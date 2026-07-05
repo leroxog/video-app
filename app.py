@@ -1,6 +1,7 @@
 import os
 import re
 import uuid
+import random
 import logging
 from datetime import datetime, timezone
 from flask import (
@@ -18,6 +19,8 @@ PLACE_GRID_SIZE = 100
 PLACE_COOLDOWN_SECONDS = 5
 PLACE_SEARCH_TERM = "gigas/place"
 TICTACTOE_SEARCH_TERM = "gigas/tic.tac.toe"
+FRUITMERGE_SEARCH_TERM = "gigas/fruit.merge"
+GAME_SUGGESTIONS = [PLACE_SEARCH_TERM, TICTACTOE_SEARCH_TERM, FRUITMERGE_SEARCH_TERM]
 HEX_COLOR_RE = re.compile(r"#[0-9a-fA-F]{6}")
 
 app = Flask(__name__)
@@ -68,8 +71,9 @@ def index():
     query = request.args.get("q", "").strip()
     show_place_egg = query.lower() == PLACE_SEARCH_TERM
     show_tictactoe_egg = query.lower() == TICTACTOE_SEARCH_TERM
+    show_fruitmerge_egg = query.lower() == FRUITMERGE_SEARCH_TERM
     videos = []
-    if not show_place_egg and not show_tictactoe_egg:
+    if not (show_place_egg or show_tictactoe_egg or show_fruitmerge_egg):
         videos_query = Video.query
         if query:
             videos_query = videos_query.filter(Video.title.ilike(f"%{query}%"))
@@ -81,6 +85,8 @@ def index():
         query=query,
         show_place_egg=show_place_egg,
         show_tictactoe_egg=show_tictactoe_egg,
+        show_fruitmerge_egg=show_fruitmerge_egg,
+        game_suggestion=random.choice(GAME_SUGGESTIONS),
     )
 
 
@@ -188,6 +194,11 @@ def seconds_since(moment):
 @app.route("/tictactoe")
 def tictactoe():
     return render_template("tictactoe.html", user=current_user())
+
+
+@app.route("/fruitmerge")
+def fruitmerge():
+    return render_template("fruitmerge.html", user=current_user())
 
 
 @app.route("/place")

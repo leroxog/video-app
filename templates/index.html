@@ -3,12 +3,15 @@
 {% block content %}
     <h1>Videos</h1>
     <form class="search-form" action="{{ url_for('index') }}" method="get">
-        <input type="text" name="q" value="{{ query }}" placeholder="Videos suchen..." maxlength="200">
+        <input type="text" id="searchInput" name="q" value="{{ query }}" placeholder="Videos suchen..." maxlength="200">
         <button type="submit">Suchen</button>
         {% if query %}
             <a class="clear-search" href="{{ url_for('index') }}">Zuruecksetzen</a>
         {% endif %}
     </form>
+    <button type="button" class="search-hint" data-suggestion="{{ game_suggestion }}">
+        &#128161; Probiere z.B. {{ game_suggestion }}
+    </button>
     {% if show_place_egg %}
         <a class="place-label" href="{{ url_for('place') }}">
             <div class="place-label-icon"></div>
@@ -23,6 +26,14 @@
             <div>
                 <div class="place-label-title">gigas/tic.tac.toe</div>
                 <div class="place-label-sub">Tic Tac Toe gegen den Bot &mdash; jetzt spielen</div>
+            </div>
+        </a>
+    {% elif show_fruitmerge_egg %}
+        <a class="place-label" href="{{ url_for('fruitmerge') }}">
+            <div class="place-label-icon fruitmerge-icon"></div>
+            <div>
+                <div class="place-label-title">gigas/fruit.merge</div>
+                <div class="place-label-sub">Fruechte fallen lassen und verschmelzen &mdash; jetzt spielen</div>
             </div>
         </a>
     {% elif videos %}
@@ -44,4 +55,12 @@
     {% else %}
         <p>Noch keine Videos hochgeladen. <a href="{{ url_for('upload') }}">Jetzt das erste Video hochladen</a>.</p>
     {% endif %}
+
+    <script>
+        document.querySelector(".search-hint").addEventListener("click", function () {
+            const input = document.getElementById("searchInput");
+            input.value = this.dataset.suggestion;
+            input.focus();
+        });
+    </script>
 {% endblock %}

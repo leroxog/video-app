@@ -106,6 +106,36 @@ h1 {
     font-size: 0.85rem;
 }
 
+.search-hint {
+    display: inline-block;
+    position: relative;
+    margin: 0 0 1.5rem;
+    padding: 0.5rem 0.9rem;
+    border: 1px solid #3c3c3c;
+    border-radius: 14px;
+    background: #1c1c1c;
+    color: #f1f1f1;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.search-hint:hover {
+    background: #2c2c2c;
+}
+
+.search-hint::before {
+    content: "";
+    position: absolute;
+    top: -6px;
+    left: 20px;
+    width: 10px;
+    height: 10px;
+    background: #1c1c1c;
+    border-left: 1px solid #3c3c3c;
+    border-top: 1px solid #3c3c3c;
+    transform: rotate(45deg);
+}
+
 .place-label {
     display: flex;
     align-items: center;
@@ -144,6 +174,14 @@ h1 {
     background:
         linear-gradient(#3c3c3c, #3c3c3c) center / 100% 2px no-repeat,
         linear-gradient(#3c3c3c, #3c3c3c) center / 2px 100% no-repeat,
+        #1c1c1c;
+}
+
+.fruitmerge-icon {
+    background:
+        radial-gradient(circle at 30% 35%, #ff6b81 0 30%, transparent 31%),
+        radial-gradient(circle at 68% 60%, #f4d03f 0 22%, transparent 23%),
+        radial-gradient(circle at 75% 25%, #7dcb5f 0 16%, transparent 17%),
         #1c1c1c;
 }
 
@@ -332,4 +370,61 @@ body.place-fullscreen main {
     background: #cc4444;
     color: #fff;
     margin-bottom: 1rem;
+}
+
+.fruitmerge-page {
+    max-width: 420px;
+}
+
+.fruitmerge-score {
+    font-weight: 600;
+    margin-bottom: 0.8rem;
+}
+
+.fruitmerge-wrapper {
+    position: relative;
+    width: 380px;
+    max-width: 100%;
+}
+
+#fruitCanvas {
+    display: block;
+    background: #101820;
+    border: 1px solid #3c3c3c;
+    border-radius: 6px;
+    cursor: pointer;
+    max-width: 100%;
+    touch-action: none;
+}
+
+.fruitmerge-gameover {
+    display: none;
+    position: absolute;
+    inset: 0;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.75);
+    border-radius: 6px;
+    text-align: center;
+}
+
+.fruitmerge-gameover.visible {
+    display: flex;
+}
+
+.fruitmerge-gameover-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.fruitmerge-gameover button {
+    margin-top: 1rem;
+    padding: 0.6rem 1.2rem;
+    border: none;
+    border-radius: 4px;
+    background: #3ea6ff;
+    color: #0f0f0f;
+    font-weight: 600;
+    cursor: pointer;
 }

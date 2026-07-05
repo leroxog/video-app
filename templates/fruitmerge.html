@@ -1,0 +1,234 @@
+{% extends "base.html" %}
+{% block title %}Fruit Merge - gigas{% endblock %}
+{% block content %}
+    <div class="fruitmerge-page">
+        <h1>gigas/fruit.merge</h1>
+        <p>Lass Fruechte fallen. Treffen zwei gleiche aufeinander, verschmelzen sie zur naechst groesseren. Wird es oben zu voll, ist das Spiel vorbei.</p>
+
+        <div class="fruitmerge-score">Punkte: <span id="score">0</span></div>
+
+        <div class="fruitmerge-wrapper">
+            <canvas id="fruitCanvas" width="380" height="560"></canvas>
+            <div class="fruitmerge-gameover" id="gameOverOverlay">
+                <div>
+                    <div class="fruitmerge-gameover-title">Spiel vorbei</div>
+                    <div>Punkte: <span id="finalScore">0</span></div>
+                    <button type="button" id="restartBtn">Nochmal spielen</button>
+                </div>
+            </div>
+        </div>
+
+        <p><a href="{{ url_for('index') }}">&larr; Zurueck zur Uebersicht</a></p>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/matter-js@0.19.0/build/matter.min.js"></script>
+    <script>
+        const { Engine, Runner, Bodies, Composite, Events } = Matter;
+
+        const WIDTH = 380;
+        const HEIGHT = 560;
+        const WALL = 16;
+        const DANGER_LINE_Y = 70;
+        const DROP_Y = 40;
+
+        const TIERS = [
+            { radius: 13, color: "#e74c3c", emoji: "\u{1F352}", points: 1 },
+            { radius: 19, color: "#ff6b81", emoji: "\u{1F353}", points: 3 },
+            { radius: 25, color: "#8e44ad", emoji: "\u{1F347}", points: 6 },
+            { radius: 32, color: "#e67e22", emoji: "\u{1F34A}", points: 10 },
+            { radius: 40, color: "#c0392b", emoji: "\u{1F34E}", points: 15 },
+            { radius: 48, color: "#a8d94f", emoji: "\u{1F350}", points: 21 },
+            { radius: 56, color: "#ffb6a3", emoji: "\u{1F351}", points: 28 },
+            { radius: 65, color: "#f4d03f", emoji: "\u{1F34D}", points: 36 },
+            { radius: 75, color: "#7dcb5f", emoji: "\u{1F348}", points: 45 },
+            { radius: 88, color: "#27ae60", emoji: "\u{1F349}", points: 55 },
+        ];
+        const SPAWN_WEIGHTS = [0, 0, 0, 0, 1, 1, 1, 2, 2, 3];
+
+        const engine = Engine.create();
+        engine.gravity.y = 1.1;
+        const runner = Runner.create();
+        Runner.run(runner, engine);
+
+        const ground = Bodies.rectangle(WIDTH / 2, HEIGHT + WALL / 2, WIDTH, WALL, { isStatic: true });
+        const leftWall = Bodies.rectangle(-WALL / 2, HEIGHT / 2, WALL, HEIGHT * 2, { isStatic: true });
+        const rightWall = Bodies.rectangle(WIDTH + WALL / 2, HEIGHT / 2, WALL, HEIGHT * 2, { isStatic: true });
+        Composite.add(engine.world, [ground, leftWall, rightWall]);
+
+        const canvas = document.getElementById("fruitCanvas");
+        const ctx = canvas.getContext("2d");
+        const scoreEl = document.getElementById("score");
+        const finalScoreEl = document.getElementById("finalScore");
+        const gameOverOverlay = document.getElementById("gameOverOverlay");
+        const restartBtn = document.getElementById("restartBtn");
+
+        let score = 0;
+        let gameOver = false;
+        let dropCooldown = false;
+        let overLineSince = null;
+        let currentTierIndex = randomSpawnTier();
+        let previewX = WIDTH / 2;
+
+        function randomSpawnTier() {
+            return SPAWN_WEIGHTS[Math.floor(Math.random() * SPAWN_WEIGHTS.length)];
+        }
+
+        function createFruit(tierIndex, x, y) {
+            const tier = TIERS[tierIndex];
+            const body = Bodies.circle(x, y, tier.radius, {
+                restitution: 0.15,
+                friction: 0.5,
+                frictionAir: 0.001,
+                density: 0.0015,
+            });
+            body.tierIndex = tierIndex;
+            body.mergeLock = false;
+            return body;
+        }
+
+        function updateScore(delta) {
+            score += delta;
+            scoreEl.textContent = score;
+        }
+
+        function clampPreviewX() {
+            const tier = TIERS[currentTierIndex];
+            previewX = Math.max(WALL + tier.radius, Math.min(WIDTH - WALL - tier.radius, previewX));
+        }
+
+        function updatePreviewX(clientX) {
+            const rect = canvas.getBoundingClientRect();
+            previewX = clientX - rect.left;
+            clampPreviewX();
+        }
+
+        function dropFruit() {
+            if (gameOver || dropCooldown) return;
+            clampPreviewX();
+            const body = createFruit(currentTierIndex, previewX, DROP_Y);
+            Composite.add(engine.world, body);
+            dropCooldown = true;
+            setTimeout(() => { dropCooldown = false; }, 350);
+            currentTierIndex = randomSpawnTier();
+        }
+
+        canvas.addEventListener("mousemove", (event) => updatePreviewX(event.clientX));
+        canvas.addEventListener("click", dropFruit);
+        canvas.addEventListener("touchmove", (event) => {
+            updatePreviewX(event.touches[0].clientX);
+            event.preventDefault();
+        }, { passive: false });
+        canvas.addEventListener("touchend", (event) => {
+            dropFruit();
+            event.preventDefault();
+        }, { passive: false });
+
+        Events.on(engine, "collisionStart", (event) => {
+            for (const pair of event.pairs) {
+                const a = pair.bodyA;
+                const b = pair.bodyB;
+                if (a.tierIndex === undefined || b.tierIndex === undefined) continue;
+                if (a.mergeLock || b.mergeLock) continue;
+                if (a.tierIndex !== b.tierIndex) continue;
+
+                const tierIndex = a.tierIndex;
+                a.mergeLock = true;
+                b.mergeLock = true;
+                const midX = (a.position.x + b.position.x) / 2;
+                const midY = (a.position.y + b.position.y) / 2;
+
+                Composite.remove(engine.world, [a, b]);
+                updateScore(TIERS[tierIndex].points);
+
+                if (tierIndex < TIERS.length - 1) {
+                    Composite.add(engine.world, createFruit(tierIndex + 1, midX, midY));
+                } else {
+                    updateScore(50);
+                }
+            }
+        });
+
+        function triggerGameOver() {
+            gameOver = true;
+            finalScoreEl.textContent = score;
+            gameOverOverlay.classList.add("visible");
+        }
+
+        function restartGame() {
+            const bodies = Composite.allBodies(engine.world).filter((b) => b.tierIndex !== undefined);
+            Composite.remove(engine.world, bodies);
+            score = 0;
+            scoreEl.textContent = 0;
+            gameOver = false;
+            overLineSince = null;
+            currentTierIndex = randomSpawnTier();
+            gameOverOverlay.classList.remove("visible");
+        }
+
+        restartBtn.addEventListener("click", restartGame);
+
+        function renderLoop() {
+            ctx.clearRect(0, 0, WIDTH, HEIGHT);
+
+            ctx.strokeStyle = "rgba(255, 80, 80, 0.5)";
+            ctx.setLineDash([6, 5]);
+            ctx.beginPath();
+            ctx.moveTo(0, DANGER_LINE_Y);
+            ctx.lineTo(WIDTH, DANGER_LINE_Y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            const bodies = Composite.allBodies(engine.world).filter((b) => b.tierIndex !== undefined);
+            let overLine = false;
+
+            for (const body of bodies) {
+                const tier = TIERS[body.tierIndex];
+                ctx.beginPath();
+                ctx.arc(body.position.x, body.position.y, tier.radius, 0, Math.PI * 2);
+                ctx.fillStyle = tier.color;
+                ctx.fill();
+                ctx.font = `${tier.radius}px sans-serif`;
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText(tier.emoji, body.position.x, body.position.y);
+
+                if (
+                    !gameOver &&
+                    body.position.y - tier.radius < DANGER_LINE_Y &&
+                    Math.abs(body.velocity.y) < 0.5
+                ) {
+                    overLine = true;
+                }
+            }
+
+            if (!gameOver) {
+                if (overLine) {
+                    if (overLineSince === null) {
+                        overLineSince = performance.now();
+                    } else if (performance.now() - overLineSince > 1500) {
+                        triggerGameOver();
+                    }
+                } else {
+                    overLineSince = null;
+                }
+
+                const tier = TIERS[currentTierIndex];
+                clampPreviewX();
+                ctx.globalAlpha = 0.85;
+                ctx.beginPath();
+                ctx.arc(previewX, DROP_Y, tier.radius, 0, Math.PI * 2);
+                ctx.fillStyle = tier.color;
+                ctx.fill();
+                ctx.font = `${tier.radius}px sans-serif`;
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText(tier.emoji, previewX, DROP_Y);
+                ctx.globalAlpha = 1;
+            }
+
+            requestAnimationFrame(renderLoop);
+        }
+
+        requestAnimationFrame(renderLoop);
+    </script>
+{% endblock %}

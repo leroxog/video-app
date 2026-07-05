@@ -116,6 +116,27 @@ def test_tictactoe_page_accessible_without_login(client):
     assert b"tictactoe-board" in response.data
 
 
+def test_search_easter_egg_shows_fruitmerge_label(client):
+    response = client.get("/?q=gigas/fruit.merge")
+    assert "gigas/fruit.merge".encode() in response.data
+    assert b"place-label" in response.data
+
+
+def test_fruitmerge_page_accessible_without_login(client):
+    response = client.get("/fruitmerge")
+    assert response.status_code == 200
+    assert b"fruitCanvas" in response.data
+
+
+def test_search_hint_shows_a_game_suggestion(client):
+    response = client.get("/")
+    assert b"search-hint" in response.data
+    assert any(
+        term.encode() in response.data
+        for term in ["gigas/place", "gigas/tic.tac.toe", "gigas/fruit.merge"]
+    )
+
+
 def test_place_requires_login(client):
     response = client.get("/place", follow_redirects=True)
     assert b"Login" in response.data
