@@ -9,7 +9,15 @@
             <a class="clear-search" href="{{ url_for('index') }}">Zuruecksetzen</a>
         {% endif %}
     </form>
-    {% if videos %}
+    {% if show_place_egg %}
+        <a class="place-label" href="{{ url_for('place') }}">
+            <div class="place-label-icon"></div>
+            <div>
+                <div class="place-label-title">gigas/place</div>
+                <div class="place-label-sub">Gemeinsame Pixel-Leinwand &mdash; jetzt spielen</div>
+            </div>
+        </a>
+    {% elif videos %}
         <div class="video-grid">
             {% for video in videos %}
                 <a class="video-card" href="{{ url_for('watch', video_id=video.id) }}">

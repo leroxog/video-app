@@ -1,17 +1,23 @@
 import os
+import re
 import uuid
 import logging
+from datetime import datetime, timezone
 from flask import (
     Flask, render_template, request, redirect, url_for,
-    session, send_from_directory, abort, flash
+    session, send_from_directory, abort, flash, jsonify
 )
 from werkzeug.utils import secure_filename
-from models import db, User, Video
+from models import db, User, Video, Pixel
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 ALLOWED_EXTENSIONS = {"mp4", "webm", "ogg", "mov"}
+PLACE_GRID_SIZE = 100
+PLACE_COOLDOWN_SECONDS = 5
+PLACE_SEARCH_TERM = "gigas/place"
+HEX_COLOR_RE = re.compile(r"#[0-9a-fA-F]{6}")
 
 app = Flask(__name__)
 
@@ -59,11 +65,16 @@ def current_user():
 @app.route("/")
 def index():
     query = request.args.get("q", "").strip()
-    videos_query = Video.query
-    if query:
-        videos_query = videos_query.filter(Video.title.ilike(f"%{query}%"))
-    videos = videos_query.order_by(Video.created_at.desc()).all()
-    return render_template("index.html", videos=videos, user=current_user(), query=query)
+    show_place_egg = query.lower() == PLACE_SEARCH_TERM
+    videos = []
+    if not show_place_egg:
+        videos_query = Video.query
+        if query:
+            videos_query = videos_query.filter(Video.title.ilike(f"%{query}%"))
+        videos = videos_query.order_by(Video.created_at.desc()).all()
+    return render_template(
+        "index.html", videos=videos, user=current_user(), query=query, show_place_egg=show_place_egg
+    )
 
 
 @app.route("/register", methods=["GET", "POST"])
@@ -161,6 +172,72 @@ def delete_video(video_id):
     db.session.delete(video)
     db.session.commit()
     return redirect(url_for("index"))
+
+
+def seconds_since(moment):
+    return (datetime.now(timezone.utc) - moment.replace(tzinfo=timezone.utc)).total_seconds()
+
+
+@app.route("/place")
+def place():
+    user = current_user()
+    if user is None:
+        return redirect(url_for("login"))
+
+    cooldown_remaining = 0
+    if user.last_pixel_at:
+        remaining = PLACE_COOLDOWN_SECONDS - seconds_since(user.last_pixel_at)
+        if remaining > 0:
+            cooldown_remaining = remaining
+
+    return render_template(
+        "place.html",
+        user=user,
+        grid_size=PLACE_GRID_SIZE,
+        cooldown_seconds=PLACE_COOLDOWN_SECONDS,
+        cooldown_remaining=cooldown_remaining,
+    )
+
+
+@app.route("/place/pixels")
+def place_pixels():
+    pixels = Pixel.query.all()
+    return jsonify([{"x": p.x, "y": p.y, "color": p.color} for p in pixels])
+
+
+@app.route("/place/pixel", methods=["POST"])
+def place_pixel():
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+
+    data = request.get_json(silent=True) or {}
+    x = data.get("x")
+    y = data.get("y")
+    color = data.get("color", "")
+
+    if not isinstance(x, int) or not isinstance(y, int) or not (0 <= x < PLACE_GRID_SIZE) or not (0 <= y < PLACE_GRID_SIZE):
+        return jsonify({"ok": False, "error": "invalid_coordinates"}), 400
+    if not isinstance(color, str) or not HEX_COLOR_RE.fullmatch(color):
+        return jsonify({"ok": False, "error": "invalid_color"}), 400
+
+    if user.last_pixel_at:
+        remaining = PLACE_COOLDOWN_SECONDS - seconds_since(user.last_pixel_at)
+        if remaining > 0:
+            return jsonify({"ok": False, "error": "cooldown", "retry_after": remaining}), 429
+
+    now = datetime.now(timezone.utc)
+    pixel = db.session.get(Pixel, (x, y))
+    if pixel is None:
+        pixel = Pixel(x=x, y=y, color=color)
+        db.session.add(pixel)
+    else:
+        pixel.color = color
+        pixel.updated_at = now
+
+    user.last_pixel_at = now
+    db.session.commit()
+    return jsonify({"ok": True})
 
 
 if __name__ == "__main__":

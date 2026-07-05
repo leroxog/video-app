@@ -96,3 +96,43 @@ def test_upload_rejects_bad_extension(client):
         follow_redirects=True,
     )
     assert "erlaubt".encode() in response.data
+
+
+def test_search_easter_egg_shows_place_label(client):
+    response = client.get("/?q=gigas/place")
+    assert b"gigas/place" in response.data
+    assert b"place-label" in response.data
+
+
+def test_place_requires_login(client):
+    response = client.get("/place", follow_redirects=True)
+    assert b"Login" in response.data
+
+
+def test_place_pixel_flow(client):
+    register(client)
+
+    response = client.post("/place/pixel", json={"x": 5, "y": 10, "color": "#ff0000"})
+    assert response.status_code == 200
+    assert response.get_json() == {"ok": True}
+
+    pixels = client.get("/place/pixels").get_json()
+    assert {"x": 5, "y": 10, "color": "#ff0000"} in pixels
+
+    response = client.post("/place/pixel", json={"x": 6, "y": 10, "color": "#00ff00"})
+    assert response.status_code == 429
+    assert response.get_json()["error"] == "cooldown"
+
+
+def test_place_pixel_rejects_out_of_bounds(client):
+    register(client)
+    response = client.post("/place/pixel", json={"x": 100, "y": 0, "color": "#ff0000"})
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "invalid_coordinates"
+
+
+def test_place_pixel_rejects_bad_color(client):
+    register(client)
+    response = client.post("/place/pixel", json={"x": 1, "y": 1, "color": "notacolor"})
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "invalid_color"
