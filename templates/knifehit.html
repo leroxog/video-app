@@ -1,0 +1,355 @@
+{% extends "base.html" %}
+{% block title %}Knife Hit - gigas{% endblock %}
+{% block content %}
+    <div class="multiplayer-page" id="mpRoot">
+        <h1>gigas/knife.hit</h1>
+        <p>Wirf Messer in den rotierenden Holzblock. Triffst du ein steckendes Messer, ist die Runde vorbei.</p>
+
+        <div id="setupScreen">
+            <p>Wie moechtest du spielen?</p>
+            <div class="mp-lobby-options">
+                <button type="button" data-mode="bot">Gegen Bot</button>
+                <button type="button" data-mode="2">2 Spieler</button>
+                <button type="button" data-mode="3">3 Spieler</button>
+                <button type="button" data-mode="4">4 Spieler</button>
+            </div>
+        </div>
+
+        <div id="turnScreen" style="display:none;">
+            <div class="mp-turn-banner">
+                <span class="mp-color-dot" id="turnColorDot"></span>
+                <span id="turnLabel"></span>
+                <button type="button" id="turnStartBtn">Start</button>
+            </div>
+        </div>
+
+        <div id="gameScreen" style="display:none;">
+            <div class="fruitmerge-score">Treffer: <span id="hitScore">0</span> &middot; Level <span id="levelDisplay">1</span></div>
+            <canvas id="knifeCanvas" width="380" height="480"></canvas>
+        </div>
+
+        <div id="resultScreen" style="display:none;">
+            <p id="resultLine"></p>
+            <button type="button" class="mp-restart-btn" id="resultContinueBtn">Weiter</button>
+        </div>
+
+        <div id="leaderboardScreen" style="display:none;">
+            <h2>Ergebnisse</h2>
+            <table class="mp-leaderboard">
+                <thead><tr><th>Platz</th><th>Spieler</th><th>Treffer</th></tr></thead>
+                <tbody id="leaderboardBody"></tbody>
+            </table>
+            <button type="button" class="mp-restart-btn" id="restartLobbyBtn">Nochmal spielen</button>
+        </div>
+
+        <p><a href="{{ url_for('index') }}">&larr; Zurueck zur Uebersicht</a></p>
+    </div>
+
+    <script>
+        const COLORS = [
+            { name: "Blau", hex: "#3ea6ff" },
+            { name: "Gelb", hex: "#ffcc00" },
+            { name: "Rot", hex: "#ff4d4d" },
+            { name: "Gruen", hex: "#4caf50" },
+        ];
+
+        let participants = [];
+        let currentTurn = 0;
+
+        function shuffledColors() {
+            const arr = [...COLORS];
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+            return arr;
+        }
+
+        function showScreen(id) {
+            ["setupScreen", "turnScreen", "gameScreen", "resultScreen", "leaderboardScreen"].forEach((s) => {
+                document.getElementById(s).style.display = s === id ? "block" : "none";
+            });
+        }
+
+        function setupParticipants(mode) {
+            const colors = shuffledColors();
+            if (mode === "bot") {
+                participants = [
+                    { name: "Du", isBot: false, color: colors[0], score: null },
+                    { name: "Bot", isBot: true, color: colors[1], score: null },
+                ];
+            } else {
+                const n = parseInt(mode, 10);
+                participants = [];
+                for (let i = 0; i < n; i++) {
+                    participants.push({ name: `Spieler ${i + 1}`, isBot: false, color: colors[i], score: null });
+                }
+            }
+            currentTurn = 0;
+            showTurnScreen();
+        }
+
+        document.querySelectorAll("#setupScreen button").forEach((btn) => {
+            btn.addEventListener("click", () => setupParticipants(btn.dataset.mode));
+        });
+
+        function showTurnScreen() {
+            const p = participants[currentTurn];
+            document.getElementById("turnColorDot").style.background = p.color.hex;
+            document.getElementById("turnLabel").textContent = `${p.name} (${p.color.name}) ist dran`;
+            document.getElementById("turnStartBtn").textContent = p.isBot ? "Bot schauen" : "Start";
+            showScreen("turnScreen");
+        }
+
+        document.getElementById("turnStartBtn").addEventListener("click", () => {
+            showScreen("gameScreen");
+            startGame(participants[currentTurn]);
+        });
+
+        function onGameFinished(score) {
+            participants[currentTurn].score = score;
+            document.getElementById("resultLine").textContent = `${participants[currentTurn].name}: ${score} Treffer`;
+            showScreen("resultScreen");
+        }
+
+        document.getElementById("resultContinueBtn").addEventListener("click", () => {
+            currentTurn++;
+            if (currentTurn < participants.length) {
+                showTurnScreen();
+            } else {
+                showLeaderboard();
+            }
+        });
+
+        function showLeaderboard() {
+            const sorted = [...participants].sort((a, b) => b.score - a.score);
+            const body = document.getElementById("leaderboardBody");
+            body.innerHTML = "";
+            sorted.forEach((p, i) => {
+                const row = document.createElement("tr");
+                if (i === 0) row.classList.add("winner");
+                row.innerHTML =
+                    `<td>${i + 1}</td>` +
+                    `<td><span class="mp-color-dot" style="display:inline-block;background:${p.color.hex}"></span> ${p.name}</td>` +
+                    `<td>${p.score}</td>`;
+                body.appendChild(row);
+            });
+            showScreen("leaderboardScreen");
+        }
+
+        document.getElementById("restartLobbyBtn").addEventListener("click", () => {
+            showScreen("setupScreen");
+        });
+
+        // --- Knife Hit game engine ---
+        const WIDTH = 380;
+        const HEIGHT = 480;
+        const CENTER_X = WIDTH / 2;
+        const CENTER_Y = 175;
+        const LOG_RADIUS = 68;
+        const THROWER_Y = 430;
+        const COLLISION_THRESHOLD = 0.30;
+        const THROW_COOLDOWN_MS = 260;
+        const FLIGHT_DURATION_MS = 140;
+
+        const canvas = document.getElementById("knifeCanvas");
+        const ctx = canvas.getContext("2d");
+        const hitScoreEl = document.getElementById("hitScore");
+        const levelEl = document.getElementById("levelDisplay");
+
+        let running = false;
+        let isBotRun = false;
+        let knifeColor = "#3ea6ff";
+        let rotationAngle = 0;
+        let rotationSpeed = 0.018;
+        let stuckKnives = [];
+        let level = 1;
+        let knivesRequired = 5;
+        let knivesThisLevel = 0;
+        let score = 0;
+        let cooldownUntil = 0;
+        let flight = null;
+        let botNextThrowAt = 0;
+        let lastFrameTime = 0;
+        let animationHandle = null;
+
+        function normalizeAngle(a) {
+            let result = a % (Math.PI * 2);
+            if (result < 0) result += Math.PI * 2;
+            return result;
+        }
+
+        function angularDistance(a, b) {
+            const diff = Math.abs(normalizeAngle(a) - normalizeAngle(b));
+            return Math.min(diff, Math.PI * 2 - diff);
+        }
+
+        function pointOnCircle(angle, radius) {
+            return {
+                x: CENTER_X + radius * Math.sin(angle),
+                y: CENTER_Y - radius * Math.cos(angle),
+            };
+        }
+
+        function resetGameState(color, bot) {
+            knifeColor = color;
+            isBotRun = bot;
+            rotationAngle = 0;
+            rotationSpeed = 0.018;
+            stuckKnives = [];
+            level = 1;
+            knivesRequired = 5;
+            knivesThisLevel = 0;
+            score = 0;
+            cooldownUntil = 0;
+            flight = null;
+            running = true;
+            botNextThrowAt = performance.now() + 500;
+        }
+
+        function startGame(participant) {
+            resetGameState(participant.color.hex, participant.isBot);
+            hitScoreEl.textContent = "0";
+            levelEl.textContent = "1";
+            lastFrameTime = performance.now();
+            animationHandle = requestAnimationFrame(gameLoop);
+        }
+
+        function attemptThrow(now) {
+            if (!running || flight || now < cooldownUntil) return;
+            flight = { start: now };
+            cooldownUntil = now + THROW_COOLDOWN_MS;
+        }
+
+        canvas.addEventListener("click", () => {
+            if (!isBotRun) attemptThrow(performance.now());
+        });
+
+        function resolveThrow() {
+            const contactOffset = normalizeAngle(-rotationAngle);
+            const collision = stuckKnives.some(
+                (offset) => angularDistance(offset, contactOffset) < COLLISION_THRESHOLD
+            );
+
+            if (collision) {
+                running = false;
+                cancelAnimationFrame(animationHandle);
+                onGameFinished(score);
+                return;
+            }
+
+            stuckKnives.push(contactOffset);
+            knivesThisLevel++;
+            score++;
+            hitScoreEl.textContent = score;
+
+            if (knivesThisLevel >= knivesRequired) {
+                level++;
+                levelEl.textContent = level;
+                stuckKnives = [];
+                knivesThisLevel = 0;
+                knivesRequired = Math.min(10, 5 + Math.floor(level / 2));
+                rotationSpeed = Math.min(0.05, rotationSpeed + 0.003);
+            }
+        }
+
+        function botMaybeThrow(now) {
+            if (now < botNextThrowAt || flight || now < cooldownUntil) return;
+            const contactOffset = normalizeAngle(-rotationAngle);
+            const nearestKnifeDistance = stuckKnives.length
+                ? Math.min(...stuckKnives.map((offset) => angularDistance(offset, contactOffset)))
+                : Math.PI;
+
+            const safetyMargin = 0.55;
+            const mistakeChance = 0.05 + level * 0.02;
+            const isClear = nearestKnifeDistance > safetyMargin;
+
+            if (isClear || Math.random() < mistakeChance) {
+                attemptThrow(now);
+                botNextThrowAt = now + 450 + Math.random() * 400;
+            } else {
+                botNextThrowAt = now + 60;
+            }
+        }
+
+        function drawScene() {
+            ctx.clearRect(0, 0, WIDTH, HEIGHT);
+            ctx.fillStyle = "#101820";
+            ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+            ctx.beginPath();
+            ctx.arc(CENTER_X, CENTER_Y, LOG_RADIUS, 0, Math.PI * 2);
+            ctx.fillStyle = "#8b5a2b";
+            ctx.fill();
+            ctx.strokeStyle = "#6b4423";
+            ctx.lineWidth = 4;
+            ctx.stroke();
+
+            ctx.strokeStyle = "rgba(0,0,0,0.25)";
+            ctx.lineWidth = 2;
+            for (let i = 0; i < 3; i++) {
+                const a = rotationAngle + (i * Math.PI * 2) / 3;
+                const p1 = pointOnCircle(a, LOG_RADIUS * 0.3);
+                const p2 = pointOnCircle(a, LOG_RADIUS * 0.85);
+                ctx.beginPath();
+                ctx.moveTo(p1.x, p1.y);
+                ctx.lineTo(p2.x, p2.y);
+                ctx.stroke();
+            }
+
+            for (const offset of stuckKnives) {
+                const angle = rotationAngle + offset;
+                const tip = pointOnCircle(angle, LOG_RADIUS - 4);
+                const tail = pointOnCircle(angle, LOG_RADIUS + 22);
+                ctx.strokeStyle = "#ddd";
+                ctx.lineWidth = 5;
+                ctx.beginPath();
+                ctx.moveTo(tail.x, tail.y);
+                ctx.lineTo(tip.x, tip.y);
+                ctx.stroke();
+            }
+
+            ctx.strokeStyle = "rgba(255,0,0,0.4)";
+            ctx.setLineDash([4, 4]);
+            const markTip = pointOnCircle(0, LOG_RADIUS + 4);
+            const markTail = pointOnCircle(0, LOG_RADIUS + 28);
+            ctx.beginPath();
+            ctx.moveTo(markTail.x, markTail.y);
+            ctx.lineTo(markTip.x, markTip.y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            let knifeY = THROWER_Y;
+            if (flight) {
+                const progress = Math.min(1, (performance.now() - flight.start) / FLIGHT_DURATION_MS);
+                const targetY = CENTER_Y - LOG_RADIUS;
+                knifeY = THROWER_Y + (targetY - THROWER_Y) * progress;
+                if (progress >= 1) {
+                    flight = null;
+                    resolveThrow();
+                }
+            }
+
+            ctx.strokeStyle = knifeColor;
+            ctx.lineWidth = 6;
+            ctx.beginPath();
+            ctx.moveTo(CENTER_X, knifeY + 26);
+            ctx.lineTo(CENTER_X, knifeY);
+            ctx.stroke();
+        }
+
+        function gameLoop(now) {
+            lastFrameTime = now;
+
+            if (running) {
+                rotationAngle = normalizeAngle(rotationAngle + rotationSpeed);
+                if (isBotRun) {
+                    botMaybeThrow(now);
+                }
+            }
+
+            drawScene();
+            animationHandle = requestAnimationFrame(gameLoop);
+        }
+    </script>
+{% endblock %}

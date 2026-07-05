@@ -36,6 +36,22 @@
                 <div class="place-label-sub">Fruechte fallen lassen und verschmelzen &mdash; jetzt spielen</div>
             </div>
         </a>
+    {% elif show_gravityrun_egg %}
+        <a class="place-label" href="{{ url_for('gravityrun') }}">
+            <div class="place-label-icon gravityrun-icon"></div>
+            <div>
+                <div class="place-label-title">gigas/gravity.run</div>
+                <div class="place-label-sub">Schwerkraft umkehren und Hindernissen ausweichen &mdash; solo, mit Bot oder zu mehreren</div>
+            </div>
+        </a>
+    {% elif show_knifehit_egg %}
+        <a class="place-label" href="{{ url_for('knifehit') }}">
+            <div class="place-label-icon knifehit-icon"></div>
+            <div>
+                <div class="place-label-title">gigas/knife.hit</div>
+                <div class="place-label-sub">Messer in den rotierenden Block werfen &mdash; solo, mit Bot oder zu mehreren</div>
+            </div>
+        </a>
     {% elif videos %}
         <div class="video-grid">
             {% for video in videos %}

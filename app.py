@@ -20,7 +20,15 @@ PLACE_COOLDOWN_SECONDS = 5
 PLACE_SEARCH_TERM = "gigas/place"
 TICTACTOE_SEARCH_TERM = "gigas/tic.tac.toe"
 FRUITMERGE_SEARCH_TERM = "gigas/fruit.merge"
-GAME_SUGGESTIONS = [PLACE_SEARCH_TERM, TICTACTOE_SEARCH_TERM, FRUITMERGE_SEARCH_TERM]
+GRAVITYRUN_SEARCH_TERM = "gigas/gravity.run"
+KNIFEHIT_SEARCH_TERM = "gigas/knife.hit"
+GAME_SUGGESTIONS = [
+    PLACE_SEARCH_TERM,
+    TICTACTOE_SEARCH_TERM,
+    FRUITMERGE_SEARCH_TERM,
+    GRAVITYRUN_SEARCH_TERM,
+    KNIFEHIT_SEARCH_TERM,
+]
 HEX_COLOR_RE = re.compile(r"#[0-9a-fA-F]{6}")
 
 app = Flask(__name__)
@@ -72,8 +80,14 @@ def index():
     show_place_egg = query.lower() == PLACE_SEARCH_TERM
     show_tictactoe_egg = query.lower() == TICTACTOE_SEARCH_TERM
     show_fruitmerge_egg = query.lower() == FRUITMERGE_SEARCH_TERM
+    show_gravityrun_egg = query.lower() == GRAVITYRUN_SEARCH_TERM
+    show_knifehit_egg = query.lower() == KNIFEHIT_SEARCH_TERM
+    any_egg = (
+        show_place_egg or show_tictactoe_egg or show_fruitmerge_egg
+        or show_gravityrun_egg or show_knifehit_egg
+    )
     videos = []
-    if not (show_place_egg or show_tictactoe_egg or show_fruitmerge_egg):
+    if not any_egg:
         videos_query = Video.query
         if query:
             videos_query = videos_query.filter(Video.title.ilike(f"%{query}%"))
@@ -86,6 +100,8 @@ def index():
         show_place_egg=show_place_egg,
         show_tictactoe_egg=show_tictactoe_egg,
         show_fruitmerge_egg=show_fruitmerge_egg,
+        show_gravityrun_egg=show_gravityrun_egg,
+        show_knifehit_egg=show_knifehit_egg,
         game_suggestion=random.choice(GAME_SUGGESTIONS),
     )
 
@@ -199,6 +215,16 @@ def tictactoe():
 @app.route("/fruitmerge")
 def fruitmerge():
     return render_template("fruitmerge.html", user=current_user())
+
+
+@app.route("/gravityrun")
+def gravityrun():
+    return render_template("gravityrun.html", user=current_user())
+
+
+@app.route("/knifehit")
+def knifehit():
+    return render_template("knifehit.html", user=current_user())
 
 
 @app.route("/place")

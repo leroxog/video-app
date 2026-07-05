@@ -133,8 +133,40 @@ def test_search_hint_shows_a_game_suggestion(client):
     assert b"search-hint" in response.data
     assert any(
         term.encode() in response.data
-        for term in ["gigas/place", "gigas/tic.tac.toe", "gigas/fruit.merge"]
+        for term in [
+            "gigas/place",
+            "gigas/tic.tac.toe",
+            "gigas/fruit.merge",
+            "gigas/gravity.run",
+            "gigas/knife.hit",
+        ]
     )
+
+
+def test_search_easter_egg_shows_gravityrun_label(client):
+    response = client.get("/?q=gigas/gravity.run")
+    assert "gigas/gravity.run".encode() in response.data
+    assert b"place-label" in response.data
+
+
+def test_gravityrun_page_accessible_without_login(client):
+    response = client.get("/gravityrun")
+    assert response.status_code == 200
+    assert b"runCanvas" in response.data
+    assert b"mp-lobby-options" in response.data
+
+
+def test_search_easter_egg_shows_knifehit_label(client):
+    response = client.get("/?q=gigas/knife.hit")
+    assert "gigas/knife.hit".encode() in response.data
+    assert b"place-label" in response.data
+
+
+def test_knifehit_page_accessible_without_login(client):
+    response = client.get("/knifehit")
+    assert response.status_code == 200
+    assert b"knifeCanvas" in response.data
+    assert b"mp-lobby-options" in response.data
 
 
 def test_place_requires_login(client):

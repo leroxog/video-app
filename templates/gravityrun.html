@@ -1,0 +1,300 @@
+{% extends "base.html" %}
+{% block title %}Gravity Run - gigas{% endblock %}
+{% block content %}
+    <div class="multiplayer-page" id="mpRoot">
+        <h1>gigas/gravity.run</h1>
+        <p>Kehre die Schwerkraft um und weiche den Hindernissen an Boden und Decke aus. Klicken/Tippen zum Umkehren.</p>
+
+        <div id="setupScreen">
+            <p>Wie moechtest du spielen?</p>
+            <div class="mp-lobby-options">
+                <button type="button" data-mode="bot">Gegen Bot</button>
+                <button type="button" data-mode="2">2 Spieler</button>
+                <button type="button" data-mode="3">3 Spieler</button>
+                <button type="button" data-mode="4">4 Spieler</button>
+            </div>
+        </div>
+
+        <div id="turnScreen" style="display:none;">
+            <div class="mp-turn-banner">
+                <span class="mp-color-dot" id="turnColorDot"></span>
+                <span id="turnLabel"></span>
+                <button type="button" id="turnStartBtn">Start</button>
+            </div>
+        </div>
+
+        <div id="gameScreen" style="display:none;">
+            <div class="fruitmerge-score">Distanz: <span id="distanceScore">0</span>m</div>
+            <canvas id="runCanvas" width="480" height="260"></canvas>
+        </div>
+
+        <div id="resultScreen" style="display:none;">
+            <p id="resultLine"></p>
+            <button type="button" class="mp-restart-btn" id="resultContinueBtn">Weiter</button>
+        </div>
+
+        <div id="leaderboardScreen" style="display:none;">
+            <h2>Ergebnisse</h2>
+            <table class="mp-leaderboard">
+                <thead><tr><th>Platz</th><th>Spieler</th><th>Distanz</th></tr></thead>
+                <tbody id="leaderboardBody"></tbody>
+            </table>
+            <button type="button" class="mp-restart-btn" id="restartLobbyBtn">Nochmal spielen</button>
+        </div>
+
+        <p><a href="{{ url_for('index') }}">&larr; Zurueck zur Uebersicht</a></p>
+    </div>
+
+    <script>
+        const COLORS = [
+            { name: "Blau", hex: "#3ea6ff" },
+            { name: "Gelb", hex: "#ffcc00" },
+            { name: "Rot", hex: "#ff4d4d" },
+            { name: "Gruen", hex: "#4caf50" },
+        ];
+
+        let participants = [];
+        let currentTurn = 0;
+
+        function shuffledColors() {
+            const arr = [...COLORS];
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+            return arr;
+        }
+
+        function showScreen(id) {
+            ["setupScreen", "turnScreen", "gameScreen", "resultScreen", "leaderboardScreen"].forEach((s) => {
+                document.getElementById(s).style.display = s === id ? "block" : "none";
+            });
+        }
+
+        function setupParticipants(mode) {
+            const colors = shuffledColors();
+            if (mode === "bot") {
+                participants = [
+                    { name: "Du", isBot: false, color: colors[0], score: null },
+                    { name: "Bot", isBot: true, color: colors[1], score: null },
+                ];
+            } else {
+                const n = parseInt(mode, 10);
+                participants = [];
+                for (let i = 0; i < n; i++) {
+                    participants.push({ name: `Spieler ${i + 1}`, isBot: false, color: colors[i], score: null });
+                }
+            }
+            currentTurn = 0;
+            showTurnScreen();
+        }
+
+        document.querySelectorAll("#setupScreen button").forEach((btn) => {
+            btn.addEventListener("click", () => setupParticipants(btn.dataset.mode));
+        });
+
+        function showTurnScreen() {
+            const p = participants[currentTurn];
+            document.getElementById("turnColorDot").style.background = p.color.hex;
+            document.getElementById("turnLabel").textContent = `${p.name} (${p.color.name}) ist dran`;
+            document.getElementById("turnStartBtn").textContent = p.isBot ? "Bot schauen" : "Start";
+            showScreen("turnScreen");
+        }
+
+        document.getElementById("turnStartBtn").addEventListener("click", () => {
+            showScreen("gameScreen");
+            startRun(participants[currentTurn]);
+        });
+
+        function onGameFinished(score) {
+            participants[currentTurn].score = score;
+            document.getElementById("resultLine").textContent = `${participants[currentTurn].name}: ${score}m`;
+            showScreen("resultScreen");
+        }
+
+        document.getElementById("resultContinueBtn").addEventListener("click", () => {
+            currentTurn++;
+            if (currentTurn < participants.length) {
+                showTurnScreen();
+            } else {
+                showLeaderboard();
+            }
+        });
+
+        function showLeaderboard() {
+            const sorted = [...participants].sort((a, b) => b.score - a.score);
+            const body = document.getElementById("leaderboardBody");
+            body.innerHTML = "";
+            sorted.forEach((p, i) => {
+                const row = document.createElement("tr");
+                if (i === 0) row.classList.add("winner");
+                row.innerHTML =
+                    `<td>${i + 1}</td>` +
+                    `<td><span class="mp-color-dot" style="display:inline-block;background:${p.color.hex}"></span> ${p.name}</td>` +
+                    `<td>${p.score}m</td>`;
+                body.appendChild(row);
+            });
+            showScreen("leaderboardScreen");
+        }
+
+        document.getElementById("restartLobbyBtn").addEventListener("click", () => {
+            showScreen("setupScreen");
+        });
+
+        // --- Gravity Run game engine ---
+        const WIDTH = 480;
+        const HEIGHT = 260;
+        const PLAYER_X = 90;
+        const PLAYER_RADIUS = 11;
+        const FLOOR_Y = HEIGHT - 30;
+        const CEILING_Y = 30;
+        const OBSTACLE_WIDTH = 22;
+        const OBSTACLE_HEIGHT = 55;
+        const REACTION_DISTANCE = 150;
+
+        const canvas = document.getElementById("runCanvas");
+        const ctx = canvas.getContext("2d");
+        const distanceEl = document.getElementById("distanceScore");
+
+        let running = false;
+        let isBotRun = false;
+        let playerColor = "#3ea6ff";
+        let playerSide = "floor";
+        let obstacles = [];
+        let scrollSpeed = 2.4;
+        let distance = 0;
+        let nextSpawnIn = 0;
+        let lastFrameTime = 0;
+        let animationHandle = null;
+        let onFinishCallback = null;
+
+        function resetRunState(color, bot) {
+            playerColor = color;
+            isBotRun = bot;
+            playerSide = "floor";
+            obstacles = [];
+            scrollSpeed = 2.4;
+            distance = 0;
+            nextSpawnIn = 60;
+            running = true;
+        }
+
+        function startRun(participant) {
+            resetRunState(participant.color.hex, participant.isBot);
+            distanceEl.textContent = "0";
+            lastFrameTime = performance.now();
+            animationHandle = requestAnimationFrame(runLoop);
+        }
+
+        function flip() {
+            if (!running) return;
+            playerSide = playerSide === "floor" ? "ceiling" : "floor";
+        }
+
+        canvas.addEventListener("click", () => {
+            if (!isBotRun) flip();
+        });
+
+        function spawnObstacle() {
+            const side = Math.random() < 0.5 ? "floor" : "ceiling";
+            obstacles.push({ x: WIDTH + OBSTACLE_WIDTH, side, handled: false });
+        }
+
+        function botDecide() {
+            for (const obstacle of obstacles) {
+                if (obstacle.handled) continue;
+                const distanceToPlayer = obstacle.x - PLAYER_X;
+                if (distanceToPlayer <= REACTION_DISTANCE && distanceToPlayer > 0) {
+                    obstacle.handled = true;
+                    const mistakeChance = 0.08 + Math.min(0.2, scrollSpeed * 0.01);
+                    if (Math.random() < mistakeChance) {
+                        continue;
+                    }
+                    const safeSide = obstacle.side === "floor" ? "ceiling" : "floor";
+                    if (playerSide !== safeSide) {
+                        flip();
+                    }
+                }
+            }
+        }
+
+        function checkCollision() {
+            for (const obstacle of obstacles) {
+                if (obstacle.side !== playerSide) continue;
+                const left = obstacle.x;
+                const right = obstacle.x + OBSTACLE_WIDTH;
+                if (right >= PLAYER_X - PLAYER_RADIUS && left <= PLAYER_X + PLAYER_RADIUS) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function drawScene() {
+            ctx.clearRect(0, 0, WIDTH, HEIGHT);
+            ctx.fillStyle = "#101820";
+            ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+            ctx.strokeStyle = "#3c3c3c";
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(0, FLOOR_Y + PLAYER_RADIUS + 6);
+            ctx.lineTo(WIDTH, FLOOR_Y + PLAYER_RADIUS + 6);
+            ctx.moveTo(0, CEILING_Y - PLAYER_RADIUS - 6);
+            ctx.lineTo(WIDTH, CEILING_Y - PLAYER_RADIUS - 6);
+            ctx.stroke();
+
+            ctx.fillStyle = "#888";
+            for (const obstacle of obstacles) {
+                if (obstacle.side === "floor") {
+                    ctx.fillRect(obstacle.x, FLOOR_Y + PLAYER_RADIUS + 6 - OBSTACLE_HEIGHT, OBSTACLE_WIDTH, OBSTACLE_HEIGHT);
+                } else {
+                    ctx.fillRect(obstacle.x, CEILING_Y - PLAYER_RADIUS - 6, OBSTACLE_WIDTH, OBSTACLE_HEIGHT);
+                }
+            }
+
+            const playerY = playerSide === "floor" ? FLOOR_Y : CEILING_Y;
+            ctx.beginPath();
+            ctx.arc(PLAYER_X, playerY, PLAYER_RADIUS, 0, Math.PI * 2);
+            ctx.fillStyle = playerColor;
+            ctx.fill();
+        }
+
+        function runLoop(now) {
+            const dt = Math.min(40, now - lastFrameTime);
+            lastFrameTime = now;
+
+            if (running) {
+                scrollSpeed += 0.0008 * dt;
+                distance += (scrollSpeed * dt) / 40;
+                distanceEl.textContent = Math.floor(distance);
+
+                nextSpawnIn -= dt / 16.6;
+                if (nextSpawnIn <= 0) {
+                    spawnObstacle();
+                    nextSpawnIn = Math.max(35, 70 - scrollSpeed * 4) + Math.random() * 20;
+                }
+
+                for (const obstacle of obstacles) {
+                    obstacle.x -= scrollSpeed;
+                }
+                obstacles = obstacles.filter((o) => o.x + OBSTACLE_WIDTH > -10);
+
+                if (isBotRun) {
+                    botDecide();
+                }
+
+                if (checkCollision()) {
+                    running = false;
+                    cancelAnimationFrame(animationHandle);
+                    drawScene();
+                    onGameFinished(Math.floor(distance));
+                    return;
+                }
+            }
+
+            drawScene();
+            animationHandle = requestAnimationFrame(runLoop);
+        }
+    </script>
+{% endblock %}
