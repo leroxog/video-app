@@ -8,7 +8,7 @@
 </head>
 <body class="{% block body_class %}{% endblock %}">
     <header>
-        <a class="brand" href="{{ url_for('index') }}">gigas</a>
+        <a class="brand" href="{{ url_for('index') }}">{% block brand_text %}gigas{% endblock %}</a>
         <nav>
             {% if user %}
                 <span class="username">{{ user.username }}</span>
