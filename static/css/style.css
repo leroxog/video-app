@@ -161,17 +161,47 @@ h1 {
     cursor: pointer;
 }
 
+.place-controls button {
+    width: 32px;
+    height: 32px;
+    border: 1px solid #3c3c3c;
+    border-radius: 4px;
+    background: #1c1c1c;
+    color: #fff;
+    font-size: 1.1rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.place-controls button:hover {
+    background: #2c2c2c;
+}
+
+#zoomLevel {
+    color: #aaa;
+    font-size: 0.9rem;
+    min-width: 2.5rem;
+}
+
 #cooldown {
     color: #aaa;
     font-size: 0.9rem;
 }
 
-#placeCanvas {
+.place-canvas-wrapper {
+    width: 100%;
+    max-width: 560px;
+    height: 560px;
+    overflow: auto;
     border: 1px solid #3c3c3c;
     border-radius: 4px;
+    background: #000;
+}
+
+#placeCanvas {
+    display: block;
     cursor: crosshair;
     image-rendering: pixelated;
-    max-width: 100%;
 }
 
 .video-grid {

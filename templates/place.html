@@ -8,32 +8,61 @@
         <div class="place-controls">
             <label for="colorPicker">Farbe:</label>
             <input type="color" id="colorPicker" value="#ff3b30">
+            <button type="button" id="zoomOut" title="Verkleinern">&minus;</button>
+            <button type="button" id="zoomIn" title="Vergroessern">+</button>
+            <span id="zoomLevel"></span>
             <span id="cooldown"></span>
         </div>
 
-        <canvas id="placeCanvas" width="{{ grid_size * 5 }}" height="{{ grid_size * 5 }}"></canvas>
+        <div class="place-canvas-wrapper" id="canvasWrapper">
+            <canvas id="placeCanvas"></canvas>
+        </div>
 
         <p><a href="{{ url_for('index') }}">&larr; Zurueck zur Uebersicht</a></p>
     </div>
 
     <script>
         const GRID_SIZE = {{ grid_size }};
-        const SCALE = 5;
+        const MIN_SCALE = 3;
+        const MAX_SCALE = 30;
         const COOLDOWN_MS = {{ cooldown_seconds }} * 1000;
 
+        let scale = 6;
+        let latestPixels = [];
+
+        const wrapper = document.getElementById("canvasWrapper");
         const canvas = document.getElementById("placeCanvas");
         const ctx = canvas.getContext("2d");
         const colorPicker = document.getElementById("colorPicker");
         const cooldownEl = document.getElementById("cooldown");
+        const zoomLevelEl = document.getElementById("zoomLevel");
 
         let nextAllowedAt = Date.now() + {{ cooldown_remaining }} * 1000;
 
+        function applyZoom(newScale, focusX, focusY) {
+            const oldScale = scale;
+            scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, newScale));
+
+            const ratio = scale / oldScale;
+            canvas.width = GRID_SIZE * scale;
+            canvas.height = GRID_SIZE * scale;
+
+            if (focusX !== undefined) {
+                wrapper.scrollLeft = (wrapper.scrollLeft + focusX) * ratio - focusX;
+                wrapper.scrollTop = (wrapper.scrollTop + focusY) * ratio - focusY;
+            }
+
+            zoomLevelEl.textContent = `${scale}x`;
+            drawPixels(latestPixels);
+        }
+
         function drawPixels(pixels) {
+            latestPixels = pixels;
             ctx.fillStyle = "#ffffff";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             for (const p of pixels) {
                 ctx.fillStyle = p.color;
-                ctx.fillRect(p.x * SCALE, p.y * SCALE, SCALE, SCALE);
+                ctx.fillRect(p.x * scale, p.y * scale, scale, scale);
             }
         }
 
@@ -53,8 +82,8 @@
                 return;
             }
             const rect = canvas.getBoundingClientRect();
-            const x = Math.floor((event.clientX - rect.left) / SCALE);
-            const y = Math.floor((event.clientY - rect.top) / SCALE);
+            const x = Math.floor((event.clientX - rect.left) / scale);
+            const y = Math.floor((event.clientY - rect.top) / scale);
 
             const res = await fetch("{{ url_for('place_pixel') }}", {
                 method: "POST",
@@ -71,6 +100,22 @@
             updateCooldownLabel();
         });
 
+        document.getElementById("zoomIn").addEventListener("click", () => applyZoom(scale + 2));
+        document.getElementById("zoomOut").addEventListener("click", () => applyZoom(scale - 2));
+
+        wrapper.addEventListener(
+            "wheel",
+            (event) => {
+                event.preventDefault();
+                const rect = wrapper.getBoundingClientRect();
+                const focusX = event.clientX - rect.left;
+                const focusY = event.clientY - rect.top;
+                applyZoom(scale + (event.deltaY < 0 ? 2 : -2), focusX, focusY);
+            },
+            { passive: false }
+        );
+
+        applyZoom(scale);
         loadPixels();
         updateCooldownLabel();
         setInterval(loadPixels, 3000);
