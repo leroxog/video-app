@@ -58,8 +58,12 @@ def current_user():
 
 @app.route("/")
 def index():
-    videos = Video.query.order_by(Video.created_at.desc()).all()
-    return render_template("index.html", videos=videos, user=current_user())
+    query = request.args.get("q", "").strip()
+    videos_query = Video.query
+    if query:
+        videos_query = videos_query.filter(Video.title.ilike(f"%{query}%"))
+    videos = videos_query.order_by(Video.created_at.desc()).all()
+    return render_template("index.html", videos=videos, user=current_user(), query=query)
 
 
 @app.route("/register", methods=["GET", "POST"])

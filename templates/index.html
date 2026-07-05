@@ -2,6 +2,13 @@
 {% block title %}gigas{% endblock %}
 {% block content %}
     <h1>Videos</h1>
+    <form class="search-form" action="{{ url_for('index') }}" method="get">
+        <input type="text" name="q" value="{{ query }}" placeholder="Videos suchen..." maxlength="200">
+        <button type="submit">Suchen</button>
+        {% if query %}
+            <a class="clear-search" href="{{ url_for('index') }}">Zuruecksetzen</a>
+        {% endif %}
+    </form>
     {% if videos %}
         <div class="video-grid">
             {% for video in videos %}
@@ -16,6 +23,8 @@
                 </a>
             {% endfor %}
         </div>
+    {% elif query %}
+        <p>Keine Videos gefunden fuer "{{ query }}".</p>
     {% else %}
         <p>Noch keine Videos hochgeladen. <a href="{{ url_for('upload') }}">Jetzt das erste Video hochladen</a>.</p>
     {% endif %}
