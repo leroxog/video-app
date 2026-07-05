@@ -83,6 +83,39 @@ def test_upload_and_watch_video(client):
     assert "Mein Testvideo".encode() in response.data
 
 
+def test_upload_with_description_is_shown_on_watch_page(client):
+    register(client)
+    data = {
+        "title": "Video mit Beschreibung",
+        "description": "Das ist eine Testbeschreibung.",
+        "video": (io.BytesIO(b"fake video bytes"), "clip.mp4"),
+    }
+    response = client.post(
+        "/upload",
+        data=data,
+        content_type="multipart/form-data",
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert "Das ist eine Testbeschreibung.".encode() in response.data
+
+
+def test_upload_without_description_works(client):
+    register(client)
+    data = {
+        "title": "Video ohne Beschreibung",
+        "video": (io.BytesIO(b"fake video bytes"), "clip.mp4"),
+    }
+    response = client.post(
+        "/upload",
+        data=data,
+        content_type="multipart/form-data",
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert "Video ohne Beschreibung".encode() in response.data
+
+
 def test_upload_rejects_bad_extension(client):
     register(client)
     data = {
@@ -126,6 +159,24 @@ def test_fruitmerge_page_accessible_without_login(client):
     response = client.get("/fruitmerge")
     assert response.status_code == 200
     assert b"fruitCanvas" in response.data
+
+
+def test_header_search_bar_present_on_every_page(client):
+    for path in ["/", "/login", "/register"]:
+        response = client.get(path)
+        assert b"headerSearchInput" in response.data
+        assert b"home-link" in response.data
+
+
+def test_header_search_bar_present_on_watch_page(client):
+    register(client)
+    data = {
+        "title": "Header Test",
+        "video": (io.BytesIO(b"fake video bytes"), "clip.mp4"),
+    }
+    client.post("/upload", data=data, content_type="multipart/form-data", follow_redirects=True)
+    response = client.get("/")
+    assert b"headerSearchInput" in response.data
 
 
 def test_search_hint_shows_a_game_suggestion(client):

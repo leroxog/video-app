@@ -9,6 +9,10 @@
         <h1>{{ video.title }}</h1>
         <p class="video-meta">Hochgeladen von {{ video.uploader.username }} am {{ video.created_at.strftime("%d.%m.%Y") }}</p>
 
+        {% if video.description %}
+            <p class="video-description">{{ video.description }}</p>
+        {% endif %}
+
         {% if user and user.id == video.user_id %}
             <form action="{{ url_for('delete_video', video_id=video.id) }}" method="post"
                   onsubmit="return confirm('Video wirklich loeschen?');">

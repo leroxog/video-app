@@ -153,6 +153,7 @@ def upload():
 
     if request.method == "POST":
         title = request.form.get("title", "").strip()
+        description = request.form.get("description", "").strip()
         file = request.files.get("video")
 
         if not title:
@@ -169,7 +170,7 @@ def upload():
         stored_filename = f"{uuid.uuid4().hex}.{extension}"
         file.save(os.path.join(app.config["UPLOAD_FOLDER"], stored_filename))
 
-        video = Video(title=title, filename=stored_filename, user_id=user.id)
+        video = Video(title=title, description=description or None, filename=stored_filename, user_id=user.id)
         db.session.add(video)
         db.session.commit()
         return redirect(url_for("watch", video_id=video.id))

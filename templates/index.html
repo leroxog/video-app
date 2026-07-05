@@ -2,13 +2,9 @@
 {% block title %}gigas{% endblock %}
 {% block content %}
     <h1>Videos</h1>
-    <form class="search-form" action="{{ url_for('index') }}" method="get">
-        <input type="text" id="searchInput" name="q" value="{{ query }}" placeholder="Videos suchen..." maxlength="200">
-        <button type="submit">Suchen</button>
-        {% if query %}
-            <a class="clear-search" href="{{ url_for('index') }}">Zuruecksetzen</a>
-        {% endif %}
-    </form>
+    {% if query %}
+        <p><a class="clear-search" href="{{ url_for('index') }}">&times; Suche zuruecksetzen</a></p>
+    {% endif %}
     <button type="button" class="search-hint" data-suggestion="{{ game_suggestion }}">
         &#128161; Probiere z.B. {{ game_suggestion }}
     </button>
@@ -62,6 +58,9 @@
                     <div class="video-card-info">
                         <div class="video-title">{{ video.title }}</div>
                         <div class="video-meta">von {{ video.uploader.username }}</div>
+                        {% if video.description %}
+                            <div class="video-card-description">{{ video.description }}</div>
+                        {% endif %}
                     </div>
                 </a>
             {% endfor %}
@@ -74,7 +73,7 @@
 
     <script>
         document.querySelector(".search-hint").addEventListener("click", function () {
-            const input = document.getElementById("searchInput");
+            const input = document.getElementById("headerSearchInput");
             input.value = this.dataset.suggestion;
             input.focus();
         });
