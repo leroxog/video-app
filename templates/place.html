@@ -1,35 +1,31 @@
 {% extends "base.html" %}
 {% block title %}gigas/place{% endblock %}
+{% block body_class %}place-fullscreen{% endblock %}
 {% block content %}
     <div class="place-page">
-        <h1>gigas/place</h1>
-        <p>Alle {{ cooldown_seconds }} Sekunden kannst du einen Pixel setzen. Die Flaeche ist fuer alle gleich &mdash; jeder sieht deine Pixel sofort.</p>
-
-        <div class="place-controls">
+        <div class="place-controls" id="placeControls">
             <label for="colorPicker">Farbe:</label>
             <input type="color" id="colorPicker" value="#ff3b30">
-            <button type="button" id="zoomOut" title="Verkleinern">&minus;</button>
-            <button type="button" id="zoomIn" title="Vergroessern">+</button>
             <span id="zoomLevel"></span>
             <span id="cooldown"></span>
+            <a class="place-back" href="{{ url_for('index') }}">&larr; Zurueck</a>
         </div>
 
         <div class="place-canvas-wrapper" id="canvasWrapper">
             <canvas id="placeCanvas"></canvas>
         </div>
-
-        <p><a href="{{ url_for('index') }}">&larr; Zurueck zur Uebersicht</a></p>
     </div>
 
     <script>
         const GRID_SIZE = {{ grid_size }};
         const MIN_SCALE = 3;
-        const MAX_SCALE = 30;
+        const MAX_SCALE = 40;
         const COOLDOWN_MS = {{ cooldown_seconds }} * 1000;
 
         let scale = 6;
         let latestPixels = [];
 
+        const controls = document.getElementById("placeControls");
         const wrapper = document.getElementById("canvasWrapper");
         const canvas = document.getElementById("placeCanvas");
         const ctx = canvas.getContext("2d");
@@ -38,6 +34,11 @@
         const zoomLevelEl = document.getElementById("zoomLevel");
 
         let nextAllowedAt = Date.now() + {{ cooldown_remaining }} * 1000;
+
+        function resizeWrapper() {
+            const top = wrapper.getBoundingClientRect().top;
+            wrapper.style.height = Math.max(200, window.innerHeight - top) + "px";
+        }
 
         function applyZoom(newScale, focusX, focusY) {
             const oldScale = scale;
@@ -100,9 +101,6 @@
             updateCooldownLabel();
         });
 
-        document.getElementById("zoomIn").addEventListener("click", () => applyZoom(scale + 2));
-        document.getElementById("zoomOut").addEventListener("click", () => applyZoom(scale - 2));
-
         wrapper.addEventListener(
             "wheel",
             (event) => {
@@ -115,6 +113,9 @@
             { passive: false }
         );
 
+        window.addEventListener("resize", resizeWrapper);
+
+        resizeWrapper();
         applyZoom(scale);
         loadPixels();
         updateCooldownLabel();

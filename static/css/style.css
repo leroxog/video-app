@@ -140,15 +140,26 @@ h1 {
     font-size: 0.85rem;
 }
 
+body.place-fullscreen main {
+    max-width: none;
+    padding: 0;
+}
+
 .place-page {
-    max-width: 600px;
+    display: flex;
+    flex-direction: column;
 }
 
 .place-controls {
     display: flex;
     align-items: center;
     gap: 0.8rem;
-    margin-bottom: 1rem;
+    padding: 0.8rem 1.5rem;
+    background: #181818;
+    border-bottom: 1px solid #2c2c2c;
+    position: sticky;
+    top: 0;
+    z-index: 10;
 }
 
 .place-controls input[type="color"] {
@@ -159,22 +170,6 @@ h1 {
     border-radius: 4px;
     background: none;
     cursor: pointer;
-}
-
-.place-controls button {
-    width: 32px;
-    height: 32px;
-    border: 1px solid #3c3c3c;
-    border-radius: 4px;
-    background: #1c1c1c;
-    color: #fff;
-    font-size: 1.1rem;
-    line-height: 1;
-    cursor: pointer;
-}
-
-.place-controls button:hover {
-    background: #2c2c2c;
 }
 
 #zoomLevel {
@@ -188,13 +183,16 @@ h1 {
     font-size: 0.9rem;
 }
 
+.place-back {
+    margin-left: auto;
+    color: #f1f1f1;
+    text-decoration: none;
+    font-size: 0.9rem;
+}
+
 .place-canvas-wrapper {
     width: 100%;
-    max-width: 560px;
-    height: 560px;
     overflow: auto;
-    border: 1px solid #3c3c3c;
-    border-radius: 4px;
     background: #000;
 }
 
