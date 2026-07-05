@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Login - VideoTube{% endblock %}
+{% block content %}
+    <h1>Login</h1>
+    <form action="{{ url_for('login') }}" method="post" class="form">
+        <label for="username">Benutzername</label>
+        <input type="text" id="username" name="username" required maxlength="50">
+
+        <label for="password">Passwort</label>
+        <input type="password" id="password" name="password" required>
+
+        <button type="submit">Einloggen</button>
+    </form>
+    <p>Noch kein Konto? <a href="{{ url_for('register') }}">Registrieren</a></p>
+{% endblock %}

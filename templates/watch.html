@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}{{ video.title }} - VideoTube{% endblock %}
+{% block content %}
+    <div class="watch-page">
+        <video controls autoplay class="player">
+            <source src="{{ url_for('uploaded_file', filename=video.filename) }}">
+            Dein Browser unterstuetzt dieses Videoformat nicht.
+        </video>
+        <h1>{{ video.title }}</h1>
+        <p class="video-meta">Hochgeladen von {{ video.uploader.username }} am {{ video.created_at.strftime("%d.%m.%Y") }}</p>
+
+        {% if user and user.id == video.user_id %}
+            <form action="{{ url_for('delete_video', video_id=video.id) }}" method="post"
+                  onsubmit="return confirm('Video wirklich loeschen?');">
+                <button type="submit" class="danger">Video loeschen</button>
+            </form>
+        {% endif %}
+
+        <a href="{{ url_for('index') }}">&larr; Zurueck zur Uebersicht</a>
+    </div>
+{% endblock %}
