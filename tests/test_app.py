@@ -104,6 +104,18 @@ def test_search_easter_egg_shows_place_label(client):
     assert b"place-label" in response.data
 
 
+def test_search_easter_egg_shows_tictactoe_label(client):
+    response = client.get("/?q=gigas/tic.tac.toe")
+    assert "gigas/tic.tac.toe".encode() in response.data
+    assert b"place-label" in response.data
+
+
+def test_tictactoe_page_accessible_without_login(client):
+    response = client.get("/tictactoe")
+    assert response.status_code == 200
+    assert b"tictactoe-board" in response.data
+
+
 def test_place_requires_login(client):
     response = client.get("/place", follow_redirects=True)
     assert b"Login" in response.data

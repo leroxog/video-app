@@ -17,6 +17,14 @@
                 <div class="place-label-sub">Gemeinsame Pixel-Leinwand &mdash; jetzt spielen</div>
             </div>
         </a>
+    {% elif show_tictactoe_egg %}
+        <a class="place-label" href="{{ url_for('tictactoe') }}">
+            <div class="place-label-icon tictactoe-icon"></div>
+            <div>
+                <div class="place-label-title">gigas/tic.tac.toe</div>
+                <div class="place-label-sub">Tic Tac Toe gegen den Bot &mdash; jetzt spielen</div>
+            </div>
+        </a>
     {% elif videos %}
         <div class="video-grid">
             {% for video in videos %}

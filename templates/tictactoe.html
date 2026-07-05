@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}Tic Tac Toe - gigas{% endblock %}
+{% block content %}
+    <div class="tictactoe-page">
+        <h1>Tic Tac Toe gegen den Bot</h1>
+        <p id="statusLine">Du bist X. Du beginnst.</p>
+
+        <div class="tictactoe-board" id="board"></div>
+
+        <button type="button" id="restartBtn">Neues Spiel</button>
+        <p><a href="{{ url_for('index') }}">&larr; Zurueck zur Uebersicht</a></p>
+    </div>
+
+    <script>
+        const HUMAN = "X";
+        const BOT = "O";
+        const WIN_LINES = [
+            [0, 1, 2], [3, 4, 5], [6, 7, 8],
+            [0, 3, 6], [1, 4, 7], [2, 5, 8],
+            [0, 4, 8], [2, 4, 6],
+        ];
+
+        let board = Array(9).fill(null);
+        let gameOver = false;
+
+        const boardEl = document.getElementById("board");
+        const statusEl = document.getElementById("statusLine");
+        const restartBtn = document.getElementById("restartBtn");
+
+        function renderBoard() {
+            boardEl.innerHTML = "";
+            board.forEach((value, index) => {
+                const cell = document.createElement("button");
+                cell.type = "button";
+                cell.className = "tictactoe-cell";
+                cell.textContent = value || "";
+                cell.disabled = value !== null || gameOver;
+                cell.addEventListener("click", () => handleHumanMove(index));
+                boardEl.appendChild(cell);
+            });
+        }
+
+        function findWinner(cells) {
+            for (const [a, b, c] of WIN_LINES) {
+                if (cells[a] && cells[a] === cells[b] && cells[a] === cells[c]) {
+                    return cells[a];
+                }
+            }
+            return null;
+        }
+
+        function isDraw(cells) {
+            return cells.every((v) => v !== null) && !findWinner(cells);
+        }
+
+        function pickBotMove(cells) {
+            const empty = cells.map((v, i) => (v === null ? i : null)).filter((v) => v !== null);
+
+            for (const i of empty) {
+                const copy = [...cells];
+                copy[i] = BOT;
+                if (findWinner(copy) === BOT) return i;
+            }
+
+            for (const i of empty) {
+                const copy = [...cells];
+                copy[i] = HUMAN;
+                if (findWinner(copy) === HUMAN) return i;
+            }
+
+            if (Math.random() < 0.15) {
+                return empty[Math.floor(Math.random() * empty.length)];
+            }
+
+            if (cells[4] === null) return 4;
+
+            const corners = [0, 2, 6, 8].filter((i) => cells[i] === null);
+            if (corners.length) return corners[Math.floor(Math.random() * corners.length)];
+
+            return empty[Math.floor(Math.random() * empty.length)];
+        }
+
+        function endGameIfNeeded() {
+            const winner = findWinner(board);
+            if (winner) {
+                statusEl.textContent = winner === HUMAN ? "Du hast gewonnen!" : "Der Bot hat gewonnen.";
+                gameOver = true;
+                return true;
+            }
+            if (isDraw(board)) {
+                statusEl.textContent = "Unentschieden.";
+                gameOver = true;
+                return true;
+            }
+            return false;
+        }
+
+        function handleHumanMove(index) {
+            if (gameOver || board[index] !== null) return;
+
+            board[index] = HUMAN;
+            renderBoard();
+            if (endGameIfNeeded()) return;
+
+            statusEl.textContent = "Der Bot ist am Zug...";
+            setTimeout(() => {
+                const botIndex = pickBotMove(board);
+                board[botIndex] = BOT;
+                renderBoard();
+                if (!endGameIfNeeded()) {
+                    statusEl.textContent = "Du bist am Zug.";
+                }
+            }, 400);
+        }
+
+        restartBtn.addEventListener("click", () => {
+            board = Array(9).fill(null);
+            gameOver = false;
+            statusEl.textContent = "Du bist X. Du beginnst.";
+            renderBoard();
+        });
+
+        renderBoard();
+    </script>
+{% endblock %}

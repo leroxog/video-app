@@ -17,6 +17,7 @@ ALLOWED_EXTENSIONS = {"mp4", "webm", "ogg", "mov"}
 PLACE_GRID_SIZE = 100
 PLACE_COOLDOWN_SECONDS = 5
 PLACE_SEARCH_TERM = "gigas/place"
+TICTACTOE_SEARCH_TERM = "gigas/tic.tac.toe"
 HEX_COLOR_RE = re.compile(r"#[0-9a-fA-F]{6}")
 
 app = Flask(__name__)
@@ -66,14 +67,20 @@ def current_user():
 def index():
     query = request.args.get("q", "").strip()
     show_place_egg = query.lower() == PLACE_SEARCH_TERM
+    show_tictactoe_egg = query.lower() == TICTACTOE_SEARCH_TERM
     videos = []
-    if not show_place_egg:
+    if not show_place_egg and not show_tictactoe_egg:
         videos_query = Video.query
         if query:
             videos_query = videos_query.filter(Video.title.ilike(f"%{query}%"))
         videos = videos_query.order_by(Video.created_at.desc()).all()
     return render_template(
-        "index.html", videos=videos, user=current_user(), query=query, show_place_egg=show_place_egg
+        "index.html",
+        videos=videos,
+        user=current_user(),
+        query=query,
+        show_place_egg=show_place_egg,
+        show_tictactoe_egg=show_tictactoe_egg,
     )
 
 
@@ -176,6 +183,11 @@ def delete_video(video_id):
 
 def seconds_since(moment):
     return (datetime.now(timezone.utc) - moment.replace(tzinfo=timezone.utc)).total_seconds()
+
+
+@app.route("/tictactoe")
+def tictactoe():
+    return render_template("tictactoe.html", user=current_user())
 
 
 @app.route("/place")
