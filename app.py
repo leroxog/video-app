@@ -30,6 +30,7 @@ GAME_SUGGESTIONS = [
     GRAVITYRUN_SEARCH_TERM,
     KNIFEHIT_SEARCH_TERM,
 ]
+SCORED_GAMES = {"fruit.merge", "gravity.run", "knife.hit"}
 HEX_COLOR_RE = re.compile(r"#[0-9a-fA-F]{6}")
 
 app = Flask(__name__)
@@ -152,6 +153,63 @@ def login():
 def logout():
     session.pop("user_id", None)
     return redirect(url_for("index"))
+
+
+@app.route("/leaderboard")
+def leaderboard():
+    users = User.query.filter(User.total_score > 0).order_by(User.total_score.desc()).all()
+    return render_template("leaderboard.html", users=users, user=current_user())
+
+
+@app.route("/api/register", methods=["POST"])
+def api_register():
+    data = request.get_json(silent=True) or {}
+    username = (data.get("username") or "").strip()
+    password = data.get("password") or ""
+
+    if not username or not password:
+        return jsonify({"ok": False, "error": "Bitte Benutzername und Passwort angeben."}), 400
+    if User.query.filter_by(username=username).first():
+        return jsonify({"ok": False, "error": "Dieser Benutzername ist bereits vergeben."}), 400
+
+    user = User(username=username)
+    user.set_password(password)
+    db.session.add(user)
+    db.session.commit()
+    session["user_id"] = user.id
+    return jsonify({"ok": True, "username": user.username})
+
+
+@app.route("/api/login", methods=["POST"])
+def api_login():
+    data = request.get_json(silent=True) or {}
+    username = (data.get("username") or "").strip()
+    password = data.get("password") or ""
+
+    user = User.query.filter_by(username=username).first()
+    if not user or not user.check_password(password):
+        return jsonify({"ok": False, "error": "Benutzername oder Passwort ist falsch."}), 400
+
+    session["user_id"] = user.id
+    return jsonify({"ok": True, "username": user.username})
+
+
+@app.route("/api/score", methods=["POST"])
+def api_score():
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+
+    data = request.get_json(silent=True) or {}
+    game = data.get("game")
+    score = data.get("score")
+
+    if game not in SCORED_GAMES or not isinstance(score, int) or score < 0:
+        return jsonify({"ok": False, "error": "invalid_data"}), 400
+
+    user.total_score += score
+    db.session.commit()
+    return jsonify({"ok": True, "total_score": user.total_score})
 
 
 @app.route("/upload", methods=["GET", "POST"])

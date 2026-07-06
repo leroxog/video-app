@@ -351,3 +351,67 @@ def test_profile_picture_upload_rejects_bad_extension(client):
         "/profile/picture", data=data, content_type="multipart/form-data", follow_redirects=True
     )
     assert "erlaubt".encode() in response.data
+
+
+def test_api_register_and_score(client):
+    response = client.post(
+        "/api/register", json={"username": "charlie", "password": "secret123"}
+    )
+    assert response.status_code == 200
+    assert response.get_json()["ok"] is True
+
+    response = client.post("/api/score", json={"game": "fruit.merge", "score": 42})
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["ok"] is True
+    assert data["total_score"] == 42
+
+    response = client.post("/api/score", json={"game": "gravity.run", "score": 8})
+    assert response.get_json()["total_score"] == 50
+
+
+def test_api_register_duplicate_username(client):
+    client.post("/api/register", json={"username": "dana", "password": "secret123"})
+    client.post("/logout")
+    response = client.post("/api/register", json={"username": "dana", "password": "other123"})
+    assert response.status_code == 400
+    assert response.get_json()["ok"] is False
+
+
+def test_api_login_success_and_failure(client):
+    register(client, username="erin", password="secret123")
+    client.post("/logout")
+
+    response = client.post("/api/login", json={"username": "erin", "password": "wrong"})
+    assert response.status_code == 400
+    assert response.get_json()["ok"] is False
+
+    response = client.post("/api/login", json={"username": "erin", "password": "secret123"})
+    assert response.status_code == 200
+    assert response.get_json()["ok"] is True
+
+
+def test_api_score_requires_login(client):
+    response = client.post("/api/score", json={"game": "fruit.merge", "score": 10})
+    assert response.status_code == 401
+
+
+def test_api_score_rejects_unknown_game(client):
+    register(client)
+    response = client.post("/api/score", json={"game": "not.a.game", "score": 10})
+    assert response.status_code == 400
+
+
+def test_leaderboard_shows_only_scored_users(client):
+    register(client, username="frank")
+    client.post("/api/score", json={"game": "knife.hit", "score": 15})
+    client.post("/logout")
+
+    register(client, username="gina")
+    client.post("/logout")
+
+    response = client.get("/leaderboard")
+    assert response.status_code == 200
+    assert b"frank" in response.data
+    assert b"15" in response.data
+    assert b"gina" not in response.data

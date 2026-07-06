@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Bestenliste - gigas{% endblock %}
+{% block content %}
+    <h1>Bestenliste</h1>
+    <p>Gesamtpunkte aus allen Spielen (gigas/fruit.merge, gigas/gravity.run, gigas/knife.hit) &mdash; nur angemeldete Accounts.</p>
+
+    {% if users %}
+        <table class="mp-leaderboard">
+            <thead><tr><th>Platz</th><th>Account</th><th>Punkte</th></tr></thead>
+            <tbody>
+                {% for u in users %}
+                    <tr class="{{ 'winner' if loop.index == 1 else '' }}">
+                        <td>{{ loop.index }}</td>
+                        <td>
+                            <a class="leaderboard-user" href="{{ url_for('profile', username=u.username) }}">
+                                {% if u.profile_image %}
+                                    <img class="nav-avatar" src="{{ url_for('static', filename='profile_pics/' + u.profile_image) }}" alt="">
+                                {% endif %}
+                                {{ u.username }}
+                            </a>
+                        </td>
+                        <td>{{ u.total_score }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>Noch keine Punkte gesammelt. Spiel eines der Minispiele und melde dich an, um hier zu erscheinen!</p>
+    {% endif %}
+{% endblock %}

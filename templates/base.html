@@ -20,6 +20,7 @@
 
         <nav>
             <a href="{{ url_for('index') }}" class="home-link" title="Startseite">&#127968; Start</a>
+            <a href="{{ url_for('leaderboard') }}" title="Bestenliste">&#127942; Bestenliste</a>
             {% if user %}
                 <a class="username" href="{{ url_for('profile', username=user.username) }}">
                     {% if user.profile_image %}

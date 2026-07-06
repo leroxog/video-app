@@ -12,6 +12,7 @@ class User(db.Model):
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     last_pixel_at = db.Column(db.DateTime, nullable=True)
     profile_image = db.Column(db.String(255), nullable=True)
+    total_score = db.Column(db.Integer, nullable=False, default=0)
     videos = db.relationship("Video", backref="uploader", lazy=True, cascade="all, delete-orphan")
     subscriptions_made = db.relationship(
         "Subscription",

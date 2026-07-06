@@ -22,9 +22,39 @@
         <p><a href="{{ url_for('index') }}">&larr; Zurueck zur Uebersicht</a></p>
     </div>
 
+    <div class="guest-upsell-overlay" id="guestUpsellOverlay">
+        <div class="guest-upsell-box">
+            <div class="guest-upsell-title">!!!Zeig dein koennen!!!</div>
+            <div class="guest-upsell-badge">EMPFOHLEN</div>
+
+            <div class="guest-upsell-actions" id="guestUpsellChoice">
+                <button type="button" class="guest-upsell-yes" id="guestUpsellYes">JA, zeig mir wie!</button>
+                <button type="button" class="guest-upsell-no" id="guestUpsellNo">Vielleicht spaeter</button>
+            </div>
+
+            <div class="guest-upsell-auth" id="guestUpsellAuth" style="display:none;">
+                <input type="text" id="guestUpsellUsername" placeholder="Benutzername" autocomplete="username">
+                <input type="password" id="guestUpsellPassword" placeholder="Passwort" autocomplete="current-password">
+                <div class="guest-upsell-auth-actions">
+                    <button type="button" id="guestUpsellLoginBtn">Einloggen</button>
+                    <button type="button" id="guestUpsellRegisterBtn">Registrieren</button>
+                </div>
+                <div class="guest-upsell-error" id="guestUpsellError"></div>
+            </div>
+
+            <div id="guestUpsellSuccess" style="display:none;">
+                <div class="guest-upsell-success">Score gespeichert!</div>
+                <button type="button" class="guest-upsell-continue" id="guestUpsellContinue">WEITER</button>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/matter-js@0.19.0/build/matter.min.js"></script>
     <script>
         const { Engine, Runner, Bodies, Composite, Events } = Matter;
+
+        const IS_LOGGED_IN = {{ 'true' if user else 'false' }};
+        const GAME_KEY = "fruit.merge";
 
         const WIDTH = 380;
         const HEIGHT = 560;
@@ -153,6 +183,92 @@
             gameOver = true;
             finalScoreEl.textContent = score;
             gameOverOverlay.classList.add("visible");
+
+            if (IS_LOGGED_IN) {
+                submitScore(score);
+            } else if (score > 0) {
+                showGuestUpsell(score);
+            }
+        }
+
+        function submitScore(points) {
+            fetch("{{ url_for('api_score') }}", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ game: GAME_KEY, score: points }),
+            });
+        }
+
+        function showGuestUpsell(points) {
+            const overlay = document.getElementById("guestUpsellOverlay");
+            document.getElementById("guestUpsellChoice").style.display = "flex";
+            document.getElementById("guestUpsellAuth").style.display = "none";
+            document.getElementById("guestUpsellSuccess").style.display = "none";
+            document.getElementById("guestUpsellError").textContent = "";
+            overlay.dataset.pendingScore = points;
+            overlay.classList.add("visible");
+        }
+
+        document.getElementById("guestUpsellNo").addEventListener("click", () => {
+            document.getElementById("guestUpsellOverlay").classList.remove("visible");
+        });
+
+        document.getElementById("guestUpsellYes").addEventListener("click", () => {
+            document.getElementById("guestUpsellChoice").style.display = "none";
+            document.getElementById("guestUpsellAuth").style.display = "flex";
+        });
+
+        async function handleGuestAuth(endpoint) {
+            const username = document.getElementById("guestUpsellUsername").value.trim();
+            const password = document.getElementById("guestUpsellPassword").value;
+            const errorEl = document.getElementById("guestUpsellError");
+            errorEl.textContent = "";
+
+            const res = await fetch(endpoint, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username, password }),
+            });
+            const data = await res.json();
+            if (!data.ok) {
+                errorEl.textContent = data.error || "Fehler, bitte erneut versuchen.";
+                return;
+            }
+
+            const overlay = document.getElementById("guestUpsellOverlay");
+            const pendingScore = parseInt(overlay.dataset.pendingScore || "0", 10);
+            await fetch("{{ url_for('api_score') }}", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ game: GAME_KEY, score: pendingScore }),
+            });
+
+            updateHeaderAfterLogin(data.username);
+
+            document.getElementById("guestUpsellAuth").style.display = "none";
+            document.getElementById("guestUpsellSuccess").style.display = "block";
+        }
+
+        document.getElementById("guestUpsellLoginBtn").addEventListener("click", () => handleGuestAuth("{{ url_for('api_login') }}"));
+        document.getElementById("guestUpsellRegisterBtn").addEventListener("click", () => handleGuestAuth("{{ url_for('api_register') }}"));
+
+        document.getElementById("guestUpsellContinue").addEventListener("click", () => {
+            document.getElementById("guestUpsellOverlay").classList.remove("visible");
+        });
+
+        function updateHeaderAfterLogin(username) {
+            const loginHref = "{{ url_for('login') }}";
+            const registerHref = "{{ url_for('register') }}";
+            const nav = document.querySelector("header nav");
+            if (!nav) return;
+            const loginLink = nav.querySelector(`a[href="${loginHref}"]`);
+            const registerLink = nav.querySelector(`a[href="${registerHref}"]`);
+            if (loginLink) loginLink.remove();
+            if (registerLink) {
+                registerLink.textContent = username;
+                registerLink.removeAttribute("href");
+                registerLink.style.cursor = "default";
+            }
         }
 
         function restartGame() {

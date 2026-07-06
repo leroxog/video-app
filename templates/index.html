@@ -1,6 +1,20 @@
 {% extends "base.html" %}
 {% block title %}gigas{% endblock %}
 {% block content %}
+    {% if not user %}
+        <div class="promo-banner" id="promoBanner">
+            <button type="button" class="promo-close" id="promoClose" title="Schliessen">&times;</button>
+            <div class="promo-title">Empfehlung von Hersteller!</div>
+            <div class="promo-game">Spiel Fruit Merge</div>
+            <a class="promo-play" href="{{ url_for('fruitmerge') }}">SPIELEN</a>
+        </div>
+        <script>
+            document.getElementById("promoClose").addEventListener("click", function () {
+                document.getElementById("promoBanner").remove();
+            });
+        </script>
+    {% endif %}
+
     <h1>Videos</h1>
     {% if query %}
         <p><a class="clear-search" href="{{ url_for('index') }}">&times; Suche zuruecksetzen</a></p>
