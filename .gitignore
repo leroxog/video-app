@@ -7,3 +7,5 @@ venv/
 instance/
 static/uploads/*
 !static/uploads/.gitkeep
+static/profile_pics/*
+!static/profile_pics/.gitkeep

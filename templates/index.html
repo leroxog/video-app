@@ -5,9 +5,12 @@
     {% if query %}
         <p><a class="clear-search" href="{{ url_for('index') }}">&times; Suche zuruecksetzen</a></p>
     {% endif %}
-    <button type="button" class="search-hint" data-suggestion="{{ game_suggestion }}">
-        &#128161; Probiere z.B. {{ game_suggestion }}
-    </button>
+    <div class="search-hint-row">
+        <button type="button" class="search-hint" id="searchHintBtn" data-suggestion="{{ game_suggestion }}">
+            &#128161; Probiere z.B. {{ game_suggestion }}
+        </button>
+        <button type="button" class="search-hint-reroll" id="searchHintReroll" title="Anderer Vorschlag">&#128260;</button>
+    </div>
     {% if show_place_egg %}
         <a class="place-label" href="{{ url_for('place') }}">
             <div class="place-label-icon"></div>
@@ -72,10 +75,28 @@
     {% endif %}
 
     <script>
-        document.querySelector(".search-hint").addEventListener("click", function () {
+        const GAME_TERMS = [
+            "gigas/place",
+            "gigas/tic.tac.toe",
+            "gigas/fruit.merge",
+            "gigas/gravity.run",
+            "gigas/knife.hit",
+        ];
+        const hintBtn = document.getElementById("searchHintBtn");
+
+        hintBtn.addEventListener("click", function () {
             const input = document.getElementById("headerSearchInput");
             input.value = this.dataset.suggestion;
             input.focus();
+        });
+
+        document.getElementById("searchHintReroll").addEventListener("click", function () {
+            let next;
+            do {
+                next = GAME_TERMS[Math.floor(Math.random() * GAME_TERMS.length)];
+            } while (next === hintBtn.dataset.suggestion && GAME_TERMS.length > 1);
+            hintBtn.dataset.suggestion = next;
+            hintBtn.innerHTML = "&#128161; Probiere z.B. " + next;
         });
     </script>
 {% endblock %}

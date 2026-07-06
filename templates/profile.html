@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}{{ profile_user.username }} - gigas{% endblock %}
+{% block content %}
+    <div class="profile-header">
+        {% if profile_user.profile_image %}
+            <img class="profile-avatar" src="{{ url_for('static', filename='profile_pics/' + profile_user.profile_image) }}" alt="">
+        {% else %}
+            <div class="profile-avatar profile-avatar-placeholder">{{ profile_user.username[0]|upper }}</div>
+        {% endif %}
+
+        <div>
+            <h1>{{ profile_user.username }}</h1>
+            <p class="video-meta">{{ subscriber_count }} Abonnenten &middot; {{ videos|length }} Videos</p>
+        </div>
+
+        {% if user and not is_own_profile %}
+            <form action="{{ url_for('subscribe', username=profile_user.username) }}" method="post" class="profile-subscribe-form">
+                <button type="submit" class="{{ 'subscribed' if is_subscribed else '' }}">
+                    {{ 'Abonniert' if is_subscribed else 'Abonnieren' }}
+                </button>
+            </form>
+        {% endif %}
+    </div>
+
+    {% if is_own_profile %}
+        <form action="{{ url_for('upload_profile_picture') }}" method="post" enctype="multipart/form-data" class="profile-picture-form">
+            <label for="profile_image">Profilbild aendern</label>
+            <input type="file" id="profile_image" name="profile_image" accept="image/png,image/jpeg,image/gif,image/webp" required>
+            <button type="submit">Hochladen</button>
+        </form>
+    {% endif %}
+
+    <h2>Videos</h2>
+    {% if videos %}
+        <div class="video-grid">
+            {% for video in videos %}
+                <a class="video-card" href="{{ url_for('watch', video_id=video.id) }}">
+                    <video muted preload="metadata">
+                        <source src="{{ url_for('uploaded_file', filename=video.filename) }}">
+                    </video>
+                    <div class="video-card-info">
+                        <div class="video-title">{{ video.title }}</div>
+                        {% if video.description %}
+                            <div class="video-card-description">{{ video.description }}</div>
+                        {% endif %}
+                    </div>
+                </a>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p>Noch keine Videos hochgeladen.</p>
+    {% endif %}
+{% endblock %}

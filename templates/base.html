@@ -21,7 +21,12 @@
         <nav>
             <a href="{{ url_for('index') }}" class="home-link" title="Startseite">&#127968; Start</a>
             {% if user %}
-                <span class="username">{{ user.username }}</span>
+                <a class="username" href="{{ url_for('profile', username=user.username) }}">
+                    {% if user.profile_image %}
+                        <img class="nav-avatar" src="{{ url_for('static', filename='profile_pics/' + user.profile_image) }}" alt="">
+                    {% endif %}
+                    {{ user.username }}
+                </a>
                 <a href="{{ url_for('upload') }}">Hochladen</a>
                 <form action="{{ url_for('logout') }}" method="post">
                     <button type="submit">Logout</button>

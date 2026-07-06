@@ -17,6 +17,8 @@ def client():
 
     upload_dir = tempfile.mkdtemp()
     flask_app.config["UPLOAD_FOLDER"] = upload_dir
+    profile_pic_dir = tempfile.mkdtemp()
+    flask_app.config["PROFILE_PIC_FOLDER"] = profile_pic_dir
 
     with flask_app.app_context():
         db.create_all()
@@ -24,6 +26,7 @@ def client():
         db.drop_all()
 
     shutil.rmtree(upload_dir, ignore_errors=True)
+    shutil.rmtree(profile_pic_dir, ignore_errors=True)
 
 
 def register(client, username="alice", password="secret123"):
@@ -252,3 +255,99 @@ def test_place_pixel_rejects_bad_color(client):
     response = client.post("/place/pixel", json={"x": 1, "y": 1, "color": "notacolor"})
     assert response.status_code == 400
     assert response.get_json()["error"] == "invalid_color"
+
+
+def upload_video(client, title="Testvideo", description=""):
+    data = {
+        "title": title,
+        "description": description,
+        "video": (io.BytesIO(b"fake video bytes"), "clip.mp4"),
+    }
+    return client.post("/upload", data=data, content_type="multipart/form-data", follow_redirects=True)
+
+
+def test_like_toggle(client):
+    register(client)
+    upload_video(client, title="Like Test")
+    response = client.get("/")
+    assert response.status_code == 200
+
+    video_id = 1
+    response = client.post(f"/video/{video_id}/like", follow_redirects=True)
+    assert response.status_code == 200
+    assert b"Geliked" in response.data
+    assert b"(1)" in response.data
+
+    response = client.post(f"/video/{video_id}/like", follow_redirects=True)
+    assert b"Geliked" not in response.data
+    assert b"(0)" in response.data
+
+
+def test_like_requires_login(client):
+    register(client)
+    upload_video(client, title="Like Login Test")
+    client.post("/logout")
+    response = client.post("/video/1/like", follow_redirects=True)
+    assert b"Login" in response.data
+
+
+def test_download_link_present_on_watch_page(client):
+    register(client)
+    upload_video(client, title="Download Test")
+    response = client.get("/video/1")
+    assert b"download" in response.data
+    assert b"Herunterladen" in response.data
+
+
+def test_profile_page_shows_username_and_videos(client):
+    register(client, username="bob")
+    upload_video(client, title="Bobs Video")
+    response = client.get("/user/bob")
+    assert response.status_code == 200
+    assert b"bob" in response.data
+    assert b"Bobs Video" in response.data
+
+
+def test_profile_page_404_for_unknown_user(client):
+    response = client.get("/user/doesnotexist")
+    assert response.status_code == 404
+
+
+def test_subscribe_toggle(client):
+    register(client, username="alice", password="secret123")
+    client.post("/logout")
+    register(client, username="bob", password="secret123")
+    client.post("/logout")
+    client.post("/login", data={"username": "alice", "password": "secret123"})
+
+    response = client.post("/user/bob/subscribe", follow_redirects=True)
+    assert response.status_code == 200
+    assert b"Abonniert" in response.data
+
+    response = client.post("/user/bob/subscribe", follow_redirects=True)
+    assert b"Abonnieren" in response.data
+
+
+def test_subscribe_to_self_is_rejected(client):
+    register(client, username="alice")
+    response = client.post("/user/alice/subscribe")
+    assert response.status_code == 400
+
+
+def test_profile_picture_upload(client):
+    register(client, username="alice")
+    data = {"profile_image": (io.BytesIO(b"fake image bytes"), "avatar.png")}
+    response = client.post(
+        "/profile/picture", data=data, content_type="multipart/form-data", follow_redirects=True
+    )
+    assert response.status_code == 200
+    assert b"profile_pics/" in response.data
+
+
+def test_profile_picture_upload_rejects_bad_extension(client):
+    register(client, username="alice")
+    data = {"profile_image": (io.BytesIO(b"not an image"), "avatar.exe")}
+    response = client.post(
+        "/profile/picture", data=data, content_type="multipart/form-data", follow_redirects=True
+    )
+    assert "erlaubt".encode() in response.data

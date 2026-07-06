@@ -7,7 +7,45 @@
             Dein Browser unterstuetzt dieses Videoformat nicht.
         </video>
         <h1>{{ video.title }}</h1>
-        <p class="video-meta">Hochgeladen von {{ video.uploader.username }} am {{ video.created_at.strftime("%d.%m.%Y") }}</p>
+
+        <div class="watch-actions">
+            {% if user %}
+                <form action="{{ url_for('like_video', video_id=video.id) }}" method="post">
+                    <button type="submit" class="{{ 'liked' if is_liked else '' }}">
+                        {{ '❤ Geliked' if is_liked else '♡ Like' }} ({{ like_count }})
+                    </button>
+                </form>
+            {% else %}
+                <span class="like-count-readonly">&#10084; {{ like_count }}</span>
+            {% endif %}
+
+            <a class="download-link" href="{{ url_for('uploaded_file', filename=video.filename) }}" download>
+                &#11015; Herunterladen
+            </a>
+        </div>
+
+        <div class="channel-row">
+            <a class="channel-link" href="{{ url_for('profile', username=video.uploader.username) }}">
+                {% if video.uploader.profile_image %}
+                    <img class="channel-avatar" src="{{ url_for('static', filename='profile_pics/' + video.uploader.profile_image) }}" alt="">
+                {% else %}
+                    <div class="channel-avatar profile-avatar-placeholder">{{ video.uploader.username[0]|upper }}</div>
+                {% endif %}
+                <span>{{ video.uploader.username }}</span>
+            </a>
+            <span class="video-meta">{{ subscriber_count }} Abonnenten</span>
+
+            {% if user and user.id != video.user_id %}
+                <form action="{{ url_for('subscribe', username=video.uploader.username) }}" method="post">
+                    <input type="hidden" name="next" value="{{ url_for('watch', video_id=video.id) }}">
+                    <button type="submit" class="{{ 'subscribed' if is_subscribed else '' }}">
+                        {{ 'Abonniert' if is_subscribed else 'Abonnieren' }}
+                    </button>
+                </form>
+            {% endif %}
+        </div>
+
+        <p class="video-meta">Hochgeladen am {{ video.created_at.strftime("%d.%m.%Y") }}</p>
 
         {% if video.description %}
             <p class="video-description">{{ video.description }}</p>

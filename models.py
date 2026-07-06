@@ -11,7 +11,22 @@ class User(db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     last_pixel_at = db.Column(db.DateTime, nullable=True)
+    profile_image = db.Column(db.String(255), nullable=True)
     videos = db.relationship("Video", backref="uploader", lazy=True, cascade="all, delete-orphan")
+    subscriptions_made = db.relationship(
+        "Subscription",
+        foreign_keys="Subscription.subscriber_id",
+        backref="subscriber",
+        lazy=True,
+        cascade="all, delete-orphan",
+    )
+    subscribers = db.relationship(
+        "Subscription",
+        foreign_keys="Subscription.channel_id",
+        backref="channel",
+        lazy=True,
+        cascade="all, delete-orphan",
+    )
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -27,6 +42,21 @@ class Video(db.Model):
     filename = db.Column(db.String(255), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    likes = db.relationship("Like", backref="video", lazy=True, cascade="all, delete-orphan")
+
+
+class Like(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    video_id = db.Column(db.Integer, db.ForeignKey("video.id"), nullable=False)
+    __table_args__ = (db.UniqueConstraint("user_id", "video_id", name="uq_like_user_video"),)
+
+
+class Subscription(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    subscriber_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    channel_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    __table_args__ = (db.UniqueConstraint("subscriber_id", "channel_id", name="uq_sub_subscriber_channel"),)
 
 
 class Pixel(db.Model):

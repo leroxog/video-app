@@ -9,12 +9,13 @@ from flask import (
     session, send_from_directory, abort, flash, jsonify
 )
 from werkzeug.utils import secure_filename
-from models import db, User, Video, Pixel
+from models import db, User, Video, Pixel, Like, Subscription
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 ALLOWED_EXTENSIONS = {"mp4", "webm", "ogg", "mov"}
+ALLOWED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
 PLACE_GRID_SIZE = 100
 PLACE_COOLDOWN_SECONDS = 5
 PLACE_SEARCH_TERM = "gigas/place"
@@ -51,6 +52,10 @@ UPLOAD_FOLDER = os.path.join(app.root_path, "static", "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
+PROFILE_PIC_FOLDER = os.path.join(app.root_path, "static", "profile_pics")
+os.makedirs(PROFILE_PIC_FOLDER, exist_ok=True)
+app.config["PROFILE_PIC_FOLDER"] = PROFILE_PIC_FOLDER
+
 logger.warning(
     "HINWEIS: Videos werden lokal im Dateisystem gespeichert. Auf den meisten "
     "kostenlosen Hosting-Plattformen (z.B. Railway) ist dieser Speicher nicht "
@@ -65,6 +70,10 @@ with app.app_context():
 
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+def allowed_image_file(filename):
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS
 
 
 def current_user():
@@ -181,7 +190,41 @@ def upload():
 @app.route("/video/<int:video_id>")
 def watch(video_id):
     video = db.get_or_404(Video, video_id)
-    return render_template("watch.html", video=video, user=current_user())
+    user = current_user()
+
+    is_liked = False
+    is_subscribed = False
+    if user is not None:
+        is_liked = Like.query.filter_by(user_id=user.id, video_id=video.id).first() is not None
+        is_subscribed = Subscription.query.filter_by(
+            subscriber_id=user.id, channel_id=video.user_id
+        ).first() is not None
+
+    return render_template(
+        "watch.html",
+        video=video,
+        user=user,
+        like_count=len(video.likes),
+        is_liked=is_liked,
+        is_subscribed=is_subscribed,
+        subscriber_count=len(video.uploader.subscribers),
+    )
+
+
+@app.route("/video/<int:video_id>/like", methods=["POST"])
+def like_video(video_id):
+    user = current_user()
+    if user is None:
+        return redirect(url_for("login"))
+    video = db.get_or_404(Video, video_id)
+
+    existing = Like.query.filter_by(user_id=user.id, video_id=video.id).first()
+    if existing:
+        db.session.delete(existing)
+    else:
+        db.session.add(Like(user_id=user.id, video_id=video.id))
+    db.session.commit()
+    return redirect(url_for("watch", video_id=video.id))
 
 
 @app.route("/uploads/<path:filename>")
@@ -202,6 +245,81 @@ def delete_video(video_id):
     db.session.delete(video)
     db.session.commit()
     return redirect(url_for("index"))
+
+
+@app.route("/user/<username>")
+def profile(username):
+    profile_user = User.query.filter_by(username=username).first_or_404()
+    user = current_user()
+
+    is_own_profile = user is not None and user.id == profile_user.id
+    is_subscribed = False
+    if user is not None and not is_own_profile:
+        is_subscribed = Subscription.query.filter_by(
+            subscriber_id=user.id, channel_id=profile_user.id
+        ).first() is not None
+
+    videos = Video.query.filter_by(user_id=profile_user.id).order_by(Video.created_at.desc()).all()
+
+    return render_template(
+        "profile.html",
+        profile_user=profile_user,
+        videos=videos,
+        user=user,
+        is_own_profile=is_own_profile,
+        is_subscribed=is_subscribed,
+        subscriber_count=len(profile_user.subscribers),
+    )
+
+
+@app.route("/user/<username>/subscribe", methods=["POST"])
+def subscribe(username):
+    user = current_user()
+    if user is None:
+        return redirect(url_for("login"))
+
+    target = User.query.filter_by(username=username).first_or_404()
+    if target.id == user.id:
+        abort(400)
+
+    existing = Subscription.query.filter_by(subscriber_id=user.id, channel_id=target.id).first()
+    if existing:
+        db.session.delete(existing)
+    else:
+        db.session.add(Subscription(subscriber_id=user.id, channel_id=target.id))
+    db.session.commit()
+
+    next_url = request.form.get("next") or url_for("profile", username=username)
+    return redirect(next_url)
+
+
+@app.route("/profile/picture", methods=["POST"])
+def upload_profile_picture():
+    user = current_user()
+    if user is None:
+        return redirect(url_for("login"))
+
+    file = request.files.get("profile_image")
+    if not file or file.filename == "":
+        flash("Bitte ein Bild auswaehlen.")
+        return redirect(url_for("profile", username=user.username))
+    if not allowed_image_file(file.filename):
+        flash("Nur folgende Bildformate sind erlaubt: " + ", ".join(sorted(ALLOWED_IMAGE_EXTENSIONS)))
+        return redirect(url_for("profile", username=user.username))
+
+    extension = secure_filename(file.filename).rsplit(".", 1)[1].lower()
+    stored_filename = f"{uuid.uuid4().hex}.{extension}"
+    file.save(os.path.join(app.config["PROFILE_PIC_FOLDER"], stored_filename))
+
+    if user.profile_image:
+        try:
+            os.remove(os.path.join(app.config["PROFILE_PIC_FOLDER"], user.profile_image))
+        except OSError:
+            pass
+
+    user.profile_image = stored_filename
+    db.session.commit()
+    return redirect(url_for("profile", username=user.username))
 
 
 def seconds_since(moment):
