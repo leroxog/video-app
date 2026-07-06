@@ -796,7 +796,7 @@ body.place-fullscreen main {
 }
 
 .fruitmerge-page {
-    max-width: 420px;
+    max-width: 500px;
 }
 
 .fruitmerge-score {
@@ -806,7 +806,7 @@ body.place-fullscreen main {
 
 .fruitmerge-wrapper {
     position: relative;
-    width: 380px;
+    width: 460px;
     max-width: 100%;
 }
 
@@ -928,4 +928,31 @@ body.place-fullscreen main {
     color: #0f0f0f;
     font-weight: 600;
     cursor: pointer;
+}
+
+.admin-create-form {
+    max-width: 320px;
+    margin-bottom: 2rem;
+}
+
+.admin-table {
+    width: 100%;
+    max-width: 700px;
+    border-collapse: collapse;
+    margin-bottom: 2rem;
+}
+
+.admin-table th, .admin-table td {
+    text-align: left;
+    padding: 0.5rem 0.7rem;
+    border-bottom: 1px solid #2c2c2c;
+}
+
+.admin-table a {
+    color: #3ea6ff;
+}
+
+.admin-inline-btn {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
 }

@@ -70,6 +70,7 @@
     <script>
         const IS_LOGGED_IN = {{ 'true' if user else 'false' }};
         const GAME_KEY = "gravity.run";
+        let sessionLoggedIn = IS_LOGGED_IN;
 
         const COLORS = [
             { name: "Blau", hex: "#3ea6ff" },
@@ -195,9 +196,7 @@
         function handleSoloScoreFlow() {
             if (currentMode !== "bot") return;
             const soloScore = participants[0].score;
-            if (IS_LOGGED_IN) {
-                submitScore(soloScore);
-            } else if (soloScore > 0) {
+            if (!sessionLoggedIn && soloScore > 0) {
                 showGuestUpsell(soloScore);
             }
         }
@@ -253,7 +252,9 @@
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ game: GAME_KEY, score: pendingScore }),
             });
+            lastSubmittedDistance = pendingScore;
 
+            sessionLoggedIn = true;
             updateHeaderAfterLogin(data.username);
 
             document.getElementById("guestUpsellAuth").style.display = "none";
@@ -307,6 +308,16 @@
         let nextSpawnIn = 0;
         let lastFrameTime = 0;
         let animationHandle = null;
+        let lastSubmittedDistance = 0;
+        let lastFlushAt = 0;
+
+        function flushSoloScore(upTo) {
+            const delta = Math.floor(upTo) - lastSubmittedDistance;
+            if (delta > 0) {
+                submitScore(delta);
+                lastSubmittedDistance += delta;
+            }
+        }
 
         function playerX(index) {
             return PLAYER_X_BASE + index * PLAYER_X_STEP;
@@ -318,6 +329,8 @@
             distance = 0;
             nextSpawnIn = 60;
             running = true;
+            lastSubmittedDistance = 0;
+            lastFlushAt = performance.now();
             participants.forEach((p) => {
                 p.y = FLOOR_Y;
                 p.vy = 0;
@@ -459,11 +472,19 @@
                     if (checkCollision(p, index)) {
                         p.alive = false;
                         p.score = Math.floor(distance);
+                        if (index === 0 && currentMode === "bot" && sessionLoggedIn) {
+                            flushSoloScore(p.score);
+                        }
                     } else {
                         anyAlive = true;
                     }
                 });
                 updateStatusList();
+
+                if (currentMode === "bot" && sessionLoggedIn && participants[0].alive && now - lastFlushAt > 1000) {
+                    flushSoloScore(distance);
+                    lastFlushAt = now;
+                }
 
                 if (!anyAlive) {
                     running = false;

@@ -68,6 +68,20 @@ db.init_app(app)
 with app.app_context():
     db.create_all()
 
+    admin_username = os.environ.get("ADMIN_USERNAME")
+    admin_password = os.environ.get("ADMIN_PASSWORD")
+    if admin_username and admin_password:
+        admin_user = User.query.filter_by(username=admin_username).first()
+        if admin_user is None:
+            admin_user = User(username=admin_username, is_admin=True)
+            admin_user.set_password(admin_password)
+            db.session.add(admin_user)
+            db.session.commit()
+            logger.info("Admin-Account '%s' angelegt.", admin_username)
+        elif not admin_user.is_admin:
+            admin_user.is_admin = True
+            db.session.commit()
+
 
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -82,6 +96,13 @@ def current_user():
     if user_id is None:
         return None
     return db.session.get(User, user_id)
+
+
+def require_admin():
+    user = current_user()
+    if user is None or not user.is_admin:
+        abort(403)
+    return user
 
 
 @app.route("/")
@@ -294,7 +315,7 @@ def uploaded_file(filename):
 def delete_video(video_id):
     user = current_user()
     video = db.get_or_404(Video, video_id)
-    if user is None or video.user_id != user.id:
+    if user is None or (video.user_id != user.id and not user.is_admin):
         abort(403)
     try:
         os.remove(os.path.join(app.config["UPLOAD_FOLDER"], video.filename))
@@ -378,6 +399,57 @@ def upload_profile_picture():
     user.profile_image = stored_filename
     db.session.commit()
     return redirect(url_for("profile", username=user.username))
+
+
+@app.route("/admin")
+def admin_dashboard():
+    admin_user = require_admin()
+    users = User.query.order_by(User.username).all()
+    videos = Video.query.order_by(Video.created_at.desc()).all()
+    return render_template("admin.html", user=admin_user, users=users, videos=videos)
+
+
+@app.route("/admin/users", methods=["POST"])
+def admin_create_user():
+    require_admin()
+    username = request.form.get("username", "").strip()
+    password = request.form.get("password", "")
+
+    if not username or not password:
+        flash("Bitte Benutzername und Passwort angeben.")
+        return redirect(url_for("admin_dashboard"))
+    if User.query.filter_by(username=username).first():
+        flash("Dieser Benutzername ist bereits vergeben.")
+        return redirect(url_for("admin_dashboard"))
+
+    fake_user = User(username=username)
+    fake_user.set_password(password)
+    db.session.add(fake_user)
+    db.session.commit()
+    return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/admin/users/<int:user_id>/delete", methods=["POST"])
+def admin_delete_user(user_id):
+    admin_user = require_admin()
+    target = db.get_or_404(User, user_id)
+    if target.id == admin_user.id:
+        abort(400)
+
+    for video in target.videos:
+        try:
+            os.remove(os.path.join(app.config["UPLOAD_FOLDER"], video.filename))
+        except OSError:
+            pass
+    if target.profile_image:
+        try:
+            os.remove(os.path.join(app.config["PROFILE_PIC_FOLDER"], target.profile_image))
+        except OSError:
+            pass
+
+    db.session.delete(target)
+    db.session.commit()
+    return redirect(url_for("admin_dashboard"))
 
 
 def seconds_since(moment):

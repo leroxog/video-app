@@ -51,7 +51,7 @@
             <p class="video-description">{{ video.description }}</p>
         {% endif %}
 
-        {% if user and user.id == video.user_id %}
+        {% if user and (user.id == video.user_id or user.is_admin) %}
             <form action="{{ url_for('delete_video', video_id=video.id) }}" method="post"
                   onsubmit="return confirm('Video wirklich loeschen?');">
                 <button type="submit" class="danger">Video loeschen</button>

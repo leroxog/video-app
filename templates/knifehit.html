@@ -70,6 +70,7 @@
     <script>
         const IS_LOGGED_IN = {{ 'true' if user else 'false' }};
         const GAME_KEY = "knife.hit";
+        let sessionLoggedIn = IS_LOGGED_IN;
 
         const COLORS = [
             { name: "Blau", hex: "#3ea6ff" },
@@ -198,9 +199,7 @@
         function handleSoloScoreFlow() {
             if (currentMode !== "bot") return;
             const soloScore = participants[0].hits;
-            if (IS_LOGGED_IN) {
-                submitScore(soloScore);
-            } else if (soloScore > 0) {
+            if (!sessionLoggedIn && soloScore > 0) {
                 showGuestUpsell(soloScore);
             }
         }
@@ -257,6 +256,7 @@
                 body: JSON.stringify({ game: GAME_KEY, score: pendingScore }),
             });
 
+            sessionLoggedIn = true;
             updateHeaderAfterLogin(data.username);
 
             document.getElementById("guestUpsellAuth").style.display = "none";
@@ -388,6 +388,10 @@
             knivesThisLevel++;
             thrower.hits++;
             updateStatusList();
+
+            if (thrower === participants[0] && currentMode === "bot" && sessionLoggedIn) {
+                submitScore(1);
+            }
 
             if (knivesThisLevel >= knivesRequired) {
                 level++;

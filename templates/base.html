@@ -29,6 +29,9 @@
                     {{ user.username }}
                 </a>
                 <a href="{{ url_for('upload') }}">Hochladen</a>
+                {% if user.is_admin %}
+                    <a href="{{ url_for('admin_dashboard') }}">&#9881; Admin</a>
+                {% endif %}
                 <form action="{{ url_for('logout') }}" method="post">
                     <button type="submit">Logout</button>
                 </form>

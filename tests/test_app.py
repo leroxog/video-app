@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 import pytest
 from app import app as flask_app, db
+from models import User
 
 
 @pytest.fixture
@@ -35,6 +36,12 @@ def register(client, username="alice", password="secret123"):
         data={"username": username, "password": password},
         follow_redirects=True,
     )
+
+
+def make_admin(username):
+    user = User.query.filter_by(username=username).first()
+    user.is_admin = True
+    db.session.commit()
 
 
 def test_register_and_login(client):
@@ -415,3 +422,82 @@ def test_leaderboard_shows_only_scored_users(client):
     assert b"frank" in response.data
     assert b"15" in response.data
     assert b"gina" not in response.data
+
+
+def test_admin_dashboard_requires_admin(client):
+    register(client, username="regular")
+    response = client.get("/admin")
+    assert response.status_code == 403
+
+
+def test_admin_dashboard_accessible_for_admin(client):
+    register(client, username="boss")
+    make_admin("boss")
+    response = client.get("/admin")
+    assert response.status_code == 200
+    assert b"Neuen Account erstellen" in response.data
+
+
+def test_admin_can_create_fake_account(client):
+    register(client, username="boss")
+    make_admin("boss")
+
+    response = client.post(
+        "/admin/users", data={"username": "fakeuser", "password": "secret123"}, follow_redirects=True
+    )
+    assert response.status_code == 200
+    assert b"fakeuser" in response.data
+
+    client.post("/logout")
+    response = client.post(
+        "/login", data={"username": "fakeuser", "password": "secret123"}, follow_redirects=True
+    )
+    assert b"fakeuser" in response.data
+
+
+def test_non_admin_cannot_create_account_via_admin_route(client):
+    register(client, username="regular")
+    response = client.post("/admin/users", data={"username": "sneaky", "password": "secret123"})
+    assert response.status_code == 403
+
+
+def test_admin_can_delete_other_account(client):
+    register(client, username="boss")
+    make_admin("boss")
+    client.post("/admin/users", data={"username": "throwaway", "password": "secret123"})
+
+    target = User.query.filter_by(username="throwaway").first()
+    response = client.post(f"/admin/users/{target.id}/delete", follow_redirects=True)
+    assert response.status_code == 200
+    assert User.query.filter_by(username="throwaway").first() is None
+
+
+def test_admin_cannot_delete_self(client):
+    register(client, username="boss")
+    make_admin("boss")
+    admin = User.query.filter_by(username="boss").first()
+    response = client.post(f"/admin/users/{admin.id}/delete")
+    assert response.status_code == 400
+
+
+def test_admin_can_delete_any_video(client):
+    register(client, username="owner")
+    upload_video(client, title="Owned Video")
+    client.post("/logout")
+
+    register(client, username="boss")
+    make_admin("boss")
+
+    response = client.post("/video/1/delete", follow_redirects=True)
+    assert response.status_code == 200
+    assert b"Owned Video" not in response.data
+
+
+def test_regular_user_still_cannot_delete_others_video(client):
+    register(client, username="owner")
+    upload_video(client, title="Protected Video")
+    client.post("/logout")
+
+    register(client, username="stranger")
+    response = client.post("/video/1/delete")
+    assert response.status_code == 403

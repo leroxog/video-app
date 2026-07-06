@@ -9,7 +9,7 @@
         <div class="fruitmerge-score">Punkte: <span id="score">0</span></div>
 
         <div class="fruitmerge-wrapper">
-            <canvas id="fruitCanvas" width="380" height="560"></canvas>
+            <canvas id="fruitCanvas" width="460" height="560"></canvas>
             <div class="fruitmerge-gameover" id="gameOverOverlay">
                 <div>
                     <div class="fruitmerge-gameover-title">Spiel vorbei</div>
@@ -59,7 +59,7 @@
         let sessionLoggedIn = IS_LOGGED_IN;
         let upsellShown = false;
 
-        const WIDTH = 380;
+        const WIDTH = 460;
         const HEIGHT = 560;
         const WALL = 16;
         const DANGER_LINE_Y = 70;
@@ -76,6 +76,11 @@
             { radius: 65, color: "#f4d03f", emoji: "\u{1F34D}", points: 36 },
             { radius: 75, color: "#7dcb5f", emoji: "\u{1F348}", points: 45 },
             { radius: 88, color: "#27ae60", emoji: "\u{1F349}", points: 55 },
+            { radius: 97, color: "#ffb347", emoji: "\u{1F96D}", points: 66 },
+            { radius: 106, color: "#a9744f", emoji: "\u{1F965}", points: 78 },
+            { radius: 115, color: "#ff8c1a", emoji: "\u{1F383}", points: 92 },
+            { radius: 124, color: "#e0452c", emoji: "\u{1F345}", points: 108 },
+            { radius: 133, color: "#8bc34a", emoji: "\u{1F348}", points: 125 },
         ];
         const SPAWN_WEIGHTS = [0, 0, 0, 0, 1, 1, 1, 2, 2, 3];
 

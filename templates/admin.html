@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Admin - gigas{% endblock %}
+{% block content %}
+    <h1>Admin</h1>
+
+    <h2>Neuen Account erstellen</h2>
+    <form action="{{ url_for('admin_create_user') }}" method="post" class="form admin-create-form">
+        <label for="username">Benutzername</label>
+        <input type="text" id="username" name="username" required maxlength="50">
+
+        <label for="password">Passwort</label>
+        <input type="password" id="password" name="password" required>
+
+        <button type="submit">Account erstellen</button>
+    </form>
+
+    <h2>Accounts verwalten</h2>
+    <table class="admin-table">
+        <thead><tr><th>Benutzername</th><th>Videos</th><th>Punkte</th><th>Rolle</th><th></th></tr></thead>
+        <tbody>
+            {% for u in users %}
+                <tr>
+                    <td><a href="{{ url_for('profile', username=u.username) }}">{{ u.username }}</a></td>
+                    <td>{{ u.videos|length }}</td>
+                    <td>{{ u.total_score }}</td>
+                    <td>{{ 'Admin' if u.is_admin else '' }}</td>
+                    <td>
+                        {% if u.id != user.id %}
+                            <form action="{{ url_for('admin_delete_user', user_id=u.id) }}" method="post"
+                                  onsubmit="return confirm('Account {{ u.username }} wirklich loeschen? Alle Videos, Likes und Abos werden mitgeloescht.');">
+                                <button type="submit" class="danger admin-inline-btn">Loeschen</button>
+                            </form>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>Alle Videos</h2>
+    <table class="admin-table">
+        <thead><tr><th>Titel</th><th>Von</th><th>Hochgeladen</th><th></th></tr></thead>
+        <tbody>
+            {% for video in videos %}
+                <tr>
+                    <td><a href="{{ url_for('watch', video_id=video.id) }}">{{ video.title }}</a></td>
+                    <td>{{ video.uploader.username }}</td>
+                    <td>{{ video.created_at.strftime("%d.%m.%Y") }}</td>
+                    <td>
+                        <form action="{{ url_for('delete_video', video_id=video.id) }}" method="post"
+                              onsubmit="return confirm('Video {{ video.title }} wirklich loeschen?');">
+                            <button type="submit" class="danger admin-inline-btn">Loeschen</button>
+                        </form>
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endblock %}
