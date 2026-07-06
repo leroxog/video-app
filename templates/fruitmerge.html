@@ -55,6 +55,9 @@
 
         const IS_LOGGED_IN = {{ 'true' if user else 'false' }};
         const GAME_KEY = "fruit.merge";
+        const UPSELL_SCORE_THRESHOLD = 100;
+        let sessionLoggedIn = IS_LOGGED_IN;
+        let upsellShown = false;
 
         const WIDTH = 380;
         const HEIGHT = 560;
@@ -120,6 +123,11 @@
         function updateScore(delta) {
             score += delta;
             scoreEl.textContent = score;
+
+            if (!sessionLoggedIn && !upsellShown && score >= UPSELL_SCORE_THRESHOLD) {
+                upsellShown = true;
+                showGuestUpsell(score);
+            }
         }
 
         function clampPreviewX() {
@@ -184,9 +192,9 @@
             finalScoreEl.textContent = score;
             gameOverOverlay.classList.add("visible");
 
-            if (IS_LOGGED_IN) {
+            if (sessionLoggedIn) {
                 submitScore(score);
-            } else if (score > 0) {
+            } else if (!upsellShown && score > 0) {
                 showGuestUpsell(score);
             }
         }
@@ -207,11 +215,15 @@
             document.getElementById("guestUpsellError").textContent = "";
             overlay.dataset.pendingScore = points;
             overlay.classList.add("visible");
+            if (!gameOver) Runner.stop(runner);
         }
 
-        document.getElementById("guestUpsellNo").addEventListener("click", () => {
+        function hideGuestUpsell() {
             document.getElementById("guestUpsellOverlay").classList.remove("visible");
-        });
+            if (!gameOver) Runner.run(runner, engine);
+        }
+
+        document.getElementById("guestUpsellNo").addEventListener("click", hideGuestUpsell);
 
         document.getElementById("guestUpsellYes").addEventListener("click", () => {
             document.getElementById("guestUpsellChoice").style.display = "none";
@@ -243,6 +255,7 @@
                 body: JSON.stringify({ game: GAME_KEY, score: pendingScore }),
             });
 
+            sessionLoggedIn = true;
             updateHeaderAfterLogin(data.username);
 
             document.getElementById("guestUpsellAuth").style.display = "none";
@@ -252,9 +265,7 @@
         document.getElementById("guestUpsellLoginBtn").addEventListener("click", () => handleGuestAuth("{{ url_for('api_login') }}"));
         document.getElementById("guestUpsellRegisterBtn").addEventListener("click", () => handleGuestAuth("{{ url_for('api_register') }}"));
 
-        document.getElementById("guestUpsellContinue").addEventListener("click", () => {
-            document.getElementById("guestUpsellOverlay").classList.remove("visible");
-        });
+        document.getElementById("guestUpsellContinue").addEventListener("click", hideGuestUpsell);
 
         function updateHeaderAfterLogin(username) {
             const loginHref = "{{ url_for('login') }}";
@@ -277,6 +288,7 @@
             score = 0;
             scoreEl.textContent = 0;
             gameOver = false;
+            upsellShown = false;
             overLineSince = null;
             currentTierIndex = randomSpawnTier();
             gameOverOverlay.classList.remove("visible");
