@@ -6,27 +6,24 @@
     <div class="multiplayer-page" id="mpRoot">
         <h1>gigas/gravity.run</h1>
         <a class="game-leaderboard-link" href="{{ url_for('leaderboard') }}">&#127942; Bestenliste</a>
-        <p>Kehre die Schwerkraft um und weiche den Hindernissen an Boden und Decke aus. Bei mehreren Spielern laeuft ihr gleichzeitig im selben Rennen &mdash; jeder mit eigener Taste.</p>
+        <p>Oben (rot) und unten (blau) laufen auf derselben zufaellig erzeugten Strecke. Tippen kehrt die Schwerkraft der jeweiligen Figur um.</p>
 
         <div id="setupScreen">
             <p>Wie moechtest du spielen?</p>
             <div class="mp-lobby-options">
                 <button type="button" data-mode="bot">Gegen Bot</button>
                 <button type="button" data-mode="2">2 Spieler</button>
-                <button type="button" data-mode="3">3 Spieler</button>
-                <button type="button" data-mode="4">4 Spieler</button>
             </div>
         </div>
 
         <div id="readyScreen" style="display:none;">
-            <p>Jeder Spieler kehrt mit seiner eigenen Taste die Schwerkraft um:</p>
-            <ul class="mp-player-list" id="readyList"></ul>
-            <button type="button" class="mp-restart-btn" id="readyStartBtn">Alle bereit &mdash; Start!</button>
+            <p id="readyInstructions"></p>
+            <button type="button" class="mp-restart-btn" id="readyStartBtn">Start!</button>
         </div>
 
         <div id="gameScreen" style="display:none;">
             <div class="fruitmerge-score">Distanz: <span id="distanceScore">0</span>m</div>
-            <canvas id="runCanvas" width="480" height="260"></canvas>
+            <canvas id="runCanvas" width="380" height="460"></canvas>
             <ul class="mp-status-list" id="statusList"></ul>
         </div>
 
@@ -73,30 +70,11 @@
         const GAME_KEY = "gravity.run";
         let sessionLoggedIn = IS_LOGGED_IN;
 
-        const COLORS = [
-            { name: "Blau", hex: "#3ea6ff" },
-            { name: "Gelb", hex: "#ffcc00" },
-            { name: "Rot", hex: "#ff4d4d" },
-            { name: "Gruen", hex: "#4caf50" },
-        ];
-        const KEY_BINDINGS = [
-            { code: "Space", label: "Leertaste / Klick" },
-            { code: "ArrowUp", label: "Pfeil hoch" },
-            { code: "Enter", label: "Eingabetaste" },
-            { code: "ShiftRight", label: "Rechte Umschalttaste" },
-        ];
+        const RED = { name: "Rot", hex: "#ff4d4d" };
+        const BLUE = { name: "Blau", hex: "#3ea6ff" };
 
         let participants = [];
         let currentMode = null;
-
-        function shuffledColors() {
-            const arr = [...COLORS];
-            for (let i = arr.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [arr[i], arr[j]] = [arr[j], arr[i]];
-            }
-            return arr;
-        }
 
         function showScreen(id) {
             ["setupScreen", "readyScreen", "gameScreen", "leaderboardScreen"].forEach((s) => {
@@ -106,56 +84,30 @@
 
         function setupParticipants(mode) {
             currentMode = mode;
-            const colors = shuffledColors();
-            let humanCount;
-            let botIncluded = false;
+
             if (mode === "bot") {
-                humanCount = 1;
-                botIncluded = true;
+                // participants[0] is always the tracked solo human for scoring
+                participants = [
+                    { name: "Du", isBot: false, color: BLUE, lane: "bottom", alive: true, score: 0 },
+                    { name: "Bot", isBot: true, color: RED, lane: "top", alive: true, score: 0 },
+                ];
+                document.getElementById("readyInstructions").textContent =
+                    "Tippe irgendwo auf den Bildschirm, um zu springen (Schwerkraft umkehren). Der Bot spielt oben (rot).";
             } else {
-                humanCount = parseInt(mode, 10);
+                participants = [
+                    { name: "Rot", isBot: false, color: RED, lane: "top", alive: true, score: 0 },
+                    { name: "Blau", isBot: false, color: BLUE, lane: "bottom", alive: true, score: 0 },
+                ];
+                document.getElementById("readyInstructions").textContent =
+                    "Tippe oben, um Rot zu steuern. Tippe unten, um Blau zu steuern.";
             }
 
-            participants = [];
-            for (let i = 0; i < humanCount; i++) {
-                participants.push({
-                    name: humanCount === 1 ? "Du" : `Spieler ${i + 1}`,
-                    isBot: false,
-                    color: colors[i],
-                    key: KEY_BINDINGS[i],
-                    alive: true,
-                    score: 0,
-                });
-            }
-            if (botIncluded) {
-                participants.push({
-                    name: "Bot",
-                    isBot: true,
-                    color: colors[humanCount],
-                    key: null,
-                    alive: true,
-                    score: 0,
-                });
-            }
-
-            showReadyScreen();
+            showScreen("readyScreen");
         }
 
         document.querySelectorAll("#setupScreen button").forEach((btn) => {
             btn.addEventListener("click", () => setupParticipants(btn.dataset.mode));
         });
-
-        function showReadyScreen() {
-            const list = document.getElementById("readyList");
-            list.innerHTML = "";
-            participants.forEach((p) => {
-                const li = document.createElement("li");
-                const control = p.isBot ? "wird automatisch gesteuert" : p.key.label;
-                li.innerHTML = `<span class="mp-color-dot" style="background:${p.color.hex}"></span> ${p.name}: ${control}`;
-                list.appendChild(li);
-            });
-            showScreen("readyScreen");
-        }
 
         document.getElementById("readyStartBtn").addEventListener("click", () => {
             showScreen("gameScreen");
@@ -284,19 +236,24 @@
             }
         }
 
-        // --- Gravity Run game engine (simultaneous multiplayer) ---
-        const WIDTH = 480;
-        const HEIGHT = 260;
-        const PLAYER_X_BASE = 80;
-        const PLAYER_X_STEP = 16;
-        const PLAYER_RADIUS = 11;
-        const FLOOR_Y = HEIGHT - 30;
-        const CEILING_Y = 30;
-        const OBSTACLE_WIDTH = 22;
-        const OBSTACLE_HEIGHT = 55;
+        // --- Gravity Run game engine: two mirrored lanes (top = red, bottom = blue) ---
+        const WIDTH = 380;
+        const LANE_HEIGHT = 220;
+        const DIVIDER_HEIGHT = 20;
+        const HEIGHT = LANE_HEIGHT * 2 + DIVIDER_HEIGHT;
+        const PLAYER_X = 90;
+        const PLAYER_RADIUS = 14;
+        const MARGIN = 6;
+        const OBSTACLE_WIDTH = 24;
+        const OBSTACLE_HEIGHT = 78;
         const REACTION_DISTANCE = 210;
         const GRAVITY_ACCEL = 0.0022;
         const MAX_VY = 0.85;
+
+        const TOP_CEILING_LINE = 0;
+        const TOP_FLOOR_LINE = LANE_HEIGHT;
+        const BOTTOM_CEILING_LINE = LANE_HEIGHT + DIVIDER_HEIGHT;
+        const BOTTOM_FLOOR_LINE = HEIGHT;
 
         const canvas = document.getElementById("runCanvas");
         const ctx = canvas.getContext("2d");
@@ -320,8 +277,25 @@
             }
         }
 
-        function playerX(index) {
-            return PLAYER_X_BASE + index * PLAYER_X_STEP;
+        function laneBounds(lane) {
+            if (lane === "top") {
+                return { ceilingY: TOP_CEILING_LINE + MARGIN + PLAYER_RADIUS, floorY: TOP_FLOOR_LINE - MARGIN - PLAYER_RADIUS };
+            }
+            return { ceilingY: BOTTOM_CEILING_LINE + MARGIN + PLAYER_RADIUS, floorY: BOTTOM_FLOOR_LINE - MARGIN - PLAYER_RADIUS };
+        }
+
+        function startY(lane) {
+            const b = laneBounds(lane);
+            return lane === "top" ? b.floorY : b.ceilingY;
+        }
+
+        function startDir(lane) {
+            return lane === "top" ? 1 : -1;
+        }
+
+        function safeDirFor(lane, obstacleSide) {
+            if (lane === "top") return obstacleSide === "outer" ? 1 : -1;
+            return obstacleSide === "outer" ? -1 : 1;
         }
 
         function startRace() {
@@ -333,9 +307,9 @@
             lastSubmittedDistance = 0;
             lastFlushAt = performance.now();
             participants.forEach((p) => {
-                p.y = FLOOR_Y;
+                p.y = startY(p.lane);
                 p.vy = 0;
-                p.dir = 1;
+                p.dir = startDir(p.lane);
                 p.alive = true;
                 p.score = 0;
                 p.handledObstacles = new Set();
@@ -351,91 +325,137 @@
             p.dir *= -1;
         }
 
-        canvas.addEventListener("click", () => {
-            const p = participants.find((pp) => !pp.isBot);
-            if (p) flipParticipant(p);
-        });
-
-        window.addEventListener("keydown", (event) => {
-            const p = participants.find((pp) => !pp.isBot && pp.key && pp.key.code === event.code);
-            if (p) {
-                event.preventDefault();
-                flipParticipant(p);
+        function handleTap(clientX, clientY) {
+            if (currentMode === "bot") {
+                flipParticipant(participants[0]);
+                return;
             }
-        });
+            const rect = canvas.getBoundingClientRect();
+            const scaleY = canvas.height / rect.height;
+            const y = (clientY - rect.top) * scaleY;
+            const lane = y < LANE_HEIGHT + DIVIDER_HEIGHT / 2 ? "top" : "bottom";
+            const target = participants.find((p) => p.lane === lane);
+            if (target) flipParticipant(target);
+        }
+
+        canvas.addEventListener("click", (event) => handleTap(event.clientX, event.clientY));
+        canvas.addEventListener("touchstart", (event) => {
+            const touch = event.touches[0];
+            handleTap(touch.clientX, touch.clientY);
+            event.preventDefault();
+        }, { passive: false });
 
         function spawnObstacle() {
-            const side = Math.random() < 0.5 ? "floor" : "ceiling";
+            const side = Math.random() < 0.5 ? "outer" : "inner";
             obstacles.push({ x: WIDTH + OBSTACLE_WIDTH, side, id: Math.random() });
         }
 
         function botDecide(bot) {
             for (const obstacle of obstacles) {
                 if (bot.handledObstacles.has(obstacle.id)) continue;
-                const distanceToPlayer = obstacle.x - playerX(participants.indexOf(bot));
+                const distanceToPlayer = obstacle.x - PLAYER_X;
                 if (distanceToPlayer <= REACTION_DISTANCE && distanceToPlayer > 0) {
                     bot.handledObstacles.add(obstacle.id);
                     const mistakeChance = 0.03 + Math.min(0.1, scrollSpeed * 0.006);
                     if (Math.random() < mistakeChance) continue;
-                    const safeDir = obstacle.side === "floor" ? -1 : 1;
+                    const safeDir = safeDirFor(bot.lane, obstacle.side);
                     if (bot.dir !== safeDir) flipParticipant(bot);
                 }
             }
         }
 
-        function obstacleYRange(obstacle) {
-            if (obstacle.side === "floor") {
-                const bottom = FLOOR_Y + PLAYER_RADIUS + 6;
-                return { top: bottom - OBSTACLE_HEIGHT, bottom };
+        function obstacleRect(obstacle, lane) {
+            if (lane === "top") {
+                return obstacle.side === "inner"
+                    ? { top: TOP_FLOOR_LINE - OBSTACLE_HEIGHT, bottom: TOP_FLOOR_LINE }
+                    : { top: TOP_CEILING_LINE, bottom: TOP_CEILING_LINE + OBSTACLE_HEIGHT };
             }
-            const top = CEILING_Y - PLAYER_RADIUS - 6;
-            return { top, bottom: top + OBSTACLE_HEIGHT };
+            return obstacle.side === "inner"
+                ? { top: BOTTOM_CEILING_LINE, bottom: BOTTOM_CEILING_LINE + OBSTACLE_HEIGHT }
+                : { top: BOTTOM_FLOOR_LINE - OBSTACLE_HEIGHT, bottom: BOTTOM_FLOOR_LINE };
         }
 
-        function checkCollision(p, index) {
-            const x = playerX(index);
+        function checkCollision(p) {
             for (const obstacle of obstacles) {
                 const left = obstacle.x;
                 const right = obstacle.x + OBSTACLE_WIDTH;
-                if (right < x - PLAYER_RADIUS || left > x + PLAYER_RADIUS) continue;
+                if (right < PLAYER_X - PLAYER_RADIUS || left > PLAYER_X + PLAYER_RADIUS) continue;
 
-                const range = obstacleYRange(obstacle);
-                if (p.y + PLAYER_RADIUS >= range.top && p.y - PLAYER_RADIUS <= range.bottom) {
+                const rect = obstacleRect(obstacle, p.lane);
+                if (p.y + PLAYER_RADIUS >= rect.top && p.y - PLAYER_RADIUS <= rect.bottom) {
                     return true;
                 }
             }
             return false;
         }
 
-        function drawScene() {
-            ctx.clearRect(0, 0, WIDTH, HEIGHT);
-            ctx.fillStyle = "#101820";
+        function drawJungleBackground() {
+            const grad = ctx.createLinearGradient(0, 0, 0, HEIGHT);
+            grad.addColorStop(0, "#1b4d2e");
+            grad.addColorStop(1, "#0f3320");
+            ctx.fillStyle = grad;
             ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
-            ctx.strokeStyle = "#3c3c3c";
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.moveTo(0, FLOOR_Y + PLAYER_RADIUS + 6);
-            ctx.lineTo(WIDTH, FLOOR_Y + PLAYER_RADIUS + 6);
-            ctx.moveTo(0, CEILING_Y - PLAYER_RADIUS - 6);
-            ctx.lineTo(WIDTH, CEILING_Y - PLAYER_RADIUS - 6);
-            ctx.stroke();
+            ctx.fillStyle = "rgba(20,90,45,0.55)";
+            [
+                [30, 26], [130, 44], [260, 22], [355, 40],
+                [60, BOTTOM_CEILING_LINE + 34], [200, BOTTOM_CEILING_LINE + 50], [330, BOTTOM_CEILING_LINE + 26],
+            ].forEach(([x, y]) => {
+                ctx.beginPath();
+                ctx.ellipse(x, y, 34, 20, 0, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
 
-            ctx.fillStyle = "#888";
+        function drawStoneBand(y, height) {
+            ctx.fillStyle = "#787468";
+            ctx.fillRect(0, y, WIDTH, height);
+            ctx.fillStyle = "rgba(0,0,0,0.18)";
+            for (let i = -((Math.floor(y) * 7) % 26); i < WIDTH; i += 26) {
+                ctx.fillRect(i, y + height * 0.25, 12, height * 0.5);
+            }
+            ctx.strokeStyle = "rgba(255,255,255,0.1)";
+            ctx.beginPath();
+            ctx.moveTo(0, y + 1);
+            ctx.lineTo(WIDTH, y + 1);
+            ctx.stroke();
+        }
+
+        function drawObstacle(x, top, bottom) {
+            ctx.fillStyle = "#8f8b7f";
+            ctx.fillRect(x, top, OBSTACLE_WIDTH, bottom - top);
+            ctx.fillStyle = "rgba(0,0,0,0.22)";
+            ctx.fillRect(x + OBSTACLE_WIDTH * 0.55, top, OBSTACLE_WIDTH * 0.25, bottom - top);
+        }
+
+        function drawPlayer(x, y, color) {
+            ctx.beginPath();
+            ctx.ellipse(x, y + 4, PLAYER_RADIUS * 0.82, PLAYER_RADIUS, 0, 0, Math.PI * 2);
+            ctx.fillStyle = color;
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.arc(x, y - PLAYER_RADIUS * 0.7, PLAYER_RADIUS * 0.55, 0, Math.PI * 2);
+            ctx.fillStyle = "#f0c9a0";
+            ctx.fill();
+        }
+
+        function drawScene() {
+            drawJungleBackground();
+            drawStoneBand(TOP_CEILING_LINE, 10);
+            drawStoneBand(TOP_FLOOR_LINE, DIVIDER_HEIGHT);
+            drawStoneBand(BOTTOM_FLOOR_LINE - 10, 10);
+
             for (const obstacle of obstacles) {
-                if (obstacle.side === "floor") {
-                    ctx.fillRect(obstacle.x, FLOOR_Y + PLAYER_RADIUS + 6 - OBSTACLE_HEIGHT, OBSTACLE_WIDTH, OBSTACLE_HEIGHT);
-                } else {
-                    ctx.fillRect(obstacle.x, CEILING_Y - PLAYER_RADIUS - 6, OBSTACLE_WIDTH, OBSTACLE_HEIGHT);
-                }
+                const topRect = obstacleRect(obstacle, "top");
+                drawObstacle(obstacle.x, topRect.top, topRect.bottom);
+                const bottomRect = obstacleRect(obstacle, "bottom");
+                drawObstacle(obstacle.x, bottomRect.top, bottomRect.bottom);
             }
 
-            participants.forEach((p, index) => {
+            participants.forEach((p) => {
                 if (!p.alive) return;
-                ctx.beginPath();
-                ctx.arc(playerX(index), p.y, PLAYER_RADIUS, 0, Math.PI * 2);
-                ctx.fillStyle = p.color.hex;
-                ctx.fill();
+                drawPlayer(PLAYER_X, p.y, p.color.hex);
             });
         }
 
@@ -467,10 +487,12 @@
                     p.vy += p.dir * GRAVITY_ACCEL * dt;
                     p.vy = Math.max(-MAX_VY, Math.min(MAX_VY, p.vy));
                     p.y += p.vy * dt;
-                    if (p.y >= FLOOR_Y) { p.y = FLOOR_Y; p.vy = 0; }
-                    if (p.y <= CEILING_Y) { p.y = CEILING_Y; p.vy = 0; }
 
-                    if (checkCollision(p, index)) {
+                    const b = laneBounds(p.lane);
+                    if (p.y >= b.floorY) { p.y = b.floorY; p.vy = 0; }
+                    if (p.y <= b.ceilingY) { p.y = b.ceilingY; p.vy = 0; }
+
+                    if (checkCollision(p)) {
                         p.alive = false;
                         p.score = Math.floor(distance);
                         if (index === 0 && currentMode === "bot" && sessionLoggedIn) {
