@@ -59,7 +59,7 @@
     <div class="bottom-nav">
         <a class="bottom-nav-avatar" href="{{ url_for('profile', username=user.username) if user else url_for('login') }}" title="Profil">
             {% if user and user.profile_image %}
-                <img src="{{ url_for('static', filename='profile_pics/' + user.profile_image) }}" alt="">
+                <img src="{{ media_url('profile_pics', user.profile_image) }}" alt="">
             {% else %}
                 <span class="bottom-nav-avatar-placeholder">{{ user.username[0]|upper if user else '?' }}</span>
             {% endif %}

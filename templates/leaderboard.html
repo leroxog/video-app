@@ -14,7 +14,7 @@
                         <td>
                             <a class="leaderboard-user" href="{{ url_for('profile', username=u.username) }}">
                                 {% if u.profile_image %}
-                                    <img class="nav-avatar" src="{{ url_for('static', filename='profile_pics/' + u.profile_image) }}" alt="">
+                                    <img class="nav-avatar" src="{{ media_url('profile_pics', u.profile_image) }}" alt="">
                                 {% endif %}
                                 {{ u.username }}
                             </a>

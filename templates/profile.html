@@ -3,7 +3,7 @@
 {% block content %}
     <div class="profile-header">
         {% if profile_user.profile_image %}
-            <img class="profile-avatar" src="{{ url_for('static', filename='profile_pics/' + profile_user.profile_image) }}" alt="">
+            <img class="profile-avatar" src="{{ media_url('profile_pics', profile_user.profile_image) }}" alt="">
         {% else %}
             <div class="profile-avatar profile-avatar-placeholder">{{ profile_user.username[0]|upper }}</div>
         {% endif %}
@@ -40,7 +40,7 @@
             {% for video in videos %}
                 <a class="video-card" href="{{ url_for('watch', video_id=video.id) }}">
                     <video muted preload="metadata">
-                        <source src="{{ url_for('uploaded_file', filename=video.filename) }}">
+                        <source src="{{ media_url('uploads', video.filename) }}">
                     </video>
                     <div class="video-card-info">
                         <div class="video-title">{{ video.title }}</div>

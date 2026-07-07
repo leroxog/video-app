@@ -70,7 +70,7 @@
             {% for video in videos %}
                 <a class="video-card" href="{{ url_for('watch', video_id=video.id) }}">
                     <video muted preload="metadata">
-                        <source src="{{ url_for('uploaded_file', filename=video.filename) }}">
+                        <source src="{{ media_url('uploads', video.filename) }}">
                     </video>
                     <div class="video-card-info">
                         <div class="video-title">{{ video.title }}</div>

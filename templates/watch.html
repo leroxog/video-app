@@ -3,7 +3,7 @@
 {% block content %}
     <div class="watch-page">
         <video controls autoplay class="player">
-            <source src="{{ url_for('uploaded_file', filename=video.filename) }}">
+            <source src="{{ media_url('uploads', video.filename) }}">
             Dein Browser unterstuetzt dieses Videoformat nicht.
         </video>
         <h1>{{ video.title }}</h1>
@@ -19,7 +19,7 @@
                 <span class="like-count-readonly">&#10084; {{ like_count }}</span>
             {% endif %}
 
-            <a class="download-link" href="{{ url_for('uploaded_file', filename=video.filename) }}" download>
+            <a class="download-link" href="{{ media_url('uploads', video.filename) }}" download>
                 &#11015; Herunterladen
             </a>
         </div>
@@ -27,7 +27,7 @@
         <div class="channel-row">
             <a class="channel-link" href="{{ url_for('profile', username=video.uploader.username) }}">
                 {% if video.uploader.profile_image %}
-                    <img class="channel-avatar" src="{{ url_for('static', filename='profile_pics/' + video.uploader.profile_image) }}" alt="">
+                    <img class="channel-avatar" src="{{ media_url('profile_pics', video.uploader.profile_image) }}" alt="">
                 {% else %}
                     <div class="channel-avatar profile-avatar-placeholder">{{ video.uploader.username[0]|upper }}</div>
                 {% endif %}

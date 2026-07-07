@@ -61,11 +61,74 @@ PROFILE_PIC_FOLDER = os.path.join(app.root_path, "static", "profile_pics")
 os.makedirs(PROFILE_PIC_FOLDER, exist_ok=True)
 app.config["PROFILE_PIC_FOLDER"] = PROFILE_PIC_FOLDER
 
-logger.warning(
-    "HINWEIS: Videos werden lokal im Dateisystem gespeichert. Auf den meisten "
-    "kostenlosen Hosting-Plattformen (z.B. Railway) ist dieser Speicher nicht "
-    "dauerhaft und Videos koennen bei einem Neustart/Deploy verloren gehen."
-)
+R2_ACCOUNT_ID = os.environ.get("R2_ACCOUNT_ID")
+R2_ACCESS_KEY_ID = os.environ.get("R2_ACCESS_KEY_ID")
+R2_SECRET_ACCESS_KEY = os.environ.get("R2_SECRET_ACCESS_KEY")
+R2_BUCKET_NAME = os.environ.get("R2_BUCKET_NAME")
+R2_PUBLIC_URL = (os.environ.get("R2_PUBLIC_URL") or "").rstrip("/")
+
+USE_R2 = all([R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME, R2_PUBLIC_URL])
+
+r2_client = None
+if USE_R2:
+    import boto3
+
+    r2_client = boto3.client(
+        "s3",
+        endpoint_url=f"https://{R2_ACCOUNT_ID}.r2.cloudflarestorage.com",
+        aws_access_key_id=R2_ACCESS_KEY_ID,
+        aws_secret_access_key=R2_SECRET_ACCESS_KEY,
+        region_name="auto",
+    )
+    logger.info("MEDIENSPEICHER: Cloudflare R2 verbunden — Dateien bleiben dauerhaft erhalten.")
+else:
+    logger.warning(
+        "HINWEIS: Videos/Profilbilder werden lokal im Dateisystem gespeichert. Auf den meisten "
+        "kostenlosen Hosting-Plattformen (z.B. Railway) ist dieser Speicher nicht "
+        "dauerhaft und Dateien koennen bei einem Neustart/Deploy verloren gehen."
+    )
+
+
+def save_media(file_storage, kind, stored_filename):
+    """Save an uploaded file either to R2 (persistent) or local disk (fallback)."""
+    if USE_R2:
+        key = f"{kind}/{stored_filename}"
+        r2_client.upload_fileobj(
+            file_storage.stream,
+            R2_BUCKET_NAME,
+            key,
+            ExtraArgs={"ContentType": file_storage.mimetype or "application/octet-stream"},
+        )
+    else:
+        folder = app.config["UPLOAD_FOLDER"] if kind == "uploads" else app.config["PROFILE_PIC_FOLDER"]
+        file_storage.save(os.path.join(folder, stored_filename))
+
+
+def delete_media(kind, stored_filename):
+    if not stored_filename:
+        return
+    if USE_R2:
+        try:
+            r2_client.delete_object(Bucket=R2_BUCKET_NAME, Key=f"{kind}/{stored_filename}")
+        except Exception:
+            logger.exception("R2-Loeschung fehlgeschlagen fuer %s/%s", kind, stored_filename)
+    else:
+        folder = app.config["UPLOAD_FOLDER"] if kind == "uploads" else app.config["PROFILE_PIC_FOLDER"]
+        try:
+            os.remove(os.path.join(folder, stored_filename))
+        except OSError:
+            pass
+
+
+@app.template_global()
+def media_url(kind, stored_filename):
+    if not stored_filename:
+        return ""
+    if USE_R2:
+        return f"{R2_PUBLIC_URL}/{kind}/{stored_filename}"
+    if kind == "uploads":
+        return url_for("uploaded_file", filename=stored_filename)
+    return url_for("static", filename=f"profile_pics/{stored_filename}")
 
 db.init_app(app)
 
@@ -321,7 +384,7 @@ def upload():
 
         extension = secure_filename(file.filename).rsplit(".", 1)[1].lower()
         stored_filename = f"{uuid.uuid4().hex}.{extension}"
-        file.save(os.path.join(app.config["UPLOAD_FOLDER"], stored_filename))
+        save_media(file, "uploads", stored_filename)
 
         video = Video(
             title=title,
@@ -427,10 +490,7 @@ def delete_video(video_id):
     video = db.get_or_404(Video, video_id)
     if user is None or (video.user_id != user.id and not user.is_admin):
         abort(403)
-    try:
-        os.remove(os.path.join(app.config["UPLOAD_FOLDER"], video.filename))
-    except OSError:
-        pass
+    delete_media("uploads", video.filename)
     db.session.delete(video)
     db.session.commit()
     return redirect(url_for("index"))
@@ -498,13 +558,10 @@ def upload_profile_picture():
 
     extension = secure_filename(file.filename).rsplit(".", 1)[1].lower()
     stored_filename = f"{uuid.uuid4().hex}.{extension}"
-    file.save(os.path.join(app.config["PROFILE_PIC_FOLDER"], stored_filename))
+    save_media(file, "profile_pics", stored_filename)
 
     if user.profile_image:
-        try:
-            os.remove(os.path.join(app.config["PROFILE_PIC_FOLDER"], user.profile_image))
-        except OSError:
-            pass
+        delete_media("profile_pics", user.profile_image)
 
     user.profile_image = stored_filename
     db.session.commit()
@@ -622,15 +679,9 @@ def admin_delete_user(user_id):
         abort(400)
 
     for video in target.videos:
-        try:
-            os.remove(os.path.join(app.config["UPLOAD_FOLDER"], video.filename))
-        except OSError:
-            pass
+        delete_media("uploads", video.filename)
     if target.profile_image:
-        try:
-            os.remove(os.path.join(app.config["PROFILE_PIC_FOLDER"], target.profile_image))
-        except OSError:
-            pass
+        delete_media("profile_pics", target.profile_image)
 
     db.session.delete(target)
     db.session.commit()

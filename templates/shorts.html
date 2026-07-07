@@ -9,7 +9,7 @@
                 <div class="shorts-slide">
                     <video
                         class="shorts-video"
-                        src="{{ url_for('uploaded_file', filename=video.filename) }}"
+                        src="{{ media_url('uploads', video.filename) }}"
                         loop muted playsinline
                         data-video-id="{{ video.id }}"
                     ></video>
@@ -20,7 +20,7 @@
                         <div class="shorts-avatar-wrap">
                             <a class="shorts-avatar-link" href="{{ url_for('profile', username=video.uploader.username) }}">
                                 {% if video.uploader.profile_image %}
-                                    <img class="shorts-avatar" src="{{ url_for('static', filename='profile_pics/' + video.uploader.profile_image) }}" alt="">
+                                    <img class="shorts-avatar" src="{{ media_url('profile_pics', video.uploader.profile_image) }}" alt="">
                                 {% else %}
                                     <div class="shorts-avatar profile-avatar-placeholder">{{ video.uploader.username[0]|upper }}</div>
                                 {% endif %}
@@ -45,7 +45,7 @@
                             </div>
                         {% endif %}
 
-                        <a class="shorts-action-btn" href="{{ url_for('uploaded_file', filename=video.filename) }}" download title="Herunterladen">
+                        <a class="shorts-action-btn" href="{{ media_url('uploads', video.filename) }}" download title="Herunterladen">
                             <span class="shorts-action-icon">&#11015;</span>
                         </a>
                     </div>
