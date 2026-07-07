@@ -19,7 +19,7 @@
     {% if query %}
         <p><a class="clear-search" href="{{ url_for('index') }}">&times; Suche zuruecksetzen</a></p>
     {% endif %}
-    <div class="search-hint-row">
+    <div class="search-hint-row" id="searchHintRow">
         <button type="button" class="search-hint" id="searchHintBtn" data-suggestion="{{ game_suggestion }}">
             &#128161; Probiere z.B. {{ game_suggestion }}
         </button>
@@ -112,5 +112,10 @@
             hintBtn.dataset.suggestion = next;
             hintBtn.innerHTML = "&#128161; Probiere z.B. " + next;
         });
+
+        setTimeout(() => {
+            const row = document.getElementById("searchHintRow");
+            if (row) row.remove();
+        }, 7000);
     </script>
 {% endblock %}

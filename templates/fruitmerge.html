@@ -9,13 +9,30 @@
         <div class="fruitmerge-score">Punkte: <span id="score">0</span></div>
 
         <div class="fruitmerge-wrapper">
-            <canvas id="fruitCanvas" width="460" height="560"></canvas>
-            <div class="fruitmerge-gameover" id="gameOverOverlay">
-                <div>
-                    <div class="fruitmerge-gameover-title">Spiel vorbei</div>
-                    <div>Punkte: <span id="finalScore">0</span></div>
-                    <button type="button" id="restartBtn">Nochmal spielen</button>
+            <div class="fruitmerge-canvas-area">
+                <canvas id="fruitCanvas" width="460" height="560"></canvas>
+                <div class="fruitmerge-gameover" id="gameOverOverlay">
+                    <div>
+                        <div class="fruitmerge-gameover-title">Spiel vorbei</div>
+                        <div>Punkte: <span id="finalScore">0</span></div>
+                        <button type="button" id="restartBtn">Nochmal spielen</button>
+                    </div>
                 </div>
+            </div>
+
+            <div class="fruitmerge-powerups">
+                <button type="button" id="shuffleBtn" title="Fruechte durchschuetteln">
+                    <span class="powerup-icon">&#128256;</span>
+                    <span class="powerup-label">Schuetteln</span>
+                </button>
+                <button type="button" id="deleteBtn" title="Frucht loeschen">
+                    <span class="powerup-icon">&#10060;</span>
+                    <span class="powerup-label">Loeschen (<span id="deleteCount">5</span>)</span>
+                </button>
+                <button type="button" id="bombBtn" title="Bombe statt naechster Frucht">
+                    <span class="powerup-icon">&#128163;</span>
+                    <span class="powerup-label">Bombe (<span id="bombCount">1</span>)</span>
+                </button>
             </div>
         </div>
 
@@ -51,7 +68,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/matter-js@0.19.0/build/matter.min.js"></script>
     <script>
-        const { Engine, Runner, Bodies, Composite, Events } = Matter;
+        const { Engine, Runner, Bodies, Body, Composite, Events } = Matter;
 
         const IS_LOGGED_IN = {{ 'true' if user else 'false' }};
         const GAME_KEY = "fruit.merge";
@@ -304,6 +321,17 @@
         const finalScoreEl = document.getElementById("finalScore");
         const gameOverOverlay = document.getElementById("gameOverOverlay");
         const restartBtn = document.getElementById("restartBtn");
+        const shuffleBtn = document.getElementById("shuffleBtn");
+        const deleteBtn = document.getElementById("deleteBtn");
+        const bombBtn = document.getElementById("bombBtn");
+        const deleteCountEl = document.getElementById("deleteCount");
+        const bombCountEl = document.getElementById("bombCount");
+
+        const BOMB_RADIUS = 22;
+        const EXPLOSION_RADIUS = 70;
+        const SHUFFLE_COOLDOWN_MS = 5000;
+        const DELETE_STARTING_USES = 5;
+        const BOMB_STARTING_USES = 1;
 
         let score = 0;
         let gameOver = false;
@@ -311,6 +339,11 @@
         let overLineSince = null;
         let currentTierIndex = randomSpawnTier();
         let previewX = WIDTH / 2;
+        let deleteUsesLeft = DELETE_STARTING_USES;
+        let bombUsesLeft = BOMB_STARTING_USES;
+        let deleteMode = false;
+        let nextIsBomb = false;
+        let lastShuffleAt = 0;
 
         function randomSpawnTier() {
             return SPAWN_WEIGHTS[Math.floor(Math.random() * SPAWN_WEIGHTS.length)];
@@ -319,9 +352,9 @@
         function createFruit(tierIndex, x, y) {
             const tier = TIERS[tierIndex];
             const body = Bodies.circle(x, y, tier.radius, {
-                restitution: 0.15,
+                restitution: 0.38,
                 friction: 0.5,
-                frictionAir: 0.001,
+                frictionAir: 0.0035,
                 density: 0.0015,
             });
             body.tierIndex = tierIndex;
@@ -329,9 +362,67 @@
             return body;
         }
 
-        function updateScore(delta) {
+        function createBomb(x, y) {
+            const body = Bodies.circle(x, y, BOMB_RADIUS, {
+                restitution: 0.2,
+                friction: 0.5,
+                frictionAir: 0.0035,
+                density: 0.002,
+            });
+            body.isBomb = true;
+            body.exploded = false;
+            return body;
+        }
+
+        function drawBomb(x, y) {
+            ctx.beginPath();
+            ctx.arc(x, y, BOMB_RADIUS, 0, Math.PI * 2);
+            const grad = ctx.createRadialGradient(x - 6, y - 6, 2, x, y, BOMB_RADIUS);
+            grad.addColorStop(0, "#666");
+            grad.addColorStop(1, "#111");
+            ctx.fillStyle = grad;
+            ctx.fill();
+            ctx.strokeStyle = "#000";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            ctx.strokeStyle = "#a9744f";
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(x, y - BOMB_RADIUS);
+            ctx.lineTo(x + 6, y - BOMB_RADIUS - 10);
+            ctx.stroke();
+            ctx.fillStyle = "#ff8c1a";
+            ctx.beginPath();
+            ctx.arc(x + 7, y - BOMB_RADIUS - 12, 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function explodeBomb(bomb) {
+            bomb.exploded = true;
+            const cx = bomb.position.x;
+            const cy = bomb.position.y;
+            Composite.remove(engine.world, bomb);
+
+            const bodies = Composite.allBodies(engine.world).filter((b) => b.tierIndex !== undefined);
+            for (const b of bodies) {
+                const dx = b.position.x - cx;
+                const dy = b.position.y - cy;
+                if (dx * dx + dy * dy <= EXPLOSION_RADIUS * EXPLOSION_RADIUS) {
+                    Composite.remove(engine.world, b);
+                }
+            }
+        }
+
+        let floatingTexts = [];
+
+        function updateScore(delta, x, y) {
             score += delta;
             scoreEl.textContent = score;
+
+            if (x !== undefined) {
+                floatingTexts.push({ x, y, text: `+${delta}`, start: performance.now() });
+            }
 
             if (!sessionLoggedIn && !upsellShown && score >= UPSELL_SCORE_THRESHOLD) {
                 upsellShown = true;
@@ -339,9 +430,36 @@
             }
         }
 
+        function drawFloatingTexts() {
+            const now = performance.now();
+            floatingTexts = floatingTexts.filter((t) => now - t.start < 900);
+            for (const t of floatingTexts) {
+                const progress = (now - t.start) / 900;
+                const riseY = t.y - progress * 40;
+                const alpha = 1 - progress;
+
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                ctx.font = "bold 22px sans-serif";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+
+                const grad = ctx.createLinearGradient(t.x, riseY - 12, t.x, riseY + 12);
+                grad.addColorStop(0, "#ffe066");
+                grad.addColorStop(1, "#ff8c1a");
+                ctx.fillStyle = grad;
+                ctx.fillText(t.text, t.x, riseY);
+                ctx.restore();
+            }
+        }
+
+        const EDGE_MARGIN = 24;
+
         function clampPreviewX() {
-            const tier = TIERS[currentTierIndex];
-            previewX = Math.max(WALL + tier.radius, Math.min(WIDTH - WALL - tier.radius, previewX));
+            const r = nextIsBomb ? BOMB_RADIUS : TIERS[currentTierIndex].radius;
+            const min = WALL + r + EDGE_MARGIN;
+            const max = WIDTH - WALL - r - EDGE_MARGIN;
+            previewX = Math.max(min, Math.min(max, previewX));
         }
 
         function updatePreviewX(clientX) {
@@ -351,10 +469,50 @@
             clampPreviewX();
         }
 
+        function eventToCanvasPoint(clientX, clientY) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
+        }
+
+        function handleDeleteClick(clientX, clientY) {
+            const point = eventToCanvasPoint(clientX, clientY);
+            const bodies = Composite.allBodies(engine.world).filter((b) => b.tierIndex !== undefined);
+            for (const b of bodies) {
+                const dx = b.position.x - point.x;
+                const dy = b.position.y - point.y;
+                const r = TIERS[b.tierIndex].radius;
+                if (dx * dx + dy * dy <= r * r) {
+                    Composite.remove(engine.world, b);
+                    deleteUsesLeft--;
+                    deleteCountEl.textContent = deleteUsesLeft;
+                    if (deleteUsesLeft <= 0) {
+                        deleteMode = false;
+                        deleteBtn.disabled = true;
+                        deleteBtn.classList.remove("active");
+                    }
+                    return;
+                }
+            }
+        }
+
         function dropFruit() {
             if (gameOver || dropCooldown) return;
             clampPreviewX();
-            const body = createFruit(currentTierIndex, previewX, DROP_Y);
+
+            let body;
+            if (nextIsBomb) {
+                body = createBomb(previewX, DROP_Y);
+                nextIsBomb = false;
+                bombUsesLeft--;
+                bombCountEl.textContent = bombUsesLeft;
+                bombBtn.classList.remove("active");
+                if (bombUsesLeft <= 0) bombBtn.disabled = true;
+            } else {
+                body = createFruit(currentTierIndex, previewX, DROP_Y);
+            }
+
             Composite.add(engine.world, body);
             dropCooldown = true;
             setTimeout(() => { dropCooldown = false; }, 350);
@@ -362,15 +520,49 @@
         }
 
         canvas.addEventListener("mousemove", (event) => updatePreviewX(event.clientX));
-        canvas.addEventListener("click", dropFruit);
+        canvas.addEventListener("click", (event) => {
+            if (deleteMode) {
+                handleDeleteClick(event.clientX, event.clientY);
+                return;
+            }
+            dropFruit();
+        });
         canvas.addEventListener("touchmove", (event) => {
             updatePreviewX(event.touches[0].clientX);
             event.preventDefault();
         }, { passive: false });
         canvas.addEventListener("touchend", (event) => {
-            dropFruit();
+            const touch = event.changedTouches[0];
+            if (deleteMode) {
+                handleDeleteClick(touch.clientX, touch.clientY);
+            } else {
+                dropFruit();
+            }
             event.preventDefault();
         }, { passive: false });
+
+        shuffleBtn.addEventListener("click", () => {
+            if (gameOver) return;
+            const now = performance.now();
+            if (now - lastShuffleAt < SHUFFLE_COOLDOWN_MS) return;
+            lastShuffleAt = now;
+            const bodies = Composite.allBodies(engine.world).filter((b) => b.tierIndex !== undefined);
+            for (const b of bodies) {
+                Body.setVelocity(b, { x: (Math.random() - 0.5) * 8, y: -Math.random() * 4 });
+            }
+        });
+
+        deleteBtn.addEventListener("click", () => {
+            if (gameOver || deleteUsesLeft <= 0) return;
+            deleteMode = !deleteMode;
+            deleteBtn.classList.toggle("active", deleteMode);
+        });
+
+        bombBtn.addEventListener("click", () => {
+            if (gameOver || bombUsesLeft <= 0) return;
+            nextIsBomb = !nextIsBomb;
+            bombBtn.classList.toggle("active", nextIsBomb);
+        });
 
         Events.on(engine, "collisionStart", (event) => {
             for (const pair of event.pairs) {
@@ -387,13 +579,23 @@
                 const midY = (a.position.y + b.position.y) / 2;
 
                 Composite.remove(engine.world, [a, b]);
-                updateScore(TIERS[tierIndex].points);
+                updateScore(TIERS[tierIndex].points, midX, midY);
 
                 if (tierIndex < TIERS.length - 1) {
                     Composite.add(engine.world, createFruit(tierIndex + 1, midX, midY));
                 } else {
-                    updateScore(50);
+                    updateScore(50, midX, midY - 20);
                 }
+            }
+        });
+
+        Events.on(engine, "collisionStart", (event) => {
+            for (const pair of event.pairs) {
+                const a = pair.bodyA;
+                const b = pair.bodyB;
+                const bomb = a.isBomb ? a : (b.isBomb ? b : null);
+                if (!bomb || bomb.exploded) continue;
+                explodeBomb(bomb);
             }
         });
 
@@ -493,15 +695,27 @@
         }
 
         function restartGame() {
-            const bodies = Composite.allBodies(engine.world).filter((b) => b.tierIndex !== undefined);
+            const bodies = Composite.allBodies(engine.world).filter((b) => b.tierIndex !== undefined || b.isBomb);
             Composite.remove(engine.world, bodies);
             score = 0;
             scoreEl.textContent = 0;
             gameOver = false;
             upsellShown = false;
             overLineSince = null;
+            floatingTexts = [];
             currentTierIndex = randomSpawnTier();
             gameOverOverlay.classList.remove("visible");
+
+            deleteUsesLeft = DELETE_STARTING_USES;
+            bombUsesLeft = BOMB_STARTING_USES;
+            deleteMode = false;
+            nextIsBomb = false;
+            deleteCountEl.textContent = deleteUsesLeft;
+            bombCountEl.textContent = bombUsesLeft;
+            deleteBtn.disabled = false;
+            bombBtn.disabled = false;
+            deleteBtn.classList.remove("active");
+            bombBtn.classList.remove("active");
         }
 
         restartBtn.addEventListener("click", restartGame);
@@ -517,10 +731,14 @@
             ctx.stroke();
             ctx.setLineDash([]);
 
-            const bodies = Composite.allBodies(engine.world).filter((b) => b.tierIndex !== undefined);
+            const bodies = Composite.allBodies(engine.world).filter((b) => b.tierIndex !== undefined || b.isBomb);
             let overLine = false;
 
             for (const body of bodies) {
+                if (body.isBomb) {
+                    drawBomb(body.position.x, body.position.y);
+                    continue;
+                }
                 const tier = TIERS[body.tierIndex];
                 drawFruit(tier, body.position.x, body.position.y);
 
@@ -544,12 +762,17 @@
                     overLineSince = null;
                 }
 
-                const tier = TIERS[currentTierIndex];
                 clampPreviewX();
                 ctx.globalAlpha = 0.85;
-                drawFruit(tier, previewX, DROP_Y);
+                if (nextIsBomb) {
+                    drawBomb(previewX, DROP_Y);
+                } else {
+                    drawFruit(TIERS[currentTierIndex], previewX, DROP_Y);
+                }
                 ctx.globalAlpha = 1;
             }
+
+            drawFloatingTexts();
 
             requestAnimationFrame(renderLoop);
         }

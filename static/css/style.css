@@ -797,7 +797,7 @@ body.place-fullscreen main {
 }
 
 .fruitmerge-page {
-    max-width: 500px;
+    max-width: 580px;
 }
 
 .fruitmerge-score {
@@ -806,6 +806,14 @@ body.place-fullscreen main {
 }
 
 .fruitmerge-wrapper {
+    display: flex;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 0.8rem;
+    max-width: 100%;
+}
+
+.fruitmerge-canvas-area {
     position: relative;
     width: 460px;
     max-width: 100%;
@@ -818,7 +826,53 @@ body.place-fullscreen main {
     border-radius: 6px;
     cursor: pointer;
     max-width: 100%;
+    width: 100%;
+    height: auto;
     touch-action: none;
+}
+
+.fruitmerge-powerups {
+    display: flex;
+    flex-direction: row;
+    gap: 0.5rem;
+}
+
+.fruitmerge-powerups button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 0.5rem 0.4rem;
+    width: 68px;
+    border: 1px solid #3c3c3c;
+    border-radius: 8px;
+    background: #1c1c1c;
+    color: #fff;
+    cursor: pointer;
+}
+
+.fruitmerge-powerups button:hover:not(:disabled) {
+    background: #2c2c2c;
+}
+
+.fruitmerge-powerups button:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.fruitmerge-powerups button.active {
+    border-color: #3ea6ff;
+    background: #16324a;
+}
+
+.powerup-icon {
+    font-size: 1.3rem;
+}
+
+.powerup-label {
+    font-size: 0.65rem;
+    color: #ccc;
+    text-align: center;
 }
 
 .fruitmerge-gameover {
