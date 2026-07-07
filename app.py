@@ -32,6 +32,9 @@ GAME_SUGGESTIONS = [
     KNIFEHIT_SEARCH_TERM,
 ]
 SCORED_GAMES = {"fruit.merge", "gravity.run", "knife.hit"}
+SHUFFLE_COST = 15
+DELETE_COST = 25
+BOMB_COST = 40
 HEX_COLOR_RE = re.compile(r"#[0-9a-fA-F]{6}")
 
 app = Flask(__name__)
@@ -273,6 +276,25 @@ def api_score():
     return jsonify({"ok": True, "total_score": user.total_score})
 
 
+@app.route("/api/spend", methods=["POST"])
+def api_spend():
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+
+    data = request.get_json(silent=True) or {}
+    amount = data.get("amount")
+
+    if not isinstance(amount, int) or amount <= 0:
+        return jsonify({"ok": False, "error": "invalid_amount"}), 400
+    if user.total_score < amount:
+        return jsonify({"ok": False, "error": "insufficient_funds", "total_score": user.total_score}), 400
+
+    user.total_score -= amount
+    db.session.commit()
+    return jsonify({"ok": True, "total_score": user.total_score})
+
+
 @app.route("/upload", methods=["GET", "POST"])
 def upload():
     user = current_user()
@@ -289,13 +311,13 @@ def upload():
 
         if not title:
             flash("Bitte einen Titel angeben.")
-            return render_template("upload.html")
+            return render_template("upload.html", user=user)
         if not file or file.filename == "":
             flash("Bitte eine Videodatei auswaehlen.")
-            return render_template("upload.html")
+            return render_template("upload.html", user=user)
         if not allowed_file(file.filename):
             flash("Nur folgende Formate sind erlaubt: " + ", ".join(sorted(ALLOWED_EXTENSIONS)))
-            return render_template("upload.html")
+            return render_template("upload.html", user=user)
 
         extension = secure_filename(file.filename).rsplit(".", 1)[1].lower()
         stored_filename = f"{uuid.uuid4().hex}.{extension}"
@@ -312,7 +334,7 @@ def upload():
         db.session.commit()
         return redirect(url_for("watch", video_id=video.id))
 
-    return render_template("upload.html")
+    return render_template("upload.html", user=user)
 
 
 @app.route("/video/<int:video_id>")
@@ -649,7 +671,13 @@ def tictactoe():
 
 @app.route("/fruitmerge")
 def fruitmerge():
-    return render_template("fruitmerge.html", user=current_user())
+    return render_template(
+        "fruitmerge.html",
+        user=current_user(),
+        shuffle_cost=SHUFFLE_COST,
+        delete_cost=DELETE_COST,
+        bomb_cost=BOMB_COST,
+    )
 
 
 @app.route("/gravityrun")

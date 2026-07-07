@@ -608,6 +608,14 @@ body.place-fullscreen main {
     padding: 0;
 }
 
+body.game-fullscreen header {
+    display: none;
+}
+
+body.game-fullscreen main {
+    max-width: none;
+}
+
 body.shorts-fullscreen main {
     max-width: none;
     padding: 0;
@@ -1156,6 +1164,28 @@ body.shorts-fullscreen main {
 }
 
 .fruitmerge-powerups {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.powerup-balance {
+    padding: 0.5rem 0.7rem;
+    border: 1px solid #3c3c3c;
+    border-radius: 8px;
+    background: #1c1c1c;
+    font-size: 0.8rem;
+    color: #ccc;
+    text-align: center;
+}
+
+.powerup-balance span {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #ffcc00;
+}
+
+.powerup-buttons {
     display: flex;
     flex-direction: row;
     gap: 0.5rem;

@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Fruit Merge - gigas{% endblock %}
 {% block brand_text %}gigas games{% endblock %}
+{% block body_class %}game-fullscreen{% endblock %}
 {% block content %}
     <div class="fruitmerge-page">
         <h1>gigas/fruit.merge</h1>
@@ -22,22 +23,26 @@
             </div>
 
             <div class="fruitmerge-powerups">
-                <button type="button" id="shuffleBtn" title="Fruechte durchschuetteln">
-                    <span class="powerup-icon">&#128256;</span>
-                    <span class="powerup-label">Schuetteln</span>
-                </button>
-                <button type="button" id="deleteBtn" title="Frucht loeschen">
-                    <span class="powerup-icon">&#10060;</span>
-                    <span class="powerup-label">Loeschen (<span id="deleteCount">5</span>)</span>
-                </button>
-                <button type="button" id="bombBtn" title="Bombe statt naechster Frucht">
-                    <span class="powerup-icon">&#128163;</span>
-                    <span class="powerup-label">Bombe (<span id="bombCount">1</span>)</span>
-                </button>
+                <div class="powerup-balance">Guthaben:<br><span id="balanceText">{{ user.total_score if user else 0 }}</span></div>
+                <div class="powerup-buttons">
+                    <button type="button" id="shuffleBtn" title="Fruechte durchschuetteln (kostet Punkte)" {{ 'disabled' if not user }}>
+                        <span class="powerup-icon">&#128256;</span>
+                        <span class="powerup-label">Schuetteln ({{ shuffle_cost }})</span>
+                    </button>
+                    <button type="button" id="deleteBtn" title="Eine Frucht loeschen (kostet Punkte)" {{ 'disabled' if not user }}>
+                        <span class="powerup-icon">&#10060;</span>
+                        <span class="powerup-label">Loeschen ({{ delete_cost }})</span>
+                    </button>
+                    <button type="button" id="bombBtn" title="Bombe statt naechster Frucht (kostet Punkte)" {{ 'disabled' if not user }}>
+                        <span class="powerup-icon">&#128163;</span>
+                        <span class="powerup-label">Bombe ({{ bomb_cost }})</span>
+                    </button>
+                </div>
+                {% if not user %}
+                    <p class="video-meta">Login erforderlich, um Punkte fuer Power-ups auszugeben.</p>
+                {% endif %}
             </div>
         </div>
-
-        <p><a href="{{ url_for('index') }}">&larr; Zurueck zur Uebersicht</a></p>
     </div>
 
     <div class="guest-upsell-overlay" id="guestUpsellOverlay">
@@ -325,26 +330,26 @@
         const shuffleBtn = document.getElementById("shuffleBtn");
         const deleteBtn = document.getElementById("deleteBtn");
         const bombBtn = document.getElementById("bombBtn");
-        const deleteCountEl = document.getElementById("deleteCount");
-        const bombCountEl = document.getElementById("bombCount");
+        const balanceEl = document.getElementById("balanceText");
 
         const BOMB_RADIUS = 22;
-        const EXPLOSION_RADIUS = 70;
-        const SHUFFLE_COOLDOWN_MS = 5000;
-        const DELETE_STARTING_USES = 5;
-        const BOMB_STARTING_USES = 1;
+        const EXPLOSION_RADIUS = 105;
+        const EXPLOSION_ANIM_MS = 400;
+        const FRUIT_DEATH_ANIM_MS = 300;
+        const SHUFFLE_COST = {{ shuffle_cost }};
+        const DELETE_COST = {{ delete_cost }};
+        const BOMB_COST = {{ bomb_cost }};
 
         let score = 0;
+        let balance = {{ user.total_score if user else 0 }};
         let gameOver = false;
         let dropCooldown = false;
         let overLineSince = null;
         let currentTierIndex = randomSpawnTier();
         let previewX = WIDTH / 2;
-        let deleteUsesLeft = DELETE_STARTING_USES;
-        let bombUsesLeft = BOMB_STARTING_USES;
         let deleteMode = false;
         let nextIsBomb = false;
-        let lastShuffleAt = 0;
+        let explosions = [];
 
         function randomSpawnTier() {
             return SPAWN_WEIGHTS[Math.floor(Math.random() * SPAWN_WEIGHTS.length)];
@@ -405,13 +410,37 @@
             const cy = bomb.position.y;
             Composite.remove(engine.world, bomb);
 
-            const bodies = Composite.allBodies(engine.world).filter((b) => b.tierIndex !== undefined);
+            explosions.push({ x: cx, y: cy, start: performance.now() });
+
+            const bodies = Composite.allBodies(engine.world).filter(
+                (b) => b.tierIndex !== undefined && !b.dying
+            );
             for (const b of bodies) {
                 const dx = b.position.x - cx;
                 const dy = b.position.y - cy;
                 if (dx * dx + dy * dy <= EXPLOSION_RADIUS * EXPLOSION_RADIUS) {
-                    Composite.remove(engine.world, b);
+                    b.dying = true;
+                    b.dyingStart = performance.now();
+                    setTimeout(() => {
+                        Composite.remove(engine.world, b);
+                    }, FRUIT_DEATH_ANIM_MS);
                 }
+            }
+        }
+
+        function drawExplosions() {
+            const now = performance.now();
+            explosions = explosions.filter((e) => now - e.start < EXPLOSION_ANIM_MS);
+            for (const e of explosions) {
+                const progress = (now - e.start) / EXPLOSION_ANIM_MS;
+                ctx.save();
+                ctx.globalAlpha = 1 - progress;
+                ctx.strokeStyle = "#ff8c1a";
+                ctx.lineWidth = 5;
+                ctx.beginPath();
+                ctx.arc(e.x, e.y, EXPLOSION_RADIUS * progress, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.restore();
             }
         }
 
@@ -425,7 +454,12 @@
                 floatingTexts.push({ x, y, text: `+${delta}`, start: performance.now() });
             }
 
-            if (!sessionLoggedIn && !upsellShown && score >= UPSELL_SCORE_THRESHOLD) {
+            if (sessionLoggedIn) {
+                balance += delta;
+                balanceEl.textContent = balance;
+                updatePowerupButtons();
+                submitScore(delta);
+            } else if (!upsellShown && score >= UPSELL_SCORE_THRESHOLD) {
                 upsellShown = true;
                 showGuestUpsell(score);
             }
@@ -479,23 +513,20 @@
 
         function handleDeleteClick(clientX, clientY) {
             const point = eventToCanvasPoint(clientX, clientY);
-            const bodies = Composite.allBodies(engine.world).filter((b) => b.tierIndex !== undefined);
+            const bodies = Composite.allBodies(engine.world).filter(
+                (b) => b.tierIndex !== undefined && !b.dying
+            );
             for (const b of bodies) {
                 const dx = b.position.x - point.x;
                 const dy = b.position.y - point.y;
                 const r = TIERS[b.tierIndex].radius;
                 if (dx * dx + dy * dy <= r * r) {
                     Composite.remove(engine.world, b);
-                    deleteUsesLeft--;
-                    deleteCountEl.textContent = deleteUsesLeft;
-                    if (deleteUsesLeft <= 0) {
-                        deleteMode = false;
-                        deleteBtn.disabled = true;
-                        deleteBtn.classList.remove("active");
-                    }
-                    return;
+                    break;
                 }
             }
+            deleteMode = false;
+            deleteBtn.classList.remove("active");
         }
 
         function dropFruit() {
@@ -506,10 +537,7 @@
             if (nextIsBomb) {
                 body = createBomb(previewX, DROP_Y);
                 nextIsBomb = false;
-                bombUsesLeft--;
-                bombCountEl.textContent = bombUsesLeft;
                 bombBtn.classList.remove("active");
-                if (bombUsesLeft <= 0) bombBtn.disabled = true;
             } else {
                 body = createFruit(currentTierIndex, previewX, DROP_Y);
             }
@@ -542,27 +570,53 @@
             event.preventDefault();
         }, { passive: false });
 
-        shuffleBtn.addEventListener("click", () => {
-            if (gameOver) return;
-            const now = performance.now();
-            if (now - lastShuffleAt < SHUFFLE_COOLDOWN_MS) return;
-            lastShuffleAt = now;
-            const bodies = Composite.allBodies(engine.world).filter((b) => b.tierIndex !== undefined);
+        async function purchasePowerup(cost) {
+            if (!sessionLoggedIn || gameOver || balance < cost) return false;
+            const res = await fetch("{{ url_for('api_spend') }}", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ amount: cost }),
+            });
+            const data = await res.json();
+            if (!data.ok) {
+                balance = data.total_score !== undefined ? data.total_score : balance;
+                balanceEl.textContent = balance;
+                updatePowerupButtons();
+                return false;
+            }
+            balance = data.total_score;
+            balanceEl.textContent = balance;
+            updatePowerupButtons();
+            return true;
+        }
+
+        function updatePowerupButtons() {
+            if (!sessionLoggedIn) return;
+            shuffleBtn.disabled = balance < SHUFFLE_COST || gameOver;
+            deleteBtn.disabled = balance < DELETE_COST || gameOver;
+            bombBtn.disabled = balance < BOMB_COST || gameOver;
+        }
+
+        shuffleBtn.addEventListener("click", async () => {
+            if (!(await purchasePowerup(SHUFFLE_COST))) return;
+            const bodies = Composite.allBodies(engine.world).filter(
+                (b) => b.tierIndex !== undefined && !b.dying
+            );
             for (const b of bodies) {
                 Body.setVelocity(b, { x: (Math.random() - 0.5) * 8, y: -Math.random() * 4 });
             }
         });
 
-        deleteBtn.addEventListener("click", () => {
-            if (gameOver || deleteUsesLeft <= 0) return;
-            deleteMode = !deleteMode;
-            deleteBtn.classList.toggle("active", deleteMode);
+        deleteBtn.addEventListener("click", async () => {
+            if (!(await purchasePowerup(DELETE_COST))) return;
+            deleteMode = true;
+            deleteBtn.classList.add("active");
         });
 
-        bombBtn.addEventListener("click", () => {
-            if (gameOver || bombUsesLeft <= 0) return;
-            nextIsBomb = !nextIsBomb;
-            bombBtn.classList.toggle("active", nextIsBomb);
+        bombBtn.addEventListener("click", async () => {
+            if (!(await purchasePowerup(BOMB_COST))) return;
+            nextIsBomb = true;
+            bombBtn.classList.add("active");
         });
 
         Events.on(engine, "collisionStart", (event) => {
@@ -570,6 +624,7 @@
                 const a = pair.bodyA;
                 const b = pair.bodyB;
                 if (a.tierIndex === undefined || b.tierIndex === undefined) continue;
+                if (a.dying || b.dying) continue;
                 if (a.mergeLock || b.mergeLock) continue;
                 if (a.tierIndex !== b.tierIndex) continue;
 
@@ -604,10 +659,9 @@
             gameOver = true;
             finalScoreEl.textContent = score;
             gameOverOverlay.classList.add("visible");
+            updatePowerupButtons();
 
-            if (sessionLoggedIn) {
-                submitScore(score);
-            } else if (!upsellShown && score > 0) {
+            if (!sessionLoggedIn && !upsellShown && score > 0) {
                 showGuestUpsell(score);
             }
         }
@@ -662,13 +716,20 @@
 
             const overlay = document.getElementById("guestUpsellOverlay");
             const pendingScore = parseInt(overlay.dataset.pendingScore || "0", 10);
-            await fetch("{{ url_for('api_score') }}", {
+            const scoreRes = await fetch("{{ url_for('api_score') }}", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ game: GAME_KEY, score: pendingScore }),
             });
+            const scoreData = await scoreRes.json();
 
             sessionLoggedIn = true;
+            balance = scoreData.total_score !== undefined ? scoreData.total_score : balance;
+            balanceEl.textContent = balance;
+            shuffleBtn.disabled = false;
+            deleteBtn.disabled = false;
+            bombBtn.disabled = false;
+            updatePowerupButtons();
             updateHeaderAfterLogin(data.username);
 
             document.getElementById("guestUpsellAuth").style.display = "none";
@@ -704,19 +765,15 @@
             upsellShown = false;
             overLineSince = null;
             floatingTexts = [];
+            explosions = [];
             currentTierIndex = randomSpawnTier();
             gameOverOverlay.classList.remove("visible");
 
-            deleteUsesLeft = DELETE_STARTING_USES;
-            bombUsesLeft = BOMB_STARTING_USES;
             deleteMode = false;
             nextIsBomb = false;
-            deleteCountEl.textContent = deleteUsesLeft;
-            bombCountEl.textContent = bombUsesLeft;
-            deleteBtn.disabled = false;
-            bombBtn.disabled = false;
             deleteBtn.classList.remove("active");
             bombBtn.classList.remove("active");
+            updatePowerupButtons();
         }
 
         restartBtn.addEventListener("click", restartGame);
@@ -741,6 +798,16 @@
                     continue;
                 }
                 const tier = TIERS[body.tierIndex];
+
+                if (body.dying) {
+                    const progress = Math.min(1, (performance.now() - body.dyingStart) / FRUIT_DEATH_ANIM_MS);
+                    ctx.save();
+                    ctx.globalAlpha = 1 - progress;
+                    drawFruit(tier, body.position.x, body.position.y);
+                    ctx.restore();
+                    continue;
+                }
+
                 drawFruit(tier, body.position.x, body.position.y);
 
                 if (
@@ -774,10 +841,12 @@
             }
 
             drawFloatingTexts();
+            drawExplosions();
 
             requestAnimationFrame(renderLoop);
         }
 
+        updatePowerupButtons();
         requestAnimationFrame(renderLoop);
     </script>
 {% endblock %}

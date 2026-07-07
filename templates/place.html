@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}gigas/place{% endblock %}
 {% block brand_text %}gigas games{% endblock %}
-{% block body_class %}place-fullscreen{% endblock %}
+{% block body_class %}place-fullscreen game-fullscreen{% endblock %}
 {% block content %}
     <div class="place-page">
         <div class="place-controls" id="placeControls">
@@ -10,7 +10,6 @@
             <span id="zoomLevel"></span>
             <span id="cooldown"></span>
             <a class="place-back" href="{{ url_for('leaderboard') }}" title="Bestenliste">&#127942;</a>
-            <a class="place-back" href="{{ url_for('index') }}">&larr; Zurueck</a>
         </div>
 
         <div class="place-canvas-wrapper" id="canvasWrapper">
