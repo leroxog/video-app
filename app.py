@@ -8,6 +8,7 @@ from flask import (
     Flask, render_template, request, redirect, url_for,
     session, send_from_directory, abort, flash, jsonify
 )
+from sqlalchemy import text
 from werkzeug.utils import secure_filename
 from models import db, User, Video, Pixel, Like, Subscription
 
@@ -65,8 +66,45 @@ logger.warning(
 
 db.init_app(app)
 
+
+def ensure_columns_exist():
+    """Self-healing migration: db.create_all() only creates missing tables,
+    it never adds columns to tables that already exist (e.g. on Postgres
+    after the model gained new fields). Add any columns the current models
+    need but the live database is still missing."""
+    if "sqlite" in database_url:
+        return
+
+    statements = [
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS public_id VARCHAR(36)',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS email VARCHAR(255)',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS last_pixel_at TIMESTAMP',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS profile_image VARCHAR(255)',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS total_score INTEGER NOT NULL DEFAULT 0',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE',
+        'ALTER TABLE video ADD COLUMN IF NOT EXISTS description TEXT',
+        "ALTER TABLE video ADD COLUMN IF NOT EXISTS orientation VARCHAR(10) NOT NULL DEFAULT 'landscape'",
+    ]
+    with db.engine.connect() as conn:
+        for statement in statements:
+            try:
+                conn.execute(text(statement))
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                logger.exception("Migration step failed: %s", statement)
+
+    missing_public_id = User.query.filter(User.public_id.is_(None)).all()
+    for user in missing_public_id:
+        user.public_id = str(uuid.uuid4())
+    if missing_public_id:
+        db.session.commit()
+        logger.info("Backfilled public_id for %d existing user(s).", len(missing_public_id))
+
+
 with app.app_context():
     db.create_all()
+    ensure_columns_exist()
 
     admin_username = os.environ.get("ADMIN_USERNAME")
     admin_password = os.environ.get("ADMIN_PASSWORD")
