@@ -56,6 +56,48 @@
         {% block content %}{% endblock %}
     </main>
 
+    <div class="bottom-nav">
+        <a class="bottom-nav-avatar" href="{{ url_for('profile', username=user.username) if user else url_for('login') }}" title="Profil">
+            {% if user and user.profile_image %}
+                <img src="{{ url_for('static', filename='profile_pics/' + user.profile_image) }}" alt="">
+            {% else %}
+                <span class="bottom-nav-avatar-placeholder">{{ user.username[0]|upper if user else '?' }}</span>
+            {% endif %}
+        </a>
+
+        <a class="bottom-nav-plus" href="{{ url_for('upload') }}" title="Hochladen">+</a>
+
+        <div class="bottom-nav-house-wrapper">
+            <div class="house-flyout" id="houseFlyout">
+                <a class="house-icon" href="{{ url_for('index') }}" title="Videos entdecken (wie YouTube)">
+                    <svg viewBox="0 0 64 40" width="34" height="22"><path d="M32 2 L60 18 V38 H4 V18 Z" fill="#ffffff"/></svg>
+                </a>
+                <a class="house-icon" href="{{ url_for('shorts') }}" title="Shorts (wie TikTok)">
+                    <svg viewBox="0 0 32 56" width="20" height="34"><path d="M16 2 L30 14 V54 H2 V14 Z" fill="#ffffff"/></svg>
+                </a>
+            </div>
+            <button type="button" class="bottom-nav-house" id="houseToggle" title="Entdecken">
+                <svg viewBox="0 0 48 48" width="26" height="26"><path d="M24 4 L44 20 V44 H4 V20 Z" fill="#ffffff"/></svg>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            const toggle = document.getElementById("houseToggle");
+            const flyout = document.getElementById("houseFlyout");
+            toggle.addEventListener("click", (event) => {
+                event.stopPropagation();
+                flyout.classList.toggle("visible");
+            });
+            document.addEventListener("click", (event) => {
+                if (!flyout.contains(event.target) && event.target !== toggle) {
+                    flyout.classList.remove("visible");
+                }
+            });
+        })();
+    </script>
+
     <script>
         (function () {
             const HISTORY_KEY = "gigasSearchHistory";

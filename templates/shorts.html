@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %}Shorts - gigas{% endblock %}
+{% block brand_text %}gigas{% endblock %}
+{% block body_class %}shorts-fullscreen{% endblock %}
+{% block content %}
+    {% if videos %}
+        <div class="shorts-feed" id="shortsFeed">
+            {% for video in videos %}
+                <div class="shorts-slide">
+                    <video
+                        class="shorts-video"
+                        src="{{ url_for('uploaded_file', filename=video.filename) }}"
+                        loop muted playsinline
+                        data-video-id="{{ video.id }}"
+                    ></video>
+
+                    <div class="shorts-mute-hint">&#128263; Tippen zum Ton an/aus</div>
+
+                    <div class="shorts-overlay">
+                        <div class="shorts-channel">
+                            <a class="channel-link" href="{{ url_for('profile', username=video.uploader.username) }}">
+                                {% if video.uploader.profile_image %}
+                                    <img class="channel-avatar" src="{{ url_for('static', filename='profile_pics/' + video.uploader.profile_image) }}" alt="">
+                                {% else %}
+                                    <div class="channel-avatar profile-avatar-placeholder">{{ video.uploader.username[0]|upper }}</div>
+                                {% endif %}
+                                <span>{{ video.uploader.username }}</span>
+                            </a>
+                            {% if user and user.id != video.user_id %}
+                                <button type="button" class="shorts-subscribe-btn {{ 'subscribed' if video.user_id in subscribed_channel_ids else '' }}"
+                                        data-username="{{ video.uploader.username }}">
+                                    {{ '&#10003;' if video.user_id in subscribed_channel_ids else '+' }}
+                                </button>
+                            {% endif %}
+                        </div>
+                        <div class="shorts-title">{{ video.title }}</div>
+                        {% if video.description %}
+                            <div class="shorts-description">{{ video.description }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="shorts-actions">
+                        {% if user %}
+                            <button type="button" class="shorts-like-btn {{ 'liked' if video.id in liked_ids else '' }}" data-video-id="{{ video.id }}">
+                                <span class="shorts-action-icon">{{ '❤' if video.id in liked_ids else '♡' }}</span>
+                                <span class="shorts-like-count">{{ video.likes|length }}</span>
+                            </button>
+                        {% else %}
+                            <div class="shorts-like-btn">
+                                <span class="shorts-action-icon">&#10084;</span>
+                                <span class="shorts-like-count">{{ video.likes|length }}</span>
+                            </div>
+                        {% endif %}
+                        <a class="shorts-action-btn" href="{{ url_for('uploaded_file', filename=video.filename) }}" download title="Herunterladen">
+                            &#11015;
+                        </a>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="shorts-empty">
+            <p>Noch keine Hochformat-Videos vorhanden.</p>
+            <a href="{{ url_for('upload') }}">Jetzt eins hochladen</a>
+        </div>
+    {% endif %}
+
+    <script>
+        const feed = document.getElementById("shortsFeed");
+        if (feed) {
+            const videos = Array.from(document.querySelectorAll(".shorts-video"));
+
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach((entry) => {
+                    const video = entry.target;
+                    if (entry.isIntersecting && entry.intersectionRatio > 0.6) {
+                        video.play().catch(() => {});
+                    } else {
+                        video.pause();
+                    }
+                });
+            }, { threshold: [0, 0.6, 1] });
+
+            videos.forEach((video) => {
+                observer.observe(video);
+                video.addEventListener("click", () => {
+                    video.muted = !video.muted;
+                });
+            });
+
+            if (videos.length) {
+                videos[0].play().catch(() => {});
+            }
+
+            document.querySelectorAll(".shorts-like-btn[data-video-id]").forEach((btn) => {
+                btn.addEventListener("click", async () => {
+                    const videoId = btn.dataset.videoId;
+                    const res = await fetch(`/api/video/${videoId}/like`, { method: "POST" });
+                    const data = await res.json();
+                    if (!data.ok) return;
+                    btn.classList.toggle("liked", data.liked);
+                    btn.querySelector(".shorts-action-icon").textContent = data.liked ? "❤" : "♡";
+                    btn.querySelector(".shorts-like-count").textContent = data.like_count;
+                });
+            });
+
+            document.querySelectorAll(".shorts-subscribe-btn").forEach((btn) => {
+                btn.addEventListener("click", async () => {
+                    const username = btn.dataset.username;
+                    const res = await fetch(`/api/user/${username}/subscribe`, { method: "POST" });
+                    const data = await res.json();
+                    if (!data.ok) return;
+                    btn.classList.toggle("subscribed", data.subscribed);
+                    btn.innerHTML = data.subscribed ? "&#10003;" : "+";
+                });
+            });
+        }
+    </script>
+{% endblock %}

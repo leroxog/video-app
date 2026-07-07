@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime, timezone
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -7,8 +8,10 @@ db = SQLAlchemy()
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    public_id = db.Column(db.String(36), unique=True, nullable=False, default=lambda: str(uuid.uuid4()))
     username = db.Column(db.String(50), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
+    email = db.Column(db.String(255), unique=True, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     last_pixel_at = db.Column(db.DateTime, nullable=True)
     profile_image = db.Column(db.String(255), nullable=True)
@@ -43,6 +46,7 @@ class Video(db.Model):
     title = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text, nullable=True)
     filename = db.Column(db.String(255), nullable=False)
+    orientation = db.Column(db.String(10), nullable=False, default="landscape")
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     likes = db.relationship("Like", backref="video", lazy=True, cascade="all, delete-orphan")

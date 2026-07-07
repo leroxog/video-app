@@ -122,6 +122,8 @@ def index():
         videos_query = Video.query
         if query:
             videos_query = videos_query.filter(Video.title.ilike(f"%{query}%"))
+        else:
+            videos_query = videos_query.filter_by(orientation="landscape")
         videos = videos_query.order_by(Video.created_at.desc()).all()
     return render_template(
         "index.html",
@@ -242,6 +244,9 @@ def upload():
     if request.method == "POST":
         title = request.form.get("title", "").strip()
         description = request.form.get("description", "").strip()
+        orientation = request.form.get("orientation", "landscape")
+        if orientation not in ("landscape", "portrait"):
+            orientation = "landscape"
         file = request.files.get("video")
 
         if not title:
@@ -258,7 +263,13 @@ def upload():
         stored_filename = f"{uuid.uuid4().hex}.{extension}"
         file.save(os.path.join(app.config["UPLOAD_FOLDER"], stored_filename))
 
-        video = Video(title=title, description=description or None, filename=stored_filename, user_id=user.id)
+        video = Video(
+            title=title,
+            description=description or None,
+            filename=stored_filename,
+            orientation=orientation,
+            user_id=user.id,
+        )
         db.session.add(video)
         db.session.commit()
         return redirect(url_for("watch", video_id=video.id))
@@ -304,6 +315,45 @@ def like_video(video_id):
         db.session.add(Like(user_id=user.id, video_id=video.id))
     db.session.commit()
     return redirect(url_for("watch", video_id=video.id))
+
+
+@app.route("/api/video/<int:video_id>/like", methods=["POST"])
+def api_like_video(video_id):
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    video = db.get_or_404(Video, video_id)
+
+    existing = Like.query.filter_by(user_id=user.id, video_id=video.id).first()
+    if existing:
+        db.session.delete(existing)
+        liked = False
+    else:
+        db.session.add(Like(user_id=user.id, video_id=video.id))
+        liked = True
+    db.session.commit()
+    return jsonify({"ok": True, "liked": liked, "like_count": len(video.likes)})
+
+
+@app.route("/api/user/<username>/subscribe", methods=["POST"])
+def api_subscribe(username):
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+
+    target = User.query.filter_by(username=username).first_or_404()
+    if target.id == user.id:
+        return jsonify({"ok": False, "error": "self_subscribe"}), 400
+
+    existing = Subscription.query.filter_by(subscriber_id=user.id, channel_id=target.id).first()
+    if existing:
+        db.session.delete(existing)
+        subscribed = False
+    else:
+        db.session.add(Subscription(subscriber_id=user.id, channel_id=target.id))
+        subscribed = True
+    db.session.commit()
+    return jsonify({"ok": True, "subscribed": subscribed, "subscriber_count": len(target.subscribers)})
 
 
 @app.route("/uploads/<path:filename>")
@@ -454,6 +504,29 @@ def admin_delete_user(user_id):
 
 def seconds_since(moment):
     return (datetime.now(timezone.utc) - moment.replace(tzinfo=timezone.utc)).total_seconds()
+
+
+@app.route("/shorts")
+def shorts():
+    user = current_user()
+    videos = Video.query.filter_by(orientation="portrait").all()
+    random.shuffle(videos)
+
+    liked_ids = set()
+    subscribed_channel_ids = set()
+    if user is not None:
+        liked_ids = {like.video_id for like in Like.query.filter_by(user_id=user.id).all()}
+        subscribed_channel_ids = {
+            sub.channel_id for sub in Subscription.query.filter_by(subscriber_id=user.id).all()
+        }
+
+    return render_template(
+        "shorts.html",
+        videos=videos,
+        user=user,
+        liked_ids=liked_ids,
+        subscribed_channel_ids=subscribed_channel_ids,
+    )
 
 
 @app.route("/tictactoe")

@@ -264,10 +264,11 @@ def test_place_pixel_rejects_bad_color(client):
     assert response.get_json()["error"] == "invalid_color"
 
 
-def upload_video(client, title="Testvideo", description=""):
+def upload_video(client, title="Testvideo", description="", orientation="landscape"):
     data = {
         "title": title,
         "description": description,
+        "orientation": orientation,
         "video": (io.BytesIO(b"fake video bytes"), "clip.mp4"),
     }
     return client.post("/upload", data=data, content_type="multipart/form-data", follow_redirects=True)
@@ -501,3 +502,92 @@ def test_regular_user_still_cannot_delete_others_video(client):
     register(client, username="stranger")
     response = client.post("/video/1/delete")
     assert response.status_code == 403
+
+
+def test_index_shows_only_landscape_videos_by_default(client):
+    register(client)
+    upload_video(client, title="Landscape Video", orientation="landscape")
+    upload_video(client, title="Portrait Video", orientation="portrait")
+
+    response = client.get("/")
+    assert b"Landscape Video" in response.data
+    assert b"Portrait Video" not in response.data
+
+
+def test_search_still_finds_portrait_videos(client):
+    register(client)
+    upload_video(client, title="Portrait Video", orientation="portrait")
+
+    response = client.get("/?q=Portrait")
+    assert b"Portrait Video" in response.data
+
+
+def test_shorts_page_shows_only_portrait_videos(client):
+    register(client)
+    upload_video(client, title="Landscape Video", orientation="landscape")
+    upload_video(client, title="Portrait Video", orientation="portrait")
+
+    response = client.get("/shorts")
+    assert response.status_code == 200
+    assert b"Portrait Video" in response.data
+    assert b"Landscape Video" not in response.data
+
+
+def test_shorts_page_empty_state(client):
+    response = client.get("/shorts")
+    assert response.status_code == 200
+    assert b"Noch keine Hochformat-Videos" in response.data
+
+
+def test_api_like_video_toggle(client):
+    register(client)
+    upload_video(client, title="Like API Test")
+
+    response = client.post("/video/1/like".replace("video/1", "api/video/1"))
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data == {"ok": True, "liked": True, "like_count": 1}
+
+    response = client.post("/api/video/1/like")
+    assert response.get_json() == {"ok": True, "liked": False, "like_count": 0}
+
+
+def test_api_like_video_requires_login(client):
+    response = client.post("/api/video/1/like")
+    assert response.status_code == 401
+
+
+def test_api_subscribe_toggle(client):
+    register(client, username="alice")
+    client.post("/logout")
+    register(client, username="bob")
+    client.post("/logout")
+    client.post("/login", data={"username": "alice", "password": "secret123"})
+
+    response = client.post("/api/user/bob/subscribe")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["ok"] is True
+    assert data["subscribed"] is True
+    assert data["subscriber_count"] == 1
+
+    response = client.post("/api/user/bob/subscribe")
+    assert response.get_json()["subscribed"] is False
+
+
+def test_api_subscribe_to_self_rejected(client):
+    register(client, username="alice")
+    response = client.post("/api/user/alice/subscribe")
+    assert response.status_code == 400
+
+
+def test_user_has_unique_public_id(client):
+    register(client, username="alice")
+    client.post("/logout")
+    register(client, username="bob")
+
+    alice = User.query.filter_by(username="alice").first()
+    bob = User.query.filter_by(username="bob").first()
+    assert alice.public_id is not None
+    assert bob.public_id is not None
+    assert alice.public_id != bob.public_id
