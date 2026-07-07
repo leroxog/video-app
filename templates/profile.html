@@ -13,6 +13,10 @@
             <p class="video-meta">{{ subscriber_count }} Abonnenten &middot; {{ videos|length }} Videos</p>
         </div>
 
+        {% if is_own_profile %}
+            <a class="profile-settings-gear" href="{{ url_for('account_settings') }}" title="Einstellungen">&#9881;</a>
+        {% endif %}
+
         {% if user and not is_own_profile %}
             <form action="{{ url_for('subscribe', username=profile_user.username) }}" method="post" class="profile-subscribe-form">
                 <button type="submit" class="{{ 'subscribed' if is_subscribed else '' }}">

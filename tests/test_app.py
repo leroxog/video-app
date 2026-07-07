@@ -591,3 +591,83 @@ def test_user_has_unique_public_id(client):
     assert alice.public_id is not None
     assert bob.public_id is not None
     assert alice.public_id != bob.public_id
+
+
+def test_account_settings_requires_login(client):
+    response = client.get("/account/settings", follow_redirects=True)
+    assert b"Login" in response.data
+
+
+def test_account_settings_shows_public_id(client):
+    register(client, username="alice")
+    user = User.query.filter_by(username="alice").first()
+    response = client.get("/account/settings")
+    assert user.public_id.encode() in response.data
+
+
+def test_username_change_blocked_without_email(client):
+    register(client, username="alice")
+    response = client.post("/account/username", data={"username": "newname"})
+    assert response.status_code == 400
+
+
+def test_password_change_blocked_without_email(client):
+    register(client, username="alice")
+    response = client.post(
+        "/account/password", data={"current_password": "secret123", "new_password": "newpass123"}
+    )
+    assert response.status_code == 400
+
+
+def test_add_email_unlocks_username_and_password_change(client):
+    register(client, username="alice")
+    client.post("/account/email", data={"email": "alice@example.com"}, follow_redirects=True)
+
+    response = client.post("/account/username", data={"username": "newalice"}, follow_redirects=True)
+    assert response.status_code == 200
+    assert User.query.filter_by(username="newalice").first() is not None
+
+    response = client.post(
+        "/account/password",
+        data={"current_password": "secret123", "new_password": "newpass123"},
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+
+    client.post("/logout")
+    response = client.post(
+        "/login", data={"username": "newalice", "password": "newpass123"}, follow_redirects=True
+    )
+    assert b"newalice" in response.data
+
+
+def test_password_change_rejects_wrong_current_password(client):
+    register(client, username="alice")
+    client.post("/account/email", data={"email": "alice@example.com"})
+    response = client.post(
+        "/account/password",
+        data={"current_password": "wrongpass", "new_password": "newpass123"},
+        follow_redirects=True,
+    )
+    assert "falsch".encode() in response.data
+
+
+def test_email_must_be_unique(client):
+    register(client, username="alice")
+    client.post("/account/email", data={"email": "shared@example.com"})
+    client.post("/logout")
+
+    register(client, username="bob")
+    response = client.post(
+        "/account/email", data={"email": "shared@example.com"}, follow_redirects=True
+    )
+    assert "verwendet".encode() in response.data
+
+
+def test_email_not_shown_on_public_profile(client):
+    register(client, username="alice")
+    client.post("/account/email", data={"email": "secret@example.com"})
+    client.post("/logout")
+
+    response = client.get("/user/alice")
+    assert b"secret@example.com" not in response.data

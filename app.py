@@ -451,6 +451,81 @@ def upload_profile_picture():
     return redirect(url_for("profile", username=user.username))
 
 
+@app.route("/account/settings")
+def account_settings():
+    user = current_user()
+    if user is None:
+        return redirect(url_for("login"))
+    return render_template("account_settings.html", user=user)
+
+
+@app.route("/account/email", methods=["POST"])
+def update_email():
+    user = current_user()
+    if user is None:
+        return redirect(url_for("login"))
+
+    email = request.form.get("email", "").strip()
+    if not email or "@" not in email:
+        flash("Bitte eine gueltige E-Mail-Adresse angeben.")
+        return redirect(url_for("account_settings"))
+
+    if User.query.filter(User.email == email, User.id != user.id).first():
+        flash("Diese E-Mail-Adresse wird bereits verwendet.")
+        return redirect(url_for("account_settings"))
+
+    user.email = email
+    db.session.commit()
+    flash("E-Mail-Adresse gespeichert.")
+    return redirect(url_for("account_settings"))
+
+
+@app.route("/account/username", methods=["POST"])
+def update_username():
+    user = current_user()
+    if user is None:
+        return redirect(url_for("login"))
+    if not user.email:
+        abort(400)
+
+    new_username = request.form.get("username", "").strip()
+    if not new_username:
+        flash("Bitte einen Benutzernamen angeben.")
+        return redirect(url_for("account_settings"))
+    if User.query.filter(User.username == new_username, User.id != user.id).first():
+        flash("Dieser Benutzername ist bereits vergeben.")
+        return redirect(url_for("account_settings"))
+
+    user.username = new_username
+    db.session.commit()
+    flash("Benutzername geaendert.")
+    return redirect(url_for("account_settings"))
+
+
+@app.route("/account/password", methods=["POST"])
+def update_password():
+    user = current_user()
+    if user is None:
+        return redirect(url_for("login"))
+    if not user.email:
+        abort(400)
+
+    current_password = request.form.get("current_password", "")
+    new_password = request.form.get("new_password", "")
+
+    if not user.check_password(current_password):
+        flash("Aktuelles Passwort ist falsch.")
+        return redirect(url_for("account_settings"))
+    if not new_password:
+        flash("Bitte ein neues Passwort angeben.")
+        return redirect(url_for("account_settings"))
+
+    user.set_password(new_password)
+    db.session.commit()
+    flash("Passwort geaendert.")
+    return redirect(url_for("account_settings"))
+
+
 @app.route("/admin")
 def admin_dashboard():
     admin_user = require_admin()

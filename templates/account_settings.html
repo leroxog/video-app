@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Einstellungen - gigas{% endblock %}
+{% block content %}
+    <h1>Einstellungen</h1>
+
+    <h2>Account</h2>
+    <div class="settings-id-row">
+        <span>ID: <code id="publicIdText">{{ user.public_id }}</code></span>
+        <button type="button" id="copyIdBtn">Kopieren</button>
+    </div>
+
+    <form action="{{ url_for('logout') }}" method="post" class="settings-logout-form">
+        <button type="submit" class="danger">Ausloggen</button>
+    </form>
+
+    <h2>E-Mail</h2>
+    {% if user.email %}
+        <p>Hinterlegte E-Mail: {{ user.email }} <span class="video-meta">(wird nicht oeffentlich angezeigt)</span></p>
+        <form action="{{ url_for('update_email') }}" method="post" class="form settings-form">
+            <label for="email">E-Mail aendern</label>
+            <input type="email" id="email" name="email" value="{{ user.email }}" required>
+            <button type="submit">Speichern</button>
+        </form>
+    {% else %}
+        <p>Um deinen Benutzernamen oder dein Passwort zu aendern, musst du zuerst eine E-Mail-Adresse hinzufuegen. Sie wird nicht oeffentlich angezeigt.</p>
+        <form action="{{ url_for('update_email') }}" method="post" class="form settings-form">
+            <label for="email">E-Mail-Adresse hinzufuegen</label>
+            <input type="email" id="email" name="email" required>
+            <button type="submit">Speichern</button>
+        </form>
+    {% endif %}
+
+    <h2>Benutzername aendern</h2>
+    {% if user.email %}
+        <form action="{{ url_for('update_username') }}" method="post" class="form settings-form">
+            <label for="username">Neuer Benutzername</label>
+            <input type="text" id="username" name="username" value="{{ user.username }}" required maxlength="50">
+            <button type="submit">Aendern</button>
+        </form>
+    {% else %}
+        <p class="video-meta">Erst verfuegbar, sobald eine E-Mail-Adresse hinterlegt ist.</p>
+    {% endif %}
+
+    <h2>Passwort aendern</h2>
+    {% if user.email %}
+        <form action="{{ url_for('update_password') }}" method="post" class="form settings-form">
+            <label for="current_password">Aktuelles Passwort</label>
+            <input type="password" id="current_password" name="current_password" required>
+
+            <label for="new_password">Neues Passwort</label>
+            <input type="password" id="new_password" name="new_password" required>
+
+            <button type="submit">Aendern</button>
+        </form>
+    {% else %}
+        <p class="video-meta">Erst verfuegbar, sobald eine E-Mail-Adresse hinterlegt ist.</p>
+    {% endif %}
+
+    <p><a href="{{ url_for('profile', username=user.username) }}">&larr; Zurueck zum Profil</a></p>
+
+    <script>
+        document.getElementById("copyIdBtn").addEventListener("click", function () {
+            const text = document.getElementById("publicIdText").textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                this.textContent = "Kopiert!";
+                setTimeout(() => { this.textContent = "Kopieren"; }, 1500);
+            });
+        });
+    </script>
+{% endblock %}
