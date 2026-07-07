@@ -175,7 +175,7 @@ def test_header_search_bar_present_on_every_page(client):
     for path in ["/", "/login", "/register"]:
         response = client.get(path)
         assert b"headerSearchInput" in response.data
-        assert b"home-link" in response.data
+        assert b"bottom-nav-house" in response.data
 
 
 def test_header_search_bar_present_on_watch_page(client):

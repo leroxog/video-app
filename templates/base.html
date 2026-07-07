@@ -18,28 +18,12 @@
             <div class="search-history-dropdown" id="searchHistoryDropdown"></div>
         </div>
 
-        <nav>
-            <a href="{{ url_for('index') }}" class="home-link" title="Startseite">&#127968; Start</a>
-            <a href="{{ url_for('leaderboard') }}" title="Bestenliste">&#127942; Bestenliste</a>
-            {% if user %}
-                <a class="username" href="{{ url_for('profile', username=user.username) }}">
-                    {% if user.profile_image %}
-                        <img class="nav-avatar" src="{{ url_for('static', filename='profile_pics/' + user.profile_image) }}" alt="">
-                    {% endif %}
-                    {{ user.username }}
-                </a>
-                <a href="{{ url_for('upload') }}">Hochladen</a>
-                {% if user.is_admin %}
-                    <a href="{{ url_for('admin_dashboard') }}">&#9881; Admin</a>
-                {% endif %}
-                <form action="{{ url_for('logout') }}" method="post">
-                    <button type="submit">Logout</button>
-                </form>
-            {% else %}
+        {% if not user %}
+            <nav>
                 <a href="{{ url_for('login') }}">Login</a>
                 <a href="{{ url_for('register') }}">Registrieren</a>
-            {% endif %}
-        </nav>
+            </nav>
+        {% endif %}
     </header>
 
     <main>

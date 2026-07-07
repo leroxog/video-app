@@ -124,23 +124,6 @@ nav a:hover, nav button:hover {
     background: #2c2c2c;
 }
 
-.username {
-    color: #f1f1f1;
-    text-decoration: none;
-    background: none;
-    border: 1px solid #3c3c3c;
-    padding: 0.4rem 0.8rem;
-    border-radius: 4px;
-    font-size: 0.9rem;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-}
-
-.username:hover {
-    background: #2c2c2c;
-}
-
 .nav-avatar {
     width: 20px;
     height: 20px;
@@ -795,6 +778,21 @@ body.shorts-fullscreen main {
     color: #f1f1f1;
     text-decoration: none;
     font-size: 0.9rem;
+}
+
+.game-leaderboard-link {
+    display: inline-block;
+    margin-bottom: 0.8rem;
+    padding: 0.4rem 0.8rem;
+    border: 1px solid #3c3c3c;
+    border-radius: 20px;
+    color: #f1f1f1;
+    text-decoration: none;
+    font-size: 0.85rem;
+}
+
+.game-leaderboard-link:hover {
+    background: #2c2c2c;
 }
 
 .place-canvas-wrapper {

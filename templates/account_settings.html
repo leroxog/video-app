@@ -13,6 +13,10 @@
         <button type="submit" class="danger">Ausloggen</button>
     </form>
 
+    {% if user.is_admin %}
+        <p><a href="{{ url_for('admin_dashboard') }}">&#9881; Admin-Bereich</a></p>
+    {% endif %}
+
     <h2>E-Mail</h2>
     {% if user.email %}
         <p>Hinterlegte E-Mail: {{ user.email }} <span class="video-meta">(wird nicht oeffentlich angezeigt)</span></p>

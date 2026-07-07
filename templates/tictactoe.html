@@ -4,6 +4,7 @@
 {% block content %}
     <div class="tictactoe-page">
         <h1>Tic Tac Toe gegen den Bot</h1>
+        <a class="game-leaderboard-link" href="{{ url_for('leaderboard') }}">&#127942; Bestenliste</a>
         <p id="statusLine">Du bist X. Du beginnst.</p>
 
         <div class="tictactoe-board" id="board"></div>
