@@ -16,44 +16,46 @@
 
                     <div class="shorts-mute-hint">&#128263; Tippen zum Ton an/aus</div>
 
-                    <div class="shorts-overlay">
-                        <div class="shorts-channel">
-                            <a class="channel-link" href="{{ url_for('profile', username=video.uploader.username) }}">
+                    <div class="shorts-action-stack">
+                        <div class="shorts-avatar-wrap">
+                            <a class="shorts-avatar-link" href="{{ url_for('profile', username=video.uploader.username) }}">
                                 {% if video.uploader.profile_image %}
-                                    <img class="channel-avatar" src="{{ url_for('static', filename='profile_pics/' + video.uploader.profile_image) }}" alt="">
+                                    <img class="shorts-avatar" src="{{ url_for('static', filename='profile_pics/' + video.uploader.profile_image) }}" alt="">
                                 {% else %}
-                                    <div class="channel-avatar profile-avatar-placeholder">{{ video.uploader.username[0]|upper }}</div>
+                                    <div class="shorts-avatar profile-avatar-placeholder">{{ video.uploader.username[0]|upper }}</div>
                                 {% endif %}
-                                <span>{{ video.uploader.username }}</span>
                             </a>
                             {% if user and user.id != video.user_id %}
-                                <button type="button" class="shorts-subscribe-btn {{ 'subscribed' if video.user_id in subscribed_channel_ids else '' }}"
+                                <button type="button" class="shorts-subscribe-badge {{ 'subscribed' if video.user_id in subscribed_channel_ids else '' }}"
                                         data-username="{{ video.uploader.username }}">
                                     {{ '&#10003;' if video.user_id in subscribed_channel_ids else '+' }}
                                 </button>
                             {% endif %}
                         </div>
-                        <div class="shorts-title">{{ video.title }}</div>
-                        {% if video.description %}
-                            <div class="shorts-description">{{ video.description }}</div>
-                        {% endif %}
-                    </div>
 
-                    <div class="shorts-actions">
                         {% if user %}
                             <button type="button" class="shorts-like-btn {{ 'liked' if video.id in liked_ids else '' }}" data-video-id="{{ video.id }}">
                                 <span class="shorts-action-icon">{{ '❤' if video.id in liked_ids else '♡' }}</span>
-                                <span class="shorts-like-count">{{ video.likes|length }}</span>
+                                <span class="shorts-action-count">{{ video.likes|length }}</span>
                             </button>
                         {% else %}
                             <div class="shorts-like-btn">
                                 <span class="shorts-action-icon">&#10084;</span>
-                                <span class="shorts-like-count">{{ video.likes|length }}</span>
+                                <span class="shorts-action-count">{{ video.likes|length }}</span>
                             </div>
                         {% endif %}
+
                         <a class="shorts-action-btn" href="{{ url_for('uploaded_file', filename=video.filename) }}" download title="Herunterladen">
-                            &#11015;
+                            <span class="shorts-action-icon">&#11015;</span>
                         </a>
+                    </div>
+
+                    <div class="shorts-info">
+                        <a class="shorts-username" href="{{ url_for('profile', username=video.uploader.username) }}">@{{ video.uploader.username }}</a>
+                        <div class="shorts-title">{{ video.title }}</div>
+                        {% if video.description %}
+                            <div class="shorts-description">{{ video.description }}</div>
+                        {% endif %}
                     </div>
                 </div>
             {% endfor %}
@@ -100,11 +102,11 @@
                     if (!data.ok) return;
                     btn.classList.toggle("liked", data.liked);
                     btn.querySelector(".shorts-action-icon").textContent = data.liked ? "❤" : "♡";
-                    btn.querySelector(".shorts-like-count").textContent = data.like_count;
+                    btn.querySelector(".shorts-action-count").textContent = data.like_count;
                 });
             });
 
-            document.querySelectorAll(".shorts-subscribe-btn").forEach((btn) => {
+            document.querySelectorAll(".shorts-subscribe-badge").forEach((btn) => {
                 btn.addEventListener("click", async () => {
                     const username = btn.dataset.username;
                     const res = await fetch(`/api/user/${username}/subscribe`, { method: "POST" });
