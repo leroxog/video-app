@@ -86,8 +86,9 @@ header {
 
 nav {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 1rem;
+    gap: 0.6rem 1rem;
 }
 
 nav a, nav button {
@@ -856,6 +857,15 @@ body.place-fullscreen main {
     max-width: 460px;
 }
 
+#runCanvas, #knifeCanvas {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    border: 1px solid #3c3c3c;
+    border-radius: 6px;
+    background: #101820;
+}
+
 .mp-lobby-options {
     display: flex;
     flex-wrap: wrap;
@@ -908,6 +918,9 @@ body.place-fullscreen main {
     width: 100%;
     border-collapse: collapse;
     margin: 1rem 0;
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .mp-leaderboard th, .mp-leaderboard td {
@@ -940,6 +953,9 @@ body.place-fullscreen main {
     max-width: 700px;
     border-collapse: collapse;
     margin-bottom: 2rem;
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .admin-table th, .admin-table td {
