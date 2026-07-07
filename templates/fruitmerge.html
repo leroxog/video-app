@@ -78,7 +78,7 @@
 
         const IS_LOGGED_IN = {{ 'true' if user else 'false' }};
         const GAME_KEY = "fruit.merge";
-        const UPSELL_SCORE_THRESHOLD = 100;
+        const UPSELL_SCORE_THRESHOLD = 15;
         let sessionLoggedIn = IS_LOGGED_IN;
         let upsellShown = false;
 
@@ -89,21 +89,21 @@
         const DROP_Y = 40;
 
         const TIERS = [
-            { radius: 13, color: "#e74c3c", kind: "cherry", topper: "leaf", points: 1 },
-            { radius: 19, color: "#ff5c77", kind: "strawberry", topper: "leaf", points: 3 },
-            { radius: 25, color: "#8e44ad", kind: "grape", topper: "leaf", points: 6 },
-            { radius: 32, color: "#e67e22", kind: "orange", topper: "leaf", points: 10 },
-            { radius: 40, color: "#c0392b", kind: "apple", topper: "leaf", points: 15 },
-            { radius: 48, color: "#b5d94c", kind: "pear", topper: "leaf", points: 21 },
-            { radius: 56, color: "#ffb28a", kind: "peach", topper: "leaf", points: 28 },
-            { radius: 65, color: "#f2c230", kind: "pineapple", topper: "crown", points: 36 },
-            { radius: 75, color: "#c7e06a", kind: "melon", topper: null, points: 45 },
-            { radius: 88, color: "#2fa84f", kind: "watermelon", topper: null, points: 55 },
-            { radius: 97, color: "#ffa733", kind: "mango", topper: "leaf", points: 66 },
-            { radius: 106, color: "#a9744f", kind: "coconut", topper: null, points: 78 },
-            { radius: 115, color: "#f08a1e", kind: "pumpkin", topper: "leaf", points: 92 },
-            { radius: 124, color: "#e0452c", kind: "tomato", topper: "calyx", points: 108 },
-            { radius: 133, color: "#6fbf4a", kind: "giantmelon", topper: null, points: 125 },
+            { radius: 13, color: "#e74c3c", kind: "cherry", topper: "leaf" },
+            { radius: 19, color: "#ff5c77", kind: "strawberry", topper: "leaf" },
+            { radius: 25, color: "#8e44ad", kind: "grape", topper: "leaf" },
+            { radius: 32, color: "#e67e22", kind: "orange", topper: "leaf" },
+            { radius: 40, color: "#c0392b", kind: "apple", topper: "leaf" },
+            { radius: 48, color: "#b5d94c", kind: "pear", topper: "leaf" },
+            { radius: 56, color: "#ffb28a", kind: "peach", topper: "leaf" },
+            { radius: 65, color: "#f2c230", kind: "pineapple", topper: "crown" },
+            { radius: 75, color: "#c7e06a", kind: "melon", topper: null },
+            { radius: 88, color: "#2fa84f", kind: "watermelon", topper: null },
+            { radius: 97, color: "#ffa733", kind: "mango", topper: "leaf" },
+            { radius: 106, color: "#a9744f", kind: "coconut", topper: null },
+            { radius: 115, color: "#f08a1e", kind: "pumpkin", topper: "leaf" },
+            { radius: 124, color: "#e0452c", kind: "tomato", topper: "calyx" },
+            { radius: 133, color: "#6fbf4a", kind: "giantmelon", topper: null },
         ];
         const SPAWN_WEIGHTS = [0, 0, 0, 0, 1, 1, 1, 2, 2, 3];
 
@@ -635,12 +635,10 @@
                 const midY = (a.position.y + b.position.y) / 2;
 
                 Composite.remove(engine.world, [a, b]);
-                updateScore(TIERS[tierIndex].points, midX, midY);
+                updateScore(1, midX, midY);
 
                 if (tierIndex < TIERS.length - 1) {
                     Composite.add(engine.world, createFruit(tierIndex + 1, midX, midY));
-                } else {
-                    updateScore(50, midX, midY - 20);
                 }
             }
         });

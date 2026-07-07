@@ -22,7 +22,7 @@
         </div>
 
         <div id="gameScreen" style="display:none;">
-            <div class="fruitmerge-score">Distanz: <span id="distanceScore">0</span>m</div>
+            <div class="fruitmerge-score">Punkte: <span id="distanceScore">0</span></div>
             <canvas id="runCanvas" width="380" height="460"></canvas>
             <ul class="mp-status-list" id="statusList"></ul>
         </div>
@@ -30,7 +30,7 @@
         <div id="leaderboardScreen" style="display:none;">
             <h2>Ergebnisse</h2>
             <table class="mp-leaderboard">
-                <thead><tr><th>Platz</th><th>Spieler</th><th>Distanz</th></tr></thead>
+                <thead><tr><th>Platz</th><th>Spieler</th><th>Punkte</th></tr></thead>
                 <tbody id="leaderboardBody"></tbody>
             </table>
             <button type="button" class="mp-restart-btn" id="restartLobbyBtn">Nochmal spielen</button>
@@ -119,7 +119,7 @@
             list.innerHTML = "";
             participants.forEach((p) => {
                 const li = document.createElement("li");
-                const state = p.alive ? "unterwegs" : `raus bei ${p.score}m`;
+                const state = p.alive ? `${p.score} Punkte` : `raus bei ${p.score} Punkten`;
                 li.innerHTML = `<span class="mp-color-dot" style="background:${p.color.hex}"></span> ${p.name}: ${state}`;
                 list.appendChild(li);
             });
@@ -135,7 +135,7 @@
                 row.innerHTML =
                     `<td>${i + 1}</td>` +
                     `<td><span class="mp-color-dot" style="display:inline-block;background:${p.color.hex}"></span> ${p.name}</td>` +
-                    `<td>${p.score}m</td>`;
+                    `<td>${p.score}</td>`;
                 body.appendChild(row);
             });
             showScreen("leaderboardScreen");
@@ -205,7 +205,7 @@
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ game: GAME_KEY, score: pendingScore }),
             });
-            lastSubmittedDistance = pendingScore;
+            lastSubmittedScore = pendingScore;
 
             sessionLoggedIn = true;
             updateHeaderAfterLogin(data.username);
@@ -262,18 +262,17 @@
         let running = false;
         let obstacles = [];
         let scrollSpeed = 2.4;
-        let distance = 0;
         let nextSpawnIn = 0;
         let lastFrameTime = 0;
         let animationHandle = null;
-        let lastSubmittedDistance = 0;
+        let lastSubmittedScore = 0;
         let lastFlushAt = 0;
 
         function flushSoloScore(upTo) {
-            const delta = Math.floor(upTo) - lastSubmittedDistance;
+            const delta = Math.floor(upTo) - lastSubmittedScore;
             if (delta > 0) {
                 submitScore(delta);
-                lastSubmittedDistance += delta;
+                lastSubmittedScore += delta;
             }
         }
 
@@ -301,10 +300,9 @@
         function startRace() {
             obstacles = [];
             scrollSpeed = 2.4;
-            distance = 0;
             nextSpawnIn = 60;
             running = true;
-            lastSubmittedDistance = 0;
+            lastSubmittedScore = 0;
             lastFlushAt = performance.now();
             participants.forEach((p) => {
                 p.y = startY(p.lane);
@@ -313,6 +311,7 @@
                 p.alive = true;
                 p.score = 0;
                 p.handledObstacles = new Set();
+                p.passedObstacles = new Set();
             });
             distanceEl.textContent = "0";
             updateStatusList();
@@ -373,6 +372,16 @@
             return obstacle.side === "inner"
                 ? { top: BOTTOM_CEILING_LINE, bottom: BOTTOM_CEILING_LINE + OBSTACLE_HEIGHT }
                 : { top: BOTTOM_FLOOR_LINE - OBSTACLE_HEIGHT, bottom: BOTTOM_FLOOR_LINE };
+        }
+
+        function countPassedObstacles(p) {
+            for (const obstacle of obstacles) {
+                if (p.passedObstacles.has(obstacle.id)) continue;
+                if (obstacle.x + OBSTACLE_WIDTH < PLAYER_X - PLAYER_RADIUS) {
+                    p.passedObstacles.add(obstacle.id);
+                    p.score++;
+                }
+            }
         }
 
         function checkCollision(p) {
@@ -465,8 +474,6 @@
 
             if (running) {
                 scrollSpeed += 0.0008 * dt;
-                distance += (scrollSpeed * dt) / 40;
-                distanceEl.textContent = Math.floor(distance);
 
                 nextSpawnIn -= dt / 16.6;
                 if (nextSpawnIn <= 0) {
@@ -494,18 +501,19 @@
 
                     if (checkCollision(p)) {
                         p.alive = false;
-                        p.score = Math.floor(distance);
                         if (index === 0 && currentMode === "bot" && sessionLoggedIn) {
                             flushSoloScore(p.score);
                         }
                     } else {
+                        countPassedObstacles(p);
                         anyAlive = true;
                     }
                 });
+                distanceEl.textContent = participants[0] ? participants[0].score : 0;
                 updateStatusList();
 
                 if (currentMode === "bot" && sessionLoggedIn && participants[0].alive && now - lastFlushAt > 1000) {
-                    flushSoloScore(distance);
+                    flushSoloScore(participants[0].score);
                     lastFlushAt = now;
                 }
 
