@@ -73,9 +73,28 @@
     <script>
         const feed = document.getElementById("shortsFeed");
         if (feed) {
-            const videos = Array.from(document.querySelectorAll(".shorts-video"));
+            const VOLUME_STORAGE_KEY = "gigas_shorts_volume";
+            let currentVolume = getSavedVolume();
 
-            const observer = new IntersectionObserver((entries) => {
+            function getSavedVolume() {
+                const saved = localStorage.getItem(VOLUME_STORAGE_KEY);
+                if (saved === null) return 1;
+                const parsed = parseFloat(saved);
+                return isNaN(parsed) ? 1 : parsed;
+            }
+
+            function applyVolume(value) {
+                currentVolume = value;
+                feed.querySelectorAll(".shorts-video").forEach((video) => {
+                    video.volume = value;
+                    video.muted = value === 0;
+                });
+                feed.querySelectorAll(".shorts-volume-slider").forEach((slider) => {
+                    slider.value = value;
+                });
+            }
+
+            const videoObserver = new IntersectionObserver((entries) => {
                 entries.forEach((entry) => {
                     const video = entry.target;
                     if (entry.isIntersecting && entry.intersectionRatio > 0.6) {
@@ -86,8 +105,42 @@
                 });
             }, { threshold: [0, 0.6, 1] });
 
-            videos.forEach((video) => {
-                observer.observe(video);
+            let endSentinel = null;
+            const endObserver = new IntersectionObserver((entries) => {
+                entries.forEach((entry) => {
+                    if (entry.isIntersecting) appendShuffledBatch();
+                });
+            }, { threshold: 0.1 });
+
+            function shuffle(arr) {
+                const copy = [...arr];
+                for (let i = copy.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [copy[i], copy[j]] = [copy[j], copy[i]];
+                }
+                return copy;
+            }
+
+            function likeAll(videoId, liked, likeCount) {
+                feed.querySelectorAll(`.shorts-like-btn[data-video-id="${videoId}"]`).forEach((btn) => {
+                    btn.classList.toggle("liked", liked);
+                    btn.querySelector(".shorts-action-icon").textContent = liked ? "❤" : "♡";
+                    btn.querySelector(".shorts-action-count").textContent = likeCount;
+                });
+            }
+
+            function subscribeAll(username, subscribed) {
+                feed.querySelectorAll(`.shorts-subscribe-badge[data-username="${username}"]`).forEach((btn) => {
+                    btn.classList.toggle("subscribed", subscribed);
+                    btn.innerHTML = subscribed ? "&#10003;" : "+";
+                });
+            }
+
+            function wireSlide(slide) {
+                const video = slide.querySelector(".shorts-video");
+                video.volume = currentVolume;
+                video.muted = currentVolume === 0;
+                videoObserver.observe(video);
                 video.addEventListener("click", () => {
                     if (video.paused) {
                         video.play().catch(() => {});
@@ -95,63 +148,62 @@
                         video.pause();
                     }
                 });
-            });
 
-            const VOLUME_STORAGE_KEY = "gigas_shorts_volume";
+                const slider = slide.querySelector(".shorts-volume-slider");
+                if (slider) {
+                    slider.value = currentVolume;
+                    slider.addEventListener("input", () => {
+                        const value = parseFloat(slider.value);
+                        applyVolume(value);
+                        localStorage.setItem(VOLUME_STORAGE_KEY, String(value));
+                    });
+                }
 
-            function getSavedVolume() {
-                const saved = localStorage.getItem(VOLUME_STORAGE_KEY);
-                if (saved === null) return 1;
-                const parsed = parseFloat(saved);
-                return isNaN(parsed) ? 1 : parsed;
+                const likeBtn = slide.querySelector(".shorts-like-btn[data-video-id]");
+                if (likeBtn) {
+                    likeBtn.addEventListener("click", async () => {
+                        const videoId = likeBtn.dataset.videoId;
+                        const res = await fetch(`/api/video/${videoId}/like`, { method: "POST" });
+                        const data = await res.json();
+                        if (!data.ok) return;
+                        likeAll(videoId, data.liked, data.like_count);
+                    });
+                }
+
+                const subBtn = slide.querySelector(".shorts-subscribe-badge");
+                if (subBtn) {
+                    subBtn.addEventListener("click", async () => {
+                        const username = subBtn.dataset.username;
+                        const res = await fetch(`/api/user/${username}/subscribe`, { method: "POST" });
+                        const data = await res.json();
+                        if (!data.ok) return;
+                        subscribeAll(username, data.subscribed);
+                    });
+                }
             }
 
-            function applyVolume(value) {
-                videos.forEach((video) => {
-                    video.volume = value;
-                    video.muted = value === 0;
-                });
-                document.querySelectorAll(".shorts-volume-slider").forEach((slider) => {
-                    slider.value = value;
-                });
+            function watchEnd() {
+                if (endSentinel) endObserver.unobserve(endSentinel);
+                endSentinel = feed.lastElementChild;
+                if (endSentinel) endObserver.observe(endSentinel);
             }
 
-            applyVolume(getSavedVolume());
-
-            document.querySelectorAll(".shorts-volume-slider").forEach((slider) => {
-                slider.addEventListener("input", () => {
-                    const value = parseFloat(slider.value);
-                    applyVolume(value);
-                    localStorage.setItem(VOLUME_STORAGE_KEY, String(value));
+            function appendShuffledBatch() {
+                const batch = shuffle(originalSlides);
+                batch.forEach((original) => {
+                    const clone = original.cloneNode(true);
+                    feed.appendChild(clone);
+                    wireSlide(clone);
                 });
-            });
-
-            if (videos.length) {
-                videos[0].play().catch(() => {});
+                watchEnd();
             }
 
-            document.querySelectorAll(".shorts-like-btn[data-video-id]").forEach((btn) => {
-                btn.addEventListener("click", async () => {
-                    const videoId = btn.dataset.videoId;
-                    const res = await fetch(`/api/video/${videoId}/like`, { method: "POST" });
-                    const data = await res.json();
-                    if (!data.ok) return;
-                    btn.classList.toggle("liked", data.liked);
-                    btn.querySelector(".shorts-action-icon").textContent = data.liked ? "❤" : "♡";
-                    btn.querySelector(".shorts-action-count").textContent = data.like_count;
-                });
-            });
+            const originalSlides = Array.from(feed.querySelectorAll(".shorts-slide"));
+            originalSlides.forEach(wireSlide);
+            watchEnd();
 
-            document.querySelectorAll(".shorts-subscribe-badge").forEach((btn) => {
-                btn.addEventListener("click", async () => {
-                    const username = btn.dataset.username;
-                    const res = await fetch(`/api/user/${username}/subscribe`, { method: "POST" });
-                    const data = await res.json();
-                    if (!data.ok) return;
-                    btn.classList.toggle("subscribed", data.subscribed);
-                    btn.innerHTML = data.subscribed ? "&#10003;" : "+";
-                });
-            });
+            const firstVideo = feed.querySelector(".shorts-video");
+            if (firstVideo) firstVideo.play().catch(() => {});
         }
     </script>
 {% endblock %}
