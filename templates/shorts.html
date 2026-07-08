@@ -16,7 +16,7 @@
 
                     <div class="shorts-volume-bar">
                         <span class="shorts-volume-icon">&#128266;</span>
-                        <input type="range" class="shorts-volume-slider" min="0" max="1" step="0.05" value="0">
+                        <input type="range" class="shorts-volume-slider" min="0" max="1" step="0.05" value="1">
                     </div>
 
                     <div class="shorts-action-stack">
@@ -97,12 +97,32 @@
                 });
             });
 
-            document.querySelectorAll(".shorts-volume-slider").forEach((slider) => {
-                const video = slider.closest(".shorts-slide").querySelector(".shorts-video");
-                slider.addEventListener("input", () => {
-                    const value = parseFloat(slider.value);
+            const VOLUME_STORAGE_KEY = "gigas_shorts_volume";
+
+            function getSavedVolume() {
+                const saved = localStorage.getItem(VOLUME_STORAGE_KEY);
+                if (saved === null) return 1;
+                const parsed = parseFloat(saved);
+                return isNaN(parsed) ? 1 : parsed;
+            }
+
+            function applyVolume(value) {
+                videos.forEach((video) => {
                     video.volume = value;
                     video.muted = value === 0;
+                });
+                document.querySelectorAll(".shorts-volume-slider").forEach((slider) => {
+                    slider.value = value;
+                });
+            }
+
+            applyVolume(getSavedVolume());
+
+            document.querySelectorAll(".shorts-volume-slider").forEach((slider) => {
+                slider.addEventListener("input", () => {
+                    const value = parseFloat(slider.value);
+                    applyVolume(value);
+                    localStorage.setItem(VOLUME_STORAGE_KEY, String(value));
                 });
             });
 
