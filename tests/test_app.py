@@ -87,6 +87,29 @@ def test_fruitmerge_page_has_record_button(client):
     assert "Aufnehmen".encode() in response.data
 
 
+def test_index_shows_upload_bonus_banner(client):
+    response = client.get("/")
+    assert b"upload-bonus-banner" in response.data
+    assert "+600 Punkte".encode() in response.data
+
+
+def test_upload_awards_bonus_points(client):
+    register(client)
+    with flask_app.app_context():
+        user = User.query.filter_by(username="alice").first()
+        assert user.total_score == 0
+
+    data = {
+        "title": "Bonus Testvideo",
+        "video": (io.BytesIO(b"fake video bytes"), "clip.mp4"),
+    }
+    client.post("/upload", data=data, content_type="multipart/form-data", follow_redirects=True)
+
+    with flask_app.app_context():
+        user = User.query.filter_by(username="alice").first()
+        assert user.total_score == 600
+
+
 def test_upload_and_watch_video(client):
     register(client)
     data = {

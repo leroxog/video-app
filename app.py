@@ -39,6 +39,7 @@ SCORED_GAMES = {"fruit.merge", "gravity.run", "knife.hit", "flappy.bird", "block
 SHUFFLE_COST = 15
 DELETE_COST = 25
 BOMB_COST = 40
+UPLOAD_BONUS_POINTS = 600
 HEX_COLOR_RE = re.compile(r"#[0-9a-fA-F]{6}")
 
 app = Flask(__name__)
@@ -403,6 +404,7 @@ def upload():
             user_id=user.id,
         )
         db.session.add(video)
+        user.total_score += UPLOAD_BONUS_POINTS
         db.session.commit()
         return redirect(url_for("watch", video_id=video.id))
 
