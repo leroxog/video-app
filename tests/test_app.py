@@ -390,10 +390,25 @@ def test_subscribe_toggle(client):
 
     response = client.post("/user/bob/subscribe", follow_redirects=True)
     assert response.status_code == 200
-    assert b"Abonniert" in response.data
+    assert b"Gefolgt" in response.data
 
     response = client.post("/user/bob/subscribe", follow_redirects=True)
-    assert b"Abonnieren" in response.data
+    assert b"Folgen" in response.data
+
+
+def test_leaderboard_shows_follow_button(client):
+    register(client, username="alice", password="secret123")
+    data = {
+        "title": "Leaderboard Clip",
+        "video": (io.BytesIO(b"fake video bytes"), "clip.mp4"),
+    }
+    client.post("/upload", data=data, content_type="multipart/form-data", follow_redirects=True)
+    client.post("/logout")
+
+    register(client, username="bob", password="secret123")
+    response = client.get("/leaderboard")
+    assert b"leaderboard-follow-form" in response.data
+    assert b"Folgen" in response.data
 
 
 def test_subscribe_to_self_is_rejected(client):

@@ -6,7 +6,7 @@
 
     {% if users %}
         <table class="mp-leaderboard">
-            <thead><tr><th>Platz</th><th>Account</th><th>Punkte</th></tr></thead>
+            <thead><tr><th>Platz</th><th>Account</th><th>Punkte</th><th></th></tr></thead>
             <tbody>
                 {% for u in users %}
                     <tr class="{{ 'winner' if loop.index == 1 else '' }}">
@@ -20,6 +20,16 @@
                             </a>
                         </td>
                         <td>{{ u.total_score }}</td>
+                        <td>
+                            {% if user and user.id != u.id %}
+                                <form action="{{ url_for('subscribe', username=u.username) }}" method="post" class="leaderboard-follow-form">
+                                    <input type="hidden" name="next" value="{{ url_for('leaderboard') }}">
+                                    <button type="submit" class="{{ 'subscribed' if u.id in followed_ids else '' }}">
+                                        {{ 'Gefolgt' if u.id in followed_ids else 'Folgen' }}
+                                    </button>
+                                </form>
+                            {% endif %}
+                        </td>
                     </tr>
                 {% endfor %}
             </tbody>

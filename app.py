@@ -295,7 +295,13 @@ def logout():
 @app.route("/leaderboard")
 def leaderboard():
     users = User.query.filter(User.total_score > 0).order_by(User.total_score.desc()).all()
-    return render_template("leaderboard.html", users=users, user=current_user())
+    user = current_user()
+    followed_ids = set()
+    if user is not None:
+        followed_ids = {
+            sub.channel_id for sub in Subscription.query.filter_by(subscriber_id=user.id).all()
+        }
+    return render_template("leaderboard.html", users=users, user=user, followed_ids=followed_ids)
 
 
 @app.route("/api/register", methods=["POST"])

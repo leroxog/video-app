@@ -33,13 +33,13 @@
                 {% endif %}
                 <span>{{ video.uploader.username }}</span>
             </a>
-            <span class="video-meta">{{ subscriber_count }} Abonnenten</span>
+            <span class="video-meta">{{ subscriber_count }} Follower</span>
 
             {% if user and user.id != video.user_id %}
                 <form action="{{ url_for('subscribe', username=video.uploader.username) }}" method="post">
                     <input type="hidden" name="next" value="{{ url_for('watch', video_id=video.id) }}">
                     <button type="submit" class="{{ 'subscribed' if is_subscribed else '' }}">
-                        {{ 'Abonniert' if is_subscribed else 'Abonnieren' }}
+                        {{ 'Gefolgt' if is_subscribed else 'Folgen' }}
                     </button>
                 </form>
             {% endif %}

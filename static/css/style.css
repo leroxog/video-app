@@ -1251,6 +1251,23 @@ body.shorts-fullscreen main {
     border: 1px solid #3c3c3c;
 }
 
+.leaderboard-follow-form button {
+    padding: 0.35rem 0.9rem;
+    border: none;
+    border-radius: 20px;
+    background: #f1f1f1;
+    color: #0f0f0f;
+    font-weight: 600;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.leaderboard-follow-form button.subscribed {
+    background: #2c2c2c;
+    color: #f1f1f1;
+    border: 1px solid #3c3c3c;
+}
+
 .profile-header {
     display: flex;
     align-items: center;

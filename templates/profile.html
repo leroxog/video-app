@@ -10,7 +10,7 @@
 
         <div>
             <h1>{{ profile_user.username }}</h1>
-            <p class="video-meta">{{ subscriber_count }} Abonnenten &middot; {{ videos|length }} Videos</p>
+            <p class="video-meta">{{ subscriber_count }} Follower &middot; {{ videos|length }} Videos</p>
         </div>
 
         {% if is_own_profile %}
@@ -20,7 +20,7 @@
         {% if user and not is_own_profile %}
             <form action="{{ url_for('subscribe', username=profile_user.username) }}" method="post" class="profile-subscribe-form">
                 <button type="submit" class="{{ 'subscribed' if is_subscribed else '' }}">
-                    {{ 'Abonniert' if is_subscribed else 'Abonnieren' }}
+                    {{ 'Gefolgt' if is_subscribed else 'Folgen' }}
                 </button>
             </form>
         {% endif %}
