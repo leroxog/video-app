@@ -1,0 +1,381 @@
+{% extends "base.html" %}
+{% block title %}Block Buster - gigas{% endblock %}
+{% block brand_text %}gigas games{% endblock %}
+{% block body_class %}game-fullscreen{% endblock %}
+{% block content %}
+    <div class="fruitmerge-page">
+        <h1>gigas/block.buster</h1>
+        <a class="game-leaderboard-link" href="{{ url_for('leaderboard') }}">&#127942; Bestenliste</a>
+        <p>Bewege das Paddle mit Maus/Finger. Tippen zum Starten. Zerstoere Bloecke, um Punkte zu sammeln.</p>
+
+        <div class="fruitmerge-score">Punkte: <span id="score">0</span></div>
+
+        <div class="fruitmerge-canvas-area">
+            <canvas id="blockCanvas" width="380" height="560"></canvas>
+            <div class="fruitmerge-gameover" id="gameOverOverlay">
+                <div>
+                    <div class="fruitmerge-gameover-title">Spiel vorbei</div>
+                    <div>Punkte: <span id="finalScore">0</span></div>
+                    <button type="button" id="restartBtn">Nochmal spielen</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="guest-upsell-overlay" id="guestUpsellOverlay">
+        <div class="guest-upsell-box">
+            <div class="guest-upsell-title">!!!Zeig dein koennen!!!</div>
+            <div class="guest-upsell-badge">EMPFOHLEN</div>
+
+            <div class="guest-upsell-actions" id="guestUpsellChoice">
+                <button type="button" class="guest-upsell-yes" id="guestUpsellYes">JA, zeig mir wie!</button>
+                <button type="button" class="guest-upsell-no" id="guestUpsellNo">Vielleicht spaeter</button>
+            </div>
+
+            <div class="guest-upsell-auth" id="guestUpsellAuth" style="display:none;">
+                <input type="text" id="guestUpsellUsername" placeholder="Benutzername" autocomplete="username">
+                <input type="password" id="guestUpsellPassword" placeholder="Passwort" autocomplete="current-password">
+                <div class="guest-upsell-auth-actions">
+                    <button type="button" id="guestUpsellLoginBtn">Einloggen</button>
+                    <button type="button" id="guestUpsellRegisterBtn">Registrieren</button>
+                </div>
+                <div class="guest-upsell-error" id="guestUpsellError"></div>
+            </div>
+
+            <div id="guestUpsellSuccess" style="display:none;">
+                <div class="guest-upsell-success">Score gespeichert!</div>
+                <button type="button" class="guest-upsell-continue" id="guestUpsellContinue">WEITER</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const IS_LOGGED_IN = {{ 'true' if user else 'false' }};
+        const GAME_KEY = "block.buster";
+        const UPSELL_SCORE_THRESHOLD = 8;
+        let sessionLoggedIn = IS_LOGGED_IN;
+        let upsellShown = false;
+
+        const WIDTH = 380;
+        const HEIGHT = 560;
+        const PADDLE_WIDTH = 74;
+        const PADDLE_HEIGHT = 12;
+        const PADDLE_Y = HEIGHT - 36;
+        const BALL_RADIUS = 7;
+        const BASE_BALL_SPEED = 0.28;
+
+        const ROWS = 5;
+        const COLS = 8;
+        const BRICK_MARGIN = 4;
+        const BRICK_TOP = 60;
+        const BRICK_SIDE = 10;
+        const BRICK_WIDTH = (WIDTH - BRICK_SIDE * 2 - BRICK_MARGIN * (COLS - 1)) / COLS;
+        const BRICK_HEIGHT = 18;
+        const ROW_COLORS = ["#e74c3c", "#e67e22", "#f2c230", "#4caf50", "#3ea6ff"];
+
+        const canvas = document.getElementById("blockCanvas");
+        const ctx = canvas.getContext("2d");
+        const scoreEl = document.getElementById("score");
+        const finalScoreEl = document.getElementById("finalScore");
+        const gameOverOverlay = document.getElementById("gameOverOverlay");
+        const restartBtn = document.getElementById("restartBtn");
+
+        let paddle = { x: WIDTH / 2 - PADDLE_WIDTH / 2 };
+        let ball = { x: WIDTH / 2, y: PADDLE_Y - BALL_RADIUS - 1, vx: 0, vy: 0 };
+        let bricks = [];
+        let score = 0;
+        let gameOver = false;
+        let running = false;
+        let launched = false;
+        let ballSpeed = BASE_BALL_SPEED;
+        let lastFrameTime = 0;
+        let animationHandle = null;
+
+        function submitScore(points) {
+            fetch("{{ url_for('api_score') }}", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ game: GAME_KEY, score: points }),
+            });
+        }
+
+        function updateScore(delta) {
+            score += delta;
+            scoreEl.textContent = score;
+
+            if (sessionLoggedIn) {
+                submitScore(delta);
+            } else if (!upsellShown && score >= UPSELL_SCORE_THRESHOLD) {
+                upsellShown = true;
+                showGuestUpsell(score);
+            }
+        }
+
+        function buildBricks() {
+            bricks = [];
+            for (let row = 0; row < ROWS; row++) {
+                for (let col = 0; col < COLS; col++) {
+                    bricks.push({
+                        x: BRICK_SIDE + col * (BRICK_WIDTH + BRICK_MARGIN),
+                        y: BRICK_TOP + row * (BRICK_HEIGHT + BRICK_MARGIN),
+                        color: ROW_COLORS[row % ROW_COLORS.length],
+                        alive: true,
+                    });
+                }
+            }
+        }
+
+        function resetBallOnPaddle() {
+            ball.x = paddle.x + PADDLE_WIDTH / 2;
+            ball.y = PADDLE_Y - BALL_RADIUS - 1;
+            ball.vx = 0;
+            ball.vy = 0;
+            launched = false;
+        }
+
+        function resetGame() {
+            paddle.x = WIDTH / 2 - PADDLE_WIDTH / 2;
+            ballSpeed = BASE_BALL_SPEED;
+            resetBallOnPaddle();
+            buildBricks();
+            score = 0;
+            scoreEl.textContent = "0";
+            gameOver = false;
+            upsellShown = false;
+            gameOverOverlay.classList.remove("visible");
+            running = true;
+            lastFrameTime = performance.now();
+            animationHandle = requestAnimationFrame(gameLoop);
+        }
+
+        function launchBall() {
+            if (gameOver || launched) return;
+            launched = true;
+            const angle = -Math.PI / 2 + (Math.random() - 0.5) * 0.6;
+            ball.vx = Math.cos(angle) * ballSpeed;
+            ball.vy = Math.sin(angle) * ballSpeed;
+        }
+
+        function movePaddleTo(clientX) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const x = (clientX - rect.left) * scaleX;
+            paddle.x = Math.max(0, Math.min(WIDTH - PADDLE_WIDTH, x - PADDLE_WIDTH / 2));
+            if (!launched) {
+                ball.x = paddle.x + PADDLE_WIDTH / 2;
+            }
+        }
+
+        canvas.addEventListener("mousemove", (event) => movePaddleTo(event.clientX));
+        canvas.addEventListener("click", launchBall);
+        canvas.addEventListener("touchmove", (event) => {
+            movePaddleTo(event.touches[0].clientX);
+            event.preventDefault();
+        }, { passive: false });
+        canvas.addEventListener("touchstart", (event) => {
+            movePaddleTo(event.touches[0].clientX);
+            launchBall();
+            event.preventDefault();
+        }, { passive: false });
+
+        function stepBall(dt) {
+            ball.x += ball.vx * dt;
+            ball.y += ball.vy * dt;
+
+            if (ball.x - BALL_RADIUS < 0) { ball.x = BALL_RADIUS; ball.vx *= -1; }
+            if (ball.x + BALL_RADIUS > WIDTH) { ball.x = WIDTH - BALL_RADIUS; ball.vx *= -1; }
+            if (ball.y - BALL_RADIUS < 0) { ball.y = BALL_RADIUS; ball.vy *= -1; }
+
+            if (
+                ball.vy > 0 &&
+                ball.y + BALL_RADIUS >= PADDLE_Y &&
+                ball.y + BALL_RADIUS <= PADDLE_Y + PADDLE_HEIGHT + 8 &&
+                ball.x >= paddle.x - BALL_RADIUS &&
+                ball.x <= paddle.x + PADDLE_WIDTH + BALL_RADIUS
+            ) {
+                const hitPos = (ball.x - (paddle.x + PADDLE_WIDTH / 2)) / (PADDLE_WIDTH / 2);
+                const angle = -Math.PI / 2 + hitPos * 1.1;
+                ball.vx = Math.cos(angle) * ballSpeed;
+                ball.vy = Math.sin(angle) * ballSpeed;
+                ball.y = PADDLE_Y - BALL_RADIUS;
+            }
+
+            for (const brick of bricks) {
+                if (!brick.alive) continue;
+                if (
+                    ball.x + BALL_RADIUS < brick.x ||
+                    ball.x - BALL_RADIUS > brick.x + BRICK_WIDTH ||
+                    ball.y + BALL_RADIUS < brick.y ||
+                    ball.y - BALL_RADIUS > brick.y + BRICK_HEIGHT
+                ) continue;
+
+                brick.alive = false;
+                updateScore(1);
+
+                const overlapX = Math.min(
+                    ball.x + BALL_RADIUS - brick.x,
+                    brick.x + BRICK_WIDTH - (ball.x - BALL_RADIUS)
+                );
+                const overlapY = Math.min(
+                    ball.y + BALL_RADIUS - brick.y,
+                    brick.y + BRICK_HEIGHT - (ball.y - BALL_RADIUS)
+                );
+                if (overlapX < overlapY) {
+                    ball.vx *= -1;
+                } else {
+                    ball.vy *= -1;
+                }
+                break;
+            }
+
+            if (bricks.every((b) => !b.alive)) {
+                buildBricks();
+                ballSpeed = Math.min(0.55, ballSpeed + 0.03);
+                const speedFactor = Math.hypot(ball.vx, ball.vy) || ballSpeed;
+                ball.vx = (ball.vx / speedFactor) * ballSpeed;
+                ball.vy = (ball.vy / speedFactor) * ballSpeed;
+            }
+
+            if (ball.y - BALL_RADIUS > HEIGHT) {
+                triggerGameOver();
+            }
+        }
+
+        function drawScene() {
+            ctx.fillStyle = "#101820";
+            ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+            for (const brick of bricks) {
+                if (!brick.alive) continue;
+                ctx.fillStyle = brick.color;
+                ctx.fillRect(brick.x, brick.y, BRICK_WIDTH, BRICK_HEIGHT);
+                ctx.fillStyle = "rgba(255,255,255,0.25)";
+                ctx.fillRect(brick.x, brick.y, BRICK_WIDTH, 4);
+            }
+
+            ctx.fillStyle = "#3ea6ff";
+            ctx.fillRect(paddle.x, PADDLE_Y, PADDLE_WIDTH, PADDLE_HEIGHT);
+
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, BALL_RADIUS, 0, Math.PI * 2);
+            ctx.fillStyle = "#fff";
+            ctx.fill();
+
+            if (!launched && !gameOver) {
+                ctx.fillStyle = "rgba(255,255,255,0.6)";
+                ctx.font = "14px sans-serif";
+                ctx.textAlign = "center";
+                ctx.fillText("Tippen zum Start", WIDTH / 2, PADDLE_Y - 30);
+            }
+        }
+
+        function triggerGameOver() {
+            gameOver = true;
+            running = false;
+            finalScoreEl.textContent = score;
+            gameOverOverlay.classList.add("visible");
+
+            if (!sessionLoggedIn && !upsellShown && score > 0) {
+                showGuestUpsell(score);
+            }
+        }
+
+        function showGuestUpsell(points) {
+            const overlay = document.getElementById("guestUpsellOverlay");
+            document.getElementById("guestUpsellChoice").style.display = "flex";
+            document.getElementById("guestUpsellAuth").style.display = "none";
+            document.getElementById("guestUpsellSuccess").style.display = "none";
+            document.getElementById("guestUpsellError").textContent = "";
+            overlay.dataset.pendingScore = points;
+            overlay.classList.add("visible");
+        }
+
+        function hideGuestUpsell() {
+            document.getElementById("guestUpsellOverlay").classList.remove("visible");
+        }
+
+        document.getElementById("guestUpsellNo").addEventListener("click", hideGuestUpsell);
+
+        document.getElementById("guestUpsellYes").addEventListener("click", () => {
+            document.getElementById("guestUpsellChoice").style.display = "none";
+            document.getElementById("guestUpsellAuth").style.display = "flex";
+        });
+
+        async function handleGuestAuth(endpoint) {
+            const username = document.getElementById("guestUpsellUsername").value.trim();
+            const password = document.getElementById("guestUpsellPassword").value;
+            const errorEl = document.getElementById("guestUpsellError");
+            errorEl.textContent = "";
+
+            const res = await fetch(endpoint, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username, password }),
+            });
+            const data = await res.json();
+            if (!data.ok) {
+                errorEl.textContent = data.error || "Fehler, bitte erneut versuchen.";
+                return;
+            }
+
+            const overlay = document.getElementById("guestUpsellOverlay");
+            const pendingScore = parseInt(overlay.dataset.pendingScore || "0", 10);
+            await fetch("{{ url_for('api_score') }}", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ game: GAME_KEY, score: pendingScore }),
+            });
+
+            sessionLoggedIn = true;
+            updateHeaderAfterLogin(data.username);
+
+            document.getElementById("guestUpsellAuth").style.display = "none";
+            document.getElementById("guestUpsellSuccess").style.display = "block";
+        }
+
+        document.getElementById("guestUpsellLoginBtn").addEventListener("click", () => handleGuestAuth("{{ url_for('api_login') }}"));
+        document.getElementById("guestUpsellRegisterBtn").addEventListener("click", () => handleGuestAuth("{{ url_for('api_register') }}"));
+
+        document.getElementById("guestUpsellContinue").addEventListener("click", hideGuestUpsell);
+
+        function updateHeaderAfterLogin(username) {
+            const loginHref = "{{ url_for('login') }}";
+            const registerHref = "{{ url_for('register') }}";
+            const nav = document.querySelector("header nav");
+            if (!nav) return;
+            const loginLink = nav.querySelector(`a[href="${loginHref}"]`);
+            const registerLink = nav.querySelector(`a[href="${registerHref}"]`);
+            if (loginLink) loginLink.remove();
+            if (registerLink) {
+                registerLink.textContent = username;
+                registerLink.removeAttribute("href");
+                registerLink.style.cursor = "default";
+            }
+        }
+
+        restartBtn.addEventListener("click", resetGame);
+
+        function gameLoop(now) {
+            const dt = Math.min(40, now - lastFrameTime);
+            lastFrameTime = now;
+
+            if (running) {
+                if (launched) {
+                    stepBall(dt);
+                } else {
+                    ball.x = paddle.x + PADDLE_WIDTH / 2;
+                }
+            }
+
+            drawScene();
+
+            if (running) {
+                animationHandle = requestAnimationFrame(gameLoop);
+            }
+        }
+
+        buildBricks();
+        resetBallOnPaddle();
+        drawScene();
+    </script>
+{% endblock %}

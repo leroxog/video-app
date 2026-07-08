@@ -24,14 +24,18 @@ TICTACTOE_SEARCH_TERM = "gigas/tic.tac.toe"
 FRUITMERGE_SEARCH_TERM = "gigas/fruit.merge"
 GRAVITYRUN_SEARCH_TERM = "gigas/gravity.run"
 KNIFEHIT_SEARCH_TERM = "gigas/knife.hit"
+FLAPPYBIRD_SEARCH_TERM = "gigas/flappy.bird"
+BLOCKBUSTER_SEARCH_TERM = "gigas/block.buster"
 GAME_SUGGESTIONS = [
     PLACE_SEARCH_TERM,
     TICTACTOE_SEARCH_TERM,
     FRUITMERGE_SEARCH_TERM,
     GRAVITYRUN_SEARCH_TERM,
     KNIFEHIT_SEARCH_TERM,
+    FLAPPYBIRD_SEARCH_TERM,
+    BLOCKBUSTER_SEARCH_TERM,
 ]
-SCORED_GAMES = {"fruit.merge", "gravity.run", "knife.hit"}
+SCORED_GAMES = {"fruit.merge", "gravity.run", "knife.hit", "flappy.bird", "block.buster"}
 SHUFFLE_COST = 15
 DELETE_COST = 25
 BOMB_COST = 40
@@ -217,9 +221,12 @@ def index():
     show_fruitmerge_egg = query.lower() == FRUITMERGE_SEARCH_TERM
     show_gravityrun_egg = query.lower() == GRAVITYRUN_SEARCH_TERM
     show_knifehit_egg = query.lower() == KNIFEHIT_SEARCH_TERM
+    show_flappybird_egg = query.lower() == FLAPPYBIRD_SEARCH_TERM
+    show_blockbuster_egg = query.lower() == BLOCKBUSTER_SEARCH_TERM
     any_egg = (
         show_place_egg or show_tictactoe_egg or show_fruitmerge_egg
         or show_gravityrun_egg or show_knifehit_egg
+        or show_flappybird_egg or show_blockbuster_egg
     )
     videos = []
     if not any_egg:
@@ -239,6 +246,8 @@ def index():
         show_fruitmerge_egg=show_fruitmerge_egg,
         show_gravityrun_egg=show_gravityrun_egg,
         show_knifehit_egg=show_knifehit_egg,
+        show_flappybird_egg=show_flappybird_egg,
+        show_blockbuster_egg=show_blockbuster_egg,
         game_suggestion=random.choice(GAME_SUGGESTIONS),
     )
 
@@ -739,6 +748,16 @@ def gravityrun():
 @app.route("/knifehit")
 def knifehit():
     return render_template("knifehit.html", user=current_user())
+
+
+@app.route("/flappybird")
+def flappybird():
+    return render_template("flappybird.html", user=current_user())
+
+
+@app.route("/blockbuster")
+def blockbuster():
+    return render_template("blockbuster.html", user=current_user())
 
 
 @app.route("/place")

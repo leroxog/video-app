@@ -230,6 +230,30 @@ def test_knifehit_page_accessible_without_login(client):
     assert b"mp-lobby-options" in response.data
 
 
+def test_search_easter_egg_shows_flappybird_label(client):
+    response = client.get("/?q=gigas/flappy.bird")
+    assert "gigas/flappy.bird".encode() in response.data
+    assert b"place-label" in response.data
+
+
+def test_flappybird_page_accessible_without_login(client):
+    response = client.get("/flappybird")
+    assert response.status_code == 200
+    assert b"flappyCanvas" in response.data
+
+
+def test_search_easter_egg_shows_blockbuster_label(client):
+    response = client.get("/?q=gigas/block.buster")
+    assert "gigas/block.buster".encode() in response.data
+    assert b"place-label" in response.data
+
+
+def test_blockbuster_page_accessible_without_login(client):
+    response = client.get("/blockbuster")
+    assert response.status_code == 200
+    assert b"blockCanvas" in response.data
+
+
 def test_place_requires_login(client):
     response = client.get("/place", follow_redirects=True)
     assert b"Login" in response.data

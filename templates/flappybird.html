@@ -1,0 +1,369 @@
+{% extends "base.html" %}
+{% block title %}Flappy Bird - gigas{% endblock %}
+{% block brand_text %}gigas games{% endblock %}
+{% block body_class %}game-fullscreen{% endblock %}
+{% block content %}
+    <div class="fruitmerge-page">
+        <h1>gigas/flappy.bird</h1>
+        <a class="game-leaderboard-link" href="{{ url_for('leaderboard') }}">&#127942; Bestenliste</a>
+        <p>Tippen oder Leertaste zum Fliegen. Weiche den Rohren aus, um Punkte zu sammeln.</p>
+
+        <div class="fruitmerge-score">Punkte: <span id="score">0</span></div>
+
+        <div class="fruitmerge-canvas-area">
+            <canvas id="flappyCanvas" width="380" height="560"></canvas>
+            <div class="fruitmerge-gameover" id="gameOverOverlay">
+                <div>
+                    <div class="fruitmerge-gameover-title">Spiel vorbei</div>
+                    <div>Punkte: <span id="finalScore">0</span></div>
+                    <button type="button" id="restartBtn">Nochmal spielen</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="guest-upsell-overlay" id="guestUpsellOverlay">
+        <div class="guest-upsell-box">
+            <div class="guest-upsell-title">!!!Zeig dein koennen!!!</div>
+            <div class="guest-upsell-badge">EMPFOHLEN</div>
+
+            <div class="guest-upsell-actions" id="guestUpsellChoice">
+                <button type="button" class="guest-upsell-yes" id="guestUpsellYes">JA, zeig mir wie!</button>
+                <button type="button" class="guest-upsell-no" id="guestUpsellNo">Vielleicht spaeter</button>
+            </div>
+
+            <div class="guest-upsell-auth" id="guestUpsellAuth" style="display:none;">
+                <input type="text" id="guestUpsellUsername" placeholder="Benutzername" autocomplete="username">
+                <input type="password" id="guestUpsellPassword" placeholder="Passwort" autocomplete="current-password">
+                <div class="guest-upsell-auth-actions">
+                    <button type="button" id="guestUpsellLoginBtn">Einloggen</button>
+                    <button type="button" id="guestUpsellRegisterBtn">Registrieren</button>
+                </div>
+                <div class="guest-upsell-error" id="guestUpsellError"></div>
+            </div>
+
+            <div id="guestUpsellSuccess" style="display:none;">
+                <div class="guest-upsell-success">Score gespeichert!</div>
+                <button type="button" class="guest-upsell-continue" id="guestUpsellContinue">WEITER</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const IS_LOGGED_IN = {{ 'true' if user else 'false' }};
+        const GAME_KEY = "flappy.bird";
+        const UPSELL_SCORE_THRESHOLD = 5;
+        let sessionLoggedIn = IS_LOGGED_IN;
+        let upsellShown = false;
+
+        const WIDTH = 380;
+        const HEIGHT = 560;
+        const BIRD_X = 90;
+        const BIRD_RADIUS = 14;
+        const GRAVITY = 0.0011;
+        const FLAP_VELOCITY = -0.42;
+        const MAX_FALL_SPEED = 0.6;
+        const PIPE_WIDTH = 52;
+        const PIPE_GAP = 165;
+        const PIPE_SPACING = 230;
+        const GROUND_HEIGHT = 24;
+
+        const canvas = document.getElementById("flappyCanvas");
+        const ctx = canvas.getContext("2d");
+        const scoreEl = document.getElementById("score");
+        const finalScoreEl = document.getElementById("finalScore");
+        const gameOverOverlay = document.getElementById("gameOverOverlay");
+        const restartBtn = document.getElementById("restartBtn");
+
+        let bird = { y: HEIGHT / 2, vy: 0 };
+        let pipes = [];
+        let score = 0;
+        let gameOver = false;
+        let running = false;
+        let nextSpawnX = WIDTH + 40;
+        let lastFrameTime = 0;
+        let animationHandle = null;
+        let groundOffset = 0;
+
+        function submitScore(points) {
+            fetch("{{ url_for('api_score') }}", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ game: GAME_KEY, score: points }),
+            });
+        }
+
+        function updateScore(delta) {
+            score += delta;
+            scoreEl.textContent = score;
+
+            if (sessionLoggedIn) {
+                submitScore(delta);
+            } else if (!upsellShown && score >= UPSELL_SCORE_THRESHOLD) {
+                upsellShown = true;
+                showGuestUpsell(score);
+            }
+        }
+
+        function spawnPipe() {
+            const margin = 60;
+            const gapY = margin + Math.random() * (HEIGHT - GROUND_HEIGHT - margin * 2 - PIPE_GAP) + PIPE_GAP / 2;
+            pipes.push({ x: nextSpawnX, gapY, passed: false });
+            nextSpawnX += PIPE_SPACING;
+        }
+
+        function resetGame() {
+            bird = { y: HEIGHT / 2, vy: 0 };
+            pipes = [];
+            nextSpawnX = WIDTH + 40;
+            spawnPipe();
+            score = 0;
+            scoreEl.textContent = "0";
+            gameOver = false;
+            upsellShown = false;
+            groundOffset = 0;
+            gameOverOverlay.classList.remove("visible");
+            running = true;
+            lastFrameTime = performance.now();
+            animationHandle = requestAnimationFrame(gameLoop);
+        }
+
+        function flap() {
+            if (gameOver) return;
+            if (!running) {
+                running = true;
+                lastFrameTime = performance.now();
+                animationHandle = requestAnimationFrame(gameLoop);
+            }
+            bird.vy = FLAP_VELOCITY;
+        }
+
+        canvas.addEventListener("click", flap);
+        canvas.addEventListener("touchstart", (event) => {
+            flap();
+            event.preventDefault();
+        }, { passive: false });
+        window.addEventListener("keydown", (event) => {
+            if (event.code === "Space") {
+                event.preventDefault();
+                flap();
+            }
+        });
+
+        function pipeCollision() {
+            for (const pipe of pipes) {
+                const left = pipe.x;
+                const right = pipe.x + PIPE_WIDTH;
+                if (right < BIRD_X - BIRD_RADIUS || left > BIRD_X + BIRD_RADIUS) continue;
+                const gapTop = pipe.gapY - PIPE_GAP / 2;
+                const gapBottom = pipe.gapY + PIPE_GAP / 2;
+                if (bird.y - BIRD_RADIUS < gapTop || bird.y + BIRD_RADIUS > gapBottom) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function drawBackground() {
+            const grad = ctx.createLinearGradient(0, 0, 0, HEIGHT);
+            grad.addColorStop(0, "#4ec0e8");
+            grad.addColorStop(1, "#bdeaf5");
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+            ctx.fillStyle = "rgba(255,255,255,0.6)";
+            [[50, 80, 30], [200, 130, 24], [310, 60, 34]].forEach(([x, y, r]) => {
+                ctx.beginPath();
+                ctx.ellipse(x, y, r, r * 0.55, 0, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        function drawPipe(pipe) {
+            const gapTop = pipe.gapY - PIPE_GAP / 2;
+            const gapBottom = pipe.gapY + PIPE_GAP / 2;
+
+            ctx.fillStyle = "#4caf50";
+            ctx.fillRect(pipe.x, 0, PIPE_WIDTH, gapTop);
+            ctx.fillRect(pipe.x, gapBottom, PIPE_WIDTH, HEIGHT - GROUND_HEIGHT - gapBottom);
+
+            ctx.fillStyle = "#3d8b40";
+            ctx.fillRect(pipe.x - 4, gapTop - 18, PIPE_WIDTH + 8, 18);
+            ctx.fillRect(pipe.x - 4, gapBottom, PIPE_WIDTH + 8, 18);
+        }
+
+        function drawGround() {
+            ctx.fillStyle = "#ded18f";
+            ctx.fillRect(0, HEIGHT - GROUND_HEIGHT, WIDTH, GROUND_HEIGHT);
+            ctx.fillStyle = "#c9b876";
+            for (let x = -((groundOffset) % 20); x < WIDTH; x += 20) {
+                ctx.fillRect(x, HEIGHT - GROUND_HEIGHT, 10, 6);
+            }
+        }
+
+        function drawBird() {
+            const angle = Math.max(-0.5, Math.min(0.9, bird.vy * 0.9));
+            ctx.save();
+            ctx.translate(BIRD_X, bird.y);
+            ctx.rotate(angle);
+
+            ctx.beginPath();
+            ctx.ellipse(0, 0, BIRD_RADIUS, BIRD_RADIUS * 0.85, 0, 0, Math.PI * 2);
+            ctx.fillStyle = "#ffcc00";
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.ellipse(-2, 4, BIRD_RADIUS * 0.55, BIRD_RADIUS * 0.35, 0.3, 0, Math.PI * 2);
+            ctx.fillStyle = "#f2a900";
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.arc(6, -5, 3.2, 0, Math.PI * 2);
+            ctx.fillStyle = "#222";
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.moveTo(BIRD_RADIUS - 2, -1);
+            ctx.lineTo(BIRD_RADIUS + 9, 2);
+            ctx.lineTo(BIRD_RADIUS - 2, 5);
+            ctx.closePath();
+            ctx.fillStyle = "#ff8c1a";
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        function triggerGameOver() {
+            gameOver = true;
+            running = false;
+            finalScoreEl.textContent = score;
+            gameOverOverlay.classList.add("visible");
+
+            if (!sessionLoggedIn && !upsellShown && score > 0) {
+                showGuestUpsell(score);
+            }
+        }
+
+        function showGuestUpsell(points) {
+            const overlay = document.getElementById("guestUpsellOverlay");
+            document.getElementById("guestUpsellChoice").style.display = "flex";
+            document.getElementById("guestUpsellAuth").style.display = "none";
+            document.getElementById("guestUpsellSuccess").style.display = "none";
+            document.getElementById("guestUpsellError").textContent = "";
+            overlay.dataset.pendingScore = points;
+            overlay.classList.add("visible");
+        }
+
+        function hideGuestUpsell() {
+            document.getElementById("guestUpsellOverlay").classList.remove("visible");
+        }
+
+        document.getElementById("guestUpsellNo").addEventListener("click", hideGuestUpsell);
+
+        document.getElementById("guestUpsellYes").addEventListener("click", () => {
+            document.getElementById("guestUpsellChoice").style.display = "none";
+            document.getElementById("guestUpsellAuth").style.display = "flex";
+        });
+
+        async function handleGuestAuth(endpoint) {
+            const username = document.getElementById("guestUpsellUsername").value.trim();
+            const password = document.getElementById("guestUpsellPassword").value;
+            const errorEl = document.getElementById("guestUpsellError");
+            errorEl.textContent = "";
+
+            const res = await fetch(endpoint, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username, password }),
+            });
+            const data = await res.json();
+            if (!data.ok) {
+                errorEl.textContent = data.error || "Fehler, bitte erneut versuchen.";
+                return;
+            }
+
+            const overlay = document.getElementById("guestUpsellOverlay");
+            const pendingScore = parseInt(overlay.dataset.pendingScore || "0", 10);
+            await fetch("{{ url_for('api_score') }}", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ game: GAME_KEY, score: pendingScore }),
+            });
+
+            sessionLoggedIn = true;
+            updateHeaderAfterLogin(data.username);
+
+            document.getElementById("guestUpsellAuth").style.display = "none";
+            document.getElementById("guestUpsellSuccess").style.display = "block";
+        }
+
+        document.getElementById("guestUpsellLoginBtn").addEventListener("click", () => handleGuestAuth("{{ url_for('api_login') }}"));
+        document.getElementById("guestUpsellRegisterBtn").addEventListener("click", () => handleGuestAuth("{{ url_for('api_register') }}"));
+
+        document.getElementById("guestUpsellContinue").addEventListener("click", hideGuestUpsell);
+
+        function updateHeaderAfterLogin(username) {
+            const loginHref = "{{ url_for('login') }}";
+            const registerHref = "{{ url_for('register') }}";
+            const nav = document.querySelector("header nav");
+            if (!nav) return;
+            const loginLink = nav.querySelector(`a[href="${loginHref}"]`);
+            const registerLink = nav.querySelector(`a[href="${registerHref}"]`);
+            if (loginLink) loginLink.remove();
+            if (registerLink) {
+                registerLink.textContent = username;
+                registerLink.removeAttribute("href");
+                registerLink.style.cursor = "default";
+            }
+        }
+
+        restartBtn.addEventListener("click", resetGame);
+
+        function gameLoop(now) {
+            const dt = Math.min(40, now - lastFrameTime);
+            lastFrameTime = now;
+
+            if (running) {
+                bird.vy = Math.min(MAX_FALL_SPEED, bird.vy + GRAVITY * dt);
+                bird.y += bird.vy * dt;
+                groundOffset += dt * 0.12;
+
+                for (const pipe of pipes) {
+                    pipe.x -= dt * 0.12;
+                }
+                pipes = pipes.filter((p) => p.x + PIPE_WIDTH > -10);
+                if (pipes.length === 0 || pipes[pipes.length - 1].x < WIDTH - PIPE_SPACING + 40) {
+                    spawnPipe();
+                }
+
+                for (const pipe of pipes) {
+                    if (!pipe.passed && pipe.x + PIPE_WIDTH < BIRD_X - BIRD_RADIUS) {
+                        pipe.passed = true;
+                        updateScore(1);
+                    }
+                }
+
+                if (bird.y - BIRD_RADIUS < 0 || bird.y + BIRD_RADIUS > HEIGHT - GROUND_HEIGHT || pipeCollision()) {
+                    triggerGameOver();
+                }
+            }
+
+            drawBackground();
+            for (const pipe of pipes) drawPipe(pipe);
+            drawGround();
+            drawBird();
+
+            if (running) {
+                animationHandle = requestAnimationFrame(gameLoop);
+            }
+        }
+
+        resetGame();
+        running = false;
+        cancelAnimationFrame(animationHandle);
+        drawBackground();
+        for (const pipe of pipes) drawPipe(pipe);
+        drawGround();
+        drawBird();
+    </script>
+{% endblock %}

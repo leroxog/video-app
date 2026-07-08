@@ -625,6 +625,26 @@ h1 {
         #1c1c1c;
 }
 
+.flappybird-icon {
+    background:
+        radial-gradient(circle at 34% 40%, #ffcc00 0 26%, transparent 27%),
+        linear-gradient(#4caf50, #4caf50) 4px 6px / 8px 34px no-repeat,
+        linear-gradient(#4caf50, #4caf50) 36px 20px / 8px 28px no-repeat,
+        linear-gradient(#4ec0e8, #bdeaf5);
+}
+
+.blockbuster-icon {
+    background:
+        linear-gradient(#3ea6ff, #3ea6ff) 12px 36px / 24px 6px no-repeat,
+        radial-gradient(circle at 24px 28px, #fff 0 3px, transparent 4px),
+        linear-gradient(#e74c3c, #e74c3c) 4px 8px / 10px 6px no-repeat,
+        linear-gradient(#f2c230, #f2c230) 16px 8px / 10px 6px no-repeat,
+        linear-gradient(#4caf50, #4caf50) 28px 8px / 10px 6px no-repeat,
+        linear-gradient(#e74c3c, #e74c3c) 10px 16px / 10px 6px no-repeat,
+        linear-gradient(#f2c230, #f2c230) 22px 16px / 10px 6px no-repeat,
+        #1c1c1c;
+}
+
 .tictactoe-page {
     max-width: 420px;
 }
@@ -1248,7 +1268,7 @@ body.shorts-fullscreen main {
     max-width: 100%;
 }
 
-#fruitCanvas {
+#fruitCanvas, #flappyCanvas, #blockCanvas {
     display: block;
     background: #101820;
     border: 1px solid #3c3c3c;
