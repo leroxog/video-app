@@ -205,7 +205,6 @@
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ game: GAME_KEY, score: pendingScore }),
             });
-            lastSubmittedScore = pendingScore;
 
             sessionLoggedIn = true;
             updateHeaderAfterLogin(data.username);
@@ -265,16 +264,6 @@
         let nextSpawnIn = 0;
         let lastFrameTime = 0;
         let animationHandle = null;
-        let lastSubmittedScore = 0;
-        let lastFlushAt = 0;
-
-        function flushSoloScore(upTo) {
-            const delta = Math.floor(upTo) - lastSubmittedScore;
-            if (delta > 0) {
-                submitScore(delta);
-                lastSubmittedScore += delta;
-            }
-        }
 
         function laneBounds(lane) {
             if (lane === "top") {
@@ -302,8 +291,6 @@
             scrollSpeed = 2.4;
             nextSpawnIn = 60;
             running = true;
-            lastSubmittedScore = 0;
-            lastFlushAt = performance.now();
             participants.forEach((p) => {
                 p.y = startY(p.lane);
                 p.vy = 0;
@@ -374,12 +361,15 @@
                 : { top: BOTTOM_FLOOR_LINE - OBSTACLE_HEIGHT, bottom: BOTTOM_FLOOR_LINE };
         }
 
-        function countPassedObstacles(p) {
+        function countPassedObstacles(p, index) {
             for (const obstacle of obstacles) {
                 if (p.passedObstacles.has(obstacle.id)) continue;
                 if (obstacle.x + OBSTACLE_WIDTH < PLAYER_X - PLAYER_RADIUS) {
                     p.passedObstacles.add(obstacle.id);
                     p.score++;
+                    if (index === 0 && currentMode === "bot" && sessionLoggedIn) {
+                        submitScore(1);
+                    }
                 }
             }
         }
@@ -501,21 +491,13 @@
 
                     if (checkCollision(p)) {
                         p.alive = false;
-                        if (index === 0 && currentMode === "bot" && sessionLoggedIn) {
-                            flushSoloScore(p.score);
-                        }
                     } else {
-                        countPassedObstacles(p);
+                        countPassedObstacles(p, index);
                         anyAlive = true;
                     }
                 });
                 distanceEl.textContent = participants[0] ? participants[0].score : 0;
                 updateStatusList();
-
-                if (currentMode === "bot" && sessionLoggedIn && participants[0].alive && now - lastFlushAt > 1000) {
-                    flushSoloScore(participants[0].score);
-                    lastFlushAt = now;
-                }
 
                 if (!anyAlive) {
                     running = false;
