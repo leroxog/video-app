@@ -119,13 +119,53 @@
             return `rgb(${r},${g},${b})`;
         }
 
-        function drawFruitBase(x, y, r, color) {
-            const grad = ctx.createRadialGradient(x - r * 0.35, y - r * 0.35, r * 0.1, x, y, r * 1.05);
+        function fruitPath(kind, x, y, r) {
+            ctx.beginPath();
+            switch (kind) {
+                case "apple":
+                    ctx.moveTo(x, y - r * 0.95);
+                    ctx.bezierCurveTo(x + r * 0.55, y - r * 1.05, x + r * 1.05, y - r * 0.55, x + r * 1.0, y + r * 0.05);
+                    ctx.bezierCurveTo(x + r * 0.95, y + r * 0.75, x + r * 0.5, y + r * 1.05, x, y + r * 1.0);
+                    ctx.bezierCurveTo(x - r * 0.5, y + r * 1.05, x - r * 0.95, y + r * 0.75, x - r * 1.0, y + r * 0.05);
+                    ctx.bezierCurveTo(x - r * 1.05, y - r * 0.55, x - r * 0.55, y - r * 1.05, x, y - r * 0.95);
+                    break;
+                case "pear":
+                    ctx.moveTo(x - r * 0.28, y - r * 0.55);
+                    ctx.bezierCurveTo(x - r * 0.35, y - r * 0.85, x - r * 0.15, y - r * 1.05, x, y - r * 1.05);
+                    ctx.bezierCurveTo(x + r * 0.15, y - r * 1.05, x + r * 0.35, y - r * 0.85, x + r * 0.28, y - r * 0.55);
+                    ctx.bezierCurveTo(x + r * 0.55, y - r * 0.15, x + r * 1.05, y + r * 0.15, x + r * 0.85, y + r * 0.65);
+                    ctx.bezierCurveTo(x + r * 0.7, y + r * 1.05, x + r * 0.3, y + r * 1.15, x, y + r * 1.15);
+                    ctx.bezierCurveTo(x - r * 0.3, y + r * 1.15, x - r * 0.7, y + r * 1.05, x - r * 0.85, y + r * 0.65);
+                    ctx.bezierCurveTo(x - r * 1.05, y + r * 0.15, x - r * 0.55, y - r * 0.15, x - r * 0.28, y - r * 0.55);
+                    break;
+                case "strawberry":
+                    ctx.moveTo(x, y + r * 1.05);
+                    ctx.bezierCurveTo(x + r * 0.7, y + r * 0.6, x + r * 1.05, y - r * 0.1, x + r * 0.85, y - r * 0.55);
+                    ctx.bezierCurveTo(x + r * 0.6, y - r * 1.05, x, y - r * 0.85, x, y - r * 0.55);
+                    ctx.bezierCurveTo(x, y - r * 0.85, x - r * 0.6, y - r * 1.05, x - r * 0.85, y - r * 0.55);
+                    ctx.bezierCurveTo(x - r * 1.05, y - r * 0.1, x - r * 0.7, y + r * 0.6, x, y + r * 1.05);
+                    break;
+                case "mango":
+                    ctx.moveTo(x, y - r * 0.9);
+                    ctx.bezierCurveTo(x + r * 0.75, y - r * 0.85, x + r * 1.05, y - r * 0.1, x + r * 0.7, y + r * 0.55);
+                    ctx.bezierCurveTo(x + r * 0.45, y + r * 1.0, x - r * 0.35, y + r * 1.05, x - r * 0.75, y + r * 0.55);
+                    ctx.bezierCurveTo(x - r * 1.05, y + r * 0.05, x - r * 0.7, y - r * 0.7, x, y - r * 0.9);
+                    break;
+                case "pineapple":
+                    ctx.ellipse(x, y, r * 0.72, r * 1.12, 0, 0, Math.PI * 2);
+                    break;
+                default:
+                    ctx.arc(x, y, r, 0, Math.PI * 2);
+            }
+            ctx.closePath();
+        }
+
+        function drawFruitBase(kind, r, color) {
+            const grad = ctx.createRadialGradient(-r * 0.35, -r * 0.35, r * 0.1, 0, 0, r * 1.05);
             grad.addColorStop(0, shade(color, 35));
             grad.addColorStop(0.6, color);
             grad.addColorStop(1, shade(color, -30));
-            ctx.beginPath();
-            ctx.arc(x, y, r, 0, Math.PI * 2);
+            fruitPath(kind, 0, 0, r);
             ctx.fillStyle = grad;
             ctx.fill();
         }
@@ -289,26 +329,31 @@
             }
         }
 
-        function drawFruit(tier, x, y) {
+        function drawFruit(tier, x, y, angle) {
             const r = tier.radius;
-            drawFruitBase(x, y, r, tier.color);
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate(angle || 0);
+
+            drawFruitBase(tier.kind, r, tier.color);
 
             ctx.save();
-            ctx.beginPath();
-            ctx.arc(x, y, r, 0, Math.PI * 2);
+            fruitPath(tier.kind, 0, 0, r);
             ctx.clip();
-            drawFruitTexture(tier, x, y, r);
+            drawFruitTexture(tier, 0, 0, r);
             ctx.restore();
 
-            drawHighlight(x, y, r);
+            drawHighlight(0, 0, r);
 
             if (tier.topper === "leaf") {
-                drawStem(x, y, r);
+                drawStem(0, 0, r);
             } else if (tier.topper === "crown") {
-                drawPineappleCrown(x, y, r);
+                drawPineappleCrown(0, 0, r);
             } else if (tier.topper === "calyx") {
-                drawTomatoCalyx(x, y, r);
+                drawTomatoCalyx(0, 0, r);
             }
+
+            ctx.restore();
         }
 
         const engine = Engine.create();
@@ -635,7 +680,7 @@
                 const midY = (a.position.y + b.position.y) / 2;
 
                 Composite.remove(engine.world, [a, b]);
-                updateScore(1, midX, midY);
+                updateScore(tierIndex + 1, midX, midY);
 
                 if (tierIndex < TIERS.length - 1) {
                     Composite.add(engine.world, createFruit(tierIndex + 1, midX, midY));
@@ -801,12 +846,12 @@
                     const progress = Math.min(1, (performance.now() - body.dyingStart) / FRUIT_DEATH_ANIM_MS);
                     ctx.save();
                     ctx.globalAlpha = 1 - progress;
-                    drawFruit(tier, body.position.x, body.position.y);
+                    drawFruit(tier, body.position.x, body.position.y, body.angle);
                     ctx.restore();
                     continue;
                 }
 
-                drawFruit(tier, body.position.x, body.position.y);
+                drawFruit(tier, body.position.x, body.position.y, body.angle);
 
                 if (
                     !gameOver &&
