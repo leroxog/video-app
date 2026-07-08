@@ -56,7 +56,7 @@
     <script>
         const IS_LOGGED_IN = {{ 'true' if user else 'false' }};
         const GAME_KEY = "flappy.bird";
-        const UPSELL_SCORE_THRESHOLD = 5;
+        const UPSELL_SCORE_THRESHOLD = 15;
         let sessionLoggedIn = IS_LOGGED_IN;
         let upsellShown = false;
 
@@ -89,6 +89,7 @@
         let lastFrameTime = 0;
         let animationHandle = null;
         let groundOffset = 0;
+        let pipesPassedCount = 0;
 
         function submitScore(points) {
             fetch("{{ url_for('api_score') }}", {
@@ -122,6 +123,7 @@
             pipes = [];
             nextSpawnX = WIDTH + 40;
             spawnPipe();
+            pipesPassedCount = 0;
             score = 0;
             scoreEl.textContent = "0";
             gameOver = false;
@@ -344,7 +346,8 @@
                 for (const pipe of pipes) {
                     if (!pipe.passed && pipe.x + PIPE_WIDTH < BIRD_X - BIRD_RADIUS) {
                         pipe.passed = true;
-                        updateScore(1);
+                        pipesPassedCount++;
+                        updateScore(pipesPassedCount * 5);
                     }
                 }
 

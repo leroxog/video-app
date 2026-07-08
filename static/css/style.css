@@ -737,17 +737,33 @@ body.shorts-fullscreen main {
     cursor: pointer;
 }
 
-.shorts-mute-hint {
+.shorts-volume-bar {
     position: absolute;
     top: 1rem;
     left: 50%;
     transform: translateX(-50%);
-    background: rgba(0, 0, 0, 0.5);
-    color: #fff;
-    font-size: 0.75rem;
-    padding: 0.3rem 0.7rem;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0.9rem;
     border-radius: 999px;
-    pointer-events: none;
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(18px) saturate(1.6);
+    -webkit-backdrop-filter: blur(18px) saturate(1.6);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+.shorts-volume-icon {
+    font-size: 0.85rem;
+    color: #fff;
+}
+
+.shorts-volume-slider {
+    width: 90px;
+    accent-color: #3ea6ff;
+    cursor: pointer;
 }
 
 .shorts-info {
