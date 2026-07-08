@@ -2,7 +2,13 @@
 {% block title %}Video hochladen - gigas{% endblock %}
 {% block content %}
     <h1>Video hochladen</h1>
-    <form action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data" class="form">
+
+    <div class="upload-recording-preview" id="recordingPreview" style="display:none;">
+        <p>Aufnahme bereit &mdash; wird beim Hochladen mitgeschickt.</p>
+        <video id="recordingPreviewVideo" controls muted></video>
+    </div>
+
+    <form action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data" class="form" id="uploadForm">
         <label for="title">Titel</label>
         <input type="text" id="title" name="title" required maxlength="200">
 
@@ -24,6 +30,189 @@
         <label for="video">Videodatei (mp4, webm, ogg, mov)</label>
         <input type="file" id="video" name="video" accept="video/mp4,video/webm,video/ogg,video/quicktime" required>
 
-        <button type="submit">Hochladen</button>
+        <button type="button" class="sound-toggle" id="soundToggleBtn">&#127925; Sound hinzufuegen</button>
+        <p class="sound-status" id="soundStatus"></p>
+        <div class="sound-picker" id="soundPicker">
+            <div class="sound-option" data-song="song1" data-name="Chiptune Upbeat">
+                <span class="sound-option-name">Chiptune Upbeat</span>
+                <button type="button" class="sound-preview-btn" data-preview="song1">&#9654; Anhoeren</button>
+                <button type="button" class="sound-select-btn" data-select="song1">Auswaehlen</button>
+            </div>
+            <div class="sound-option" data-song="song2" data-name="Lo-fi Chill">
+                <span class="sound-option-name">Lo-fi Chill</span>
+                <button type="button" class="sound-preview-btn" data-preview="song2">&#9654; Anhoeren</button>
+                <button type="button" class="sound-select-btn" data-select="song2">Auswaehlen</button>
+            </div>
+            <div class="sound-option" data-song="song3" data-name="8-bit Adventure">
+                <span class="sound-option-name">8-bit Adventure</span>
+                <button type="button" class="sound-preview-btn" data-preview="song3">&#9654; Anhoeren</button>
+                <button type="button" class="sound-select-btn" data-select="song3">Auswaehlen</button>
+            </div>
+        </div>
+
+        <button type="submit" id="uploadSubmitBtn">Hochladen</button>
     </form>
+
+    <script src="{{ url_for('static', filename='js/gigas-recorder.js') }}"></script>
+    <script>
+        const videoInput = document.getElementById("video");
+        const titleInput = document.getElementById("title");
+        const recordingPreview = document.getElementById("recordingPreview");
+        const recordingPreviewVideo = document.getElementById("recordingPreviewVideo");
+
+        let originalFile = null;
+
+        function setVideoFile(file) {
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            videoInput.files = dt.files;
+        }
+
+        (async function loadPendingRecording() {
+            const blob = await GigasRecorder.takePending();
+            if (!blob) return;
+            const file = new File([blob], `aufnahme-${Date.now()}.webm`, { type: "video/webm" });
+            setVideoFile(file);
+            originalFile = file;
+            if (!titleInput.value) titleInput.value = "Meine Aufnahme";
+            recordingPreviewVideo.src = URL.createObjectURL(blob);
+            recordingPreview.style.display = "block";
+        })();
+
+        videoInput.addEventListener("change", () => {
+            originalFile = videoInput.files[0] || null;
+        });
+
+        const SONGS = {
+            song1: "{{ url_for('static', filename='audio/song1.wav') }}",
+            song2: "{{ url_for('static', filename='audio/song2.wav') }}",
+            song3: "{{ url_for('static', filename='audio/song3.wav') }}",
+        };
+
+        const soundToggleBtn = document.getElementById("soundToggleBtn");
+        const soundPicker = document.getElementById("soundPicker");
+        const soundStatus = document.getElementById("soundStatus");
+        const uploadSubmitBtn = document.getElementById("uploadSubmitBtn");
+
+        const canMixAudio =
+            typeof MediaRecorder !== "undefined" &&
+            !!HTMLVideoElement.prototype.captureStream &&
+            !!(window.AudioContext || window.webkitAudioContext);
+
+        if (!canMixAudio) {
+            soundToggleBtn.style.display = "none";
+        }
+
+        soundToggleBtn.addEventListener("click", () => {
+            soundPicker.classList.toggle("visible");
+        });
+
+        let previewAudio = null;
+        document.querySelectorAll(".sound-preview-btn").forEach((btn) => {
+            btn.addEventListener("click", () => {
+                const key = btn.dataset.preview;
+                if (previewAudio) {
+                    previewAudio.pause();
+                    previewAudio = null;
+                }
+                previewAudio = new Audio(SONGS[key]);
+                previewAudio.play().catch(() => {});
+            });
+        });
+
+        function withTimeout(promise, ms, message) {
+            let timer;
+            const timeout = new Promise((_, reject) => {
+                timer = setTimeout(() => reject(new Error(message)), ms);
+            });
+            return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+        }
+
+        async function mixAudioIntoVideo(videoFile, audioUrl) {
+            const videoEl = document.createElement("video");
+            videoEl.src = URL.createObjectURL(videoFile);
+            videoEl.muted = true;
+            await withTimeout(
+                new Promise((resolve) => { videoEl.onloadedmetadata = resolve; }),
+                10000,
+                "Videodatei konnte nicht gelesen werden."
+            );
+
+            const audioEl = document.createElement("audio");
+            audioEl.src = audioUrl;
+            audioEl.loop = true;
+            await withTimeout(
+                new Promise((resolve) => { audioEl.onloadedmetadata = resolve; }),
+                10000,
+                "Sound konnte nicht geladen werden."
+            );
+
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const source = audioCtx.createMediaElementSource(audioEl);
+            const dest = audioCtx.createMediaStreamDestination();
+            source.connect(dest);
+
+            const videoStream = videoEl.captureStream();
+            const combined = new MediaStream([
+                ...videoStream.getVideoTracks(),
+                ...dest.stream.getAudioTracks(),
+            ]);
+
+            let mimeType = "video/webm;codecs=vp9,opus";
+            if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = "video/webm";
+            const recorder = new MediaRecorder(combined, { mimeType });
+            const chunks = [];
+            recorder.ondataavailable = (event) => {
+                if (event.data && event.data.size > 0) chunks.push(event.data);
+            };
+
+            const finished = new Promise((resolve) => {
+                recorder.onstop = () => resolve(new Blob(chunks, { type: "video/webm" }));
+            });
+
+            recorder.start();
+            audioEl.currentTime = 0;
+            videoEl.currentTime = 0;
+            await Promise.all([audioEl.play(), videoEl.play()]);
+
+            const maxDurationMs = (isFinite(videoEl.duration) ? videoEl.duration * 1000 : 60000) + 3000;
+            const stopOnce = () => {
+                if (recorder.state === "recording") recorder.stop();
+                audioEl.pause();
+            };
+            videoEl.onended = stopOnce;
+            const safetyTimer = setTimeout(stopOnce, Math.min(maxDurationMs, 120000));
+
+            const mixedBlob = await finished;
+            clearTimeout(safetyTimer);
+            await audioCtx.close();
+            return mixedBlob;
+        }
+
+        document.querySelectorAll(".sound-select-btn").forEach((btn) => {
+            btn.addEventListener("click", async () => {
+                const key = btn.dataset.select;
+                if (!originalFile) {
+                    soundStatus.textContent = "Bitte zuerst eine Videodatei auswaehlen.";
+                    return;
+                }
+
+                document.querySelectorAll(".sound-option").forEach((opt) => opt.classList.remove("selected"));
+                btn.closest(".sound-option").classList.add("selected");
+
+                soundStatus.textContent = "Sound wird hinzugefuegt...";
+                uploadSubmitBtn.disabled = true;
+                try {
+                    const mixedBlob = await mixAudioIntoVideo(originalFile, SONGS[key]);
+                    const mixedFile = new File([mixedBlob], "video-mit-sound.webm", { type: "video/webm" });
+                    setVideoFile(mixedFile);
+                    soundStatus.textContent = "Sound hinzugefuegt ✓";
+                } catch (err) {
+                    soundStatus.textContent = "Sound konnte nicht hinzugefuegt werden.";
+                } finally {
+                    uploadSubmitBtn.disabled = false;
+                }
+            });
+        });
+    </script>
 {% endblock %}

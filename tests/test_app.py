@@ -74,6 +74,19 @@ def test_upload_requires_login(client):
     assert b"Login" in response.data
 
 
+def test_upload_page_has_sound_picker(client):
+    register(client)
+    response = client.get("/upload")
+    assert b"soundToggleBtn" in response.data
+    assert b"soundPicker" in response.data
+
+
+def test_fruitmerge_page_has_record_button(client):
+    response = client.get("/fruitmerge")
+    assert b"recordBtn" in response.data
+    assert "Aufnehmen".encode() in response.data
+
+
 def test_upload_and_watch_video(client):
     register(client)
     data = {

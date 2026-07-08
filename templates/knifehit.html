@@ -5,7 +5,10 @@
 {% block content %}
     <div class="multiplayer-page" id="mpRoot">
         <h1>gigas/knife.hit</h1>
-        <a class="game-leaderboard-link" href="{{ url_for('leaderboard') }}">&#127942; Bestenliste</a>
+        <div class="game-top-row">
+            <a class="game-leaderboard-link" href="{{ url_for('leaderboard') }}">&#127942; Bestenliste</a>
+            <button type="button" class="game-record-btn" id="recordBtn">&#128308; Aufnehmen<span class="game-record-badge">EMPFOHLEN</span></button>
+        </div>
         <p>Werft gemeinsam Messer in denselben rotierenden Holzblock &mdash; jeder mit eigener Farbe. Wer ein steckendes Messer trifft, scheidet aus. Wer als Letztes uebrig bleibt, gewinnt.</p>
 
         <div id="setupScreen">
@@ -68,6 +71,7 @@
         </div>
     </div>
 
+    <script src="{{ url_for('static', filename='js/gigas-recorder.js') }}"></script>
     <script>
         const IS_LOGGED_IN = {{ 'true' if user else 'false' }};
         const GAME_KEY = "knife.hit";
@@ -300,6 +304,7 @@
         const canvas = document.getElementById("knifeCanvas");
         const ctx = canvas.getContext("2d");
         const levelEl = document.getElementById("levelDisplay");
+        GigasRecorder.attach(canvas, document.getElementById("recordBtn"));
 
         let running = false;
         let rotationAngle = 0;
