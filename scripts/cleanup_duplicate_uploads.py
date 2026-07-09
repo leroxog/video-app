@@ -7,10 +7,12 @@ Safe to run more than once -- already-penalized duplicates are skipped
 via Video.duplicate_penalty_applied.
 
 Usage against production (from the video-app directory):
+    railway run python scripts/cleanup_duplicate_uploads.py --dry-run
     railway run python scripts/cleanup_duplicate_uploads.py
 Usage locally:
-    ./.venv/Scripts/python.exe scripts/cleanup_duplicate_uploads.py
+    ./.venv/Scripts/python.exe scripts/cleanup_duplicate_uploads.py --dry-run
 """
+import argparse
 import hashlib
 import os
 import sys
@@ -33,14 +35,23 @@ def fetch_video_bytes(video):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--dry-run", action="store_true",
+        help="Report what would change without writing anything to the database.",
+    )
+    args = parser.parse_args()
+
     with app.app_context():
         videos = Video.query.order_by(Video.created_at.asc()).all()
         print(f"Found {len(videos)} videos total.")
 
         hashed = 0
         skipped = 0
+        computed_hashes = {}
         for video in videos:
             if video.content_hash:
+                computed_hashes[video.id] = video.content_hash
                 continue
             try:
                 data = fetch_video_bytes(video)
@@ -48,14 +59,23 @@ def main():
                 skipped += 1
                 print(f"  [SKIP] video {video.id} ({video.filename}): could not read file ({exc})")
                 continue
-            video.content_hash = hashlib.sha256(data).hexdigest()
+            digest = hashlib.sha256(data).hexdigest()
+            computed_hashes[video.id] = digest
+            if not args.dry_run:
+                video.content_hash = digest
             hashed += 1
-        db.session.commit()
-        print(f"Hashed {hashed} video(s) this run ({skipped} unreadable/skipped).")
+
+        if not args.dry_run:
+            db.session.commit()
+        verb = "Would hash" if args.dry_run else "Hashed"
+        print(f"{verb} {hashed} video(s) this run ({skipped} unreadable/skipped).")
 
         by_hash = {}
-        for video in Video.query.filter(Video.content_hash.isnot(None)).order_by(Video.created_at.asc()).all():
-            by_hash.setdefault(video.content_hash, []).append(video)
+        for video in videos:
+            content_hash = computed_hashes.get(video.id)
+            if content_hash is None:
+                continue
+            by_hash.setdefault(content_hash, []).append(video)
 
         duplicate_groups = {h: vids for h, vids in by_hash.items() if len(vids) > 1}
         print(f"Found {len(duplicate_groups)} group(s) of duplicate content.")
@@ -76,19 +96,29 @@ def main():
                     continue
                 user = dup.uploader
                 before = user.total_score
-                user.total_score = max(0, user.total_score - OLD_UPLOAD_BONUS)
-                dup.duplicate_penalty_applied = True
-                deducted = before - user.total_score
+                after = max(0, before - OLD_UPLOAD_BONUS)
+                deducted = before - after
                 total_deducted += deducted
                 affected_users.add(user.username)
-                print(
-                    f"    - video {dup.id}: user '{user.username}' total_score "
-                    f"{before} -> {user.total_score} (-{deducted})"
-                )
+                if args.dry_run:
+                    print(
+                        f"    - video {dup.id}: user '{user.username}' total_score "
+                        f"{before} -> {after} (-{deducted}) [DRY RUN, not applied]"
+                    )
+                else:
+                    user.total_score = after
+                    dup.duplicate_penalty_applied = True
+                    print(
+                        f"    - video {dup.id}: user '{user.username}' total_score "
+                        f"{before} -> {after} (-{deducted})"
+                    )
 
-        db.session.commit()
+        if not args.dry_run:
+            db.session.commit()
+
+        prefix = "[DRY RUN] Would deduct" if args.dry_run else "Done. Deducted"
         print(
-            f"\nDone. Deducted {total_deducted} point(s) total across "
+            f"\n{prefix} {total_deducted} point(s) total across "
             f"{len(affected_users)} account(s): {sorted(affected_users)}"
         )
 
