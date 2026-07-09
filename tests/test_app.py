@@ -993,6 +993,39 @@ def test_api_like_video_requires_login(client):
     assert response.status_code == 401
 
 
+def test_api_my_stats_requires_login(client):
+    response = client.get("/api/my-stats")
+    assert response.status_code == 401
+
+
+def test_api_my_stats_reports_likes_and_followers(client):
+    register(client, username="alice")
+    upload_video(client, title="Stats Video")
+    client.post("/logout")
+
+    register(client, username="bob")
+    client.post("/video/1/like")
+    client.post("/user/alice/subscribe")
+    client.post("/logout")
+
+    register(client, username="carol")
+    client.post("/video/1/like")
+    client.post("/logout")
+
+    client.post("/login", data={"username": "alice", "password": "secret123"})
+    response = client.get("/api/my-stats")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data == {"ok": True, "likes_received": 2, "followers": 1}
+
+
+def test_homepage_bottom_nav_has_stats_bubble_markup_for_user(client):
+    register(client)
+    response = client.get("/")
+    assert b"statsBubble" in response.data
+    assert b"stats-bubble-tail" in response.data
+
+
 def test_api_subscribe_toggle(client):
     register(client, username="alice")
     client.post("/logout")

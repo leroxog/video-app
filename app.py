@@ -518,6 +518,17 @@ def api_redeem_code():
     return jsonify({"ok": True, "points": points, "total_score": user.total_score})
 
 
+@app.route("/api/my-stats")
+def api_my_stats():
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+
+    likes_received = sum(len(v.likes) for v in user.videos)
+    followers = len(user.subscribers)
+    return jsonify({"ok": True, "likes_received": likes_received, "followers": followers})
+
+
 @app.route("/upload", methods=["GET", "POST"])
 def upload():
     user = current_user()
