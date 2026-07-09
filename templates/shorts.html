@@ -48,6 +48,11 @@
                             </div>
                         {% endif %}
 
+                        <button type="button" class="shorts-comment-btn" data-video-id="{{ video.id }}">
+                            <span class="shorts-action-icon">&#128172;</span>
+                            <span class="shorts-action-count">{{ video.comments|length }}</span>
+                        </button>
+
                         <a class="shorts-action-btn" href="{{ media_url('uploads', video.filename) }}" download title="Herunterladen">
                             <span class="shorts-action-icon">&#11015;</span>
                         </a>
@@ -62,6 +67,24 @@
                     </div>
                 </div>
             {% endfor %}
+        </div>
+
+        <div class="shorts-comments-overlay" id="commentsOverlay">
+            <div class="shorts-comments-panel">
+                <div class="shorts-comments-header">
+                    <span>Kommentare</span>
+                    <button type="button" id="commentsCloseBtn">&times;</button>
+                </div>
+                <ul class="shorts-comments-list" id="commentsList"></ul>
+                {% if user %}
+                    <form class="shorts-comment-form" id="commentForm">
+                        <input type="text" id="commentInput" placeholder="Kommentar hinzufügen..." maxlength="500" required autocomplete="off">
+                        <button type="submit">Senden</button>
+                    </form>
+                {% else %}
+                    <p class="shorts-comments-login-hint"><a href="{{ url_for('login') }}">Anmelden</a>, um zu kommentieren.</p>
+                {% endif %}
+            </div>
         </div>
     {% else %}
         <div class="shorts-empty">
@@ -178,6 +201,100 @@
                         const data = await res.json();
                         if (!data.ok) return;
                         subscribeAll(username, data.subscribed);
+                    });
+                }
+
+                const commentBtn = slide.querySelector(".shorts-comment-btn");
+                if (commentBtn) {
+                    commentBtn.addEventListener("click", () => openComments(commentBtn.dataset.videoId));
+                }
+            }
+
+            const commentsOverlay = document.getElementById("commentsOverlay");
+            const commentsList = document.getElementById("commentsList");
+            const commentForm = document.getElementById("commentForm");
+            const commentInput = document.getElementById("commentInput");
+            let activeVideoId = null;
+
+            function updateCommentCount(videoId, count) {
+                feed.querySelectorAll(`.shorts-comment-btn[data-video-id="${videoId}"] .shorts-action-count`).forEach((el) => {
+                    el.textContent = count;
+                });
+            }
+
+            function addCommentToList(comment) {
+                const emptyMsg = commentsList.querySelector(".shorts-comments-empty");
+                if (emptyMsg) emptyMsg.remove();
+
+                const li = document.createElement("li");
+                li.className = "shorts-comment-item";
+
+                let avatarEl;
+                if (comment.profile_image) {
+                    avatarEl = document.createElement("img");
+                    avatarEl.className = "shorts-comment-avatar";
+                    avatarEl.src = comment.profile_image;
+                    avatarEl.alt = "";
+                } else {
+                    avatarEl = document.createElement("div");
+                    avatarEl.className = "shorts-comment-avatar profile-avatar-placeholder";
+                    avatarEl.textContent = comment.username.charAt(0).toUpperCase();
+                }
+
+                const body = document.createElement("div");
+                body.className = "shorts-comment-body";
+
+                const usernameEl = document.createElement("span");
+                usernameEl.className = "shorts-comment-username";
+                usernameEl.textContent = comment.username;
+
+                const textEl = document.createElement("p");
+                textEl.className = "shorts-comment-text";
+                textEl.textContent = comment.text;
+
+                body.appendChild(usernameEl);
+                body.appendChild(textEl);
+                li.appendChild(avatarEl);
+                li.appendChild(body);
+                commentsList.appendChild(li);
+                commentsList.scrollTop = commentsList.scrollHeight;
+            }
+
+            async function openComments(videoId) {
+                activeVideoId = videoId;
+                commentsList.innerHTML = "<li class=\"shorts-comments-loading\">Laden...</li>";
+                commentsOverlay.classList.add("visible");
+                const res = await fetch(`/api/video/${videoId}/comments`);
+                const data = await res.json();
+                if (!data.ok) return;
+                commentsList.innerHTML = "";
+                if (!data.comments.length) {
+                    commentsList.innerHTML = "<li class=\"shorts-comments-empty\">Noch keine Kommentare.</li>";
+                } else {
+                    data.comments.forEach(addCommentToList);
+                }
+            }
+
+            if (commentsOverlay) {
+                document.getElementById("commentsCloseBtn").addEventListener("click", () => {
+                    commentsOverlay.classList.remove("visible");
+                });
+
+                if (commentForm) {
+                    commentForm.addEventListener("submit", async (event) => {
+                        event.preventDefault();
+                        const text = commentInput.value.trim();
+                        if (!text || !activeVideoId) return;
+                        const res = await fetch(`/api/video/${activeVideoId}/comment`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ text }),
+                        });
+                        const data = await res.json();
+                        if (!data.ok) return;
+                        addCommentToList(data.comment);
+                        commentInput.value = "";
+                        updateCommentCount(activeVideoId, data.comment_count);
                     });
                 }
             }

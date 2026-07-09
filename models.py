@@ -19,6 +19,7 @@ class User(db.Model):
     is_admin = db.Column(db.Boolean, nullable=False, default=False)
     videos = db.relationship("Video", backref="uploader", lazy=True, cascade="all, delete-orphan")
     likes_given = db.relationship("Like", backref="liker", lazy=True, cascade="all, delete-orphan")
+    comments_made = db.relationship("Comment", backref="author", lazy=True, cascade="all, delete-orphan")
     subscriptions_made = db.relationship(
         "Subscription",
         foreign_keys="Subscription.subscriber_id",
@@ -50,6 +51,10 @@ class Video(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     likes = db.relationship("Like", backref="video", lazy=True, cascade="all, delete-orphan")
+    comments = db.relationship(
+        "Comment", backref="video", lazy=True, cascade="all, delete-orphan",
+        order_by="Comment.created_at",
+    )
 
 
 class Like(db.Model):
@@ -57,6 +62,14 @@ class Like(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     video_id = db.Column(db.Integer, db.ForeignKey("video.id"), nullable=False)
     __table_args__ = (db.UniqueConstraint("user_id", "video_id", name="uq_like_user_video"),)
+
+
+class Comment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    video_id = db.Column(db.Integer, db.ForeignKey("video.id"), nullable=False)
+    text = db.Column(db.String(500), nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class Subscription(db.Model):

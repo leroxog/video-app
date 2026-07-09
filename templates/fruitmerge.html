@@ -9,7 +9,7 @@
             <a class="game-leaderboard-link" href="{{ url_for('leaderboard') }}">&#127942; Bestenliste</a>
             <button type="button" class="game-record-btn" id="recordBtn">&#128308; Aufnehmen<span class="game-record-badge">EMPFOHLEN</span></button>
         </div>
-        <p>Lass Fruechte fallen. Treffen zwei gleiche aufeinander, verschmelzen sie zur naechst groesseren. Wird es oben zu voll, ist das Spiel vorbei.</p>
+        <p>Lass Früchte fallen. Treffen zwei gleiche aufeinander, verschmelzen sie zur nächst größeren. Wird es oben zu voll, ist das Spiel vorbei.</p>
 
         <div class="fruitmerge-score">Punkte: <span id="score">0</span></div>
 
@@ -28,21 +28,21 @@
             <div class="fruitmerge-powerups">
                 <div class="powerup-balance">Guthaben:<br><span id="balanceText">{{ user.total_score if user else 0 }}</span></div>
                 <div class="powerup-buttons">
-                    <button type="button" id="shuffleBtn" title="Fruechte durchschuetteln (kostet Punkte)" {{ 'disabled' if not user }}>
+                    <button type="button" id="shuffleBtn" title="Früchte durchschütteln (kostet Punkte)" {{ 'disabled' if not user }}>
                         <span class="powerup-icon">&#128256;</span>
-                        <span class="powerup-label">Schuetteln ({{ shuffle_cost }})</span>
+                        <span class="powerup-label">Schütteln ({{ shuffle_cost }})</span>
                     </button>
-                    <button type="button" id="deleteBtn" title="Eine Frucht loeschen (kostet Punkte)" {{ 'disabled' if not user }}>
+                    <button type="button" id="deleteBtn" title="Eine Frucht löschen (kostet Punkte)" {{ 'disabled' if not user }}>
                         <span class="powerup-icon">&#10060;</span>
-                        <span class="powerup-label">Loeschen ({{ delete_cost }})</span>
+                        <span class="powerup-label">Löschen ({{ delete_cost }})</span>
                     </button>
-                    <button type="button" id="bombBtn" title="Bombe statt naechster Frucht (kostet Punkte)" {{ 'disabled' if not user }}>
+                    <button type="button" id="bombBtn" title="Bombe statt nächster Frucht (kostet Punkte)" {{ 'disabled' if not user }}>
                         <span class="powerup-icon">&#128163;</span>
                         <span class="powerup-label">Bombe ({{ bomb_cost }})</span>
                     </button>
                 </div>
                 {% if not user %}
-                    <p class="video-meta">Login erforderlich, um Punkte fuer Power-ups auszugeben.</p>
+                    <p class="video-meta">Login erforderlich, um Punkte für Power-ups auszugeben.</p>
                 {% endif %}
             </div>
         </div>
@@ -50,12 +50,12 @@
 
     <div class="guest-upsell-overlay" id="guestUpsellOverlay">
         <div class="guest-upsell-box">
-            <div class="guest-upsell-title">!!!Zeig dein koennen!!!</div>
+            <div class="guest-upsell-title">!!!Zeig dein Können!!!</div>
             <div class="guest-upsell-badge">EMPFOHLEN</div>
 
             <div class="guest-upsell-actions" id="guestUpsellChoice">
                 <button type="button" class="guest-upsell-yes" id="guestUpsellYes">JA, zeig mir wie!</button>
-                <button type="button" class="guest-upsell-no" id="guestUpsellNo">Vielleicht spaeter</button>
+                <button type="button" class="guest-upsell-no" id="guestUpsellNo">Vielleicht später</button>
             </div>
 
             <div class="guest-upsell-auth" id="guestUpsellAuth" style="display:none;">

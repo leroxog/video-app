@@ -10,7 +10,7 @@ from flask import (
 )
 from sqlalchemy import text
 from werkzeug.utils import secure_filename
-from models import db, User, Video, Pixel, Like, Subscription
+from models import db, User, Video, Pixel, Like, Subscription, Comment
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -40,6 +40,7 @@ SHUFFLE_COST = 15
 DELETE_COST = 25
 BOMB_COST = 40
 UPLOAD_BONUS_POINTS = 600
+COMMENT_MAX_LENGTH = 500
 HEX_COLOR_RE = re.compile(r"#[0-9a-fA-F]{6}")
 
 app = Flask(__name__)
@@ -90,7 +91,7 @@ else:
     logger.warning(
         "HINWEIS: Videos/Profilbilder werden lokal im Dateisystem gespeichert. Auf den meisten "
         "kostenlosen Hosting-Plattformen (z.B. Railway) ist dieser Speicher nicht "
-        "dauerhaft und Dateien koennen bei einem Neustart/Deploy verloren gehen."
+        "dauerhaft und Dateien können bei einem Neustart/Deploy verloren gehen."
     )
 
 
@@ -116,7 +117,7 @@ def delete_media(kind, stored_filename):
         try:
             r2_client.delete_object(Bucket=R2_BUCKET_NAME, Key=f"{kind}/{stored_filename}")
         except Exception:
-            logger.exception("R2-Loeschung fehlgeschlagen fuer %s/%s", kind, stored_filename)
+            logger.exception("R2-Löschung fehlgeschlagen für %s/%s", kind, stored_filename)
     else:
         folder = app.config["UPLOAD_FOLDER"] if kind == "uploads" else app.config["PROFILE_PIC_FOLDER"]
         try:
@@ -392,7 +393,7 @@ def upload():
             flash("Bitte einen Titel angeben.")
             return render_template("upload.html", user=user)
         if not file or file.filename == "":
-            flash("Bitte eine Videodatei auswaehlen.")
+            flash("Bitte eine Videodatei auswählen.")
             return render_template("upload.html", user=user)
         if not allowed_file(file.filename):
             flash("Nur folgende Formate sind erlaubt: " + ", ".join(sorted(ALLOWED_EXTENSIONS)))
@@ -438,6 +439,7 @@ def watch(video_id):
         is_liked=is_liked,
         is_subscribed=is_subscribed,
         subscriber_count=len(video.uploader.subscribers),
+        comments=video.comments,
     )
 
 
@@ -473,6 +475,47 @@ def api_like_video(video_id):
         liked = True
     db.session.commit()
     return jsonify({"ok": True, "liked": liked, "like_count": len(video.likes)})
+
+
+def serialize_comment(comment):
+    return {
+        "id": comment.id,
+        "username": comment.author.username,
+        "profile_image": media_url("profile_pics", comment.author.profile_image),
+        "text": comment.text,
+        "created_at": comment.created_at.strftime("%d.%m.%Y %H:%M"),
+    }
+
+
+@app.route("/api/video/<int:video_id>/comments")
+def api_list_comments(video_id):
+    video = db.get_or_404(Video, video_id)
+    comments = Comment.query.filter_by(video_id=video.id).order_by(Comment.created_at).all()
+    return jsonify({"ok": True, "comments": [serialize_comment(c) for c in comments]})
+
+
+@app.route("/api/video/<int:video_id>/comment", methods=["POST"])
+def api_add_comment(video_id):
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    video = db.get_or_404(Video, video_id)
+
+    data = request.get_json(silent=True) or {}
+    text = (data.get("text") or "").strip()
+    if not text:
+        return jsonify({"ok": False, "error": "empty_comment"}), 400
+    text = text[:COMMENT_MAX_LENGTH]
+
+    comment = Comment(user_id=user.id, video_id=video.id, text=text)
+    db.session.add(comment)
+    db.session.commit()
+
+    return jsonify({
+        "ok": True,
+        "comment": serialize_comment(comment),
+        "comment_count": len(video.comments),
+    })
 
 
 @app.route("/api/user/<username>/subscribe", methods=["POST"])
@@ -567,7 +610,7 @@ def upload_profile_picture():
 
     file = request.files.get("profile_image")
     if not file or file.filename == "":
-        flash("Bitte ein Bild auswaehlen.")
+        flash("Bitte ein Bild auswählen.")
         return redirect(url_for("profile", username=user.username))
     if not allowed_image_file(file.filename):
         flash("Nur folgende Bildformate sind erlaubt: " + ", ".join(sorted(ALLOWED_IMAGE_EXTENSIONS)))
@@ -601,7 +644,7 @@ def update_email():
 
     email = request.form.get("email", "").strip()
     if not email or "@" not in email:
-        flash("Bitte eine gueltige E-Mail-Adresse angeben.")
+        flash("Bitte eine gültige E-Mail-Adresse angeben.")
         return redirect(url_for("account_settings"))
 
     if User.query.filter(User.email == email, User.id != user.id).first():
@@ -632,7 +675,7 @@ def update_username():
 
     user.username = new_username
     db.session.commit()
-    flash("Benutzername geaendert.")
+    flash("Benutzername geändert.")
     return redirect(url_for("account_settings"))
 
 
@@ -656,7 +699,7 @@ def update_password():
 
     user.set_password(new_password)
     db.session.commit()
-    flash("Passwort geaendert.")
+    flash("Passwort geändert.")
     return redirect(url_for("account_settings"))
 
 

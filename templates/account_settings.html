@@ -19,33 +19,33 @@
 
     <h2>E-Mail</h2>
     {% if user.email %}
-        <p>Hinterlegte E-Mail: {{ user.email }} <span class="video-meta">(wird nicht oeffentlich angezeigt)</span></p>
+        <p>Hinterlegte E-Mail: {{ user.email }} <span class="video-meta">(wird nicht öffentlich angezeigt)</span></p>
         <form action="{{ url_for('update_email') }}" method="post" class="form settings-form">
-            <label for="email">E-Mail aendern</label>
+            <label for="email">E-Mail ändern</label>
             <input type="email" id="email" name="email" value="{{ user.email }}" required>
             <button type="submit">Speichern</button>
         </form>
     {% else %}
-        <p>Um deinen Benutzernamen oder dein Passwort zu aendern, musst du zuerst eine E-Mail-Adresse hinzufuegen. Sie wird nicht oeffentlich angezeigt.</p>
+        <p>Um deinen Benutzernamen oder dein Passwort zu ändern, musst du zuerst eine E-Mail-Adresse hinzufügen. Sie wird nicht öffentlich angezeigt.</p>
         <form action="{{ url_for('update_email') }}" method="post" class="form settings-form">
-            <label for="email">E-Mail-Adresse hinzufuegen</label>
+            <label for="email">E-Mail-Adresse hinzufügen</label>
             <input type="email" id="email" name="email" required>
             <button type="submit">Speichern</button>
         </form>
     {% endif %}
 
-    <h2>Benutzername aendern</h2>
+    <h2>Benutzername ändern</h2>
     {% if user.email %}
         <form action="{{ url_for('update_username') }}" method="post" class="form settings-form">
             <label for="username">Neuer Benutzername</label>
             <input type="text" id="username" name="username" value="{{ user.username }}" required maxlength="50">
-            <button type="submit">Aendern</button>
+            <button type="submit">Ändern</button>
         </form>
     {% else %}
-        <p class="video-meta">Erst verfuegbar, sobald eine E-Mail-Adresse hinterlegt ist.</p>
+        <p class="video-meta">Erst verfügbar, sobald eine E-Mail-Adresse hinterlegt ist.</p>
     {% endif %}
 
-    <h2>Passwort aendern</h2>
+    <h2>Passwort ändern</h2>
     {% if user.email %}
         <form action="{{ url_for('update_password') }}" method="post" class="form settings-form">
             <label for="current_password">Aktuelles Passwort</label>
@@ -54,13 +54,13 @@
             <label for="new_password">Neues Passwort</label>
             <input type="password" id="new_password" name="new_password" required>
 
-            <button type="submit">Aendern</button>
+            <button type="submit">Ändern</button>
         </form>
     {% else %}
-        <p class="video-meta">Erst verfuegbar, sobald eine E-Mail-Adresse hinterlegt ist.</p>
+        <p class="video-meta">Erst verfügbar, sobald eine E-Mail-Adresse hinterlegt ist.</p>
     {% endif %}
 
-    <p><a href="{{ url_for('profile', username=user.username) }}">&larr; Zurueck zum Profil</a></p>
+    <p><a href="{{ url_for('profile', username=user.username) }}">&larr; Zurück zum Profil</a></p>
 
     <script>
         document.getElementById("copyIdBtn").addEventListener("click", function () {

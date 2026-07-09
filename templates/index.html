@@ -19,7 +19,7 @@
 
     <h1>Videos</h1>
     {% if query %}
-        <p><a class="clear-search" href="{{ url_for('index') }}">&times; Suche zuruecksetzen</a></p>
+        <p><a class="clear-search" href="{{ url_for('index') }}">&times; Suche zurücksetzen</a></p>
     {% endif %}
     <div class="search-hint-row" id="searchHintRow">
         <button type="button" class="search-hint" id="searchHintBtn" data-suggestion="{{ game_suggestion }}">
@@ -101,7 +101,7 @@
             {% endfor %}
         </div>
     {% elif query %}
-        <p>Keine Videos gefunden fuer "{{ query }}".</p>
+        <p>Keine Videos gefunden für "{{ query }}".</p>
     {% else %}
         <p>Noch keine Videos hochgeladen. <a href="{{ url_for('upload') }}">Jetzt das erste Video hochladen</a>.</p>
     {% endif %}

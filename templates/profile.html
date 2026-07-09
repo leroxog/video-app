@@ -28,7 +28,7 @@
 
     {% if is_own_profile %}
         <form action="{{ url_for('upload_profile_picture') }}" method="post" enctype="multipart/form-data" class="profile-picture-form">
-            <label for="profile_image">Profilbild aendern</label>
+            <label for="profile_image">Profilbild ändern</label>
             <input type="file" id="profile_image" name="profile_image" accept="image/png,image/jpeg,image/gif,image/webp" required>
             <button type="submit">Hochladen</button>
         </form>

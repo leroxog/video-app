@@ -30,23 +30,23 @@
         <label for="video">Videodatei (mp4, webm, ogg, mov)</label>
         <input type="file" id="video" name="video" accept="video/mp4,video/webm,video/ogg,video/quicktime" required>
 
-        <button type="button" class="sound-toggle" id="soundToggleBtn">&#127925; Sound hinzufuegen</button>
+        <button type="button" class="sound-toggle" id="soundToggleBtn">&#127925; Sound hinzufügen</button>
         <p class="sound-status" id="soundStatus"></p>
         <div class="sound-picker" id="soundPicker">
             <div class="sound-option" data-song="song1" data-name="Chiptune Upbeat">
                 <span class="sound-option-name">Chiptune Upbeat</span>
-                <button type="button" class="sound-preview-btn" data-preview="song1">&#9654; Anhoeren</button>
-                <button type="button" class="sound-select-btn" data-select="song1">Auswaehlen</button>
+                <button type="button" class="sound-preview-btn" data-preview="song1">&#9654; Anhören</button>
+                <button type="button" class="sound-select-btn" data-select="song1">Auswählen</button>
             </div>
             <div class="sound-option" data-song="song2" data-name="Lo-fi Chill">
                 <span class="sound-option-name">Lo-fi Chill</span>
-                <button type="button" class="sound-preview-btn" data-preview="song2">&#9654; Anhoeren</button>
-                <button type="button" class="sound-select-btn" data-select="song2">Auswaehlen</button>
+                <button type="button" class="sound-preview-btn" data-preview="song2">&#9654; Anhören</button>
+                <button type="button" class="sound-select-btn" data-select="song2">Auswählen</button>
             </div>
             <div class="sound-option" data-song="song3" data-name="8-bit Adventure">
                 <span class="sound-option-name">8-bit Adventure</span>
-                <button type="button" class="sound-preview-btn" data-preview="song3">&#9654; Anhoeren</button>
-                <button type="button" class="sound-select-btn" data-select="song3">Auswaehlen</button>
+                <button type="button" class="sound-preview-btn" data-preview="song3">&#9654; Anhören</button>
+                <button type="button" class="sound-select-btn" data-select="song3">Auswählen</button>
             </div>
         </div>
 
@@ -193,22 +193,22 @@
             btn.addEventListener("click", async () => {
                 const key = btn.dataset.select;
                 if (!originalFile) {
-                    soundStatus.textContent = "Bitte zuerst eine Videodatei auswaehlen.";
+                    soundStatus.textContent = "Bitte zuerst eine Videodatei auswählen.";
                     return;
                 }
 
                 document.querySelectorAll(".sound-option").forEach((opt) => opt.classList.remove("selected"));
                 btn.closest(".sound-option").classList.add("selected");
 
-                soundStatus.textContent = "Sound wird hinzugefuegt...";
+                soundStatus.textContent = "Sound wird hinzugefügt...";
                 uploadSubmitBtn.disabled = true;
                 try {
                     const mixedBlob = await mixAudioIntoVideo(originalFile, SONGS[key]);
                     const mixedFile = new File([mixedBlob], "video-mit-sound.webm", { type: "video/webm" });
                     setVideoFile(mixedFile);
-                    soundStatus.textContent = "Sound hinzugefuegt ✓";
+                    soundStatus.textContent = "Sound hinzugefügt ✓";
                 } catch (err) {
-                    soundStatus.textContent = "Sound konnte nicht hinzugefuegt werden.";
+                    soundStatus.textContent = "Sound konnte nicht hinzugefügt werden.";
                 } finally {
                     uploadSubmitBtn.disabled = false;
                 }
