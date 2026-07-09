@@ -20,6 +20,8 @@ def client():
     flask_app.config["UPLOAD_FOLDER"] = upload_dir
     profile_pic_dir = tempfile.mkdtemp()
     flask_app.config["PROFILE_PIC_FOLDER"] = profile_pic_dir
+    sound_dir = tempfile.mkdtemp()
+    flask_app.config["SOUND_FOLDER"] = sound_dir
 
     with flask_app.app_context():
         db.create_all()
@@ -28,6 +30,7 @@ def client():
 
     shutil.rmtree(upload_dir, ignore_errors=True)
     shutil.rmtree(profile_pic_dir, ignore_errors=True)
+    shutil.rmtree(sound_dir, ignore_errors=True)
 
 
 def register(client, username="alice", password="secret123"):
