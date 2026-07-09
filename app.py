@@ -842,6 +842,97 @@ def update_password():
     return redirect(url_for("account_settings"))
 
 
+OLD_UPLOAD_BONUS = 600
+
+
+def fetch_video_bytes(video):
+    if USE_R2:
+        obj = r2_client.get_object(Bucket=R2_BUCKET_NAME, Key=f"uploads/{video.filename}")
+        return obj["Body"].read()
+    with open(os.path.join(app.config["UPLOAD_FOLDER"], video.filename), "rb") as f:
+        return f.read()
+
+
+def run_duplicate_cleanup(dry_run=True):
+    """Hash any videos still missing a content_hash, then revoke the old
+    600pt upload bonus from duplicate uploads (same content, not the
+    earliest copy) that haven't been penalized yet. Idempotent: safe to
+    call repeatedly, and with dry_run=True makes no database changes."""
+    videos = Video.query.order_by(Video.created_at.asc()).all()
+    computed_hashes = {}
+    hashed = 0
+    unreadable = []
+    for video in videos:
+        if video.content_hash:
+            computed_hashes[video.id] = video.content_hash
+            continue
+        try:
+            data = fetch_video_bytes(video)
+        except Exception as exc:
+            unreadable.append({"video_id": video.id, "filename": video.filename, "error": str(exc)})
+            continue
+        digest = hashlib.sha256(data).hexdigest()
+        computed_hashes[video.id] = digest
+        if not dry_run:
+            video.content_hash = digest
+        hashed += 1
+
+    if not dry_run:
+        db.session.commit()
+
+    by_hash = {}
+    for video in videos:
+        content_hash = computed_hashes.get(video.id)
+        if content_hash is None:
+            continue
+        by_hash.setdefault(content_hash, []).append(video)
+
+    penalties = []
+    for content_hash, vids in by_hash.items():
+        if len(vids) < 2:
+            continue
+        vids.sort(key=lambda v: v.created_at)
+        original, duplicates = vids[0], vids[1:]
+        for dup in duplicates:
+            if dup.duplicate_penalty_applied:
+                continue
+            user = dup.uploader
+            before = user.total_score
+            after = max(0, before - OLD_UPLOAD_BONUS)
+            penalties.append({
+                "video_id": dup.id,
+                "kept_original_video_id": original.id,
+                "username": user.username,
+                "total_score_before": before,
+                "total_score_after": after,
+                "deducted": before - after,
+            })
+            if not dry_run:
+                user.total_score = after
+                dup.duplicate_penalty_applied = True
+
+    if not dry_run:
+        db.session.commit()
+
+    return {
+        "dry_run": dry_run,
+        "videos_total": len(videos),
+        "hashed_this_run": hashed,
+        "unreadable": unreadable,
+        "duplicate_groups": len([h for h, v in by_hash.items() if len(v) > 1]),
+        "penalties": penalties,
+        "total_deducted": sum(p["deducted"] for p in penalties),
+    }
+
+
+@app.route("/admin/cleanup-duplicate-videos", methods=["POST"])
+def admin_cleanup_duplicate_videos():
+    require_admin()
+    dry_run = request.args.get("dry_run", "1") != "0"
+    report = run_duplicate_cleanup(dry_run=dry_run)
+    return jsonify(report)
+
+
 @app.route("/admin")
 def admin_dashboard():
     admin_user = require_admin()

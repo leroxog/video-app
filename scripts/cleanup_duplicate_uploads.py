@@ -1,37 +1,26 @@
-"""One-off maintenance script: retroactively hash existing video files and
-revoke the old +600 upload bonus from duplicate uploads (same content
-uploaded more than once) beyond the first, now that the app prevents
-duplicate content going forward.
+"""One-off maintenance script (local/dev use): retroactively hash existing
+video files and revoke the old +600 upload bonus from duplicate uploads
+beyond the first.
 
 Safe to run more than once -- already-penalized duplicates are skipped
 via Video.duplicate_penalty_applied.
 
-Usage against production (from the video-app directory):
-    railway run python scripts/cleanup_duplicate_uploads.py --dry-run
-    railway run python scripts/cleanup_duplicate_uploads.py
-Usage locally:
+Note: against production, use the admin-gated route instead
+(POST /admin/cleanup-duplicate-videos?dry_run=1), since this script needs
+a database connection this machine may not have (e.g. Railway's internal
+Postgres hostname is only reachable from within Railway's network).
+
+Usage:
     ./.venv/Scripts/python.exe scripts/cleanup_duplicate_uploads.py --dry-run
+    ./.venv/Scripts/python.exe scripts/cleanup_duplicate_uploads.py
 """
 import argparse
-import hashlib
 import os
 import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from app import app, db, USE_R2, r2_client, R2_BUCKET_NAME  # noqa: E402
-from models import Video  # noqa: E402
-
-OLD_UPLOAD_BONUS = 600
-
-
-def fetch_video_bytes(video):
-    if USE_R2:
-        obj = r2_client.get_object(Bucket=R2_BUCKET_NAME, Key=f"uploads/{video.filename}")
-        return obj["Body"].read()
-    folder = app.config["UPLOAD_FOLDER"]
-    with open(os.path.join(folder, video.filename), "rb") as f:
-        return f.read()
+from app import app, run_duplicate_cleanup  # noqa: E402
 
 
 def main():
@@ -43,84 +32,26 @@ def main():
     args = parser.parse_args()
 
     with app.app_context():
-        videos = Video.query.order_by(Video.created_at.asc()).all()
-        print(f"Found {len(videos)} videos total.")
+        report = run_duplicate_cleanup(dry_run=args.dry_run)
 
-        hashed = 0
-        skipped = 0
-        computed_hashes = {}
-        for video in videos:
-            if video.content_hash:
-                computed_hashes[video.id] = video.content_hash
-                continue
-            try:
-                data = fetch_video_bytes(video)
-            except Exception as exc:
-                skipped += 1
-                print(f"  [SKIP] video {video.id} ({video.filename}): could not read file ({exc})")
-                continue
-            digest = hashlib.sha256(data).hexdigest()
-            computed_hashes[video.id] = digest
-            if not args.dry_run:
-                video.content_hash = digest
-            hashed += 1
-
-        if not args.dry_run:
-            db.session.commit()
+        print(f"Found {report['videos_total']} videos total.")
         verb = "Would hash" if args.dry_run else "Hashed"
-        print(f"{verb} {hashed} video(s) this run ({skipped} unreadable/skipped).")
+        print(f"{verb} {report['hashed_this_run']} video(s) this run ({len(report['unreadable'])} unreadable/skipped).")
+        for item in report["unreadable"]:
+            print(f"  [SKIP] video {item['video_id']} ({item['filename']}): {item['error']}")
 
-        by_hash = {}
-        for video in videos:
-            content_hash = computed_hashes.get(video.id)
-            if content_hash is None:
-                continue
-            by_hash.setdefault(content_hash, []).append(video)
-
-        duplicate_groups = {h: vids for h, vids in by_hash.items() if len(vids) > 1}
-        print(f"Found {len(duplicate_groups)} group(s) of duplicate content.")
-
-        total_deducted = 0
-        affected_users = set()
-        for content_hash, vids in duplicate_groups.items():
-            vids.sort(key=lambda v: v.created_at)
-            original, duplicates = vids[0], vids[1:]
+        print(f"Found {report['duplicate_groups']} group(s) of duplicate content.")
+        for p in report["penalties"]:
+            tag = "[DRY RUN, not applied]" if args.dry_run else ""
             print(
-                f"  Hash {content_hash[:12]}...: keeping video {original.id} "
-                f"(uploaded {original.created_at}), {len(duplicates)} duplicate(s): "
-                f"{[v.id for v in duplicates]}"
+                f"  video {p['video_id']} (original kept: {p['kept_original_video_id']}): "
+                f"user '{p['username']}' total_score {p['total_score_before']} -> "
+                f"{p['total_score_after']} (-{p['deducted']}) {tag}"
             )
-            for dup in duplicates:
-                if dup.duplicate_penalty_applied:
-                    print(f"    - video {dup.id}: already penalized, skipping")
-                    continue
-                user = dup.uploader
-                before = user.total_score
-                after = max(0, before - OLD_UPLOAD_BONUS)
-                deducted = before - after
-                total_deducted += deducted
-                affected_users.add(user.username)
-                if args.dry_run:
-                    print(
-                        f"    - video {dup.id}: user '{user.username}' total_score "
-                        f"{before} -> {after} (-{deducted}) [DRY RUN, not applied]"
-                    )
-                else:
-                    user.total_score = after
-                    dup.duplicate_penalty_applied = True
-                    print(
-                        f"    - video {dup.id}: user '{user.username}' total_score "
-                        f"{before} -> {after} (-{deducted})"
-                    )
 
-        if not args.dry_run:
-            db.session.commit()
-
+        affected = sorted({p["username"] for p in report["penalties"]})
         prefix = "[DRY RUN] Would deduct" if args.dry_run else "Done. Deducted"
-        print(
-            f"\n{prefix} {total_deducted} point(s) total across "
-            f"{len(affected_users)} account(s): {sorted(affected_users)}"
-        )
+        print(f"\n{prefix} {report['total_deducted']} point(s) total across {len(affected)} account(s): {affected}")
 
 
 if __name__ == "__main__":

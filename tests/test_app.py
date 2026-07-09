@@ -715,6 +715,79 @@ def test_admin_cannot_delete_self(client):
     assert response.status_code == 400
 
 
+def test_cleanup_duplicate_videos_requires_admin(client):
+    register(client, username="regular")
+    response = client.post("/admin/cleanup-duplicate-videos?dry_run=1")
+    assert response.status_code == 403
+
+
+def test_cleanup_duplicate_videos_dry_run_makes_no_changes(client):
+    register(client, username="alice")
+    upload_video(client, title="Original")
+    client.post("/logout")
+
+    register(client, username="bob")
+    make_admin("bob")
+
+    with flask_app.app_context():
+        original = Video.query.filter_by(title="Original").first()
+        dup = Video(
+            title="Duplicate",
+            filename=original.filename,
+            content_hash=None,
+            user_id=original.user_id,
+        )
+        db.session.add(dup)
+        db.session.commit()
+
+    response = client.post("/admin/cleanup-duplicate-videos?dry_run=1")
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["dry_run"] is True
+    assert data["duplicate_groups"] == 1
+    assert data["total_deducted"] == 100
+
+    with flask_app.app_context():
+        alice = User.query.filter_by(username="alice").first()
+        assert alice.total_score == 100
+        dup_video = Video.query.filter_by(title="Duplicate").first()
+        assert dup_video.content_hash is None
+        assert dup_video.duplicate_penalty_applied is False
+
+
+def test_cleanup_duplicate_videos_real_run_deducts_points(client):
+    register(client, username="alice")
+    upload_video(client, title="Original")
+    client.post("/logout")
+
+    register(client, username="bob")
+    make_admin("bob")
+
+    with flask_app.app_context():
+        original = Video.query.filter_by(title="Original").first()
+        dup = Video(
+            title="Duplicate",
+            filename=original.filename,
+            content_hash=None,
+            user_id=original.user_id,
+        )
+        db.session.add(dup)
+        db.session.commit()
+
+    response = client.post("/admin/cleanup-duplicate-videos?dry_run=0")
+    data = response.get_json()
+    assert data["total_deducted"] == 100
+
+    with flask_app.app_context():
+        alice = User.query.filter_by(username="alice").first()
+        assert alice.total_score == 0
+
+    second_response = client.post("/admin/cleanup-duplicate-videos?dry_run=0")
+    second_data = second_response.get_json()
+    assert second_data["total_deducted"] == 0
+    assert second_data["penalties"] == []
+
+
 def test_admin_can_delete_any_video(client):
     register(client, username="owner")
     upload_video(client, title="Owned Video")
