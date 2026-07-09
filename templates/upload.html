@@ -48,6 +48,17 @@
                 <button type="button" class="sound-preview-btn" data-preview="song3">&#9654; Anhören</button>
                 <button type="button" class="sound-select-btn" data-select="song3">Auswählen</button>
             </div>
+
+            <ul class="sound-library-list" id="soundLibraryList"></ul>
+
+            <div class="sound-own-upload">
+                <label for="ownSoundInput" class="sound-own-upload-label">&#128228; Eigene Datei/Video als Sound hochladen</label>
+                <input type="file" id="ownSoundInput" accept="audio/*,video/*">
+                <p class="sound-own-upload-notice">
+                    Hinweis: Dein hochgeladener Sound wird automatisch der <strong>öffentlichen Sound-Bibliothek</strong>
+                    hinzugefügt und kann danach auch von anderen Nutzer:innen für ihre Videos verwendet werden.
+                </p>
+            </div>
         </div>
 
         <button type="submit" id="uploadSubmitBtn">Hochladen</button>
@@ -189,30 +200,114 @@
             return mixedBlob;
         }
 
-        document.querySelectorAll(".sound-select-btn").forEach((btn) => {
-            btn.addEventListener("click", async () => {
+        async function applySoundToVideo(url, optionEl) {
+            if (!originalFile) {
+                soundStatus.textContent = "Bitte zuerst eine Videodatei auswählen.";
+                return;
+            }
+
+            document.querySelectorAll(".sound-option").forEach((opt) => opt.classList.remove("selected"));
+            if (optionEl) optionEl.classList.add("selected");
+
+            soundStatus.textContent = "Sound wird hinzugefügt...";
+            uploadSubmitBtn.disabled = true;
+            try {
+                const mixedBlob = await mixAudioIntoVideo(originalFile, url);
+                const mixedFile = new File([mixedBlob], "video-mit-sound.webm", { type: "video/webm" });
+                setVideoFile(mixedFile);
+                soundStatus.textContent = "Sound hinzugefügt ✓";
+            } catch (err) {
+                soundStatus.textContent = "Sound konnte nicht hinzugefügt werden.";
+            } finally {
+                uploadSubmitBtn.disabled = false;
+            }
+        }
+
+        document.querySelectorAll(".sound-select-btn[data-select]").forEach((btn) => {
+            btn.addEventListener("click", () => {
                 const key = btn.dataset.select;
-                if (!originalFile) {
-                    soundStatus.textContent = "Bitte zuerst eine Videodatei auswählen.";
+                applySoundToVideo(SONGS[key], btn.closest(".sound-option"));
+            });
+        });
+
+        const soundLibraryList = document.getElementById("soundLibraryList");
+
+        function addLibrarySoundOption(sound) {
+            const li = document.createElement("li");
+            li.className = "sound-option";
+
+            const nameEl = document.createElement("span");
+            nameEl.className = "sound-option-name";
+            nameEl.textContent = `${sound.title} (von ${sound.username})`;
+
+            const previewBtn = document.createElement("button");
+            previewBtn.type = "button";
+            previewBtn.className = "sound-preview-btn";
+            previewBtn.innerHTML = "&#9654; Anhören";
+            previewBtn.addEventListener("click", () => {
+                if (previewAudio) {
+                    previewAudio.pause();
+                    previewAudio = null;
+                }
+                previewAudio = new Audio(sound.url);
+                previewAudio.play().catch(() => {});
+            });
+
+            const selectBtn = document.createElement("button");
+            selectBtn.type = "button";
+            selectBtn.className = "sound-select-btn";
+            selectBtn.textContent = "Auswählen";
+            selectBtn.addEventListener("click", () => applySoundToVideo(sound.url, li));
+
+            li.appendChild(nameEl);
+            li.appendChild(previewBtn);
+            li.appendChild(selectBtn);
+            soundLibraryList.appendChild(li);
+        }
+
+        (async function loadSoundLibrary() {
+            try {
+                const res = await fetch("{{ url_for('api_list_sounds') }}");
+                const data = await res.json();
+                if (data.ok) data.sounds.forEach(addLibrarySoundOption);
+            } catch (err) {
+                // Sound-Bibliothek konnte nicht geladen werden -- built-in Songs bleiben trotzdem nutzbar.
+            }
+        })();
+
+        const ownSoundInput = document.getElementById("ownSoundInput");
+        ownSoundInput.addEventListener("change", async () => {
+            const file = ownSoundInput.files[0];
+            if (!file) return;
+            if (!originalFile) {
+                soundStatus.textContent = "Bitte zuerst eine Videodatei auswählen.";
+                ownSoundInput.value = "";
+                return;
+            }
+
+            soundStatus.textContent = "Sound wird hochgeladen...";
+            uploadSubmitBtn.disabled = true;
+            try {
+                const formData = new FormData();
+                formData.append("sound", file);
+                formData.append("title", file.name.replace(/\.[^.]+$/, ""));
+                const res = await fetch("{{ url_for('api_upload_sound') }}", {
+                    method: "POST",
+                    body: formData,
+                });
+                const data = await res.json();
+                if (!data.ok) {
+                    soundStatus.textContent = "Sound konnte nicht hochgeladen werden.";
                     return;
                 }
-
-                document.querySelectorAll(".sound-option").forEach((opt) => opt.classList.remove("selected"));
-                btn.closest(".sound-option").classList.add("selected");
-
-                soundStatus.textContent = "Sound wird hinzugefügt...";
-                uploadSubmitBtn.disabled = true;
-                try {
-                    const mixedBlob = await mixAudioIntoVideo(originalFile, SONGS[key]);
-                    const mixedFile = new File([mixedBlob], "video-mit-sound.webm", { type: "video/webm" });
-                    setVideoFile(mixedFile);
-                    soundStatus.textContent = "Sound hinzugefügt ✓";
-                } catch (err) {
-                    soundStatus.textContent = "Sound konnte nicht hinzugefügt werden.";
-                } finally {
-                    uploadSubmitBtn.disabled = false;
-                }
-            });
+                addLibrarySoundOption(data.sound);
+                await applySoundToVideo(data.sound.url, soundLibraryList.lastElementChild);
+            } catch (err) {
+                soundStatus.textContent = "Sound konnte nicht hochgeladen werden.";
+            } finally {
+                uploadSubmitBtn.disabled = false;
+                ownSoundInput.value = "";
+            }
         });
     </script>
 {% endblock %}

@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 import pytest
 from app import app as flask_app, db
-from models import User, Video
+from models import User, Video, Sound
 
 
 @pytest.fixture
@@ -79,6 +79,66 @@ def test_upload_page_has_sound_picker(client):
     response = client.get("/upload")
     assert b"soundToggleBtn" in response.data
     assert b"soundPicker" in response.data
+
+
+def test_upload_page_has_own_sound_upload_notice(client):
+    register(client)
+    response = client.get("/upload")
+    assert b"ownSoundInput" in response.data
+    assert "öffentlichen Sound-Bibliothek".encode() in response.data
+
+
+def test_api_upload_sound_requires_login(client):
+    data = {"sound": (io.BytesIO(b"fake audio bytes"), "clip.mp3")}
+    response = client.post("/api/sounds", data=data, content_type="multipart/form-data")
+    assert response.status_code == 401
+
+
+def test_api_upload_sound_adds_to_public_library(client):
+    register(client, username="alice")
+    data = {"title": "My Cool Sound", "sound": (io.BytesIO(b"fake audio bytes"), "clip.mp3")}
+    response = client.post("/api/sounds", data=data, content_type="multipart/form-data")
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["sound"]["title"] == "My Cool Sound"
+    assert payload["sound"]["username"] == "alice"
+
+    with flask_app.app_context():
+        assert Sound.query.count() == 1
+
+    client.post("/logout")
+    register(client, username="bob")
+    list_response = client.get("/api/sounds")
+    list_payload = list_response.get_json()
+    assert list_payload["ok"] is True
+    assert len(list_payload["sounds"]) == 1
+    assert list_payload["sounds"][0]["title"] == "My Cool Sound"
+    assert list_payload["sounds"][0]["username"] == "alice"
+
+
+def test_api_upload_sound_rejects_bad_extension(client):
+    register(client)
+    data = {"sound": (io.BytesIO(b"not audio"), "clip.exe")}
+    response = client.post("/api/sounds", data=data, content_type="multipart/form-data")
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "invalid_format"
+
+
+def test_api_upload_sound_accepts_video_file_as_sound_source(client):
+    register(client)
+    data = {"sound": (io.BytesIO(b"fake video-with-audio bytes"), "clip.mp4")}
+    response = client.post("/api/sounds", data=data, content_type="multipart/form-data")
+    assert response.status_code == 200
+    assert response.get_json()["ok"] is True
+
+
+def test_api_upload_sound_defaults_title_from_filename(client):
+    register(client)
+    data = {"sound": (io.BytesIO(b"fake audio bytes"), "mein_toller_sound.mp3")}
+    response = client.post("/api/sounds", data=data, content_type="multipart/form-data")
+    payload = response.get_json()
+    assert payload["sound"]["title"] == "mein_toller_sound"
 
 
 def test_fruitmerge_page_has_record_button(client):

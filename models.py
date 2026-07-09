@@ -20,6 +20,7 @@ class User(db.Model):
     videos = db.relationship("Video", backref="uploader", lazy=True, cascade="all, delete-orphan")
     likes_given = db.relationship("Like", backref="liker", lazy=True, cascade="all, delete-orphan")
     comments_made = db.relationship("Comment", backref="author", lazy=True, cascade="all, delete-orphan")
+    sounds_uploaded = db.relationship("Sound", backref="uploader", lazy=True, cascade="all, delete-orphan")
     subscriptions_made = db.relationship(
         "Subscription",
         foreign_keys="Subscription.subscriber_id",
@@ -99,3 +100,11 @@ class RedeemedCode(db.Model):
 class GamePlayCount(db.Model):
     game_key = db.Column(db.String(30), primary_key=True)
     count = db.Column(db.Integer, nullable=False, default=0)
+
+
+class Sound(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    filename = db.Column(db.String(255), nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))

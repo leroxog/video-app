@@ -12,13 +12,15 @@ from flask import (
 )
 from sqlalchemy import text
 from werkzeug.utils import secure_filename
-from models import db, User, Video, Pixel, Like, Subscription, Comment, RedeemedCode, GamePlayCount
+from models import db, User, Video, Pixel, Like, Subscription, Comment, RedeemedCode, GamePlayCount, Sound
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 ALLOWED_EXTENSIONS = {"mp4", "webm", "ogg", "mov"}
 ALLOWED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
+ALLOWED_SOUND_EXTENSIONS = {"mp3", "wav", "ogg", "m4a", "aac", "mp4", "webm", "mov"}
+SOUND_TITLE_MAX_LENGTH = 100
 PLACE_GRID_SIZE = 100
 PLACE_COOLDOWN_SECONDS = 5
 
@@ -164,6 +166,10 @@ PROFILE_PIC_FOLDER = os.path.join(app.root_path, "static", "profile_pics")
 os.makedirs(PROFILE_PIC_FOLDER, exist_ok=True)
 app.config["PROFILE_PIC_FOLDER"] = PROFILE_PIC_FOLDER
 
+SOUND_FOLDER = os.path.join(app.root_path, "static", "sounds")
+os.makedirs(SOUND_FOLDER, exist_ok=True)
+app.config["SOUND_FOLDER"] = SOUND_FOLDER
+
 R2_ACCOUNT_ID = os.environ.get("R2_ACCOUNT_ID")
 R2_ACCESS_KEY_ID = os.environ.get("R2_ACCESS_KEY_ID")
 R2_SECRET_ACCESS_KEY = os.environ.get("R2_SECRET_ACCESS_KEY")
@@ -192,6 +198,13 @@ else:
     )
 
 
+LOCAL_MEDIA_FOLDERS = {
+    "uploads": "UPLOAD_FOLDER",
+    "profile_pics": "PROFILE_PIC_FOLDER",
+    "sounds": "SOUND_FOLDER",
+}
+
+
 def save_media(file_storage, kind, stored_filename):
     """Save an uploaded file either to R2 (persistent) or local disk (fallback)."""
     if USE_R2:
@@ -203,7 +216,7 @@ def save_media(file_storage, kind, stored_filename):
             ExtraArgs={"ContentType": file_storage.mimetype or "application/octet-stream"},
         )
     else:
-        folder = app.config["UPLOAD_FOLDER"] if kind == "uploads" else app.config["PROFILE_PIC_FOLDER"]
+        folder = app.config[LOCAL_MEDIA_FOLDERS[kind]]
         file_storage.save(os.path.join(folder, stored_filename))
 
 
@@ -216,7 +229,7 @@ def delete_media(kind, stored_filename):
         except Exception:
             logger.exception("R2-Löschung fehlgeschlagen für %s/%s", kind, stored_filename)
     else:
-        folder = app.config["UPLOAD_FOLDER"] if kind == "uploads" else app.config["PROFILE_PIC_FOLDER"]
+        folder = app.config[LOCAL_MEDIA_FOLDERS[kind]]
         try:
             os.remove(os.path.join(folder, stored_filename))
         except OSError:
@@ -231,6 +244,8 @@ def media_url(kind, stored_filename):
         return f"{R2_PUBLIC_URL}/{kind}/{stored_filename}"
     if kind == "uploads":
         return url_for("uploaded_file", filename=stored_filename)
+    if kind == "sounds":
+        return url_for("static", filename=f"sounds/{stored_filename}")
     return url_for("static", filename=f"profile_pics/{stored_filename}")
 
 db.init_app(app)
@@ -299,6 +314,10 @@ def allowed_file(filename):
 
 def allowed_image_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS
+
+
+def allowed_sound_file(filename):
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_SOUND_EXTENSIONS
 
 
 def current_user():
@@ -551,6 +570,49 @@ def upload():
         return redirect(url_for("watch", video_id=video.id))
 
     return render_template("upload.html", user=user)
+
+
+def serialize_sound(sound):
+    return {
+        "id": sound.id,
+        "title": sound.title,
+        "url": media_url("sounds", sound.filename),
+        "username": sound.uploader.username,
+    }
+
+
+@app.route("/api/sounds", methods=["GET"])
+def api_list_sounds():
+    sounds = Sound.query.order_by(Sound.created_at.desc()).all()
+    return jsonify({"ok": True, "sounds": [serialize_sound(s) for s in sounds]})
+
+
+@app.route("/api/sounds", methods=["POST"])
+def api_upload_sound():
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+
+    file = request.files.get("sound")
+    title = (request.form.get("title") or "").strip()
+
+    if not file or file.filename == "":
+        return jsonify({"ok": False, "error": "no_file"}), 400
+    if not allowed_sound_file(file.filename):
+        return jsonify({"ok": False, "error": "invalid_format"}), 400
+    if not title:
+        title = secure_filename(file.filename).rsplit(".", 1)[0][:SOUND_TITLE_MAX_LENGTH] or "Sound"
+    title = title[:SOUND_TITLE_MAX_LENGTH]
+
+    extension = secure_filename(file.filename).rsplit(".", 1)[1].lower()
+    stored_filename = f"{uuid.uuid4().hex}.{extension}"
+    save_media(file, "sounds", stored_filename)
+
+    sound = Sound(filename=stored_filename, title=title, user_id=user.id)
+    db.session.add(sound)
+    db.session.commit()
+
+    return jsonify({"ok": True, "sound": serialize_sound(sound)})
 
 
 @app.route("/video/<int:video_id>")

@@ -1387,6 +1387,40 @@ body.shorts-fullscreen main {
     font-size: 0.8rem;
 }
 
+.sound-library-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.sound-own-upload {
+    padding: 0.7rem;
+    border: 1px dashed #3c3c3c;
+    border-radius: 8px;
+    background: #141414;
+}
+
+.sound-own-upload-label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 0.4rem;
+    cursor: pointer;
+}
+
+.sound-own-upload-notice {
+    font-size: 0.75rem;
+    color: #aaa;
+    margin: 0.5rem 0 0;
+}
+
+.sound-own-upload-notice strong {
+    color: #ffcc00;
+}
+
 .sound-status {
     font-size: 0.8rem;
     color: #aaa;
