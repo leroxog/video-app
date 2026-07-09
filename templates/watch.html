@@ -2,9 +2,9 @@
 {% block title %}{{ video.title }} - gigas{% endblock %}
 {% block content %}
     <div class="watch-page">
-        <video controls autoplay class="player">
+        <video controls autoplay muted playsinline class="player">
             <source src="{{ media_url('uploads', video.filename) }}">
-            Dein Browser unterstuetzt dieses Videoformat nicht.
+            Dein Browser unterstützt dieses Videoformat nicht.
         </video>
         <h1>{{ video.title }}</h1>
 
@@ -53,11 +53,109 @@
 
         {% if user and (user.id == video.user_id or user.is_admin) %}
             <form action="{{ url_for('delete_video', video_id=video.id) }}" method="post"
-                  onsubmit="return confirm('Video wirklich loeschen?');">
-                <button type="submit" class="danger">Video loeschen</button>
+                  onsubmit="return confirm('Video wirklich löschen?');">
+                <button type="submit" class="danger">Video löschen</button>
             </form>
         {% endif %}
 
-        <a href="{{ url_for('index') }}">&larr; Zurueck zur Uebersicht</a>
+        <div class="comments-section">
+            <h2>Kommentare (<span id="commentCount">{{ comments|length }}</span>)</h2>
+
+            {% if user %}
+                <form class="comment-form" id="commentForm">
+                    <input type="text" id="commentInput" placeholder="Kommentar hinzufügen..." maxlength="500" required autocomplete="off">
+                    <button type="submit">Kommentieren</button>
+                </form>
+            {% else %}
+                <p class="video-meta"><a href="{{ url_for('login') }}">Melde dich an</a>, um zu kommentieren.</p>
+            {% endif %}
+
+            <ul class="comments-list" id="commentsList">
+                {% for c in comments %}
+                    <li class="comment-item">
+                        {% if c.author.profile_image %}
+                            <img class="comment-avatar" src="{{ media_url('profile_pics', c.author.profile_image) }}" alt="">
+                        {% else %}
+                            <div class="comment-avatar profile-avatar-placeholder">{{ c.author.username[0]|upper }}</div>
+                        {% endif %}
+                        <div class="comment-body">
+                            <span class="comment-username">{{ c.author.username }}</span>
+                            <span class="comment-time">{{ c.created_at.strftime("%d.%m.%Y %H:%M") }}</span>
+                            <p class="comment-text">{{ c.text }}</p>
+                        </div>
+                    </li>
+                {% else %}
+                    <li class="comments-empty">Noch keine Kommentare.</li>
+                {% endfor %}
+            </ul>
+        </div>
+
+        <a href="{{ url_for('index') }}">&larr; Zurück zur Übersicht</a>
     </div>
+
+    <script>
+        const commentForm = document.getElementById("commentForm");
+        const commentsList = document.getElementById("commentsList");
+        const commentCountEl = document.getElementById("commentCount");
+
+        if (commentForm) {
+            commentForm.addEventListener("submit", async (event) => {
+                event.preventDefault();
+                const input = document.getElementById("commentInput");
+                const text = input.value.trim();
+                if (!text) return;
+
+                const res = await fetch("{{ url_for('api_add_comment', video_id=video.id) }}", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ text }),
+                });
+                const data = await res.json();
+                if (!data.ok) return;
+
+                const emptyMsg = commentsList.querySelector(".comments-empty");
+                if (emptyMsg) emptyMsg.remove();
+
+                const li = document.createElement("li");
+                li.className = "comment-item";
+
+                let avatarEl;
+                if (data.comment.profile_image) {
+                    avatarEl = document.createElement("img");
+                    avatarEl.className = "comment-avatar";
+                    avatarEl.src = data.comment.profile_image;
+                    avatarEl.alt = "";
+                } else {
+                    avatarEl = document.createElement("div");
+                    avatarEl.className = "comment-avatar profile-avatar-placeholder";
+                    avatarEl.textContent = data.comment.username.charAt(0).toUpperCase();
+                }
+
+                const body = document.createElement("div");
+                body.className = "comment-body";
+
+                const usernameEl = document.createElement("span");
+                usernameEl.className = "comment-username";
+                usernameEl.textContent = data.comment.username;
+
+                const timeEl = document.createElement("span");
+                timeEl.className = "comment-time";
+                timeEl.textContent = data.comment.created_at;
+
+                const textEl = document.createElement("p");
+                textEl.className = "comment-text";
+                textEl.textContent = data.comment.text;
+
+                body.appendChild(usernameEl);
+                body.appendChild(timeEl);
+                body.appendChild(textEl);
+                li.appendChild(avatarEl);
+                li.appendChild(body);
+                commentsList.appendChild(li);
+
+                input.value = "";
+                commentCountEl.textContent = data.comment_count;
+            });
+        }
+    </script>
 {% endblock %}
