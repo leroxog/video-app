@@ -883,6 +883,29 @@ def test_shorts_page_shows_only_portrait_videos(client):
     assert b"Landscape Video" not in response.data
 
 
+def test_shorts_feed_shows_most_liked_video_first(client):
+    register(client, username="alice")
+    upload_video(client, title="Popular Clip", orientation="portrait")
+    upload_video(client, title="Unpopular Clip", orientation="portrait")
+    client.post("/logout")
+
+    register(client, username="bob")
+    with flask_app.app_context():
+        popular = Video.query.filter_by(title="Popular Clip").first()
+        video_id = popular.id
+    client.post(f"/video/{video_id}/like")
+
+    response = client.get("/shorts")
+    data = response.data
+    assert data.index(b"Popular Clip") < data.index(b"Unpopular Clip")
+
+
+def test_homepage_shows_redeem_login_button_for_guest(client):
+    response = client.get("/")
+    assert b"redeem-login-btn" in response.data
+    assert b'href="/register"' in response.data
+
+
 def test_shorts_page_empty_state(client):
     response = client.get("/shorts")
     assert response.status_code == 200

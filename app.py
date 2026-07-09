@@ -994,7 +994,11 @@ def seconds_since(moment):
 def shorts():
     user = current_user()
     videos = Video.query.filter_by(orientation="portrait").all()
-    random.shuffle(videos)
+    videos.sort(key=lambda v: len(v.likes), reverse=True)
+    if len(videos) > 1:
+        top, rest = videos[0], videos[1:]
+        random.shuffle(rest)
+        videos = [top] + rest
 
     liked_ids = set()
     subscribed_channel_ids = set()

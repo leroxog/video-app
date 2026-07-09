@@ -74,6 +74,7 @@
         <h2>CODES EINLÖSEN</h2>
         {% if not user %}
             <p class="redeem-guest-teaser">+ 500 PUNKTE BEI ANMELDUNG</p>
+            <a class="redeem-login-btn" href="{{ url_for('register') }}">Anmelden</a>
         {% else %}
             <p class="redeem-gold-msg">CODE ERHALTEN</p>
             <div class="redeem-code-chip">{{ public_promo_code }}{% if public_promo_code_redeemed %} <span class="redeem-code-used">(eingelöst)</span>{% endif %}</div>

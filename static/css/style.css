@@ -431,6 +431,21 @@ h1 {
     letter-spacing: 0.02em;
 }
 
+.redeem-login-btn {
+    display: inline-block;
+    margin-top: 0.9rem;
+    padding: 0.6rem 1.6rem;
+    border-radius: 999px;
+    background: #3ea6ff;
+    color: #0f0f0f;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.redeem-login-btn:hover {
+    background: #5fb6ff;
+}
+
 .redeem-gold-msg {
     color: #ffcc00;
     font-weight: 800;
