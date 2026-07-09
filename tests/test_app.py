@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 import pytest
 from app import app as flask_app, db
-from models import User
+from models import User, Video
 
 
 @pytest.fixture
@@ -90,7 +90,7 @@ def test_fruitmerge_page_has_record_button(client):
 def test_index_shows_upload_bonus_banner(client):
     response = client.get("/")
     assert b"upload-bonus-banner" in response.data
-    assert "+600 Punkte".encode() in response.data
+    assert "+100 Punkte".encode() in response.data
 
 
 def test_upload_awards_bonus_points(client):
@@ -107,7 +107,57 @@ def test_upload_awards_bonus_points(client):
 
     with flask_app.app_context():
         user = User.query.filter_by(username="alice").first()
-        assert user.total_score == 600
+        assert user.total_score == 100
+
+
+def test_duplicate_video_upload_is_rejected(client):
+    register(client)
+    data = {
+        "title": "Original",
+        "video": (io.BytesIO(b"identical video bytes"), "clip.mp4"),
+    }
+    client.post("/upload", data=data, content_type="multipart/form-data", follow_redirects=True)
+
+    with flask_app.app_context():
+        user = User.query.filter_by(username="alice").first()
+        assert user.total_score == 100
+
+    data2 = {
+        "title": "Duplicate",
+        "video": (io.BytesIO(b"identical video bytes"), "clip2.mp4"),
+    }
+    response = client.post("/upload", data=data2, content_type="multipart/form-data", follow_redirects=True)
+    assert b"bereits hochgeladen" in response.data
+
+    with flask_app.app_context():
+        user = User.query.filter_by(username="alice").first()
+        assert user.total_score == 100
+        assert Video.query.count() == 1
+
+
+def test_like_awards_and_removes_bonus_points(client):
+    register(client, username="alice", password="secret123")
+    data = {
+        "title": "Likeable Video",
+        "video": (io.BytesIO(b"fake video bytes"), "clip.mp4"),
+    }
+    client.post("/upload", data=data, content_type="multipart/form-data", follow_redirects=True)
+    client.post("/logout")
+
+    register(client, username="bob", password="secret123")
+    with flask_app.app_context():
+        video = Video.query.filter_by(title="Likeable Video").first()
+        video_id = video.id
+
+    client.post(f"/video/{video_id}/like")
+    with flask_app.app_context():
+        alice = User.query.filter_by(username="alice").first()
+        assert alice.total_score == 160
+
+    client.post(f"/video/{video_id}/like")
+    with flask_app.app_context():
+        alice = User.query.filter_by(username="alice").first()
+        assert alice.total_score == 100
 
 
 def test_upload_and_watch_video(client):
@@ -295,6 +345,115 @@ def test_place_requires_login(client):
     assert b"Login" in response.data
 
 
+def test_fuzzy_search_matches_game_without_exact_term(client):
+    response = client.get("/?q=fruit merge")
+    assert "gigas/fruit.merge".encode() in response.data
+    assert b"place-label" in response.data
+
+
+def test_fuzzy_search_matches_typo_in_game_term(client):
+    response = client.get("/?q=fruitmerge")
+    assert "gigas/fruit.merge".encode() in response.data
+
+
+def test_search_does_not_treat_generic_word_as_game(client):
+    register(client)
+    upload_video(client, title="My Running Blog")
+    response = client.get("/?q=run")
+    assert b"place-label-sub" not in response.data
+    assert b"My Running Blog" in response.data
+
+
+def test_fuzzy_search_finds_similar_sounding_video_title(client):
+    register(client)
+    upload_video(client, title="Katzenvideo vom Urlaub")
+    response = client.get("/?q=katzen")
+    assert "Katzenvideo vom Urlaub".encode() in response.data
+
+
+def test_homepage_shows_game_showcase_row(client):
+    response = client.get("/")
+    assert b"game-showcase-row" in response.data
+    assert b"game-showcase-card" in response.data
+
+
+def test_most_played_game_gets_highlighted(client):
+    client.get("/fruitmerge")
+    client.get("/fruitmerge")
+    client.get("/gravityrun")
+
+    response = client.get("/")
+    assert b"most-played" in response.data
+    assert b"MEISTGESPIELT" in response.data
+
+
+def test_redeem_code_awards_points(client):
+    register(client)
+    with flask_app.app_context():
+        user = User.query.filter_by(username="alice").first()
+        assert user.total_score == 0
+
+    response = client.post(
+        "/api/redeem-code",
+        json={"code": "free for all"},
+    )
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["ok"] is True
+    assert data["points"] == 500
+
+    with flask_app.app_context():
+        user = User.query.filter_by(username="alice").first()
+        assert user.total_score == 500
+
+
+def test_redeem_code_cannot_be_used_twice(client):
+    register(client)
+    client.post("/api/redeem-code", json={"code": "FREE FOR ALL"})
+    response = client.post("/api/redeem-code", json={"code": "FREE FOR ALL"})
+    data = response.get_json()
+    assert data["ok"] is False
+    assert data["error"] == "already_redeemed"
+
+    with flask_app.app_context():
+        user = User.query.filter_by(username="alice").first()
+        assert user.total_score == 500
+
+
+def test_redeem_hidden_code_awards_300(client):
+    register(client)
+    response = client.post("/api/redeem-code", json={"code": "GIGASFREE300FOREVERYONE"})
+    data = response.get_json()
+    assert data["ok"] is True
+    assert data["points"] == 300
+
+
+def test_redeem_invalid_code_rejected(client):
+    register(client)
+    response = client.post("/api/redeem-code", json={"code": "NOT-A-REAL-CODE"})
+    data = response.get_json()
+    assert data["ok"] is False
+    assert data["error"] == "invalid_code"
+
+
+def test_redeem_code_requires_login(client):
+    response = client.post("/api/redeem-code", json={"code": "FREE FOR ALL"})
+    assert response.status_code == 401
+
+
+def test_homepage_shows_redeem_section_for_guest(client):
+    response = client.get("/")
+    assert b"CODES EINL\xc3\x96SEN" in response.data
+    assert "+ 500 PUNKTE BEI ANMELDUNG".encode() in response.data
+
+
+def test_homepage_shows_redeem_code_chip_for_user(client):
+    register(client)
+    response = client.get("/")
+    assert b"FREE FOR ALL" in response.data
+    assert "CODE ERHALTEN".encode() in response.data
+
+
 def test_place_pixel_flow(client):
     register(client)
 
@@ -329,7 +488,7 @@ def upload_video(client, title="Testvideo", description="", orientation="landsca
         "title": title,
         "description": description,
         "orientation": orientation,
-        "video": (io.BytesIO(b"fake video bytes"), "clip.mp4"),
+        "video": (io.BytesIO(f"fake video bytes for {title}".encode()), "clip.mp4"),
     }
     return client.post("/upload", data=data, content_type="multipart/form-data", follow_redirects=True)
 

@@ -2,6 +2,8 @@ import os
 import re
 import uuid
 import random
+import hashlib
+import difflib
 import logging
 from datetime import datetime, timezone
 from flask import (
@@ -10,7 +12,7 @@ from flask import (
 )
 from sqlalchemy import text
 from werkzeug.utils import secure_filename
-from models import db, User, Video, Pixel, Like, Subscription, Comment
+from models import db, User, Video, Pixel, Like, Subscription, Comment, RedeemedCode, GamePlayCount
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -19,29 +21,124 @@ ALLOWED_EXTENSIONS = {"mp4", "webm", "ogg", "mov"}
 ALLOWED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
 PLACE_GRID_SIZE = 100
 PLACE_COOLDOWN_SECONDS = 5
-PLACE_SEARCH_TERM = "gigas/place"
-TICTACTOE_SEARCH_TERM = "gigas/tic.tac.toe"
-FRUITMERGE_SEARCH_TERM = "gigas/fruit.merge"
-GRAVITYRUN_SEARCH_TERM = "gigas/gravity.run"
-KNIFEHIT_SEARCH_TERM = "gigas/knife.hit"
-FLAPPYBIRD_SEARCH_TERM = "gigas/flappy.bird"
-BLOCKBUSTER_SEARCH_TERM = "gigas/block.buster"
-GAME_SUGGESTIONS = [
-    PLACE_SEARCH_TERM,
-    TICTACTOE_SEARCH_TERM,
-    FRUITMERGE_SEARCH_TERM,
-    GRAVITYRUN_SEARCH_TERM,
-    KNIFEHIT_SEARCH_TERM,
-    FLAPPYBIRD_SEARCH_TERM,
-    BLOCKBUSTER_SEARCH_TERM,
+
+GAMES = [
+    {
+        "key": "place",
+        "search_term": "gigas/place",
+        "endpoint": "place",
+        "title": "gigas/place",
+        "subtitle": "Gemeinsame Pixel-Leinwand",
+        "icon_class": "place-label-icon",
+    },
+    {
+        "key": "tic.tac.toe",
+        "search_term": "gigas/tic.tac.toe",
+        "endpoint": "tictactoe",
+        "title": "gigas/tic.tac.toe",
+        "subtitle": "Tic Tac Toe gegen den Bot",
+        "icon_class": "place-label-icon tictactoe-icon",
+    },
+    {
+        "key": "fruit.merge",
+        "search_term": "gigas/fruit.merge",
+        "endpoint": "fruitmerge",
+        "title": "gigas/fruit.merge",
+        "subtitle": "Fruechte fallen lassen und verschmelzen",
+        "icon_class": "place-label-icon fruitmerge-icon",
+    },
+    {
+        "key": "gravity.run",
+        "search_term": "gigas/gravity.run",
+        "endpoint": "gravityrun",
+        "title": "gigas/gravity.run",
+        "subtitle": "Schwerkraft umkehren und Hindernissen ausweichen",
+        "icon_class": "place-label-icon gravityrun-icon",
+    },
+    {
+        "key": "knife.hit",
+        "search_term": "gigas/knife.hit",
+        "endpoint": "knifehit",
+        "title": "gigas/knife.hit",
+        "subtitle": "Messer in den rotierenden Block werfen",
+        "icon_class": "place-label-icon knifehit-icon",
+    },
+    {
+        "key": "flappy.bird",
+        "search_term": "gigas/flappy.bird",
+        "endpoint": "flappybird",
+        "title": "gigas/flappy.bird",
+        "subtitle": "Zwischen Rohren hindurchfliegen",
+        "icon_class": "place-label-icon flappybird-icon",
+    },
+    {
+        "key": "block.buster",
+        "search_term": "gigas/block.buster",
+        "endpoint": "blockbuster",
+        "title": "gigas/block.buster",
+        "subtitle": "Bloecke mit dem Paddle zerstoeren",
+        "icon_class": "place-label-icon blockbuster-icon",
+    },
 ]
+GAME_SUGGESTIONS = [g["search_term"] for g in GAMES]
+GAME_MATCH_THRESHOLD = 0.65
 SCORED_GAMES = {"fruit.merge", "gravity.run", "knife.hit", "flappy.bird", "block.buster"}
 SHUFFLE_COST = 15
 DELETE_COST = 25
 BOMB_COST = 40
-UPLOAD_BONUS_POINTS = 600
+UPLOAD_BONUS_POINTS = 100
+LIKE_BONUS_POINTS = 60
 COMMENT_MAX_LENGTH = 500
+PROMO_CODES = {
+    "FREE FOR ALL": 500,
+    "GIGASFREE300FOREVERYONE": 300,
+}
+PUBLIC_PROMO_CODE = "FREE FOR ALL"
 HEX_COLOR_RE = re.compile(r"#[0-9a-fA-F]{6}")
+
+
+def find_best_game_match(query):
+    if not query:
+        return None
+    normalized_query = query.lower().strip()
+    best_game = None
+    best_score = 0.0
+    for game in GAMES:
+        candidates = [
+            game["search_term"],
+            game["search_term"].replace("gigas/", "").replace(".", " "),
+            game["key"].replace(".", " "),
+        ]
+        for candidate in candidates:
+            score = difflib.SequenceMatcher(None, normalized_query, candidate.lower()).ratio()
+            if score > best_score:
+                best_score = score
+                best_game = game
+    if best_score >= GAME_MATCH_THRESHOLD:
+        return best_game
+    return None
+
+
+def video_matches_query(video, query_lower):
+    title_lower = video.title.lower()
+    if query_lower in title_lower:
+        return True
+    query_words = [w for w in query_lower.split() if len(w) >= 3]
+    title_words = title_lower.split()
+    for qw in query_words:
+        for tw in title_words:
+            if difflib.SequenceMatcher(None, qw, tw).ratio() >= 0.75:
+                return True
+    return False
+
+
+def record_game_play(key):
+    row = db.session.get(GamePlayCount, key)
+    if row is None:
+        row = GamePlayCount(game_key=key, count=0)
+        db.session.add(row)
+    row.count += 1
+    db.session.commit()
 
 app = Flask(__name__)
 
@@ -156,6 +253,9 @@ def ensure_columns_exist():
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE',
         'ALTER TABLE video ADD COLUMN IF NOT EXISTS description TEXT',
         "ALTER TABLE video ADD COLUMN IF NOT EXISTS orientation VARCHAR(10) NOT NULL DEFAULT 'landscape'",
+        'ALTER TABLE video ADD COLUMN IF NOT EXISTS content_hash VARCHAR(64)',
+        'CREATE INDEX IF NOT EXISTS ix_video_content_hash ON video (content_hash)',
+        'ALTER TABLE video ADD COLUMN IF NOT EXISTS duplicate_penalty_applied BOOLEAN NOT NULL DEFAULT FALSE',
     ]
     with db.engine.connect() as conn:
         for statement in statements:
@@ -218,38 +318,40 @@ def require_admin():
 @app.route("/")
 def index():
     query = request.args.get("q", "").strip()
-    show_place_egg = query.lower() == PLACE_SEARCH_TERM
-    show_tictactoe_egg = query.lower() == TICTACTOE_SEARCH_TERM
-    show_fruitmerge_egg = query.lower() == FRUITMERGE_SEARCH_TERM
-    show_gravityrun_egg = query.lower() == GRAVITYRUN_SEARCH_TERM
-    show_knifehit_egg = query.lower() == KNIFEHIT_SEARCH_TERM
-    show_flappybird_egg = query.lower() == FLAPPYBIRD_SEARCH_TERM
-    show_blockbuster_egg = query.lower() == BLOCKBUSTER_SEARCH_TERM
-    any_egg = (
-        show_place_egg or show_tictactoe_egg or show_fruitmerge_egg
-        or show_gravityrun_egg or show_knifehit_egg
-        or show_flappybird_egg or show_blockbuster_egg
-    )
+    matched_game = find_best_game_match(query)
+
     videos = []
-    if not any_egg:
-        videos_query = Video.query
+    if matched_game is None:
         if query:
-            videos_query = videos_query.filter(Video.title.ilike(f"%{query}%"))
+            query_lower = query.lower()
+            candidates = Video.query.order_by(Video.created_at.desc()).all()
+            videos = [v for v in candidates if video_matches_query(v, query_lower)]
         else:
-            videos_query = videos_query.filter_by(orientation="landscape")
-        videos = videos_query.order_by(Video.created_at.desc()).all()
+            videos = (
+                Video.query.filter_by(orientation="landscape")
+                .order_by(Video.created_at.desc())
+                .all()
+            )
+
+    play_counts = {row.game_key: row.count for row in GamePlayCount.query.all()}
+    games_ordered = sorted(GAMES, key=lambda g: play_counts.get(g["key"], 0), reverse=True)
+    most_played_key = games_ordered[0]["key"] if play_counts.get(games_ordered[0]["key"], 0) > 0 else None
+
+    user = current_user()
+    redeemed_codes = set()
+    if user is not None:
+        redeemed_codes = {r.code for r in RedeemedCode.query.filter_by(user_id=user.id).all()}
+
     return render_template(
         "index.html",
         videos=videos,
-        user=current_user(),
+        user=user,
         query=query,
-        show_place_egg=show_place_egg,
-        show_tictactoe_egg=show_tictactoe_egg,
-        show_fruitmerge_egg=show_fruitmerge_egg,
-        show_gravityrun_egg=show_gravityrun_egg,
-        show_knifehit_egg=show_knifehit_egg,
-        show_flappybird_egg=show_flappybird_egg,
-        show_blockbuster_egg=show_blockbuster_egg,
+        matched_game=matched_game,
+        games_ordered=games_ordered,
+        most_played_key=most_played_key,
+        public_promo_code=PUBLIC_PROMO_CODE,
+        public_promo_code_redeemed=PUBLIC_PROMO_CODE in redeemed_codes,
         game_suggestion=random.choice(GAME_SUGGESTIONS),
     )
 
@@ -375,6 +477,28 @@ def api_spend():
     return jsonify({"ok": True, "total_score": user.total_score})
 
 
+@app.route("/api/redeem-code", methods=["POST"])
+def api_redeem_code():
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+
+    data = request.get_json(silent=True) or {}
+    code = (data.get("code") or "").strip().upper()
+
+    points = PROMO_CODES.get(code)
+    if points is None:
+        return jsonify({"ok": False, "error": "invalid_code"}), 400
+
+    if RedeemedCode.query.filter_by(user_id=user.id, code=code).first() is not None:
+        return jsonify({"ok": False, "error": "already_redeemed"}), 400
+
+    db.session.add(RedeemedCode(user_id=user.id, code=code))
+    user.total_score += points
+    db.session.commit()
+    return jsonify({"ok": True, "points": points, "total_score": user.total_score})
+
+
 @app.route("/upload", methods=["GET", "POST"])
 def upload():
     user = current_user()
@@ -399,6 +523,16 @@ def upload():
             flash("Nur folgende Formate sind erlaubt: " + ", ".join(sorted(ALLOWED_EXTENSIONS)))
             return render_template("upload.html", user=user)
 
+        content_hash = hashlib.sha256()
+        for chunk in iter(lambda: file.stream.read(65536), b""):
+            content_hash.update(chunk)
+        content_hash = content_hash.hexdigest()
+        file.stream.seek(0)
+
+        if Video.query.filter_by(content_hash=content_hash).first() is not None:
+            flash("Dieses Video wurde bereits hochgeladen.")
+            return render_template("upload.html", user=user)
+
         extension = secure_filename(file.filename).rsplit(".", 1)[1].lower()
         stored_filename = f"{uuid.uuid4().hex}.{extension}"
         save_media(file, "uploads", stored_filename)
@@ -408,6 +542,7 @@ def upload():
             description=description or None,
             filename=stored_filename,
             orientation=orientation,
+            content_hash=content_hash,
             user_id=user.id,
         )
         db.session.add(video)
@@ -453,8 +588,10 @@ def like_video(video_id):
     existing = Like.query.filter_by(user_id=user.id, video_id=video.id).first()
     if existing:
         db.session.delete(existing)
+        video.uploader.total_score = max(0, video.uploader.total_score - LIKE_BONUS_POINTS)
     else:
         db.session.add(Like(user_id=user.id, video_id=video.id))
+        video.uploader.total_score += LIKE_BONUS_POINTS
     db.session.commit()
     return redirect(url_for("watch", video_id=video.id))
 
@@ -470,9 +607,11 @@ def api_like_video(video_id):
     if existing:
         db.session.delete(existing)
         liked = False
+        video.uploader.total_score = max(0, video.uploader.total_score - LIKE_BONUS_POINTS)
     else:
         db.session.add(Like(user_id=user.id, video_id=video.id))
         liked = True
+        video.uploader.total_score += LIKE_BONUS_POINTS
     db.session.commit()
     return jsonify({"ok": True, "liked": liked, "like_count": len(video.likes)})
 
@@ -777,11 +916,13 @@ def shorts():
 
 @app.route("/tictactoe")
 def tictactoe():
+    record_game_play("tic.tac.toe")
     return render_template("tictactoe.html", user=current_user())
 
 
 @app.route("/fruitmerge")
 def fruitmerge():
+    record_game_play("fruit.merge")
     return render_template(
         "fruitmerge.html",
         user=current_user(),
@@ -793,21 +934,25 @@ def fruitmerge():
 
 @app.route("/gravityrun")
 def gravityrun():
+    record_game_play("gravity.run")
     return render_template("gravityrun.html", user=current_user())
 
 
 @app.route("/knifehit")
 def knifehit():
+    record_game_play("knife.hit")
     return render_template("knifehit.html", user=current_user())
 
 
 @app.route("/flappybird")
 def flappybird():
+    record_game_play("flappy.bird")
     return render_template("flappybird.html", user=current_user())
 
 
 @app.route("/blockbuster")
 def blockbuster():
+    record_game_play("block.buster")
     return render_template("blockbuster.html", user=current_user())
 
 
@@ -816,6 +961,7 @@ def place():
     user = current_user()
     if user is None:
         return redirect(url_for("login"))
+    record_game_play("place")
 
     cooldown_remaining = 0
     if user.last_pixel_at:

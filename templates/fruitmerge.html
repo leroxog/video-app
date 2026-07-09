@@ -29,15 +29,34 @@
                 <div class="powerup-balance">Guthaben:<br><span id="balanceText">{{ user.total_score if user else 0 }}</span></div>
                 <div class="powerup-buttons">
                     <button type="button" id="shuffleBtn" title="Früchte durchschütteln (kostet Punkte)" {{ 'disabled' if not user }}>
-                        <span class="powerup-icon">&#128256;</span>
+                        <span class="powerup-icon-badge">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#3ea6ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M3 17h3.5l7-10H21"/>
+                                <path d="M17 3l4 4-4 4"/>
+                                <path d="M3 7h3.5l2.5 3.6"/>
+                                <path d="M17 21l4-4-4-4"/>
+                            </svg>
+                        </span>
                         <span class="powerup-label">Schütteln ({{ shuffle_cost }})</span>
                     </button>
                     <button type="button" id="deleteBtn" title="Eine Frucht löschen (kostet Punkte)" {{ 'disabled' if not user }}>
-                        <span class="powerup-icon">&#10060;</span>
+                        <span class="powerup-icon-badge">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#ff6b6b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M4 7h16M9 7V4h6v3M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/>
+                                <line x1="10" y1="11" x2="10" y2="17"/>
+                                <line x1="14" y1="11" x2="14" y2="17"/>
+                            </svg>
+                        </span>
                         <span class="powerup-label">Löschen ({{ delete_cost }})</span>
                     </button>
                     <button type="button" id="bombBtn" title="Bombe statt nächster Frucht (kostet Punkte)" {{ 'disabled' if not user }}>
-                        <span class="powerup-icon">&#128163;</span>
+                        <span class="powerup-icon-badge">
+                            <svg viewBox="0 0 24 24" width="18" height="18">
+                                <circle cx="10" cy="14" r="7" fill="#2c2c2c" stroke="#777" stroke-width="1.5"/>
+                                <path d="M13 8l3-3" stroke="#a9744f" stroke-width="2" stroke-linecap="round"/>
+                                <circle cx="17" cy="4" r="2" fill="#ff8c1a"/>
+                            </svg>
+                        </span>
                         <span class="powerup-label">Bombe ({{ bomb_cost }})</span>
                     </button>
                 </div>
@@ -110,6 +129,18 @@
             { radius: 133, color: "#6fbf4a", kind: "giantmelon", topper: null },
         ];
         const SPAWN_WEIGHTS = [0, 0, 0, 0, 1, 1, 1, 2, 2, 3];
+
+        const HITBOX_SCALE = {
+            apple: 0.92,
+            pear: 0.82,
+            strawberry: 0.85,
+            mango: 0.85,
+            pineapple: 0.8,
+        };
+
+        function hitboxRadius(tier) {
+            return tier.radius * (HITBOX_SCALE[tier.kind] || 1);
+        }
 
         function shade(hex, percent) {
             const num = parseInt(hex.slice(1), 16);
@@ -407,7 +438,7 @@
 
         function createFruit(tierIndex, x, y) {
             const tier = TIERS[tierIndex];
-            const body = Bodies.circle(x, y, tier.radius, {
+            const body = Bodies.circle(x, y, hitboxRadius(tier), {
                 restitution: 0.38,
                 friction: 0.5,
                 frictionAir: 0.0035,

@@ -48,6 +48,8 @@ class Video(db.Model):
     description = db.Column(db.Text, nullable=True)
     filename = db.Column(db.String(255), nullable=False)
     orientation = db.Column(db.String(10), nullable=False, default="landscape")
+    content_hash = db.Column(db.String(64), nullable=True, index=True)
+    duplicate_penalty_applied = db.Column(db.Boolean, nullable=False, default=False)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     likes = db.relationship("Like", backref="video", lazy=True, cascade="all, delete-orphan")
@@ -84,3 +86,16 @@ class Pixel(db.Model):
     y = db.Column(db.Integer, primary_key=True)
     color = db.Column(db.String(7), nullable=False, default="#ffffff")
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class RedeemedCode(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    code = db.Column(db.String(64), nullable=False)
+    redeemed_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    __table_args__ = (db.UniqueConstraint("user_id", "code", name="uq_redeemed_user_code"),)
+
+
+class GamePlayCount(db.Model):
+    game_key = db.Column(db.String(30), primary_key=True)
+    count = db.Column(db.Integer, nullable=False, default=0)

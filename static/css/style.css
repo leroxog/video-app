@@ -346,6 +346,155 @@ h1 {
     font-size: 1.3rem;
 }
 
+.game-showcase-row {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.8rem;
+    overflow-x: auto;
+    padding-bottom: 0.5rem;
+    margin-bottom: 1.8rem;
+    -webkit-overflow-scrolling: touch;
+}
+
+.game-showcase-card {
+    position: relative;
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    width: 92px;
+    padding: 0.7rem 0.5rem;
+    border: 2px solid #2c2c2c;
+    border-radius: 10px;
+    background: #181818;
+    color: inherit;
+    text-decoration: none;
+    text-align: center;
+}
+
+.game-showcase-card:hover {
+    background: #202020;
+}
+
+.game-showcase-card.most-played {
+    border-color: #ff3b30;
+    box-shadow: 0 0 0 1px rgba(255, 59, 48, 0.4);
+    order: -1;
+}
+
+.game-showcase-badge {
+    position: absolute;
+    top: -0.6rem;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #ff3b30;
+    color: #fff;
+    font-size: 0.55rem;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    padding: 0.15rem 0.4rem;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+
+.game-showcase-icon {
+    width: 44px;
+    height: 44px;
+}
+
+.game-showcase-title {
+    font-size: 0.68rem;
+    color: #ccc;
+    word-break: break-word;
+    line-height: 1.2;
+}
+
+.redeem-section {
+    margin: 2.5rem 0 1.5rem;
+    padding: 1.3rem 1.5rem;
+    border: 1px solid #3c3c3c;
+    border-radius: 10px;
+    background: #161616;
+    text-align: center;
+}
+
+.redeem-section h2 {
+    margin-top: 0;
+    letter-spacing: 0.04em;
+}
+
+.redeem-guest-teaser {
+    color: #ff4d4d;
+    font-weight: 800;
+    font-size: 1.1rem;
+    letter-spacing: 0.02em;
+}
+
+.redeem-gold-msg {
+    color: #ffcc00;
+    font-weight: 800;
+    font-size: 1rem;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.4rem;
+}
+
+.redeem-code-chip {
+    display: inline-block;
+    padding: 0.5rem 1.2rem;
+    border: 1px dashed #ffcc00;
+    border-radius: 8px;
+    color: #ffcc00;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    margin-bottom: 1rem;
+}
+
+.redeem-code-used {
+    color: #888;
+    font-weight: 400;
+    font-size: 0.8rem;
+}
+
+.redeem-form {
+    display: flex;
+    gap: 0.6rem;
+    max-width: 320px;
+    margin: 0 auto;
+}
+
+.redeem-form input {
+    flex: 1;
+    padding: 0.6rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid #3c3c3c;
+    background: #1c1c1c;
+    color: #fff;
+}
+
+.redeem-form button {
+    padding: 0.6rem 1.2rem;
+    border: none;
+    border-radius: 999px;
+    background: #3ea6ff;
+    color: #0f0f0f;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.redeem-status {
+    margin-top: 0.8rem;
+    font-size: 0.85rem;
+}
+
+.redeem-status.success {
+    color: #4caf50;
+}
+
+.redeem-status.error {
+    color: #ff6b6b;
+}
+
 .promo-banner {
     position: relative;
     max-width: 480px;
@@ -621,18 +770,23 @@ h1 {
 
 .fruitmerge-icon {
     background:
+        radial-gradient(circle at 26% 30%, rgba(255, 255, 255, 0.55) 0 3px, transparent 4px),
         radial-gradient(circle at 30% 35%, #ff6b81 0 30%, transparent 31%),
+        radial-gradient(circle at 64% 54%, rgba(255, 255, 255, 0.5) 0 3px, transparent 4px),
         radial-gradient(circle at 68% 60%, #f4d03f 0 22%, transparent 23%),
+        radial-gradient(circle at 71% 20%, rgba(255, 255, 255, 0.5) 0 2px, transparent 3px),
         radial-gradient(circle at 75% 25%, #7dcb5f 0 16%, transparent 17%),
         #1c1c1c;
 }
 
 .gravityrun-icon {
     background:
-        linear-gradient(#3ea6ff, #3ea6ff) 10px 10px / 8px 8px no-repeat,
-        linear-gradient(#3c3c3c, #3c3c3c) 0 100% / 100% 3px no-repeat,
-        linear-gradient(#3c3c3c, #3c3c3c) 0 0 / 100% 3px no-repeat,
-        #1c1c1c;
+        radial-gradient(circle at 14px 13px, #ff4d4d 0 5px, transparent 6px),
+        radial-gradient(circle at 34px 35px, #3ea6ff 0 5px, transparent 6px),
+        linear-gradient(#5a4a2e, #5a4a2e) 30px 4px / 7px 15px no-repeat,
+        linear-gradient(#5a4a2e, #5a4a2e) 11px 29px / 7px 15px no-repeat,
+        linear-gradient(#787468, #787468) 0 22px / 100% 4px no-repeat,
+        linear-gradient(135deg, #1b4d2e, #0f3320);
 }
 
 .knifehit-icon {
@@ -1736,8 +1890,15 @@ body.shorts-fullscreen main {
     background: #16324a;
 }
 
-.powerup-icon {
-    font-size: 1.3rem;
+.powerup-icon-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    background: #101010;
+    border: 1px solid #333;
 }
 
 .powerup-label {
