@@ -755,6 +755,49 @@ def test_cleanup_duplicate_videos_dry_run_makes_no_changes(client):
         assert dup_video.duplicate_penalty_applied is False
 
 
+def test_cleanup_duplicate_videos_reports_cumulative_deductions(client):
+    register(client, username="alice")
+    upload_video(client, title="Original")
+    client.post("/logout")
+
+    register(client, username="bob")
+    make_admin("bob")
+
+    with flask_app.app_context():
+        original = Video.query.filter_by(title="Original").first()
+        for i in range(3):
+            db.session.add(Video(
+                title=f"Duplicate {i}",
+                filename=original.filename,
+                content_hash=None,
+                user_id=original.user_id,
+            ))
+        db.session.commit()
+        alice = User.query.filter_by(username="alice").first()
+        alice.total_score = 3000
+        db.session.commit()
+
+    response = client.post("/admin/cleanup-duplicate-videos?dry_run=1")
+    data = response.get_json()
+    assert data["total_deducted"] == 1800
+    befores = [p["total_score_before"] for p in data["penalties"]]
+    afters = [p["total_score_after"] for p in data["penalties"]]
+    assert befores == [3000, 2400, 1800]
+    assert afters == [2400, 1800, 1200]
+
+    with flask_app.app_context():
+        alice = User.query.filter_by(username="alice").first()
+        assert alice.total_score == 3000
+
+    real_response = client.post("/admin/cleanup-duplicate-videos?dry_run=0")
+    real_data = real_response.get_json()
+    assert real_data["total_deducted"] == 1800
+
+    with flask_app.app_context():
+        alice = User.query.filter_by(username="alice").first()
+        assert alice.total_score == 1200
+
+
 def test_cleanup_duplicate_videos_real_run_deducts_points(client):
     register(client, username="alice")
     upload_video(client, title="Original")

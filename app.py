@@ -888,6 +888,13 @@ def run_duplicate_cleanup(dry_run=True):
         by_hash.setdefault(content_hash, []).append(video)
 
     penalties = []
+    simulated_scores = {}
+
+    def current_score(user):
+        if user.id not in simulated_scores:
+            simulated_scores[user.id] = user.total_score
+        return simulated_scores[user.id]
+
     for content_hash, vids in by_hash.items():
         if len(vids) < 2:
             continue
@@ -897,8 +904,9 @@ def run_duplicate_cleanup(dry_run=True):
             if dup.duplicate_penalty_applied:
                 continue
             user = dup.uploader
-            before = user.total_score
+            before = current_score(user)
             after = max(0, before - OLD_UPLOAD_BONUS)
+            simulated_scores[user.id] = after
             penalties.append({
                 "video_id": dup.id,
                 "kept_original_video_id": original.id,
