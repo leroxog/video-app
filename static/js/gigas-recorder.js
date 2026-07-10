@@ -51,6 +51,7 @@ const GigasRecorder = (function () {
 
     function pickMimeType() {
         const candidates = [
+            "video/mp4",
             "video/webm;codecs=vp9",
             "video/webm;codecs=vp8",
             "video/webm",
@@ -79,6 +80,7 @@ const GigasRecorder = (function () {
             const stream = canvas.captureStream(30);
             const mimeType = pickMimeType();
             recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+            const outputType = mimeType && mimeType.startsWith("video/mp4") ? "video/mp4" : "video/webm";
             chunks = [];
 
             recorder.ondataavailable = (event) => {
@@ -86,7 +88,7 @@ const GigasRecorder = (function () {
             };
 
             recorder.onstop = async () => {
-                const blob = new Blob(chunks, { type: "video/webm" });
+                const blob = new Blob(chunks, { type: outputType });
                 button.textContent = "🔴 Aufnehmen";
                 button.classList.remove("recording");
                 if (blob.size > 0) {
