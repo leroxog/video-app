@@ -9,6 +9,159 @@ body {
     color: #f1f1f1;
 }
 
+.admin-online-dot, .admin-offline-dot {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    margin-right: 4px;
+}
+
+.admin-online-dot {
+    background: #3ecf6e;
+}
+
+.admin-offline-dot {
+    background: #555;
+}
+
+.profile-badge-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    margin-left: 6px;
+    background: none;
+    border: none;
+    cursor: default;
+    vertical-align: middle;
+}
+
+.profile-badge-btn.is-owner {
+    cursor: pointer;
+}
+
+.profile-badge-icon {
+    display: block;
+    width: 22px;
+    height: 22px;
+    background: linear-gradient(145deg, #ffd75e, #e8a920);
+    clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+}
+
+.streak-display {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+    background: #1c1408;
+    border: 1px solid #4d3410;
+    border-radius: 999px;
+    padding: 4px 12px 4px 8px;
+    width: fit-content;
+}
+
+.streak-flame {
+    display: inline-block;
+    width: 14px;
+    height: 18px;
+    border-radius: 50% 50% 50% 0;
+    transform: rotate(-45deg);
+    background: radial-gradient(circle at 30% 30%, #ffe27a, #ff8a00 55%, #ff3d00 90%);
+    animation: streak-flicker 1.4s ease-in-out infinite;
+    box-shadow: 0 0 8px 1px rgba(255, 138, 0, 0.6);
+}
+
+@keyframes streak-flicker {
+    0%, 100% { transform: rotate(-45deg) scale(1); opacity: 1; }
+    50% { transform: rotate(-42deg) scale(1.12); opacity: 0.85; }
+}
+
+.streak-count {
+    font-weight: bold;
+    color: #ffcf7a;
+}
+
+.streak-label {
+    font-size: 0.8rem;
+    color: #d9a94f;
+}
+
+.badge-modal-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 10000;
+    align-items: center;
+    justify-content: center;
+}
+
+.badge-modal-backdrop.show {
+    display: flex;
+}
+
+.badge-modal {
+    position: relative;
+    background: #181818;
+    border: 1px solid #2c2c2c;
+    border-radius: 10px;
+    padding: 1.5rem;
+    max-width: 400px;
+    width: 90%;
+}
+
+.badge-modal-close {
+    position: absolute;
+    top: 8px;
+    right: 12px;
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 1.5rem;
+    cursor: pointer;
+}
+
+.badge-modal-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 1rem;
+}
+
+.badge-chip {
+    background: #3ea6ff;
+    color: #0f0f0f;
+    font-weight: bold;
+    border-radius: 999px;
+    padding: 6px 14px;
+}
+
+.badge-chip-gold {
+    background: linear-gradient(145deg, #ffd75e, #e8a920);
+}
+
+.watch-format-warning {
+    color: #ffb020;
+    font-size: 0.9rem;
+    background: #2a2110;
+    border: 1px solid #4d3a10;
+    border-radius: 6px;
+    padding: 0.6rem 0.9rem;
+}
+
+.upload-storage-note {
+    color: #aaa;
+    font-size: 0.9rem;
+    background: #181818;
+    border: 1px solid #2c2c2c;
+    border-radius: 6px;
+    padding: 0.6rem 0.9rem;
+    margin-bottom: 1rem;
+}
+
 header {
     display: flex;
     align-items: center;
@@ -545,6 +698,94 @@ h1 {
 
 .redeem-status.error {
     color: #ff6b6b;
+}
+
+.create-code-toggle-btn {
+    flex: 0 0 auto;
+    width: 40px;
+    padding: 0.6rem 0;
+    border: none;
+    border-radius: 999px;
+    background: #3ea6ff;
+    color: #0f0f0f;
+    font-weight: 700;
+    font-size: 1.1rem;
+    cursor: pointer;
+}
+
+.create-code-panel {
+    max-width: 400px;
+    margin: 1rem auto 0;
+    background: #181818;
+    border: 1px solid #2c2c2c;
+    border-radius: 10px;
+    padding: 1rem 1.2rem;
+    text-align: left;
+}
+
+.create-code-panel label {
+    display: block;
+    font-size: 0.85rem;
+    color: #aaa;
+    margin-top: 0.6rem;
+}
+
+.create-code-panel input {
+    width: 100%;
+    padding: 0.5rem 0.7rem;
+    border-radius: 6px;
+    border: 1px solid #3c3c3c;
+    background: #1c1c1c;
+    color: #fff;
+    margin-top: 0.2rem;
+}
+
+.create-code-hint {
+    color: #aaa;
+    font-size: 0.9rem;
+}
+
+.create-code-fee-note {
+    color: #888;
+    font-size: 0.8rem;
+    margin-top: 0.6rem;
+}
+
+.create-code-preview {
+    font-size: 0.85rem;
+    color: #3ea6ff;
+    margin-top: 0.4rem;
+}
+
+.create-code-panel > button {
+    margin-top: 0.8rem;
+    padding: 0.6rem 1.2rem;
+    border: none;
+    border-radius: 999px;
+    background: #3ea6ff;
+    color: #0f0f0f;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.create-code-status {
+    margin-top: 0.6rem;
+    font-size: 0.85rem;
+}
+
+.create-code-status.success {
+    color: #4caf50;
+}
+
+.create-code-status.error {
+    color: #ff6b6b;
+}
+
+.create-code-results {
+    margin-top: 0.6rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
 }
 
 .promo-banner {

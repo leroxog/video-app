@@ -81,8 +81,28 @@
             <form id="redeemForm" class="redeem-form">
                 <input type="text" id="redeemInput" placeholder="Code eingeben" autocomplete="off" required>
                 <button type="submit">Einlösen</button>
+                <button type="button" class="create-code-toggle-btn" id="createCodeToggleBtn" title="Eigenen Code erstellen">+</button>
             </form>
             <p class="redeem-status" id="redeemStatus"></p>
+
+            <div class="create-code-panel" id="createCodePanel" style="display:none;">
+                {% if user.organic_points_earned < code_creation_min_points %}
+                    <p class="create-code-hint">Du brauchst mindestens {{ code_creation_min_points }} selbst erspielte Punkte (ohne Codes), um eigene Codes zu erstellen. Du hast aktuell {{ user.organic_points_earned }}.</p>
+                {% else %}
+                    <label for="codePointsInput">Punkte pro Code</label>
+                    <input type="number" id="codePointsInput" min="1" value="100">
+
+                    <label for="codeCountInput">Wie viele Codes?</label>
+                    <input type="number" id="codeCountInput" min="1" max="{{ max_codes_per_batch }}" value="1">
+
+                    <p class="create-code-fee-note">Bei jedem Code werden {{ code_creation_fee_percent }}% von den ursprünglichen Punkten abgezogen. Codes sind immer anonym.</p>
+                    <p class="create-code-preview" id="createCodePreview"></p>
+
+                    <button type="button" id="createCodeSubmitBtn">Codes erstellen</button>
+                    <p class="create-code-status" id="createCodeStatus"></p>
+                    <div class="create-code-results" id="createCodeResults" style="display:none;"></div>
+                {% endif %}
+            </div>
         {% endif %}
     </div>
 
@@ -135,6 +155,64 @@
                 } else {
                     status.textContent = "Ungültiger Code.";
                     status.className = "redeem-status error";
+                }
+            });
+        }
+
+        const createCodeToggleBtn = document.getElementById("createCodeToggleBtn");
+        const createCodePanel = document.getElementById("createCodePanel");
+        if (createCodeToggleBtn && createCodePanel) {
+            createCodeToggleBtn.addEventListener("click", () => {
+                createCodePanel.style.display = createCodePanel.style.display === "none" ? "block" : "none";
+            });
+        }
+
+        const codePointsInput = document.getElementById("codePointsInput");
+        const codeCountInput = document.getElementById("codeCountInput");
+        const createCodePreview = document.getElementById("createCodePreview");
+        const FEE_PERCENT = {{ code_creation_fee_percent }};
+
+        function updateCodePreview() {
+            if (!createCodePreview) return;
+            const points = parseInt(codePointsInput.value, 10) || 0;
+            const count = parseInt(codeCountInput.value, 10) || 0;
+            const valuePerCode = Math.floor(points * (100 - FEE_PERCENT) / 100);
+            const totalCost = points * count;
+            createCodePreview.textContent =
+                `${count}x Code(s) im Wert von je ${valuePerCode} Punkten (nach ${FEE_PERCENT}% Gebühr) — kostet dich insgesamt ${totalCost} Punkte.`;
+        }
+
+        if (codePointsInput && codeCountInput) {
+            codePointsInput.addEventListener("input", updateCodePreview);
+            codeCountInput.addEventListener("input", updateCodePreview);
+            updateCodePreview();
+        }
+
+        const createCodeSubmitBtn = document.getElementById("createCodeSubmitBtn");
+        if (createCodeSubmitBtn) {
+            createCodeSubmitBtn.addEventListener("click", async () => {
+                const status = document.getElementById("createCodeStatus");
+                const results = document.getElementById("createCodeResults");
+                const points_per_code = parseInt(codePointsInput.value, 10);
+                const count = parseInt(codeCountInput.value, 10);
+
+                const res = await fetch("{{ url_for('api_create_codes') }}", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ points_per_code, count }),
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    status.textContent = `${data.codes.length} Code(s) erstellt, je ${data.points_value} Punkte wert.`;
+                    status.className = "create-code-status success";
+                    results.style.display = "block";
+                    results.innerHTML = data.codes.map(c => `<div class="redeem-code-chip">${c}</div>`).join("");
+                } else if (data.error === "insufficient_funds") {
+                    status.textContent = "Du hast nicht genug Punkte dafür.";
+                    status.className = "create-code-status error";
+                } else {
+                    status.textContent = "Das hat nicht geklappt.";
+                    status.className = "create-code-status error";
                 }
             });
         }

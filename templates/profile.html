@@ -9,8 +9,26 @@
         {% endif %}
 
         <div>
-            <h1>{{ profile_user.username }}</h1>
+            <h1>
+                {{ profile_user.username }}
+                {% set badges = user_badges(profile_user) %}
+                {% if badges %}
+                    <button type="button" class="profile-badge-btn {{ 'is-owner' if is_own_profile else '' }}"
+                            {% if is_own_profile %}id="badgeModalOpenBtn"{% endif %}
+                            title="Abzeichen">
+                        <span class="profile-badge-icon"></span>
+                    </button>
+                {% endif %}
+            </h1>
             <p class="video-meta">{{ subscriber_count }} Follower &middot; {{ videos|length }} Videos</p>
+            {% set streak = effective_streak(profile_user) %}
+            {% if streak > 0 %}
+                <div class="streak-display">
+                    <span class="streak-flame"></span>
+                    <span class="streak-count">{{ streak }}</span>
+                    <span class="streak-label">{{ "Tag" if streak == 1 else "Tage" }} Streak</span>
+                </div>
+            {% endif %}
         </div>
 
         {% if is_own_profile %}
@@ -40,7 +58,7 @@
             {% for video in videos %}
                 <a class="video-card" href="{{ url_for('watch', video_id=video.id) }}">
                     <video muted preload="metadata">
-                        <source src="{{ media_url('uploads', video.filename) }}">
+                        <source src="{{ media_url('uploads', video.filename) }}" type="{{ video_mime_type(video.filename) }}">
                     </video>
                     <div class="video-card-info">
                         <div class="video-title">{{ video.title }}</div>
@@ -53,5 +71,34 @@
         </div>
     {% else %}
         <p>Noch keine Videos hochgeladen.</p>
+    {% endif %}
+
+    {% if is_own_profile and badges %}
+        <div class="badge-modal-backdrop" id="badgeModalBackdrop">
+            <div class="badge-modal">
+                <button type="button" class="badge-modal-close" id="badgeModalCloseBtn">&times;</button>
+                <h2>Deine Abzeichen</h2>
+                <div class="badge-modal-grid">
+                    {% for badge in badges %}
+                        <div class="badge-chip {{ 'badge-chip-gold' if badge == 'Platz 1' else '' }}">
+                            {{ badge }}
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        <script>
+            (function () {
+                const openBtn = document.getElementById("badgeModalOpenBtn");
+                const backdrop = document.getElementById("badgeModalBackdrop");
+                const closeBtn = document.getElementById("badgeModalCloseBtn");
+                if (!openBtn || !backdrop) return;
+                openBtn.addEventListener("click", () => backdrop.classList.add("show"));
+                closeBtn.addEventListener("click", () => backdrop.classList.remove("show"));
+                backdrop.addEventListener("click", (e) => {
+                    if (e.target === backdrop) backdrop.classList.remove("show");
+                });
+            })();
+        </script>
     {% endif %}
 {% endblock %}

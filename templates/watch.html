@@ -3,9 +3,12 @@
 {% block content %}
     <div class="watch-page">
         <video controls autoplay muted playsinline class="player">
-            <source src="{{ media_url('uploads', video.filename) }}">
+            <source src="{{ media_url('uploads', video.filename) }}" type="{{ video_mime_type(video.filename) }}">
             Dein Browser unterstützt dieses Videoformat nicht.
         </video>
+        {% if video.filename.endswith('.webm') %}
+            <p class="watch-format-warning">Hinweis: Dieses Video wurde im WebM-Format hochgeladen und lässt sich auf iPhone/iPad (Safari) nicht abspielen. Auf Android/Windows/Mac (Chrome, Firefox, Edge) funktioniert es normal.</p>
+        {% endif %}
         <h1>{{ video.title }}</h1>
 
         <div class="watch-actions">

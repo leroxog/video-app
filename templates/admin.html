@@ -16,7 +16,7 @@
 
     <h2>Accounts verwalten</h2>
     <table class="admin-table">
-        <thead><tr><th>Benutzername</th><th>Videos</th><th>Punkte</th><th>Rolle</th><th></th></tr></thead>
+        <thead><tr><th>Benutzername</th><th>Videos</th><th>Punkte</th><th>Rolle</th><th>Status</th><th>Zuletzt online</th><th></th></tr></thead>
         <tbody>
             {% for u in users %}
                 <tr>
@@ -24,6 +24,14 @@
                     <td>{{ u.videos|length }}</td>
                     <td>{{ u.total_score }}</td>
                     <td>{{ 'Admin' if u.is_admin else '' }}</td>
+                    <td>
+                        {% if online_status.get(u.id) %}
+                            <span class="admin-online-dot"></span> Online
+                        {% else %}
+                            <span class="admin-offline-dot"></span> Offline
+                        {% endif %}
+                    </td>
+                    <td>{{ u.last_seen.strftime("%d.%m.%Y %H:%M") if u.last_seen else "Noch nie" }}</td>
                     <td>
                         {% if u.id != user.id %}
                             <form action="{{ url_for('admin_delete_user', user_id=u.id) }}" method="post"

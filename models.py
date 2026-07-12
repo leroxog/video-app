@@ -17,6 +17,14 @@ class User(db.Model):
     profile_image = db.Column(db.String(255), nullable=True)
     total_score = db.Column(db.Integer, nullable=False, default=0)
     is_admin = db.Column(db.Boolean, nullable=False, default=False)
+    last_seen = db.Column(db.DateTime, nullable=True)
+    current_streak = db.Column(db.Integer, nullable=False, default=0)
+    best_streak = db.Column(db.Integer, nullable=False, default=0)
+    last_streak_date = db.Column(db.Date, nullable=True)
+    points_earned_today = db.Column(db.Integer, nullable=False, default=0)
+    points_today_date = db.Column(db.Date, nullable=True)
+    organic_points_earned = db.Column(db.Integer, nullable=False, default=0)
+    ever_rank_one = db.Column(db.Boolean, nullable=False, default=False)
     videos = db.relationship("Video", backref="uploader", lazy=True, cascade="all, delete-orphan")
     likes_given = db.relationship("Like", backref="liker", lazy=True, cascade="all, delete-orphan")
     comments_made = db.relationship("Comment", backref="author", lazy=True, cascade="all, delete-orphan")
@@ -95,6 +103,21 @@ class RedeemedCode(db.Model):
     code = db.Column(db.String(64), nullable=False)
     redeemed_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     __table_args__ = (db.UniqueConstraint("user_id", "code", name="uq_redeemed_user_code"),)
+
+
+class UserCreatedCode(db.Model):
+    """A player-created gift code. Single-use across the whole site (not
+    per-account like the static promo codes) -- once redeemed_by_id is
+    set, the code is spent for good. Never expose creator_id publicly;
+    codes are meant to be anonymous."""
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(20), unique=True, nullable=False, index=True)
+    original_points = db.Column(db.Integer, nullable=False)
+    points_value = db.Column(db.Integer, nullable=False)
+    creator_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    redeemed_by_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    redeemed_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class GamePlayCount(db.Model):

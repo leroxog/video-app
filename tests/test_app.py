@@ -1140,3 +1140,318 @@ def test_email_not_shown_on_public_profile(client):
 
     response = client.get("/user/alice")
     assert b"secret@example.com" not in response.data
+
+
+def test_r2_cleanup_deletes_oldest_videos_until_low_water_mark(client, monkeypatch):
+    import app as app_module
+    from datetime import datetime, timedelta, timezone
+    from unittest.mock import MagicMock
+
+    register(client, username="alice")
+    user = User.query.filter_by(username="alice").first()
+
+    base = datetime.now(timezone.utc)
+    videos = []
+    for i in range(4):
+        video = Video(
+            title=f"video{i}",
+            filename=f"video{i}.mp4",
+            content_hash=f"hash{i}",
+            user_id=user.id,
+            created_at=base + timedelta(minutes=i),
+        )
+        db.session.add(video)
+        db.session.commit()
+        videos.append(video)
+
+    # Each of the 4 videos is 3GB -> total 12GB, over the 9GB high-water mark.
+    sizes = {f"uploads/video{i}.mp4": 3 * 1024 ** 3 for i in range(4)}
+    fake_r2 = MagicMock()
+    fake_r2.list_objects_v2.return_value = {
+        "Contents": [{"Key": key, "Size": size} for key, size in sizes.items()],
+        "IsTruncated": False,
+    }
+
+    monkeypatch.setattr(app_module, "USE_R2", True)
+    monkeypatch.setattr(app_module, "r2_client", fake_r2)
+    monkeypatch.setattr(app_module, "R2_BUCKET_NAME", "test-bucket")
+
+    with flask_app.app_context():
+        app_module.cleanup_oldest_videos_if_over_quota()
+
+    # 12GB -> delete video0 (9GB left, still >7GB) -> delete video1 (6GB left, <=7GB) -> stop
+    remaining_titles = {v.title for v in Video.query.all()}
+    assert remaining_titles == {"video2", "video3"}
+
+
+def test_r2_cleanup_never_deletes_just_uploaded_video(client, monkeypatch):
+    import app as app_module
+    from datetime import datetime, timedelta, timezone
+    from unittest.mock import MagicMock
+
+    register(client, username="alice")
+    user = User.query.filter_by(username="alice").first()
+
+    base = datetime.now(timezone.utc)
+    old_video = Video(
+        title="old", filename="old.mp4", content_hash="old-hash",
+        user_id=user.id, created_at=base,
+    )
+    new_video = Video(
+        title="new", filename="new.mp4", content_hash="new-hash",
+        user_id=user.id, created_at=base + timedelta(minutes=1),
+    )
+    db.session.add_all([old_video, new_video])
+    db.session.commit()
+
+    # Both videos are 8GB each -> 16GB total, well over quota, but even
+    # deleting "old" alone only gets to 8GB (still above 7GB) so a naive
+    # loop would also delete "new" -- keep_video_id must prevent that.
+    sizes = {"uploads/old.mp4": 8 * 1024 ** 3, "uploads/new.mp4": 8 * 1024 ** 3}
+    fake_r2 = MagicMock()
+    fake_r2.list_objects_v2.return_value = {
+        "Contents": [{"Key": key, "Size": size} for key, size in sizes.items()],
+        "IsTruncated": False,
+    }
+
+    monkeypatch.setattr(app_module, "USE_R2", True)
+    monkeypatch.setattr(app_module, "r2_client", fake_r2)
+    monkeypatch.setattr(app_module, "R2_BUCKET_NAME", "test-bucket")
+
+    with flask_app.app_context():
+        app_module.cleanup_oldest_videos_if_over_quota(keep_video_id=new_video.id)
+
+    remaining_titles = {v.title for v in Video.query.all()}
+    assert remaining_titles == {"new"}
+
+
+def test_last_seen_updated_on_request_and_shown_as_online_in_admin(client):
+    from datetime import datetime, timedelta, timezone
+
+    register(client, username="alice")
+    make_admin("alice")
+
+    register(client, username="bob")
+    client.get("/")  # updates bob's last_seen via before_request
+    client.post("/logout")
+
+    client.post("/login", data={"username": "alice", "password": "secret123"})
+
+    response = client.get("/admin")
+    assert b"Online" in response.data
+
+    bob = User.query.filter_by(username="bob").first()
+    assert bob.last_seen is not None
+
+    # Simulate bob having been gone for a long time -> should show Offline
+    bob.last_seen = datetime.now(timezone.utc) - timedelta(hours=1)
+    db.session.commit()
+
+    response = client.get("/admin")
+    assert b"Offline" in response.data
+
+
+def test_webm_video_shows_ipad_safari_warning(client):
+    register(client, username="alice")
+    user = User.query.filter_by(username="alice").first()
+    video = Video(title="old webm clip", filename="abc.webm", content_hash="webmhash", user_id=user.id)
+    db.session.add(video)
+    db.session.commit()
+
+    response = client.get(f"/video/{video.id}")
+    assert b"iPhone/iPad" in response.data
+    assert b'type="video/webm"' in response.data
+
+
+def test_mp4_video_has_correct_source_type_and_no_warning(client):
+    register(client, username="alice")
+    user = User.query.filter_by(username="alice").first()
+    video = Video(title="normal clip", filename="abc.mp4", content_hash="mp4hash", user_id=user.id)
+    db.session.add(video)
+    db.session.commit()
+
+    response = client.get(f"/video/{video.id}")
+    assert b'type="video/mp4"' in response.data
+    assert b"iPhone/iPad" not in response.data
+
+
+def test_streak_starts_at_one_after_earning_100_points_in_a_day(client):
+    import app as app_module
+
+    register(client, username="alice")
+    user = User.query.filter_by(username="alice").first()
+    assert user.current_streak == 0
+
+    app_module.adjust_points(user, 100)
+    db.session.commit()
+
+    assert user.current_streak == 1
+    assert user.best_streak == 1
+    assert app_module.effective_streak(user) == 1
+
+
+def test_streak_continues_on_consecutive_day_and_resets_after_gap(client):
+    import app as app_module
+    from datetime import date, timedelta
+
+    register(client, username="alice")
+    user = User.query.filter_by(username="alice").first()
+
+    yesterday = date.today() - timedelta(days=1)
+    user.current_streak = 3
+    user.best_streak = 3
+    user.last_streak_date = yesterday
+    user.points_today_date = yesterday
+    user.points_earned_today = 0
+    db.session.commit()
+
+    app_module.adjust_points(user, 100)
+    db.session.commit()
+    assert user.current_streak == 4
+    assert user.best_streak == 4
+
+    # Now simulate a missed day (streak was 4, two days ago) -> should reset to 1
+    two_days_ago = date.today() - timedelta(days=2)
+    user.current_streak = 4
+    user.last_streak_date = two_days_ago
+    user.points_today_date = two_days_ago
+    user.points_earned_today = 0
+    db.session.commit()
+
+    app_module.adjust_points(user, 100)
+    db.session.commit()
+    assert user.current_streak == 1
+    assert user.best_streak == 4  # best streak is preserved even after a reset
+
+
+def test_streak_below_100_points_does_not_count(client):
+    import app as app_module
+
+    register(client, username="alice")
+    user = User.query.filter_by(username="alice").first()
+
+    app_module.adjust_points(user, 99)
+    db.session.commit()
+    assert user.current_streak == 0
+
+
+def test_badges_include_streak_milestones_and_rank_one(client):
+    import app as app_module
+
+    register(client, username="alice")
+    user = User.query.filter_by(username="alice").first()
+    user.best_streak = 3
+    user.ever_rank_one = True
+    db.session.commit()
+
+    badges = app_module.user_badges(user)
+    assert badges == ["1", "2", "3", "Platz 1"]
+
+
+def test_leaderboard_marks_top_user_as_ever_rank_one(client):
+    register(client, username="alice")
+    alice = User.query.filter_by(username="alice").first()
+    alice.total_score = 500
+    db.session.commit()
+
+    client.get("/leaderboard")
+    alice = User.query.filter_by(username="alice").first()
+    assert alice.ever_rank_one is True
+
+
+def test_profile_shows_streak_and_badge_for_owner(client):
+    import app as app_module
+    from datetime import date
+
+    register(client, username="alice")
+    user = User.query.filter_by(username="alice").first()
+    user.current_streak = 2
+    user.best_streak = 2
+    user.last_streak_date = date.today()
+    db.session.commit()
+
+    response = client.get("/user/alice")
+    assert b"Tage Streak" in response.data
+    assert b"badgeModalOpenBtn" in response.data
+
+
+def make_eligible_for_code_creation(username, total_score=1000):
+    user = User.query.filter_by(username=username).first()
+    user.organic_points_earned = 500
+    user.total_score = total_score
+    db.session.commit()
+    return user
+
+
+def test_create_codes_requires_500_organic_points(client):
+    register(client, username="alice")
+    user = User.query.filter_by(username="alice").first()
+    user.organic_points_earned = 100
+    user.total_score = 1000
+    db.session.commit()
+
+    response = client.post("/api/create-codes", json={"points_per_code": 100, "count": 1})
+    data = response.get_json()
+    assert data["ok"] is False
+    assert data["error"] == "not_eligible"
+
+
+def test_create_codes_success_deducts_points_and_applies_fee(client):
+    register(client, username="alice")
+    make_eligible_for_code_creation("alice", total_score=1000)
+
+    response = client.post("/api/create-codes", json={"points_per_code": 100, "count": 3})
+    data = response.get_json()
+    assert data["ok"] is True
+    assert len(data["codes"]) == 3
+    assert len(set(data["codes"])) == 3  # all unique
+    assert data["points_value"] == 97  # 100 - 3%
+    assert data["fee_percent"] == 3
+
+    alice = User.query.filter_by(username="alice").first()
+    assert alice.total_score == 1000 - 300  # 3 codes * 100 points each
+
+
+def test_create_codes_insufficient_funds(client):
+    register(client, username="alice")
+    make_eligible_for_code_creation("alice", total_score=50)
+
+    response = client.post("/api/create-codes", json={"points_per_code": 100, "count": 1})
+    data = response.get_json()
+    assert data["ok"] is False
+    assert data["error"] == "insufficient_funds"
+
+
+def test_redeem_user_created_code(client):
+    register(client, username="alice")
+    make_eligible_for_code_creation("alice", total_score=1000)
+    create_response = client.post("/api/create-codes", json={"points_per_code": 100, "count": 1})
+    code = create_response.get_json()["codes"][0]
+    client.post("/logout")
+
+    register(client, username="bob")
+    response = client.post("/api/redeem-code", json={"code": code})
+    data = response.get_json()
+    assert data["ok"] is True
+    assert data["points"] == 97
+
+    bob = User.query.filter_by(username="bob").first()
+    assert bob.total_score == 97
+
+    # Redeeming again (by a third user) must fail -- single-use code
+    client.post("/logout")
+    register(client, username="carol")
+    response = client.post("/api/redeem-code", json={"code": code})
+    assert response.get_json()["ok"] is False
+
+
+def test_cannot_redeem_own_created_code(client):
+    register(client, username="alice")
+    make_eligible_for_code_creation("alice", total_score=1000)
+    create_response = client.post("/api/create-codes", json={"points_per_code": 100, "count": 1})
+    code = create_response.get_json()["codes"][0]
+
+    response = client.post("/api/redeem-code", json={"code": code})
+    data = response.get_json()
+    assert data["ok"] is False
+    assert data["error"] == "cannot_redeem_own_code"

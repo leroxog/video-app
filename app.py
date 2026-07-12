@@ -5,14 +5,17 @@ import random
 import hashlib
 import difflib
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date, timedelta
 from flask import (
     Flask, render_template, request, redirect, url_for,
     session, send_from_directory, abort, flash, jsonify
 )
 from sqlalchemy import text
 from werkzeug.utils import secure_filename
-from models import db, User, Video, Pixel, Like, Subscription, Comment, RedeemedCode, GamePlayCount, Sound
+from models import (
+    db, User, Video, Pixel, Like, Subscription, Comment, RedeemedCode, GamePlayCount, Sound,
+    UserCreatedCode,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -97,6 +100,79 @@ PROMO_CODES = {
 }
 PUBLIC_PROMO_CODE = "FREE FOR ALL"
 HEX_COLOR_RE = re.compile(r"#[0-9a-fA-F]{6}")
+STREAK_DAILY_THRESHOLD = 100
+
+CODE_CREATION_MIN_ORGANIC_POINTS = 500
+CODE_CREATION_FEE_PERCENT = 3
+MIN_POINTS_PER_CODE = 1
+MAX_CODES_PER_BATCH = 20
+
+
+def generate_unique_code():
+    while True:
+        candidate = uuid.uuid4().hex[:10].upper()
+        if candidate in PROMO_CODES:
+            continue
+        if UserCreatedCode.query.filter_by(code=candidate).first() is not None:
+            continue
+        return candidate
+
+
+def _update_streak(user, today):
+    if user.last_streak_date == today:
+        return
+    yesterday = today - timedelta(days=1)
+    if user.last_streak_date == yesterday:
+        user.current_streak += 1
+    else:
+        user.current_streak = 1
+    user.last_streak_date = today
+    if user.current_streak > user.best_streak:
+        user.best_streak = user.current_streak
+
+
+def adjust_points(user, delta, from_code=False):
+    """Central helper for every point change. Positive deltas (earned
+    points) also feed the daily-earned counter (for streaks), the
+    organic-earned counter (for self-serve code creation eligibility,
+    unless from_code=True), and the streak logic. Negative deltas (spending,
+    unliking) only touch the raw balance."""
+    if delta <= 0:
+        user.total_score = max(0, user.total_score + delta)
+        return
+
+    user.total_score += delta
+
+    today = date.today()
+    if user.points_today_date != today:
+        user.points_today_date = today
+        user.points_earned_today = 0
+    user.points_earned_today += delta
+
+    if not from_code:
+        user.organic_points_earned += delta
+
+    if user.points_earned_today >= STREAK_DAILY_THRESHOLD:
+        _update_streak(user, today)
+
+
+def effective_streak(user):
+    """Streak value for display: lapses back to 0 once a day has passed
+    without the user re-qualifying (the DB field itself only resets
+    lazily, on the next day the user actually earns enough points)."""
+    if user.last_streak_date is None:
+        return 0
+    if user.last_streak_date >= date.today() - timedelta(days=1):
+        return user.current_streak
+    return 0
+
+
+def user_badges(user):
+    """List of badge labels a user has permanently earned."""
+    badges = [str(n) for n in range(1, user.best_streak + 1)]
+    if user.ever_rank_one:
+        badges.append("Platz 1")
+    return badges
 
 
 def find_best_game_match(query):
@@ -236,6 +312,77 @@ def delete_media(kind, stored_filename):
             pass
 
 
+R2_CLEANUP_HIGH_WATER_BYTES = 9 * 1024 ** 3
+R2_CLEANUP_LOW_WATER_BYTES = 7 * 1024 ** 3
+
+
+def get_r2_bucket_usage():
+    """Return (total_bytes, {key: size}) for every object in the R2 bucket."""
+    total_bytes = 0
+    sizes_by_key = {}
+    continuation_token = None
+    while True:
+        kwargs = {"Bucket": R2_BUCKET_NAME}
+        if continuation_token:
+            kwargs["ContinuationToken"] = continuation_token
+        resp = r2_client.list_objects_v2(**kwargs)
+        for obj in resp.get("Contents", []):
+            sizes_by_key[obj["Key"]] = obj["Size"]
+            total_bytes += obj["Size"]
+        if resp.get("IsTruncated"):
+            continuation_token = resp.get("NextContinuationToken")
+        else:
+            break
+    return total_bytes, sizes_by_key
+
+
+def cleanup_oldest_videos_if_over_quota(keep_video_id=None):
+    """If the R2 bucket is at/above the 9 GB high-water mark, delete the
+    oldest videos (oldest upload first) until usage drops back to 7 GB.
+    Called after every upload, so it keeps repeating forever as new
+    uploads push storage back over the threshold. Never deletes
+    keep_video_id (the video that was just uploaded)."""
+    if not USE_R2:
+        return
+    try:
+        total_bytes, sizes_by_key = get_r2_bucket_usage()
+        if total_bytes < R2_CLEANUP_HIGH_WATER_BYTES:
+            return
+        for video in Video.query.order_by(Video.created_at.asc()).all():
+            if total_bytes <= R2_CLEANUP_LOW_WATER_BYTES:
+                break
+            if video.id == keep_video_id:
+                continue
+            total_bytes -= sizes_by_key.get(f"uploads/{video.filename}", 0)
+            delete_media("uploads", video.filename)
+            db.session.delete(video)
+            db.session.commit()
+            logger.info(
+                "R2-Aufraeumen: Video '%s' (id=%s) geloescht, da Speicherlimit (9GB) erreicht war.",
+                video.title, video.id,
+            )
+    except Exception:
+        logger.exception("R2-Speicher-Aufraeumen fehlgeschlagen.")
+
+
+VIDEO_MIME_TYPES = {
+    "mp4": "video/mp4",
+    "webm": "video/webm",
+    "ogg": "video/ogg",
+    "mov": "video/quicktime",
+}
+
+
+@app.template_global()
+def video_mime_type(filename):
+    extension = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    return VIDEO_MIME_TYPES.get(extension, "video/mp4")
+
+
+app.template_global()(effective_streak)
+app.template_global()(user_badges)
+
+
 @app.template_global()
 def media_url(kind, stored_filename):
     if not stored_filename:
@@ -266,6 +413,14 @@ def ensure_columns_exist():
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS profile_image VARCHAR(255)',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS total_score INTEGER NOT NULL DEFAULT 0',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS last_seen TIMESTAMP',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS current_streak INTEGER NOT NULL DEFAULT 0',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS best_streak INTEGER NOT NULL DEFAULT 0',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS last_streak_date DATE',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS points_earned_today INTEGER NOT NULL DEFAULT 0',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS points_today_date DATE',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS organic_points_earned INTEGER NOT NULL DEFAULT 0',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS ever_rank_one BOOLEAN NOT NULL DEFAULT FALSE',
         'ALTER TABLE video ADD COLUMN IF NOT EXISTS description TEXT',
         "ALTER TABLE video ADD COLUMN IF NOT EXISTS orientation VARCHAR(10) NOT NULL DEFAULT 'landscape'",
         'ALTER TABLE video ADD COLUMN IF NOT EXISTS content_hash VARCHAR(64)',
@@ -334,6 +489,27 @@ def require_admin():
     return user
 
 
+ONLINE_THRESHOLD_SECONDS = 5 * 60
+LAST_SEEN_UPDATE_THROTTLE_SECONDS = 60
+
+
+@app.before_request
+def update_last_seen():
+    user_id = session.get("user_id")
+    if user_id is None:
+        return
+    now = datetime.now(timezone.utc)
+    user = db.session.get(User, user_id)
+    if user is None:
+        return
+    last_seen = user.last_seen
+    if last_seen is not None and last_seen.tzinfo is None:
+        last_seen = last_seen.replace(tzinfo=timezone.utc)
+    if last_seen is None or (now - last_seen).total_seconds() >= LAST_SEEN_UPDATE_THROTTLE_SECONDS:
+        user.last_seen = now
+        db.session.commit()
+
+
 @app.route("/")
 def index():
     query = request.args.get("q", "").strip()
@@ -372,6 +548,9 @@ def index():
         public_promo_code=PUBLIC_PROMO_CODE,
         public_promo_code_redeemed=PUBLIC_PROMO_CODE in redeemed_codes,
         game_suggestion=random.choice(GAME_SUGGESTIONS),
+        code_creation_min_points=CODE_CREATION_MIN_ORGANIC_POINTS,
+        code_creation_fee_percent=CODE_CREATION_FEE_PERCENT,
+        max_codes_per_batch=MAX_CODES_PER_BATCH,
     )
 
 
@@ -417,6 +596,9 @@ def logout():
 @app.route("/leaderboard")
 def leaderboard():
     users = User.query.filter(User.total_score > 0).order_by(User.total_score.desc()).all()
+    if users and not users[0].ever_rank_one:
+        users[0].ever_rank_one = True
+        db.session.commit()
     user = current_user()
     followed_ids = set()
     if user is not None:
@@ -472,7 +654,7 @@ def api_score():
     if game not in SCORED_GAMES or not isinstance(score, int) or score < 0:
         return jsonify({"ok": False, "error": "invalid_data"}), 400
 
-    user.total_score += score
+    adjust_points(user, score)
     db.session.commit()
     return jsonify({"ok": True, "total_score": user.total_score})
 
@@ -491,7 +673,7 @@ def api_spend():
     if user.total_score < amount:
         return jsonify({"ok": False, "error": "insufficient_funds", "total_score": user.total_score}), 400
 
-    user.total_score -= amount
+    adjust_points(user, -amount)
     db.session.commit()
     return jsonify({"ok": True, "total_score": user.total_score})
 
@@ -506,16 +688,71 @@ def api_redeem_code():
     code = (data.get("code") or "").strip().upper()
 
     points = PROMO_CODES.get(code)
-    if points is None:
+    if points is not None:
+        if RedeemedCode.query.filter_by(user_id=user.id, code=code).first() is not None:
+            return jsonify({"ok": False, "error": "already_redeemed"}), 400
+        db.session.add(RedeemedCode(user_id=user.id, code=code))
+        adjust_points(user, points, from_code=True)
+        db.session.commit()
+        return jsonify({"ok": True, "points": points, "total_score": user.total_score})
+
+    user_code = UserCreatedCode.query.filter_by(code=code, redeemed_by_id=None).first()
+    if user_code is None:
         return jsonify({"ok": False, "error": "invalid_code"}), 400
+    if user_code.creator_id == user.id:
+        return jsonify({"ok": False, "error": "cannot_redeem_own_code"}), 400
 
-    if RedeemedCode.query.filter_by(user_id=user.id, code=code).first() is not None:
-        return jsonify({"ok": False, "error": "already_redeemed"}), 400
-
-    db.session.add(RedeemedCode(user_id=user.id, code=code))
-    user.total_score += points
+    user_code.redeemed_by_id = user.id
+    user_code.redeemed_at = datetime.now(timezone.utc)
+    adjust_points(user, user_code.points_value, from_code=True)
     db.session.commit()
-    return jsonify({"ok": True, "points": points, "total_score": user.total_score})
+    return jsonify({"ok": True, "points": user_code.points_value, "total_score": user.total_score})
+
+
+@app.route("/api/create-codes", methods=["POST"])
+def api_create_codes():
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+
+    if user.organic_points_earned < CODE_CREATION_MIN_ORGANIC_POINTS:
+        return jsonify({"ok": False, "error": "not_eligible"}), 400
+
+    data = request.get_json(silent=True) or {}
+    points_per_code = data.get("points_per_code")
+    count = data.get("count")
+
+    if not isinstance(points_per_code, int) or points_per_code < MIN_POINTS_PER_CODE:
+        return jsonify({"ok": False, "error": "invalid_points"}), 400
+    if not isinstance(count, int) or count < 1 or count > MAX_CODES_PER_BATCH:
+        return jsonify({"ok": False, "error": "invalid_count"}), 400
+
+    total_cost = points_per_code * count
+    if user.total_score < total_cost:
+        return jsonify({"ok": False, "error": "insufficient_funds", "total_score": user.total_score}), 400
+
+    points_value = int(points_per_code * (100 - CODE_CREATION_FEE_PERCENT) / 100)
+    created_codes = []
+    for _ in range(count):
+        code = generate_unique_code()
+        db.session.add(UserCreatedCode(
+            code=code,
+            original_points=points_per_code,
+            points_value=points_value,
+            creator_id=user.id,
+        ))
+        created_codes.append(code)
+
+    adjust_points(user, -total_cost)
+    db.session.commit()
+
+    return jsonify({
+        "ok": True,
+        "codes": created_codes,
+        "points_value": points_value,
+        "fee_percent": CODE_CREATION_FEE_PERCENT,
+        "total_score": user.total_score,
+    })
 
 
 @app.route("/api/my-stats")
@@ -576,8 +813,9 @@ def upload():
             user_id=user.id,
         )
         db.session.add(video)
-        user.total_score += UPLOAD_BONUS_POINTS
+        adjust_points(user, UPLOAD_BONUS_POINTS)
         db.session.commit()
+        cleanup_oldest_videos_if_over_quota(keep_video_id=video.id)
         return redirect(url_for("watch", video_id=video.id))
 
     return render_template("upload.html", user=user)
@@ -661,10 +899,10 @@ def like_video(video_id):
     existing = Like.query.filter_by(user_id=user.id, video_id=video.id).first()
     if existing:
         db.session.delete(existing)
-        video.uploader.total_score = max(0, video.uploader.total_score - LIKE_BONUS_POINTS)
+        adjust_points(video.uploader, -LIKE_BONUS_POINTS)
     else:
         db.session.add(Like(user_id=user.id, video_id=video.id))
-        video.uploader.total_score += LIKE_BONUS_POINTS
+        adjust_points(video.uploader, LIKE_BONUS_POINTS)
     db.session.commit()
     return redirect(url_for("watch", video_id=video.id))
 
@@ -680,11 +918,11 @@ def api_like_video(video_id):
     if existing:
         db.session.delete(existing)
         liked = False
-        video.uploader.total_score = max(0, video.uploader.total_score - LIKE_BONUS_POINTS)
+        adjust_points(video.uploader, -LIKE_BONUS_POINTS)
     else:
         db.session.add(Like(user_id=user.id, video_id=video.id))
         liked = True
-        video.uploader.total_score += LIKE_BONUS_POINTS
+        adjust_points(video.uploader, LIKE_BONUS_POINTS)
     db.session.commit()
     return jsonify({"ok": True, "liked": liked, "like_count": len(video.likes)})
 
@@ -1014,12 +1252,24 @@ def admin_cleanup_duplicate_videos():
     return jsonify(report)
 
 
+def is_user_online(user):
+    if user.last_seen is None:
+        return False
+    last_seen = user.last_seen
+    if last_seen.tzinfo is None:
+        last_seen = last_seen.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - last_seen).total_seconds() <= ONLINE_THRESHOLD_SECONDS
+
+
 @app.route("/admin")
 def admin_dashboard():
     admin_user = require_admin()
     users = User.query.order_by(User.username).all()
     videos = Video.query.order_by(Video.created_at.desc()).all()
-    return render_template("admin.html", user=admin_user, users=users, videos=videos)
+    online_status = {u.id: is_user_online(u) for u in users}
+    return render_template(
+        "admin.html", user=admin_user, users=users, videos=videos, online_status=online_status,
+    )
 
 
 @app.route("/admin/users", methods=["POST"])
