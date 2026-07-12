@@ -1615,15 +1615,21 @@ def admin_cleanup_duplicate_videos():
     return jsonify(report)
 
 
-def run_transcode_migration(dry_run=True):
+def run_transcode_migration(dry_run=True, limit=None):
     """One-off fix for videos uploaded before automatic transcoding
     existed (e.g. the legacy WebM uploads that can't play on Safari).
     Re-encodes every non-MP4 video to H.264 MP4 and replaces the R2
-    object + filename. Idempotent: videos already .mp4 are skipped."""
+    object + filename. Idempotent: videos already .mp4 are skipped.
+    `limit` caps how many videos are processed per call, since
+    transcoding several videos in one HTTP request risks hitting a
+    platform-level proxy timeout."""
     if not FFMPEG_PATH:
         return {"ok": False, "error": "ffmpeg_not_available"}
 
-    videos = Video.query.filter(~Video.filename.ilike("%.mp4")).all()
+    query = Video.query.filter(~Video.filename.ilike("%.mp4"))
+    if limit is not None:
+        query = query.limit(limit)
+    videos = query.all()
     results = []
     for video in videos:
         entry = {"video_id": video.id, "title": video.title, "old_filename": video.filename}
@@ -1661,7 +1667,8 @@ def run_transcode_migration(dry_run=True):
 def admin_transcode_legacy_videos():
     require_admin()
     dry_run = request.args.get("dry_run", "1") != "0"
-    report = run_transcode_migration(dry_run=dry_run)
+    limit = request.args.get("limit", type=int)
+    report = run_transcode_migration(dry_run=dry_run, limit=limit)
     return jsonify(report)
 
 

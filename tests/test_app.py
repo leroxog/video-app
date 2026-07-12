@@ -1682,6 +1682,26 @@ def test_transcode_migration_dry_run_does_not_modify_anything(client, monkeypatc
     assert video.filename == "legacy.webm"  # unchanged in dry run
 
 
+def test_transcode_migration_limit_processes_fewer_videos_per_call(client, monkeypatch, tmp_path):
+    import app as app_module
+
+    register(client, username="alice")
+    alice = User.query.filter_by(username="alice").first()
+    for i in range(3):
+        db.session.add(Video(title=f"legacy {i}", filename=f"legacy{i}.webm", content_hash=f"hash{i}", user_id=alice.id))
+    db.session.commit()
+
+    fake_output = tmp_path / "fake_converted.mp4"
+    fake_output.write_bytes(b"fake transcoded mp4 bytes")
+
+    monkeypatch.setattr(app_module, "FFMPEG_PATH", "/usr/bin/ffmpeg")
+    monkeypatch.setattr(app_module, "transcode_to_mp4", lambda input_path: str(fake_output))
+    monkeypatch.setattr(app_module, "fetch_video_bytes", lambda v: b"old webm bytes")
+
+    report = app_module.run_transcode_migration(dry_run=True, limit=1)
+    assert len(report["results"]) == 1
+
+
 def test_transcode_migration_real_run_updates_filename(client, monkeypatch, tmp_path):
     import app as app_module
 
