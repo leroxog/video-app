@@ -5,6 +5,9 @@ import random
 import hashlib
 import difflib
 import logging
+import shutil
+import subprocess
+import tempfile
 from datetime import datetime, timezone, date, timedelta
 from flask import (
     Flask, render_template, request, redirect, url_for,
@@ -294,6 +297,52 @@ def save_media(file_storage, kind, stored_filename):
     else:
         folder = app.config[LOCAL_MEDIA_FOLDERS[kind]]
         file_storage.save(os.path.join(folder, stored_filename))
+
+
+def save_media_from_path(local_path, kind, stored_filename, content_type="application/octet-stream"):
+    """Like save_media, but takes a plain file path instead of a Flask
+    FileStorage (used after ffmpeg has written a transcoded file to disk)."""
+    if USE_R2:
+        key = f"{kind}/{stored_filename}"
+        with open(local_path, "rb") as f:
+            r2_client.upload_fileobj(f, R2_BUCKET_NAME, key, ExtraArgs={"ContentType": content_type})
+    else:
+        folder = app.config[LOCAL_MEDIA_FOLDERS[kind]]
+        shutil.copyfile(local_path, os.path.join(folder, stored_filename))
+
+
+FFMPEG_PATH = shutil.which("ffmpeg")
+
+
+def transcode_to_mp4(input_path):
+    """Transcode a video file to a broadly-compatible H.264/AAC MP4 so it
+    plays on every device/browser (Safari/iOS in particular can't play
+    WebM at all). Returns the output path on success, or None if ffmpeg
+    isn't installed or the conversion fails -- callers should fall back
+    to uploading the original file untouched."""
+    if not FFMPEG_PATH:
+        logger.warning("ffmpeg nicht gefunden -- Video wird ohne Transkodierung hochgeladen.")
+        return None
+    output_path = input_path + "-converted.mp4"
+    try:
+        subprocess.run(
+            [
+                FFMPEG_PATH, "-y", "-i", input_path,
+                "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+                "-c:a", "aac", "-b:a", "128k",
+                "-movflags", "+faststart",
+                output_path,
+            ],
+            check=True,
+            capture_output=True,
+            timeout=280,
+        )
+        return output_path
+    except Exception:
+        logger.exception("Video-Transkodierung fehlgeschlagen fuer %s", input_path)
+        if os.path.exists(output_path):
+            os.remove(output_path)
+        return None
 
 
 def delete_media(kind, stored_filename):
@@ -836,8 +885,19 @@ def upload():
             return render_template("upload.html", user=user)
 
         extension = secure_filename(file.filename).rsplit(".", 1)[1].lower()
-        stored_filename = f"{uuid.uuid4().hex}.{extension}"
-        save_media(file, "uploads", stored_filename)
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            input_path = os.path.join(tmp_dir, f"input.{extension}")
+            file.save(input_path)
+
+            converted_path = transcode_to_mp4(input_path)
+            final_path, final_extension = (converted_path, "mp4") if converted_path else (input_path, extension)
+
+            stored_filename = f"{uuid.uuid4().hex}.{final_extension}"
+            save_media_from_path(
+                final_path, "uploads", stored_filename,
+                content_type=VIDEO_MIME_TYPES.get(final_extension, "application/octet-stream"),
+            )
 
         video = Video(
             title=title,
@@ -1552,6 +1612,56 @@ def admin_cleanup_duplicate_videos():
     require_admin()
     dry_run = request.args.get("dry_run", "1") != "0"
     report = run_duplicate_cleanup(dry_run=dry_run)
+    return jsonify(report)
+
+
+def run_transcode_migration(dry_run=True):
+    """One-off fix for videos uploaded before automatic transcoding
+    existed (e.g. the legacy WebM uploads that can't play on Safari).
+    Re-encodes every non-MP4 video to H.264 MP4 and replaces the R2
+    object + filename. Idempotent: videos already .mp4 are skipped."""
+    if not FFMPEG_PATH:
+        return {"ok": False, "error": "ffmpeg_not_available"}
+
+    videos = Video.query.filter(~Video.filename.ilike("%.mp4")).all()
+    results = []
+    for video in videos:
+        entry = {"video_id": video.id, "title": video.title, "old_filename": video.filename}
+        try:
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                extension = video.filename.rsplit(".", 1)[-1]
+                input_path = os.path.join(tmp_dir, f"input.{extension}")
+                with open(input_path, "wb") as f:
+                    f.write(fetch_video_bytes(video))
+
+                converted_path = transcode_to_mp4(input_path)
+                if converted_path is None:
+                    entry["status"] = "transcode_failed"
+                    results.append(entry)
+                    continue
+
+                new_filename = f"{uuid.uuid4().hex}.mp4"
+                entry["new_filename"] = new_filename
+                if not dry_run:
+                    save_media_from_path(converted_path, "uploads", new_filename, content_type="video/mp4")
+                    old_filename = video.filename
+                    video.filename = new_filename
+                    db.session.commit()
+                    delete_media("uploads", old_filename)
+                entry["status"] = "converted" if not dry_run else "would_convert"
+        except Exception as exc:
+            entry["status"] = "error"
+            entry["error"] = str(exc)
+        results.append(entry)
+
+    return {"ok": True, "dry_run": dry_run, "results": results}
+
+
+@app.route("/admin/transcode-legacy-videos", methods=["POST"])
+def admin_transcode_legacy_videos():
+    require_admin()
+    dry_run = request.args.get("dry_run", "1") != "0"
+    report = run_transcode_migration(dry_run=dry_run)
     return jsonify(report)
 
 

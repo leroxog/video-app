@@ -1616,6 +1616,99 @@ def test_share_video_creates_message_with_shared_video(client):
     assert messages_data[0]["shared_video"]["title"] == "cool clip"
 
 
+def test_upload_without_ffmpeg_keeps_original_format(client, monkeypatch):
+    import app as app_module
+    monkeypatch.setattr(app_module, "FFMPEG_PATH", None)
+
+    register(client, username="alice")
+    data = {
+        "title": "webm clip",
+        "description": "",
+        "orientation": "landscape",
+        "video": (io.BytesIO(b"fake webm bytes"), "clip.webm"),
+    }
+    client.post("/upload", data=data, content_type="multipart/form-data", follow_redirects=True)
+
+    video = Video.query.filter_by(title="webm clip").first()
+    assert video is not None
+    assert video.filename.endswith(".webm")
+
+
+def test_upload_transcodes_to_mp4_when_ffmpeg_available(client, monkeypatch, tmp_path):
+    import app as app_module
+
+    fake_output = tmp_path / "fake_converted.mp4"
+    fake_output.write_bytes(b"fake transcoded mp4 bytes")
+
+    monkeypatch.setattr(app_module, "FFMPEG_PATH", "/usr/bin/ffmpeg")
+    monkeypatch.setattr(app_module, "transcode_to_mp4", lambda input_path: str(fake_output))
+
+    register(client, username="alice")
+    data = {
+        "title": "recorded clip",
+        "description": "",
+        "orientation": "landscape",
+        "video": (io.BytesIO(b"fake webm bytes"), "clip.webm"),
+    }
+    client.post("/upload", data=data, content_type="multipart/form-data", follow_redirects=True)
+
+    video = Video.query.filter_by(title="recorded clip").first()
+    assert video is not None
+    assert video.filename.endswith(".mp4")
+
+
+def test_transcode_migration_dry_run_does_not_modify_anything(client, monkeypatch, tmp_path):
+    import app as app_module
+
+    register(client, username="alice")
+    alice = User.query.filter_by(username="alice").first()
+    video = Video(title="legacy webm", filename="legacy.webm", content_hash="legacyhash", user_id=alice.id)
+    db.session.add(video)
+    db.session.commit()
+
+    fake_output = tmp_path / "fake_converted.mp4"
+    fake_output.write_bytes(b"fake transcoded mp4 bytes")
+
+    monkeypatch.setattr(app_module, "FFMPEG_PATH", "/usr/bin/ffmpeg")
+    monkeypatch.setattr(app_module, "transcode_to_mp4", lambda input_path: str(fake_output))
+    monkeypatch.setattr(app_module, "fetch_video_bytes", lambda v: b"old webm bytes")
+
+    report = app_module.run_transcode_migration(dry_run=True)
+
+    assert report["ok"] is True
+    assert report["results"][0]["status"] == "would_convert"
+
+    video = Video.query.filter_by(id=video.id).first()
+    assert video.filename == "legacy.webm"  # unchanged in dry run
+
+
+def test_transcode_migration_real_run_updates_filename(client, monkeypatch, tmp_path):
+    import app as app_module
+
+    register(client, username="alice")
+    alice = User.query.filter_by(username="alice").first()
+    video = Video(title="legacy webm", filename="legacy.webm", content_hash="legacyhash", user_id=alice.id)
+    db.session.add(video)
+    db.session.commit()
+    video_id = video.id
+
+    fake_output = tmp_path / "fake_converted.mp4"
+    fake_output.write_bytes(b"fake transcoded mp4 bytes")
+
+    monkeypatch.setattr(app_module, "FFMPEG_PATH", "/usr/bin/ffmpeg")
+    monkeypatch.setattr(app_module, "transcode_to_mp4", lambda input_path: str(fake_output))
+    monkeypatch.setattr(app_module, "fetch_video_bytes", lambda v: b"old webm bytes")
+    deleted = []
+    monkeypatch.setattr(app_module, "delete_media", lambda kind, filename: deleted.append(filename))
+
+    report = app_module.run_transcode_migration(dry_run=False)
+
+    assert report["results"][0]["status"] == "converted"
+    video = Video.query.filter_by(id=video_id).first()
+    assert video.filename.endswith(".mp4")
+    assert deleted == ["legacy.webm"]
+
+
 def test_liked_videos_page_lists_liked_videos(client):
     register(client, username="alice")
     alice = User.query.filter_by(username="alice").first()
