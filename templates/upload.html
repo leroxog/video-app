@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Video hochladen - gigas{% endblock %}
+{% block title %}Video hochladen - timeskip{% endblock %}
 {% block content %}
     <h1>Video hochladen</h1>
 
@@ -64,7 +64,7 @@
         <button type="submit" id="uploadSubmitBtn">Hochladen</button>
     </form>
 
-    <script src="{{ url_for('static', filename='js/gigas-recorder.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/timeskip-recorder.js') }}"></script>
     <script>
         const videoInput = document.getElementById("video");
         const titleInput = document.getElementById("title");
@@ -80,7 +80,7 @@
         }
 
         (async function loadPendingRecording() {
-            const blob = await GigasRecorder.takePending();
+            const blob = await TimeSkipRecorder.takePending();
             if (!blob) return;
             const recordingType = blob.type || "video/webm";
             const recordingExt = recordingType.startsWith("video/mp4") ? "mp4" : "webm";

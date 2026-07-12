@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Fruit Merge - gigas{% endblock %}
-{% block brand_text %}gigas games{% endblock %}
+{% block title %}Fruit Merge - timeskip{% endblock %}
+{% block brand_text %}games{% endblock %}
 {% block body_class %}game-fullscreen{% endblock %}
 {% block content %}
     <div class="fruitmerge-page">
-        <h1>gigas/fruit.merge</h1>
+        <h1>timeskip/fruit.merge</h1>
         <div class="game-top-row">
             <a class="game-leaderboard-link" href="{{ url_for('leaderboard') }}">&#127942; Bestenliste</a>
             <button type="button" class="game-record-btn" id="recordBtn">&#128308; Aufnehmen<span class="game-record-badge">EMPFOHLEN</span></button>
@@ -95,7 +95,7 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/matter-js@0.19.0/build/matter.min.js"></script>
-    <script src="{{ url_for('static', filename='js/gigas-recorder.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/timeskip-recorder.js') }}"></script>
     <script>
         const { Engine, Runner, Bodies, Body, Composite, Events } = Matter;
 
@@ -403,7 +403,7 @@
 
         const canvas = document.getElementById("fruitCanvas");
         const ctx = canvas.getContext("2d");
-        GigasRecorder.attach(canvas, document.getElementById("recordBtn"));
+        TimeSkipRecorder.attach(canvas, document.getElementById("recordBtn"));
         const scoreEl = document.getElementById("score");
         const finalScoreEl = document.getElementById("finalScore");
         const gameOverOverlay = document.getElementById("gameOverOverlay");

@@ -27,57 +27,57 @@ PLACE_COOLDOWN_SECONDS = 5
 GAMES = [
     {
         "key": "place",
-        "search_term": "gigas/place",
+        "search_term": "timeskip/place",
         "endpoint": "place",
-        "title": "gigas/place",
+        "title": "timeskip/place",
         "subtitle": "Gemeinsame Pixel-Leinwand",
         "icon_class": "place-label-icon",
     },
     {
         "key": "tic.tac.toe",
-        "search_term": "gigas/tic.tac.toe",
+        "search_term": "timeskip/tic.tac.toe",
         "endpoint": "tictactoe",
-        "title": "gigas/tic.tac.toe",
+        "title": "timeskip/tic.tac.toe",
         "subtitle": "Tic Tac Toe gegen den Bot",
         "icon_class": "place-label-icon tictactoe-icon",
     },
     {
         "key": "fruit.merge",
-        "search_term": "gigas/fruit.merge",
+        "search_term": "timeskip/fruit.merge",
         "endpoint": "fruitmerge",
-        "title": "gigas/fruit.merge",
+        "title": "timeskip/fruit.merge",
         "subtitle": "Fruechte fallen lassen und verschmelzen",
         "icon_class": "place-label-icon fruitmerge-icon",
     },
     {
         "key": "gravity.run",
-        "search_term": "gigas/gravity.run",
+        "search_term": "timeskip/gravity.run",
         "endpoint": "gravityrun",
-        "title": "gigas/gravity.run",
+        "title": "timeskip/gravity.run",
         "subtitle": "Schwerkraft umkehren und Hindernissen ausweichen",
         "icon_class": "place-label-icon gravityrun-icon",
     },
     {
         "key": "knife.hit",
-        "search_term": "gigas/knife.hit",
+        "search_term": "timeskip/knife.hit",
         "endpoint": "knifehit",
-        "title": "gigas/knife.hit",
+        "title": "timeskip/knife.hit",
         "subtitle": "Messer in den rotierenden Block werfen",
         "icon_class": "place-label-icon knifehit-icon",
     },
     {
         "key": "flappy.bird",
-        "search_term": "gigas/flappy.bird",
+        "search_term": "timeskip/flappy.bird",
         "endpoint": "flappybird",
-        "title": "gigas/flappy.bird",
+        "title": "timeskip/flappy.bird",
         "subtitle": "Zwischen Rohren hindurchfliegen",
         "icon_class": "place-label-icon flappybird-icon",
     },
     {
         "key": "block.buster",
-        "search_term": "gigas/block.buster",
+        "search_term": "timeskip/block.buster",
         "endpoint": "blockbuster",
-        "title": "gigas/block.buster",
+        "title": "timeskip/block.buster",
         "subtitle": "Bloecke mit dem Paddle zerstoeren",
         "icon_class": "place-label-icon blockbuster-icon",
     },
@@ -93,7 +93,7 @@ LIKE_BONUS_POINTS = 60
 COMMENT_MAX_LENGTH = 500
 PROMO_CODES = {
     "FREE FOR ALL": 500,
-    "GIGASFREE300FOREVERYONE": 300,
+    "TIMESKIPFREE300FOREVERYONE": 300,
 }
 PUBLIC_PROMO_CODE = "FREE FOR ALL"
 HEX_COLOR_RE = re.compile(r"#[0-9a-fA-F]{6}")
@@ -108,7 +108,7 @@ def find_best_game_match(query):
     for game in GAMES:
         candidates = [
             game["search_term"],
-            game["search_term"].replace("gigas/", "").replace(".", " "),
+            game["search_term"].replace("timeskip/", "").replace(".", " "),
             game["key"].replace(".", " "),
         ]
         for candidate in candidates:

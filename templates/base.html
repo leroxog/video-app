@@ -3,27 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}gigas{% endblock %}</title>
+    <title>{% block title %}timeskip{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body class="{% block body_class %}{% endblock %}">
     <div class="splash-screen" id="splashScreen">
         <div class="splash-logo">
-            <svg class="splash-ribbon" viewBox="0 0 200 70" preserveAspectRatio="none">
-                <path d="M12,38 C25,52 40,52 52,44 C70,34 85,15 100,15 C115,15 130,5 148,8 C160,10 172,18 186,24"
-                      fill="none" stroke="#3ea6ff" stroke-width="13" stroke-linecap="round" />
-            </svg>
-            <span class="splash-text">gigas</span>
+            {% include "partials/_logo.html" %}
         </div>
     </div>
 
     <header>
         <a class="brand-logo" href="{{ url_for('index') }}">
-            <svg class="brand-ribbon" viewBox="0 0 200 70" preserveAspectRatio="none">
-                <path d="M12,38 C25,52 40,52 52,44 C70,34 85,15 100,15 C115,15 130,5 148,8 C160,10 172,18 186,24"
-                      fill="none" stroke="#3ea6ff" stroke-width="13" stroke-linecap="round" />
-            </svg>
-            <span class="brand-text">{% block brand_text %}gigas{% endblock %}</span>
+            {% include "partials/_logo.html" %}
+            {% set brand_caption %}{% block brand_text %}{% endblock %}{% endset %}{% if brand_caption.strip() %}<span class="brand-text">{{ brand_caption.strip() }}</span>{% endif %}
         </a>
 
         <div class="header-search-wrapper">
@@ -145,7 +138,7 @@
 
     <script>
         (function () {
-            const HISTORY_KEY = "gigasSearchHistory";
+            const HISTORY_KEY = "timeskipSearchHistory";
             const MAX_HISTORY = 7;
             const input = document.getElementById("headerSearchInput");
             const form = document.getElementById("headerSearchForm");

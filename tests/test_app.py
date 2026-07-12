@@ -291,14 +291,14 @@ def test_upload_rejects_bad_extension(client):
 
 
 def test_search_easter_egg_shows_place_label(client):
-    response = client.get("/?q=gigas/place")
-    assert b"gigas/place" in response.data
+    response = client.get("/?q=timeskip/place")
+    assert b"timeskip/place" in response.data
     assert b"place-label" in response.data
 
 
 def test_search_easter_egg_shows_tictactoe_label(client):
-    response = client.get("/?q=gigas/tic.tac.toe")
-    assert "gigas/tic.tac.toe".encode() in response.data
+    response = client.get("/?q=timeskip/tic.tac.toe")
+    assert "timeskip/tic.tac.toe".encode() in response.data
     assert b"place-label" in response.data
 
 
@@ -309,8 +309,8 @@ def test_tictactoe_page_accessible_without_login(client):
 
 
 def test_search_easter_egg_shows_fruitmerge_label(client):
-    response = client.get("/?q=gigas/fruit.merge")
-    assert "gigas/fruit.merge".encode() in response.data
+    response = client.get("/?q=timeskip/fruit.merge")
+    assert "timeskip/fruit.merge".encode() in response.data
     assert b"place-label" in response.data
 
 
@@ -344,18 +344,18 @@ def test_search_hint_shows_a_game_suggestion(client):
     assert any(
         term.encode() in response.data
         for term in [
-            "gigas/place",
-            "gigas/tic.tac.toe",
-            "gigas/fruit.merge",
-            "gigas/gravity.run",
-            "gigas/knife.hit",
+            "timeskip/place",
+            "timeskip/tic.tac.toe",
+            "timeskip/fruit.merge",
+            "timeskip/gravity.run",
+            "timeskip/knife.hit",
         ]
     )
 
 
 def test_search_easter_egg_shows_gravityrun_label(client):
-    response = client.get("/?q=gigas/gravity.run")
-    assert "gigas/gravity.run".encode() in response.data
+    response = client.get("/?q=timeskip/gravity.run")
+    assert "timeskip/gravity.run".encode() in response.data
     assert b"place-label" in response.data
 
 
@@ -367,8 +367,8 @@ def test_gravityrun_page_accessible_without_login(client):
 
 
 def test_search_easter_egg_shows_knifehit_label(client):
-    response = client.get("/?q=gigas/knife.hit")
-    assert "gigas/knife.hit".encode() in response.data
+    response = client.get("/?q=timeskip/knife.hit")
+    assert "timeskip/knife.hit".encode() in response.data
     assert b"place-label" in response.data
 
 
@@ -380,8 +380,8 @@ def test_knifehit_page_accessible_without_login(client):
 
 
 def test_search_easter_egg_shows_flappybird_label(client):
-    response = client.get("/?q=gigas/flappy.bird")
-    assert "gigas/flappy.bird".encode() in response.data
+    response = client.get("/?q=timeskip/flappy.bird")
+    assert "timeskip/flappy.bird".encode() in response.data
     assert b"place-label" in response.data
 
 
@@ -392,8 +392,8 @@ def test_flappybird_page_accessible_without_login(client):
 
 
 def test_search_easter_egg_shows_blockbuster_label(client):
-    response = client.get("/?q=gigas/block.buster")
-    assert "gigas/block.buster".encode() in response.data
+    response = client.get("/?q=timeskip/block.buster")
+    assert "timeskip/block.buster".encode() in response.data
     assert b"place-label" in response.data
 
 
@@ -410,13 +410,13 @@ def test_place_requires_login(client):
 
 def test_fuzzy_search_matches_game_without_exact_term(client):
     response = client.get("/?q=fruit merge")
-    assert "gigas/fruit.merge".encode() in response.data
+    assert "timeskip/fruit.merge".encode() in response.data
     assert b"place-label" in response.data
 
 
 def test_fuzzy_search_matches_typo_in_game_term(client):
     response = client.get("/?q=fruitmerge")
-    assert "gigas/fruit.merge".encode() in response.data
+    assert "timeskip/fruit.merge".encode() in response.data
 
 
 def test_search_does_not_treat_generic_word_as_game(client):
@@ -485,7 +485,7 @@ def test_redeem_code_cannot_be_used_twice(client):
 
 def test_redeem_hidden_code_awards_300(client):
     register(client)
-    response = client.post("/api/redeem-code", json={"code": "GIGASFREE300FOREVERYONE"})
+    response = client.post("/api/redeem-code", json={"code": "TIMESKIPFREE300FOREVERYONE"})
     data = response.get_json()
     assert data["ok"] is True
     assert data["points"] == 300

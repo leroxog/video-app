@@ -1,5 +1,5 @@
-const GigasRecorder = (function () {
-    const DB_NAME = "gigas-recorder";
+const TimeSkipRecorder = (function () {
+    const DB_NAME = "timeskip-recorder";
     const STORE = "recordings";
     const KEY = "pending";
 

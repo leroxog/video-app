@@ -1,6 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Shorts - gigas{% endblock %}
-{% block brand_text %}gigas{% endblock %}
+{% block title %}Shorts - timeskip{% endblock %}
 {% block body_class %}shorts-fullscreen{% endblock %}
 {% block content %}
     {% if videos %}
@@ -96,7 +95,7 @@
     <script>
         const feed = document.getElementById("shortsFeed");
         if (feed) {
-            const VOLUME_STORAGE_KEY = "gigas_shorts_volume";
+            const VOLUME_STORAGE_KEY = "timeskip_shorts_volume";
             let currentVolume = getSavedVolume();
 
             function getSavedVolume() {

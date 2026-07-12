@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Flappy Bird - gigas{% endblock %}
-{% block brand_text %}gigas games{% endblock %}
+{% block title %}Flappy Bird - timeskip{% endblock %}
+{% block brand_text %}games{% endblock %}
 {% block body_class %}game-fullscreen{% endblock %}
 {% block content %}
     <div class="fruitmerge-page">
-        <h1>gigas/flappy.bird</h1>
+        <h1>timeskip/flappy.bird</h1>
         <div class="game-top-row">
             <a class="game-leaderboard-link" href="{{ url_for('leaderboard') }}">&#127942; Bestenliste</a>
             <button type="button" class="game-record-btn" id="recordBtn">&#128308; Aufnehmen<span class="game-record-badge">EMPFOHLEN</span></button>
@@ -52,7 +52,7 @@
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='js/gigas-recorder.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/timeskip-recorder.js') }}"></script>
     <script>
         const IS_LOGGED_IN = {{ 'true' if user else 'false' }};
         const GAME_KEY = "flappy.bird";
@@ -74,7 +74,7 @@
 
         const canvas = document.getElementById("flappyCanvas");
         const ctx = canvas.getContext("2d");
-        GigasRecorder.attach(canvas, document.getElementById("recordBtn"));
+        TimeSkipRecorder.attach(canvas, document.getElementById("recordBtn"));
         const scoreEl = document.getElementById("score");
         const finalScoreEl = document.getElementById("finalScore");
         const gameOverOverlay = document.getElementById("gameOverOverlay");

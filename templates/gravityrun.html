@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Gravity Run - gigas{% endblock %}
-{% block brand_text %}gigas games{% endblock %}
+{% block title %}Gravity Run - timeskip{% endblock %}
+{% block brand_text %}games{% endblock %}
 {% block body_class %}game-fullscreen{% endblock %}
 {% block content %}
     <div class="multiplayer-page" id="mpRoot">
-        <h1>gigas/gravity.run</h1>
+        <h1>timeskip/gravity.run</h1>
         <div class="game-top-row">
             <a class="game-leaderboard-link" href="{{ url_for('leaderboard') }}">&#127942; Bestenliste</a>
             <button type="button" class="game-record-btn" id="recordBtn">&#128308; Aufnehmen<span class="game-record-badge">EMPFOHLEN</span></button>
@@ -68,7 +68,7 @@
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='js/gigas-recorder.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/timeskip-recorder.js') }}"></script>
     <script>
         const IS_LOGGED_IN = {{ 'true' if user else 'false' }};
         const GAME_KEY = "gravity.run";
@@ -261,7 +261,7 @@
         const canvas = document.getElementById("runCanvas");
         const ctx = canvas.getContext("2d");
         const distanceEl = document.getElementById("distanceScore");
-        GigasRecorder.attach(canvas, document.getElementById("recordBtn"));
+        TimeSkipRecorder.attach(canvas, document.getElementById("recordBtn"));
 
         let running = false;
         let obstacles = [];
