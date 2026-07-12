@@ -7,7 +7,7 @@
         <div class="game-top-row">
             <a class="game-leaderboard-link" href="{{ url_for('leaderboard') }}">&#127942; Bestenliste</a>
         </div>
-        <p>Setz Punkte ein und wirf die Münze. Landet sie auf dem Dollarzeichen, bekommst du das {{ base_multiplier }}-fache zurück &mdash; mit einem Mitarbeiter sogar das {{ worker_multiplier }}-fache. Landet sie auf dem Gebäude, ist dein Einsatz weg.</p>
+        <p>Setz Punkte ein und wirf die Münze. Landet sie auf dem Dollarzeichen, bekommst du dein Guthaben mit <span id="coinflipMultiplierText">{{ base_multiplier }}</span>-fachem Multiplikator zurück. Landet sie auf dem Gebäude, ist dein Einsatz weg.</p>
 
         <div class="coinflip-wrapper">
             <div class="coinflip-table-area">
@@ -34,7 +34,7 @@
                     <div>
                         <div class="coinflip-shop-title">Mitarbeiter <span id="coinflipWorkerCount">{{ user.coinflip_worker_count if user else 0 }}</span></div>
                         <div class="coinflip-shop-sub">Erhöht den Gewinn auf das {{ worker_multiplier }}-fache</div>
-                        <button type="button" id="coinflipBuyWorkerBtn" {{ 'disabled' if not user }}>Kaufen ({{ worker_cost }})</button>
+                        <button type="button" id="coinflipBuyWorkerBtn" {{ 'disabled' if not user }}>Kaufen (<span id="coinflipWorkerCost">{{ worker_cost }}</span>)</button>
                     </div>
                 </div>
                 <div class="coinflip-shop-item">
@@ -42,7 +42,15 @@
                     <div>
                         <div class="coinflip-shop-title">Neue Münze <span id="coinflipCoinCount">{{ user.coinflip_coins if user else 1 }}</span></div>
                         <div class="coinflip-shop-sub">Eine weitere Münze wirft bei jedem Wurf mit</div>
-                        <button type="button" id="coinflipBuyCoinBtn" {{ 'disabled' if not user }}>Kaufen ({{ new_coin_cost }})</button>
+                        <button type="button" id="coinflipBuyCoinBtn" {{ 'disabled' if not user }}>Kaufen (<span id="coinflipCoinCost">{{ new_coin_cost }}</span>)</button>
+                    </div>
+                </div>
+                <div class="coinflip-shop-item coinflip-rebirth-item">
+                    <span class="coinflip-rebirth-icon"></span>
+                    <div>
+                        <div class="coinflip-shop-title">Wiedergeburt <span id="coinflipRebirthCount">{{ user.coinflip_rebirths if user else 0 }}</span></div>
+                        <div class="coinflip-shop-sub">Setzt Mitarbeiter &amp; Münzen zurück, gibt aber dauerhaft +<span id="coinflipNextRebirthBonus">{{ "%.1f"|format(rebirth_multiplier_step * ((user.coinflip_rebirths if user else 0) + 1)) }}</span> Multiplikator (aktuell +{{ "%.1f"|format(rebirth_multiplier_step * (user.coinflip_rebirths if user else 0)) }})</div>
+                        <button type="button" id="coinflipRebirthBtn" {{ 'disabled' if not user }}>Wiedergeburt (<span id="coinflipRebirthCost">{{ rebirth_cost }}</span>)</button>
                     </div>
                 </div>
             </div>
@@ -50,12 +58,23 @@
     </div>
 
     <script>
-        const COIN_COUNT_KEY = "coinflipCoinCount";
+        const BASE_MULTIPLIER = {{ base_multiplier }};
+        const WORKER_MULTIPLIER = {{ worker_multiplier }};
+        const REBIRTH_STEP = {{ rebirth_multiplier_step }};
+        let rebirths = {{ user.coinflip_rebirths if user else 0 }};
+        let hasWorker = {{ 'true' if user and user.coinflip_worker_count > 0 else 'false' }};
         let coinCount = {{ user.coinflip_coins if user else 1 }};
-        let workerCount = {{ user.coinflip_worker_count if user else 0 }};
         let coinAngles = [];
 
         const coinRow = document.getElementById("coinflipCoinRow");
+        const multiplierTextEl = document.getElementById("coinflipMultiplierText");
+
+        function updateMultiplierText() {
+            const base = hasWorker ? WORKER_MULTIPLIER : BASE_MULTIPLIER;
+            const total = base + REBIRTH_STEP * rebirths;
+            multiplierTextEl.textContent = (Math.round(total * 10) / 10).toString();
+        }
+        updateMultiplierText();
 
         function coinFaceSvg(kind) {
             if (kind === "dollar") {
@@ -149,7 +168,10 @@
                 const data = await res.json();
                 if (data.ok) {
                     document.getElementById("coinflipWorkerCount").textContent = data.worker_count;
+                    document.getElementById("coinflipWorkerCost").textContent = data.next_cost;
                     balanceEl.textContent = data.total_score;
+                    hasWorker = data.worker_count > 0;
+                    updateMultiplierText();
                 }
             });
         }
@@ -162,9 +184,39 @@
                 if (data.ok) {
                     coinCount = data.coins;
                     document.getElementById("coinflipCoinCount").textContent = data.coins;
+                    document.getElementById("coinflipCoinCost").textContent = data.next_cost;
                     balanceEl.textContent = data.total_score;
                     renderCoins();
                 }
+            });
+        }
+
+        const rebirthBtn = document.getElementById("coinflipRebirthBtn");
+        if (rebirthBtn) {
+            rebirthBtn.addEventListener("click", async () => {
+                if (!confirm("Wiedergeburt setzt deine Mitarbeiter und zusätzlichen Münzen zurück, gibt dir aber einen dauerhaften Multiplikator-Bonus. Fortfahren?")) {
+                    return;
+                }
+                const res = await fetch("{{ url_for('api_coinflip_rebirth') }}", { method: "POST" });
+                const data = await res.json();
+                if (!data.ok) {
+                    resultEl.textContent = "Nicht genug Punkte für eine Wiedergeburt.";
+                    resultEl.className = "coinflip-result error";
+                    return;
+                }
+                rebirths = data.rebirths;
+                hasWorker = data.worker_count > 0;
+                coinCount = data.coins;
+                balanceEl.textContent = data.total_score;
+                document.getElementById("coinflipRebirthCount").textContent = data.rebirths;
+                document.getElementById("coinflipRebirthCost").textContent = data.next_rebirth_cost;
+                document.getElementById("coinflipNextRebirthBonus").textContent = (REBIRTH_STEP * (data.rebirths + 1)).toFixed(1);
+                document.getElementById("coinflipWorkerCount").textContent = data.worker_count;
+                document.getElementById("coinflipWorkerCost").textContent = data.next_worker_cost;
+                document.getElementById("coinflipCoinCount").textContent = data.coins;
+                document.getElementById("coinflipCoinCost").textContent = data.next_coin_cost;
+                updateMultiplierText();
+                renderCoins();
             });
         }
     </script>

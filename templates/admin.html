@@ -22,7 +22,12 @@
                 <tr>
                     <td><a href="{{ url_for('profile', username=u.username) }}">{{ u.username }}</a></td>
                     <td>{{ u.videos|length }}</td>
-                    <td>{{ u.total_score }}</td>
+                    <td>
+                        <form action="{{ url_for('admin_set_points', user_id=u.id) }}" method="post" class="admin-points-form">
+                            <input type="number" name="total_score" value="{{ u.total_score }}" min="0">
+                            <button type="submit" class="admin-inline-btn">Setzen</button>
+                        </form>
+                    </td>
                     <td>{{ 'Admin' if u.is_admin else '' }}</td>
                     <td>
                         {% if online_status.get(u.id) %}

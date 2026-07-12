@@ -108,6 +108,25 @@ COINFLIP_BASE_MULTIPLIER = 3
 COINFLIP_WORKER_MULTIPLIER = 5
 COINFLIP_WORKER_COST = 30
 COINFLIP_NEW_COIN_COST = 100
+COINFLIP_REBIRTH_COST_STEP = 500
+COINFLIP_REBIRTH_MULTIPLIER_STEP = 0.2
+
+
+def coinflip_worker_cost(user):
+    return COINFLIP_WORKER_COST * (2 ** user.coinflip_worker_count)
+
+
+def coinflip_new_coin_cost(user):
+    return COINFLIP_NEW_COIN_COST * (2 ** (user.coinflip_coins - 1))
+
+
+def coinflip_multiplier(user):
+    base = COINFLIP_WORKER_MULTIPLIER if user.coinflip_worker_count > 0 else COINFLIP_BASE_MULTIPLIER
+    return base + COINFLIP_REBIRTH_MULTIPLIER_STEP * user.coinflip_rebirths
+
+
+def coinflip_rebirth_cost(user):
+    return COINFLIP_REBIRTH_COST_STEP * (user.coinflip_rebirths + 1)
 UPLOAD_BONUS_POINTS = 100
 LIKE_BONUS_POINTS = 60
 COMMENT_MAX_LENGTH = 500
@@ -486,6 +505,7 @@ def ensure_columns_exist():
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS ever_rank_one BOOLEAN NOT NULL DEFAULT FALSE',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS coinflip_coins INTEGER NOT NULL DEFAULT 1',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS coinflip_worker_count INTEGER NOT NULL DEFAULT 0',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS coinflip_rebirths INTEGER NOT NULL DEFAULT 0',
         'ALTER TABLE video ADD COLUMN IF NOT EXISTS description TEXT',
         "ALTER TABLE video ADD COLUMN IF NOT EXISTS orientation VARCHAR(10) NOT NULL DEFAULT 'landscape'",
         'ALTER TABLE video ADD COLUMN IF NOT EXISTS content_hash VARCHAR(64)',
@@ -1772,6 +1792,21 @@ def admin_delete_user(user_id):
     return redirect(url_for("admin_dashboard"))
 
 
+@app.route("/admin/users/<int:user_id>/set-points", methods=["POST"])
+def admin_set_points(user_id):
+    require_admin()
+    target = db.get_or_404(User, user_id)
+    try:
+        new_score = int(request.form.get("total_score", ""))
+    except (TypeError, ValueError):
+        flash("Ungültiger Punktewert.")
+        return redirect(url_for("admin_dashboard"))
+
+    target.total_score = max(0, new_score)
+    db.session.commit()
+    return redirect(url_for("admin_dashboard"))
+
+
 def seconds_since(moment):
     return (datetime.now(timezone.utc) - moment.replace(tzinfo=timezone.utc)).total_seconds()
 
@@ -1848,13 +1883,16 @@ def blockbuster():
 @app.route("/coinflip")
 def coinflip():
     record_game_play("coin.flip")
+    user = current_user()
     return render_template(
         "coinflip.html",
-        user=current_user(),
-        worker_cost=COINFLIP_WORKER_COST,
-        new_coin_cost=COINFLIP_NEW_COIN_COST,
+        user=user,
+        worker_cost=coinflip_worker_cost(user) if user else COINFLIP_WORKER_COST,
+        new_coin_cost=coinflip_new_coin_cost(user) if user else COINFLIP_NEW_COIN_COST,
         base_multiplier=COINFLIP_BASE_MULTIPLIER,
         worker_multiplier=COINFLIP_WORKER_MULTIPLIER,
+        rebirth_cost=coinflip_rebirth_cost(user) if user else COINFLIP_REBIRTH_COST_STEP,
+        rebirth_multiplier_step=COINFLIP_REBIRTH_MULTIPLIER_STEP,
     )
 
 
@@ -1871,7 +1909,7 @@ def api_coinflip_flip():
     if user.total_score < stake:
         return jsonify({"ok": False, "error": "insufficient_funds", "total_score": user.total_score}), 400
 
-    multiplier = COINFLIP_WORKER_MULTIPLIER if user.coinflip_worker_count > 0 else COINFLIP_BASE_MULTIPLIER
+    multiplier = coinflip_multiplier(user)
 
     adjust_points(user, -stake)
     results = []
@@ -1880,7 +1918,7 @@ def api_coinflip_flip():
         won = random.random() < 0.5
         results.append("win" if won else "lose")
         if won:
-            payout += stake * multiplier
+            payout += int(stake * multiplier)
 
     if payout > 0:
         adjust_points(user, payout)
@@ -1900,16 +1938,18 @@ def api_coinflip_buy_worker():
     user = current_user()
     if user is None:
         return jsonify({"ok": False, "error": "not_logged_in"}), 401
-    if user.total_score < COINFLIP_WORKER_COST:
+    cost = coinflip_worker_cost(user)
+    if user.total_score < cost:
         return jsonify({"ok": False, "error": "insufficient_funds", "total_score": user.total_score}), 400
 
-    adjust_points(user, -COINFLIP_WORKER_COST)
+    adjust_points(user, -cost)
     user.coinflip_worker_count += 1
     db.session.commit()
     return jsonify({
         "ok": True,
         "worker_count": user.coinflip_worker_count,
         "total_score": user.total_score,
+        "next_cost": coinflip_worker_cost(user),
     })
 
 
@@ -1918,16 +1958,45 @@ def api_coinflip_buy_coin():
     user = current_user()
     if user is None:
         return jsonify({"ok": False, "error": "not_logged_in"}), 401
-    if user.total_score < COINFLIP_NEW_COIN_COST:
+    cost = coinflip_new_coin_cost(user)
+    if user.total_score < cost:
         return jsonify({"ok": False, "error": "insufficient_funds", "total_score": user.total_score}), 400
 
-    adjust_points(user, -COINFLIP_NEW_COIN_COST)
+    adjust_points(user, -cost)
     user.coinflip_coins += 1
     db.session.commit()
     return jsonify({
         "ok": True,
         "coins": user.coinflip_coins,
         "total_score": user.total_score,
+        "next_cost": coinflip_new_coin_cost(user),
+    })
+
+
+@app.route("/api/coinflip/rebirth", methods=["POST"])
+def api_coinflip_rebirth():
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    cost = coinflip_rebirth_cost(user)
+    if user.total_score < cost:
+        return jsonify({"ok": False, "error": "insufficient_funds", "total_score": user.total_score}), 400
+
+    adjust_points(user, -cost)
+    user.coinflip_rebirths += 1
+    user.coinflip_worker_count = 0
+    user.coinflip_coins = 1
+    db.session.commit()
+    return jsonify({
+        "ok": True,
+        "rebirths": user.coinflip_rebirths,
+        "multiplier_bonus": round(COINFLIP_REBIRTH_MULTIPLIER_STEP * user.coinflip_rebirths, 2),
+        "total_score": user.total_score,
+        "worker_count": user.coinflip_worker_count,
+        "coins": user.coinflip_coins,
+        "next_worker_cost": coinflip_worker_cost(user),
+        "next_coin_cost": coinflip_new_coin_cost(user),
+        "next_rebirth_cost": coinflip_rebirth_cost(user),
     })
 
 

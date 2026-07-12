@@ -2409,6 +2409,20 @@ body.shorts-fullscreen main {
     font-size: 0.85rem;
 }
 
+.admin-points-form {
+    display: flex;
+    gap: 4px;
+}
+
+.admin-points-form input {
+    width: 80px;
+    padding: 0.3rem 0.5rem;
+    border-radius: 6px;
+    border: 1px solid #3c3c3c;
+    background: #1c1c1c;
+    color: #fff;
+}
+
 .conversation-list {
     display: flex;
     flex-direction: column;
@@ -2823,6 +2837,26 @@ body.shorts-fullscreen main {
     font-weight: 600;
     cursor: pointer;
     font-size: 0.85rem;
+}
+
+.coinflip-rebirth-item {
+    border-color: #6b4fd6;
+}
+
+.coinflip-rebirth-icon {
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background:
+        conic-gradient(#a78bfa 0deg 300deg, transparent 300deg 360deg);
+    -webkit-mask: radial-gradient(circle, transparent 40%, #000 41%);
+    mask: radial-gradient(circle, transparent 40%, #000 41%);
+    position: relative;
+}
+
+.coinflip-rebirth-item button {
+    background: #a78bfa;
 }
 
 .share-target-btn:hover {

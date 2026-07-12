@@ -778,6 +778,37 @@ def test_admin_cannot_delete_self(client):
     assert response.status_code == 400
 
 
+def test_admin_can_set_any_users_points(client):
+    register(client, username="boss")
+    make_admin("boss")
+    register(client, username="regular")
+    client.post("/logout")
+    client.post("/login", data={"username": "boss", "password": "secret123"})
+
+    target = User.query.filter_by(username="regular").first()
+    response = client.post(f"/admin/users/{target.id}/set-points", data={"total_score": "12345"}, follow_redirects=True)
+    assert response.status_code == 200
+
+    target = User.query.filter_by(username="regular").first()
+    assert target.total_score == 12345
+
+
+def test_admin_set_points_requires_admin(client):
+    register(client, username="alice")
+    response = client.post(f"/admin/users/1/set-points", data={"total_score": "999"})
+    assert response.status_code == 403
+
+
+def test_admin_set_points_clamps_negative_to_zero(client):
+    register(client, username="boss")
+    make_admin("boss")
+    target = User.query.filter_by(username="boss").first()
+
+    client.post(f"/admin/users/{target.id}/set-points", data={"total_score": "-50"})
+    target = User.query.filter_by(username="boss").first()
+    assert target.total_score == 0
+
+
 def test_cleanup_duplicate_videos_requires_admin(client):
     register(client, username="regular")
     response = client.post("/admin/cleanup-duplicate-videos?dry_run=1")
@@ -1865,6 +1896,108 @@ def test_coinflip_buy_coin_adds_simultaneous_flip(client, monkeypatch):
 def test_coinflip_buy_worker_insufficient_funds(client):
     register(client, username="alice")
     response = client.post("/api/coinflip/buy-worker")
+    data = response.get_json()
+    assert data["ok"] is False
+    assert data["error"] == "insufficient_funds"
+
+
+def test_coinflip_worker_cost_doubles_each_purchase(client):
+    register(client, username="alice")
+    user = User.query.filter_by(username="alice").first()
+    user.total_score = 1000
+    db.session.commit()
+
+    first = client.post("/api/coinflip/buy-worker").get_json()
+    assert first["total_score"] == 970  # 1000 - 30
+    assert first["next_cost"] == 60
+
+    second = client.post("/api/coinflip/buy-worker").get_json()
+    assert second["total_score"] == 910  # 970 - 60
+    assert second["next_cost"] == 120
+
+    third = client.post("/api/coinflip/buy-worker").get_json()
+    assert third["total_score"] == 790  # 910 - 120
+
+
+def test_coinflip_coin_cost_doubles_each_purchase(client):
+    register(client, username="alice")
+    user = User.query.filter_by(username="alice").first()
+    user.total_score = 1000
+    db.session.commit()
+
+    first = client.post("/api/coinflip/buy-coin").get_json()
+    assert first["total_score"] == 900  # 1000 - 100
+    assert first["next_cost"] == 200
+
+    second = client.post("/api/coinflip/buy-coin").get_json()
+    assert second["total_score"] == 700  # 900 - 200
+    assert second["next_cost"] == 400
+
+
+def test_coinflip_rebirth_resets_gadgets_and_grants_multiplier_bonus(client, monkeypatch):
+    import app as app_module
+
+    register(client, username="alice")
+    user = User.query.filter_by(username="alice").first()
+    user.total_score = 10000
+    db.session.commit()
+
+    client.post("/api/coinflip/buy-worker")
+    client.post("/api/coinflip/buy-coin")
+    client.post("/api/coinflip/buy-coin")
+
+    user = User.query.filter_by(username="alice").first()
+    assert user.coinflip_worker_count == 1
+    assert user.coinflip_coins == 3
+    before_score = user.total_score
+
+    response = client.post("/api/coinflip/rebirth")
+    data = response.get_json()
+    assert data["ok"] is True
+    assert data["rebirths"] == 1
+    assert data["worker_count"] == 0
+    assert data["coins"] == 1
+    assert data["multiplier_bonus"] == 0.2
+    assert data["total_score"] == before_score - 500
+
+    user = User.query.filter_by(username="alice").first()
+    assert user.coinflip_worker_count == 0
+    assert user.coinflip_coins == 1
+    assert user.coinflip_rebirths == 1
+
+    # Winning payout now includes the +0.2 rebirth bonus on top of the base 3x
+    # (no worker owned yet post-rebirth, so this is base_multiplier + bonus)
+    monkeypatch.setattr(app_module.random, "random", lambda: 0.1)  # win
+    flip_response = client.post("/api/coinflip/flip", json={"stake": 10}).get_json()
+    assert flip_response["multiplier"] == 3.2
+    assert flip_response["payout"] == 32  # int(10 * 3.2)
+
+    # Next worker/coin purchase is back to the base cost after the reset
+    balance_before_worker = flip_response["total_score"]
+    worker_response = client.post("/api/coinflip/buy-worker").get_json()
+    assert worker_response["total_score"] == balance_before_worker - 30
+
+
+def test_coinflip_second_rebirth_costs_1000_and_gives_0point4_bonus(client):
+    register(client, username="alice")
+    user = User.query.filter_by(username="alice").first()
+    user.total_score = 10000
+    db.session.commit()
+
+    first = client.post("/api/coinflip/rebirth").get_json()
+    assert first["next_rebirth_cost"] == 1000
+
+    second = client.post("/api/coinflip/rebirth")
+    second_data = second.get_json()
+    assert second_data["ok"] is True
+    assert second_data["rebirths"] == 2
+    assert second_data["multiplier_bonus"] == 0.4
+    assert second_data["total_score"] == 10000 - 500 - 1000
+
+
+def test_coinflip_rebirth_insufficient_funds(client):
+    register(client, username="alice")
+    response = client.post("/api/coinflip/rebirth")
     data = response.get_json()
     assert data["ok"] is False
     assert data["error"] == "insufficient_funds"

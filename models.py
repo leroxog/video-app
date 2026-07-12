@@ -27,6 +27,7 @@ class User(db.Model):
     ever_rank_one = db.Column(db.Boolean, nullable=False, default=False)
     coinflip_coins = db.Column(db.Integer, nullable=False, default=1)
     coinflip_worker_count = db.Column(db.Integer, nullable=False, default=0)
+    coinflip_rebirths = db.Column(db.Integer, nullable=False, default=0)
     videos = db.relationship("Video", backref="uploader", lazy=True, cascade="all, delete-orphan")
     likes_given = db.relationship("Like", backref="liker", lazy=True, cascade="all, delete-orphan")
     comments_made = db.relationship("Comment", backref="author", lazy=True, cascade="all, delete-orphan")
