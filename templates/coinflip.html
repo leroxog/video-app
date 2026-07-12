@@ -53,6 +53,7 @@
         const COIN_COUNT_KEY = "coinflipCoinCount";
         let coinCount = {{ user.coinflip_coins if user else 1 }};
         let workerCount = {{ user.coinflip_worker_count if user else 0 }};
+        let coinAngles = [];
 
         const coinRow = document.getElementById("coinflipCoinRow");
 
@@ -75,6 +76,14 @@
                     '</div>';
                 coinRow.appendChild(coin);
             }
+            while (coinAngles.length < coinCount) coinAngles.push(0);
+            coinAngles.length = coinCount;
+            coinRow.querySelectorAll(".coinflip-coin-inner").forEach((el, i) => {
+                el.style.transition = "none";
+                el.style.transform = `rotateY(${coinAngles[i]}deg)`;
+                void el.offsetWidth;
+                el.style.transition = "";
+            });
         }
         renderCoins();
 
@@ -108,9 +117,15 @@
                 data.results.forEach((outcome, i) => {
                     const el = coinEls[i];
                     if (!el) return;
-                    const spins = 4;
-                    const finalAngle = spins * 360 + (outcome === "win" ? 0 : 180);
-                    el.style.transform = `rotateY(${finalAngle}deg)`;
+                    const currentAngle = coinAngles[i] || 0;
+                    const currentOffset = ((currentAngle % 360) + 360) % 360;
+                    const desiredOffset = outcome === "win" ? 0 : 180;
+                    let delta = ((desiredOffset - currentOffset) + 360) % 360;
+                    if (delta === 0) delta = 360; // always spin visibly, even on a repeat result
+                    const extraSpins = 3;
+                    const newAngle = currentAngle + delta + extraSpins * 360;
+                    coinAngles[i] = newAngle;
+                    el.style.transform = `rotateY(${newAngle}deg)`;
                 });
 
                 setTimeout(() => {
