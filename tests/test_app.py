@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 import pytest
 from app import app as flask_app, db
-from models import User, Video, Sound
+from models import User, Video, Sound, Conversation, Message
 
 
 @pytest.fixture
@@ -1455,3 +1455,174 @@ def test_cannot_redeem_own_created_code(client):
     data = response.get_json()
     assert data["ok"] is False
     assert data["error"] == "cannot_redeem_own_code"
+
+
+def mutual_follow(client, user_a, user_b):
+    """Log in as each user in turn and subscribe to the other, making them mutual followers."""
+    client.post("/login", data={"username": user_a, "password": "secret123"})
+    a = User.query.filter_by(username=user_a).first()
+    b = User.query.filter_by(username=user_b).first()
+    client.post(f"/api/user/{user_b}/subscribe")
+    client.post("/logout")
+    client.post("/login", data={"username": user_b, "password": "secret123"})
+    client.post(f"/api/user/{user_a}/subscribe")
+    client.post("/logout")
+
+
+def test_cannot_start_dm_without_mutual_follow(client):
+    register(client, username="alice")
+    client.post("/logout")
+    register(client, username="bob")
+
+    response = client.post("/api/messages/start-dm", json={"username": "alice"})
+    data = response.get_json()
+    assert data["ok"] is False
+    assert data["error"] == "not_mutual_follow"
+
+
+def test_start_dm_with_mutual_follow_and_reuses_existing_conversation(client):
+    register(client, username="alice")
+    client.post("/logout")
+    register(client, username="bob")
+    client.post("/logout")
+
+    mutual_follow(client, "alice", "bob")
+
+    client.post("/login", data={"username": "alice", "password": "secret123"})
+    response = client.post("/api/messages/start-dm", json={"username": "bob"})
+    data = response.get_json()
+    assert data["ok"] is True
+    conv_id = data["conversation_id"]
+
+    # Calling again returns the same conversation, doesn't create a second one
+    response2 = client.post("/api/messages/start-dm", json={"username": "bob"})
+    assert response2.get_json()["conversation_id"] == conv_id
+
+
+def test_send_and_receive_message_in_dm(client):
+    register(client, username="alice")
+    client.post("/logout")
+    register(client, username="bob")
+    client.post("/logout")
+    mutual_follow(client, "alice", "bob")
+
+    client.post("/login", data={"username": "alice", "password": "secret123"})
+    conv_id = client.post("/api/messages/start-dm", json={"username": "bob"}).get_json()["conversation_id"]
+    client.post(f"/api/messages/{conv_id}/send", json={"text": "Hallo Bob!"})
+    client.post("/logout")
+
+    client.post("/login", data={"username": "bob", "password": "secret123"})
+    response = client.get(f"/api/messages/{conv_id}")
+    data = response.get_json()
+    assert data["ok"] is True
+    assert len(data["messages"]) == 1
+    assert data["messages"][0]["text"] == "Hallo Bob!"
+    assert data["messages"][0]["is_mine"] is False
+
+
+def test_non_member_cannot_access_conversation(client):
+    register(client, username="alice")
+    client.post("/logout")
+    register(client, username="bob")
+    client.post("/logout")
+    mutual_follow(client, "alice", "bob")
+
+    client.post("/login", data={"username": "alice", "password": "secret123"})
+    conv_id = client.post("/api/messages/start-dm", json={"username": "bob"}).get_json()["conversation_id"]
+    client.post("/logout")
+
+    register(client, username="carol")
+    response = client.get(f"/api/messages/{conv_id}")
+    assert response.get_json()["ok"] is False
+
+
+def test_message_self_deletes_15_seconds_after_being_viewed(client):
+    from datetime import datetime, timedelta, timezone
+
+    register(client, username="alice")
+    client.post("/logout")
+    register(client, username="bob")
+    client.post("/logout")
+    mutual_follow(client, "alice", "bob")
+
+    client.post("/login", data={"username": "alice", "password": "secret123"})
+    conv_id = client.post("/api/messages/start-dm", json={"username": "bob"}).get_json()["conversation_id"]
+    client.post(f"/api/messages/{conv_id}/send", json={"text": "Hallo Bob!"})
+    client.post("/logout")
+
+    client.post("/login", data={"username": "bob", "password": "secret123"})
+    client.get(f"/api/messages/{conv_id}")  # marks it viewed
+    message = Message.query.filter_by(conversation_id=conv_id).first()
+    assert message is not None
+    assert message.viewed_at is not None
+
+    # Simulate 16 seconds having passed since it was viewed
+    message.viewed_at = datetime.now(timezone.utc) - timedelta(seconds=16)
+    db.session.commit()
+
+    response = client.get(f"/api/messages/{conv_id}")
+    assert response.get_json()["messages"] == []
+    assert Message.query.filter_by(conversation_id=conv_id).first() is None
+
+
+def test_create_group_requires_2_to_99_mutual_follow_members(client):
+    register(client, username="alice")
+    client.post("/logout")
+    register(client, username="bob")
+    client.post("/logout")
+    mutual_follow(client, "alice", "bob")
+
+    client.post("/login", data={"username": "alice", "password": "secret123"})
+    response = client.post("/api/messages/create-group", json={"name": "Team", "usernames": ["bob"]})
+    data = response.get_json()
+    assert data["ok"] is True
+
+    conv = db.session.get(Conversation, data["conversation_id"])
+    assert conv.is_group is True
+    assert len(conv.members) == 2
+
+
+def test_create_group_rejects_non_mutual_follow_member(client):
+    register(client, username="alice")
+    client.post("/logout")
+    register(client, username="bob")
+    client.post("/logout")
+    register(client, username="carol")  # not mutually followed by alice
+    client.post("/logout")
+
+    client.post("/login", data={"username": "alice", "password": "secret123"})
+    response = client.post("/api/messages/create-group", json={"name": "Team", "usernames": ["carol"]})
+    assert response.get_json()["ok"] is False
+
+
+def test_share_video_creates_message_with_shared_video(client):
+    register(client, username="alice")
+    alice = User.query.filter_by(username="alice").first()
+    video = Video(title="cool clip", filename="clip.mp4", content_hash="clip-hash", user_id=alice.id)
+    db.session.add(video)
+    db.session.commit()
+    client.post("/logout")
+
+    register(client, username="bob")
+    client.post("/logout")
+    mutual_follow(client, "alice", "bob")
+
+    client.post("/login", data={"username": "alice", "password": "secret123"})
+    conv_id = client.post("/api/messages/start-dm", json={"username": "bob"}).get_json()["conversation_id"]
+    response = client.post(f"/api/videos/{video.id}/share", json={"conversation_id": conv_id})
+    assert response.get_json()["ok"] is True
+
+    messages_data = client.get(f"/api/messages/{conv_id}").get_json()["messages"]
+    assert messages_data[0]["shared_video"]["title"] == "cool clip"
+
+
+def test_liked_videos_page_lists_liked_videos(client):
+    register(client, username="alice")
+    alice = User.query.filter_by(username="alice").first()
+    video = Video(title="liked clip", filename="liked.mp4", content_hash="liked-hash", user_id=alice.id)
+    db.session.add(video)
+    db.session.commit()
+
+    client.post(f"/video/{video.id}/like")
+    response = client.get("/liked-videos")
+    assert b"liked clip" in response.data

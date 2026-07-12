@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}{{ conversation_name }} - timeskip{% endblock %}
+{% block content %}
+    <div class="conversation-page">
+        <a class="clear-search" href="{{ url_for('messages_page') }}">&larr; Alle Chats</a>
+        <h1>{{ conversation_name }}</h1>
+        <p class="video-meta">Nachrichten verschwinden 15 Sekunden, nachdem sie angeschaut wurden.</p>
+
+        <div class="conversation-messages" id="conversationMessages"></div>
+
+        <form class="conversation-send-form" id="conversationSendForm">
+            <input type="text" id="conversationMessageInput" placeholder="Nachricht schreiben..." maxlength="2000" autocomplete="off">
+            <button type="submit">Senden</button>
+        </form>
+    </div>
+
+    <script>
+        const CONVERSATION_ID = {{ conversation.id }};
+        const MY_USERNAME = "{{ user.username }}";
+        const messagesEl = document.getElementById("conversationMessages");
+
+        function renderMessages(messages) {
+            messagesEl.innerHTML = "";
+            messages.forEach((m) => {
+                const item = document.createElement("div");
+                item.className = "conversation-message " + (m.is_mine ? "mine" : "theirs");
+
+                const sender = document.createElement("div");
+                sender.className = "conversation-message-sender";
+                sender.textContent = m.is_mine ? "Du" : m.sender_username;
+                item.appendChild(sender);
+
+                if (m.text) {
+                    const text = document.createElement("div");
+                    text.className = "conversation-message-text";
+                    text.textContent = m.text;
+                    item.appendChild(text);
+                }
+
+                if (m.shared_video) {
+                    const shared = document.createElement("a");
+                    shared.className = "conversation-shared-video";
+                    shared.href = m.shared_video.url;
+                    shared.textContent = "🎬 " + m.shared_video.title;
+                    item.appendChild(shared);
+                }
+
+                const time = document.createElement("div");
+                time.className = "conversation-message-time";
+                time.textContent = m.created_at;
+                item.appendChild(time);
+
+                messagesEl.appendChild(item);
+            });
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+
+        async function fetchMessages() {
+            const res = await fetch(`/api/messages/${CONVERSATION_ID}`);
+            const data = await res.json();
+            if (data.ok) renderMessages(data.messages);
+        }
+
+        fetchMessages();
+        const pollInterval = setInterval(fetchMessages, 3000);
+        window.addEventListener("beforeunload", () => clearInterval(pollInterval));
+
+        document.getElementById("conversationSendForm").addEventListener("submit", async (event) => {
+            event.preventDefault();
+            const input = document.getElementById("conversationMessageInput");
+            const text = input.value.trim();
+            if (!text) return;
+
+            await fetch(`/api/messages/${CONVERSATION_ID}/send`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ text }),
+            });
+            input.value = "";
+            fetchMessages();
+        });
+    </script>
+{% endblock %}

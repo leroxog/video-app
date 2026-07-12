@@ -131,3 +131,39 @@ class Sound(db.Model):
     title = db.Column(db.String(200), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class Conversation(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    is_group = db.Column(db.Boolean, nullable=False, default=False)
+    group_name = db.Column(db.String(100), nullable=True)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    members = db.relationship(
+        "ConversationMember", backref="conversation", lazy=True, cascade="all, delete-orphan",
+    )
+    messages = db.relationship(
+        "Message", backref="conversation", lazy=True, cascade="all, delete-orphan",
+        order_by="Message.created_at",
+    )
+
+
+class ConversationMember(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    conversation_id = db.Column(db.Integer, db.ForeignKey("conversation.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    user = db.relationship("User")
+    __table_args__ = (db.UniqueConstraint("conversation_id", "user_id", name="uq_conv_member"),)
+
+
+class Message(db.Model):
+    """Messages self-delete 15 seconds after first being viewed by a
+    recipient (viewed_at set on read, row purged lazily on next fetch)."""
+    id = db.Column(db.Integer, primary_key=True)
+    conversation_id = db.Column(db.Integer, db.ForeignKey("conversation.id"), nullable=False)
+    sender_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    text = db.Column(db.Text, nullable=True)
+    shared_video_id = db.Column(db.Integer, db.ForeignKey("video.id"), nullable=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    viewed_at = db.Column(db.DateTime, nullable=True)
+    sender = db.relationship("User", foreign_keys=[sender_id])

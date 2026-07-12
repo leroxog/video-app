@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Nachrichten - timeskip{% endblock %}
+{% block content %}
+    <div class="messages-page">
+        <h1>Nachrichten</h1>
+
+        <h2>Chats</h2>
+        {% if conversations %}
+            <div class="conversation-list">
+                {% for conv in conversations %}
+                    <a class="conversation-list-item" href="{{ url_for('conversation_page', conversation_id=conv.id) }}">
+                        <span class="conversation-list-name">{{ conv.name }}{% if conv.is_group %} <span class="conversation-group-tag">Gruppe</span>{% endif %}</span>
+                        {% if conv.last_message %}
+                            <span class="conversation-list-preview">{{ conv.last_message }}</span>
+                        {% endif %}
+                    </a>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p>Noch keine Chats. Schreib jemandem, dem du folgst und der dir auch folgt.</p>
+        {% endif %}
+
+        <div class="messages-contacts-header">
+            <h2>Kontakte</h2>
+            <button type="button" class="create-group-toggle-btn" id="createGroupToggleBtn" title="Gruppe erstellen">+</button>
+        </div>
+
+        <div class="create-group-panel" id="createGroupPanel" style="display:none;">
+            <label for="groupNameInput">Gruppenname</label>
+            <input type="text" id="groupNameInput" maxlength="100" placeholder="z.B. Fußball-Gruppe">
+            <p class="create-code-fee-note">Wähle 1-98 weitere Mitglieder (2-99 insgesamt, dich eingeschlossen).</p>
+            <div class="group-member-checkboxes">
+                {% for contact in contacts %}
+                    <label class="group-member-checkbox">
+                        <input type="checkbox" value="{{ contact.username }}"> {{ contact.username }}
+                    </label>
+                {% endfor %}
+            </div>
+            <button type="button" id="createGroupSubmitBtn">Gruppe erstellen</button>
+            <p class="create-code-status" id="createGroupStatus"></p>
+        </div>
+
+        {% if contacts %}
+            <div class="contact-list">
+                {% for contact in contacts %}
+                    <button type="button" class="contact-list-item" data-username="{{ contact.username }}">
+                        {% if contact.profile_image %}
+                            <img class="contact-avatar" src="{{ media_url('profile_pics', contact.profile_image) }}" alt="">
+                        {% else %}
+                            <div class="contact-avatar profile-avatar-placeholder">{{ contact.username[0]|upper }}</div>
+                        {% endif %}
+                        <span>{{ contact.username }}</span>
+                    </button>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p>Noch keine gegenseitigen Follower. Folge jemandem, der dir auch folgt, um zu schreiben.</p>
+        {% endif %}
+    </div>
+
+    <script>
+        document.querySelectorAll(".contact-list-item").forEach((btn) => {
+            btn.addEventListener("click", async () => {
+                const res = await fetch("{{ url_for('api_start_dm') }}", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ username: btn.dataset.username }),
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    window.location.href = "/messages/" + data.conversation_id;
+                }
+            });
+        });
+
+        const createGroupToggleBtn = document.getElementById("createGroupToggleBtn");
+        const createGroupPanel = document.getElementById("createGroupPanel");
+        if (createGroupToggleBtn) {
+            createGroupToggleBtn.addEventListener("click", () => {
+                createGroupPanel.style.display = createGroupPanel.style.display === "none" ? "block" : "none";
+            });
+        }
+
+        const createGroupSubmitBtn = document.getElementById("createGroupSubmitBtn");
+        if (createGroupSubmitBtn) {
+            createGroupSubmitBtn.addEventListener("click", async () => {
+                const status = document.getElementById("createGroupStatus");
+                const name = document.getElementById("groupNameInput").value.trim();
+                const usernames = [...document.querySelectorAll(".group-member-checkbox input:checked")].map(cb => cb.value);
+
+                const res = await fetch("{{ url_for('api_create_group') }}", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ name, usernames }),
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    window.location.href = "/messages/" + data.conversation_id;
+                } else if (data.error === "invalid_group_size") {
+                    status.textContent = "Eine Gruppe braucht 2-99 Mitglieder (dich eingeschlossen).";
+                    status.className = "create-code-status error";
+                } else {
+                    status.textContent = "Das hat nicht geklappt.";
+                    status.className = "create-code-status error";
+                }
+            });
+        }
+    </script>
+{% endblock %}

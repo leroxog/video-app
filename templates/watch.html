@@ -22,9 +22,15 @@
                 <span class="like-count-readonly">&#10084; {{ like_count }}</span>
             {% endif %}
 
-            <a class="download-link" href="{{ media_url('uploads', video.filename) }}" download>
+            <a class="download-link" href="{{ url_for('download_video', video_id=video.id) }}">
                 &#11015; Herunterladen
             </a>
+
+            {% if user %}
+                <button type="button" class="share-video-btn" id="shareVideoBtn" data-video-id="{{ video.id }}">
+                    <span class="share-icon"></span> Teilen
+                </button>
+            {% endif %}
         </div>
 
         <div class="channel-row">
@@ -94,6 +100,17 @@
         </div>
 
         <a href="{{ url_for('index') }}">&larr; Zurück zur Übersicht</a>
+
+        {% if user %}
+            <div class="badge-modal-backdrop" id="shareModalBackdrop">
+                <div class="badge-modal">
+                    <button type="button" class="badge-modal-close" id="shareModalCloseBtn">&times;</button>
+                    <h2>Video teilen</h2>
+                    <div class="share-target-list" id="shareTargetList"></div>
+                    <p class="create-code-status" id="shareStatus"></p>
+                </div>
+            </div>
+        {% endif %}
     </div>
 
     <script>
@@ -158,6 +175,50 @@
 
                 input.value = "";
                 commentCountEl.textContent = data.comment_count;
+            });
+        }
+
+        const shareBtn = document.getElementById("shareVideoBtn");
+        const shareBackdrop = document.getElementById("shareModalBackdrop");
+        if (shareBtn && shareBackdrop) {
+            const shareCloseBtn = document.getElementById("shareModalCloseBtn");
+            const shareTargetList = document.getElementById("shareTargetList");
+            const shareStatus = document.getElementById("shareStatus");
+
+            shareBtn.addEventListener("click", async () => {
+                shareBackdrop.classList.add("show");
+                shareStatus.textContent = "";
+                shareTargetList.innerHTML = "Lade...";
+
+                const res = await fetch("{{ url_for('api_conversations') }}");
+                const data = await res.json();
+                shareTargetList.innerHTML = "";
+                if (!data.ok || data.conversations.length === 0) {
+                    shareTargetList.innerHTML = "<p>Du hast noch keine Chats. Schreib zuerst jemandem, dem du folgst und der dir auch folgt.</p>";
+                    return;
+                }
+                data.conversations.forEach((conv) => {
+                    const btn = document.createElement("button");
+                    btn.type = "button";
+                    btn.className = "share-target-btn";
+                    btn.textContent = conv.name;
+                    btn.addEventListener("click", async () => {
+                        const shareRes = await fetch("{{ url_for('api_share_video', video_id=video.id) }}", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ conversation_id: conv.id }),
+                        });
+                        const shareData = await shareRes.json();
+                        shareStatus.textContent = shareData.ok ? `An "${conv.name}" gesendet!` : "Fehlgeschlagen.";
+                        shareStatus.className = shareData.ok ? "create-code-status success" : "create-code-status error";
+                    });
+                    shareTargetList.appendChild(btn);
+                });
+            });
+
+            shareCloseBtn.addEventListener("click", () => shareBackdrop.classList.remove("show"));
+            shareBackdrop.addEventListener("click", (e) => {
+                if (e.target === shareBackdrop) shareBackdrop.classList.remove("show");
             });
         }
     </script>

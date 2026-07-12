@@ -8,13 +8,13 @@ import logging
 from datetime import datetime, timezone, date, timedelta
 from flask import (
     Flask, render_template, request, redirect, url_for,
-    session, send_from_directory, abort, flash, jsonify
+    session, send_from_directory, abort, flash, jsonify, Response
 )
 from sqlalchemy import text
 from werkzeug.utils import secure_filename
 from models import (
     db, User, Video, Pixel, Like, Subscription, Comment, RedeemedCode, GamePlayCount, Sound,
-    UserCreatedCode,
+    UserCreatedCode, Conversation, ConversationMember, Message,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -487,6 +487,41 @@ def require_admin():
     if user is None or not user.is_admin:
         abort(403)
     return user
+
+
+MESSAGE_VIEW_TTL_SECONDS = 15
+MIN_GROUP_MEMBERS = 2
+MAX_GROUP_MEMBERS = 99
+
+
+def mutual_follow_ids(user):
+    """IDs of users that `user` follows AND that follow `user` back."""
+    following = {
+        s.channel_id for s in Subscription.query.filter_by(subscriber_id=user.id).all()
+    }
+    followers = {
+        s.subscriber_id for s in Subscription.query.filter_by(channel_id=user.id).all()
+    }
+    return following & followers
+
+
+def is_conversation_member(user, conversation):
+    return ConversationMember.query.filter_by(
+        conversation_id=conversation.id, user_id=user.id
+    ).first() is not None
+
+
+def purge_expired_messages(conversation):
+    now = datetime.now(timezone.utc)
+    for message in list(conversation.messages):
+        viewed_at = message.viewed_at
+        if viewed_at is None:
+            continue
+        if viewed_at.tzinfo is None:
+            viewed_at = viewed_at.replace(tzinfo=timezone.utc)
+        if (now - viewed_at).total_seconds() >= MESSAGE_VIEW_TTL_SECONDS:
+            db.session.delete(message)
+    db.session.commit()
 
 
 ONLINE_THRESHOLD_SECONDS = 5 * 60
@@ -987,6 +1022,274 @@ def api_subscribe(username):
         subscribed = True
     db.session.commit()
     return jsonify({"ok": True, "subscribed": subscribed, "subscriber_count": len(target.subscribers)})
+
+
+def serialize_message(message, viewer_id):
+    entry = {
+        "id": message.id,
+        "sender_id": message.sender_id,
+        "sender_username": message.sender.username,
+        "text": message.text,
+        "created_at": message.created_at.strftime("%H:%M"),
+        "is_mine": message.sender_id == viewer_id,
+    }
+    if message.shared_video_id is not None:
+        video = db.session.get(Video, message.shared_video_id)
+        if video is not None:
+            entry["shared_video"] = {
+                "id": video.id,
+                "title": video.title,
+                "url": url_for("watch", video_id=video.id),
+            }
+    return entry
+
+
+def conversation_display_name(conversation, viewer):
+    if conversation.is_group:
+        return conversation.group_name or "Gruppe"
+    other = next(
+        (m.user for m in conversation.members if m.user_id != viewer.id), None
+    )
+    return other.username if other else "Unbekannt"
+
+
+@app.route("/messages")
+def messages_page():
+    user = current_user()
+    if user is None:
+        return redirect(url_for("login"))
+
+    memberships = ConversationMember.query.filter_by(user_id=user.id).all()
+    conversations = []
+    for membership in memberships:
+        conv = membership.conversation
+        last_message = conv.messages[-1] if conv.messages else None
+        conversations.append({
+            "id": conv.id,
+            "name": conversation_display_name(conv, user),
+            "is_group": conv.is_group,
+            "last_message": last_message.text if last_message and last_message.text else (
+                "[Video geteilt]" if last_message and last_message.shared_video_id else ""
+            ),
+        })
+    conversations.sort(key=lambda c: c["id"], reverse=True)
+
+    contacts = [
+        db.session.get(User, uid) for uid in mutual_follow_ids(user)
+    ]
+    return render_template("messages.html", user=user, conversations=conversations, contacts=contacts)
+
+
+@app.route("/messages/<int:conversation_id>")
+def conversation_page(conversation_id):
+    user = current_user()
+    if user is None:
+        return redirect(url_for("login"))
+    conversation = db.get_or_404(Conversation, conversation_id)
+    if not is_conversation_member(user, conversation):
+        abort(403)
+    return render_template(
+        "conversation.html",
+        user=user,
+        conversation=conversation,
+        conversation_name=conversation_display_name(conversation, user),
+    )
+
+
+@app.route("/api/conversations")
+def api_conversations():
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    memberships = ConversationMember.query.filter_by(user_id=user.id).all()
+    conversations = [
+        {"id": m.conversation.id, "name": conversation_display_name(m.conversation, user), "is_group": m.conversation.is_group}
+        for m in memberships
+    ]
+    return jsonify({"ok": True, "conversations": conversations})
+
+
+@app.route("/api/contacts")
+def api_contacts():
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    contacts = [db.session.get(User, uid) for uid in mutual_follow_ids(user)]
+    return jsonify({
+        "ok": True,
+        "contacts": [
+            {"username": c.username, "profile_image": media_url("profile_pics", c.profile_image)}
+            for c in contacts if c is not None
+        ],
+    })
+
+
+@app.route("/api/messages/start-dm", methods=["POST"])
+def api_start_dm():
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+
+    data = request.get_json(silent=True) or {}
+    username = (data.get("username") or "").strip()
+    target = User.query.filter_by(username=username).first()
+    if target is None or target.id == user.id:
+        return jsonify({"ok": False, "error": "invalid_user"}), 400
+    if target.id not in mutual_follow_ids(user):
+        return jsonify({"ok": False, "error": "not_mutual_follow"}), 400
+
+    my_conv_ids = {
+        m.conversation_id for m in ConversationMember.query.filter_by(user_id=user.id).all()
+    }
+    for conv_id in my_conv_ids:
+        conv = db.session.get(Conversation, conv_id)
+        if conv.is_group:
+            continue
+        member_ids = {m.user_id for m in conv.members}
+        if member_ids == {user.id, target.id}:
+            return jsonify({"ok": True, "conversation_id": conv.id})
+
+    conversation = Conversation(is_group=False, created_by=user.id)
+    db.session.add(conversation)
+    db.session.flush()
+    db.session.add(ConversationMember(conversation_id=conversation.id, user_id=user.id))
+    db.session.add(ConversationMember(conversation_id=conversation.id, user_id=target.id))
+    db.session.commit()
+    return jsonify({"ok": True, "conversation_id": conversation.id})
+
+
+@app.route("/api/messages/create-group", methods=["POST"])
+def api_create_group():
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()[:100]
+    usernames = data.get("usernames") or []
+    if not isinstance(usernames, list):
+        return jsonify({"ok": False, "error": "invalid_data"}), 400
+
+    allowed_ids = mutual_follow_ids(user)
+    member_ids = {user.id}
+    for uname in usernames:
+        target = User.query.filter_by(username=uname).first()
+        if target is None or target.id not in allowed_ids:
+            return jsonify({"ok": False, "error": "invalid_member", "username": uname}), 400
+        member_ids.add(target.id)
+
+    if not (MIN_GROUP_MEMBERS <= len(member_ids) <= MAX_GROUP_MEMBERS):
+        return jsonify({"ok": False, "error": "invalid_group_size"}), 400
+    if not name:
+        name = "Gruppe"
+
+    conversation = Conversation(is_group=True, group_name=name, created_by=user.id)
+    db.session.add(conversation)
+    db.session.flush()
+    for uid in member_ids:
+        db.session.add(ConversationMember(conversation_id=conversation.id, user_id=uid))
+    db.session.commit()
+    return jsonify({"ok": True, "conversation_id": conversation.id})
+
+
+@app.route("/api/messages/<int:conversation_id>")
+def api_get_messages(conversation_id):
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    conversation = db.get_or_404(Conversation, conversation_id)
+    if not is_conversation_member(user, conversation):
+        return jsonify({"ok": False, "error": "forbidden"}), 403
+
+    now = datetime.now(timezone.utc)
+    for message in conversation.messages:
+        if message.viewed_at is None and message.sender_id != user.id:
+            message.viewed_at = now
+    db.session.commit()
+
+    purge_expired_messages(conversation)
+
+    return jsonify({
+        "ok": True,
+        "messages": [serialize_message(m, user.id) for m in conversation.messages],
+    })
+
+
+@app.route("/api/messages/<int:conversation_id>/send", methods=["POST"])
+def api_send_message(conversation_id):
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    conversation = db.get_or_404(Conversation, conversation_id)
+    if not is_conversation_member(user, conversation):
+        return jsonify({"ok": False, "error": "forbidden"}), 403
+
+    data = request.get_json(silent=True) or {}
+    text = (data.get("text") or "").strip()[:2000]
+    shared_video_id = data.get("shared_video_id")
+
+    if not text and not shared_video_id:
+        return jsonify({"ok": False, "error": "empty_message"}), 400
+
+    video = None
+    if shared_video_id is not None:
+        video = db.session.get(Video, shared_video_id)
+        if video is None:
+            return jsonify({"ok": False, "error": "invalid_video"}), 400
+
+    message = Message(
+        conversation_id=conversation.id,
+        sender_id=user.id,
+        text=text or None,
+        shared_video_id=video.id if video else None,
+    )
+    db.session.add(message)
+    db.session.commit()
+    return jsonify({"ok": True, "message": serialize_message(message, user.id)})
+
+
+@app.route("/api/videos/<int:video_id>/share", methods=["POST"])
+def api_share_video(video_id):
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    video = db.get_or_404(Video, video_id)
+
+    data = request.get_json(silent=True) or {}
+    conversation_id = data.get("conversation_id")
+    conversation = db.session.get(Conversation, conversation_id) if conversation_id else None
+    if conversation is None or not is_conversation_member(user, conversation):
+        return jsonify({"ok": False, "error": "invalid_conversation"}), 400
+
+    message = Message(conversation_id=conversation.id, sender_id=user.id, shared_video_id=video.id)
+    db.session.add(message)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/liked-videos")
+def liked_videos_page():
+    user = current_user()
+    if user is None:
+        return redirect(url_for("login"))
+    videos = [like.video for like in Like.query.filter_by(user_id=user.id).order_by(Like.id.desc()).all()]
+    return render_template("liked_videos.html", user=user, videos=videos)
+
+
+@app.route("/video/<int:video_id>/download")
+def download_video(video_id):
+    video = db.get_or_404(Video, video_id)
+    if USE_R2:
+        data = fetch_video_bytes(video)
+        return Response(
+            data,
+            mimetype=video_mime_type(video.filename),
+            headers={"Content-Disposition": f'attachment; filename="{secure_filename(video.title)[:100] or "video"}.{video.filename.rsplit(".", 1)[-1]}"'},
+        )
+    return send_from_directory(
+        app.config["UPLOAD_FOLDER"], video.filename, as_attachment=True,
+        download_name=f"{secure_filename(video.title)[:100] or 'video'}.{video.filename.rsplit('.', 1)[-1]}",
+    )
 
 
 @app.route("/uploads/<path:filename>")

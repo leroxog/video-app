@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Deine Likes - timeskip{% endblock %}
+{% block content %}
+    <h1>Deine Likes</h1>
+    {% if videos %}
+        <div class="video-grid">
+            {% for video in videos %}
+                <a class="video-card" href="{{ url_for('watch', video_id=video.id) }}">
+                    <video muted preload="metadata">
+                        <source src="{{ media_url('uploads', video.filename) }}" type="{{ video_mime_type(video.filename) }}">
+                    </video>
+                    <div class="video-card-info">
+                        <div class="video-title">{{ video.title }}</div>
+                        <div class="video-meta">von {{ video.uploader.username }}</div>
+                    </div>
+                </a>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p>Du hast noch keine Videos geliked.</p>
+    {% endif %}
+{% endblock %}
