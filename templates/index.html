@@ -13,6 +13,24 @@
                 document.getElementById("promoBanner").remove();
             });
         </script>
+    {% else %}
+        <div class="secret-tip-banner">
+            <div class="secret-tip-label">GEHEIM TIPP</div>
+            <div class="secret-tip-title">Spiele COIN FLIPP</div>
+            <div class="secret-tip-preview">
+                <div class="secret-tip-coin">
+                    <div class="secret-tip-coin-inner">
+                        <div class="secret-tip-coin-face secret-tip-coin-front">
+                            <svg viewBox="0 0 60 60"><circle cx="30" cy="30" r="28" fill="#e8b923" stroke="#b8890f" stroke-width="3"/><text x="30" y="40" text-anchor="middle" font-size="28" font-weight="bold" fill="#7a5c0a">$</text></svg>
+                        </div>
+                        <div class="secret-tip-coin-face secret-tip-coin-back">
+                            <svg viewBox="0 0 60 60"><circle cx="30" cy="30" r="28" fill="#c9c9c9" stroke="#8f8f8f" stroke-width="3"/><rect x="16" y="24" width="8" height="18" fill="#6b6b6b"/><rect x="26" y="18" width="8" height="24" fill="#5a5a5a"/><rect x="36" y="27" width="8" height="15" fill="#6b6b6b"/></svg>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <a class="secret-tip-play" href="{{ url_for('coinflip') }}">SPIELEN</a>
+        </div>
     {% endif %}
 
     <div class="upload-bonus-banner">Jedes hochgeladene Video bringt <strong>+100 Punkte</strong>, jeder Like <strong>+60 Punkte</strong></div>

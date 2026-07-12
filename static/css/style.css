@@ -857,6 +857,88 @@ h1 {
     background: #5fb6ff;
 }
 
+.secret-tip-banner {
+    position: relative;
+    max-width: 480px;
+    margin-bottom: 1.5rem;
+    padding: 1.5rem;
+    border: 2px solid #e8b923;
+    border-radius: 10px;
+    background: #1c1a14;
+    text-align: center;
+}
+
+.secret-tip-label {
+    color: #e8b923;
+    font-size: 1.5rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.6rem;
+}
+
+.secret-tip-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+}
+
+.secret-tip-preview {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 1.2rem;
+}
+
+.secret-tip-coin {
+    width: 70px;
+    height: 70px;
+    perspective: 600px;
+}
+
+.secret-tip-coin-inner {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    transform-style: preserve-3d;
+    animation: secret-tip-coin-spin 2.4s linear infinite;
+}
+
+@keyframes secret-tip-coin-spin {
+    from { transform: rotateY(0deg); }
+    to { transform: rotateY(360deg); }
+}
+
+.secret-tip-coin-face {
+    position: absolute;
+    inset: 0;
+    backface-visibility: hidden;
+    filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.4));
+}
+
+.secret-tip-coin-face svg {
+    width: 100%;
+    height: 100%;
+}
+
+.secret-tip-coin-back {
+    transform: rotateY(180deg);
+}
+
+.secret-tip-play {
+    display: inline-block;
+    padding: 0.7rem 2rem;
+    border-radius: 6px;
+    background: #3ea6ff;
+    color: #0f0f0f;
+    font-weight: 800;
+    text-decoration: none;
+    letter-spacing: 0.05em;
+}
+
+.secret-tip-play:hover {
+    background: #5fb6ff;
+}
+
 .leaderboard-user {
     display: inline-flex;
     align-items: center;

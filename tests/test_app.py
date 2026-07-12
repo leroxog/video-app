@@ -517,6 +517,17 @@ def test_homepage_shows_redeem_code_chip_for_user(client):
     assert "CODE ERHALTEN".encode() in response.data
 
 
+def test_homepage_shows_secret_tip_only_for_logged_in_users(client):
+    guest_response = client.get("/")
+    assert "GEHEIM TIPP".encode() not in guest_response.data
+
+    register(client)
+    user_response = client.get("/")
+    assert "GEHEIM TIPP".encode() in user_response.data
+    assert "COIN FLIPP".encode() in user_response.data
+    assert b'href="/coinflip"' in user_response.data
+
+
 def test_place_pixel_flow(client):
     register(client)
 
