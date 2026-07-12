@@ -8,6 +8,7 @@ import logging
 import shutil
 import subprocess
 import tempfile
+import threading
 from datetime import datetime, timezone, date, timedelta
 from flask import (
     Flask, render_template, request, redirect, url_for,
@@ -1663,13 +1664,40 @@ def run_transcode_migration(dry_run=True, limit=None):
     return {"ok": True, "dry_run": dry_run, "results": results}
 
 
+transcode_migration_status = {"running": False, "last_report": None}
+
+
+def _run_transcode_migration_background(dry_run, limit):
+    transcode_migration_status["running"] = True
+    try:
+        with app.app_context():
+            report = run_transcode_migration(dry_run=dry_run, limit=limit)
+        transcode_migration_status["last_report"] = report
+        logger.info("Transcode-Migration abgeschlossen: %s", report)
+    except Exception:
+        logger.exception("Transcode-Migration im Hintergrund fehlgeschlagen.")
+    finally:
+        transcode_migration_status["running"] = False
+
+
 @app.route("/admin/transcode-legacy-videos", methods=["POST"])
 def admin_transcode_legacy_videos():
     require_admin()
     dry_run = request.args.get("dry_run", "1") != "0"
     limit = request.args.get("limit", type=int)
-    report = run_transcode_migration(dry_run=dry_run, limit=limit)
-    return jsonify(report)
+    if transcode_migration_status["running"]:
+        return jsonify({"ok": False, "error": "already_running"}), 409
+    thread = threading.Thread(
+        target=_run_transcode_migration_background, args=(dry_run, limit), daemon=True,
+    )
+    thread.start()
+    return jsonify({"ok": True, "status": "started"})
+
+
+@app.route("/admin/transcode-legacy-videos/status")
+def admin_transcode_legacy_videos_status():
+    require_admin()
+    return jsonify(transcode_migration_status)
 
 
 def is_user_online(user):

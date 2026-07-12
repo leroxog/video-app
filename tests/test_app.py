@@ -1729,6 +1729,36 @@ def test_transcode_migration_real_run_updates_filename(client, monkeypatch, tmp_
     assert deleted == ["legacy.webm"]
 
 
+def test_admin_transcode_route_starts_in_background_and_reports_status(client, monkeypatch, tmp_path):
+    import app as app_module
+    import time
+
+    register(client, username="alice")
+    make_admin("alice")
+    victim = User.query.filter_by(username="alice").first()
+    video = Video(title="legacy webm", filename="legacy.webm", content_hash="legacyhash", user_id=victim.id)
+    db.session.add(video)
+    db.session.commit()
+
+    fake_output = tmp_path / "fake_converted.mp4"
+    fake_output.write_bytes(b"fake transcoded mp4 bytes")
+    monkeypatch.setattr(app_module, "FFMPEG_PATH", "/usr/bin/ffmpeg")
+    monkeypatch.setattr(app_module, "transcode_to_mp4", lambda input_path: str(fake_output))
+    monkeypatch.setattr(app_module, "fetch_video_bytes", lambda v: b"old webm bytes")
+
+    response = client.post("/admin/transcode-legacy-videos?dry_run=1")
+    assert response.get_json()["ok"] is True
+    assert response.get_json()["status"] == "started"
+
+    for _ in range(50):
+        status = client.get("/admin/transcode-legacy-videos/status").get_json()
+        if not status["running"] and status["last_report"] is not None:
+            break
+        time.sleep(0.05)
+
+    assert status["last_report"]["results"][0]["status"] == "would_convert"
+
+
 def test_liked_videos_page_lists_liked_videos(client):
     register(client, username="alice")
     alice = User.query.filter_by(username="alice").first()
