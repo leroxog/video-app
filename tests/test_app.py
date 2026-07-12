@@ -1769,3 +1769,102 @@ def test_liked_videos_page_lists_liked_videos(client):
     client.post(f"/video/{video.id}/like")
     response = client.get("/liked-videos")
     assert b"liked clip" in response.data
+
+
+def test_coinflip_page_loads(client):
+    register(client, username="alice")
+    response = client.get("/coinflip")
+    assert response.status_code == 200
+    assert b"timeskip/coin.flip" in response.data
+
+
+def test_coinflip_win_pays_3x_stake(client, monkeypatch):
+    import app as app_module
+
+    register(client, username="alice")
+    user = User.query.filter_by(username="alice").first()
+    user.total_score = 100
+    db.session.commit()
+
+    monkeypatch.setattr(app_module.random, "random", lambda: 0.1)  # < 0.5 -> win
+    response = client.post("/api/coinflip/flip", json={"stake": 10})
+    data = response.get_json()
+    assert data["ok"] is True
+    assert data["results"] == ["win"]
+    assert data["payout"] == 30  # 10 * 3x base multiplier
+    assert data["total_score"] == 120  # 100 - 10 + 30
+
+
+def test_coinflip_lose_forfeits_stake(client, monkeypatch):
+    import app as app_module
+
+    register(client, username="alice")
+    user = User.query.filter_by(username="alice").first()
+    user.total_score = 100
+    db.session.commit()
+
+    monkeypatch.setattr(app_module.random, "random", lambda: 0.9)  # >= 0.5 -> lose
+    response = client.post("/api/coinflip/flip", json={"stake": 10})
+    data = response.get_json()
+    assert data["ok"] is True
+    assert data["results"] == ["lose"]
+    assert data["payout"] == 0
+    assert data["total_score"] == 90
+
+
+def test_coinflip_insufficient_funds(client):
+    register(client, username="alice")
+    response = client.post("/api/coinflip/flip", json={"stake": 999999})
+    data = response.get_json()
+    assert data["ok"] is False
+    assert data["error"] == "insufficient_funds"
+
+
+def test_coinflip_buy_worker_boosts_multiplier_to_5x(client, monkeypatch):
+    import app as app_module
+
+    register(client, username="alice")
+    user = User.query.filter_by(username="alice").first()
+    user.total_score = 1000
+    db.session.commit()
+
+    buy_response = client.post("/api/coinflip/buy-worker")
+    buy_data = buy_response.get_json()
+    assert buy_data["ok"] is True
+    assert buy_data["worker_count"] == 1
+    assert buy_data["total_score"] == 970  # 1000 - 30
+
+    monkeypatch.setattr(app_module.random, "random", lambda: 0.1)  # win
+    response = client.post("/api/coinflip/flip", json={"stake": 10})
+    data = response.get_json()
+    assert data["multiplier"] == 5
+    assert data["payout"] == 50  # 10 * 5x
+
+
+def test_coinflip_buy_coin_adds_simultaneous_flip(client, monkeypatch):
+    import app as app_module
+
+    register(client, username="alice")
+    user = User.query.filter_by(username="alice").first()
+    user.total_score = 1000
+    db.session.commit()
+
+    buy_response = client.post("/api/coinflip/buy-coin")
+    buy_data = buy_response.get_json()
+    assert buy_data["ok"] is True
+    assert buy_data["coins"] == 2
+    assert buy_data["total_score"] == 900  # 1000 - 100
+
+    monkeypatch.setattr(app_module.random, "random", lambda: 0.1)  # both coins win
+    response = client.post("/api/coinflip/flip", json={"stake": 10})
+    data = response.get_json()
+    assert len(data["results"]) == 2
+    assert data["payout"] == 60  # 2 coins x 10 stake x 3x
+
+
+def test_coinflip_buy_worker_insufficient_funds(client):
+    register(client, username="alice")
+    response = client.post("/api/coinflip/buy-worker")
+    data = response.get_json()
+    assert data["ok"] is False
+    assert data["error"] == "insufficient_funds"

@@ -88,6 +88,14 @@ GAMES = [
         "subtitle": "Bloecke mit dem Paddle zerstoeren",
         "icon_class": "place-label-icon blockbuster-icon",
     },
+    {
+        "key": "coin.flip",
+        "search_term": "timeskip/coin.flip",
+        "endpoint": "coinflip",
+        "title": "timeskip/coin.flip",
+        "subtitle": "Muenze werfen und Punkte verdreifachen",
+        "icon_class": "place-label-icon coinflip-icon",
+    },
 ]
 GAME_SUGGESTIONS = [g["search_term"] for g in GAMES]
 GAME_MATCH_THRESHOLD = 0.65
@@ -95,6 +103,11 @@ SCORED_GAMES = {"fruit.merge", "gravity.run", "knife.hit", "flappy.bird", "block
 SHUFFLE_COST = 15
 DELETE_COST = 25
 BOMB_COST = 40
+
+COINFLIP_BASE_MULTIPLIER = 3
+COINFLIP_WORKER_MULTIPLIER = 5
+COINFLIP_WORKER_COST = 30
+COINFLIP_NEW_COIN_COST = 100
 UPLOAD_BONUS_POINTS = 100
 LIKE_BONUS_POINTS = 60
 COMMENT_MAX_LENGTH = 500
@@ -471,6 +484,8 @@ def ensure_columns_exist():
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS points_today_date DATE',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS organic_points_earned INTEGER NOT NULL DEFAULT 0',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS ever_rank_one BOOLEAN NOT NULL DEFAULT FALSE',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS coinflip_coins INTEGER NOT NULL DEFAULT 1',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS coinflip_worker_count INTEGER NOT NULL DEFAULT 0',
         'ALTER TABLE video ADD COLUMN IF NOT EXISTS description TEXT',
         "ALTER TABLE video ADD COLUMN IF NOT EXISTS orientation VARCHAR(10) NOT NULL DEFAULT 'landscape'",
         'ALTER TABLE video ADD COLUMN IF NOT EXISTS content_hash VARCHAR(64)',
@@ -1828,6 +1843,92 @@ def flappybird():
 def blockbuster():
     record_game_play("block.buster")
     return render_template("blockbuster.html", user=current_user())
+
+
+@app.route("/coinflip")
+def coinflip():
+    record_game_play("coin.flip")
+    return render_template(
+        "coinflip.html",
+        user=current_user(),
+        worker_cost=COINFLIP_WORKER_COST,
+        new_coin_cost=COINFLIP_NEW_COIN_COST,
+        base_multiplier=COINFLIP_BASE_MULTIPLIER,
+        worker_multiplier=COINFLIP_WORKER_MULTIPLIER,
+    )
+
+
+@app.route("/api/coinflip/flip", methods=["POST"])
+def api_coinflip_flip():
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+
+    data = request.get_json(silent=True) or {}
+    stake = data.get("stake")
+    if not isinstance(stake, int) or stake <= 0:
+        return jsonify({"ok": False, "error": "invalid_stake"}), 400
+    if user.total_score < stake:
+        return jsonify({"ok": False, "error": "insufficient_funds", "total_score": user.total_score}), 400
+
+    multiplier = COINFLIP_WORKER_MULTIPLIER if user.coinflip_worker_count > 0 else COINFLIP_BASE_MULTIPLIER
+
+    adjust_points(user, -stake)
+    results = []
+    payout = 0
+    for _ in range(user.coinflip_coins):
+        won = random.random() < 0.5
+        results.append("win" if won else "lose")
+        if won:
+            payout += stake * multiplier
+
+    if payout > 0:
+        adjust_points(user, payout)
+    db.session.commit()
+
+    return jsonify({
+        "ok": True,
+        "results": results,
+        "payout": payout,
+        "multiplier": multiplier,
+        "total_score": user.total_score,
+    })
+
+
+@app.route("/api/coinflip/buy-worker", methods=["POST"])
+def api_coinflip_buy_worker():
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    if user.total_score < COINFLIP_WORKER_COST:
+        return jsonify({"ok": False, "error": "insufficient_funds", "total_score": user.total_score}), 400
+
+    adjust_points(user, -COINFLIP_WORKER_COST)
+    user.coinflip_worker_count += 1
+    db.session.commit()
+    return jsonify({
+        "ok": True,
+        "worker_count": user.coinflip_worker_count,
+        "total_score": user.total_score,
+    })
+
+
+@app.route("/api/coinflip/buy-coin", methods=["POST"])
+def api_coinflip_buy_coin():
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    if user.total_score < COINFLIP_NEW_COIN_COST:
+        return jsonify({"ok": False, "error": "insufficient_funds", "total_score": user.total_score}), 400
+
+    adjust_points(user, -COINFLIP_NEW_COIN_COST)
+    user.coinflip_coins += 1
+    db.session.commit()
+    return jsonify({
+        "ok": True,
+        "coins": user.coinflip_coins,
+        "total_score": user.total_score,
+    })
 
 
 @app.route("/place")

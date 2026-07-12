@@ -1123,6 +1123,13 @@ h1 {
         #1c1c1c;
 }
 
+.coinflip-icon {
+    background:
+        radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.5) 0 3px, transparent 4px),
+        radial-gradient(circle at center, #e8b923 0 60%, #b8890f 60% 63%, transparent 64%),
+        #1c1c1c;
+}
+
 .tictactoe-page {
     max-width: 420px;
 }
@@ -2646,6 +2653,176 @@ body.shorts-fullscreen main {
     padding: 0.6rem 0.9rem;
     text-align: left;
     cursor: pointer;
+}
+
+.coinflip-page {
+    max-width: 700px;
+}
+
+.coinflip-wrapper {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    margin-top: 1rem;
+}
+
+.coinflip-table-area {
+    flex: 1 1 380px;
+}
+
+.coinflip-balance {
+    margin-bottom: 0.6rem;
+    font-weight: 600;
+}
+
+.coinflip-table {
+    background: radial-gradient(ellipse at center, #6b4a2b 0%, #4a3319 100%);
+    border: 6px solid #2e2010;
+    border-radius: 16px;
+    min-height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+}
+
+.coinflip-coin-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    justify-content: center;
+}
+
+.coinflip-coin {
+    width: 70px;
+    height: 70px;
+    perspective: 600px;
+}
+
+.coinflip-coin-inner {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    transform-style: preserve-3d;
+    transition: transform 0.9s cubic-bezier(0.3, 0.6, 0.3, 1);
+}
+
+.coinflip-coin-face {
+    position: absolute;
+    inset: 0;
+    backface-visibility: hidden;
+    filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.4));
+}
+
+.coinflip-coin-face svg {
+    width: 100%;
+    height: 100%;
+}
+
+.coinflip-coin-back {
+    transform: rotateY(180deg);
+}
+
+.coinflip-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-top: 1rem;
+}
+
+.coinflip-controls label {
+    color: #aaa;
+    font-size: 0.9rem;
+}
+
+.coinflip-controls input {
+    width: 90px;
+    padding: 0.5rem 0.7rem;
+    border-radius: 6px;
+    border: 1px solid #3c3c3c;
+    background: #1c1c1c;
+    color: #fff;
+}
+
+.coinflip-controls button {
+    padding: 0.6rem 1.4rem;
+    border: none;
+    border-radius: 999px;
+    background: #3ea6ff;
+    color: #0f0f0f;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.coinflip-result {
+    margin-top: 0.8rem;
+    font-weight: 600;
+    min-height: 1.2em;
+}
+
+.coinflip-result.success {
+    color: #4caf50;
+}
+
+.coinflip-result.error {
+    color: #ff6b6b;
+}
+
+.coinflip-shop {
+    flex: 1 1 220px;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.coinflip-shop-item {
+    display: flex;
+    gap: 0.8rem;
+    align-items: flex-start;
+    background: #181818;
+    border: 1px solid #2c2c2c;
+    border-radius: 10px;
+    padding: 0.8rem;
+}
+
+.coinflip-worker-icon, .coinflip-coin-icon {
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+    border-radius: 50%;
+}
+
+.coinflip-worker-icon {
+    background:
+        radial-gradient(circle at 50% 32%, #f2e6d0 0 26%, transparent 27%),
+        linear-gradient(180deg, transparent 0 45%, #f2e6d0 45% 100%) center / 26px 20px no-repeat,
+        transparent;
+}
+
+.coinflip-coin-icon {
+    background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.6) 0 3px, transparent 4px),
+        radial-gradient(circle at center, #e8b923 0 80%, #b8890f 80% 100%);
+}
+
+.coinflip-shop-title {
+    font-weight: 600;
+}
+
+.coinflip-shop-sub {
+    color: #999;
+    font-size: 0.8rem;
+    margin: 2px 0 6px;
+}
+
+.coinflip-shop-item button {
+    padding: 0.4rem 0.9rem;
+    border: none;
+    border-radius: 999px;
+    background: #3ea6ff;
+    color: #0f0f0f;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 0.85rem;
 }
 
 .share-target-btn:hover {

@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}Coin Flip - timeskip{% endblock %}
+{% block brand_text %}games{% endblock %}
+{% block content %}
+    <div class="coinflip-page">
+        <h1>timeskip/coin.flip</h1>
+        <div class="game-top-row">
+            <a class="game-leaderboard-link" href="{{ url_for('leaderboard') }}">&#127942; Bestenliste</a>
+        </div>
+        <p>Setz Punkte ein und wirf die Münze. Landet sie auf dem Dollarzeichen, bekommst du das {{ base_multiplier }}-fache zurück &mdash; mit einem Mitarbeiter sogar das {{ worker_multiplier }}-fache. Landet sie auf dem Gebäude, ist dein Einsatz weg.</p>
+
+        <div class="coinflip-wrapper">
+            <div class="coinflip-table-area">
+                <div class="coinflip-balance">Guthaben: <span id="coinflipBalance">{{ user.total_score if user else 0 }}</span></div>
+
+                <div class="coinflip-table" id="coinflipTable">
+                    <div class="coinflip-coin-row" id="coinflipCoinRow"></div>
+                </div>
+
+                <div class="coinflip-controls">
+                    <label for="coinflipStake">Einsatz</label>
+                    <input type="number" id="coinflipStake" min="1" value="10" {{ 'disabled' if not user }}>
+                    <button type="button" id="coinflipFlipBtn" {{ 'disabled' if not user }}>Werfen</button>
+                </div>
+                <p class="coinflip-result" id="coinflipResult"></p>
+                {% if not user %}
+                    <p class="video-meta">Login erforderlich, um zu spielen.</p>
+                {% endif %}
+            </div>
+
+            <div class="coinflip-shop">
+                <div class="coinflip-shop-item">
+                    <span class="coinflip-worker-icon"></span>
+                    <div>
+                        <div class="coinflip-shop-title">Mitarbeiter <span id="coinflipWorkerCount">{{ user.coinflip_worker_count if user else 0 }}</span></div>
+                        <div class="coinflip-shop-sub">Erhöht den Gewinn auf das {{ worker_multiplier }}-fache</div>
+                        <button type="button" id="coinflipBuyWorkerBtn" {{ 'disabled' if not user }}>Kaufen ({{ worker_cost }})</button>
+                    </div>
+                </div>
+                <div class="coinflip-shop-item">
+                    <span class="coinflip-coin-icon"></span>
+                    <div>
+                        <div class="coinflip-shop-title">Neue Münze <span id="coinflipCoinCount">{{ user.coinflip_coins if user else 1 }}</span></div>
+                        <div class="coinflip-shop-sub">Eine weitere Münze wirft bei jedem Wurf mit</div>
+                        <button type="button" id="coinflipBuyCoinBtn" {{ 'disabled' if not user }}>Kaufen ({{ new_coin_cost }})</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const COIN_COUNT_KEY = "coinflipCoinCount";
+        let coinCount = {{ user.coinflip_coins if user else 1 }};
+        let workerCount = {{ user.coinflip_worker_count if user else 0 }};
+
+        const coinRow = document.getElementById("coinflipCoinRow");
+
+        function coinFaceSvg(kind) {
+            if (kind === "dollar") {
+                return '<svg viewBox="0 0 60 60"><circle cx="30" cy="30" r="28" fill="#e8b923" stroke="#b8890f" stroke-width="3"/><text x="30" y="40" text-anchor="middle" font-size="28" font-weight="bold" fill="#7a5c0a">$</text></svg>';
+            }
+            return '<svg viewBox="0 0 60 60"><circle cx="30" cy="30" r="28" fill="#c9c9c9" stroke="#8f8f8f" stroke-width="3"/><rect x="16" y="24" width="8" height="18" fill="#6b6b6b"/><rect x="26" y="18" width="8" height="24" fill="#5a5a5a"/><rect x="36" y="27" width="8" height="15" fill="#6b6b6b"/></svg>';
+        }
+
+        function renderCoins() {
+            coinRow.innerHTML = "";
+            for (let i = 0; i < coinCount; i++) {
+                const coin = document.createElement("div");
+                coin.className = "coinflip-coin";
+                coin.innerHTML =
+                    '<div class="coinflip-coin-inner">' +
+                    '<div class="coinflip-coin-face coinflip-coin-front">' + coinFaceSvg("dollar") + '</div>' +
+                    '<div class="coinflip-coin-face coinflip-coin-back">' + coinFaceSvg("building") + '</div>' +
+                    '</div>';
+                coinRow.appendChild(coin);
+            }
+        }
+        renderCoins();
+
+        const flipBtn = document.getElementById("coinflipFlipBtn");
+        const stakeInput = document.getElementById("coinflipStake");
+        const resultEl = document.getElementById("coinflipResult");
+        const balanceEl = document.getElementById("coinflipBalance");
+
+        if (flipBtn) {
+            flipBtn.addEventListener("click", async () => {
+                const stake = parseInt(stakeInput.value, 10);
+                if (!stake || stake <= 0) return;
+                flipBtn.disabled = true;
+                resultEl.textContent = "";
+
+                const res = await fetch("{{ url_for('api_coinflip_flip') }}", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ stake }),
+                });
+                const data = await res.json();
+                flipBtn.disabled = false;
+
+                if (!data.ok) {
+                    resultEl.textContent = data.error === "insufficient_funds" ? "Nicht genug Punkte." : "Das hat nicht geklappt.";
+                    resultEl.className = "coinflip-result error";
+                    return;
+                }
+
+                const coinEls = coinRow.querySelectorAll(".coinflip-coin-inner");
+                data.results.forEach((outcome, i) => {
+                    const el = coinEls[i];
+                    if (!el) return;
+                    const spins = 4;
+                    const finalAngle = spins * 360 + (outcome === "win" ? 0 : 180);
+                    el.style.transform = `rotateY(${finalAngle}deg)`;
+                });
+
+                setTimeout(() => {
+                    const wins = data.results.filter(r => r === "win").length;
+                    if (data.payout > 0) {
+                        resultEl.textContent = `${wins}x Dollarzeichen! +${data.payout} Punkte`;
+                        resultEl.className = "coinflip-result success";
+                    } else {
+                        resultEl.textContent = "Kein Glück &mdash; Einsatz verloren.";
+                        resultEl.className = "coinflip-result error";
+                    }
+                    balanceEl.textContent = data.total_score;
+                }, 900);
+            });
+        }
+
+        const buyWorkerBtn = document.getElementById("coinflipBuyWorkerBtn");
+        if (buyWorkerBtn) {
+            buyWorkerBtn.addEventListener("click", async () => {
+                const res = await fetch("{{ url_for('api_coinflip_buy_worker') }}", { method: "POST" });
+                const data = await res.json();
+                if (data.ok) {
+                    document.getElementById("coinflipWorkerCount").textContent = data.worker_count;
+                    balanceEl.textContent = data.total_score;
+                }
+            });
+        }
+
+        const buyCoinBtn = document.getElementById("coinflipBuyCoinBtn");
+        if (buyCoinBtn) {
+            buyCoinBtn.addEventListener("click", async () => {
+                const res = await fetch("{{ url_for('api_coinflip_buy_coin') }}", { method: "POST" });
+                const data = await res.json();
+                if (data.ok) {
+                    coinCount = data.coins;
+                    document.getElementById("coinflipCoinCount").textContent = data.coins;
+                    balanceEl.textContent = data.total_score;
+                    renderCoins();
+                }
+            });
+        }
+    </script>
+{% endblock %}
