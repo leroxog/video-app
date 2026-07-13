@@ -50,6 +50,34 @@
         </tbody>
     </table>
 
+    <h2>Gemeldete Videos</h2>
+    {% if reports %}
+        <table class="admin-table">
+            <thead><tr><th>Titel</th><th>Von</th><th>Gemeldet von</th><th>Gemeldet am</th><th></th></tr></thead>
+            <tbody>
+                {% for report in reports %}
+                    <tr>
+                        <td><a href="{{ url_for('watch', video_id=report.video.id) }}">{{ report.video.title }}</a></td>
+                        <td>{{ report.video.uploader.username }}</td>
+                        <td>{{ report.reporter.username }}</td>
+                        <td>{{ report.created_at.strftime("%d.%m.%Y %H:%M") }}</td>
+                        <td>
+                            <form action="{{ url_for('admin_dismiss_report', report_id=report.id) }}" method="post" class="admin-inline-form">
+                                <button type="submit" class="admin-inline-btn">Erledigt</button>
+                            </form>
+                            <form action="{{ url_for('delete_video', video_id=report.video.id) }}" method="post" class="admin-inline-form"
+                                  onsubmit="return confirm('Video {{ report.video.title }} wirklich löschen?');">
+                                <button type="submit" class="danger admin-inline-btn">Video löschen</button>
+                            </form>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>Keine gemeldeten Videos.</p>
+    {% endif %}
+
     <h2>Alle Videos</h2>
     <table class="admin-table">
         <thead><tr><th>Titel</th><th>Von</th><th>Hochgeladen</th><th></th></tr></thead>

@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 import pytest
 from app import app as flask_app, db
-from models import User, Video, Sound, Conversation, Message
+from models import User, Video, Sound, Conversation, Message, VideoReport
 
 
 @pytest.fixture
@@ -949,6 +949,80 @@ def test_admin_can_delete_any_video(client):
     assert b"Owned Video" not in response.data
 
 
+def test_report_video_requires_login(client):
+    register(client, username="owner")
+    upload_video(client, title="Video")
+    client.post("/logout")
+
+    response = client.post("/api/video/1/report")
+    data = response.get_json()
+    assert data["ok"] is False
+    assert data["error"] == "not_logged_in"
+
+
+def test_report_video_success(client):
+    register(client, username="owner")
+    upload_video(client, title="Video")
+    client.post("/logout")
+
+    register(client, username="reporter")
+    response = client.post("/api/video/1/report")
+    data = response.get_json()
+    assert data["ok"] is True
+
+    reports = VideoReport.query.filter_by(video_id=1).all()
+    assert len(reports) == 1
+    assert reports[0].reporter.username == "reporter"
+
+
+def test_report_video_twice_by_same_user_fails(client):
+    register(client, username="owner")
+    upload_video(client, title="Video")
+    client.post("/logout")
+
+    register(client, username="reporter")
+    client.post("/api/video/1/report")
+    response = client.post("/api/video/1/report")
+    data = response.get_json()
+    assert data["ok"] is False
+    assert data["error"] == "already_reported"
+
+
+def test_admin_sees_reported_videos(client):
+    register(client, username="owner")
+    upload_video(client, title="Reported Video")
+    client.post("/logout")
+
+    register(client, username="reporter")
+    client.post("/api/video/1/report")
+    client.post("/logout")
+
+    register(client, username="boss")
+    make_admin("boss")
+    response = client.get("/admin")
+    assert b"Reported Video" in response.data
+    assert b"reporter" in response.data
+
+
+def test_admin_can_dismiss_report(client):
+    register(client, username="owner")
+    upload_video(client, title="Video")
+    client.post("/logout")
+
+    register(client, username="reporter")
+    client.post("/api/video/1/report")
+    client.post("/logout")
+
+    register(client, username="boss")
+    make_admin("boss")
+    report = VideoReport.query.first()
+    response = client.post(f"/admin/reports/{report.id}/dismiss", follow_redirects=True)
+    assert response.status_code == 200
+    assert VideoReport.query.count() == 0
+    # dismissing a report does not delete the video itself
+    assert Video.query.count() == 1
+
+
 def test_regular_user_still_cannot_delete_others_video(client):
     register(client, username="owner")
     upload_video(client, title="Protected Video")
@@ -1605,6 +1679,13 @@ def test_message_self_deletes_15_seconds_after_being_viewed(client):
     response = client.get(f"/api/messages/{conv_id}")
     assert response.get_json()["messages"] == []
     assert Message.query.filter_by(conversation_id=conv_id).first() is None
+
+
+def test_messages_page_shows_prominent_group_button_once(client):
+    register(client, username="alice")
+    response = client.get("/messages")
+    assert response.data.count(b'id="createGroupToggleBtn"') == 1
+    assert b"Gruppe" in response.data
 
 
 def test_create_group_requires_2_to_99_mutual_follow_members(client):

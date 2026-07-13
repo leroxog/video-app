@@ -1961,6 +1961,14 @@ body.shorts-fullscreen main {
     border-radius: 8px;
 }
 
+.watch-player-wrap {
+    position: relative;
+}
+
+.video-card-wrap {
+    position: relative;
+}
+
 .watch-actions {
     display: flex;
     align-items: center;
@@ -2491,6 +2499,11 @@ body.shorts-fullscreen main {
     font-size: 0.85rem;
 }
 
+.admin-inline-form {
+    display: inline-block;
+    margin-right: 4px;
+}
+
 .admin-points-form {
     display: flex;
     gap: 4px;
@@ -2539,22 +2552,40 @@ body.shorts-fullscreen main {
     margin-top: 2px;
 }
 
-.messages-contacts-header {
+.messages-page-header {
     display: flex;
     align-items: center;
-    gap: 0.6rem;
+    justify-content: space-between;
+    gap: 0.8rem;
+    margin-bottom: 0.5rem;
+}
+
+.messages-page-header h1 {
+    margin: 0;
 }
 
 .create-group-toggle-btn {
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.55rem 1.1rem;
+    border-radius: 999px;
     border: none;
     background: #3ea6ff;
     color: #0f0f0f;
     font-weight: 700;
-    font-size: 1.1rem;
+    font-size: 0.95rem;
     cursor: pointer;
+    flex-shrink: 0;
+}
+
+.create-group-toggle-btn:hover {
+    background: #5fb6ff;
+}
+
+.create-group-toggle-plus {
+    font-size: 1.2rem;
+    line-height: 1;
 }
 
 .create-group-panel {
@@ -2943,4 +2974,64 @@ body.shorts-fullscreen main {
 
 .share-target-btn:hover {
     background: #2c2c2c;
+}
+
+.video-menu-wrap {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    z-index: 5;
+}
+
+.video-menu-dots {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.55);
+    border: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    cursor: pointer;
+}
+
+.video-menu-dot {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: #fff;
+}
+
+.video-menu-dropdown {
+    position: absolute;
+    top: 32px;
+    right: 0;
+    background: #1c1c1c;
+    border: 1px solid #3c3c3c;
+    border-radius: 8px;
+    overflow: hidden;
+    min-width: 120px;
+}
+
+.video-menu-report-btn {
+    display: block;
+    width: 100%;
+    padding: 0.5rem 0.9rem;
+    background: none;
+    border: none;
+    color: #ff6b6b;
+    text-align: left;
+    cursor: pointer;
+    font-size: 0.85rem;
+}
+
+.video-menu-report-btn:hover {
+    background: #2c2c2c;
+}
+
+.video-menu-report-btn:disabled {
+    color: #888;
+    cursor: default;
 }

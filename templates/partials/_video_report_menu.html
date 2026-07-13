@@ -1,0 +1,12 @@
+{% if user %}
+    <div class="video-menu-wrap">
+        <button type="button" class="video-menu-dots" data-video-id="{{ video.id }}" title="Mehr" aria-label="Mehr Optionen">
+            <span class="video-menu-dot"></span>
+            <span class="video-menu-dot"></span>
+            <span class="video-menu-dot"></span>
+        </button>
+        <div class="video-menu-dropdown" style="display:none;">
+            <button type="button" class="video-menu-report-btn" data-video-id="{{ video.id }}">Melden</button>
+        </div>
+    </div>
+{% endif %}

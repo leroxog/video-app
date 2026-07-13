@@ -68,18 +68,21 @@
     {% elif videos %}
         <div class="video-grid">
             {% for video in videos %}
-                <a class="video-card" href="{{ url_for('watch', video_id=video.id) }}">
-                    <video muted preload="metadata">
-                        <source src="{{ media_url('uploads', video.filename) }}">
-                    </video>
-                    <div class="video-card-info">
-                        <div class="video-title">{{ video.title }}</div>
-                        <div class="video-meta">von {{ video.uploader.username }}</div>
-                        {% if video.description %}
-                            <div class="video-card-description">{{ video.description }}</div>
-                        {% endif %}
-                    </div>
-                </a>
+                <div class="video-card-wrap">
+                    <a class="video-card" href="{{ url_for('watch', video_id=video.id) }}">
+                        <video muted preload="metadata">
+                            <source src="{{ media_url('uploads', video.filename) }}" type="{{ video_mime_type(video.filename) }}">
+                        </video>
+                        <div class="video-card-info">
+                            <div class="video-title">{{ video.title }}</div>
+                            <div class="video-meta">von {{ video.uploader.username }}</div>
+                            {% if video.description %}
+                                <div class="video-card-description">{{ video.description }}</div>
+                            {% endif %}
+                        </div>
+                    </a>
+                    {% include "partials/_video_report_menu.html" %}
+                </div>
             {% endfor %}
         </div>
     {% elif query %}

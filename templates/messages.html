@@ -2,7 +2,12 @@
 {% block title %}Nachrichten - timeskip{% endblock %}
 {% block content %}
     <div class="messages-page">
-        <h1>Nachrichten</h1>
+        <div class="messages-page-header">
+            <h1>Nachrichten</h1>
+            <button type="button" class="create-group-toggle-btn" id="createGroupToggleBtn" title="Gruppe erstellen">
+                <span class="create-group-toggle-plus">+</span> Gruppe
+            </button>
+        </div>
 
         <h2>Chats</h2>
         {% if conversations %}
@@ -20,10 +25,7 @@
             <p>Noch keine Chats. Schreib jemandem, dem du folgst und der dir auch folgt.</p>
         {% endif %}
 
-        <div class="messages-contacts-header">
-            <h2>Kontakte</h2>
-            <button type="button" class="create-group-toggle-btn" id="createGroupToggleBtn" title="Gruppe erstellen">+</button>
-        </div>
+        <h2>Kontakte</h2>
 
         <div class="create-group-panel" id="createGroupPanel" style="display:none;">
             <label for="groupNameInput">Gruppenname</label>

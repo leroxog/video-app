@@ -104,6 +104,41 @@
 
     <script>
         (function () {
+            document.addEventListener("click", (event) => {
+                const dotsBtn = event.target.closest(".video-menu-dots");
+                if (dotsBtn) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const dropdown = dotsBtn.nextElementSibling;
+                    document.querySelectorAll(".video-menu-dropdown").forEach((d) => {
+                        if (d !== dropdown) d.style.display = "none";
+                    });
+                    dropdown.style.display = dropdown.style.display === "none" ? "block" : "none";
+                    return;
+                }
+
+                const reportBtn = event.target.closest(".video-menu-report-btn");
+                if (reportBtn) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if (reportBtn.disabled) return;
+                    const videoId = reportBtn.dataset.videoId;
+                    fetch(`/api/video/${videoId}/report`, { method: "POST" })
+                        .then((res) => res.json())
+                        .then((data) => {
+                            reportBtn.textContent = data.ok ? "Gemeldet" : (data.error === "already_reported" ? "Bereits gemeldet" : "Fehler");
+                            reportBtn.disabled = true;
+                        });
+                    return;
+                }
+
+                document.querySelectorAll(".video-menu-dropdown").forEach((d) => { d.style.display = "none"; });
+            });
+        })();
+    </script>
+
+    <script>
+        (function () {
             const splash = document.getElementById("splashScreen");
             window.addEventListener("load", () => {
                 setTimeout(() => {

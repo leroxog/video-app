@@ -18,6 +18,8 @@
                         <input type="range" class="shorts-volume-slider" min="0" max="1" step="0.05" value="1">
                     </div>
 
+                    {% include "partials/_video_report_menu.html" %}
+
                     <div class="shorts-action-stack">
                         <div class="shorts-avatar-wrap">
                             <a class="shorts-avatar-link" href="{{ url_for('profile', username=video.uploader.username) }}">

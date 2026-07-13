@@ -69,6 +69,19 @@ class Video(db.Model):
         "Comment", backref="video", lazy=True, cascade="all, delete-orphan",
         order_by="Comment.created_at",
     )
+    reports = db.relationship(
+        "VideoReport", backref="video", lazy=True, cascade="all, delete-orphan",
+        order_by="VideoReport.created_at",
+    )
+
+
+class VideoReport(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    video_id = db.Column(db.Integer, db.ForeignKey("video.id"), nullable=False)
+    reporter_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    reporter = db.relationship("User")
+    __table_args__ = (db.UniqueConstraint("video_id", "reporter_id", name="uq_report_video_reporter"),)
 
 
 class Like(db.Model):

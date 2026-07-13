@@ -18,7 +18,7 @@ from sqlalchemy import text
 from werkzeug.utils import secure_filename
 from models import (
     db, User, Video, Pixel, Like, Subscription, Comment, RedeemedCode, GamePlayCount, Sound,
-    UserCreatedCode, Conversation, ConversationMember, Message,
+    UserCreatedCode, Conversation, ConversationMember, Message, VideoReport,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -1099,6 +1099,21 @@ def api_add_comment(video_id):
     })
 
 
+@app.route("/api/video/<int:video_id>/report", methods=["POST"])
+def api_report_video(video_id):
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    video = db.get_or_404(Video, video_id)
+
+    if VideoReport.query.filter_by(video_id=video.id, reporter_id=user.id).first() is not None:
+        return jsonify({"ok": False, "error": "already_reported"}), 400
+
+    db.session.add(VideoReport(video_id=video.id, reporter_id=user.id))
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
 @app.route("/api/user/<username>/subscribe", methods=["POST"])
 def api_subscribe(username):
     user = current_user()
@@ -1750,9 +1765,20 @@ def admin_dashboard():
     users = User.query.order_by(User.username).all()
     videos = Video.query.order_by(Video.created_at.desc()).all()
     online_status = {u.id: is_user_online(u) for u in users}
+    reports = VideoReport.query.order_by(VideoReport.created_at.desc()).all()
     return render_template(
         "admin.html", user=admin_user, users=users, videos=videos, online_status=online_status,
+        reports=reports,
     )
+
+
+@app.route("/admin/reports/<int:report_id>/dismiss", methods=["POST"])
+def admin_dismiss_report(report_id):
+    require_admin()
+    report = db.get_or_404(VideoReport, report_id)
+    db.session.delete(report)
+    db.session.commit()
+    return redirect(url_for("admin_dashboard"))
 
 
 @app.route("/admin/users", methods=["POST"])
