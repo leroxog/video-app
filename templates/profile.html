@@ -23,10 +23,11 @@
             <p class="video-meta">{{ subscriber_count }} Follower &middot; {{ videos|length }} Videos</p>
             {% set streak = effective_streak(profile_user) %}
             {% if streak > 0 %}
+                {% set bonus_pct = ((streak_points_multiplier(profile_user) - 1) * 100)|round|int %}
                 <div class="streak-display">
                     <span class="streak-flame"></span>
                     <span class="streak-count">{{ streak }}</span>
-                    <span class="streak-label">{{ "Tag" if streak == 1 else "Tage" }} Streak</span>
+                    <span class="streak-label">{{ "Tag" if streak == 1 else "Tage" }} Streak &mdash; +{{ bonus_pct }}% Punkte</span>
                 </div>
             {% endif %}
         </div>

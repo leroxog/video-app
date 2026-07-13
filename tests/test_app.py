@@ -215,11 +215,16 @@ def test_like_awards_and_removes_bonus_points(client):
     client.post(f"/video/{video_id}/like")
     with flask_app.app_context():
         alice = User.query.filter_by(username="alice").first()
-        assert alice.total_score == 160
+        # Alice's upload already crossed the 100pt daily threshold, so her
+        # streak is active by the time the like lands -> +10% streak bonus
+        # on the 60pt like bonus (60 * 1.1 = 66).
+        assert alice.total_score == 166
 
     client.post(f"/video/{video_id}/like")
     with flask_app.app_context():
         alice = User.query.filter_by(username="alice").first()
+        # Unliking must remove the exact same (boosted) amount that was
+        # awarded, not the flat 60, otherwise like/unlike would leak points.
         assert alice.total_score == 100
 
 
@@ -1404,6 +1409,82 @@ def test_streak_starts_at_one_after_earning_100_points_in_a_day(client):
     assert user.current_streak == 1
     assert user.best_streak == 1
     assert app_module.effective_streak(user) == 1
+
+
+def test_streak_multiplier_boosts_points_earned(client):
+    import app as app_module
+    from datetime import date
+
+    register(client, username="alice")
+    user = User.query.filter_by(username="alice").first()
+    user.current_streak = 3
+    user.best_streak = 3
+    user.last_streak_date = date.today()  # active streak, counted by effective_streak
+    db.session.commit()
+
+    assert app_module.streak_points_multiplier(user) == 1.3  # 1 + 3*0.1
+
+    before = user.total_score
+    app_module.adjust_points(user, 100)
+    db.session.commit()
+    assert user.total_score == before + 130  # 100 * 1.3
+
+
+def test_streak_multiplier_caps_at_100_percent(client):
+    import app as app_module
+    from datetime import date
+
+    register(client, username="alice")
+    user = User.query.filter_by(username="alice").first()
+    user.current_streak = 25  # way past the 10-day cap point
+    user.best_streak = 25
+    user.last_streak_date = date.today()
+    db.session.commit()
+
+    assert app_module.streak_points_multiplier(user) == 2.0  # capped at +100%
+
+    before = user.total_score
+    app_module.adjust_points(user, 100)
+    db.session.commit()
+    assert user.total_score == before + 200
+
+
+def test_no_streak_means_no_multiplier_bonus(client):
+    import app as app_module
+
+    register(client, username="alice")
+    user = User.query.filter_by(username="alice").first()
+    assert app_module.streak_points_multiplier(user) == 1.0
+
+    before = user.total_score
+    app_module.adjust_points(user, 100)
+    db.session.commit()
+    assert user.total_score == before + 100
+
+
+def test_like_unlike_stays_symmetric_with_active_streak_bonus(client):
+    from datetime import date
+
+    register(client, username="owner")
+    owner = User.query.filter_by(username="owner").first()
+    owner.current_streak = 5
+    owner.best_streak = 5
+    owner.last_streak_date = date.today()
+    video = Video(title="Video", filename="clip.mp4", content_hash="hash1", user_id=owner.id)
+    db.session.add(video)
+    db.session.commit()
+    video_id = video.id
+    client.post("/logout")
+
+    register(client, username="liker")
+    client.post(f"/video/{video_id}/like")
+
+    owner = User.query.filter_by(username="owner").first()
+    assert owner.total_score == 90  # 60 * 1.5 (5-day streak = +50%)
+
+    client.post(f"/video/{video_id}/like")  # unlike
+    owner = User.query.filter_by(username="owner").first()
+    assert owner.total_score == 0  # exact reversal, no leftover leak
 
 
 def test_streak_continues_on_consecutive_day_and_resets_after_gap(client):

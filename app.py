@@ -137,6 +137,8 @@ PROMO_CODES = {
 PUBLIC_PROMO_CODE = "FREE FOR ALL"
 HEX_COLOR_RE = re.compile(r"#[0-9a-fA-F]{6}")
 STREAK_DAILY_THRESHOLD = 100
+STREAK_POINTS_MULTIPLIER_STEP = 0.1
+STREAK_POINTS_MULTIPLIER_CAP = 1.0  # bonus caps at +100% (i.e. max 2x) at a 10-day streak
 
 CODE_CREATION_MIN_ORGANIC_POINTS = 500
 CODE_CREATION_FEE_PERCENT = 3
@@ -167,16 +169,30 @@ def _update_streak(user, today):
         user.best_streak = user.current_streak
 
 
+def streak_points_multiplier(user):
+    """Users with an active streak earn a bonus on every point gain:
+    +10% per streak day, capped at +100% so it can't compound out of
+    control (evaluated on the streak as it stands *before* this
+    earning event, to avoid circular chicken-and-egg effects)."""
+    bonus = min(STREAK_POINTS_MULTIPLIER_STEP * effective_streak(user), STREAK_POINTS_MULTIPLIER_CAP)
+    return 1 + bonus
+
+
 def adjust_points(user, delta, from_code=False):
     """Central helper for every point change. Positive deltas (earned
-    points) also feed the daily-earned counter (for streaks), the
-    organic-earned counter (for self-serve code creation eligibility,
-    unless from_code=True), and the streak logic. Negative deltas (spending,
-    unliking) only touch the raw balance."""
+    points) get boosted by the user's streak multiplier, then also feed
+    the daily-earned counter (for streaks), the organic-earned counter
+    (for self-serve code creation eligibility, unless from_code=True),
+    and the streak logic. Negative deltas (spending, unliking) only
+    touch the raw balance, unscaled. Returns the actual delta applied to
+    total_score (after the streak multiplier), so callers that need to
+    reverse an award later (e.g. unliking) can subtract the exact same
+    amount instead of the un-boosted base value."""
     if delta <= 0:
         user.total_score = max(0, user.total_score + delta)
-        return
+        return delta
 
+    delta = int(delta * streak_points_multiplier(user))
     user.total_score += delta
 
     today = date.today()
@@ -190,6 +206,8 @@ def adjust_points(user, delta, from_code=False):
 
     if user.points_earned_today >= STREAK_DAILY_THRESHOLD:
         _update_streak(user, today)
+
+    return delta
 
 
 def effective_streak(user):
@@ -463,6 +481,7 @@ def video_mime_type(filename):
 
 app.template_global()(effective_streak)
 app.template_global()(user_badges)
+app.template_global()(streak_points_multiplier)
 
 
 @app.template_global()
@@ -506,11 +525,15 @@ def ensure_columns_exist():
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS coinflip_coins INTEGER NOT NULL DEFAULT 1',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS coinflip_worker_count INTEGER NOT NULL DEFAULT 0',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS coinflip_rebirths INTEGER NOT NULL DEFAULT 0',
+        'ALTER TABLE "user" ALTER COLUMN total_score TYPE BIGINT',
+        'ALTER TABLE "user" ALTER COLUMN points_earned_today TYPE BIGINT',
+        'ALTER TABLE "user" ALTER COLUMN organic_points_earned TYPE BIGINT',
         'ALTER TABLE video ADD COLUMN IF NOT EXISTS description TEXT',
         "ALTER TABLE video ADD COLUMN IF NOT EXISTS orientation VARCHAR(10) NOT NULL DEFAULT 'landscape'",
         'ALTER TABLE video ADD COLUMN IF NOT EXISTS content_hash VARCHAR(64)',
         'CREATE INDEX IF NOT EXISTS ix_video_content_hash ON video (content_hash)',
         'ALTER TABLE video ADD COLUMN IF NOT EXISTS duplicate_penalty_applied BOOLEAN NOT NULL DEFAULT FALSE',
+        'ALTER TABLE "like" ADD COLUMN IF NOT EXISTS points_awarded INTEGER NOT NULL DEFAULT 0',
     ]
     with db.engine.connect() as conn:
         for statement in statements:
@@ -1030,10 +1053,10 @@ def like_video(video_id):
     existing = Like.query.filter_by(user_id=user.id, video_id=video.id).first()
     if existing:
         db.session.delete(existing)
-        adjust_points(video.uploader, -LIKE_BONUS_POINTS)
+        adjust_points(video.uploader, -existing.points_awarded)
     else:
-        db.session.add(Like(user_id=user.id, video_id=video.id))
-        adjust_points(video.uploader, LIKE_BONUS_POINTS)
+        awarded = adjust_points(video.uploader, LIKE_BONUS_POINTS)
+        db.session.add(Like(user_id=user.id, video_id=video.id, points_awarded=awarded))
     db.session.commit()
     return redirect(url_for("watch", video_id=video.id))
 
@@ -1049,11 +1072,11 @@ def api_like_video(video_id):
     if existing:
         db.session.delete(existing)
         liked = False
-        adjust_points(video.uploader, -LIKE_BONUS_POINTS)
+        adjust_points(video.uploader, -existing.points_awarded)
     else:
-        db.session.add(Like(user_id=user.id, video_id=video.id))
+        awarded = adjust_points(video.uploader, LIKE_BONUS_POINTS)
+        db.session.add(Like(user_id=user.id, video_id=video.id, points_awarded=awarded))
         liked = True
-        adjust_points(video.uploader, LIKE_BONUS_POINTS)
     db.session.commit()
     return jsonify({"ok": True, "liked": liked, "like_count": len(video.likes)})
 
