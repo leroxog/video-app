@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 import pytest
 from app import app as flask_app, db
-from models import User, Video, Sound, Conversation, Message, VideoReport
+from models import User, Post, PostPhoto, PostLike, PostComment, PostReport, Sound, Conversation, Message
 
 
 @pytest.fixture
@@ -47,6 +47,22 @@ def make_admin(username):
     db.session.commit()
 
 
+def upload_post(client, caption="Testfoto", filenames=None, content=None):
+    if filenames is None:
+        filenames = ["clip.png"]
+    if content is None:
+        contents = [f"fake image bytes for {caption}-{name}".encode() for name in filenames]
+    elif isinstance(content, bytes):
+        contents = [content] * len(filenames)
+    else:
+        contents = content
+    data = {
+        "caption": caption,
+        "photos": [(io.BytesIO(c), name) for c, name in zip(contents, filenames)],
+    }
+    return client.post("/upload", data=data, content_type="multipart/form-data", follow_redirects=True)
+
+
 def test_register_and_login(client):
     response = register(client)
     assert response.status_code == 200
@@ -75,20 +91,6 @@ def test_login_wrong_password(client):
 def test_upload_requires_login(client):
     response = client.get("/upload", follow_redirects=True)
     assert b"Login" in response.data
-
-
-def test_upload_page_has_sound_picker(client):
-    register(client)
-    response = client.get("/upload")
-    assert b"soundToggleBtn" in response.data
-    assert b"soundPicker" in response.data
-
-
-def test_upload_page_has_own_sound_upload_notice(client):
-    register(client)
-    response = client.get("/upload")
-    assert b"ownSoundInput" in response.data
-    assert "öffentlichen Sound-Bibliothek".encode() in response.data
 
 
 def test_api_upload_sound_requires_login(client):
@@ -144,12 +146,6 @@ def test_api_upload_sound_defaults_title_from_filename(client):
     assert payload["sound"]["title"] == "mein_toller_sound"
 
 
-def test_fruitmerge_page_has_record_button(client):
-    response = client.get("/fruitmerge")
-    assert b"recordBtn" in response.data
-    assert "Aufnehmen".encode() in response.data
-
-
 def test_index_shows_upload_bonus_banner(client):
     response = client.get("/")
     assert b"upload-bonus-banner" in response.data
@@ -162,57 +158,41 @@ def test_upload_awards_bonus_points(client):
         user = User.query.filter_by(username="alice").first()
         assert user.total_score == 0
 
-    data = {
-        "title": "Bonus Testvideo",
-        "video": (io.BytesIO(b"fake video bytes"), "clip.mp4"),
-    }
-    client.post("/upload", data=data, content_type="multipart/form-data", follow_redirects=True)
+    upload_post(client, caption="Bonus Testfoto")
 
     with flask_app.app_context():
         user = User.query.filter_by(username="alice").first()
         assert user.total_score == 100
 
 
-def test_duplicate_video_upload_is_rejected(client):
+def test_duplicate_photo_upload_is_rejected(client):
     register(client)
-    data = {
-        "title": "Original",
-        "video": (io.BytesIO(b"identical video bytes"), "clip.mp4"),
-    }
-    client.post("/upload", data=data, content_type="multipart/form-data", follow_redirects=True)
+    upload_post(client, caption="Original", filenames=["clip.png"], content=b"identical photo bytes")
 
     with flask_app.app_context():
         user = User.query.filter_by(username="alice").first()
         assert user.total_score == 100
 
-    data2 = {
-        "title": "Duplicate",
-        "video": (io.BytesIO(b"identical video bytes"), "clip2.mp4"),
-    }
-    response = client.post("/upload", data=data2, content_type="multipart/form-data", follow_redirects=True)
+    response = upload_post(client, caption="Duplicate", filenames=["clip2.png"], content=b"identical photo bytes")
     assert b"bereits hochgeladen" in response.data
 
     with flask_app.app_context():
         user = User.query.filter_by(username="alice").first()
         assert user.total_score == 100
-        assert Video.query.count() == 1
+        assert Post.query.count() == 1
 
 
 def test_like_awards_and_removes_bonus_points(client):
     register(client, username="alice", password="secret123")
-    data = {
-        "title": "Likeable Video",
-        "video": (io.BytesIO(b"fake video bytes"), "clip.mp4"),
-    }
-    client.post("/upload", data=data, content_type="multipart/form-data", follow_redirects=True)
+    upload_post(client, caption="Likeable Photo")
     client.post("/logout")
 
     register(client, username="bob", password="secret123")
     with flask_app.app_context():
-        video = Video.query.filter_by(title="Likeable Video").first()
-        video_id = video.id
+        post = Post.query.filter_by(caption="Likeable Photo").first()
+        post_id = post.id
 
-    client.post(f"/video/{video_id}/like")
+    client.post(f"/api/post/{post_id}/like")
     with flask_app.app_context():
         alice = User.query.filter_by(username="alice").first()
         # Alice's upload already crossed the 100pt daily threshold, so her
@@ -220,7 +200,7 @@ def test_like_awards_and_removes_bonus_points(client):
         # on the 60pt like bonus (60 * 1.1 = 66).
         assert alice.total_score == 166
 
-    client.post(f"/video/{video_id}/like")
+    client.post(f"/api/post/{post_id}/like")
     with flask_app.app_context():
         alice = User.query.filter_by(username="alice").first()
         # Unliking must remove the exact same (boosted) amount that was
@@ -228,67 +208,36 @@ def test_like_awards_and_removes_bonus_points(client):
         assert alice.total_score == 100
 
 
-def test_upload_and_watch_video(client):
+def test_upload_and_view_in_feed(client):
     register(client)
-    data = {
-        "title": "Mein Testvideo",
-        "video": (io.BytesIO(b"fake video bytes"), "clip.mp4"),
-    }
-    response = client.post(
-        "/upload",
-        data=data,
-        content_type="multipart/form-data",
-        follow_redirects=True,
-    )
+    response = upload_post(client, caption="Mein Testfoto")
     assert response.status_code == 200
-    assert "Mein Testvideo".encode() in response.data
+    assert "Mein Testfoto".encode() in response.data
 
-    response = client.get("/")
-    assert "Mein Testvideo".encode() in response.data
+    response = client.get("/feed")
+    assert "Mein Testfoto".encode() in response.data
 
 
-def test_upload_with_description_is_shown_on_watch_page(client):
+def test_upload_with_caption_is_shown_in_feed(client):
     register(client)
-    data = {
-        "title": "Video mit Beschreibung",
-        "description": "Das ist eine Testbeschreibung.",
-        "video": (io.BytesIO(b"fake video bytes"), "clip.mp4"),
-    }
-    response = client.post(
-        "/upload",
-        data=data,
-        content_type="multipart/form-data",
-        follow_redirects=True,
-    )
+    response = upload_post(client, caption="Das ist eine Testbeschreibung.")
     assert response.status_code == 200
     assert "Das ist eine Testbeschreibung.".encode() in response.data
 
 
-def test_upload_without_description_works(client):
+def test_upload_without_caption_works(client):
     register(client)
-    data = {
-        "title": "Video ohne Beschreibung",
-        "video": (io.BytesIO(b"fake video bytes"), "clip.mp4"),
-    }
-    response = client.post(
-        "/upload",
-        data=data,
-        content_type="multipart/form-data",
-        follow_redirects=True,
-    )
+    response = upload_post(client, caption="")
     assert response.status_code == 200
-    assert "Video ohne Beschreibung".encode() in response.data
+    with flask_app.app_context():
+        assert Post.query.count() == 1
 
 
 def test_upload_rejects_bad_extension(client):
     register(client)
-    data = {
-        "title": "Boeses Format",
-        "video": (io.BytesIO(b"not a video"), "clip.exe"),
-    }
     response = client.post(
         "/upload",
-        data=data,
+        data={"caption": "Boeses Format", "photos": [(io.BytesIO(b"not an image"), "clip.exe")]},
         content_type="multipart/form-data",
         follow_redirects=True,
     )
@@ -332,14 +281,10 @@ def test_header_search_bar_present_on_every_page(client):
         assert b"bottom-nav-house" in response.data
 
 
-def test_header_search_bar_present_on_watch_page(client):
+def test_header_search_bar_present_on_feed_page(client):
     register(client)
-    data = {
-        "title": "Header Test",
-        "video": (io.BytesIO(b"fake video bytes"), "clip.mp4"),
-    }
-    client.post("/upload", data=data, content_type="multipart/form-data", follow_redirects=True)
-    response = client.get("/")
+    upload_post(client, caption="Header Test")
+    response = client.get("/feed")
     assert b"headerSearchInput" in response.data
 
 
@@ -422,21 +367,6 @@ def test_fuzzy_search_matches_game_without_exact_term(client):
 def test_fuzzy_search_matches_typo_in_game_term(client):
     response = client.get("/?q=fruitmerge")
     assert "timeskip/fruit.merge".encode() in response.data
-
-
-def test_search_does_not_treat_generic_word_as_game(client):
-    register(client)
-    upload_video(client, title="My Running Blog")
-    response = client.get("/?q=run")
-    assert b"place-label-sub" not in response.data
-    assert b"My Running Blog" in response.data
-
-
-def test_fuzzy_search_finds_similar_sounding_video_title(client):
-    register(client)
-    upload_video(client, title="Katzenvideo vom Urlaub")
-    response = client.get("/?q=katzen")
-    assert "Katzenvideo vom Urlaub".encode() in response.data
 
 
 def test_homepage_shows_game_showcase_row(client):
@@ -562,56 +492,41 @@ def test_place_pixel_rejects_bad_color(client):
     assert response.get_json()["error"] == "invalid_color"
 
 
-def upload_video(client, title="Testvideo", description="", orientation="landscape"):
-    data = {
-        "title": title,
-        "description": description,
-        "orientation": orientation,
-        "video": (io.BytesIO(f"fake video bytes for {title}".encode()), "clip.mp4"),
-    }
-    return client.post("/upload", data=data, content_type="multipart/form-data", follow_redirects=True)
-
-
-def test_like_toggle(client):
+def test_api_like_post_toggle(client):
     register(client)
-    upload_video(client, title="Like Test")
-    response = client.get("/")
+    upload_post(client, caption="Like API Test")
+    with flask_app.app_context():
+        post_id = Post.query.filter_by(caption="Like API Test").first().id
+
+    response = client.post(f"/api/post/{post_id}/like")
     assert response.status_code == 200
+    data = response.get_json()
+    assert data == {"ok": True, "liked": True, "like_count": 1}
 
-    video_id = 1
-    response = client.post(f"/video/{video_id}/like", follow_redirects=True)
-    assert response.status_code == 200
-    assert b"Geliked" in response.data
-    assert b"(1)" in response.data
-
-    response = client.post(f"/video/{video_id}/like", follow_redirects=True)
-    assert b"Geliked" not in response.data
-    assert b"(0)" in response.data
+    response = client.post(f"/api/post/{post_id}/like")
+    assert response.get_json() == {"ok": True, "liked": False, "like_count": 0}
 
 
-def test_like_requires_login(client):
+def test_api_like_post_requires_login(client):
+    response = client.post("/api/post/1/like")
+    assert response.status_code == 401
+
+
+def test_feed_page_has_download_link(client):
     register(client)
-    upload_video(client, title="Like Login Test")
-    client.post("/logout")
-    response = client.post("/video/1/like", follow_redirects=True)
-    assert b"Login" in response.data
-
-
-def test_download_link_present_on_watch_page(client):
-    register(client)
-    upload_video(client, title="Download Test")
-    response = client.get("/video/1")
-    assert b"download" in response.data
+    upload_post(client, caption="Download Test")
+    response = client.get("/feed")
+    assert b"post-download-btn" in response.data
     assert b"Herunterladen" in response.data
 
 
-def test_profile_page_shows_username_and_videos(client):
+def test_profile_page_shows_username_and_posts(client):
     register(client, username="bob")
-    upload_video(client, title="Bobs Video")
+    upload_post(client, caption="Bobs Foto")
     response = client.get("/user/bob")
     assert response.status_code == 200
     assert b"bob" in response.data
-    assert b"Bobs Video" in response.data
+    assert b"Bobs Foto" in response.data
 
 
 def test_profile_page_404_for_unknown_user(client):
@@ -636,11 +551,7 @@ def test_subscribe_toggle(client):
 
 def test_leaderboard_shows_follow_button(client):
     register(client, username="alice", password="secret123")
-    data = {
-        "title": "Leaderboard Clip",
-        "video": (io.BytesIO(b"fake video bytes"), "clip.mp4"),
-    }
-    client.post("/upload", data=data, content_type="multipart/form-data", follow_redirects=True)
+    upload_post(client, caption="Leaderboard Clip")
     client.post("/logout")
 
     register(client, username="bob", password="secret123")
@@ -834,293 +745,131 @@ def test_admin_set_points_clamps_negative_to_zero(client):
     assert target.total_score == 0
 
 
-def test_cleanup_duplicate_videos_requires_admin(client):
-    register(client, username="regular")
-    response = client.post("/admin/cleanup-duplicate-videos?dry_run=1")
-    assert response.status_code == 403
-
-
-def test_cleanup_duplicate_videos_dry_run_makes_no_changes(client):
-    register(client, username="alice")
-    upload_video(client, title="Original")
-    client.post("/logout")
-
-    register(client, username="bob")
-    make_admin("bob")
-
-    with flask_app.app_context():
-        original = Video.query.filter_by(title="Original").first()
-        dup = Video(
-            title="Duplicate",
-            filename=original.filename,
-            content_hash=None,
-            user_id=original.user_id,
-        )
-        db.session.add(dup)
-        db.session.commit()
-
-    response = client.post("/admin/cleanup-duplicate-videos?dry_run=1")
-    assert response.status_code == 200
-    data = response.get_json()
-    assert data["dry_run"] is True
-    assert data["duplicate_groups"] == 1
-    assert data["total_deducted"] == 100
-
-    with flask_app.app_context():
-        alice = User.query.filter_by(username="alice").first()
-        assert alice.total_score == 100
-        dup_video = Video.query.filter_by(title="Duplicate").first()
-        assert dup_video.content_hash is None
-        assert dup_video.duplicate_penalty_applied is False
-
-
-def test_cleanup_duplicate_videos_reports_cumulative_deductions(client):
-    register(client, username="alice")
-    upload_video(client, title="Original")
-    client.post("/logout")
-
-    register(client, username="bob")
-    make_admin("bob")
-
-    with flask_app.app_context():
-        original = Video.query.filter_by(title="Original").first()
-        for i in range(3):
-            db.session.add(Video(
-                title=f"Duplicate {i}",
-                filename=original.filename,
-                content_hash=None,
-                user_id=original.user_id,
-            ))
-        db.session.commit()
-        alice = User.query.filter_by(username="alice").first()
-        alice.total_score = 3000
-        db.session.commit()
-
-    response = client.post("/admin/cleanup-duplicate-videos?dry_run=1")
-    data = response.get_json()
-    assert data["total_deducted"] == 1800
-    befores = [p["total_score_before"] for p in data["penalties"]]
-    afters = [p["total_score_after"] for p in data["penalties"]]
-    assert befores == [3000, 2400, 1800]
-    assert afters == [2400, 1800, 1200]
-
-    with flask_app.app_context():
-        alice = User.query.filter_by(username="alice").first()
-        assert alice.total_score == 3000
-
-    real_response = client.post("/admin/cleanup-duplicate-videos?dry_run=0")
-    real_data = real_response.get_json()
-    assert real_data["total_deducted"] == 1800
-
-    with flask_app.app_context():
-        alice = User.query.filter_by(username="alice").first()
-        assert alice.total_score == 1200
-
-
-def test_cleanup_duplicate_videos_real_run_deducts_points(client):
-    register(client, username="alice")
-    upload_video(client, title="Original")
-    client.post("/logout")
-
-    register(client, username="bob")
-    make_admin("bob")
-
-    with flask_app.app_context():
-        original = Video.query.filter_by(title="Original").first()
-        dup = Video(
-            title="Duplicate",
-            filename=original.filename,
-            content_hash=None,
-            user_id=original.user_id,
-        )
-        db.session.add(dup)
-        db.session.commit()
-
-    response = client.post("/admin/cleanup-duplicate-videos?dry_run=0")
-    data = response.get_json()
-    assert data["total_deducted"] == 100
-
-    with flask_app.app_context():
-        alice = User.query.filter_by(username="alice").first()
-        assert alice.total_score == 0
-
-    second_response = client.post("/admin/cleanup-duplicate-videos?dry_run=0")
-    second_data = second_response.get_json()
-    assert second_data["total_deducted"] == 0
-    assert second_data["penalties"] == []
-
-
-def test_admin_can_delete_any_video(client):
+def test_admin_can_delete_any_post(client):
     register(client, username="owner")
-    upload_video(client, title="Owned Video")
+    upload_post(client, caption="Owned Photo")
     client.post("/logout")
 
     register(client, username="boss")
     make_admin("boss")
 
-    response = client.post("/video/1/delete", follow_redirects=True)
+    with flask_app.app_context():
+        post_id = Post.query.filter_by(caption="Owned Photo").first().id
+
+    response = client.post(f"/post/{post_id}/delete", follow_redirects=True)
     assert response.status_code == 200
-    assert b"Owned Video" not in response.data
+    assert Post.query.count() == 0
 
 
-def test_report_video_requires_login(client):
+def test_report_post_requires_login(client):
     register(client, username="owner")
-    upload_video(client, title="Video")
+    upload_post(client, caption="Photo")
     client.post("/logout")
 
-    response = client.post("/api/video/1/report")
+    response = client.post("/api/post/1/report")
     data = response.get_json()
     assert data["ok"] is False
     assert data["error"] == "not_logged_in"
 
 
-def test_report_video_success(client):
+def test_report_post_success(client):
     register(client, username="owner")
-    upload_video(client, title="Video")
+    upload_post(client, caption="Photo")
     client.post("/logout")
 
     register(client, username="reporter")
-    response = client.post("/api/video/1/report")
+    response = client.post("/api/post/1/report")
     data = response.get_json()
     assert data["ok"] is True
 
-    reports = VideoReport.query.filter_by(video_id=1).all()
+    reports = PostReport.query.filter_by(post_id=1).all()
     assert len(reports) == 1
     assert reports[0].reporter.username == "reporter"
 
 
-def test_report_video_twice_by_same_user_fails(client):
+def test_report_post_twice_by_same_user_fails(client):
     register(client, username="owner")
-    upload_video(client, title="Video")
+    upload_post(client, caption="Photo")
     client.post("/logout")
 
     register(client, username="reporter")
-    client.post("/api/video/1/report")
-    response = client.post("/api/video/1/report")
+    client.post("/api/post/1/report")
+    response = client.post("/api/post/1/report")
     data = response.get_json()
     assert data["ok"] is False
     assert data["error"] == "already_reported"
 
 
-def test_admin_sees_reported_videos(client):
+def test_admin_sees_reported_posts(client):
     register(client, username="owner")
-    upload_video(client, title="Reported Video")
+    upload_post(client, caption="Reported Photo")
     client.post("/logout")
 
     register(client, username="reporter")
-    client.post("/api/video/1/report")
+    client.post("/api/post/1/report")
     client.post("/logout")
 
     register(client, username="boss")
     make_admin("boss")
     response = client.get("/admin")
-    assert b"Reported Video" in response.data
+    assert b"Reported Photo" in response.data
     assert b"reporter" in response.data
 
 
 def test_admin_can_dismiss_report(client):
     register(client, username="owner")
-    upload_video(client, title="Video")
+    upload_post(client, caption="Photo")
     client.post("/logout")
 
     register(client, username="reporter")
-    client.post("/api/video/1/report")
+    client.post("/api/post/1/report")
     client.post("/logout")
 
     register(client, username="boss")
     make_admin("boss")
-    report = VideoReport.query.first()
+    report = PostReport.query.first()
     response = client.post(f"/admin/reports/{report.id}/dismiss", follow_redirects=True)
     assert response.status_code == 200
-    assert VideoReport.query.count() == 0
-    # dismissing a report does not delete the video itself
-    assert Video.query.count() == 1
+    assert PostReport.query.count() == 0
+    # dismissing a report does not delete the post itself
+    assert Post.query.count() == 1
 
 
-def test_regular_user_still_cannot_delete_others_video(client):
+def test_regular_user_still_cannot_delete_others_post(client):
     register(client, username="owner")
-    upload_video(client, title="Protected Video")
+    upload_post(client, caption="Protected Photo")
     client.post("/logout")
 
     register(client, username="stranger")
-    response = client.post("/video/1/delete")
+    response = client.post("/post/1/delete")
     assert response.status_code == 403
 
 
-def test_index_shows_only_landscape_videos_by_default(client):
+def test_feed_page_accessible_and_shows_photo(client):
     register(client)
-    upload_video(client, title="Landscape Video", orientation="landscape")
-    upload_video(client, title="Portrait Video", orientation="portrait")
-
-    response = client.get("/")
-    assert b"Landscape Video" in response.data
-    assert b"Portrait Video" not in response.data
-
-
-def test_search_still_finds_portrait_videos(client):
-    register(client)
-    upload_video(client, title="Portrait Video", orientation="portrait")
-
-    response = client.get("/?q=Portrait")
-    assert b"Portrait Video" in response.data
-
-
-def test_shorts_page_shows_only_portrait_videos(client):
-    register(client)
-    upload_video(client, title="Landscape Video", orientation="landscape")
-    upload_video(client, title="Portrait Video", orientation="portrait")
-
-    response = client.get("/shorts")
+    upload_post(client, caption="Feed Photo")
+    response = client.get("/feed")
     assert response.status_code == 200
-    assert b"Portrait Video" in response.data
-    assert b"Landscape Video" not in response.data
+    assert b"Feed Photo" in response.data
 
 
-def test_shorts_feed_shows_most_liked_video_first(client):
-    register(client, username="alice")
-    upload_video(client, title="Popular Clip", orientation="portrait")
-    upload_video(client, title="Unpopular Clip", orientation="portrait")
-    client.post("/logout")
+def test_feed_page_empty_state(client):
+    response = client.get("/feed")
+    assert response.status_code == 200
+    assert "Noch keine Fotos vorhanden".encode() in response.data
 
-    register(client, username="bob")
-    with flask_app.app_context():
-        popular = Video.query.filter_by(title="Popular Clip").first()
-        video_id = popular.id
-    client.post(f"/video/{video_id}/like")
 
-    response = client.get("/shorts")
-    data = response.data
-    assert data.index(b"Popular Clip") < data.index(b"Unpopular Clip")
+def test_feed_shows_swipe_dots_for_multi_photo_post(client):
+    register(client)
+    upload_post(client, caption="Multi", filenames=["a.png", "b.png"])
+    response = client.get("/feed")
+    assert b"post-photo-dot" in response.data
 
 
 def test_homepage_shows_redeem_login_button_for_guest(client):
     response = client.get("/")
     assert b"redeem-login-btn" in response.data
     assert b'href="/register"' in response.data
-
-
-def test_shorts_page_empty_state(client):
-    response = client.get("/shorts")
-    assert response.status_code == 200
-    assert b"Noch keine Hochformat-Videos" in response.data
-
-
-def test_api_like_video_toggle(client):
-    register(client)
-    upload_video(client, title="Like API Test")
-
-    response = client.post("/video/1/like".replace("video/1", "api/video/1"))
-    assert response.status_code == 200
-    data = response.get_json()
-    assert data == {"ok": True, "liked": True, "like_count": 1}
-
-    response = client.post("/api/video/1/like")
-    assert response.get_json() == {"ok": True, "liked": False, "like_count": 0}
-
-
-def test_api_like_video_requires_login(client):
-    response = client.post("/api/video/1/like")
-    assert response.status_code == 401
 
 
 def test_api_my_stats_requires_login(client):
@@ -1130,16 +879,16 @@ def test_api_my_stats_requires_login(client):
 
 def test_api_my_stats_reports_likes_and_followers(client):
     register(client, username="alice")
-    upload_video(client, title="Stats Video")
+    upload_post(client, caption="Stats Photo")
     client.post("/logout")
 
     register(client, username="bob")
-    client.post("/video/1/like")
+    client.post("/api/post/1/like")
     client.post("/user/alice/subscribe")
     client.post("/logout")
 
     register(client, username="carol")
-    client.post("/video/1/like")
+    client.post("/api/post/1/like")
     client.post("/logout")
 
     client.post("/login", data={"username": "alice", "password": "secret123"})
@@ -1272,89 +1021,6 @@ def test_email_not_shown_on_public_profile(client):
     assert b"secret@example.com" not in response.data
 
 
-def test_r2_cleanup_deletes_oldest_videos_until_low_water_mark(client, monkeypatch):
-    import app as app_module
-    from datetime import datetime, timedelta, timezone
-    from unittest.mock import MagicMock
-
-    register(client, username="alice")
-    user = User.query.filter_by(username="alice").first()
-
-    base = datetime.now(timezone.utc)
-    videos = []
-    for i in range(4):
-        video = Video(
-            title=f"video{i}",
-            filename=f"video{i}.mp4",
-            content_hash=f"hash{i}",
-            user_id=user.id,
-            created_at=base + timedelta(minutes=i),
-        )
-        db.session.add(video)
-        db.session.commit()
-        videos.append(video)
-
-    # Each of the 4 videos is 3GB -> total 12GB, over the 9GB high-water mark.
-    sizes = {f"uploads/video{i}.mp4": 3 * 1024 ** 3 for i in range(4)}
-    fake_r2 = MagicMock()
-    fake_r2.list_objects_v2.return_value = {
-        "Contents": [{"Key": key, "Size": size} for key, size in sizes.items()],
-        "IsTruncated": False,
-    }
-
-    monkeypatch.setattr(app_module, "USE_R2", True)
-    monkeypatch.setattr(app_module, "r2_client", fake_r2)
-    monkeypatch.setattr(app_module, "R2_BUCKET_NAME", "test-bucket")
-
-    with flask_app.app_context():
-        app_module.cleanup_oldest_videos_if_over_quota()
-
-    # 12GB -> delete video0 (9GB left, still >7GB) -> delete video1 (6GB left, <=7GB) -> stop
-    remaining_titles = {v.title for v in Video.query.all()}
-    assert remaining_titles == {"video2", "video3"}
-
-
-def test_r2_cleanup_never_deletes_just_uploaded_video(client, monkeypatch):
-    import app as app_module
-    from datetime import datetime, timedelta, timezone
-    from unittest.mock import MagicMock
-
-    register(client, username="alice")
-    user = User.query.filter_by(username="alice").first()
-
-    base = datetime.now(timezone.utc)
-    old_video = Video(
-        title="old", filename="old.mp4", content_hash="old-hash",
-        user_id=user.id, created_at=base,
-    )
-    new_video = Video(
-        title="new", filename="new.mp4", content_hash="new-hash",
-        user_id=user.id, created_at=base + timedelta(minutes=1),
-    )
-    db.session.add_all([old_video, new_video])
-    db.session.commit()
-
-    # Both videos are 8GB each -> 16GB total, well over quota, but even
-    # deleting "old" alone only gets to 8GB (still above 7GB) so a naive
-    # loop would also delete "new" -- keep_video_id must prevent that.
-    sizes = {"uploads/old.mp4": 8 * 1024 ** 3, "uploads/new.mp4": 8 * 1024 ** 3}
-    fake_r2 = MagicMock()
-    fake_r2.list_objects_v2.return_value = {
-        "Contents": [{"Key": key, "Size": size} for key, size in sizes.items()],
-        "IsTruncated": False,
-    }
-
-    monkeypatch.setattr(app_module, "USE_R2", True)
-    monkeypatch.setattr(app_module, "r2_client", fake_r2)
-    monkeypatch.setattr(app_module, "R2_BUCKET_NAME", "test-bucket")
-
-    with flask_app.app_context():
-        app_module.cleanup_oldest_videos_if_over_quota(keep_video_id=new_video.id)
-
-    remaining_titles = {v.title for v in Video.query.all()}
-    assert remaining_titles == {"new"}
-
-
 def test_last_seen_updated_on_request_and_shown_as_online_in_admin(client):
     from datetime import datetime, timedelta, timezone
 
@@ -1379,30 +1045,6 @@ def test_last_seen_updated_on_request_and_shown_as_online_in_admin(client):
 
     response = client.get("/admin")
     assert b"Offline" in response.data
-
-
-def test_webm_video_shows_ipad_safari_warning(client):
-    register(client, username="alice")
-    user = User.query.filter_by(username="alice").first()
-    video = Video(title="old webm clip", filename="abc.webm", content_hash="webmhash", user_id=user.id)
-    db.session.add(video)
-    db.session.commit()
-
-    response = client.get(f"/video/{video.id}")
-    assert b"iPhone/iPad" in response.data
-    assert b'type="video/webm"' in response.data
-
-
-def test_mp4_video_has_correct_source_type_and_no_warning(client):
-    register(client, username="alice")
-    user = User.query.filter_by(username="alice").first()
-    video = Video(title="normal clip", filename="abc.mp4", content_hash="mp4hash", user_id=user.id)
-    db.session.add(video)
-    db.session.commit()
-
-    response = client.get(f"/video/{video.id}")
-    assert b'type="video/mp4"' in response.data
-    assert b"iPhone/iPad" not in response.data
 
 
 def test_streak_starts_at_one_after_earning_100_points_in_a_day(client):
@@ -1479,19 +1121,21 @@ def test_like_unlike_stays_symmetric_with_active_streak_bonus(client):
     owner.current_streak = 5
     owner.best_streak = 5
     owner.last_streak_date = date.today()
-    video = Video(title="Video", filename="clip.mp4", content_hash="hash1", user_id=owner.id)
-    db.session.add(video)
+    post = Post(caption="Photo", user_id=owner.id)
+    db.session.add(post)
+    db.session.flush()
+    db.session.add(PostPhoto(post_id=post.id, filename="clip.png", position=0, content_hash="hash1"))
     db.session.commit()
-    video_id = video.id
+    post_id = post.id
     client.post("/logout")
 
     register(client, username="liker")
-    client.post(f"/video/{video_id}/like")
+    client.post(f"/api/post/{post_id}/like")
 
     owner = User.query.filter_by(username="owner").first()
     assert owner.total_score == 90  # 60 * 1.5 (5-day streak = +50%)
 
-    client.post(f"/video/{video_id}/like")  # unlike
+    client.post(f"/api/post/{post_id}/like")  # unlike
     owner = User.query.filter_by(username="owner").first()
     assert owner.total_score == 0  # exact reversal, no leftover leak
 
@@ -1808,12 +1452,15 @@ def test_create_group_rejects_non_mutual_follow_member(client):
     assert response.get_json()["ok"] is False
 
 
-def test_share_video_creates_message_with_shared_video(client):
+def test_share_post_creates_message_with_shared_post(client):
     register(client, username="alice")
     alice = User.query.filter_by(username="alice").first()
-    video = Video(title="cool clip", filename="clip.mp4", content_hash="clip-hash", user_id=alice.id)
-    db.session.add(video)
+    post = Post(caption="cool photo", user_id=alice.id)
+    db.session.add(post)
+    db.session.flush()
+    db.session.add(PostPhoto(post_id=post.id, filename="clip.png", position=0, content_hash="clip-hash"))
     db.session.commit()
+    post_id = post.id
     client.post("/logout")
 
     register(client, username="bob")
@@ -1822,166 +1469,26 @@ def test_share_video_creates_message_with_shared_video(client):
 
     client.post("/login", data={"username": "alice", "password": "secret123"})
     conv_id = client.post("/api/messages/start-dm", json={"username": "bob"}).get_json()["conversation_id"]
-    response = client.post(f"/api/videos/{video.id}/share", json={"conversation_id": conv_id})
+    response = client.post(f"/api/posts/{post_id}/share", json={"conversation_id": conv_id})
     assert response.get_json()["ok"] is True
 
     messages_data = client.get(f"/api/messages/{conv_id}").get_json()["messages"]
-    assert messages_data[0]["shared_video"]["title"] == "cool clip"
+    assert messages_data[0]["shared_post"]["caption"] == "cool photo"
 
 
-def test_upload_without_ffmpeg_keeps_original_format(client, monkeypatch):
-    import app as app_module
-    monkeypatch.setattr(app_module, "FFMPEG_PATH", None)
-
-    register(client, username="alice")
-    data = {
-        "title": "webm clip",
-        "description": "",
-        "orientation": "landscape",
-        "video": (io.BytesIO(b"fake webm bytes"), "clip.webm"),
-    }
-    client.post("/upload", data=data, content_type="multipart/form-data", follow_redirects=True)
-
-    video = Video.query.filter_by(title="webm clip").first()
-    assert video is not None
-    assert video.filename.endswith(".webm")
-
-
-def test_upload_transcodes_to_mp4_when_ffmpeg_available(client, monkeypatch, tmp_path):
-    import app as app_module
-
-    fake_output = tmp_path / "fake_converted.mp4"
-    fake_output.write_bytes(b"fake transcoded mp4 bytes")
-
-    monkeypatch.setattr(app_module, "FFMPEG_PATH", "/usr/bin/ffmpeg")
-    monkeypatch.setattr(app_module, "transcode_to_mp4", lambda input_path: str(fake_output))
-
-    register(client, username="alice")
-    data = {
-        "title": "recorded clip",
-        "description": "",
-        "orientation": "landscape",
-        "video": (io.BytesIO(b"fake webm bytes"), "clip.webm"),
-    }
-    client.post("/upload", data=data, content_type="multipart/form-data", follow_redirects=True)
-
-    video = Video.query.filter_by(title="recorded clip").first()
-    assert video is not None
-    assert video.filename.endswith(".mp4")
-
-
-def test_transcode_migration_dry_run_does_not_modify_anything(client, monkeypatch, tmp_path):
-    import app as app_module
-
+def test_liked_posts_page_lists_liked_posts(client):
     register(client, username="alice")
     alice = User.query.filter_by(username="alice").first()
-    video = Video(title="legacy webm", filename="legacy.webm", content_hash="legacyhash", user_id=alice.id)
-    db.session.add(video)
+    post = Post(caption="liked photo", user_id=alice.id)
+    db.session.add(post)
+    db.session.flush()
+    db.session.add(PostPhoto(post_id=post.id, filename="liked.png", position=0, content_hash="liked-hash"))
     db.session.commit()
+    post_id = post.id
 
-    fake_output = tmp_path / "fake_converted.mp4"
-    fake_output.write_bytes(b"fake transcoded mp4 bytes")
-
-    monkeypatch.setattr(app_module, "FFMPEG_PATH", "/usr/bin/ffmpeg")
-    monkeypatch.setattr(app_module, "transcode_to_mp4", lambda input_path: str(fake_output))
-    monkeypatch.setattr(app_module, "fetch_video_bytes", lambda v: b"old webm bytes")
-
-    report = app_module.run_transcode_migration(dry_run=True)
-
-    assert report["ok"] is True
-    assert report["results"][0]["status"] == "would_convert"
-
-    video = Video.query.filter_by(id=video.id).first()
-    assert video.filename == "legacy.webm"  # unchanged in dry run
-
-
-def test_transcode_migration_limit_processes_fewer_videos_per_call(client, monkeypatch, tmp_path):
-    import app as app_module
-
-    register(client, username="alice")
-    alice = User.query.filter_by(username="alice").first()
-    for i in range(3):
-        db.session.add(Video(title=f"legacy {i}", filename=f"legacy{i}.webm", content_hash=f"hash{i}", user_id=alice.id))
-    db.session.commit()
-
-    fake_output = tmp_path / "fake_converted.mp4"
-    fake_output.write_bytes(b"fake transcoded mp4 bytes")
-
-    monkeypatch.setattr(app_module, "FFMPEG_PATH", "/usr/bin/ffmpeg")
-    monkeypatch.setattr(app_module, "transcode_to_mp4", lambda input_path: str(fake_output))
-    monkeypatch.setattr(app_module, "fetch_video_bytes", lambda v: b"old webm bytes")
-
-    report = app_module.run_transcode_migration(dry_run=True, limit=1)
-    assert len(report["results"]) == 1
-
-
-def test_transcode_migration_real_run_updates_filename(client, monkeypatch, tmp_path):
-    import app as app_module
-
-    register(client, username="alice")
-    alice = User.query.filter_by(username="alice").first()
-    video = Video(title="legacy webm", filename="legacy.webm", content_hash="legacyhash", user_id=alice.id)
-    db.session.add(video)
-    db.session.commit()
-    video_id = video.id
-
-    fake_output = tmp_path / "fake_converted.mp4"
-    fake_output.write_bytes(b"fake transcoded mp4 bytes")
-
-    monkeypatch.setattr(app_module, "FFMPEG_PATH", "/usr/bin/ffmpeg")
-    monkeypatch.setattr(app_module, "transcode_to_mp4", lambda input_path: str(fake_output))
-    monkeypatch.setattr(app_module, "fetch_video_bytes", lambda v: b"old webm bytes")
-    deleted = []
-    monkeypatch.setattr(app_module, "delete_media", lambda kind, filename: deleted.append(filename))
-
-    report = app_module.run_transcode_migration(dry_run=False)
-
-    assert report["results"][0]["status"] == "converted"
-    video = Video.query.filter_by(id=video_id).first()
-    assert video.filename.endswith(".mp4")
-    assert deleted == ["legacy.webm"]
-
-
-def test_admin_transcode_route_starts_in_background_and_reports_status(client, monkeypatch, tmp_path):
-    import app as app_module
-    import time
-
-    register(client, username="alice")
-    make_admin("alice")
-    victim = User.query.filter_by(username="alice").first()
-    video = Video(title="legacy webm", filename="legacy.webm", content_hash="legacyhash", user_id=victim.id)
-    db.session.add(video)
-    db.session.commit()
-
-    fake_output = tmp_path / "fake_converted.mp4"
-    fake_output.write_bytes(b"fake transcoded mp4 bytes")
-    monkeypatch.setattr(app_module, "FFMPEG_PATH", "/usr/bin/ffmpeg")
-    monkeypatch.setattr(app_module, "transcode_to_mp4", lambda input_path: str(fake_output))
-    monkeypatch.setattr(app_module, "fetch_video_bytes", lambda v: b"old webm bytes")
-
-    response = client.post("/admin/transcode-legacy-videos?dry_run=1")
-    assert response.get_json()["ok"] is True
-    assert response.get_json()["status"] == "started"
-
-    for _ in range(50):
-        status = client.get("/admin/transcode-legacy-videos/status").get_json()
-        if not status["running"] and status["last_report"] is not None:
-            break
-        time.sleep(0.05)
-
-    assert status["last_report"]["results"][0]["status"] == "would_convert"
-
-
-def test_liked_videos_page_lists_liked_videos(client):
-    register(client, username="alice")
-    alice = User.query.filter_by(username="alice").first()
-    video = Video(title="liked clip", filename="liked.mp4", content_hash="liked-hash", user_id=alice.id)
-    db.session.add(video)
-    db.session.commit()
-
-    client.post(f"/video/{video.id}/like")
-    response = client.get("/liked-videos")
-    assert b"liked clip" in response.data
+    client.post(f"/api/post/{post_id}/like")
+    response = client.get("/liked-posts")
+    assert b"liked photo" in response.data
 
 
 def test_coinflip_page_loads(client):

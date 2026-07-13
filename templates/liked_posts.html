@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Deine Likes - timeskip{% endblock %}
+{% block content %}
+    <h1>Deine Likes</h1>
+    {% if posts %}
+        <div class="video-grid">
+            {% for post in posts %}
+                <div class="video-card-wrap">
+                    <a class="video-card" href="{{ url_for('feed', post_id=post.id) }}">
+                        <img src="{{ media_url('posts', post.photos[0].filename) }}" alt="" loading="lazy">
+                        {% if post.photos|length > 1 %}
+                            <span class="post-card-multi-badge">1/{{ post.photos|length }}</span>
+                        {% endif %}
+                        <div class="video-card-info">
+                            {% if post.caption %}
+                                <div class="video-card-description">{{ post.caption }}</div>
+                            {% endif %}
+                            <div class="video-meta">von {{ post.uploader.username }}</div>
+                        </div>
+                    </a>
+                    {% include "partials/_post_report_menu.html" %}
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p>Du hast noch keine Fotos geliked.</p>
+    {% endif %}
+{% endblock %}

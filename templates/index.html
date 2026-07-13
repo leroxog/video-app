@@ -33,7 +33,7 @@
         </div>
     {% endif %}
 
-    <div class="upload-bonus-banner">Jedes hochgeladene Video bringt <strong>+100 Punkte</strong>, jeder Like <strong>+60 Punkte</strong></div>
+    <div class="upload-bonus-banner">Jedes hochgeladene Foto bringt <strong>+100 Punkte</strong>, jeder Like <strong>+60 Punkte</strong> &mdash; <a href="{{ url_for('feed') }}">Fotos ansehen</a></div>
 
     <div class="game-showcase-row">
         {% for game in games_ordered %}
@@ -47,7 +47,6 @@
         {% endfor %}
     </div>
 
-    <h1>Videos</h1>
     {% if query %}
         <p><a class="clear-search" href="{{ url_for('index') }}">&times; Suche zurücksetzen</a></p>
     {% endif %}
@@ -65,30 +64,8 @@
                 <div class="place-label-sub">{{ matched_game.subtitle }} &mdash; jetzt spielen</div>
             </div>
         </a>
-    {% elif videos %}
-        <div class="video-grid">
-            {% for video in videos %}
-                <div class="video-card-wrap">
-                    <a class="video-card" href="{{ url_for('watch', video_id=video.id) }}">
-                        <video muted preload="metadata">
-                            <source src="{{ media_url('uploads', video.filename) }}" type="{{ video_mime_type(video.filename) }}">
-                        </video>
-                        <div class="video-card-info">
-                            <div class="video-title">{{ video.title }}</div>
-                            <div class="video-meta">von {{ video.uploader.username }}</div>
-                            {% if video.description %}
-                                <div class="video-card-description">{{ video.description }}</div>
-                            {% endif %}
-                        </div>
-                    </a>
-                    {% include "partials/_video_report_menu.html" %}
-                </div>
-            {% endfor %}
-        </div>
     {% elif query %}
-        <p>Keine Videos gefunden für "{{ query }}".</p>
-    {% else %}
-        <p>Noch keine Videos hochgeladen. <a href="{{ url_for('upload') }}">Jetzt das erste Video hochladen</a>.</p>
+        <p>Kein Spiel gefunden für "{{ query }}".</p>
     {% endif %}
 
     <div class="redeem-section">

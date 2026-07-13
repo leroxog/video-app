@@ -28,9 +28,9 @@ class User(db.Model):
     coinflip_coins = db.Column(db.Integer, nullable=False, default=1)
     coinflip_worker_count = db.Column(db.Integer, nullable=False, default=0)
     coinflip_rebirths = db.Column(db.Integer, nullable=False, default=0)
-    videos = db.relationship("Video", backref="uploader", lazy=True, cascade="all, delete-orphan")
-    likes_given = db.relationship("Like", backref="liker", lazy=True, cascade="all, delete-orphan")
-    comments_made = db.relationship("Comment", backref="author", lazy=True, cascade="all, delete-orphan")
+    posts = db.relationship("Post", backref="uploader", lazy=True, cascade="all, delete-orphan")
+    post_likes_given = db.relationship("PostLike", backref="liker", lazy=True, cascade="all, delete-orphan")
+    post_comments_made = db.relationship("PostComment", backref="author", lazy=True, cascade="all, delete-orphan")
     sounds_uploaded = db.relationship("Sound", backref="uploader", lazy=True, cascade="all, delete-orphan")
     subscriptions_made = db.relationship(
         "Subscription",
@@ -54,48 +54,56 @@ class User(db.Model):
         return check_password_hash(self.password_hash, password)
 
 
-class Video(db.Model):
+class Post(db.Model):
+    """A photo post -- can have one or many photos, swipeable in the feed."""
     id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(200), nullable=False)
-    description = db.Column(db.Text, nullable=True)
-    filename = db.Column(db.String(255), nullable=False)
-    orientation = db.Column(db.String(10), nullable=False, default="landscape")
-    content_hash = db.Column(db.String(64), nullable=True, index=True)
-    duplicate_penalty_applied = db.Column(db.Boolean, nullable=False, default=False)
+    caption = db.Column(db.Text, nullable=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    likes = db.relationship("Like", backref="video", lazy=True, cascade="all, delete-orphan")
+    photos = db.relationship(
+        "PostPhoto", backref="post", lazy=True, cascade="all, delete-orphan",
+        order_by="PostPhoto.position",
+    )
+    likes = db.relationship("PostLike", backref="post", lazy=True, cascade="all, delete-orphan")
     comments = db.relationship(
-        "Comment", backref="video", lazy=True, cascade="all, delete-orphan",
-        order_by="Comment.created_at",
+        "PostComment", backref="post", lazy=True, cascade="all, delete-orphan",
+        order_by="PostComment.created_at",
     )
     reports = db.relationship(
-        "VideoReport", backref="video", lazy=True, cascade="all, delete-orphan",
-        order_by="VideoReport.created_at",
+        "PostReport", backref="post", lazy=True, cascade="all, delete-orphan",
+        order_by="PostReport.created_at",
     )
 
 
-class VideoReport(db.Model):
+class PostPhoto(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    video_id = db.Column(db.Integer, db.ForeignKey("video.id"), nullable=False)
+    post_id = db.Column(db.Integer, db.ForeignKey("post.id"), nullable=False)
+    filename = db.Column(db.String(255), nullable=False)
+    position = db.Column(db.Integer, nullable=False, default=0)
+    content_hash = db.Column(db.String(64), nullable=True, index=True)
+
+
+class PostReport(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    post_id = db.Column(db.Integer, db.ForeignKey("post.id"), nullable=False)
     reporter_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     reporter = db.relationship("User")
-    __table_args__ = (db.UniqueConstraint("video_id", "reporter_id", name="uq_report_video_reporter"),)
+    __table_args__ = (db.UniqueConstraint("post_id", "reporter_id", name="uq_postreport_post_reporter"),)
 
 
-class Like(db.Model):
+class PostLike(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    video_id = db.Column(db.Integer, db.ForeignKey("video.id"), nullable=False)
+    post_id = db.Column(db.Integer, db.ForeignKey("post.id"), nullable=False)
     points_awarded = db.Column(db.Integer, nullable=False, default=0)
-    __table_args__ = (db.UniqueConstraint("user_id", "video_id", name="uq_like_user_video"),)
+    __table_args__ = (db.UniqueConstraint("user_id", "post_id", name="uq_postlike_user_post"),)
 
 
-class Comment(db.Model):
+class PostComment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    video_id = db.Column(db.Integer, db.ForeignKey("video.id"), nullable=False)
+    post_id = db.Column(db.Integer, db.ForeignKey("post.id"), nullable=False)
     text = db.Column(db.String(500), nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
@@ -193,7 +201,7 @@ class Message(db.Model):
     conversation_id = db.Column(db.Integer, db.ForeignKey("conversation.id"), nullable=False)
     sender_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     text = db.Column(db.Text, nullable=True)
-    shared_video_id = db.Column(db.Integer, db.ForeignKey("video.id"), nullable=True)
+    shared_post_id = db.Column(db.Integer, db.ForeignKey("post.id"), nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     viewed_at = db.Column(db.DateTime, nullable=True)
     sender = db.relationship("User", foreign_keys=[sender_id])

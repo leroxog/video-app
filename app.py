@@ -5,9 +5,6 @@ import random
 import hashlib
 import difflib
 import logging
-import shutil
-import subprocess
-import tempfile
 import threading
 from datetime import datetime, timezone, date, timedelta
 from flask import (
@@ -17,15 +14,16 @@ from flask import (
 from sqlalchemy import text
 from werkzeug.utils import secure_filename
 from models import (
-    db, User, Video, Pixel, Like, Subscription, Comment, RedeemedCode, GamePlayCount, Sound,
-    UserCreatedCode, Conversation, ConversationMember, Message, VideoReport, CoinflipDeposit,
+    db, User, Post, PostPhoto, Pixel, PostLike, Subscription, PostComment, RedeemedCode,
+    GamePlayCount, Sound, UserCreatedCode, Conversation, ConversationMember, Message,
+    PostReport, CoinflipDeposit,
 )
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-ALLOWED_EXTENSIONS = {"mp4", "webm", "ogg", "mov"}
 ALLOWED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
+MAX_PHOTOS_PER_POST = 10
 ALLOWED_SOUND_EXTENSIONS = {"mp3", "wav", "ogg", "m4a", "aac", "mp4", "webm", "mov"}
 SOUND_TITLE_MAX_LENGTH = 100
 PLACE_GRID_SIZE = 100
@@ -258,19 +256,6 @@ def find_best_game_match(query):
     return None
 
 
-def video_matches_query(video, query_lower):
-    title_lower = video.title.lower()
-    if query_lower in title_lower:
-        return True
-    query_words = [w for w in query_lower.split() if len(w) >= 3]
-    title_words = title_lower.split()
-    for qw in query_words:
-        for tw in title_words:
-            if difflib.SequenceMatcher(None, qw, tw).ratio() >= 0.75:
-                return True
-    return False
-
-
 def record_game_play(key):
     row = db.session.get(GamePlayCount, key)
     if row is None:
@@ -336,7 +321,7 @@ else:
 
 
 LOCAL_MEDIA_FOLDERS = {
-    "uploads": "UPLOAD_FOLDER",
+    "posts": "UPLOAD_FOLDER",
     "profile_pics": "PROFILE_PIC_FOLDER",
     "sounds": "SOUND_FOLDER",
 }
@@ -357,52 +342,6 @@ def save_media(file_storage, kind, stored_filename):
         file_storage.save(os.path.join(folder, stored_filename))
 
 
-def save_media_from_path(local_path, kind, stored_filename, content_type="application/octet-stream"):
-    """Like save_media, but takes a plain file path instead of a Flask
-    FileStorage (used after ffmpeg has written a transcoded file to disk)."""
-    if USE_R2:
-        key = f"{kind}/{stored_filename}"
-        with open(local_path, "rb") as f:
-            r2_client.upload_fileobj(f, R2_BUCKET_NAME, key, ExtraArgs={"ContentType": content_type})
-    else:
-        folder = app.config[LOCAL_MEDIA_FOLDERS[kind]]
-        shutil.copyfile(local_path, os.path.join(folder, stored_filename))
-
-
-FFMPEG_PATH = shutil.which("ffmpeg")
-
-
-def transcode_to_mp4(input_path):
-    """Transcode a video file to a broadly-compatible H.264/AAC MP4 so it
-    plays on every device/browser (Safari/iOS in particular can't play
-    WebM at all). Returns the output path on success, or None if ffmpeg
-    isn't installed or the conversion fails -- callers should fall back
-    to uploading the original file untouched."""
-    if not FFMPEG_PATH:
-        logger.warning("ffmpeg nicht gefunden -- Video wird ohne Transkodierung hochgeladen.")
-        return None
-    output_path = input_path + "-converted.mp4"
-    try:
-        subprocess.run(
-            [
-                FFMPEG_PATH, "-y", "-i", input_path,
-                "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
-                "-c:a", "aac", "-b:a", "128k",
-                "-movflags", "+faststart",
-                output_path,
-            ],
-            check=True,
-            capture_output=True,
-            timeout=280,
-        )
-        return output_path
-    except Exception:
-        logger.exception("Video-Transkodierung fehlgeschlagen fuer %s", input_path)
-        if os.path.exists(output_path):
-            os.remove(output_path)
-        return None
-
-
 def delete_media(kind, stored_filename):
     if not stored_filename:
         return
@@ -417,10 +356,6 @@ def delete_media(kind, stored_filename):
             os.remove(os.path.join(folder, stored_filename))
         except OSError:
             pass
-
-
-R2_CLEANUP_HIGH_WATER_BYTES = 9 * 1024 ** 3
-R2_CLEANUP_LOW_WATER_BYTES = 7 * 1024 ** 3
 
 
 def get_r2_bucket_usage():
@@ -443,49 +378,6 @@ def get_r2_bucket_usage():
     return total_bytes, sizes_by_key
 
 
-def cleanup_oldest_videos_if_over_quota(keep_video_id=None):
-    """If the R2 bucket is at/above the 9 GB high-water mark, delete the
-    oldest videos (oldest upload first) until usage drops back to 7 GB.
-    Called after every upload, so it keeps repeating forever as new
-    uploads push storage back over the threshold. Never deletes
-    keep_video_id (the video that was just uploaded)."""
-    if not USE_R2:
-        return
-    try:
-        total_bytes, sizes_by_key = get_r2_bucket_usage()
-        if total_bytes < R2_CLEANUP_HIGH_WATER_BYTES:
-            return
-        for video in Video.query.order_by(Video.created_at.asc()).all():
-            if total_bytes <= R2_CLEANUP_LOW_WATER_BYTES:
-                break
-            if video.id == keep_video_id:
-                continue
-            total_bytes -= sizes_by_key.get(f"uploads/{video.filename}", 0)
-            delete_media("uploads", video.filename)
-            db.session.delete(video)
-            db.session.commit()
-            logger.info(
-                "R2-Aufraeumen: Video '%s' (id=%s) geloescht, da Speicherlimit (9GB) erreicht war.",
-                video.title, video.id,
-            )
-    except Exception:
-        logger.exception("R2-Speicher-Aufraeumen fehlgeschlagen.")
-
-
-VIDEO_MIME_TYPES = {
-    "mp4": "video/mp4",
-    "webm": "video/webm",
-    "ogg": "video/ogg",
-    "mov": "video/quicktime",
-}
-
-
-@app.template_global()
-def video_mime_type(filename):
-    extension = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
-    return VIDEO_MIME_TYPES.get(extension, "video/mp4")
-
-
 app.template_global()(effective_streak)
 app.template_global()(user_badges)
 app.template_global()(streak_points_multiplier)
@@ -497,8 +389,8 @@ def media_url(kind, stored_filename):
         return ""
     if USE_R2:
         return f"{R2_PUBLIC_URL}/{kind}/{stored_filename}"
-    if kind == "uploads":
-        return url_for("uploaded_file", filename=stored_filename)
+    if kind == "posts":
+        return url_for("post_photo_file", filename=stored_filename)
     if kind == "sounds":
         return url_for("static", filename=f"sounds/{stored_filename}")
     return url_for("static", filename=f"profile_pics/{stored_filename}")
@@ -535,12 +427,7 @@ def ensure_columns_exist():
         'ALTER TABLE "user" ALTER COLUMN total_score TYPE BIGINT',
         'ALTER TABLE "user" ALTER COLUMN points_earned_today TYPE BIGINT',
         'ALTER TABLE "user" ALTER COLUMN organic_points_earned TYPE BIGINT',
-        'ALTER TABLE video ADD COLUMN IF NOT EXISTS description TEXT',
-        "ALTER TABLE video ADD COLUMN IF NOT EXISTS orientation VARCHAR(10) NOT NULL DEFAULT 'landscape'",
-        'ALTER TABLE video ADD COLUMN IF NOT EXISTS content_hash VARCHAR(64)',
-        'CREATE INDEX IF NOT EXISTS ix_video_content_hash ON video (content_hash)',
-        'ALTER TABLE video ADD COLUMN IF NOT EXISTS duplicate_penalty_applied BOOLEAN NOT NULL DEFAULT FALSE',
-        'ALTER TABLE "like" ADD COLUMN IF NOT EXISTS points_awarded INTEGER NOT NULL DEFAULT 0',
+        'ALTER TABLE message ADD COLUMN IF NOT EXISTS shared_post_id INTEGER',
     ]
     with db.engine.connect() as conn:
         for statement in statements:
@@ -576,10 +463,6 @@ with app.app_context():
         elif not admin_user.is_admin:
             admin_user.is_admin = True
             db.session.commit()
-
-
-def allowed_file(filename):
-    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
 def allowed_image_file(filename):
@@ -665,19 +548,6 @@ def index():
     query = request.args.get("q", "").strip()
     matched_game = find_best_game_match(query)
 
-    videos = []
-    if matched_game is None:
-        if query:
-            query_lower = query.lower()
-            candidates = Video.query.order_by(Video.created_at.desc()).all()
-            videos = [v for v in candidates if video_matches_query(v, query_lower)]
-        else:
-            videos = (
-                Video.query.filter_by(orientation="landscape")
-                .order_by(Video.created_at.desc())
-                .all()
-            )
-
     play_counts = {row.game_key: row.count for row in GamePlayCount.query.all()}
     games_ordered = sorted(GAMES, key=lambda g: play_counts.get(g["key"], 0), reverse=True)
     most_played_key = games_ordered[0]["key"] if play_counts.get(games_ordered[0]["key"], 0) > 0 else None
@@ -689,7 +559,6 @@ def index():
 
     return render_template(
         "index.html",
-        videos=videos,
         user=user,
         query=query,
         matched_game=matched_game,
@@ -911,7 +780,7 @@ def api_my_stats():
     if user is None:
         return jsonify({"ok": False, "error": "not_logged_in"}), 401
 
-    likes_received = sum(len(v.likes) for v in user.videos)
+    likes_received = sum(len(p.likes) for p in user.posts)
     followers = len(user.subscribers)
     return jsonify({"ok": True, "likes_received": likes_received, "followers": followers})
 
@@ -923,63 +792,50 @@ def upload():
         return redirect(url_for("login"))
 
     if request.method == "POST":
-        title = request.form.get("title", "").strip()
-        description = request.form.get("description", "").strip()
-        orientation = request.form.get("orientation", "landscape")
-        if orientation not in ("landscape", "portrait"):
-            orientation = "landscape"
-        file = request.files.get("video")
+        caption = request.form.get("caption", "").strip()
+        files = [f for f in request.files.getlist("photos") if f and f.filename]
 
-        if not title:
-            flash("Bitte einen Titel angeben.")
+        if not files:
+            flash("Bitte mindestens ein Foto auswählen.")
             return render_template("upload.html", user=user)
-        if not file or file.filename == "":
-            flash("Bitte eine Videodatei auswählen.")
+        if len(files) > MAX_PHOTOS_PER_POST:
+            flash(f"Maximal {MAX_PHOTOS_PER_POST} Fotos pro Beitrag.")
             return render_template("upload.html", user=user)
-        if not allowed_file(file.filename):
-            flash("Nur folgende Formate sind erlaubt: " + ", ".join(sorted(ALLOWED_EXTENSIONS)))
+        for f in files:
+            if not allowed_image_file(f.filename):
+                flash("Nur folgende Bildformate sind erlaubt: " + ", ".join(sorted(ALLOWED_IMAGE_EXTENSIONS)))
+                return render_template("upload.html", user=user)
+
+        hashes = []
+        for f in files:
+            digest = hashlib.sha256()
+            for chunk in iter(lambda: f.stream.read(65536), b""):
+                digest.update(chunk)
+            hashes.append(digest.hexdigest())
+            f.stream.seek(0)
+
+        existing = PostPhoto.query.filter(PostPhoto.content_hash.in_(hashes)).first()
+        if existing is not None:
+            flash("Eines dieser Fotos wurde bereits hochgeladen.")
             return render_template("upload.html", user=user)
 
-        content_hash = hashlib.sha256()
-        for chunk in iter(lambda: file.stream.read(65536), b""):
-            content_hash.update(chunk)
-        content_hash = content_hash.hexdigest()
-        file.stream.seek(0)
+        post = Post(caption=caption or None, user_id=user.id)
+        db.session.add(post)
+        db.session.flush()
 
-        if Video.query.filter_by(content_hash=content_hash).first() is not None:
-            flash("Dieses Video wurde bereits hochgeladen.")
-            return render_template("upload.html", user=user)
+        for position, (f, content_hash) in enumerate(zip(files, hashes)):
+            extension = secure_filename(f.filename).rsplit(".", 1)[1].lower()
+            stored_filename = f"{uuid.uuid4().hex}.{extension}"
+            save_media(f, "posts", stored_filename)
+            db.session.add(PostPhoto(
+                post_id=post.id, filename=stored_filename, position=position, content_hash=content_hash,
+            ))
 
-        extension = secure_filename(file.filename).rsplit(".", 1)[1].lower()
-
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            input_path = os.path.join(tmp_dir, f"input.{extension}")
-            file.save(input_path)
-
-            converted_path = transcode_to_mp4(input_path)
-            final_path, final_extension = (converted_path, "mp4") if converted_path else (input_path, extension)
-
-            stored_filename = f"{uuid.uuid4().hex}.{final_extension}"
-            save_media_from_path(
-                final_path, "uploads", stored_filename,
-                content_type=VIDEO_MIME_TYPES.get(final_extension, "application/octet-stream"),
-            )
-
-        video = Video(
-            title=title,
-            description=description or None,
-            filename=stored_filename,
-            orientation=orientation,
-            content_hash=content_hash,
-            user_id=user.id,
-        )
-        db.session.add(video)
         adjust_points(user, UPLOAD_BONUS_POINTS)
         db.session.commit()
-        cleanup_oldest_videos_if_over_quota(keep_video_id=video.id)
-        return redirect(url_for("watch", video_id=video.id))
+        return redirect(url_for("feed", post_id=post.id))
 
-    return render_template("upload.html", user=user)
+    return render_template("upload.html", user=user, max_photos=MAX_PHOTOS_PER_POST)
 
 
 def serialize_sound(sound):
@@ -1025,67 +881,24 @@ def api_upload_sound():
     return jsonify({"ok": True, "sound": serialize_sound(sound)})
 
 
-@app.route("/video/<int:video_id>")
-def watch(video_id):
-    video = db.get_or_404(Video, video_id)
-    user = current_user()
-
-    is_liked = False
-    is_subscribed = False
-    if user is not None:
-        is_liked = Like.query.filter_by(user_id=user.id, video_id=video.id).first() is not None
-        is_subscribed = Subscription.query.filter_by(
-            subscriber_id=user.id, channel_id=video.user_id
-        ).first() is not None
-
-    return render_template(
-        "watch.html",
-        video=video,
-        user=user,
-        like_count=len(video.likes),
-        is_liked=is_liked,
-        is_subscribed=is_subscribed,
-        subscriber_count=len(video.uploader.subscribers),
-        comments=video.comments,
-    )
-
-
-@app.route("/video/<int:video_id>/like", methods=["POST"])
-def like_video(video_id):
-    user = current_user()
-    if user is None:
-        return redirect(url_for("login"))
-    video = db.get_or_404(Video, video_id)
-
-    existing = Like.query.filter_by(user_id=user.id, video_id=video.id).first()
-    if existing:
-        db.session.delete(existing)
-        adjust_points(video.uploader, -existing.points_awarded)
-    else:
-        awarded = adjust_points(video.uploader, LIKE_BONUS_POINTS)
-        db.session.add(Like(user_id=user.id, video_id=video.id, points_awarded=awarded))
-    db.session.commit()
-    return redirect(url_for("watch", video_id=video.id))
-
-
-@app.route("/api/video/<int:video_id>/like", methods=["POST"])
-def api_like_video(video_id):
+@app.route("/api/post/<int:post_id>/like", methods=["POST"])
+def api_like_post(post_id):
     user = current_user()
     if user is None:
         return jsonify({"ok": False, "error": "not_logged_in"}), 401
-    video = db.get_or_404(Video, video_id)
+    post = db.get_or_404(Post, post_id)
 
-    existing = Like.query.filter_by(user_id=user.id, video_id=video.id).first()
+    existing = PostLike.query.filter_by(user_id=user.id, post_id=post.id).first()
     if existing:
         db.session.delete(existing)
         liked = False
-        adjust_points(video.uploader, -existing.points_awarded)
+        adjust_points(post.uploader, -existing.points_awarded)
     else:
-        awarded = adjust_points(video.uploader, LIKE_BONUS_POINTS)
-        db.session.add(Like(user_id=user.id, video_id=video.id, points_awarded=awarded))
+        awarded = adjust_points(post.uploader, LIKE_BONUS_POINTS)
+        db.session.add(PostLike(user_id=user.id, post_id=post.id, points_awarded=awarded))
         liked = True
     db.session.commit()
-    return jsonify({"ok": True, "liked": liked, "like_count": len(video.likes)})
+    return jsonify({"ok": True, "liked": liked, "like_count": len(post.likes)})
 
 
 def serialize_comment(comment):
@@ -1098,19 +911,19 @@ def serialize_comment(comment):
     }
 
 
-@app.route("/api/video/<int:video_id>/comments")
-def api_list_comments(video_id):
-    video = db.get_or_404(Video, video_id)
-    comments = Comment.query.filter_by(video_id=video.id).order_by(Comment.created_at).all()
+@app.route("/api/post/<int:post_id>/comments")
+def api_list_post_comments(post_id):
+    post = db.get_or_404(Post, post_id)
+    comments = PostComment.query.filter_by(post_id=post.id).order_by(PostComment.created_at).all()
     return jsonify({"ok": True, "comments": [serialize_comment(c) for c in comments]})
 
 
-@app.route("/api/video/<int:video_id>/comment", methods=["POST"])
-def api_add_comment(video_id):
+@app.route("/api/post/<int:post_id>/comment", methods=["POST"])
+def api_add_post_comment(post_id):
     user = current_user()
     if user is None:
         return jsonify({"ok": False, "error": "not_logged_in"}), 401
-    video = db.get_or_404(Video, video_id)
+    post = db.get_or_404(Post, post_id)
 
     data = request.get_json(silent=True) or {}
     text = (data.get("text") or "").strip()
@@ -1118,28 +931,28 @@ def api_add_comment(video_id):
         return jsonify({"ok": False, "error": "empty_comment"}), 400
     text = text[:COMMENT_MAX_LENGTH]
 
-    comment = Comment(user_id=user.id, video_id=video.id, text=text)
+    comment = PostComment(user_id=user.id, post_id=post.id, text=text)
     db.session.add(comment)
     db.session.commit()
 
     return jsonify({
         "ok": True,
         "comment": serialize_comment(comment),
-        "comment_count": len(video.comments),
+        "comment_count": len(post.comments),
     })
 
 
-@app.route("/api/video/<int:video_id>/report", methods=["POST"])
-def api_report_video(video_id):
+@app.route("/api/post/<int:post_id>/report", methods=["POST"])
+def api_report_post(post_id):
     user = current_user()
     if user is None:
         return jsonify({"ok": False, "error": "not_logged_in"}), 401
-    video = db.get_or_404(Video, video_id)
+    post = db.get_or_404(Post, post_id)
 
-    if VideoReport.query.filter_by(video_id=video.id, reporter_id=user.id).first() is not None:
+    if PostReport.query.filter_by(post_id=post.id, reporter_id=user.id).first() is not None:
         return jsonify({"ok": False, "error": "already_reported"}), 400
 
-    db.session.add(VideoReport(video_id=video.id, reporter_id=user.id))
+    db.session.add(PostReport(post_id=post.id, reporter_id=user.id))
     db.session.commit()
     return jsonify({"ok": True})
 
@@ -1174,13 +987,14 @@ def serialize_message(message, viewer_id):
         "created_at": message.created_at.strftime("%H:%M"),
         "is_mine": message.sender_id == viewer_id,
     }
-    if message.shared_video_id is not None:
-        video = db.session.get(Video, message.shared_video_id)
-        if video is not None:
-            entry["shared_video"] = {
-                "id": video.id,
-                "title": video.title,
-                "url": url_for("watch", video_id=video.id),
+    if message.shared_post_id is not None:
+        post = db.session.get(Post, message.shared_post_id)
+        if post is not None:
+            entry["shared_post"] = {
+                "id": post.id,
+                "caption": post.caption or "Foto",
+                "thumbnail": media_url("posts", post.photos[0].filename) if post.photos else "",
+                "url": url_for("feed", post_id=post.id),
             }
     return entry
 
@@ -1210,7 +1024,7 @@ def messages_page():
             "name": conversation_display_name(conv, user),
             "is_group": conv.is_group,
             "last_message": last_message.text if last_message and last_message.text else (
-                "[Video geteilt]" if last_message and last_message.shared_video_id else ""
+                "[Foto geteilt]" if last_message and last_message.shared_post_id else ""
             ),
         })
     conversations.sort(key=lambda c: c["id"], reverse=True)
@@ -1367,34 +1181,34 @@ def api_send_message(conversation_id):
 
     data = request.get_json(silent=True) or {}
     text = (data.get("text") or "").strip()[:2000]
-    shared_video_id = data.get("shared_video_id")
+    shared_post_id = data.get("shared_post_id")
 
-    if not text and not shared_video_id:
+    if not text and not shared_post_id:
         return jsonify({"ok": False, "error": "empty_message"}), 400
 
-    video = None
-    if shared_video_id is not None:
-        video = db.session.get(Video, shared_video_id)
-        if video is None:
-            return jsonify({"ok": False, "error": "invalid_video"}), 400
+    post = None
+    if shared_post_id is not None:
+        post = db.session.get(Post, shared_post_id)
+        if post is None:
+            return jsonify({"ok": False, "error": "invalid_post"}), 400
 
     message = Message(
         conversation_id=conversation.id,
         sender_id=user.id,
         text=text or None,
-        shared_video_id=video.id if video else None,
+        shared_post_id=post.id if post else None,
     )
     db.session.add(message)
     db.session.commit()
     return jsonify({"ok": True, "message": serialize_message(message, user.id)})
 
 
-@app.route("/api/videos/<int:video_id>/share", methods=["POST"])
-def api_share_video(video_id):
+@app.route("/api/posts/<int:post_id>/share", methods=["POST"])
+def api_share_post(post_id):
     user = current_user()
     if user is None:
         return jsonify({"ok": False, "error": "not_logged_in"}), 401
-    video = db.get_or_404(Video, video_id)
+    post = db.get_or_404(Post, post_id)
 
     data = request.get_json(silent=True) or {}
     conversation_id = data.get("conversation_id")
@@ -1402,52 +1216,62 @@ def api_share_video(video_id):
     if conversation is None or not is_conversation_member(user, conversation):
         return jsonify({"ok": False, "error": "invalid_conversation"}), 400
 
-    message = Message(conversation_id=conversation.id, sender_id=user.id, shared_video_id=video.id)
+    message = Message(conversation_id=conversation.id, sender_id=user.id, shared_post_id=post.id)
     db.session.add(message)
     db.session.commit()
     return jsonify({"ok": True})
 
 
-@app.route("/liked-videos")
-def liked_videos_page():
+@app.route("/liked-posts")
+def liked_posts_page():
     user = current_user()
     if user is None:
         return redirect(url_for("login"))
-    videos = [like.video for like in Like.query.filter_by(user_id=user.id).order_by(Like.id.desc()).all()]
-    return render_template("liked_videos.html", user=user, videos=videos)
+    posts = [like.post for like in PostLike.query.filter_by(user_id=user.id).order_by(PostLike.id.desc()).all()]
+    return render_template("liked_posts.html", user=user, posts=posts)
 
 
-@app.route("/video/<int:video_id>/download")
-def download_video(video_id):
-    video = db.get_or_404(Video, video_id)
+def fetch_photo_bytes(photo):
     if USE_R2:
-        data = fetch_video_bytes(video)
+        obj = r2_client.get_object(Bucket=R2_BUCKET_NAME, Key=f"posts/{photo.filename}")
+        return obj["Body"].read()
+    with open(os.path.join(app.config["UPLOAD_FOLDER"], photo.filename), "rb") as f:
+        return f.read()
+
+
+@app.route("/photo/<int:photo_id>/download")
+def download_photo(photo_id):
+    photo = db.get_or_404(PostPhoto, photo_id)
+    extension = photo.filename.rsplit(".", 1)[-1]
+    download_name = f"foto.{extension}"
+    if USE_R2:
+        data = fetch_photo_bytes(photo)
+        mimetype = f"image/{'jpeg' if extension == 'jpg' else extension}"
         return Response(
-            data,
-            mimetype=video_mime_type(video.filename),
-            headers={"Content-Disposition": f'attachment; filename="{secure_filename(video.title)[:100] or "video"}.{video.filename.rsplit(".", 1)[-1]}"'},
+            data, mimetype=mimetype,
+            headers={"Content-Disposition": f'attachment; filename="{download_name}"'},
         )
     return send_from_directory(
-        app.config["UPLOAD_FOLDER"], video.filename, as_attachment=True,
-        download_name=f"{secure_filename(video.title)[:100] or 'video'}.{video.filename.rsplit('.', 1)[-1]}",
+        app.config["UPLOAD_FOLDER"], photo.filename, as_attachment=True, download_name=download_name,
     )
 
 
-@app.route("/uploads/<path:filename>")
-def uploaded_file(filename):
+@app.route("/posts/<path:filename>")
+def post_photo_file(filename):
     return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
 
 
-@app.route("/video/<int:video_id>/delete", methods=["POST"])
-def delete_video(video_id):
+@app.route("/post/<int:post_id>/delete", methods=["POST"])
+def delete_post(post_id):
     user = current_user()
-    video = db.get_or_404(Video, video_id)
-    if user is None or (video.user_id != user.id and not user.is_admin):
+    post = db.get_or_404(Post, post_id)
+    if user is None or (post.user_id != user.id and not user.is_admin):
         abort(403)
-    delete_media("uploads", video.filename)
-    db.session.delete(video)
+    for photo in post.photos:
+        delete_media("posts", photo.filename)
+    db.session.delete(post)
     db.session.commit()
-    return redirect(url_for("index"))
+    return redirect(url_for("feed"))
 
 
 @app.route("/user/<username>")
@@ -1462,12 +1286,12 @@ def profile(username):
             subscriber_id=user.id, channel_id=profile_user.id
         ).first() is not None
 
-    videos = Video.query.filter_by(user_id=profile_user.id).order_by(Video.created_at.desc()).all()
+    posts = Post.query.filter_by(user_id=profile_user.id).order_by(Post.created_at.desc()).all()
 
     return render_template(
         "profile.html",
         profile_user=profile_user,
-        videos=videos,
+        posts=posts,
         user=user,
         is_own_profile=is_own_profile,
         is_subscribed=is_subscribed,
@@ -1597,187 +1421,54 @@ def update_password():
     return redirect(url_for("account_settings"))
 
 
-OLD_UPLOAD_BONUS = 600
+def run_video_wipe():
+    """One-off, irreversible cleanup: delete every legacy Video (and its
+    R2 file) left over from before the site switched from video hosting
+    to photos. Safe to call repeatedly (no-ops once the table is empty)."""
+    try:
+        with db.engine.connect() as conn:
+            rows = conn.execute(text('SELECT id, filename FROM video')).fetchall()
+            for row in rows:
+                delete_media("uploads", row.filename)
+            conn.execute(text('DELETE FROM "like"'))
+            conn.execute(text('DELETE FROM comment'))
+            conn.execute(text('DELETE FROM video_report'))
+            conn.execute(text('DELETE FROM video'))
+            conn.commit()
+        return {"ok": True, "deleted": len(rows)}
+    except Exception as exc:
+        logger.exception("Video-Wipe fehlgeschlagen.")
+        return {"ok": False, "error": str(exc)}
 
 
-def fetch_video_bytes(video):
-    if USE_R2:
-        obj = r2_client.get_object(Bucket=R2_BUCKET_NAME, Key=f"uploads/{video.filename}")
-        return obj["Body"].read()
-    with open(os.path.join(app.config["UPLOAD_FOLDER"], video.filename), "rb") as f:
-        return f.read()
+video_wipe_status = {"running": False, "last_report": None}
 
 
-def run_duplicate_cleanup(dry_run=True):
-    """Hash any videos still missing a content_hash, then revoke the old
-    600pt upload bonus from duplicate uploads (same content, not the
-    earliest copy) that haven't been penalized yet. Idempotent: safe to
-    call repeatedly, and with dry_run=True makes no database changes."""
-    videos = Video.query.order_by(Video.created_at.asc()).all()
-    computed_hashes = {}
-    hashed = 0
-    unreadable = []
-    for video in videos:
-        if video.content_hash:
-            computed_hashes[video.id] = video.content_hash
-            continue
-        try:
-            data = fetch_video_bytes(video)
-        except Exception as exc:
-            unreadable.append({"video_id": video.id, "filename": video.filename, "error": str(exc)})
-            continue
-        digest = hashlib.sha256(data).hexdigest()
-        computed_hashes[video.id] = digest
-        if not dry_run:
-            video.content_hash = digest
-        hashed += 1
-
-    if not dry_run:
-        db.session.commit()
-
-    by_hash = {}
-    for video in videos:
-        content_hash = computed_hashes.get(video.id)
-        if content_hash is None:
-            continue
-        by_hash.setdefault(content_hash, []).append(video)
-
-    penalties = []
-    simulated_scores = {}
-
-    def current_score(user):
-        if user.id not in simulated_scores:
-            simulated_scores[user.id] = user.total_score
-        return simulated_scores[user.id]
-
-    for content_hash, vids in by_hash.items():
-        if len(vids) < 2:
-            continue
-        vids.sort(key=lambda v: v.created_at)
-        original, duplicates = vids[0], vids[1:]
-        for dup in duplicates:
-            if dup.duplicate_penalty_applied:
-                continue
-            user = dup.uploader
-            before = current_score(user)
-            after = max(0, before - OLD_UPLOAD_BONUS)
-            simulated_scores[user.id] = after
-            penalties.append({
-                "video_id": dup.id,
-                "kept_original_video_id": original.id,
-                "username": user.username,
-                "total_score_before": before,
-                "total_score_after": after,
-                "deducted": before - after,
-            })
-            if not dry_run:
-                user.total_score = after
-                dup.duplicate_penalty_applied = True
-
-    if not dry_run:
-        db.session.commit()
-
-    return {
-        "dry_run": dry_run,
-        "videos_total": len(videos),
-        "hashed_this_run": hashed,
-        "unreadable": unreadable,
-        "duplicate_groups": len([h for h, v in by_hash.items() if len(v) > 1]),
-        "penalties": penalties,
-        "total_deducted": sum(p["deducted"] for p in penalties),
-    }
-
-
-@app.route("/admin/cleanup-duplicate-videos", methods=["POST"])
-def admin_cleanup_duplicate_videos():
-    require_admin()
-    dry_run = request.args.get("dry_run", "1") != "0"
-    report = run_duplicate_cleanup(dry_run=dry_run)
-    return jsonify(report)
-
-
-def run_transcode_migration(dry_run=True, limit=None):
-    """One-off fix for videos uploaded before automatic transcoding
-    existed (e.g. the legacy WebM uploads that can't play on Safari).
-    Re-encodes every non-MP4 video to H.264 MP4 and replaces the R2
-    object + filename. Idempotent: videos already .mp4 are skipped.
-    `limit` caps how many videos are processed per call, since
-    transcoding several videos in one HTTP request risks hitting a
-    platform-level proxy timeout."""
-    if not FFMPEG_PATH:
-        return {"ok": False, "error": "ffmpeg_not_available"}
-
-    query = Video.query.filter(~Video.filename.ilike("%.mp4"))
-    if limit is not None:
-        query = query.limit(limit)
-    videos = query.all()
-    results = []
-    for video in videos:
-        entry = {"video_id": video.id, "title": video.title, "old_filename": video.filename}
-        try:
-            with tempfile.TemporaryDirectory() as tmp_dir:
-                extension = video.filename.rsplit(".", 1)[-1]
-                input_path = os.path.join(tmp_dir, f"input.{extension}")
-                with open(input_path, "wb") as f:
-                    f.write(fetch_video_bytes(video))
-
-                converted_path = transcode_to_mp4(input_path)
-                if converted_path is None:
-                    entry["status"] = "transcode_failed"
-                    results.append(entry)
-                    continue
-
-                new_filename = f"{uuid.uuid4().hex}.mp4"
-                entry["new_filename"] = new_filename
-                if not dry_run:
-                    save_media_from_path(converted_path, "uploads", new_filename, content_type="video/mp4")
-                    old_filename = video.filename
-                    video.filename = new_filename
-                    db.session.commit()
-                    delete_media("uploads", old_filename)
-                entry["status"] = "converted" if not dry_run else "would_convert"
-        except Exception as exc:
-            entry["status"] = "error"
-            entry["error"] = str(exc)
-        results.append(entry)
-
-    return {"ok": True, "dry_run": dry_run, "results": results}
-
-
-transcode_migration_status = {"running": False, "last_report": None}
-
-
-def _run_transcode_migration_background(dry_run, limit):
-    transcode_migration_status["running"] = True
+def _run_video_wipe_background():
+    video_wipe_status["running"] = True
     try:
         with app.app_context():
-            report = run_transcode_migration(dry_run=dry_run, limit=limit)
-        transcode_migration_status["last_report"] = report
-        logger.info("Transcode-Migration abgeschlossen: %s", report)
-    except Exception:
-        logger.exception("Transcode-Migration im Hintergrund fehlgeschlagen.")
+            report = run_video_wipe()
+        video_wipe_status["last_report"] = report
+        logger.info("Video-Wipe abgeschlossen: %s", report)
     finally:
-        transcode_migration_status["running"] = False
+        video_wipe_status["running"] = False
 
 
-@app.route("/admin/transcode-legacy-videos", methods=["POST"])
-def admin_transcode_legacy_videos():
+@app.route("/admin/wipe-legacy-videos", methods=["POST"])
+def admin_wipe_legacy_videos():
     require_admin()
-    dry_run = request.args.get("dry_run", "1") != "0"
-    limit = request.args.get("limit", type=int)
-    if transcode_migration_status["running"]:
+    if video_wipe_status["running"]:
         return jsonify({"ok": False, "error": "already_running"}), 409
-    thread = threading.Thread(
-        target=_run_transcode_migration_background, args=(dry_run, limit), daemon=True,
-    )
+    thread = threading.Thread(target=_run_video_wipe_background, daemon=True)
     thread.start()
     return jsonify({"ok": True, "status": "started"})
 
 
-@app.route("/admin/transcode-legacy-videos/status")
-def admin_transcode_legacy_videos_status():
+@app.route("/admin/wipe-legacy-videos/status")
+def admin_wipe_legacy_videos_status():
     require_admin()
-    return jsonify(transcode_migration_status)
+    return jsonify(video_wipe_status)
 
 
 def is_user_online(user):
@@ -1793,11 +1484,11 @@ def is_user_online(user):
 def admin_dashboard():
     admin_user = require_admin()
     users = User.query.order_by(User.username).all()
-    videos = Video.query.order_by(Video.created_at.desc()).all()
+    posts = Post.query.order_by(Post.created_at.desc()).all()
     online_status = {u.id: is_user_online(u) for u in users}
-    reports = VideoReport.query.order_by(VideoReport.created_at.desc()).all()
+    reports = PostReport.query.order_by(PostReport.created_at.desc()).all()
     return render_template(
-        "admin.html", user=admin_user, users=users, videos=videos, online_status=online_status,
+        "admin.html", user=admin_user, users=users, posts=posts, online_status=online_status,
         reports=reports,
     )
 
@@ -1805,7 +1496,7 @@ def admin_dashboard():
 @app.route("/admin/reports/<int:report_id>/dismiss", methods=["POST"])
 def admin_dismiss_report(report_id):
     require_admin()
-    report = db.get_or_404(VideoReport, report_id)
+    report = db.get_or_404(PostReport, report_id)
     db.session.delete(report)
     db.session.commit()
     return redirect(url_for("admin_dashboard"))
@@ -1838,8 +1529,9 @@ def admin_delete_user(user_id):
     if target.id == admin_user.id:
         abort(400)
 
-    for video in target.videos:
-        delete_media("uploads", video.filename)
+    for post in target.posts:
+        for photo in post.photos:
+            delete_media("posts", photo.filename)
     if target.profile_image:
         delete_media("profile_pics", target.profile_image)
 
@@ -1867,30 +1559,27 @@ def seconds_since(moment):
     return (datetime.now(timezone.utc) - moment.replace(tzinfo=timezone.utc)).total_seconds()
 
 
-@app.route("/shorts")
-def shorts():
+@app.route("/feed")
+def feed():
     user = current_user()
-    videos = Video.query.filter_by(orientation="portrait").all()
-    videos.sort(key=lambda v: len(v.likes), reverse=True)
-    if len(videos) > 1:
-        top, rest = videos[0], videos[1:]
-        random.shuffle(rest)
-        videos = [top] + rest
+    posts = Post.query.order_by(Post.created_at.desc()).all()
+    jump_to_post_id = request.args.get("post_id", type=int)
 
     liked_ids = set()
     subscribed_channel_ids = set()
     if user is not None:
-        liked_ids = {like.video_id for like in Like.query.filter_by(user_id=user.id).all()}
+        liked_ids = {like.post_id for like in PostLike.query.filter_by(user_id=user.id).all()}
         subscribed_channel_ids = {
             sub.channel_id for sub in Subscription.query.filter_by(subscriber_id=user.id).all()
         }
 
     return render_template(
-        "shorts.html",
-        videos=videos,
+        "feed.html",
+        posts=posts,
         user=user,
         liked_ids=liked_ids,
         subscribed_channel_ids=subscribed_channel_ids,
+        jump_to_post_id=jump_to_post_id,
     )
 
 

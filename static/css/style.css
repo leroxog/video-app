@@ -1355,6 +1355,80 @@ body.shorts-fullscreen main {
     cursor: pointer;
 }
 
+.post-photo-carousel {
+    position: relative;
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    touch-action: pan-y;
+}
+
+.post-photo-track {
+    display: flex;
+    height: 100%;
+    width: 100%;
+    transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+.post-photo-item {
+    flex: 0 0 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #000;
+}
+
+.post-photo-item img {
+    max-height: 100%;
+    max-width: 100%;
+    object-fit: contain;
+    user-select: none;
+    -webkit-user-drag: none;
+}
+
+.post-photo-dots {
+    position: absolute;
+    top: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 5;
+    display: flex;
+    gap: 6px;
+}
+
+.post-photo-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.4);
+    transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.post-photo-dot.active {
+    background: #fff;
+    transform: scale(1.3);
+}
+
+.post-photo-swipe-hint {
+    position: absolute;
+    top: 2.1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 5;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.7rem;
+    letter-spacing: 0.02em;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+    animation: swipeHintFade 3s ease forwards;
+}
+
+@keyframes swipeHintFade {
+    0% { opacity: 1; }
+    70% { opacity: 1; }
+    100% { opacity: 0; }
+}
+
 .shorts-volume-bar {
     position: absolute;
     top: 1rem;
@@ -1891,12 +1965,25 @@ body.shorts-fullscreen main {
     display: block;
 }
 
-.video-card video {
+.video-card video,
+.video-card img {
     width: 100%;
     aspect-ratio: 16 / 9;
     background: #000;
     border-radius: 8px;
     object-fit: cover;
+}
+
+.post-card-multi-badge {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.65);
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 600;
 }
 
 .video-card-info {
@@ -2253,30 +2340,25 @@ body.shorts-fullscreen main {
     resize: vertical;
 }
 
-.orientation-choice {
-    display: flex;
-    gap: 0.8rem;
-}
-
-.orientation-option {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0.5rem 0.8rem;
-    border: 1px solid #3c3c3c;
-    border-radius: 6px;
-    cursor: pointer;
+.upload-storage-note {
+    color: #aaa;
     font-size: 0.9rem;
-    color: #ccc;
+    max-width: 500px;
 }
 
-.orientation-option input {
-    margin: 0;
+.upload-photo-preview {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.3rem;
 }
 
-.orientation-option:has(input:checked) {
-    border-color: #3ea6ff;
-    color: #fff;
+.upload-photo-thumb {
+    width: 84px;
+    height: 84px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid #3c3c3c;
 }
 
 .form button, .danger {
@@ -2771,7 +2853,7 @@ body.shorts-fullscreen main {
     word-break: break-word;
 }
 
-.conversation-shared-video {
+.conversation-shared-post {
     display: block;
     margin-top: 4px;
     color: inherit;
@@ -3112,14 +3194,14 @@ body.shorts-fullscreen main {
     background: #2c2c2c;
 }
 
-.video-menu-wrap {
+.post-menu-wrap {
     position: absolute;
     top: 6px;
     right: 6px;
     z-index: 5;
 }
 
-.video-menu-dots {
+.post-menu-dots {
     width: 28px;
     height: 28px;
     border-radius: 50%;
@@ -3133,14 +3215,14 @@ body.shorts-fullscreen main {
     cursor: pointer;
 }
 
-.video-menu-dot {
+.post-menu-dot {
     width: 4px;
     height: 4px;
     border-radius: 50%;
     background: #fff;
 }
 
-.video-menu-dropdown {
+.post-menu-dropdown {
     position: absolute;
     top: 32px;
     right: 0;
@@ -3151,7 +3233,7 @@ body.shorts-fullscreen main {
     min-width: 120px;
 }
 
-.video-menu-report-btn {
+.post-menu-report-btn {
     display: block;
     width: 100%;
     padding: 0.5rem 0.9rem;
@@ -3163,11 +3245,11 @@ body.shorts-fullscreen main {
     font-size: 0.85rem;
 }
 
-.video-menu-report-btn:hover {
+.post-menu-report-btn:hover {
     background: #2c2c2c;
 }
 
-.video-menu-report-btn:disabled {
+.post-menu-report-btn:disabled {
     color: #888;
     cursor: default;
 }
@@ -3199,7 +3281,8 @@ body.shorts-fullscreen main {
     transform: translateY(-3px);
 }
 
-.video-card:hover video {
+.video-card:hover video,
+.video-card:hover img {
     box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(62, 166, 255, 0.25);
 }
 

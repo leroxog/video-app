@@ -37,11 +37,11 @@
                     item.appendChild(text);
                 }
 
-                if (m.shared_video) {
+                if (m.shared_post) {
                     const shared = document.createElement("a");
-                    shared.className = "conversation-shared-video";
-                    shared.href = m.shared_video.url;
-                    shared.textContent = "🎬 " + m.shared_video.title;
+                    shared.className = "conversation-shared-post";
+                    shared.href = m.shared_post.url;
+                    shared.textContent = "📷 " + m.shared_post.caption;
                     item.appendChild(shared);
                 }
 

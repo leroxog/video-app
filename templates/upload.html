@@ -1,331 +1,34 @@
 {% extends "base.html" %}
-{% block title %}Video hochladen - timeskip{% endblock %}
+{% block title %}Foto hochladen - timeskip{% endblock %}
 {% block content %}
-    <h1>Video hochladen</h1>
-
-    <p class="upload-storage-note">Hinweis: Wenn der gesamte Videospeicher 9 GB erreicht, werden automatisch die ältesten Videos gelöscht, bis wieder 7 GB frei sind &mdash; das wiederholt sich immer wieder, sobald der Speicher erneut voll wird.</p>
-
-    <div class="upload-recording-preview" id="recordingPreview" style="display:none;">
-        <p>Aufnahme bereit &mdash; wird beim Hochladen mitgeschickt.</p>
-        <video id="recordingPreviewVideo" controls muted></video>
-    </div>
+    <h1>Foto hochladen</h1>
+    <p class="upload-storage-note">Du kannst bis zu {{ max_photos }} Fotos gleichzeitig hochladen &mdash; sie werden gemeinsam als ein Beitrag veröffentlicht, den man im Feed durchwischen kann.</p>
 
     <form action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data" class="form" id="uploadForm">
-        <label for="title">Titel</label>
-        <input type="text" id="title" name="title" required maxlength="200">
+        <label for="caption">Beschreibung (optional)</label>
+        <textarea id="caption" name="caption" rows="3" maxlength="2000"></textarea>
 
-        <label for="description">Beschreibung (optional)</label>
-        <textarea id="description" name="description" rows="4" maxlength="2000"></textarea>
+        <label for="photos">Fotos (png, jpg, gif, webp)</label>
+        <input type="file" id="photos" name="photos" accept="image/png,image/jpeg,image/gif,image/webp" multiple required>
 
-        <label>Format</label>
-        <div class="orientation-choice">
-            <label class="orientation-option">
-                <input type="radio" name="orientation" value="landscape" checked>
-                <span>&#9645; Querformat</span>
-            </label>
-            <label class="orientation-option">
-                <input type="radio" name="orientation" value="portrait">
-                <span>&#9646; Hochformat</span>
-            </label>
-        </div>
-
-        <label for="video">Videodatei (mp4, webm, ogg, mov)</label>
-        <input type="file" id="video" name="video" accept="video/mp4,video/webm,video/ogg,video/quicktime" required>
-
-        <button type="button" class="sound-toggle" id="soundToggleBtn">&#127925; Sound hinzufügen</button>
-        <p class="sound-status" id="soundStatus"></p>
-        <div class="sound-picker" id="soundPicker">
-            <div class="sound-option" data-song="song1" data-name="Chiptune Upbeat">
-                <span class="sound-option-name">Chiptune Upbeat</span>
-                <button type="button" class="sound-preview-btn" data-preview="song1">&#9654; Anhören</button>
-                <button type="button" class="sound-select-btn" data-select="song1">Auswählen</button>
-            </div>
-            <div class="sound-option" data-song="song2" data-name="Lo-fi Chill">
-                <span class="sound-option-name">Lo-fi Chill</span>
-                <button type="button" class="sound-preview-btn" data-preview="song2">&#9654; Anhören</button>
-                <button type="button" class="sound-select-btn" data-select="song2">Auswählen</button>
-            </div>
-            <div class="sound-option" data-song="song3" data-name="8-bit Adventure">
-                <span class="sound-option-name">8-bit Adventure</span>
-                <button type="button" class="sound-preview-btn" data-preview="song3">&#9654; Anhören</button>
-                <button type="button" class="sound-select-btn" data-select="song3">Auswählen</button>
-            </div>
-
-            <ul class="sound-library-list" id="soundLibraryList"></ul>
-
-            <div class="sound-own-upload">
-                <label for="ownSoundInput" class="sound-own-upload-label">&#128228; Eigene Datei/Video als Sound hochladen</label>
-                <input type="file" id="ownSoundInput" accept="audio/*,video/*">
-                <p class="sound-own-upload-notice">
-                    Hinweis: Dein hochgeladener Sound wird automatisch der <strong>öffentlichen Sound-Bibliothek</strong>
-                    hinzugefügt und kann danach auch von anderen Nutzer:innen für ihre Videos verwendet werden.
-                </p>
-            </div>
-        </div>
+        <div class="upload-photo-preview" id="uploadPhotoPreview"></div>
 
         <button type="submit" id="uploadSubmitBtn">Hochladen</button>
     </form>
 
-    <script src="{{ url_for('static', filename='js/timeskip-recorder.js') }}"></script>
     <script>
-        const videoInput = document.getElementById("video");
-        const titleInput = document.getElementById("title");
-        const recordingPreview = document.getElementById("recordingPreview");
-        const recordingPreviewVideo = document.getElementById("recordingPreviewVideo");
+        const photosInput = document.getElementById("photos");
+        const previewEl = document.getElementById("uploadPhotoPreview");
 
-        let originalFile = null;
-
-        function setVideoFile(file) {
-            const dt = new DataTransfer();
-            dt.items.add(file);
-            videoInput.files = dt.files;
-        }
-
-        (async function loadPendingRecording() {
-            const blob = await TimeSkipRecorder.takePending();
-            if (!blob) return;
-            const recordingType = blob.type || "video/webm";
-            const recordingExt = recordingType.startsWith("video/mp4") ? "mp4" : "webm";
-            const file = new File([blob], `aufnahme-${Date.now()}.${recordingExt}`, { type: recordingType });
-            setVideoFile(file);
-            originalFile = file;
-            if (!titleInput.value) titleInput.value = "Meine Aufnahme";
-            recordingPreviewVideo.src = URL.createObjectURL(blob);
-            recordingPreview.style.display = "block";
-        })();
-
-        videoInput.addEventListener("change", () => {
-            originalFile = videoInput.files[0] || null;
-        });
-
-        const SONGS = {
-            song1: "{{ url_for('static', filename='audio/song1.wav') }}",
-            song2: "{{ url_for('static', filename='audio/song2.wav') }}",
-            song3: "{{ url_for('static', filename='audio/song3.wav') }}",
-        };
-
-        const soundToggleBtn = document.getElementById("soundToggleBtn");
-        const soundPicker = document.getElementById("soundPicker");
-        const soundStatus = document.getElementById("soundStatus");
-        const uploadSubmitBtn = document.getElementById("uploadSubmitBtn");
-
-        const canMixAudio =
-            typeof MediaRecorder !== "undefined" &&
-            !!HTMLVideoElement.prototype.captureStream &&
-            !!(window.AudioContext || window.webkitAudioContext);
-
-        if (!canMixAudio) {
-            soundToggleBtn.style.display = "none";
-        }
-
-        soundToggleBtn.addEventListener("click", () => {
-            soundPicker.classList.toggle("visible");
-        });
-
-        let previewAudio = null;
-        document.querySelectorAll(".sound-preview-btn").forEach((btn) => {
-            btn.addEventListener("click", () => {
-                const key = btn.dataset.preview;
-                if (previewAudio) {
-                    previewAudio.pause();
-                    previewAudio = null;
-                }
-                previewAudio = new Audio(SONGS[key]);
-                previewAudio.play().catch(() => {});
+        photosInput.addEventListener("change", () => {
+            previewEl.innerHTML = "";
+            const files = [...photosInput.files].slice(0, {{ max_photos }});
+            files.forEach((file) => {
+                const img = document.createElement("img");
+                img.className = "upload-photo-thumb";
+                img.src = URL.createObjectURL(file);
+                previewEl.appendChild(img);
             });
-        });
-
-        function pickRecorderMimeType() {
-            const candidates = [
-                "video/mp4",
-                "video/webm;codecs=vp9,opus",
-                "video/webm;codecs=vp8,opus",
-                "video/webm",
-            ];
-            for (const type of candidates) {
-                if (MediaRecorder.isTypeSupported(type)) return type;
-            }
-            return "";
-        }
-
-        function withTimeout(promise, ms, message) {
-            let timer;
-            const timeout = new Promise((_, reject) => {
-                timer = setTimeout(() => reject(new Error(message)), ms);
-            });
-            return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
-        }
-
-        async function mixAudioIntoVideo(videoFile, audioUrl) {
-            const videoEl = document.createElement("video");
-            videoEl.src = URL.createObjectURL(videoFile);
-            videoEl.muted = true;
-            await withTimeout(
-                new Promise((resolve) => { videoEl.onloadedmetadata = resolve; }),
-                10000,
-                "Videodatei konnte nicht gelesen werden."
-            );
-
-            const audioEl = document.createElement("audio");
-            audioEl.src = audioUrl;
-            audioEl.loop = true;
-            await withTimeout(
-                new Promise((resolve) => { audioEl.onloadedmetadata = resolve; }),
-                10000,
-                "Sound konnte nicht geladen werden."
-            );
-
-            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            const source = audioCtx.createMediaElementSource(audioEl);
-            const dest = audioCtx.createMediaStreamDestination();
-            source.connect(dest);
-
-            const videoStream = videoEl.captureStream();
-            const combined = new MediaStream([
-                ...videoStream.getVideoTracks(),
-                ...dest.stream.getAudioTracks(),
-            ]);
-
-            const mimeType = pickRecorderMimeType();
-            const recorder = mimeType ? new MediaRecorder(combined, { mimeType }) : new MediaRecorder(combined);
-            const outputType = mimeType && mimeType.startsWith("video/mp4") ? "video/mp4" : "video/webm";
-            const chunks = [];
-            recorder.ondataavailable = (event) => {
-                if (event.data && event.data.size > 0) chunks.push(event.data);
-            };
-
-            const finished = new Promise((resolve) => {
-                recorder.onstop = () => resolve(new Blob(chunks, { type: outputType }));
-            });
-
-            recorder.start();
-            audioEl.currentTime = 0;
-            videoEl.currentTime = 0;
-            await Promise.all([audioEl.play(), videoEl.play()]);
-
-            const maxDurationMs = (isFinite(videoEl.duration) ? videoEl.duration * 1000 : 60000) + 3000;
-            const stopOnce = () => {
-                if (recorder.state === "recording") recorder.stop();
-                audioEl.pause();
-            };
-            videoEl.onended = stopOnce;
-            const safetyTimer = setTimeout(stopOnce, Math.min(maxDurationMs, 120000));
-
-            const mixedBlob = await finished;
-            clearTimeout(safetyTimer);
-            await audioCtx.close();
-            return mixedBlob;
-        }
-
-        async function applySoundToVideo(url, optionEl) {
-            if (!originalFile) {
-                soundStatus.textContent = "Bitte zuerst eine Videodatei auswählen.";
-                return;
-            }
-
-            document.querySelectorAll(".sound-option").forEach((opt) => opt.classList.remove("selected"));
-            if (optionEl) optionEl.classList.add("selected");
-
-            soundStatus.textContent = "Sound wird hinzugefügt...";
-            uploadSubmitBtn.disabled = true;
-            try {
-                const mixedBlob = await mixAudioIntoVideo(originalFile, url);
-                const extension = mixedBlob.type.startsWith("video/mp4") ? "mp4" : "webm";
-                const mixedFile = new File([mixedBlob], `video-mit-sound.${extension}`, { type: mixedBlob.type });
-                setVideoFile(mixedFile);
-                soundStatus.textContent = "Sound hinzugefügt ✓";
-            } catch (err) {
-                soundStatus.textContent = "Sound konnte nicht hinzugefügt werden.";
-            } finally {
-                uploadSubmitBtn.disabled = false;
-            }
-        }
-
-        document.querySelectorAll(".sound-select-btn[data-select]").forEach((btn) => {
-            btn.addEventListener("click", () => {
-                const key = btn.dataset.select;
-                applySoundToVideo(SONGS[key], btn.closest(".sound-option"));
-            });
-        });
-
-        const soundLibraryList = document.getElementById("soundLibraryList");
-
-        function addLibrarySoundOption(sound) {
-            const li = document.createElement("li");
-            li.className = "sound-option";
-
-            const nameEl = document.createElement("span");
-            nameEl.className = "sound-option-name";
-            nameEl.textContent = `${sound.title} (von ${sound.username})`;
-
-            const previewBtn = document.createElement("button");
-            previewBtn.type = "button";
-            previewBtn.className = "sound-preview-btn";
-            previewBtn.innerHTML = "&#9654; Anhören";
-            previewBtn.addEventListener("click", () => {
-                if (previewAudio) {
-                    previewAudio.pause();
-                    previewAudio = null;
-                }
-                previewAudio = new Audio(sound.url);
-                previewAudio.play().catch(() => {});
-            });
-
-            const selectBtn = document.createElement("button");
-            selectBtn.type = "button";
-            selectBtn.className = "sound-select-btn";
-            selectBtn.textContent = "Auswählen";
-            selectBtn.addEventListener("click", () => applySoundToVideo(sound.url, li));
-
-            li.appendChild(nameEl);
-            li.appendChild(previewBtn);
-            li.appendChild(selectBtn);
-            soundLibraryList.appendChild(li);
-        }
-
-        (async function loadSoundLibrary() {
-            try {
-                const res = await fetch("{{ url_for('api_list_sounds') }}");
-                const data = await res.json();
-                if (data.ok) data.sounds.forEach(addLibrarySoundOption);
-            } catch (err) {
-                // Sound-Bibliothek konnte nicht geladen werden -- built-in Songs bleiben trotzdem nutzbar.
-            }
-        })();
-
-        const ownSoundInput = document.getElementById("ownSoundInput");
-        ownSoundInput.addEventListener("change", async () => {
-            const file = ownSoundInput.files[0];
-            if (!file) return;
-            if (!originalFile) {
-                soundStatus.textContent = "Bitte zuerst eine Videodatei auswählen.";
-                ownSoundInput.value = "";
-                return;
-            }
-
-            soundStatus.textContent = "Sound wird hochgeladen...";
-            uploadSubmitBtn.disabled = true;
-            try {
-                const formData = new FormData();
-                formData.append("sound", file);
-                formData.append("title", file.name.replace(/\.[^.]+$/, ""));
-                const res = await fetch("{{ url_for('api_upload_sound') }}", {
-                    method: "POST",
-                    body: formData,
-                });
-                const data = await res.json();
-                if (!data.ok) {
-                    soundStatus.textContent = "Sound konnte nicht hochgeladen werden.";
-                    return;
-                }
-                addLibrarySoundOption(data.sound);
-                await applySoundToVideo(data.sound.url, soundLibraryList.lastElementChild);
-            } catch (err) {
-                soundStatus.textContent = "Sound konnte nicht hochgeladen werden.";
-            } finally {
-                uploadSubmitBtn.disabled = false;
-                ownSoundInput.value = "";
-            }
         });
     </script>
 {% endblock %}

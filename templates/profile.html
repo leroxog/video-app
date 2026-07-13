@@ -20,7 +20,7 @@
                     </button>
                 {% endif %}
             </h1>
-            <p class="video-meta">{{ subscriber_count }} Follower &middot; {{ videos|length }} Videos</p>
+            <p class="video-meta">{{ subscriber_count }} Follower &middot; {{ posts|length }} Fotos</p>
             {% set streak = effective_streak(profile_user) %}
             {% if streak > 0 %}
                 {% set bonus_pct = ((streak_points_multiplier(profile_user) - 1) * 100)|round|int %}
@@ -53,28 +53,28 @@
         </form>
     {% endif %}
 
-    <h2>Videos</h2>
-    {% if videos %}
+    <h2>Fotos</h2>
+    {% if posts %}
         <div class="video-grid">
-            {% for video in videos %}
+            {% for post in posts %}
                 <div class="video-card-wrap">
-                    <a class="video-card" href="{{ url_for('watch', video_id=video.id) }}">
-                        <video muted preload="metadata">
-                            <source src="{{ media_url('uploads', video.filename) }}" type="{{ video_mime_type(video.filename) }}">
-                        </video>
+                    <a class="video-card" href="{{ url_for('feed', post_id=post.id) }}">
+                        <img src="{{ media_url('posts', post.photos[0].filename) }}" alt="" loading="lazy">
+                        {% if post.photos|length > 1 %}
+                            <span class="post-card-multi-badge">1/{{ post.photos|length }}</span>
+                        {% endif %}
                         <div class="video-card-info">
-                            <div class="video-title">{{ video.title }}</div>
-                            {% if video.description %}
-                                <div class="video-card-description">{{ video.description }}</div>
+                            {% if post.caption %}
+                                <div class="video-card-description">{{ post.caption }}</div>
                             {% endif %}
                         </div>
                     </a>
-                    {% include "partials/_video_report_menu.html" %}
+                    {% include "partials/_post_report_menu.html" %}
                 </div>
             {% endfor %}
         </div>
     {% else %}
-        <p>Noch keine Videos hochgeladen.</p>
+        <p>Noch keine Fotos hochgeladen.</p>
     {% endif %}
 
     {% if is_own_profile and badges %}

@@ -83,10 +83,10 @@
 
         <div class="bottom-nav-house-wrapper">
             <div class="house-flyout" id="houseFlyout">
-                <a class="house-icon" href="{{ url_for('index') }}" title="Videos entdecken (wie YouTube)">
+                <a class="house-icon" href="{{ url_for('index') }}" title="Startseite (Spiele &amp; mehr)">
                     <svg viewBox="0 0 64 40" width="34" height="22"><path d="M32 2 L60 18 V38 H4 V18 Z" fill="#ffffff"/></svg>
                 </a>
-                <a class="house-icon" href="{{ url_for('shorts') }}" title="Shorts (wie TikTok)">
+                <a class="house-icon" href="{{ url_for('feed') }}" title="Fotos entdecken">
                     <svg viewBox="0 0 32 56" width="20" height="34"><path d="M16 2 L30 14 V54 H2 V14 Z" fill="#ffffff"/></svg>
                 </a>
             </div>
@@ -96,7 +96,7 @@
         </div>
 
         {% if user %}
-            <a class="bottom-nav-heart-btn" href="{{ url_for('liked_videos_page') }}" title="Deine Likes">
+            <a class="bottom-nav-heart-btn" href="{{ url_for('liked_posts_page') }}" title="Deine Likes">
                 <svg viewBox="0 0 16 16" width="24" height="24"><path d="M8 14 C8 14 1 9.5 1 5.5 C1 3 3 1.5 5 1.5 C6.5 1.5 7.5 2.5 8 3.5 C8.5 2.5 9.5 1.5 11 1.5 C13 1.5 15 3 15 5.5 C15 9.5 8 14 8 14 Z" fill="#ffffff"/></svg>
             </a>
         {% endif %}
@@ -105,25 +105,25 @@
     <script>
         (function () {
             document.addEventListener("click", (event) => {
-                const dotsBtn = event.target.closest(".video-menu-dots");
+                const dotsBtn = event.target.closest(".post-menu-dots");
                 if (dotsBtn) {
                     event.preventDefault();
                     event.stopPropagation();
                     const dropdown = dotsBtn.nextElementSibling;
-                    document.querySelectorAll(".video-menu-dropdown").forEach((d) => {
+                    document.querySelectorAll(".post-menu-dropdown").forEach((d) => {
                         if (d !== dropdown) d.style.display = "none";
                     });
                     dropdown.style.display = dropdown.style.display === "none" ? "block" : "none";
                     return;
                 }
 
-                const reportBtn = event.target.closest(".video-menu-report-btn");
+                const reportBtn = event.target.closest(".post-menu-report-btn");
                 if (reportBtn) {
                     event.preventDefault();
                     event.stopPropagation();
                     if (reportBtn.disabled) return;
-                    const videoId = reportBtn.dataset.videoId;
-                    fetch(`/api/video/${videoId}/report`, { method: "POST" })
+                    const postId = reportBtn.dataset.postId;
+                    fetch(`/api/post/${postId}/report`, { method: "POST" })
                         .then((res) => res.json())
                         .then((data) => {
                             reportBtn.textContent = data.ok ? "Gemeldet" : (data.error === "already_reported" ? "Bereits gemeldet" : "Fehler");
@@ -132,7 +132,7 @@
                     return;
                 }
 
-                document.querySelectorAll(".video-menu-dropdown").forEach((d) => { d.style.display = "none"; });
+                document.querySelectorAll(".post-menu-dropdown").forEach((d) => { d.style.display = "none"; });
             });
         })();
     </script>
