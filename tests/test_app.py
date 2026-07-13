@@ -685,10 +685,10 @@ def test_api_register_and_score(client):
     assert response.status_code == 200
     data = response.get_json()
     assert data["ok"] is True
-    assert data["total_score"] == 42
+    assert data["total_score"] == 84  # 42 * GAME_SCORE_MULTIPLIER (2)
 
     response = client.post("/api/score", json={"game": "gravity.run", "score": 8})
-    assert response.get_json()["total_score"] == 50
+    assert response.get_json()["total_score"] == 100  # 84 + 8*2
 
 
 def test_api_register_duplicate_username(client):
@@ -715,6 +715,15 @@ def test_api_login_success_and_failure(client):
 def test_api_score_requires_login(client):
     response = client.post("/api/score", json={"game": "fruit.merge", "score": 10})
     assert response.status_code == 401
+
+
+def test_api_score_applies_game_score_multiplier(client):
+    import app as app_module
+
+    register(client, username="alice")
+    response = client.post("/api/score", json={"game": "block.buster", "score": 50})
+    data = response.get_json()
+    assert data["total_score"] == 50 * app_module.GAME_SCORE_MULTIPLIER
 
 
 def test_api_score_rejects_unknown_game(client):
@@ -1982,7 +1991,7 @@ def test_coinflip_page_loads(client):
     assert b"timeskip/coin.flip" in response.data
 
 
-def test_coinflip_win_pays_3x_stake(client, monkeypatch):
+def test_coinflip_win_pays_1point5x_stake(client, monkeypatch):
     import app as app_module
 
     register(client, username="alice")
@@ -1990,13 +1999,13 @@ def test_coinflip_win_pays_3x_stake(client, monkeypatch):
     user.total_score = 100
     db.session.commit()
 
-    monkeypatch.setattr(app_module.random, "random", lambda: 0.1)  # < 0.5 -> win
+    monkeypatch.setattr(app_module.random, "random", lambda: 0.1)  # < 0.4 win chance -> win
     response = client.post("/api/coinflip/flip", json={"stake": 10})
     data = response.get_json()
     assert data["ok"] is True
     assert data["results"] == ["win"]
-    assert data["payout"] == 30  # 10 * 3x base multiplier
-    assert data["total_score"] == 120  # 100 - 10 + 30
+    assert data["payout"] == 15  # 10 * 1.5x base multiplier
+    assert data["total_score"] == 105  # 100 - 10 + 15
 
 
 def test_coinflip_lose_forfeits_stake(client, monkeypatch):
@@ -2007,7 +2016,7 @@ def test_coinflip_lose_forfeits_stake(client, monkeypatch):
     user.total_score = 100
     db.session.commit()
 
-    monkeypatch.setattr(app_module.random, "random", lambda: 0.9)  # >= 0.5 -> lose
+    monkeypatch.setattr(app_module.random, "random", lambda: 0.9)  # >= 0.4 win chance -> lose
     response = client.post("/api/coinflip/flip", json={"stake": 10})
     data = response.get_json()
     assert data["ok"] is True
@@ -2024,7 +2033,7 @@ def test_coinflip_insufficient_funds(client):
     assert data["error"] == "insufficient_funds"
 
 
-def test_coinflip_buy_worker_boosts_multiplier_to_5x(client, monkeypatch):
+def test_coinflip_buy_worker_boosts_multiplier(client, monkeypatch):
     import app as app_module
 
     register(client, username="alice")
@@ -2041,8 +2050,8 @@ def test_coinflip_buy_worker_boosts_multiplier_to_5x(client, monkeypatch):
     monkeypatch.setattr(app_module.random, "random", lambda: 0.1)  # win
     response = client.post("/api/coinflip/flip", json={"stake": 10})
     data = response.get_json()
-    assert data["multiplier"] == 5
-    assert data["payout"] == 50  # 10 * 5x
+    assert data["multiplier"] == 2.5
+    assert data["payout"] == 25  # 10 * 2.5x
 
 
 def test_coinflip_buy_coin_adds_simultaneous_flip(client, monkeypatch):
@@ -2063,7 +2072,7 @@ def test_coinflip_buy_coin_adds_simultaneous_flip(client, monkeypatch):
     response = client.post("/api/coinflip/flip", json={"stake": 10})
     data = response.get_json()
     assert len(data["results"]) == 2
-    assert data["payout"] == 60  # 2 coins x 10 stake x 3x
+    assert data["payout"] == 30  # 2 coins x 10 stake x 1.5x
 
 
 def test_coinflip_buy_worker_insufficient_funds(client):
@@ -2138,12 +2147,12 @@ def test_coinflip_rebirth_resets_gadgets_and_grants_multiplier_bonus(client, mon
     assert user.coinflip_coins == 1
     assert user.coinflip_rebirths == 1
 
-    # Winning payout now includes the +0.2 rebirth bonus on top of the base 3x
+    # Winning payout now includes the +0.2 rebirth bonus on top of the base 1.5x
     # (no worker owned yet post-rebirth, so this is base_multiplier + bonus)
     monkeypatch.setattr(app_module.random, "random", lambda: 0.1)  # win
     flip_response = client.post("/api/coinflip/flip", json={"stake": 10}).get_json()
-    assert flip_response["multiplier"] == 3.2
-    assert flip_response["payout"] == 32  # int(10 * 3.2)
+    assert flip_response["multiplier"] == 1.7
+    assert flip_response["payout"] == 17  # int(10 * 1.7)
 
     # Next worker/coin purchase is back to the base cost after the reset
     balance_before_worker = flip_response["total_score"]
@@ -2174,3 +2183,127 @@ def test_coinflip_rebirth_insufficient_funds(client):
     data = response.get_json()
     assert data["ok"] is False
     assert data["error"] == "insufficient_funds"
+
+
+def test_coinflip_deposit_start_success(client):
+    register(client, username="alice")
+    user = User.query.filter_by(username="alice").first()
+    user.total_score = 1000
+    db.session.commit()
+
+    response = client.post("/api/coinflip/deposit/start", json={"stake": 100, "duration_minutes": 30})
+    data = response.get_json()
+    assert data["ok"] is True
+    assert data["total_score"] == 900
+    assert data["deposit"]["staked_amount"] == 100
+    assert data["deposit"]["status"] == "pending"
+
+    from models import CoinflipDeposit
+    assert CoinflipDeposit.query.count() == 1
+
+
+def test_coinflip_deposit_start_rejects_duration_out_of_range(client):
+    register(client, username="alice")
+    user = User.query.filter_by(username="alice").first()
+    user.total_score = 1000
+    db.session.commit()
+
+    too_short = client.post("/api/coinflip/deposit/start", json={"stake": 10, "duration_minutes": 4}).get_json()
+    assert too_short["ok"] is False
+    assert too_short["error"] == "invalid_duration"
+
+    too_long = client.post("/api/coinflip/deposit/start", json={"stake": 10, "duration_minutes": 721}).get_json()
+    assert too_long["ok"] is False
+    assert too_long["error"] == "invalid_duration"
+
+
+def test_coinflip_deposit_start_insufficient_funds(client):
+    register(client, username="alice")
+    response = client.post("/api/coinflip/deposit/start", json={"stake": 999999, "duration_minutes": 30})
+    data = response.get_json()
+    assert data["ok"] is False
+    assert data["error"] == "insufficient_funds"
+
+
+def test_coinflip_deposit_collect_too_early(client):
+    register(client, username="alice")
+    user = User.query.filter_by(username="alice").first()
+    user.total_score = 1000
+    db.session.commit()
+
+    start = client.post("/api/coinflip/deposit/start", json={"stake": 100, "duration_minutes": 30}).get_json()
+    response = client.post(f"/api/coinflip/deposit/{start['deposit']['id']}/collect")
+    data = response.get_json()
+    assert data["ok"] is False
+    assert data["error"] == "not_ready"
+
+
+def test_coinflip_deposit_collect_success_within_window(client, monkeypatch):
+    import app as app_module
+    from datetime import datetime, timezone, timedelta
+    from models import CoinflipDeposit
+
+    register(client, username="alice")
+    user = User.query.filter_by(username="alice").first()
+    user.total_score = 1000
+    db.session.commit()
+
+    start = client.post("/api/coinflip/deposit/start", json={"stake": 100, "duration_minutes": 30}).get_json()
+    deposit = db.session.get(CoinflipDeposit, start["deposit"]["id"])
+    deposit.matures_at = datetime.now(timezone.utc) - timedelta(minutes=5)  # already matured
+    db.session.commit()
+
+    monkeypatch.setattr(app_module.random, "uniform", lambda lo, hi: 1.3)
+    response = client.post(f"/api/coinflip/deposit/{deposit.id}/collect")
+    data = response.get_json()
+    assert data["ok"] is True
+    assert data["multiplier"] == 1.3
+    assert data["payout"] == 130  # int(100 * 1.3)
+    assert data["total_score"] == 900 + 130  # 1000 - 100 stake + 130 payout
+
+    assert CoinflipDeposit.query.count() == 0  # collected deposit is removed
+
+
+def test_coinflip_deposit_collect_expired_forfeits_stake(client):
+    from datetime import datetime, timezone, timedelta
+    from models import CoinflipDeposit
+
+    register(client, username="alice")
+    user = User.query.filter_by(username="alice").first()
+    user.total_score = 1000
+    db.session.commit()
+
+    start = client.post("/api/coinflip/deposit/start", json={"stake": 100, "duration_minutes": 30}).get_json()
+    deposit = db.session.get(CoinflipDeposit, start["deposit"]["id"])
+    # matured 20 minutes ago -> 5 minutes past the 15-minute collect window
+    deposit.matures_at = datetime.now(timezone.utc) - timedelta(minutes=20)
+    db.session.commit()
+
+    response = client.post(f"/api/coinflip/deposit/{deposit.id}/collect")
+    data = response.get_json()
+    assert data["ok"] is False
+    assert data["error"] == "expired"
+
+    user = User.query.filter_by(username="alice").first()
+    assert user.total_score == 900  # stake never comes back
+    assert CoinflipDeposit.query.count() == 0  # forfeited deposit is purged
+
+
+def test_coinflip_deposits_list_purges_expired_ones(client):
+    from datetime import datetime, timezone, timedelta
+    from models import CoinflipDeposit
+
+    register(client, username="alice")
+    user = User.query.filter_by(username="alice").first()
+    user.total_score = 1000
+    db.session.commit()
+
+    start = client.post("/api/coinflip/deposit/start", json={"stake": 100, "duration_minutes": 30}).get_json()
+    deposit = db.session.get(CoinflipDeposit, start["deposit"]["id"])
+    deposit.matures_at = datetime.now(timezone.utc) - timedelta(minutes=20)
+    db.session.commit()
+
+    response = client.get("/api/coinflip/deposits")
+    data = response.get_json()
+    assert data["deposits"] == []
+    assert CoinflipDeposit.query.count() == 0

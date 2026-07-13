@@ -107,6 +107,19 @@ class Subscription(db.Model):
     __table_args__ = (db.UniqueConstraint("subscriber_id", "channel_id", name="uq_sub_subscriber_channel"),)
 
 
+class CoinflipDeposit(db.Model):
+    """The "offline"/idle coin.flip gadget: stake points for a chosen
+    duration; once matured, a random 1.1x-1.6x payout can be collected
+    within a 15-minute window, after which it's forfeited."""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    staked_amount = db.Column(db.Integer, nullable=False)
+    started_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    matures_at = db.Column(db.DateTime, nullable=False)
+    collected = db.Column(db.Boolean, nullable=False, default=False)
+    user = db.relationship("User")
+
+
 class Pixel(db.Model):
     x = db.Column(db.Integer, primary_key=True)
     y = db.Column(db.Integer, primary_key=True)

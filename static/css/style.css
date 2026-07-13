@@ -3037,6 +3037,77 @@ body.shorts-fullscreen main {
     background: #a78bfa;
 }
 
+.coinflip-deposit-icon {
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: conic-gradient(#3ecf6e 0deg, #ffcc00 180deg, #3ecf6e 360deg);
+}
+
+.coinflip-deposit-form {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 0.6rem;
+}
+
+.coinflip-deposit-form label {
+    color: #999;
+    font-size: 0.78rem;
+}
+
+.coinflip-deposit-form input {
+    padding: 0.4rem 0.6rem;
+    border-radius: 6px;
+    border: 1px solid #3c3c3c;
+    background: #1c1c1c;
+    color: #fff;
+    width: 100%;
+    max-width: 160px;
+}
+
+.coinflip-deposit-form button {
+    margin-top: 0.4rem;
+    align-self: flex-start;
+}
+
+.coinflip-deposits-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 0.8rem;
+}
+
+.coinflip-deposit-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 0.5rem 0.7rem;
+    font-size: 0.85rem;
+}
+
+.coinflip-deposit-row button {
+    padding: 0.35rem 0.8rem;
+    border: none;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #57b6ff, #2f8fe0);
+    color: #0f0f0f;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 0.8rem;
+    flex-shrink: 0;
+}
+
+.coinflip-deposit-row button:disabled {
+    background: #444;
+    color: #888;
+    cursor: default;
+}
+
 .share-target-btn:hover {
     background: #2c2c2c;
 }

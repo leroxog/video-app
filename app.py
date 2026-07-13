@@ -18,7 +18,7 @@ from sqlalchemy import text
 from werkzeug.utils import secure_filename
 from models import (
     db, User, Video, Pixel, Like, Subscription, Comment, RedeemedCode, GamePlayCount, Sound,
-    UserCreatedCode, Conversation, ConversationMember, Message, VideoReport,
+    UserCreatedCode, Conversation, ConversationMember, Message, VideoReport, CoinflipDeposit,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -100,16 +100,23 @@ GAMES = [
 GAME_SUGGESTIONS = [g["search_term"] for g in GAMES]
 GAME_MATCH_THRESHOLD = 0.65
 SCORED_GAMES = {"fruit.merge", "gravity.run", "knife.hit", "flappy.bird", "block.buster"}
+GAME_SCORE_MULTIPLIER = 2
 SHUFFLE_COST = 15
 DELETE_COST = 25
 BOMB_COST = 40
 
-COINFLIP_BASE_MULTIPLIER = 3
-COINFLIP_WORKER_MULTIPLIER = 5
+COINFLIP_BASE_MULTIPLIER = 1.5
+COINFLIP_WORKER_MULTIPLIER = 2.5
+COINFLIP_WIN_CHANCE = 0.4
 COINFLIP_WORKER_COST = 30
 COINFLIP_NEW_COIN_COST = 100
 COINFLIP_REBIRTH_COST_STEP = 500
 COINFLIP_REBIRTH_MULTIPLIER_STEP = 0.2
+COINFLIP_DEPOSIT_MIN_MINUTES = 5
+COINFLIP_DEPOSIT_MAX_MINUTES = 12 * 60
+COINFLIP_DEPOSIT_COLLECT_WINDOW_MINUTES = 15
+COINFLIP_DEPOSIT_MIN_PAYOUT_MULTIPLIER = 1.1
+COINFLIP_DEPOSIT_MAX_PAYOUT_MULTIPLIER = 1.6
 
 
 def coinflip_worker_cost(user):
@@ -797,7 +804,7 @@ def api_score():
     if game not in SCORED_GAMES or not isinstance(score, int) or score < 0:
         return jsonify({"ok": False, "error": "invalid_data"}), 400
 
-    adjust_points(user, score)
+    adjust_points(user, score * GAME_SCORE_MULTIPLIER)
     db.session.commit()
     return jsonify({"ok": True, "total_score": user.total_score})
 
@@ -1940,8 +1947,14 @@ def coinflip():
         new_coin_cost=coinflip_new_coin_cost(user) if user else COINFLIP_NEW_COIN_COST,
         base_multiplier=COINFLIP_BASE_MULTIPLIER,
         worker_multiplier=COINFLIP_WORKER_MULTIPLIER,
+        win_chance=COINFLIP_WIN_CHANCE,
         rebirth_cost=coinflip_rebirth_cost(user) if user else COINFLIP_REBIRTH_COST_STEP,
         rebirth_multiplier_step=COINFLIP_REBIRTH_MULTIPLIER_STEP,
+        deposit_min_minutes=COINFLIP_DEPOSIT_MIN_MINUTES,
+        deposit_max_minutes=COINFLIP_DEPOSIT_MAX_MINUTES,
+        deposit_collect_window_minutes=COINFLIP_DEPOSIT_COLLECT_WINDOW_MINUTES,
+        deposit_min_multiplier=COINFLIP_DEPOSIT_MIN_PAYOUT_MULTIPLIER,
+        deposit_max_multiplier=COINFLIP_DEPOSIT_MAX_PAYOUT_MULTIPLIER,
     )
 
 
@@ -1964,7 +1977,7 @@ def api_coinflip_flip():
     results = []
     payout = 0
     for _ in range(user.coinflip_coins):
-        won = random.random() < 0.5
+        won = random.random() < COINFLIP_WIN_CHANCE
         results.append("win" if won else "lose")
         if won:
             payout += int(stake * multiplier)
@@ -2046,6 +2059,127 @@ def api_coinflip_rebirth():
         "next_worker_cost": coinflip_worker_cost(user),
         "next_coin_cost": coinflip_new_coin_cost(user),
         "next_rebirth_cost": coinflip_rebirth_cost(user),
+    })
+
+
+def purge_expired_deposits(user):
+    """Deposits not collected within the grace window after maturing are
+    forfeited for good -- delete them so they stop showing up."""
+    now = datetime.now(timezone.utc)
+    for deposit in CoinflipDeposit.query.filter_by(user_id=user.id, collected=False).all():
+        matures_at = deposit.matures_at
+        if matures_at.tzinfo is None:
+            matures_at = matures_at.replace(tzinfo=timezone.utc)
+        deadline = matures_at + timedelta(minutes=COINFLIP_DEPOSIT_COLLECT_WINDOW_MINUTES)
+        if now > deadline:
+            db.session.delete(deposit)
+    db.session.commit()
+
+
+def serialize_deposit(deposit):
+    now = datetime.now(timezone.utc)
+    matures_at = deposit.matures_at
+    if matures_at.tzinfo is None:
+        matures_at = matures_at.replace(tzinfo=timezone.utc)
+    deadline = matures_at + timedelta(minutes=COINFLIP_DEPOSIT_COLLECT_WINDOW_MINUTES)
+    if now < matures_at:
+        status = "pending"
+    elif now <= deadline:
+        status = "ready"
+    else:
+        status = "expired"
+    return {
+        "id": deposit.id,
+        "staked_amount": deposit.staked_amount,
+        "matures_at": matures_at.isoformat(),
+        "collect_deadline": deadline.isoformat(),
+        "status": status,
+    }
+
+
+@app.route("/api/coinflip/deposit/start", methods=["POST"])
+def api_coinflip_deposit_start():
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+
+    data = request.get_json(silent=True) or {}
+    stake = data.get("stake")
+    duration_minutes = data.get("duration_minutes")
+
+    if not isinstance(stake, int) or stake <= 0:
+        return jsonify({"ok": False, "error": "invalid_stake"}), 400
+    if (
+        not isinstance(duration_minutes, int)
+        or duration_minutes < COINFLIP_DEPOSIT_MIN_MINUTES
+        or duration_minutes > COINFLIP_DEPOSIT_MAX_MINUTES
+    ):
+        return jsonify({"ok": False, "error": "invalid_duration"}), 400
+    if user.total_score < stake:
+        return jsonify({"ok": False, "error": "insufficient_funds", "total_score": user.total_score}), 400
+
+    adjust_points(user, -stake)
+    deposit = CoinflipDeposit(
+        user_id=user.id,
+        staked_amount=stake,
+        matures_at=datetime.now(timezone.utc) + timedelta(minutes=duration_minutes),
+    )
+    db.session.add(deposit)
+    db.session.commit()
+
+    return jsonify({"ok": True, "deposit": serialize_deposit(deposit), "total_score": user.total_score})
+
+
+@app.route("/api/coinflip/deposits")
+def api_coinflip_deposits():
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+
+    purge_expired_deposits(user)
+    deposits = CoinflipDeposit.query.filter_by(user_id=user.id, collected=False).order_by(
+        CoinflipDeposit.matures_at
+    ).all()
+    return jsonify({"ok": True, "deposits": [serialize_deposit(d) for d in deposits]})
+
+
+@app.route("/api/coinflip/deposit/<int:deposit_id>/collect", methods=["POST"])
+def api_coinflip_deposit_collect(deposit_id):
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+
+    deposit = db.get_or_404(CoinflipDeposit, deposit_id)
+    if deposit.user_id != user.id:
+        abort(403)
+    if deposit.collected:
+        return jsonify({"ok": False, "error": "already_collected"}), 400
+
+    now = datetime.now(timezone.utc)
+    matures_at = deposit.matures_at
+    if matures_at.tzinfo is None:
+        matures_at = matures_at.replace(tzinfo=timezone.utc)
+    deadline = matures_at + timedelta(minutes=COINFLIP_DEPOSIT_COLLECT_WINDOW_MINUTES)
+
+    if now < matures_at:
+        return jsonify({"ok": False, "error": "not_ready"}), 400
+    if now > deadline:
+        db.session.delete(deposit)
+        db.session.commit()
+        return jsonify({"ok": False, "error": "expired"}), 400
+
+    multiplier = random.uniform(COINFLIP_DEPOSIT_MIN_PAYOUT_MULTIPLIER, COINFLIP_DEPOSIT_MAX_PAYOUT_MULTIPLIER)
+    payout = int(deposit.staked_amount * multiplier)
+    adjust_points(user, payout)
+    deposit.collected = True
+    db.session.delete(deposit)
+    db.session.commit()
+
+    return jsonify({
+        "ok": True,
+        "payout": payout,
+        "multiplier": round(multiplier, 2),
+        "total_score": user.total_score,
     })
 
 

@@ -7,7 +7,7 @@
         <div class="game-top-row">
             <a class="game-leaderboard-link" href="{{ url_for('leaderboard') }}">&#127942; Bestenliste</a>
         </div>
-        <p>Setz Punkte ein und wirf die Münze. Landet sie auf dem Dollarzeichen, bekommst du dein Guthaben mit <span id="coinflipMultiplierText">{{ base_multiplier }}</span>-fachem Multiplikator zurück. Landet sie auf dem Gebäude, ist dein Einsatz weg.</p>
+        <p>Setz Punkte ein und wirf die Münze. Landet sie auf dem Dollarzeichen (Gewinnchance: {{ (win_chance * 100)|round|int }}%), bekommst du dein Guthaben mit <span id="coinflipMultiplierText">{{ base_multiplier }}</span>-fachem Multiplikator zurück. Landet sie auf dem Gebäude, ist dein Einsatz weg.</p>
 
         <div class="coinflip-wrapper">
             <div class="coinflip-table-area">
@@ -53,6 +53,27 @@
                         <button type="button" id="coinflipRebirthBtn" {{ 'disabled' if not user }}>Wiedergeburt (<span id="coinflipRebirthCost">{{ rebirth_cost }}</span>)</button>
                     </div>
                 </div>
+
+                {% if user %}
+                    <div class="coinflip-shop-item coinflip-deposit-item">
+                        <span class="coinflip-deposit-icon"></span>
+                        <div>
+                            <div class="coinflip-shop-title">Offline-Einlage</div>
+                            <div class="coinflip-shop-sub">
+                                Lass Punkte eine Weile "arbeiten": nach Ablauf der Zeit bekommst du deinen Einsatz mit zufällig {{ deposit_min_multiplier }}x bis {{ deposit_max_multiplier }}x zurück.
+                                <strong>Achtung:</strong> Du musst innerhalb von {{ deposit_collect_window_minutes }} Minuten nach Ablauf abholen, sonst sind die Punkte für immer weg!
+                            </div>
+                            <div class="coinflip-deposit-form">
+                                <label for="depositStake">Einsatz</label>
+                                <input type="number" id="depositStake" min="1" value="50">
+                                <label for="depositDuration">Dauer in Minuten ({{ deposit_min_minutes }}&ndash;{{ deposit_max_minutes }})</label>
+                                <input type="number" id="depositDuration" min="{{ deposit_min_minutes }}" max="{{ deposit_max_minutes }}" value="30">
+                                <button type="button" id="depositStartBtn">Einlage starten</button>
+                            </div>
+                            <div class="coinflip-deposits-list" id="coinflipDepositsList"></div>
+                        </div>
+                    </div>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -218,6 +239,101 @@
                 updateMultiplierText();
                 renderCoins();
             });
+        }
+
+        const depositsListEl = document.getElementById("coinflipDepositsList");
+
+        function formatCountdown(msRemaining) {
+            if (msRemaining <= 0) return "0:00";
+            const totalSeconds = Math.floor(msRemaining / 1000);
+            const h = Math.floor(totalSeconds / 3600);
+            const m = Math.floor((totalSeconds % 3600) / 60);
+            const s = totalSeconds % 60;
+            if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+            return `${m}:${String(s).padStart(2, "0")}`;
+        }
+
+        async function refreshDeposits() {
+            if (!depositsListEl) return;
+            const res = await fetch("{{ url_for('api_coinflip_deposits') }}");
+            const data = await res.json();
+            if (!data.ok) return;
+            depositsListEl.innerHTML = "";
+            data.deposits.forEach((dep) => {
+                const maturesAt = new Date(dep.matures_at).getTime();
+                const deadline = new Date(dep.collect_deadline).getTime();
+                const now = Date.now();
+
+                const row = document.createElement("div");
+                row.className = "coinflip-deposit-row";
+
+                let statusText;
+                let collectDisabled = true;
+                if (dep.status === "pending") {
+                    statusText = `Bereit in ${formatCountdown(maturesAt - now)}`;
+                } else if (dep.status === "ready") {
+                    statusText = `Bereit! Noch ${formatCountdown(deadline - now)} zum Abholen`;
+                    collectDisabled = false;
+                } else {
+                    statusText = "Abgelaufen";
+                }
+
+                const label = document.createElement("span");
+                label.textContent = `${dep.staked_amount} Punkte — ${statusText}`;
+                row.appendChild(label);
+
+                const collectBtn = document.createElement("button");
+                collectBtn.textContent = "Abholen";
+                collectBtn.disabled = collectDisabled;
+                collectBtn.addEventListener("click", async () => {
+                    const collectRes = await fetch(`/api/coinflip/deposit/${dep.id}/collect`, { method: "POST" });
+                    const result = await collectRes.json();
+                    if (result.ok) {
+                        resultEl.textContent = `Einlage abgeholt: +${result.payout} Punkte (${result.multiplier}x)`;
+                        resultEl.className = "coinflip-result success";
+                        balanceEl.textContent = result.total_score;
+                    } else if (result.error === "expired") {
+                        resultEl.textContent = "Diese Einlage war abgelaufen — die Punkte sind verloren.";
+                        resultEl.className = "coinflip-result error";
+                    } else {
+                        resultEl.textContent = "Noch nicht bereit zum Abholen.";
+                        resultEl.className = "coinflip-result error";
+                    }
+                    refreshDeposits();
+                });
+                row.appendChild(collectBtn);
+
+                depositsListEl.appendChild(row);
+            });
+        }
+
+        const depositStartBtn = document.getElementById("depositStartBtn");
+        if (depositStartBtn) {
+            depositStartBtn.addEventListener("click", async () => {
+                const stake = parseInt(document.getElementById("depositStake").value, 10);
+                const duration = parseInt(document.getElementById("depositDuration").value, 10);
+                const res = await fetch("{{ url_for('api_coinflip_deposit_start') }}", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ stake, duration_minutes: duration }),
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    balanceEl.textContent = data.total_score;
+                    refreshDeposits();
+                } else if (data.error === "insufficient_funds") {
+                    resultEl.textContent = "Nicht genug Punkte.";
+                    resultEl.className = "coinflip-result error";
+                } else {
+                    resultEl.textContent = "Ungültige Eingabe (Dauer muss zwischen {{ deposit_min_minutes }} und {{ deposit_max_minutes }} Minuten liegen).";
+                    resultEl.className = "coinflip-result error";
+                }
+            });
+        }
+
+        if (depositsListEl) {
+            refreshDeposits();
+            setInterval(refreshDeposits, 15000);
         }
     </script>
 {% endblock %}
