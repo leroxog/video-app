@@ -36,7 +36,13 @@ def client():
 def register(client, username="alice", password="secret123"):
     return client.post(
         "/register",
-        data={"username": username, "password": password},
+        data={
+            "username": username,
+            "password": password,
+            "password2": password,
+            "birthdate": "2005-01-01",
+            "gender": "keine_angabe",
+        },
         follow_redirects=True,
     )
 
@@ -47,7 +53,7 @@ def make_admin(username):
     db.session.commit()
 
 
-def upload_post(client, caption="Testfoto", filenames=None, content=None):
+def upload_post(client, caption="Testfoto", filenames=None, content=None, hashtags=""):
     if filenames is None:
         filenames = ["clip.png"]
     if content is None:
@@ -58,6 +64,7 @@ def upload_post(client, caption="Testfoto", filenames=None, content=None):
         contents = content
     data = {
         "caption": caption,
+        "hashtags": hashtags,
         "photos": [(io.BytesIO(c), name) for c, name in zip(contents, filenames)],
     }
     return client.post("/upload", data=data, content_type="multipart/form-data", follow_redirects=True)
@@ -75,6 +82,40 @@ def test_register_and_login(client):
     )
     assert response.status_code == 200
     assert b"alice" in response.data
+
+
+def test_register_stores_birthdate_and_gender(client):
+    register(client, username="alice")
+    from datetime import date
+    user = User.query.filter_by(username="alice").first()
+    assert user.birthdate == date(2005, 1, 1)
+    assert user.gender == "keine_angabe"
+
+
+def test_register_rejects_mismatched_passwords(client):
+    response = client.post(
+        "/register",
+        data={
+            "username": "alice",
+            "password": "secret123",
+            "password2": "different123",
+            "birthdate": "2005-01-01",
+            "gender": "keine_angabe",
+        },
+        follow_redirects=True,
+    )
+    assert "stimmen nicht".encode() in response.data
+    assert User.query.filter_by(username="alice").first() is None
+
+
+def test_register_requires_birthdate_and_gender(client):
+    response = client.post(
+        "/register",
+        data={"username": "alice", "password": "secret123", "password2": "secret123"},
+        follow_redirects=True,
+    )
+    assert "alle Felder".encode() in response.data
+    assert User.query.filter_by(username="alice").first() is None
 
 
 def test_login_wrong_password(client):
@@ -223,6 +264,20 @@ def test_upload_with_caption_is_shown_in_feed(client):
     response = upload_post(client, caption="Das ist eine Testbeschreibung.")
     assert response.status_code == 200
     assert "Das ist eine Testbeschreibung.".encode() in response.data
+
+
+def test_upload_with_hashtags_normalizes_and_shows_in_feed(client):
+    register(client)
+    response = upload_post(client, caption="Mit Hashtags", hashtags="schule, #freunde #Freunde lustig")
+    assert response.status_code == 200
+    assert b"#schule" in response.data
+    assert b"#freunde" in response.data
+    assert b"#lustig" in response.data
+
+    with flask_app.app_context():
+        post = Post.query.filter_by(caption="Mit Hashtags").first()
+        # duplicate #freunde/#Freunde collapses to a single tag, case-insensitively
+        assert post.hashtags == "#schule #freunde #lustig"
 
 
 def test_upload_without_caption_works(client):

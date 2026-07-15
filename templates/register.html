@@ -9,6 +9,20 @@
         <label for="password">Passwort</label>
         <input type="password" id="password" name="password" required>
 
+        <label for="password2">Passwort wiederholen</label>
+        <input type="password" id="password2" name="password2" required>
+
+        <label for="birthdate">Geburtsdatum</label>
+        <input type="date" id="birthdate" name="birthdate" required>
+
+        <label for="gender">Geschlecht</label>
+        <select id="gender" name="gender" required>
+            <option value="" disabled selected>Bitte auswählen</option>
+            {% for value, label in GENDER_CHOICES.items() %}
+                <option value="{{ value }}">{{ label }}</option>
+            {% endfor %}
+        </select>
+
         <button type="submit">Konto erstellen</button>
     </form>
     <p>Bereits registriert? <a href="{{ url_for('login') }}">Login</a></p>

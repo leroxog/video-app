@@ -76,6 +76,9 @@
                         {% if post.caption %}
                             <div class="shorts-description">{{ post.caption }}</div>
                         {% endif %}
+                        {% if post.hashtags %}
+                            <div class="shorts-hashtags">{{ post.hashtags }}</div>
+                        {% endif %}
                     </div>
                 </div>
             {% endfor %}

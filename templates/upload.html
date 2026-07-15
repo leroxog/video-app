@@ -2,33 +2,153 @@
 {% block title %}Foto hochladen - timeskip{% endblock %}
 {% block content %}
     <h1>Foto hochladen</h1>
-    <p class="upload-storage-note">Du kannst bis zu {{ max_photos }} Fotos gleichzeitig hochladen &mdash; sie werden gemeinsam als ein Beitrag veröffentlicht, den man im Feed durchwischen kann.</p>
+    <p class="upload-storage-note">Tippe auf ein Foto, um Text hinzuzufügen. Bis zu {{ max_photos }} Fotos werden gemeinsam als ein Beitrag veröffentlicht.</p>
 
     <form action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data" class="form" id="uploadForm">
-        <label for="caption">Beschreibung (optional)</label>
-        <textarea id="caption" name="caption" rows="3" maxlength="2000"></textarea>
+        <input type="text" id="nameInput" name="caption" maxlength="100" placeholder="Name (optional)" class="upload-name-input" autocomplete="off">
 
-        <label for="photos">Fotos (png, jpg, gif, webp)</label>
-        <input type="file" id="photos" name="photos" accept="image/png,image/jpeg,image/gif,image/webp" multiple required>
+        <input type="file" id="photosInput" name="photos" accept="image/png,image/jpeg,image/gif,image/webp" multiple required class="upload-file-input-hidden">
+        <label for="photosInput" class="upload-pick-btn" id="uploadPickBtn">+ Fotos auswählen</label>
 
-        <div class="upload-photo-preview" id="uploadPhotoPreview"></div>
+        <div class="upload-viewer" id="uploadViewer" style="display:none;">
+            <div class="upload-viewer-track" id="uploadViewerTrack"></div>
+            <button type="button" class="upload-viewer-nav prev" id="uploadPrevBtn">&lsaquo;</button>
+            <button type="button" class="upload-viewer-nav next" id="uploadNextBtn">&rsaquo;</button>
+            <div class="upload-viewer-dots" id="uploadViewerDots"></div>
+        </div>
+
+        <div class="upload-hashtag-panel" id="uploadHashtagPanel">
+            <button type="button" class="upload-hashtag-handle" id="uploadHashtagHandle">
+                <span class="upload-hashtag-handle-bar"></span>
+                <span># Hashtags hinzufügen</span>
+            </button>
+            <div class="upload-hashtag-body" id="uploadHashtagBody" style="display:none;">
+                <input type="text" id="hashtagsInput" name="hashtags" placeholder="#lustig #schule #freunde" maxlength="300" autocomplete="off">
+            </div>
+        </div>
 
         <button type="submit" id="uploadSubmitBtn">Hochladen</button>
     </form>
 
+    <script src="{{ url_for('static', filename='js/photo-text-overlay.js') }}"></script>
     <script>
-        const photosInput = document.getElementById("photos");
-        const previewEl = document.getElementById("uploadPhotoPreview");
+        const MAX_PHOTOS = {{ max_photos }};
+        const photosInput = document.getElementById("photosInput");
+        const pickBtn = document.getElementById("uploadPickBtn");
+        const viewer = document.getElementById("uploadViewer");
+        const track = document.getElementById("uploadViewerTrack");
+        const dotsEl = document.getElementById("uploadViewerDots");
+        const prevBtn = document.getElementById("uploadPrevBtn");
+        const nextBtn = document.getElementById("uploadNextBtn");
+        const form = document.getElementById("uploadForm");
+        const submitBtn = document.getElementById("uploadSubmitBtn");
+        const nameInput = document.getElementById("nameInput");
+        const hashtagsInput = document.getElementById("hashtagsInput");
+
+        let selectedPhotos = [];
+        let currentIndex = 0;
+
+        function goTo(index) {
+            currentIndex = Math.max(0, Math.min(selectedPhotos.length - 1, index));
+            track.style.transform = `translateX(-${currentIndex * 100}%)`;
+            [...dotsEl.children].forEach((dot, i) => dot.classList.toggle("active", i === currentIndex));
+        }
 
         photosInput.addEventListener("change", () => {
-            previewEl.innerHTML = "";
-            const files = [...photosInput.files].slice(0, {{ max_photos }});
-            files.forEach((file) => {
+            const files = [...photosInput.files].slice(0, MAX_PHOTOS);
+            selectedPhotos = files.map((file) => ({ file, api: null }));
+            track.innerHTML = "";
+            dotsEl.innerHTML = "";
+
+            selectedPhotos.forEach((photo, index) => {
+                const wrapper = document.createElement("div");
+                wrapper.className = "upload-viewer-slide";
+
                 const img = document.createElement("img");
-                img.className = "upload-photo-thumb";
-                img.src = URL.createObjectURL(file);
-                previewEl.appendChild(img);
+                img.src = URL.createObjectURL(photo.file);
+                wrapper.appendChild(img);
+                track.appendChild(wrapper);
+                photo.api = PhotoTextOverlay.attach(wrapper, img);
+
+                const dot = document.createElement("span");
+                dot.className = "upload-viewer-dot";
+                dotsEl.appendChild(dot);
             });
+
+            viewer.style.display = selectedPhotos.length > 0 ? "block" : "none";
+            pickBtn.textContent = selectedPhotos.length > 0
+                ? `${selectedPhotos.length} Foto(s) ausgewählt — andere wählen`
+                : "+ Fotos auswählen";
+            goTo(0);
+        });
+
+        prevBtn.addEventListener("click", () => goTo(currentIndex - 1));
+        nextBtn.addEventListener("click", () => goTo(currentIndex + 1));
+
+        let dragStartX = null;
+        viewer.addEventListener("pointerdown", (e) => { dragStartX = e.clientX; });
+        viewer.addEventListener("pointerup", (e) => {
+            if (dragStartX === null) return;
+            const dx = e.clientX - dragStartX;
+            dragStartX = null;
+            if (dx < -50) goTo(currentIndex + 1);
+            else if (dx > 50) goTo(currentIndex - 1);
+        });
+
+        const hashtagHandle = document.getElementById("uploadHashtagHandle");
+        const hashtagBody = document.getElementById("uploadHashtagBody");
+        let hashtagOpen = false;
+
+        function setHashtagOpen(open) {
+            hashtagOpen = open;
+            hashtagBody.style.display = open ? "block" : "none";
+            hashtagHandle.classList.toggle("open", open);
+        }
+
+        hashtagHandle.addEventListener("click", () => setHashtagOpen(!hashtagOpen));
+
+        let handleDragStartY = null;
+        hashtagHandle.addEventListener("pointerdown", (e) => { handleDragStartY = e.clientY; });
+        hashtagHandle.addEventListener("pointerup", (e) => {
+            if (handleDragStartY === null) return;
+            const dy = e.clientY - handleDragStartY;
+            handleDragStartY = null;
+            if (dy < -20) setHashtagOpen(true);
+            else if (dy > 20) setHashtagOpen(false);
+        });
+
+        form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            if (selectedPhotos.length === 0) {
+                photosInput.reportValidity();
+                return;
+            }
+            submitBtn.disabled = true;
+            submitBtn.textContent = "Wird hochgeladen...";
+
+            const formData = new FormData();
+            formData.append("caption", nameInput.value.trim());
+            formData.append("hashtags", hashtagsInput.value.trim());
+
+            for (const photo of selectedPhotos) {
+                const blob = await PhotoTextOverlay.compositeToBlob(photo.file, photo.api.entries);
+                formData.append("photos", blob, photo.file.name || "photo.png");
+            }
+
+            try {
+                const res = await fetch(form.action, { method: "POST", body: formData });
+                if (res.redirected) {
+                    window.location.href = res.url;
+                    return;
+                }
+                const html = await res.text();
+                document.open();
+                document.write(html);
+                document.close();
+            } catch (err) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = "Hochladen";
+            }
         });
     </script>
 {% endblock %}

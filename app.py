@@ -135,6 +135,7 @@ def coinflip_rebirth_cost(user):
 UPLOAD_BONUS_POINTS = 100
 LIKE_BONUS_POINTS = 60
 COMMENT_MAX_LENGTH = 500
+GENDER_CHOICES = {"maennlich": "Männlich", "weiblich": "Weiblich", "keine_angabe": "Ich will nicht antworten"}
 PROMO_CODES = {
     "FREE FOR ALL": 500,
     "TIMESKIPFREE300FOREVERYONE": 300,
@@ -381,6 +382,7 @@ def get_r2_bucket_usage():
 app.template_global()(effective_streak)
 app.template_global()(user_badges)
 app.template_global()(streak_points_multiplier)
+app.jinja_env.globals["GENDER_CHOICES"] = GENDER_CHOICES
 
 
 @app.template_global()
@@ -428,6 +430,9 @@ def ensure_columns_exist():
         'ALTER TABLE "user" ALTER COLUMN points_earned_today TYPE BIGINT',
         'ALTER TABLE "user" ALTER COLUMN organic_points_earned TYPE BIGINT',
         'ALTER TABLE message ADD COLUMN IF NOT EXISTS shared_post_id INTEGER',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS birthdate DATE',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS gender VARCHAR(20)',
+        'ALTER TABLE post ADD COLUMN IF NOT EXISTS hashtags TEXT',
     ]
     with db.engine.connect() as conn:
         for statement in statements:
@@ -467,6 +472,16 @@ with app.app_context():
 
 def allowed_image_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS
+
+
+def normalize_hashtags(raw):
+    tokens = raw.replace(",", " ").split()
+    seen = []
+    for token in tokens:
+        tag = "#" + token.lstrip("#")
+        if len(tag) > 1 and tag.lower() not in [t.lower() for t in seen]:
+            seen.append(tag)
+    return " ".join(seen)
 
 
 def allowed_sound_file(filename):
@@ -578,13 +593,32 @@ def register():
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
-        if not username or not password:
-            flash("Bitte Benutzername und Passwort angeben.")
+        password2 = request.form.get("password2", "")
+        birthdate_raw = request.form.get("birthdate", "").strip()
+        gender = request.form.get("gender", "").strip()
+
+        if not username or not password or not password2 or not birthdate_raw or not gender:
+            flash("Bitte alle Felder ausfüllen.")
+            return render_template("register.html")
+        if password != password2:
+            flash("Die Passwörter stimmen nicht überein.")
+            return render_template("register.html")
+        if gender not in GENDER_CHOICES:
+            flash("Bitte ein gültiges Geschlecht auswählen.")
+            return render_template("register.html")
+        try:
+            birthdate = datetime.strptime(birthdate_raw, "%Y-%m-%d").date()
+        except ValueError:
+            flash("Bitte ein gültiges Geburtsdatum angeben.")
+            return render_template("register.html")
+        if birthdate > date.today():
+            flash("Das Geburtsdatum darf nicht in der Zukunft liegen.")
             return render_template("register.html")
         if User.query.filter_by(username=username).first():
             flash("Dieser Benutzername ist bereits vergeben.")
             return render_template("register.html")
-        user = User(username=username)
+
+        user = User(username=username, birthdate=birthdate, gender=gender)
         user.set_password(password)
         db.session.add(user)
         db.session.commit()
@@ -793,6 +827,7 @@ def upload():
 
     if request.method == "POST":
         caption = request.form.get("caption", "").strip()
+        hashtags = normalize_hashtags(request.form.get("hashtags", ""))
         files = [f for f in request.files.getlist("photos") if f and f.filename]
 
         if not files:
@@ -819,7 +854,7 @@ def upload():
             flash("Eines dieser Fotos wurde bereits hochgeladen.")
             return render_template("upload.html", user=user)
 
-        post = Post(caption=caption or None, user_id=user.id)
+        post = Post(caption=caption or None, hashtags=hashtags or None, user_id=user.id)
         db.session.add(post)
         db.session.flush()
 

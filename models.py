@@ -12,6 +12,8 @@ class User(db.Model):
     username = db.Column(db.String(50), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
     email = db.Column(db.String(255), unique=True, nullable=True)
+    birthdate = db.Column(db.Date, nullable=True)
+    gender = db.Column(db.String(20), nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     last_pixel_at = db.Column(db.DateTime, nullable=True)
     profile_image = db.Column(db.String(255), nullable=True)
@@ -58,6 +60,7 @@ class Post(db.Model):
     """A photo post -- can have one or many photos, swipeable in the feed."""
     id = db.Column(db.Integer, primary_key=True)
     caption = db.Column(db.Text, nullable=True)
+    hashtags = db.Column(db.Text, nullable=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     photos = db.relationship(

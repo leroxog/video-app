@@ -1485,6 +1485,13 @@ body.shorts-fullscreen main {
     margin-top: 0.3rem;
 }
 
+.shorts-hashtags {
+    font-size: 0.85rem;
+    color: #3ea6ff;
+    margin-top: 0.3rem;
+    font-weight: 600;
+}
+
 .shorts-action-stack {
     position: absolute;
     right: 0.7rem;
@@ -2330,7 +2337,7 @@ body.shorts-fullscreen main {
     color: #ccc;
 }
 
-.form input, .form textarea {
+.form input, .form textarea, .form select {
     padding: 0.6rem;
     border-radius: 4px;
     border: 1px solid #3c3c3c;
@@ -2340,25 +2347,182 @@ body.shorts-fullscreen main {
     resize: vertical;
 }
 
-.upload-storage-note {
-    color: #aaa;
-    font-size: 0.9rem;
+.upload-name-input {
+    display: block;
+    width: 100%;
     max-width: 500px;
-}
-
-.upload-photo-preview {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    margin-top: 0.3rem;
-}
-
-.upload-photo-thumb {
-    width: 84px;
-    height: 84px;
-    object-fit: cover;
+    padding: 0.7rem 0.9rem;
     border-radius: 8px;
     border: 1px solid #3c3c3c;
+    background: #1c1c1c;
+    color: #fff;
+    font-size: 1rem;
+    margin-bottom: 1rem;
+}
+
+.upload-file-input-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    overflow: hidden;
+}
+
+.upload-pick-btn {
+    display: inline-block;
+    padding: 0.6rem 1rem;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #57b6ff, #2f8fe0);
+    color: #0f0f0f;
+    font-weight: 600;
+    cursor: pointer;
+    margin-bottom: 1rem;
+}
+
+.upload-viewer {
+    position: relative;
+    max-width: 500px;
+    aspect-ratio: 3 / 4;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #000;
+    margin-bottom: 1rem;
+    touch-action: pan-y;
+}
+
+.upload-viewer-track {
+    display: flex;
+    height: 100%;
+    width: 100%;
+    transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+.upload-viewer-slide {
+    position: relative;
+    flex: 0 0 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #000;
+    cursor: crosshair;
+}
+
+.upload-viewer-slide img {
+    max-height: 100%;
+    max-width: 100%;
+    object-fit: contain;
+    pointer-events: none;
+    user-select: none;
+}
+
+.upload-viewer-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.5);
+    color: #fff;
+    border: none;
+    font-size: 1.3rem;
+    line-height: 1;
+    cursor: pointer;
+    z-index: 5;
+}
+
+.upload-viewer-nav.prev { left: 0.5rem; }
+.upload-viewer-nav.next { right: 0.5rem; }
+
+.upload-viewer-dots {
+    position: absolute;
+    bottom: 0.7rem;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 6px;
+    z-index: 5;
+}
+
+.upload-viewer-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.4);
+}
+
+.upload-viewer-dot.active {
+    background: #fff;
+}
+
+.photo-text-entry {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    color: #fff;
+    font-weight: 700;
+    font-size: 1.1rem;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9), 0 0 6px rgba(0, 0, 0, 0.7);
+    cursor: pointer;
+    white-space: nowrap;
+    z-index: 6;
+    padding: 2px 4px;
+}
+
+.photo-text-input {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    z-index: 7;
+    padding: 4px 8px;
+    border-radius: 6px;
+    border: 1px solid #3ea6ff;
+    background: rgba(0, 0, 0, 0.75);
+    color: #fff;
+    font-size: 1rem;
+    max-width: 80%;
+}
+
+.upload-hashtag-panel {
+    max-width: 500px;
+    margin-bottom: 1rem;
+}
+
+.upload-hashtag-handle {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.3rem;
+    width: 100%;
+    padding: 0.6rem;
+    background: none;
+    border: none;
+    color: #9fd3ff;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+.upload-hashtag-handle-bar {
+    width: 36px;
+    height: 4px;
+    border-radius: 999px;
+    background: #3c3c3c;
+}
+
+.upload-hashtag-handle.open .upload-hashtag-handle-bar {
+    background: #3ea6ff;
+}
+
+.upload-hashtag-body {
+    padding: 0 0.2rem;
+}
+
+.upload-hashtag-body input {
+    width: 100%;
+    padding: 0.6rem;
+    border-radius: 8px;
+    border: 1px solid #3c3c3c;
+    background: #1c1c1c;
+    color: #fff;
 }
 
 .form button, .danger {
