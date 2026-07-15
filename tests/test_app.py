@@ -519,6 +519,55 @@ def test_redeem_code_requires_login(client):
     assert response.status_code == 401
 
 
+def test_share_app_requires_login(client):
+    response = client.post("/api/share-app")
+    assert response.status_code == 401
+
+
+def test_share_app_awards_points(client):
+    import app as app_module
+
+    register(client, username="alice")
+    response = client.post("/api/share-app")
+    data = response.get_json()
+    assert data["ok"] is True
+    assert data["points"] == app_module.APP_SHARE_POINTS
+    assert data["total_score"] == app_module.APP_SHARE_POINTS
+
+
+def test_share_app_enforces_cooldown(client):
+    register(client, username="alice")
+    client.post("/api/share-app")
+    response = client.post("/api/share-app")
+    assert response.status_code == 429
+    data = response.get_json()
+    assert data["ok"] is False
+    assert data["error"] == "cooldown"
+    assert data["seconds_left"] > 0
+
+
+def test_share_app_available_again_after_cooldown_window(client):
+    import app as app_module
+    from datetime import datetime, timedelta, timezone
+
+    register(client, username="alice")
+    user = User.query.filter_by(username="alice").first()
+    user.last_app_share_at = datetime.now(timezone.utc) - timedelta(hours=app_module.APP_SHARE_COOLDOWN_HOURS, minutes=1)
+    db.session.commit()
+
+    response = client.post("/api/share-app")
+    data = response.get_json()
+    assert data["ok"] is True
+    assert data["total_score"] == app_module.APP_SHARE_POINTS
+
+
+def test_homepage_shows_app_share_banner_for_logged_in_user(client):
+    register(client, username="alice")
+    response = client.get("/")
+    assert b"app-share-banner" in response.data
+    assert str(20).encode() in response.data  # APP_SHARE_POINTS shown in the banner
+
+
 def test_homepage_shows_redeem_section_for_guest(client):
     response = client.get("/")
     assert b"CODES EINL\xc3\x96SEN" in response.data

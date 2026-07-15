@@ -2,6 +2,7 @@
 {% block title %}Spiele - timeskip{% endblock %}
 {% block content %}
     <h1>Alle Spiele</h1>
+    {% include "partials/_app_share_banner.html" %}
     <div class="games-grid">
         {% for game in games %}
             <a class="place-label games-grid-card" href="{{ url_for(game.endpoint) }}">

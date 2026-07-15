@@ -496,11 +496,6 @@ main {
     flex-shrink: 0;
 }
 
-.bottom-nav-house-wrapper {
-    position: relative;
-    flex-shrink: 0;
-}
-
 .bottom-nav-house {
     width: 34px;
     height: 34px;
@@ -511,35 +506,7 @@ main {
     align-items: center;
     justify-content: center;
     cursor: pointer;
-}
-
-.house-flyout {
-    position: absolute;
-    bottom: calc(100% + 14px);
-    left: 50%;
-    transform: translateX(-50%);
-    display: none;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.6rem;
-    padding: 0.7rem 0.6rem;
-    background: rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(20px) saturate(1.6);
-    -webkit-backdrop-filter: blur(20px) saturate(1.6);
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    border-radius: 20px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-}
-
-.house-flyout.visible {
-    display: flex;
-}
-
-.house-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0.3rem;
+    flex-shrink: 0;
 }
 
 h1 {
@@ -582,6 +549,59 @@ h1 {
 .upload-bonus-banner strong {
     color: #ffcc00;
     font-size: 1.3rem;
+}
+
+.app-share-banner {
+    margin-bottom: 1.5rem;
+    padding: 1.1rem 1.5rem;
+    border: 1px solid rgba(62, 166, 255, 0.5);
+    border-radius: 14px;
+    background: rgba(62, 166, 255, 0.1);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    color: #fff;
+    text-align: center;
+}
+
+.app-share-banner-title {
+    font-size: 1.15rem;
+    font-weight: 700;
+}
+
+.app-share-banner-title strong {
+    color: #ffcc00;
+    font-size: 1.3rem;
+}
+
+.app-share-banner-sub {
+    color: #cde6ff;
+    font-size: 0.85rem;
+    margin-top: 0.2rem;
+}
+
+.app-share-banner-btn {
+    margin-top: 0.8rem;
+    padding: 0.6rem 1.2rem;
+    border: none;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #57b6ff, #2f8fe0);
+    color: #0f0f0f;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.app-share-banner-status {
+    margin: 0.6rem 0 0;
+    font-size: 0.85rem;
+    min-height: 1.1em;
+}
+
+.app-share-banner-status.success {
+    color: #4caf50;
+}
+
+.app-share-banner-status.error {
+    color: #ff6b6b;
 }
 
 .game-showcase-row {

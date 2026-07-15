@@ -136,6 +136,13 @@ UPLOAD_BONUS_POINTS = 100
 LIKE_BONUS_POINTS = 60
 COMMENT_MAX_LENGTH = 500
 GENDER_CHOICES = {"maennlich": "Männlich", "weiblich": "Weiblich", "keine_angabe": "Ich will nicht antworten"}
+# NOTE: intentionally NOT 999999999 -- BigInteger overflow already crashed prod
+# once this session (see coin.flip rebalance); a click-farmable reward at that
+# magnitude would blow past the safe range in a handful of clicks and make
+# every other point source in the app meaningless. Bump this once a sane
+# value is confirmed.
+APP_SHARE_POINTS = 20
+APP_SHARE_COOLDOWN_HOURS = 24
 PROMO_CODES = {
     "FREE FOR ALL": 500,
     "TIMESKIPFREE300FOREVERYONE": 300,
@@ -383,6 +390,7 @@ app.template_global()(effective_streak)
 app.template_global()(user_badges)
 app.template_global()(streak_points_multiplier)
 app.jinja_env.globals["GENDER_CHOICES"] = GENDER_CHOICES
+app.jinja_env.globals["APP_SHARE_POINTS"] = APP_SHARE_POINTS
 
 
 @app.template_global()
@@ -433,6 +441,7 @@ def ensure_columns_exist():
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS birthdate DATE',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS gender VARCHAR(20)',
         'ALTER TABLE post ADD COLUMN IF NOT EXISTS hashtags TEXT',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS last_app_share_at TIMESTAMP',
     ]
     with db.engine.connect() as conn:
         for statement in statements:
@@ -774,6 +783,27 @@ def api_redeem_code():
     adjust_points(user, user_code.points_value, from_code=True)
     db.session.commit()
     return jsonify({"ok": True, "points": user_code.points_value, "total_score": user.total_score})
+
+
+@app.route("/api/share-app", methods=["POST"])
+def api_share_app():
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+
+    now = datetime.now(timezone.utc)
+    last = user.last_app_share_at
+    if last is not None:
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=timezone.utc)
+        seconds_left = APP_SHARE_COOLDOWN_HOURS * 3600 - (now - last).total_seconds()
+        if seconds_left > 0:
+            return jsonify({"ok": False, "error": "cooldown", "seconds_left": int(seconds_left)}), 429
+
+    user.last_app_share_at = now
+    adjust_points(user, APP_SHARE_POINTS)
+    db.session.commit()
+    return jsonify({"ok": True, "points": APP_SHARE_POINTS, "total_score": user.total_score})
 
 
 @app.route("/api/create-codes", methods=["POST"])

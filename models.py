@@ -16,6 +16,7 @@ class User(db.Model):
     gender = db.Column(db.String(20), nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     last_pixel_at = db.Column(db.DateTime, nullable=True)
+    last_app_share_at = db.Column(db.DateTime, nullable=True)
     profile_image = db.Column(db.String(255), nullable=True)
     total_score = db.Column(db.BigInteger, nullable=False, default=0)
     is_admin = db.Column(db.Boolean, nullable=False, default=False)

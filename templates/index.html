@@ -35,6 +35,8 @@
 
     <div class="upload-bonus-banner">Jedes hochgeladene Foto bringt <strong>+100 Punkte</strong>, jeder Like <strong>+60 Punkte</strong> &mdash; <a href="{{ url_for('feed') }}">Fotos ansehen</a></div>
 
+    {% include "partials/_app_share_banner.html" %}
+
     <div class="game-showcase-row">
         {% for game in games_ordered %}
             <a class="game-showcase-card {{ 'most-played' if game.key == most_played_key else '' }}" href="{{ url_for(game.endpoint) }}">

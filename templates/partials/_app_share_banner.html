@@ -1,0 +1,56 @@
+{% if user %}
+    <div class="app-share-banner" id="appShareBanner">
+        <div class="app-share-banner-title">&#128241; timeskip teilen &mdash; <strong>+{{ APP_SHARE_POINTS }} Punkte</strong></div>
+        <div class="app-share-banner-sub">Teile den Link in WhatsApp, Teams o.&auml;. und kassiere Punkte</div>
+        <button type="button" class="app-share-banner-btn" id="appShareBtn">Teilen &amp; Punkte holen</button>
+        <p class="app-share-banner-status" id="appShareStatus"></p>
+    </div>
+    <script>
+        (function () {
+            const btn = document.getElementById("appShareBtn");
+            const status = document.getElementById("appShareStatus");
+            if (!btn) return;
+
+            async function claimPoints(prefix) {
+                const res = await fetch("{{ url_for('api_share_app') }}", { method: "POST" });
+                const data = await res.json();
+                if (data.ok) {
+                    status.textContent = `${prefix}+${data.points} Punkte erhalten!`;
+                    status.className = "app-share-banner-status success";
+                } else if (data.error === "cooldown") {
+                    const hours = Math.ceil(data.seconds_left / 3600);
+                    status.textContent = `Schon geteilt — nächste Punkte in ca. ${hours} Std.`;
+                    status.className = "app-share-banner-status error";
+                } else {
+                    status.textContent = "Das hat nicht geklappt.";
+                    status.className = "app-share-banner-status error";
+                }
+            }
+
+            btn.addEventListener("click", async () => {
+                const shareData = { title: "timeskip", text: "Schau dir timeskip an!", url: window.location.origin };
+                if (navigator.share) {
+                    try {
+                        await navigator.share(shareData);
+                    } catch (err) {
+                        return;
+                    }
+                    claimPoints("");
+                } else if (navigator.clipboard) {
+                    try {
+                        await navigator.clipboard.writeText(shareData.url);
+                    } catch (err) {
+                        status.textContent = "Konnte den Link nicht kopieren.";
+                        status.className = "app-share-banner-status error";
+                        return;
+                    }
+                    claimPoints("Link kopiert! Füge ihn in WhatsApp, Teams o.ä. ein. ");
+                } else {
+                    status.textContent = `Link zum Teilen: ${shareData.url}`;
+                    status.className = "app-share-banner-status success";
+                    claimPoints("");
+                }
+            });
+        })();
+    </script>
+{% endif %}
