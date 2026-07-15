@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Kamera - timeskip{% endblock %}
+{% block body_class %}camera-fullscreen{% endblock %}
+{% block content %}
+    <div class="camera-page" id="cameraPage">
+        <div class="camera-live-wrap" id="cameraLiveWrap">
+            <video id="cameraVideo" autoplay playsinline muted style="display:none;"></video>
+            <canvas id="cameraCanvas"></canvas>
+            <div class="camera-error" id="cameraError" style="display:none;"></div>
+
+            <div class="camera-filter-row" id="cameraFilterRow">
+                <button type="button" class="camera-filter-btn active" data-filter="none">Kein Filter</button>
+                <button type="button" class="camera-filter-btn" data-filter="dog">&#128054; Hund</button>
+                <button type="button" class="camera-filter-btn" data-filter="mask">&#129399; Maske</button>
+            </div>
+
+            <button type="button" class="camera-shutter-btn" id="cameraShutterBtn" title="Foto aufnehmen"></button>
+        </div>
+
+        <div class="camera-review" id="cameraReview" style="display:none;">
+            <div class="camera-review-photo-wrap" id="cameraReviewPhotoWrap">
+                <img id="cameraReviewImg" alt="">
+            </div>
+            <p class="upload-storage-note">Tippe auf das Foto, um Text hinzuzufügen.</p>
+            <input type="text" id="cameraNameInput" maxlength="100" placeholder="Name (optional)" class="upload-name-input">
+            <div class="camera-review-actions">
+                <button type="button" id="cameraRetakeBtn">&#8634; Nochmal</button>
+                <button type="button" id="cameraDownloadBtn">&#11015; Herunterladen</button>
+                <button type="button" id="cameraShareBtn">&#128228; Teilen</button>
+                <button type="button" id="cameraUploadBtn">Hochladen</button>
+            </div>
+            <p class="camera-review-status" id="cameraReviewStatus"></p>
+        </div>
+
+        <div class="badge-modal-backdrop" id="cameraShareBackdrop">
+            <div class="badge-modal">
+                <button type="button" class="badge-modal-close" id="cameraShareCloseBtn">&times;</button>
+                <h2>Foto teilen</h2>
+                <div class="share-target-list" id="cameraShareTargetList"></div>
+                <p class="create-code-status" id="cameraShareStatus"></p>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/photo-text-overlay.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/camera.js') }}"></script>
+{% endblock %}

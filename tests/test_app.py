@@ -413,6 +413,31 @@ def test_place_requires_login(client):
     assert b"Login" in response.data
 
 
+def test_games_page_accessible_without_login_and_lists_all_games(client):
+    response = client.get("/games")
+    assert response.status_code == 200
+    assert b"timeskip/fruit.merge" in response.data
+    assert b"timeskip/coin.flip" in response.data
+
+
+def test_camera_page_requires_login(client):
+    response = client.get("/camera", follow_redirects=True)
+    assert b"Login" in response.data
+
+
+def test_camera_page_accessible_when_logged_in(client):
+    register(client)
+    response = client.get("/camera")
+    assert response.status_code == 200
+    assert b"cameraCanvas" in response.data
+
+
+def test_bottom_nav_has_games_and_camera_buttons(client):
+    response = client.get("/")
+    assert b"bottom-nav-games-btn" in response.data
+    assert b"bottom-nav-camera-btn" in response.data
+
+
 def test_fuzzy_search_matches_game_without_exact_term(client):
     response = client.get("/?q=fruit merge")
     assert "timeskip/fruit.merge".encode() in response.data

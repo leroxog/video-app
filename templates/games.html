@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Spiele - timeskip{% endblock %}
+{% block content %}
+    <h1>Alle Spiele</h1>
+    <div class="games-grid">
+        {% for game in games %}
+            <a class="place-label games-grid-card" href="{{ url_for(game.endpoint) }}">
+                <div class="place-label-icon {{ game.icon_class }}"></div>
+                <div>
+                    <div class="place-label-title">{{ game.title }}</div>
+                    <div class="place-label-sub">{{ game.subtitle }}</div>
+                </div>
+            </a>
+        {% endfor %}
+    </div>
+{% endblock %}

@@ -661,6 +661,20 @@ def leaderboard():
     return render_template("leaderboard.html", users=users, user=user, followed_ids=followed_ids)
 
 
+@app.route("/games")
+def games_page():
+    user = current_user()
+    return render_template("games.html", user=user, games=GAMES)
+
+
+@app.route("/camera")
+def camera_page():
+    user = current_user()
+    if user is None:
+        return redirect(url_for("login"))
+    return render_template("camera.html", user=user, max_photos=MAX_PHOTOS_PER_POST)
+
+
 @app.route("/api/register", methods=["POST"])
 def api_register():
     data = request.get_json(silent=True) or {}
