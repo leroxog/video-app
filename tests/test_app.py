@@ -339,6 +339,25 @@ def test_header_search_bar_present_on_every_page(client):
         assert b"bottom-nav-house" in response.data
 
 
+def test_service_worker_served_from_root_for_full_scope(client):
+    response = client.get("/service-worker.js")
+    assert response.status_code == 200
+    assert response.content_type.startswith("application/javascript")
+    assert b"CACHE_NAME" in response.data
+
+
+def test_offline_page_accessible(client):
+    response = client.get("/offline")
+    assert response.status_code == 200
+    assert "Du bist offline".encode() in response.data
+
+
+def test_manifest_and_service_worker_referenced_in_every_page(client):
+    response = client.get("/")
+    assert b'rel="manifest"' in response.data
+    assert b"/service-worker.js" in response.data
+
+
 def test_header_search_bar_present_on_feed_page(client):
     register(client)
     upload_post(client, caption="Header Test")
@@ -565,10 +584,12 @@ def test_share_app_available_again_after_cooldown_window(client):
 
 
 def test_homepage_shows_app_share_banner_for_logged_in_user(client):
+    import app as app_module
+
     register(client, username="alice")
     response = client.get("/")
     assert b"app-share-banner" in response.data
-    assert str(20).encode() in response.data  # APP_SHARE_POINTS shown in the banner
+    assert str(app_module.APP_SHARE_POINTS).encode() in response.data
 
 
 def test_homepage_shows_redeem_section_for_guest(client):
@@ -1628,6 +1649,65 @@ def test_coinflip_page_loads(client):
     response = client.get("/coinflip")
     assert response.status_code == 200
     assert b"timeskip/coin.flip" in response.data
+
+
+def test_coinflip_win_chance_is_highest_for_zero_points(client):
+    import app as app_module
+
+    register(client, username="alice")
+    user = User.query.filter_by(username="alice").first()
+    user.total_score = 0
+    db.session.commit()
+
+    assert app_module.coinflip_win_chance(user) == app_module.COINFLIP_MAX_WIN_CHANCE
+
+
+def test_coinflip_win_chance_decreases_as_points_grow(client):
+    import app as app_module
+
+    register(client, username="alice")
+    user = User.query.filter_by(username="alice").first()
+
+    user.total_score = 500
+    db.session.commit()
+    low_chance = app_module.coinflip_win_chance(user)
+
+    user.total_score = 100000
+    db.session.commit()
+    high_chance = app_module.coinflip_win_chance(user)
+
+    assert app_module.COINFLIP_MIN_WIN_CHANCE < low_chance < app_module.COINFLIP_MAX_WIN_CHANCE
+    assert high_chance < low_chance
+    assert high_chance == pytest.approx(app_module.COINFLIP_MIN_WIN_CHANCE, abs=0.01)
+
+
+def test_coinflip_page_shows_win_chance_for_current_balance(client):
+    import app as app_module
+
+    register(client, username="alice")
+    user = User.query.filter_by(username="alice").first()
+    user.total_score = 0
+    db.session.commit()
+
+    response = client.get("/coinflip")
+    expected_pct = round(app_module.COINFLIP_MAX_WIN_CHANCE * 100)
+    assert f'id="coinflipWinChanceText">{expected_pct}<'.encode() in response.data
+
+
+def test_coinflip_flip_response_includes_win_chance(client, monkeypatch):
+    import app as app_module
+
+    register(client, username="alice")
+    user = User.query.filter_by(username="alice").first()
+    user.total_score = 100
+    db.session.commit()
+    expected_chance = app_module.coinflip_win_chance(user)  # win_chance is based on pre-stake balance
+
+    monkeypatch.setattr(app_module.random, "random", lambda: 0.1)
+    response = client.post("/api/coinflip/flip", json={"stake": 10})
+    data = response.get_json()
+    assert data["ok"] is True
+    assert data["win_chance"] == pytest.approx(expected_chance, abs=0.001)
 
 
 def test_coinflip_win_pays_1point5x_stake(client, monkeypatch):

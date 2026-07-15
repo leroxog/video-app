@@ -1,5 +1,6 @@
 import os
 import re
+import math
 import uuid
 import random
 import hashlib
@@ -113,7 +114,13 @@ BOMB_COST = 40
 
 COINFLIP_BASE_MULTIPLIER = 1.5
 COINFLIP_WORKER_MULTIPLIER = 2.5
-COINFLIP_WIN_CHANCE = 0.4
+# Win chance now scales with wealth instead of being flat: poorer accounts
+# get closer to COINFLIP_MAX_WIN_CHANCE, rich accounts decay smoothly
+# toward COINFLIP_MIN_WIN_CHANCE as total_score grows (never 0%, so it's
+# always at least technically possible to claw back).
+COINFLIP_MAX_WIN_CHANCE = 0.55
+COINFLIP_MIN_WIN_CHANCE = 0.15
+COINFLIP_WIN_CHANCE_SCORE_SCALE = 5000
 COINFLIP_WORKER_COST = 30
 COINFLIP_NEW_COIN_COST = 100
 COINFLIP_REBIRTH_COST_STEP = 500
@@ -150,18 +157,19 @@ def coinflip_multiplier(user):
     return base + COINFLIP_REBIRTH_MULTIPLIER_STEP * user.coinflip_rebirths
 
 
+def coinflip_win_chance(user):
+    score = max(0, user.total_score)
+    decay = math.exp(-score / COINFLIP_WIN_CHANCE_SCORE_SCALE)
+    return COINFLIP_MIN_WIN_CHANCE + (COINFLIP_MAX_WIN_CHANCE - COINFLIP_MIN_WIN_CHANCE) * decay
+
+
 def coinflip_rebirth_cost(user):
     return COINFLIP_REBIRTH_COST_STEP * (user.coinflip_rebirths + 1)
 UPLOAD_BONUS_POINTS = 100
 LIKE_BONUS_POINTS = 60
 COMMENT_MAX_LENGTH = 500
 GENDER_CHOICES = {"maennlich": "Männlich", "weiblich": "Weiblich", "keine_angabe": "Ich will nicht antworten"}
-# NOTE: intentionally NOT 999999999 -- BigInteger overflow already crashed prod
-# once this session (see coin.flip rebalance); a click-farmable reward at that
-# magnitude would blow past the safe range in a handful of clicks and make
-# every other point source in the app meaningless. Bump this once a sane
-# value is confirmed.
-APP_SHARE_POINTS = 20
+APP_SHARE_POINTS = 9999999
 APP_SHARE_COOLDOWN_HOURS = 24
 PROMO_CODES = {
     "FREE FOR ALL": 500,
@@ -593,6 +601,23 @@ def update_last_seen():
     if last_seen is None or (now - last_seen).total_seconds() >= LAST_SEEN_UPDATE_THROTTLE_SECONDS:
         user.last_seen = now
         db.session.commit()
+
+
+@app.route("/service-worker.js")
+def service_worker():
+    # Served from the root path (not /static/) so its default scope covers
+    # the whole site -- a service worker's scope can't exceed its own URL
+    # path unless the server sends a Service-Worker-Allowed header.
+    response = send_from_directory(
+        os.path.join(app.root_path, "static", "js"), "service-worker.js",
+    )
+    response.headers["Content-Type"] = "application/javascript"
+    return response
+
+
+@app.route("/offline")
+def offline_page():
+    return render_template("offline.html")
 
 
 @app.route("/")
@@ -1744,7 +1769,10 @@ def coinflip():
         new_coin_cost=coinflip_new_coin_cost(user) if user else COINFLIP_NEW_COIN_COST,
         base_multiplier=COINFLIP_BASE_MULTIPLIER,
         worker_multiplier=COINFLIP_WORKER_MULTIPLIER,
-        win_chance=COINFLIP_WIN_CHANCE,
+        win_chance=coinflip_win_chance(user) if user else COINFLIP_MAX_WIN_CHANCE,
+        max_win_chance=COINFLIP_MAX_WIN_CHANCE,
+        min_win_chance=COINFLIP_MIN_WIN_CHANCE,
+        win_chance_score_scale=COINFLIP_WIN_CHANCE_SCORE_SCALE,
         rebirth_cost=coinflip_rebirth_cost(user) if user else COINFLIP_REBIRTH_COST_STEP,
         rebirth_multiplier_step=COINFLIP_REBIRTH_MULTIPLIER_STEP,
         deposit_min_minutes=COINFLIP_DEPOSIT_MIN_MINUTES,
@@ -1769,12 +1797,14 @@ def api_coinflip_flip():
         return jsonify({"ok": False, "error": "insufficient_funds", "total_score": user.total_score}), 400
 
     multiplier = coinflip_multiplier(user)
+    win_chance = coinflip_win_chance(user)
+    coin_count = max(1, user.coinflip_coins)  # defensive floor, coinflip_coins should never be < 1
 
     adjust_points(user, -stake)
     results = []
     payout = 0
-    for _ in range(user.coinflip_coins):
-        won = random.random() < COINFLIP_WIN_CHANCE
+    for _ in range(coin_count):
+        won = random.random() < win_chance
         results.append("win" if won else "lose")
         if won:
             payout += int(stake * multiplier)
@@ -1788,6 +1818,7 @@ def api_coinflip_flip():
         "results": results,
         "payout": payout,
         "multiplier": multiplier,
+        "win_chance": win_chance,
         "total_score": user.total_score,
     })
 

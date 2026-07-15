@@ -1,0 +1,9 @@
+<svg viewBox="0 0 600 480" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+    <rect width="600" height="480" fill="#0f0f0f" />
+    <path d="M30,255 C60,278 105,272 132,253 C156,236 168,210 158,188 C150,170 128,162 120,175 C113,187 124,202 145,207 C182,216 218,202 238,236 C258,270 246,322 214,358 C182,394 202,420 238,404 C275,388 322,342 362,302 C412,252 465,222 502,206"
+          fill="none" stroke="#8b46e0" stroke-width="15" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M480,196 L508,204 L494,230"
+          fill="none" stroke="#8b46e0" stroke-width="15" stroke-linecap="round" stroke-linejoin="round" />
+    <text x="65" y="228" font-family="Arial, sans-serif" font-size="108" font-weight="800" fill="#3ea6ff">time</text>
+    <text x="168" y="358" font-family="Arial, sans-serif" font-size="108" font-weight="800" fill="#3ea6ff">skip</text>
+</svg>

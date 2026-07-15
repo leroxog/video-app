@@ -3154,6 +3154,23 @@ body.shorts-fullscreen main {
     font-weight: 600;
 }
 
+.offline-page {
+    max-width: 420px;
+    text-align: center;
+    padding-top: 2rem;
+}
+
+.offline-page button {
+    margin-top: 1rem;
+    padding: 0.7rem 1.4rem;
+    border: none;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #57b6ff, #2f8fe0);
+    color: #0f0f0f;
+    font-weight: 700;
+    cursor: pointer;
+}
+
 .admin-inline-btn {
     padding: 0.4rem 0.8rem;
     font-size: 0.85rem;

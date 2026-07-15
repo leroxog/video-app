@@ -7,7 +7,7 @@
         <div class="game-top-row">
             <a class="game-leaderboard-link" href="{{ url_for('leaderboard') }}">&#127942; Bestenliste</a>
         </div>
-        <p>Setz Punkte ein und wirf die Münze. Landet sie auf dem Dollarzeichen (Gewinnchance: {{ (win_chance * 100)|round|int }}%), bekommst du dein Guthaben mit <span id="coinflipMultiplierText">{{ base_multiplier }}</span>-fachem Multiplikator zurück. Landet sie auf dem Gebäude, ist dein Einsatz weg.</p>
+        <p>Setz Punkte ein und wirf die Münze. Landet sie auf dem Dollarzeichen (Gewinnchance: <span id="coinflipWinChanceText">{{ (win_chance * 100)|round|int }}</span>%), bekommst du dein Guthaben mit <span id="coinflipMultiplierText">{{ base_multiplier }}</span>-fachem Multiplikator zurück. Landet sie auf dem Gebäude, ist dein Einsatz weg. <strong>Je mehr Punkte du hast, desto unwahrscheinlicher wird ein Gewinn</strong> &mdash; mit wenig Punkten stehen die Chancen besser.</p>
 
         <div class="coinflip-wrapper">
             <div class="coinflip-table-area">
@@ -82,10 +82,22 @@
         const BASE_MULTIPLIER = {{ base_multiplier }};
         const WORKER_MULTIPLIER = {{ worker_multiplier }};
         const REBIRTH_STEP = {{ rebirth_multiplier_step }};
+        const MAX_WIN_CHANCE = {{ max_win_chance }};
+        const MIN_WIN_CHANCE = {{ min_win_chance }};
+        const WIN_CHANCE_SCORE_SCALE = {{ win_chance_score_scale }};
         let rebirths = {{ user.coinflip_rebirths if user else 0 }};
         let hasWorker = {{ 'true' if user and user.coinflip_worker_count > 0 else 'false' }};
         let coinCount = {{ user.coinflip_coins if user else 1 }};
         let coinAngles = [];
+
+        const winChanceTextEl = document.getElementById("coinflipWinChanceText");
+        function updateWinChanceText(totalScore) {
+            if (!winChanceTextEl) return;
+            const score = Math.max(0, totalScore);
+            const decay = Math.exp(-score / WIN_CHANCE_SCORE_SCALE);
+            const chance = MIN_WIN_CHANCE + (MAX_WIN_CHANCE - MIN_WIN_CHANCE) * decay;
+            winChanceTextEl.textContent = Math.round(chance * 100);
+        }
 
         const coinRow = document.getElementById("coinflipCoinRow");
         const multiplierTextEl = document.getElementById("coinflipMultiplierText");
@@ -135,7 +147,11 @@
         if (flipBtn) {
             flipBtn.addEventListener("click", async () => {
                 const stake = parseInt(stakeInput.value, 10);
-                if (!stake || stake <= 0) return;
+                if (!stake || stake <= 0) {
+                    resultEl.textContent = "Bitte einen gültigen Einsatz eingeben.";
+                    resultEl.className = "coinflip-result error";
+                    return;
+                }
                 flipBtn.disabled = true;
                 resultEl.textContent = "";
 
@@ -178,6 +194,7 @@
                         resultEl.className = "coinflip-result error";
                     }
                     balanceEl.textContent = data.total_score;
+                    updateWinChanceText(data.total_score);
                 }, 900);
             });
         }
@@ -191,6 +208,7 @@
                     document.getElementById("coinflipWorkerCount").textContent = data.worker_count;
                     document.getElementById("coinflipWorkerCost").textContent = data.next_cost;
                     balanceEl.textContent = data.total_score;
+                    updateWinChanceText(data.total_score);
                     hasWorker = data.worker_count > 0;
                     updateMultiplierText();
                 }
@@ -207,6 +225,7 @@
                     document.getElementById("coinflipCoinCount").textContent = data.coins;
                     document.getElementById("coinflipCoinCost").textContent = data.next_cost;
                     balanceEl.textContent = data.total_score;
+                    updateWinChanceText(data.total_score);
                     renderCoins();
                 }
             });
@@ -229,6 +248,7 @@
                 hasWorker = data.worker_count > 0;
                 coinCount = data.coins;
                 balanceEl.textContent = data.total_score;
+                updateWinChanceText(data.total_score);
                 document.getElementById("coinflipRebirthCount").textContent = data.rebirths;
                 document.getElementById("coinflipRebirthCost").textContent = data.next_rebirth_cost;
                 document.getElementById("coinflipNextRebirthBonus").textContent = (REBIRTH_STEP * (data.rebirths + 1)).toFixed(1);
@@ -292,6 +312,7 @@
                         resultEl.textContent = `Einlage abgeholt: +${result.payout} Punkte (${result.multiplier}x)`;
                         resultEl.className = "coinflip-result success";
                         balanceEl.textContent = result.total_score;
+                        updateWinChanceText(result.total_score);
                     } else if (result.error === "expired") {
                         resultEl.textContent = "Diese Einlage war abgelaufen — die Punkte sind verloren.";
                         resultEl.className = "coinflip-result error";
@@ -320,6 +341,7 @@
                 const data = await res.json();
                 if (data.ok) {
                     balanceEl.textContent = data.total_score;
+                    updateWinChanceText(data.total_score);
                     refreshDeposits();
                 } else if (data.error === "insufficient_funds") {
                     resultEl.textContent = "Nicht genug Punkte.";

@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Offline - timeskip{% endblock %}
+{% block content %}
+    <div class="offline-page">
+        <h1>Du bist offline</h1>
+        <p>Diese Seite braucht eine Internetverbindung, die gerade nicht verfügbar ist.</p>
+        <p class="upload-storage-note">Bereits besuchte Seiten &mdash; zum Beispiel Spiele, die du schon geöffnet hattest &mdash; funktionieren teilweise auch ohne Internet weiter. Fotos, Nachrichten und make.a.meme brauchen aber immer eine Verbindung.</p>
+        <button type="button" onclick="window.location.reload()">Erneut versuchen</button>
+    </div>
+{% endblock %}
