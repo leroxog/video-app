@@ -132,6 +132,70 @@ class CoinflipDeposit(db.Model):
     user = db.relationship("User")
 
 
+class MemeTemplate(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    filename = db.Column(db.String(255), nullable=False)
+    uploaded_by_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    active = db.Column(db.Boolean, nullable=False, default=True)
+
+
+class MemeLobby(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(6), unique=True, nullable=False, index=True)
+    leader_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    max_players = db.Column(db.Integer, nullable=False, default=11)
+    round_seconds = db.Column(db.Integer, nullable=False, default=70)
+    template_cost = db.Column(db.Integer, nullable=False, default=100)
+    # waiting -> round -> voting -> results -> (round again on rematch)
+    status = db.Column(db.String(20), nullable=False, default="waiting")
+    round_number = db.Column(db.Integer, nullable=False, default=0)
+    round_started_at = db.Column(db.DateTime, nullable=True)
+    voting_started_at = db.Column(db.DateTime, nullable=True)
+    results_awarded = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    leader = db.relationship("User")
+    players = db.relationship(
+        "MemeLobbyPlayer", backref="lobby", lazy=True, cascade="all, delete-orphan",
+        order_by="MemeLobbyPlayer.joined_at",
+    )
+    creations = db.relationship("MemeCreation", backref="lobby", lazy=True, cascade="all, delete-orphan")
+
+
+class MemeLobbyPlayer(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    lobby_id = db.Column(db.Integer, db.ForeignKey("meme_lobby.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    joined_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    current_template_id = db.Column(db.Integer, db.ForeignKey("meme_template.id"), nullable=True)
+    wants_rematch = db.Column(db.Boolean, nullable=False, default=False)
+    user = db.relationship("User")
+    current_template = db.relationship("MemeTemplate")
+    __table_args__ = (db.UniqueConstraint("lobby_id", "user_id", name="uq_memelobbyplayer_lobby_user"),)
+
+
+class MemeCreation(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    lobby_id = db.Column(db.Integer, db.ForeignKey("meme_lobby.id"), nullable=False)
+    round_number = db.Column(db.Integer, nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    filename = db.Column(db.String(255), nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    user = db.relationship("User")
+    votes = db.relationship("MemeVote", backref="creation", lazy=True, cascade="all, delete-orphan")
+    __table_args__ = (
+        db.UniqueConstraint("lobby_id", "round_number", "user_id", name="uq_memecreation_lobby_round_user"),
+    )
+
+
+class MemeVote(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    creation_id = db.Column(db.Integer, db.ForeignKey("meme_creation.id"), nullable=False)
+    voter_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    value = db.Column(db.Boolean, nullable=False)
+    __table_args__ = (db.UniqueConstraint("creation_id", "voter_id", name="uq_memevote_creation_voter"),)
+
+
 class Pixel(db.Model):
     x = db.Column(db.Integer, primary_key=True)
     y = db.Column(db.Integer, primary_key=True)

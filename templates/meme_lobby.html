@@ -1,0 +1,363 @@
+{% extends "base.html" %}
+{% block title %}Lobby {{ lobby.code }} - make.a.meme{% endblock %}
+{% block content %}
+    <div class="meme-lobby-page" id="memeLobbyPage" data-lobby-id="{{ lobby.id }}">
+
+        <section class="meme-section" id="memeWaitingSection" style="display:none;">
+            <h1>Lobby <span id="memeCodeDisplay">{{ lobby.code }}</span></h1>
+            <button type="button" class="meme-copy-code-btn" id="memeCopyCodeBtn">Code kopieren</button>
+
+            <h2>Spieler (<span id="memePlayerCount">0</span>/<span id="memeMaxPlayers"></span>)</h2>
+            <ul class="meme-player-list" id="memePlayerList"></ul>
+
+            <div id="memeLeaderStartArea" style="display:none;">
+                <button type="button" class="meme-start-btn" id="memeStartBtn">STARTEN</button>
+                <div class="meme-responsibility-panel" id="memeResponsibilityPanel" style="display:none;">
+                    <label class="meme-responsibility-label">
+                        <input type="checkbox" id="memeResponsibilityCheck">
+                        Ich bestätige, dass alle in dieser Lobby hochgeladenen Inhalte auf meine Verantwortung gehen.
+                    </label>
+                    <button type="button" class="meme-start-btn" id="memeConfirmStartBtn" disabled>Jetzt starten</button>
+                </div>
+                <p class="meme-start-status" id="memeStartStatus"></p>
+            </div>
+            <p class="upload-storage-note" id="memeWaitingForLeaderNote">Warte, bis der Lobby-Leiter startet...</p>
+
+            <h2>Zeitvertreib: Flappy Bird (ohne Punkte)</h2>
+            <iframe class="meme-practice-iframe" src="{{ url_for('flappybird') }}?practice=1" title="Flappy Bird"></iframe>
+        </section>
+
+        <section class="meme-section" id="memeRoundSection" style="display:none;">
+            <h1>Runde <span id="memeRoundNumber"></span></h1>
+            <div class="meme-round-timer" id="memeRoundTimer"></div>
+
+            <div class="meme-template-wrap" id="memeTemplateWrap">
+                <img id="memeTemplateImg" src="" alt="">
+            </div>
+            <p class="upload-storage-note">Tippe auf das Meme, um Text hinzuzufügen.</p>
+
+            <div class="meme-round-actions">
+                <button type="button" id="memeNextTemplateBtn">Nächstes Meme (<span id="memeNextTemplateCost"></span> Punkte)</button>
+                <button type="button" id="memeFinishBtn">Fertig &amp; abschicken</button>
+            </div>
+
+            <details class="meme-photo-upload-details">
+                <summary>Oder eigenes Foto als Meme hochladen</summary>
+                <input type="file" id="memeOwnPhotoInput" accept="image/png,image/jpeg,image/gif,image/webp">
+            </details>
+
+            <p class="meme-start-status" id="memeRoundStatus"></p>
+        </section>
+
+        <section class="meme-section" id="memeVotingSection" style="display:none;">
+            <h1>Abstimmen</h1>
+            <p class="upload-storage-note"><span id="memeVotingIndex"></span> / <span id="memeVotingTotal"></span></p>
+            <div class="meme-voting-wrap">
+                <img id="memeVotingImg" src="" alt="">
+            </div>
+            <div class="meme-voting-actions">
+                <button type="button" class="meme-vote-btn down" id="memeVoteDownBtn">&#128078;</button>
+                <button type="button" class="meme-vote-btn up" id="memeVoteUpBtn">&#128077;</button>
+            </div>
+        </section>
+
+        <section class="meme-section" id="memeResultsSection" style="display:none;">
+            <h1>Ergebnis</h1>
+            <p class="meme-new-account-note">Neue Accounts bekommen bei einem Top-3-Platz einen extra Punkte-Bonus!</p>
+            <ol class="meme-results-list" id="memeResultsList"></ol>
+
+            <button type="button" class="meme-rematch-toggle-btn" id="memeRematchToggleBtn">Noch eine Runde</button>
+            <p class="upload-storage-note"><span id="memeRematchCount">0</span>/<span id="memeRematchTotal">0</span> wollen nochmal</p>
+            <div id="memeLeaderRematchArea" style="display:none;">
+                <button type="button" class="meme-start-btn" id="memeRematchStartBtn">Nächste Runde starten</button>
+            </div>
+        </section>
+
+    </div>
+
+    <script src="{{ url_for('static', filename='js/photo-text-overlay.js') }}"></script>
+    <script>
+        const LOBBY_ID = {{ lobby.id }};
+        const STATE_URL = `/api/meme/lobby/${LOBBY_ID}/state`;
+
+        const sections = {
+            waiting: document.getElementById("memeWaitingSection"),
+            round: document.getElementById("memeRoundSection"),
+            voting: document.getElementById("memeVotingSection"),
+            results: document.getElementById("memeResultsSection"),
+        };
+
+        function showSection(status) {
+            Object.entries(sections).forEach(([key, el]) => {
+                el.style.display = key === status ? "block" : "none";
+            });
+        }
+
+        // ---------- waiting ----------
+        document.getElementById("memeCopyCodeBtn").addEventListener("click", async () => {
+            try {
+                await navigator.clipboard.writeText("{{ lobby.code }}");
+                document.getElementById("memeCopyCodeBtn").textContent = "Kopiert!";
+            } catch (err) { /* ignore */ }
+        });
+
+        const startBtn = document.getElementById("memeStartBtn");
+        const responsibilityPanel = document.getElementById("memeResponsibilityPanel");
+        const responsibilityCheck = document.getElementById("memeResponsibilityCheck");
+        const confirmStartBtn = document.getElementById("memeConfirmStartBtn");
+        const startStatus = document.getElementById("memeStartStatus");
+
+        startBtn.addEventListener("click", () => {
+            startBtn.style.display = "none";
+            responsibilityPanel.style.display = "block";
+        });
+        responsibilityCheck.addEventListener("change", () => {
+            confirmStartBtn.disabled = !responsibilityCheck.checked;
+        });
+        confirmStartBtn.addEventListener("click", async () => {
+            confirmStartBtn.disabled = true;
+            startStatus.textContent = "Starte...";
+            const res = await fetch(`/api/meme/lobby/${LOBBY_ID}/start`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ confirmed_responsibility: true }),
+            });
+            const data = await res.json();
+            if (!data.ok) {
+                startStatus.textContent = data.error === "no_templates"
+                    ? "Es gibt noch keine Meme-Vorlagen. Ein Admin muss zuerst welche hochladen."
+                    : "Das hat nicht geklappt.";
+                confirmStartBtn.disabled = false;
+            }
+        });
+
+        function renderWaiting(data) {
+            document.getElementById("memePlayerCount").textContent = data.players.length;
+            document.getElementById("memeMaxPlayers").textContent = data.max_players;
+            const list = document.getElementById("memePlayerList");
+            list.innerHTML = "";
+            data.players.forEach((p) => {
+                const li = document.createElement("li");
+                li.className = "meme-player-item";
+                li.textContent = p.username + (p.is_leader ? " (Leiter)" : "");
+                list.appendChild(li);
+            });
+            document.getElementById("memeLeaderStartArea").style.display = data.is_leader ? "block" : "none";
+            document.getElementById("memeWaitingForLeaderNote").style.display = data.is_leader ? "none" : "block";
+        }
+
+        // ---------- round ----------
+        let currentTemplateId = null;
+        let templateOverlay = null;
+        const templateImg = document.getElementById("memeTemplateImg");
+        const templateWrap = document.getElementById("memeTemplateWrap");
+        const nextTemplateBtn = document.getElementById("memeNextTemplateBtn");
+        const finishBtn = document.getElementById("memeFinishBtn");
+        const roundStatus = document.getElementById("memeRoundStatus");
+        const ownPhotoInput = document.getElementById("memeOwnPhotoInput");
+        let roundSubmitted = false;
+        let roundTimeLeft = 0;
+
+        function tickRoundTimer() {
+            if (sections.round.style.display !== "block") return;
+            roundTimeLeft = Math.max(0, roundTimeLeft - 1);
+            document.getElementById("memeRoundTimer").textContent = Math.ceil(roundTimeLeft) + "s";
+        }
+        setInterval(tickRoundTimer, 1000);
+
+        function renderRound(data) {
+            document.getElementById("memeRoundNumber").textContent = data.round_number;
+            roundTimeLeft = data.time_left;
+            document.getElementById("memeRoundTimer").textContent = Math.ceil(roundTimeLeft) + "s";
+            document.getElementById("memeNextTemplateCost").textContent = data.template_cost;
+            roundSubmitted = data.submitted;
+            roundStatus.textContent = roundSubmitted ? "Abgeschickt! Du kannst weiter tippen, bis die Zeit um ist." : "";
+
+            if (data.template && data.template.id !== currentTemplateId) {
+                currentTemplateId = data.template.id;
+                templateImg.src = data.template.url;
+                templateWrap.querySelectorAll(".photo-text-entry, .photo-text-input").forEach((el) => el.remove());
+                templateOverlay = null;
+                templateImg.onload = () => {
+                    templateOverlay = PhotoTextOverlay.attach(templateWrap, templateImg);
+                };
+            }
+        }
+
+        nextTemplateBtn.addEventListener("click", async () => {
+            nextTemplateBtn.disabled = true;
+            const res = await fetch(`/api/meme/lobby/${LOBBY_ID}/next-template`, { method: "POST" });
+            const data = await res.json();
+            nextTemplateBtn.disabled = false;
+            if (!data.ok) {
+                roundStatus.textContent = data.error === "insufficient_funds"
+                    ? "Nicht genug Punkte." : "Das hat nicht geklappt.";
+                return;
+            }
+            currentTemplateId = data.template.id;
+            templateImg.src = data.template.url;
+            templateWrap.querySelectorAll(".photo-text-entry, .photo-text-input").forEach((el) => el.remove());
+            templateImg.onload = () => {
+                templateOverlay = PhotoTextOverlay.attach(templateWrap, templateImg);
+            };
+        });
+
+        async function fetchAsFile(url) {
+            const res = await fetch(url);
+            const blob = await res.blob();
+            return blob;
+        }
+
+        async function submitCurrentMeme() {
+            if (!templateImg.src) return;
+            finishBtn.disabled = true;
+            roundStatus.textContent = "Wird abgeschickt...";
+            try {
+                const originalBlob = await fetchAsFile(templateImg.src);
+                const finalBlob = await PhotoTextOverlay.compositeToBlob(
+                    originalBlob, templateOverlay ? templateOverlay.entries : []
+                );
+                const formData = new FormData();
+                formData.append("photo", finalBlob, "meme.png");
+                const res = await fetch(`/api/meme/lobby/${LOBBY_ID}/submit`, { method: "POST", body: formData });
+                const data = await res.json();
+                roundStatus.textContent = data.ok ? "Abgeschickt!" : "Das hat nicht geklappt.";
+                roundSubmitted = data.ok;
+            } finally {
+                finishBtn.disabled = false;
+            }
+        }
+
+        finishBtn.addEventListener("click", submitCurrentMeme);
+
+        ownPhotoInput.addEventListener("change", async () => {
+            const file = ownPhotoInput.files[0];
+            if (!file) return;
+            roundStatus.textContent = "Wird abgeschickt...";
+            const formData = new FormData();
+            formData.append("photo", file, file.name);
+            const res = await fetch(`/api/meme/lobby/${LOBBY_ID}/submit`, { method: "POST", body: formData });
+            const data = await res.json();
+            roundStatus.textContent = data.ok ? "Foto abgeschickt!" : "Das hat nicht geklappt.";
+            roundSubmitted = data.ok;
+            ownPhotoInput.value = "";
+        });
+
+        // ---------- voting ----------
+        let currentVotingCreationId = null;
+        const votingImg = document.getElementById("memeVotingImg");
+        const voteUpBtn = document.getElementById("memeVoteUpBtn");
+        const voteDownBtn = document.getElementById("memeVoteDownBtn");
+
+        function renderVoting(data) {
+            document.getElementById("memeVotingIndex").textContent = data.voting_index + 1;
+            document.getElementById("memeVotingTotal").textContent = data.voting_total;
+            if (!data.current_creation) return;
+            if (data.current_creation.id !== currentVotingCreationId) {
+                currentVotingCreationId = data.current_creation.id;
+                votingImg.src = data.current_creation.url;
+            }
+            voteUpBtn.classList.toggle("active", data.current_creation.my_vote === true);
+            voteDownBtn.classList.toggle("active", data.current_creation.my_vote === false);
+            voteUpBtn.disabled = data.current_creation.is_mine;
+            voteDownBtn.disabled = data.current_creation.is_mine;
+        }
+
+        async function castVote(value) {
+            if (!currentVotingCreationId) return;
+            await fetch(`/api/meme/lobby/${LOBBY_ID}/vote`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ creation_id: currentVotingCreationId, value }),
+            });
+        }
+        voteUpBtn.addEventListener("click", () => castVote(true));
+        voteDownBtn.addEventListener("click", () => castVote(false));
+
+        // ---------- results ----------
+        const rematchToggleBtn = document.getElementById("memeRematchToggleBtn");
+        let wantsRematch = false;
+
+        function renderResults(data) {
+            const list = document.getElementById("memeResultsList");
+            list.innerHTML = "";
+            data.results.forEach((r) => {
+                const li = document.createElement("li");
+                li.className = "meme-result-item" + (r.is_mine ? " mine" : "");
+                const img = document.createElement("img");
+                img.src = r.url;
+                const info = document.createElement("div");
+                info.innerHTML = `<strong>#${r.place} ${r.username}</strong><span>${r.score} Punkte</span>`;
+                const actions = document.createElement("div");
+                actions.className = "meme-result-actions";
+                const dl = document.createElement("a");
+                dl.textContent = "Herunterladen";
+                dl.href = r.download_url;
+                const shareBtn = document.createElement("button");
+                shareBtn.type = "button";
+                shareBtn.textContent = "Teilen";
+                shareBtn.addEventListener("click", async () => {
+                    if (navigator.share) {
+                        try { await navigator.share({ title: "Mein Meme", url: r.url }); } catch (err) { /* ignore */ }
+                    }
+                });
+                actions.appendChild(dl);
+                actions.appendChild(shareBtn);
+                li.appendChild(img);
+                li.appendChild(info);
+                li.appendChild(actions);
+                list.appendChild(li);
+            });
+
+            wantsRematch = data.wants_rematch;
+            rematchToggleBtn.classList.toggle("active", wantsRematch);
+            rematchToggleBtn.textContent = wantsRematch ? "Nochmal (angemeldet)" : "Noch eine Runde";
+            document.getElementById("memeRematchCount").textContent = data.wants_rematch_count;
+            document.getElementById("memeRematchTotal").textContent = data.players.length;
+            document.getElementById("memeLeaderRematchArea").style.display = data.is_leader ? "block" : "none";
+        }
+
+        rematchToggleBtn.addEventListener("click", async () => {
+            wantsRematch = !wantsRematch;
+            await fetch(`/api/meme/lobby/${LOBBY_ID}/rematch-vote`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ want: wantsRematch }),
+            });
+        });
+
+        document.getElementById("memeRematchStartBtn").addEventListener("click", async () => {
+            const res = await fetch(`/api/meme/lobby/${LOBBY_ID}/rematch-start`, { method: "POST" });
+            const data = await res.json();
+            if (data.ok) {
+                currentTemplateId = null;
+                currentVotingCreationId = null;
+            }
+        });
+
+        // ---------- polling ----------
+        async function poll() {
+            let res;
+            try {
+                res = await fetch(STATE_URL);
+            } catch (err) {
+                return;
+            }
+            if (res.status === 403 || res.status === 404) {
+                window.location.href = "{{ url_for('make_a_meme_page') }}";
+                return;
+            }
+            const data = await res.json();
+            if (!data.ok) return;
+
+            showSection(data.status);
+            if (data.status === "waiting") renderWaiting(data);
+            else if (data.status === "round") renderRound(data);
+            else if (data.status === "voting") renderVoting(data);
+            else if (data.status === "results") renderResults(data);
+        }
+
+        poll();
+        setInterval(poll, 2000);
+    </script>
+{% endblock %}

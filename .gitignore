@@ -9,3 +9,5 @@ static/uploads/*
 !static/uploads/.gitkeep
 static/profile_pics/*
 !static/profile_pics/.gitkeep
+static/meme/*
+!static/meme/.gitkeep

@@ -50,6 +50,28 @@
         </tbody>
     </table>
 
+    <h2>Meme-Vorlagen (timeskip/make.a.meme)</h2>
+    <form action="{{ url_for('admin_upload_meme_template') }}" method="post" enctype="multipart/form-data" class="form admin-create-form">
+        <label for="memeTemplates">Vorlagen hochladen (mehrere möglich)</label>
+        <input type="file" id="memeTemplates" name="templates" accept="image/png,image/jpeg,image/gif,image/webp" multiple required>
+        <button type="submit">Hochladen</button>
+    </form>
+    {% if meme_templates %}
+        <div class="meme-template-admin-grid">
+            {% for template in meme_templates %}
+                <div class="meme-template-admin-item">
+                    <img src="{{ media_url('meme_templates', template.filename) }}" alt="">
+                    <form action="{{ url_for('admin_delete_meme_template', template_id=template.id) }}" method="post"
+                          onsubmit="return confirm('Vorlage wirklich löschen?');">
+                        <button type="submit" class="danger admin-inline-btn">Löschen</button>
+                    </form>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p>Noch keine Meme-Vorlagen hochgeladen &mdash; ohne Vorlagen kann keine Lobby gestartet werden.</p>
+    {% endif %}
+
     <h2>Gemeldete Fotos</h2>
     {% if reports %}
         <table class="admin-table">

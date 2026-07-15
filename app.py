@@ -16,7 +16,7 @@ from werkzeug.utils import secure_filename
 from models import (
     db, User, Post, PostPhoto, Pixel, PostLike, Subscription, PostComment, RedeemedCode,
     GamePlayCount, Sound, UserCreatedCode, Conversation, ConversationMember, Message,
-    PostReport, CoinflipDeposit,
+    PostReport, CoinflipDeposit, MemeTemplate, MemeLobby, MemeLobbyPlayer, MemeCreation, MemeVote,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -94,6 +94,14 @@ GAMES = [
         "subtitle": "Muenze werfen und Punkte verdreifachen",
         "icon_class": "place-label-icon coinflip-icon",
     },
+    {
+        "key": "make.a.meme",
+        "search_term": "timeskip/make.a.meme",
+        "endpoint": "make_a_meme_page",
+        "title": "timeskip/make.a.meme",
+        "subtitle": "Meme-Party mit Freunden -- gemeinsam Memes bauen und abstimmen",
+        "icon_class": "place-label-icon memeparty-icon",
+    },
 ]
 GAME_SUGGESTIONS = [g["search_term"] for g in GAMES]
 GAME_MATCH_THRESHOLD = 0.65
@@ -115,6 +123,18 @@ COINFLIP_DEPOSIT_MAX_MINUTES = 12 * 60
 COINFLIP_DEPOSIT_COLLECT_WINDOW_MINUTES = 15
 COINFLIP_DEPOSIT_MIN_PAYOUT_MULTIPLIER = 1.1
 COINFLIP_DEPOSIT_MAX_PAYOUT_MULTIPLIER = 1.6
+
+MEME_MIN_PLAYERS = 1
+MEME_MAX_PLAYERS = 11
+MEME_MIN_ROUND_SECONDS = 20
+MEME_MAX_ROUND_SECONDS = 600
+MEME_DEFAULT_ROUND_SECONDS = 70
+MEME_DEFAULT_TEMPLATE_COST = 100
+MEME_VOTE_SECONDS_PER_ITEM = 12
+MEME_PLACEMENT_POINTS = {1: 300, 2: 150}
+MEME_NEW_ACCOUNT_WINDOW_DAYS = 7
+MEME_NEW_ACCOUNT_BONUS = 100
+MEME_NEW_ACCOUNT_BONUS_PLACES = 3
 
 
 def coinflip_worker_cost(user):
@@ -300,6 +320,10 @@ SOUND_FOLDER = os.path.join(app.root_path, "static", "sounds")
 os.makedirs(SOUND_FOLDER, exist_ok=True)
 app.config["SOUND_FOLDER"] = SOUND_FOLDER
 
+MEME_FOLDER = os.path.join(app.root_path, "static", "meme")
+os.makedirs(MEME_FOLDER, exist_ok=True)
+app.config["MEME_FOLDER"] = MEME_FOLDER
+
 R2_ACCOUNT_ID = os.environ.get("R2_ACCOUNT_ID")
 R2_ACCESS_KEY_ID = os.environ.get("R2_ACCESS_KEY_ID")
 R2_SECRET_ACCESS_KEY = os.environ.get("R2_SECRET_ACCESS_KEY")
@@ -332,6 +356,8 @@ LOCAL_MEDIA_FOLDERS = {
     "posts": "UPLOAD_FOLDER",
     "profile_pics": "PROFILE_PIC_FOLDER",
     "sounds": "SOUND_FOLDER",
+    "meme_templates": "MEME_FOLDER",
+    "meme_creations": "MEME_FOLDER",
 }
 
 
@@ -403,6 +429,8 @@ def media_url(kind, stored_filename):
         return url_for("post_photo_file", filename=stored_filename)
     if kind == "sounds":
         return url_for("static", filename=f"sounds/{stored_filename}")
+    if kind in ("meme_templates", "meme_creations"):
+        return url_for("static", filename=f"meme/{stored_filename}")
     return url_for("static", filename=f"profile_pics/{stored_filename}")
 
 db.init_app(app)
@@ -1566,9 +1594,10 @@ def admin_dashboard():
     posts = Post.query.order_by(Post.created_at.desc()).all()
     online_status = {u.id: is_user_online(u) for u in users}
     reports = PostReport.query.order_by(PostReport.created_at.desc()).all()
+    meme_templates = MemeTemplate.query.filter_by(active=True).order_by(MemeTemplate.created_at.desc()).all()
     return render_template(
         "admin.html", user=admin_user, users=users, posts=posts, online_status=online_status,
-        reports=reports,
+        reports=reports, meme_templates=meme_templates,
     )
 
 
@@ -1949,6 +1978,464 @@ def api_coinflip_deposit_collect(deposit_id):
         "multiplier": round(multiplier, 2),
         "total_score": user.total_score,
     })
+
+
+def generate_meme_lobby_code():
+    while True:
+        code = "".join(random.choices("0123456789", k=6))
+        if MemeLobby.query.filter_by(code=code).first() is None:
+            return code
+
+
+def meme_creation_score(creation):
+    return sum(1 if v.value else -1 for v in creation.votes)
+
+
+def advance_meme_lobby(lobby):
+    """Lazily transition a lobby's status based on elapsed time, same
+    pattern as the lazy expiry used for chat messages / coinflip deposits."""
+    now = datetime.now(timezone.utc)
+
+    if lobby.status == "round" and lobby.round_started_at is not None:
+        started = lobby.round_started_at
+        if started.tzinfo is None:
+            started = started.replace(tzinfo=timezone.utc)
+        if (now - started).total_seconds() >= lobby.round_seconds:
+            lobby.status = "voting"
+            lobby.voting_started_at = now
+            db.session.commit()
+
+    if lobby.status == "voting" and lobby.voting_started_at is not None:
+        creation_count = MemeCreation.query.filter_by(
+            lobby_id=lobby.id, round_number=lobby.round_number
+        ).count()
+        started = lobby.voting_started_at
+        if started.tzinfo is None:
+            started = started.replace(tzinfo=timezone.utc)
+        elapsed = (now - started).total_seconds()
+        total_window = max(creation_count, 1) * MEME_VOTE_SECONDS_PER_ITEM
+        if creation_count == 0 or elapsed >= total_window:
+            lobby.status = "results"
+            db.session.commit()
+
+
+def award_meme_results(lobby):
+    if lobby.results_awarded:
+        return
+    creations = MemeCreation.query.filter_by(lobby_id=lobby.id, round_number=lobby.round_number).all()
+    if len(lobby.players) > 2 and creations:
+        ranked = sorted(creations, key=meme_creation_score, reverse=True)
+        now = datetime.now(timezone.utc)
+        for index, creation in enumerate(ranked):
+            place = index + 1
+            points = MEME_PLACEMENT_POINTS.get(place)
+            if points is None:
+                continue
+            winner = creation.user
+            total = points
+            created_at = winner.created_at
+            if created_at is not None:
+                if created_at.tzinfo is None:
+                    created_at = created_at.replace(tzinfo=timezone.utc)
+                if place <= MEME_NEW_ACCOUNT_BONUS_PLACES and (now - created_at).days <= MEME_NEW_ACCOUNT_WINDOW_DAYS:
+                    total += MEME_NEW_ACCOUNT_BONUS
+            adjust_points(winner, total)
+    lobby.results_awarded = True
+    db.session.commit()
+
+
+def serialize_meme_player(player, lobby):
+    return {
+        "username": player.user.username,
+        "profile_image": media_url("profile_pics", player.user.profile_image) if player.user.profile_image else None,
+        "is_leader": player.user_id == lobby.leader_id,
+    }
+
+
+@app.route("/make-a-meme")
+def make_a_meme_page():
+    user = current_user()
+    if user is None:
+        return redirect(url_for("login"))
+    return render_template(
+        "make_a_meme.html", user=user,
+        min_players=MEME_MIN_PLAYERS, max_players=MEME_MAX_PLAYERS,
+        min_seconds=MEME_MIN_ROUND_SECONDS, max_seconds=MEME_MAX_ROUND_SECONDS,
+        default_seconds=MEME_DEFAULT_ROUND_SECONDS,
+    )
+
+
+@app.route("/make-a-meme/<code>")
+def meme_lobby_page(code):
+    user = current_user()
+    if user is None:
+        return redirect(url_for("login"))
+    lobby = MemeLobby.query.filter_by(code=code).first_or_404()
+    if MemeLobbyPlayer.query.filter_by(lobby_id=lobby.id, user_id=user.id).first() is None:
+        abort(403)
+    return render_template("meme_lobby.html", user=user, lobby=lobby)
+
+
+@app.route("/api/meme/create-lobby", methods=["POST"])
+def api_meme_create_lobby():
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+
+    data = request.get_json(silent=True) or {}
+    try:
+        max_players = int(data.get("max_players", MEME_MAX_PLAYERS))
+        round_seconds = int(data.get("round_seconds", MEME_DEFAULT_ROUND_SECONDS))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "invalid_input"}), 400
+
+    if not (MEME_MIN_PLAYERS <= max_players <= MEME_MAX_PLAYERS):
+        return jsonify({"ok": False, "error": "invalid_max_players"}), 400
+    if not (MEME_MIN_ROUND_SECONDS <= round_seconds <= MEME_MAX_ROUND_SECONDS):
+        return jsonify({"ok": False, "error": "invalid_round_seconds"}), 400
+
+    lobby = MemeLobby(
+        code=generate_meme_lobby_code(), leader_id=user.id, max_players=max_players,
+        round_seconds=round_seconds, template_cost=MEME_DEFAULT_TEMPLATE_COST,
+    )
+    db.session.add(lobby)
+    db.session.flush()
+    db.session.add(MemeLobbyPlayer(lobby_id=lobby.id, user_id=user.id))
+    db.session.commit()
+    return jsonify({"ok": True, "code": lobby.code})
+
+
+@app.route("/api/meme/join", methods=["POST"])
+def api_meme_join():
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+
+    data = request.get_json(silent=True) or {}
+    code = (data.get("code") or "").strip()
+    lobby = MemeLobby.query.filter_by(code=code).first()
+    if lobby is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+
+    existing = MemeLobbyPlayer.query.filter_by(lobby_id=lobby.id, user_id=user.id).first()
+    if existing is not None:
+        return jsonify({"ok": True, "code": lobby.code})
+
+    if lobby.status != "waiting":
+        return jsonify({"ok": False, "error": "already_started"}), 400
+    if len(lobby.players) >= lobby.max_players:
+        return jsonify({"ok": False, "error": "full"}), 400
+
+    db.session.add(MemeLobbyPlayer(lobby_id=lobby.id, user_id=user.id))
+    db.session.commit()
+    return jsonify({"ok": True, "code": lobby.code})
+
+
+@app.route("/api/meme/lobby/<int:lobby_id>/start", methods=["POST"])
+def api_meme_start(lobby_id):
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    lobby = db.get_or_404(MemeLobby, lobby_id)
+    if lobby.leader_id != user.id:
+        abort(403)
+    if lobby.status != "waiting":
+        return jsonify({"ok": False, "error": "already_started"}), 400
+
+    data = request.get_json(silent=True) or {}
+    if not data.get("confirmed_responsibility"):
+        return jsonify({"ok": False, "error": "responsibility_not_confirmed"}), 400
+
+    templates = MemeTemplate.query.filter_by(active=True).all()
+    if not templates:
+        return jsonify({"ok": False, "error": "no_templates"}), 400
+
+    lobby.round_number = 1
+    lobby.status = "round"
+    lobby.round_started_at = datetime.now(timezone.utc)
+    lobby.voting_started_at = None
+    lobby.results_awarded = False
+    for p in lobby.players:
+        p.current_template_id = random.choice(templates).id
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/meme/lobby/<int:lobby_id>/next-template", methods=["POST"])
+def api_meme_next_template(lobby_id):
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    lobby = db.get_or_404(MemeLobby, lobby_id)
+    player = MemeLobbyPlayer.query.filter_by(lobby_id=lobby.id, user_id=user.id).first()
+    if player is None:
+        abort(403)
+    advance_meme_lobby(lobby)
+    if lobby.status != "round":
+        return jsonify({"ok": False, "error": "not_in_round"}), 400
+    if user.total_score < lobby.template_cost:
+        return jsonify({"ok": False, "error": "insufficient_funds"}), 400
+
+    templates = MemeTemplate.query.filter_by(active=True).all()
+    if not templates:
+        return jsonify({"ok": False, "error": "no_templates"}), 400
+    choices = [t for t in templates if t.id != player.current_template_id] or templates
+    new_template = random.choice(choices)
+
+    adjust_points(user, -lobby.template_cost)
+    player.current_template_id = new_template.id
+    db.session.commit()
+    return jsonify({
+        "ok": True,
+        "template": {"id": new_template.id, "url": media_url("meme_templates", new_template.filename)},
+        "total_score": user.total_score,
+    })
+
+
+@app.route("/api/meme/lobby/<int:lobby_id>/submit", methods=["POST"])
+def api_meme_submit(lobby_id):
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    lobby = db.get_or_404(MemeLobby, lobby_id)
+    player = MemeLobbyPlayer.query.filter_by(lobby_id=lobby.id, user_id=user.id).first()
+    if player is None:
+        abort(403)
+    advance_meme_lobby(lobby)
+    if lobby.status != "round":
+        return jsonify({"ok": False, "error": "not_in_round"}), 400
+
+    file = request.files.get("photo")
+    if not file or not file.filename or not allowed_image_file(file.filename):
+        return jsonify({"ok": False, "error": "invalid_image"}), 400
+
+    extension = secure_filename(file.filename).rsplit(".", 1)[1].lower()
+    stored_filename = f"{uuid.uuid4().hex}.{extension}"
+    save_media(file, "meme_creations", stored_filename)
+
+    existing = MemeCreation.query.filter_by(
+        lobby_id=lobby.id, round_number=lobby.round_number, user_id=user.id
+    ).first()
+    if existing is not None:
+        delete_media("meme_creations", existing.filename)
+        existing.filename = stored_filename
+    else:
+        db.session.add(MemeCreation(
+            lobby_id=lobby.id, round_number=lobby.round_number, user_id=user.id, filename=stored_filename,
+        ))
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/meme/lobby/<int:lobby_id>/vote", methods=["POST"])
+def api_meme_vote(lobby_id):
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    lobby = db.get_or_404(MemeLobby, lobby_id)
+    player = MemeLobbyPlayer.query.filter_by(lobby_id=lobby.id, user_id=user.id).first()
+    if player is None:
+        abort(403)
+    advance_meme_lobby(lobby)
+    if lobby.status != "voting":
+        return jsonify({"ok": False, "error": "not_voting"}), 400
+
+    data = request.get_json(silent=True) or {}
+    creation_id = data.get("creation_id")
+    value = data.get("value")
+    creation = db.session.get(MemeCreation, creation_id) if creation_id else None
+    if creation is None or creation.lobby_id != lobby.id or not isinstance(value, bool):
+        return jsonify({"ok": False, "error": "invalid_vote"}), 400
+
+    existing_vote = MemeVote.query.filter_by(creation_id=creation.id, voter_id=user.id).first()
+    if existing_vote is not None:
+        existing_vote.value = value
+    else:
+        db.session.add(MemeVote(creation_id=creation.id, voter_id=user.id, value=value))
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/meme/lobby/<int:lobby_id>/rematch-vote", methods=["POST"])
+def api_meme_rematch_vote(lobby_id):
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    lobby = db.get_or_404(MemeLobby, lobby_id)
+    player = MemeLobbyPlayer.query.filter_by(lobby_id=lobby.id, user_id=user.id).first()
+    if player is None:
+        abort(403)
+    advance_meme_lobby(lobby)
+    if lobby.status != "results":
+        return jsonify({"ok": False, "error": "not_results"}), 400
+
+    data = request.get_json(silent=True) or {}
+    player.wants_rematch = bool(data.get("want"))
+    db.session.commit()
+    wants_count = sum(1 for p in lobby.players if p.wants_rematch)
+    return jsonify({"ok": True, "wants_rematch_count": wants_count, "player_count": len(lobby.players)})
+
+
+@app.route("/api/meme/lobby/<int:lobby_id>/rematch-start", methods=["POST"])
+def api_meme_rematch_start(lobby_id):
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    lobby = db.get_or_404(MemeLobby, lobby_id)
+    if lobby.leader_id != user.id:
+        abort(403)
+    advance_meme_lobby(lobby)
+    if lobby.status != "results":
+        return jsonify({"ok": False, "error": "not_results"}), 400
+
+    templates = MemeTemplate.query.filter_by(active=True).all()
+    if not templates:
+        return jsonify({"ok": False, "error": "no_templates"}), 400
+
+    lobby.round_number += 1
+    lobby.status = "round"
+    lobby.round_started_at = datetime.now(timezone.utc)
+    lobby.voting_started_at = None
+    lobby.results_awarded = False
+    for p in lobby.players:
+        p.wants_rematch = False
+        p.current_template_id = random.choice(templates).id
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/meme/lobby/<int:lobby_id>/state")
+def api_meme_lobby_state(lobby_id):
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    lobby = db.get_or_404(MemeLobby, lobby_id)
+    player = MemeLobbyPlayer.query.filter_by(lobby_id=lobby.id, user_id=user.id).first()
+    if player is None:
+        abort(403)
+
+    advance_meme_lobby(lobby)
+    if lobby.status == "results":
+        award_meme_results(lobby)
+
+    now = datetime.now(timezone.utc)
+    payload = {
+        "ok": True,
+        "status": lobby.status,
+        "code": lobby.code,
+        "round_number": lobby.round_number,
+        "round_seconds": lobby.round_seconds,
+        "template_cost": lobby.template_cost,
+        "max_players": lobby.max_players,
+        "is_leader": lobby.leader_id == user.id,
+        "players": [serialize_meme_player(p, lobby) for p in lobby.players],
+        "total_score": user.total_score,
+    }
+
+    if lobby.status == "round":
+        started = lobby.round_started_at
+        if started.tzinfo is None:
+            started = started.replace(tzinfo=timezone.utc)
+        payload["time_left"] = max(0, lobby.round_seconds - (now - started).total_seconds())
+        my_creation = MemeCreation.query.filter_by(
+            lobby_id=lobby.id, round_number=lobby.round_number, user_id=user.id
+        ).first()
+        payload["submitted"] = my_creation is not None
+        if player.current_template is not None:
+            payload["template"] = {
+                "id": player.current_template.id,
+                "url": media_url("meme_templates", player.current_template.filename),
+            }
+
+    elif lobby.status == "voting":
+        creations = MemeCreation.query.filter_by(
+            lobby_id=lobby.id, round_number=lobby.round_number
+        ).order_by(MemeCreation.id).all()
+        started = lobby.voting_started_at
+        if started.tzinfo is None:
+            started = started.replace(tzinfo=timezone.utc)
+        elapsed = (now - started).total_seconds()
+        index = int(elapsed // MEME_VOTE_SECONDS_PER_ITEM)
+        index = max(0, min(index, len(creations) - 1)) if creations else 0
+        payload["voting_index"] = index
+        payload["voting_total"] = len(creations)
+        if creations:
+            current = creations[index]
+            my_vote = MemeVote.query.filter_by(creation_id=current.id, voter_id=user.id).first()
+            payload["current_creation"] = {
+                "id": current.id,
+                "url": media_url("meme_creations", current.filename),
+                "my_vote": my_vote.value if my_vote is not None else None,
+                "is_mine": current.user_id == user.id,
+            }
+
+    elif lobby.status == "results":
+        creations = MemeCreation.query.filter_by(lobby_id=lobby.id, round_number=lobby.round_number).all()
+        ranked = sorted(creations, key=meme_creation_score, reverse=True)
+        payload["results"] = [
+            {
+                "id": c.id,
+                "place": index + 1,
+                "username": c.user.username,
+                "url": media_url("meme_creations", c.filename),
+                "download_url": url_for("download_meme_creation", creation_id=c.id),
+                "score": meme_creation_score(c),
+                "is_mine": c.user_id == user.id,
+            }
+            for index, c in enumerate(ranked)
+        ]
+        payload["wants_rematch"] = player.wants_rematch
+        payload["wants_rematch_count"] = sum(1 for p in lobby.players if p.wants_rematch)
+
+    return jsonify(payload)
+
+
+@app.route("/meme-creation/<int:creation_id>/download")
+def download_meme_creation(creation_id):
+    creation = db.get_or_404(MemeCreation, creation_id)
+    extension = creation.filename.rsplit(".", 1)[-1]
+    download_name = f"meme.{extension}"
+    if USE_R2:
+        obj = r2_client.get_object(Bucket=R2_BUCKET_NAME, Key=f"meme_creations/{creation.filename}")
+        data = obj["Body"].read()
+        mimetype = f"image/{'jpeg' if extension == 'jpg' else extension}"
+        return Response(
+            data, mimetype=mimetype,
+            headers={"Content-Disposition": f'attachment; filename="{download_name}"'},
+        )
+    return send_from_directory(
+        app.config["MEME_FOLDER"], creation.filename, as_attachment=True, download_name=download_name,
+    )
+
+
+@app.route("/admin/meme-templates", methods=["POST"])
+def admin_upload_meme_template():
+    admin_user = require_admin()
+    files = [f for f in request.files.getlist("templates") if f and f.filename]
+    if not files:
+        flash("Bitte mindestens ein Bild auswählen.")
+        return redirect(url_for("admin_dashboard"))
+    for f in files:
+        if not allowed_image_file(f.filename):
+            flash("Nur folgende Bildformate sind erlaubt: " + ", ".join(sorted(ALLOWED_IMAGE_EXTENSIONS)))
+            return redirect(url_for("admin_dashboard"))
+    for f in files:
+        extension = secure_filename(f.filename).rsplit(".", 1)[1].lower()
+        stored_filename = f"{uuid.uuid4().hex}.{extension}"
+        save_media(f, "meme_templates", stored_filename)
+        db.session.add(MemeTemplate(filename=stored_filename, uploaded_by_id=admin_user.id))
+    db.session.commit()
+    return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/admin/meme-templates/<int:template_id>/delete", methods=["POST"])
+def admin_delete_meme_template(template_id):
+    require_admin()
+    template = db.get_or_404(MemeTemplate, template_id)
+    delete_media("meme_templates", template.filename)
+    db.session.delete(template)
+    db.session.commit()
+    return redirect(url_for("admin_dashboard"))
 
 
 @app.route("/place")

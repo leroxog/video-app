@@ -8,7 +8,10 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 import pytest
 from app import app as flask_app, db
-from models import User, Post, PostPhoto, PostLike, PostComment, PostReport, Sound, Conversation, Message
+from models import (
+    User, Post, PostPhoto, PostLike, PostComment, PostReport, Sound, Conversation, Message,
+    MemeTemplate, MemeLobby, MemeLobbyPlayer, MemeCreation, MemeVote,
+)
 
 
 @pytest.fixture
@@ -1943,3 +1946,472 @@ def test_coinflip_deposits_list_purges_expired_ones(client):
     data = response.get_json()
     assert data["deposits"] == []
     assert CoinflipDeposit.query.count() == 0
+
+
+def create_meme_template():
+    tpl = MemeTemplate(filename="template.png")
+    db.session.add(tpl)
+    db.session.commit()
+    return tpl
+
+
+def create_lobby_via_api(client, max_players=11, round_seconds=60):
+    response = client.post(
+        "/api/meme/create-lobby",
+        json={"max_players": max_players, "round_seconds": round_seconds},
+    )
+    data = response.get_json()
+    assert data["ok"] is True
+    return data["code"]
+
+
+def join_lobby_via_api(client, code):
+    response = client.post("/api/meme/join", json={"code": code})
+    return response.get_json()
+
+
+def start_lobby_via_api(client, lobby_id):
+    return client.post(
+        f"/api/meme/lobby/{lobby_id}/start", json={"confirmed_responsibility": True}
+    ).get_json()
+
+
+def test_make_a_meme_page_requires_login(client):
+    response = client.get("/make-a-meme", follow_redirects=True)
+    assert b"Login" in response.data
+
+
+def test_games_page_includes_make_a_meme(client):
+    response = client.get("/games")
+    assert b"timeskip/make.a.meme" in response.data
+
+
+def test_meme_create_lobby_and_join(client):
+    register(client, username="alice")
+    code = create_lobby_via_api(client)
+    assert len(code) == 6
+    client.post("/logout")
+
+    register(client, username="bob")
+    data = join_lobby_via_api(client, code)
+    assert data["ok"] is True
+    assert data["code"] == code
+
+    with flask_app.app_context():
+        lobby = MemeLobby.query.filter_by(code=code).first()
+        assert len(lobby.players) == 2
+
+
+def test_meme_join_invalid_code(client):
+    register(client, username="alice")
+    data = join_lobby_via_api(client, "000000")
+    assert data["ok"] is False
+    assert data["error"] == "not_found"
+
+
+def test_meme_join_full_lobby(client):
+    register(client, username="alice")
+    code = create_lobby_via_api(client, max_players=1)
+    client.post("/logout")
+
+    register(client, username="bob")
+    data = join_lobby_via_api(client, code)
+    assert data["ok"] is False
+    assert data["error"] == "full"
+
+
+def test_meme_lobby_page_requires_membership(client):
+    register(client, username="alice")
+    code = create_lobby_via_api(client)
+    client.post("/logout")
+
+    register(client, username="stranger")
+    response = client.get(f"/make-a-meme/{code}")
+    assert response.status_code == 403
+
+
+def test_meme_start_requires_leader(client):
+    register(client, username="alice")
+    code = create_lobby_via_api(client)
+    with flask_app.app_context():
+        lobby_id = MemeLobby.query.filter_by(code=code).first().id
+    client.post("/logout")
+
+    register(client, username="bob")
+    join_lobby_via_api(client, code)
+    response = client.post(f"/api/meme/lobby/{lobby_id}/start", json={"confirmed_responsibility": True})
+    assert response.status_code == 403
+
+
+def test_meme_start_requires_responsibility_confirmation(client):
+    register(client, username="alice")
+    code = create_lobby_via_api(client)
+    create_meme_template()
+    with flask_app.app_context():
+        lobby_id = MemeLobby.query.filter_by(code=code).first().id
+
+    response = client.post(f"/api/meme/lobby/{lobby_id}/start", json={"confirmed_responsibility": False})
+    data = response.get_json()
+    assert data["ok"] is False
+    assert data["error"] == "responsibility_not_confirmed"
+
+
+def test_meme_start_requires_templates(client):
+    register(client, username="alice")
+    code = create_lobby_via_api(client)
+    with flask_app.app_context():
+        lobby_id = MemeLobby.query.filter_by(code=code).first().id
+
+    data = start_lobby_via_api(client, lobby_id)
+    assert data["ok"] is False
+    assert data["error"] == "no_templates"
+
+
+def test_meme_start_assigns_templates_and_transitions_to_round(client):
+    register(client, username="alice")
+    code = create_lobby_via_api(client)
+    create_meme_template()
+    with flask_app.app_context():
+        lobby_id = MemeLobby.query.filter_by(code=code).first().id
+
+    data = start_lobby_via_api(client, lobby_id)
+    assert data["ok"] is True
+
+    state = client.get(f"/api/meme/lobby/{lobby_id}/state").get_json()
+    assert state["status"] == "round"
+    assert state["round_number"] == 1
+    assert state["template"]["id"] is not None
+    assert state["submitted"] is False
+
+
+def test_meme_next_template_costs_points(client):
+    register(client, username="alice")
+    user = User.query.filter_by(username="alice").first()
+    user.total_score = 1000
+    db.session.commit()
+
+    code = create_lobby_via_api(client)
+    create_meme_template()
+    create_meme_template()
+    with flask_app.app_context():
+        lobby_id = MemeLobby.query.filter_by(code=code).first().id
+    start_lobby_via_api(client, lobby_id)
+
+    response = client.post(f"/api/meme/lobby/{lobby_id}/next-template")
+    data = response.get_json()
+    assert data["ok"] is True
+    assert data["total_score"] == 900  # 1000 - MEME_DEFAULT_TEMPLATE_COST (100)
+
+
+def test_meme_next_template_insufficient_funds(client):
+    register(client, username="alice")
+    code = create_lobby_via_api(client)
+    create_meme_template()
+    with flask_app.app_context():
+        lobby_id = MemeLobby.query.filter_by(code=code).first().id
+    start_lobby_via_api(client, lobby_id)
+
+    response = client.post(f"/api/meme/lobby/{lobby_id}/next-template")
+    data = response.get_json()
+    assert data["ok"] is False
+    assert data["error"] == "insufficient_funds"
+
+
+def test_meme_submit_creates_creation(client):
+    register(client, username="alice")
+    code = create_lobby_via_api(client)
+    create_meme_template()
+    with flask_app.app_context():
+        lobby_id = MemeLobby.query.filter_by(code=code).first().id
+    start_lobby_via_api(client, lobby_id)
+
+    response = client.post(
+        f"/api/meme/lobby/{lobby_id}/submit",
+        data={"photo": (io.BytesIO(b"fake meme bytes"), "meme.png")},
+        content_type="multipart/form-data",
+    )
+    assert response.get_json()["ok"] is True
+
+    with flask_app.app_context():
+        assert MemeCreation.query.filter_by(lobby_id=lobby_id, round_number=1).count() == 1
+
+    state = client.get(f"/api/meme/lobby/{lobby_id}/state").get_json()
+    assert state["submitted"] is True
+
+
+def test_meme_round_auto_transitions_to_voting_after_time(client):
+    from datetime import datetime, timedelta, timezone
+
+    register(client, username="alice")
+    code = create_lobby_via_api(client, round_seconds=20)
+    create_meme_template()
+    with flask_app.app_context():
+        lobby_id = MemeLobby.query.filter_by(code=code).first().id
+    start_lobby_via_api(client, lobby_id)
+
+    lobby = db.session.get(MemeLobby, lobby_id)
+    lobby.round_started_at = datetime.now(timezone.utc) - timedelta(seconds=21)
+    db.session.commit()
+
+    state = client.get(f"/api/meme/lobby/{lobby_id}/state").get_json()
+    assert state["status"] in ("voting", "results")  # no creations submitted -> skips straight to results
+
+
+def test_meme_vote_and_results_ranking(client):
+    from datetime import datetime, timedelta, timezone
+
+    register(client, username="alice", password="secret123")
+    code = create_lobby_via_api(client, round_seconds=20)
+    create_meme_template()
+    client.post("/logout")
+
+    register(client, username="bob", password="secret123")
+    join_lobby_via_api(client, code)
+    client.post("/logout")
+
+    register(client, username="carol", password="secret123")
+    join_lobby_via_api(client, code)
+    client.post("/logout")
+
+    client.post("/login", data={"username": "alice", "password": "secret123"})
+    with flask_app.app_context():
+        lobby_id = MemeLobby.query.filter_by(code=code).first().id
+    start_lobby_via_api(client, lobby_id)
+    client.post(
+        f"/api/meme/lobby/{lobby_id}/submit",
+        data={"photo": (io.BytesIO(b"alice meme"), "a.png")},
+        content_type="multipart/form-data",
+    )
+    client.post("/logout")
+
+    client.post("/login", data={"username": "bob", "password": "secret123"})
+    client.post(
+        f"/api/meme/lobby/{lobby_id}/submit",
+        data={"photo": (io.BytesIO(b"bob meme"), "b.png")},
+        content_type="multipart/form-data",
+    )
+
+    lobby = db.session.get(MemeLobby, lobby_id)
+    lobby.round_started_at = datetime.now(timezone.utc) - timedelta(seconds=21)
+    db.session.commit()
+
+    state = client.get(f"/api/meme/lobby/{lobby_id}/state").get_json()
+    assert state["status"] == "voting"
+    assert state["voting_total"] == 2
+    first_creation_id = state["current_creation"]["id"]
+
+    client.post(
+        f"/api/meme/lobby/{lobby_id}/vote",
+        json={"creation_id": first_creation_id, "value": True},
+    )
+    client.post("/logout")
+
+    client.post("/login", data={"username": "carol", "password": "secret123"})
+    client.post(
+        f"/api/meme/lobby/{lobby_id}/vote",
+        json={"creation_id": first_creation_id, "value": True},
+    )
+
+    voting_lobby = db.session.get(MemeLobby, lobby_id)
+    voting_lobby.voting_started_at = datetime.now(timezone.utc) - timedelta(seconds=100)
+    db.session.commit()
+
+    state = client.get(f"/api/meme/lobby/{lobby_id}/state").get_json()
+    assert state["status"] == "results"
+    assert state["results"][0]["score"] == 2
+    assert state["results"][0]["place"] == 1
+
+
+def test_meme_results_awards_points_to_top_two(client):
+    import app as app_module
+    from datetime import datetime, timedelta, timezone
+
+    register(client, username="alice", password="secret123")
+    code = create_lobby_via_api(client, round_seconds=20)
+    create_meme_template()
+    client.post("/logout")
+
+    register(client, username="bob", password="secret123")
+    join_lobby_via_api(client, code)
+    client.post("/logout")
+
+    register(client, username="carol", password="secret123")
+    join_lobby_via_api(client, code)
+    client.post("/logout")
+
+    client.post("/login", data={"username": "alice", "password": "secret123"})
+    with flask_app.app_context():
+        lobby_id = MemeLobby.query.filter_by(code=code).first().id
+    # backdate alice's account so the new-account bonus doesn't confound this
+    # test -- it's covered separately by test_meme_new_account_bonus_applied
+    alice = User.query.filter_by(username="alice").first()
+    alice.created_at = datetime.now(timezone.utc) - timedelta(days=app_module.MEME_NEW_ACCOUNT_WINDOW_DAYS + 1)
+    db.session.commit()
+
+    start_lobby_via_api(client, lobby_id)
+    client.post(
+        f"/api/meme/lobby/{lobby_id}/submit",
+        data={"photo": (io.BytesIO(b"alice meme"), "a.png")},
+        content_type="multipart/form-data",
+    )
+
+    lobby = db.session.get(MemeLobby, lobby_id)
+    lobby.round_started_at = datetime.now(timezone.utc) - timedelta(seconds=21)
+    db.session.commit()
+    client.get(f"/api/meme/lobby/{lobby_id}/state")  # round -> voting
+
+    lobby = db.session.get(MemeLobby, lobby_id)
+    lobby.voting_started_at = datetime.now(timezone.utc) - timedelta(seconds=200)
+    db.session.commit()
+    client.get(f"/api/meme/lobby/{lobby_id}/state")  # voting -> results, triggers award_meme_results
+
+    alice = User.query.filter_by(username="alice").first()
+    assert alice.total_score == app_module.MEME_PLACEMENT_POINTS[1]
+
+
+def test_meme_results_skips_points_for_two_or_fewer_players(client):
+    from datetime import datetime, timedelta, timezone
+
+    register(client, username="alice", password="secret123")
+    code = create_lobby_via_api(client, round_seconds=20)
+    create_meme_template()
+    client.post("/logout")
+
+    register(client, username="bob", password="secret123")
+    join_lobby_via_api(client, code)
+    client.post("/logout")
+
+    client.post("/login", data={"username": "alice", "password": "secret123"})
+    with flask_app.app_context():
+        lobby_id = MemeLobby.query.filter_by(code=code).first().id
+    start_lobby_via_api(client, lobby_id)
+    client.post(
+        f"/api/meme/lobby/{lobby_id}/submit",
+        data={"photo": (io.BytesIO(b"alice meme"), "a.png")},
+        content_type="multipart/form-data",
+    )
+
+    lobby = db.session.get(MemeLobby, lobby_id)
+    lobby.round_started_at = datetime.now(timezone.utc) - timedelta(seconds=21)
+    db.session.commit()
+    client.get(f"/api/meme/lobby/{lobby_id}/state")  # round -> voting
+
+    lobby = db.session.get(MemeLobby, lobby_id)
+    lobby.voting_started_at = datetime.now(timezone.utc) - timedelta(seconds=200)
+    db.session.commit()
+    state = client.get(f"/api/meme/lobby/{lobby_id}/state").get_json()  # voting -> results
+    assert state["status"] == "results"
+
+    alice = User.query.filter_by(username="alice").first()
+    assert alice.total_score == 0  # only 2 players -> no placement points awarded
+
+
+def test_meme_new_account_bonus_applied(client):
+    import app as app_module
+    from datetime import datetime, timedelta, timezone
+
+    register(client, username="alice", password="secret123")
+    code = create_lobby_via_api(client, round_seconds=20)
+    create_meme_template()
+    client.post("/logout")
+
+    register(client, username="bob", password="secret123")
+    join_lobby_via_api(client, code)
+    client.post("/logout")
+
+    register(client, username="carol", password="secret123")
+    join_lobby_via_api(client, code)
+    client.post("/logout")
+
+    client.post("/login", data={"username": "alice", "password": "secret123"})
+    with flask_app.app_context():
+        lobby_id = MemeLobby.query.filter_by(code=code).first().id
+    start_lobby_via_api(client, lobby_id)
+    client.post(
+        f"/api/meme/lobby/{lobby_id}/submit",
+        data={"photo": (io.BytesIO(b"alice meme"), "a.png")},
+        content_type="multipart/form-data",
+    )
+
+    lobby = db.session.get(MemeLobby, lobby_id)
+    lobby.round_started_at = datetime.now(timezone.utc) - timedelta(seconds=21)
+    db.session.commit()
+    client.get(f"/api/meme/lobby/{lobby_id}/state")  # round -> voting
+
+    lobby = db.session.get(MemeLobby, lobby_id)
+    lobby.voting_started_at = datetime.now(timezone.utc) - timedelta(seconds=200)
+    db.session.commit()
+    client.get(f"/api/meme/lobby/{lobby_id}/state")  # voting -> results
+
+    alice = User.query.filter_by(username="alice").first()
+    assert alice.total_score == app_module.MEME_PLACEMENT_POINTS[1] + app_module.MEME_NEW_ACCOUNT_BONUS
+
+
+def test_meme_rematch_flow(client):
+    from datetime import datetime, timedelta, timezone
+
+    register(client, username="alice", password="secret123")
+    code = create_lobby_via_api(client, round_seconds=20)
+    create_meme_template()
+    client.post("/logout")
+
+    register(client, username="bob", password="secret123")
+    join_lobby_via_api(client, code)
+    client.post("/logout")
+
+    register(client, username="carol", password="secret123")
+    join_lobby_via_api(client, code)
+
+    client.post("/login", data={"username": "alice", "password": "secret123"})
+    with flask_app.app_context():
+        lobby_id = MemeLobby.query.filter_by(code=code).first().id
+    start_lobby_via_api(client, lobby_id)
+
+    lobby = db.session.get(MemeLobby, lobby_id)
+    lobby.round_started_at = datetime.now(timezone.utc) - timedelta(seconds=21)
+    lobby.voting_started_at = datetime.now(timezone.utc) - timedelta(seconds=200)
+    db.session.commit()
+    client.get(f"/api/meme/lobby/{lobby_id}/state")
+
+    rematch_response = client.post(f"/api/meme/lobby/{lobby_id}/rematch-vote", json={"want": True})
+    rematch_data = rematch_response.get_json()
+    assert rematch_data["ok"] is True
+    assert rematch_data["wants_rematch_count"] == 1
+
+    start_response = client.post(f"/api/meme/lobby/{lobby_id}/rematch-start")
+    assert start_response.get_json()["ok"] is True
+
+    lobby = db.session.get(MemeLobby, lobby_id)
+    assert lobby.round_number == 2
+    assert lobby.status == "round"
+
+
+def test_admin_can_upload_and_delete_meme_template(client):
+    register(client, username="boss")
+    make_admin("boss")
+
+    response = client.post(
+        "/admin/meme-templates",
+        data={"templates": (io.BytesIO(b"fake template bytes"), "tpl.png")},
+        content_type="multipart/form-data",
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    with flask_app.app_context():
+        assert MemeTemplate.query.count() == 1
+        template_id = MemeTemplate.query.first().id
+
+    delete_response = client.post(f"/admin/meme-templates/{template_id}/delete", follow_redirects=True)
+    assert delete_response.status_code == 200
+    with flask_app.app_context():
+        assert MemeTemplate.query.count() == 0
+
+
+def test_admin_meme_template_upload_requires_admin(client):
+    register(client, username="regular")
+    response = client.post(
+        "/admin/meme-templates",
+        data={"templates": (io.BytesIO(b"fake template bytes"), "tpl.png")},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 403

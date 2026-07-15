@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}make.a.meme - timeskip{% endblock %}
+{% block content %}
+    <h1>timeskip/make.a.meme</h1>
+    <p class="upload-storage-note">Erstelle mit Freunden gemeinsam Memes und stimmt am Ende über die besten ab. Die ersten beiden Plätze bekommen Punkte &mdash; neue Accounts bekommen bei einer Top-3-Platzierung sogar einen extra Bonus!</p>
+
+    <div class="meme-start-section">
+        <h2>Mit Code beitreten</h2>
+        <form id="memeJoinForm" class="form meme-join-form">
+            <input type="text" id="memeJoinCode" inputmode="numeric" maxlength="6" placeholder="6-stelliger Code" autocomplete="off" required>
+            <button type="submit">Beitreten</button>
+        </form>
+        <p class="meme-start-status" id="memeJoinStatus"></p>
+    </div>
+
+    <div class="meme-start-section">
+        <h2>Lobby erstellen</h2>
+        <form id="memeCreateForm" class="form">
+            <label for="memeMaxPlayers">Anzahl Spieler (1-{{ max_players }})</label>
+            <input type="number" id="memeMaxPlayers" min="{{ min_players }}" max="{{ max_players }}" value="{{ max_players }}">
+
+            <label for="memeRoundSeconds">Rundenzeit in Sekunden ({{ min_seconds }}-{{ max_seconds }})</label>
+            <input type="number" id="memeRoundSeconds" min="{{ min_seconds }}" max="{{ max_seconds }}" value="{{ default_seconds }}">
+
+            <button type="submit">LOBBY ERSTELLEN</button>
+        </form>
+        <p class="meme-start-status" id="memeCreateStatus"></p>
+    </div>
+
+    <script>
+        const joinForm = document.getElementById("memeJoinForm");
+        const joinStatus = document.getElementById("memeJoinStatus");
+        joinForm.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            const code = document.getElementById("memeJoinCode").value.trim();
+            if (!code) return;
+            joinStatus.textContent = "Trete bei...";
+            const res = await fetch("{{ url_for('api_meme_join') }}", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ code }),
+            });
+            const data = await res.json();
+            if (data.ok) {
+                window.location.href = `/make-a-meme/${data.code}`;
+            } else if (data.error === "not_found") {
+                joinStatus.textContent = "Diesen Code gibt es nicht.";
+            } else if (data.error === "full") {
+                joinStatus.textContent = "Diese Lobby ist voll.";
+            } else if (data.error === "already_started") {
+                joinStatus.textContent = "Diese Lobby läuft schon.";
+            } else {
+                joinStatus.textContent = "Das hat nicht geklappt.";
+            }
+        });
+
+        const createForm = document.getElementById("memeCreateForm");
+        const createStatus = document.getElementById("memeCreateStatus");
+        createForm.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            const max_players = parseInt(document.getElementById("memeMaxPlayers").value, 10);
+            const round_seconds = parseInt(document.getElementById("memeRoundSeconds").value, 10);
+            createStatus.textContent = "Erstelle Lobby...";
+            const res = await fetch("{{ url_for('api_meme_create_lobby') }}", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ max_players, round_seconds }),
+            });
+            const data = await res.json();
+            if (data.ok) {
+                window.location.href = `/make-a-meme/${data.code}`;
+            } else {
+                createStatus.textContent = "Das hat nicht geklappt.";
+            }
+        });
+    </script>
+{% endblock %}

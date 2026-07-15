@@ -55,6 +55,7 @@
         const IS_LOGGED_IN = {{ 'true' if user else 'false' }};
         const GAME_KEY = "flappy.bird";
         const UPSELL_SCORE_THRESHOLD = 15;
+        const PRACTICE_MODE = new URLSearchParams(window.location.search).get("practice") === "1";
         let sessionLoggedIn = IS_LOGGED_IN;
         let upsellShown = false;
 
@@ -100,9 +101,9 @@
             score += delta;
             scoreEl.textContent = score;
 
-            if (sessionLoggedIn) {
+            if (sessionLoggedIn && !PRACTICE_MODE) {
                 submitScore(delta);
-            } else if (!upsellShown && score >= UPSELL_SCORE_THRESHOLD) {
+            } else if (!sessionLoggedIn && !upsellShown && score >= UPSELL_SCORE_THRESHOLD) {
                 upsellShown = true;
                 showGuestUpsell(score);
             }
