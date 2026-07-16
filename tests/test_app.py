@@ -11,6 +11,7 @@ from app import app as flask_app, db
 from models import (
     User, Post, PostPhoto, PostLike, PostComment, PostReport, Sound, Conversation, Message,
     MemeTemplate, MemeLobby, MemeLobbyPlayer, MemeCreation, MemeVote,
+    StudioProject, StudioBlock,
 )
 
 
@@ -2614,3 +2615,143 @@ def test_r2_cors_skipped_when_r2_not_in_use(client, monkeypatch):
 
     app_module.ensure_r2_cors_configured()
     fake_r2.get_bucket_cors.assert_not_called()
+
+
+def create_studio_project(client, name="Testspiel"):
+    return client.post("/studio/create", data={"name": name}, follow_redirects=True)
+
+
+def test_studio_requires_login(client):
+    response = client.get("/studio", follow_redirects=False)
+    assert response.status_code == 302
+    assert "/login" in response.headers["Location"]
+
+
+def test_studio_create_project_adds_default_block(client):
+    register(client)
+    create_studio_project(client)
+
+    project = StudioProject.query.filter_by(name="Testspiel").first()
+    assert project is not None
+    assert project.published is False
+    assert len(project.blocks) == 1
+    assert project.blocks[0].name == "Part1"
+    assert project.blocks[0].is_default is True
+
+
+def test_studio_editor_forbidden_for_non_owner(client):
+    register(client, username="alice")
+    create_studio_project(client)
+    project = StudioProject.query.filter_by(name="Testspiel").first()
+
+    client.post("/logout")
+    register(client, username="bob")
+    response = client.get(f"/studio/{project.id}")
+    assert response.status_code == 403
+
+
+def test_studio_api_create_block_assigns_unique_name(client):
+    register(client)
+    create_studio_project(client)
+    project = StudioProject.query.filter_by(name="Testspiel").first()
+
+    res1 = client.post(f"/api/studio/{project.id}/block", json={"name": "Block"})
+    res2 = client.post(f"/api/studio/{project.id}/block", json={"name": "Block"})
+    assert res1.get_json()["block"]["name"] == "Block"
+    assert res2.get_json()["block"]["name"] == "Block2"
+
+
+def test_studio_default_block_cannot_be_renamed_or_deleted(client):
+    register(client)
+    create_studio_project(client)
+    project = StudioProject.query.filter_by(name="Testspiel").first()
+    default_block = project.blocks[0]
+
+    rename_res = client.post(
+        f"/api/studio/{project.id}/block/{default_block.id}", json={"name": "Renamed"}
+    )
+    assert rename_res.status_code == 400
+    assert rename_res.get_json()["error"] == "default_block_locked"
+
+    delete_res = client.post(f"/api/studio/{project.id}/block/{default_block.id}/delete")
+    assert delete_res.status_code == 400
+    assert delete_res.get_json()["error"] == "default_block_locked"
+
+
+def test_studio_block_name_collision_rejected(client):
+    register(client)
+    create_studio_project(client)
+    project = StudioProject.query.filter_by(name="Testspiel").first()
+    new_block = client.post(f"/api/studio/{project.id}/block", json={"name": "Extra"}).get_json()["block"]
+
+    res = client.post(f"/api/studio/{project.id}/block/{new_block['id']}", json={"name": "Part1"})
+    assert res.status_code == 400
+    assert res.get_json()["error"] == "name_taken"
+
+
+def test_studio_play_page_hidden_until_published(client):
+    register(client, username="alice")
+    create_studio_project(client)
+    project = StudioProject.query.filter_by(name="Testspiel").first()
+
+    client.post("/logout")
+    register(client, username="bob")
+    response = client.get(f"/studio/play/{project.id}")
+    assert response.status_code == 404
+
+    client.post("/logout")
+    client.post("/login", data={"username": "alice", "password": "secret123"})
+    client.post(f"/studio/{project.id}/publish")
+
+    client.post("/logout")
+    register(client, username="carol")
+    response = client.get(f"/studio/play/{project.id}")
+    assert response.status_code == 200
+
+
+def test_studio_published_game_listed_on_games_page(client):
+    register(client)
+    create_studio_project(client)
+    project = StudioProject.query.filter_by(name="Testspiel").first()
+    client.post(f"/studio/{project.id}/publish")
+
+    response = client.get("/games")
+    assert b"Testspiel" in response.data
+
+
+def test_studio_award_requires_login(client):
+    register(client)
+    create_studio_project(client)
+    project = StudioProject.query.filter_by(name="Testspiel").first()
+    client.post("/logout")
+
+    response = client.post(f"/api/studio/{project.id}/award", json={"amount": 5})
+    assert response.status_code == 401
+
+
+def test_studio_award_credits_points_on_published_game(client):
+    register(client, username="alice")
+    create_studio_project(client)
+    project = StudioProject.query.filter_by(name="Testspiel").first()
+    client.post(f"/studio/{project.id}/publish")
+
+    client.post("/logout")
+    register(client, username="bob")
+    before = User.query.filter_by(username="bob").first().total_score
+
+    response = client.post(f"/api/studio/{project.id}/award", json={"amount": 25})
+    assert response.status_code == 200
+    after = User.query.filter_by(username="bob").first().total_score
+    assert after == before + 25
+
+
+def test_studio_award_rejects_absurd_amount(client):
+    register(client)
+    create_studio_project(client)
+    project = StudioProject.query.filter_by(name="Testspiel").first()
+    client.post(f"/studio/{project.id}/publish")
+
+    response = client.post(f"/api/studio/{project.id}/award", json={"amount": 999999})
+    assert response.status_code == 400
+
+

@@ -19,6 +19,7 @@ from models import (
     db, User, Post, PostPhoto, Pixel, PostLike, Subscription, PostComment, RedeemedCode,
     GamePlayCount, Sound, UserCreatedCode, Conversation, ConversationMember, Message,
     PostReport, CoinflipDeposit, MemeTemplate, MemeLobby, MemeLobbyPlayer, MemeCreation, MemeVote,
+    StudioProject, StudioBlock,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -789,7 +790,8 @@ def leaderboard():
 @app.route("/games")
 def games_page():
     user = current_user()
-    return render_template("games.html", user=user, games=GAMES)
+    studio_games = StudioProject.query.filter_by(published=True).order_by(StudioProject.updated_at.desc()).all()
+    return render_template("games.html", user=user, games=GAMES, studio_games=studio_games)
 
 
 @app.route("/camera")
@@ -798,6 +800,229 @@ def camera_page():
     if user is None:
         return redirect(url_for("login"))
     return render_template("camera.html", user=user, max_photos=MAX_PHOTOS_PER_POST)
+
+
+STUDIO_DEFAULT_BLOCK_NAME = "Part1"
+STUDIO_MAX_BLOCKS_PER_PROJECT = 40
+STUDIO_MAX_PROJECTS_PER_USER = 20
+
+
+def serialize_studio_block(block):
+    return {
+        "id": block.id,
+        "name": block.name,
+        "is_default": block.is_default,
+        "x": block.x,
+        "y": block.y,
+        "width": block.width,
+        "height": block.height,
+        "color": block.color,
+        "script_code": block.script_code or "",
+    }
+
+
+@app.route("/studio")
+def studio_projects_page():
+    user = current_user()
+    if user is None:
+        return redirect(url_for("login"))
+    projects = StudioProject.query.filter_by(owner_id=user.id).order_by(StudioProject.updated_at.desc()).all()
+    return render_template("studio_projects.html", user=user, projects=projects)
+
+
+@app.route("/studio/create", methods=["POST"])
+def studio_create_project():
+    user = current_user()
+    if user is None:
+        return redirect(url_for("login"))
+
+    name = (request.form.get("name") or "").strip()[:100]
+    if not name:
+        flash("Bitte einen Projektnamen eingeben.")
+        return redirect(url_for("studio_projects_page"))
+    if StudioProject.query.filter_by(owner_id=user.id).count() >= STUDIO_MAX_PROJECTS_PER_USER:
+        flash("Maximale Anzahl an Projekten erreicht.")
+        return redirect(url_for("studio_projects_page"))
+
+    project = StudioProject(owner_id=user.id, name=name)
+    db.session.add(project)
+    db.session.flush()
+    db.session.add(StudioBlock(
+        project_id=project.id, name=STUDIO_DEFAULT_BLOCK_NAME, is_default=True,
+        x=80, y=200, width=160, height=40, color="#3ea6ff",
+    ))
+    db.session.commit()
+    return redirect(url_for("studio_editor_page", project_id=project.id))
+
+
+@app.route("/studio/<int:project_id>/delete", methods=["POST"])
+def studio_delete_project(project_id):
+    user = current_user()
+    if user is None:
+        return redirect(url_for("login"))
+    project = db.get_or_404(StudioProject, project_id)
+    if project.owner_id != user.id:
+        abort(403)
+    db.session.delete(project)
+    db.session.commit()
+    return redirect(url_for("studio_projects_page"))
+
+
+@app.route("/studio/<int:project_id>/publish", methods=["POST"])
+def studio_publish_project(project_id):
+    user = current_user()
+    if user is None:
+        return redirect(url_for("login"))
+    project = db.get_or_404(StudioProject, project_id)
+    if project.owner_id != user.id:
+        abort(403)
+    project.published = not project.published
+    db.session.commit()
+    return redirect(url_for("studio_editor_page", project_id=project.id))
+
+
+@app.route("/studio/<int:project_id>")
+def studio_editor_page(project_id):
+    user = current_user()
+    if user is None:
+        return redirect(url_for("login"))
+    project = db.get_or_404(StudioProject, project_id)
+    if project.owner_id != user.id:
+        abort(403)
+    return render_template("studio_editor.html", user=user, project=project)
+
+
+@app.route("/api/studio/<int:project_id>/state")
+def api_studio_state(project_id):
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    project = db.get_or_404(StudioProject, project_id)
+    if project.owner_id != user.id:
+        return jsonify({"ok": False, "error": "forbidden"}), 403
+    return jsonify({"ok": True, "blocks": [serialize_studio_block(b) for b in project.blocks]})
+
+
+@app.route("/api/studio/<int:project_id>/block", methods=["POST"])
+def api_studio_create_block(project_id):
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    project = db.get_or_404(StudioProject, project_id)
+    if project.owner_id != user.id:
+        return jsonify({"ok": False, "error": "forbidden"}), 403
+    if len(project.blocks) >= STUDIO_MAX_BLOCKS_PER_PROJECT:
+        return jsonify({"ok": False, "error": "too_many_blocks"}), 400
+
+    data = request.get_json(silent=True) or {}
+    base_name = (data.get("name") or "Block").strip()[:50] or "Block"
+    name = base_name
+    suffix = 2
+    existing_names = {b.name for b in project.blocks}
+    while name in existing_names:
+        name = f"{base_name}{suffix}"
+        suffix += 1
+
+    block = StudioBlock(project_id=project.id, name=name, x=40, y=40, width=140, height=40, color="#3ea6ff")
+    db.session.add(block)
+    project.updated_at = datetime.now(timezone.utc)
+    db.session.commit()
+    return jsonify({"ok": True, "block": serialize_studio_block(block)})
+
+
+@app.route("/api/studio/<int:project_id>/block/<int:block_id>", methods=["POST"])
+def api_studio_update_block(project_id, block_id):
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    project = db.get_or_404(StudioProject, project_id)
+    if project.owner_id != user.id:
+        return jsonify({"ok": False, "error": "forbidden"}), 403
+    block = StudioBlock.query.filter_by(id=block_id, project_id=project.id).first_or_404()
+
+    data = request.get_json(silent=True) or {}
+
+    if "name" in data:
+        new_name = (data.get("name") or "").strip()[:50]
+        if not new_name:
+            return jsonify({"ok": False, "error": "invalid_name"}), 400
+        if block.is_default and new_name != block.name:
+            return jsonify({"ok": False, "error": "default_block_locked"}), 400
+        clash = StudioBlock.query.filter(
+            StudioBlock.project_id == project.id, StudioBlock.name == new_name, StudioBlock.id != block.id
+        ).first()
+        if clash is not None:
+            return jsonify({"ok": False, "error": "name_taken"}), 400
+        block.name = new_name
+
+    if "color" in data:
+        color = (data.get("color") or "").strip()
+        if re.fullmatch(r"#[0-9a-fA-F]{6}", color):
+            block.color = color
+
+    for field in ("x", "y", "width", "height"):
+        if field in data and isinstance(data[field], (int, float)):
+            value = max(0, min(4000, int(data[field])))
+            if field in ("width", "height"):
+                value = max(10, value)
+            setattr(block, field, value)
+
+    if "script_code" in data:
+        code = data.get("script_code") or ""
+        if len(code) > 20000:
+            return jsonify({"ok": False, "error": "script_too_long"}), 400
+        block.script_code = code
+
+    project.updated_at = datetime.now(timezone.utc)
+    db.session.commit()
+    return jsonify({"ok": True, "block": serialize_studio_block(block)})
+
+
+@app.route("/api/studio/<int:project_id>/block/<int:block_id>/delete", methods=["POST"])
+def api_studio_delete_block(project_id, block_id):
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    project = db.get_or_404(StudioProject, project_id)
+    if project.owner_id != user.id:
+        return jsonify({"ok": False, "error": "forbidden"}), 403
+    block = StudioBlock.query.filter_by(id=block_id, project_id=project.id).first_or_404()
+    if block.is_default:
+        return jsonify({"ok": False, "error": "default_block_locked"}), 400
+    db.session.delete(block)
+    project.updated_at = datetime.now(timezone.utc)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/studio/play/<int:project_id>")
+def studio_play_page(project_id):
+    user = current_user()
+    project = db.get_or_404(StudioProject, project_id)
+    is_owner = user is not None and user.id == project.owner_id
+    if not project.published and not is_owner:
+        abort(404)
+    blocks = [serialize_studio_block(b) for b in project.blocks]
+    return render_template("studio_play.html", user=user, project=project, blocks_json=blocks)
+
+
+@app.route("/api/studio/<int:project_id>/award", methods=["POST"])
+def api_studio_award(project_id):
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    project = db.get_or_404(StudioProject, project_id)
+    if not project.published and project.owner_id != user.id:
+        return jsonify({"ok": False, "error": "not_published"}), 403
+
+    data = request.get_json(silent=True) or {}
+    amount = data.get("amount")
+    if not isinstance(amount, int) or amount <= 0 or amount > 5000:
+        return jsonify({"ok": False, "error": "invalid_amount"}), 400
+
+    adjust_points(user, amount)
+    db.session.commit()
+    return jsonify({"ok": True, "total_score": user.total_score})
 
 
 @app.route("/api/register", methods=["POST"])

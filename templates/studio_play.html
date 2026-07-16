@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}{{ project.name }} - timeskip studio{% endblock %}
+{% block body_class %}studio-fullscreen game-fullscreen{% endblock %}
+{% block content %}
+    <div class="studio-play-page" id="studioPlayPage"
+         data-project-id="{{ project.id }}"
+         data-logged-in="{{ '1' if user else '0' }}"
+         data-blocks='{{ blocks_json|tojson }}'>
+        <div class="studio-play-hud">
+            <a class="studio-play-back" href="{{ url_for('games_page') }}">&larr;</a>
+            <span class="studio-play-title">{{ project.name }}</span>
+            <span class="studio-play-coins">🪙 <span id="studioPlayCoins">0</span></span>
+        </div>
+        <canvas id="studioPlayCanvas"></canvas>
+        <div class="studio-play-touch-controls">
+            <div class="studio-play-touch-move">
+                <button type="button" id="studioTouchLeft">&#9664;</button>
+                <button type="button" id="studioTouchRight">&#9654;</button>
+            </div>
+            <button type="button" id="studioTouchJump">&#8963;</button>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/studio-dsl.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/studio-runtime.js') }}"></script>
+{% endblock %}

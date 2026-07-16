@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}{{ project.name }} - timeskip studio{% endblock %}
+{% block body_class %}studio-fullscreen{% endblock %}
+{% block content %}
+    <div class="studio-editor-page" id="studioEditorPage" data-project-id="{{ project.id }}">
+        <div class="studio-editor-topbar">
+            <a class="studio-editor-back" href="{{ url_for('studio_projects_page') }}">&larr; timeskip studio</a>
+            <span class="studio-editor-title">{{ project.name }}</span>
+            <div class="studio-editor-topbar-actions">
+                <a class="studio-editor-play-btn" href="{{ url_for('studio_play_page', project_id=project.id) }}" target="_blank">Testen</a>
+                <form action="{{ url_for('studio_publish_project', project_id=project.id) }}" method="post">
+                    <button type="submit" class="studio-editor-publish-btn {{ 'is-published' if project.published else '' }}">
+                        {{ 'Veröffentlicht ✓' if project.published else 'Veröffentlichen' }}
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div class="studio-editor-body">
+            <div class="studio-props-panel" id="studioPropsPanel">
+                <h3>Eigenschaften</h3>
+                <div id="studioPropsEmpty" class="studio-props-empty">Wähle einen Block aus.</div>
+                <div id="studioPropsForm" class="studio-props-form" style="display:none;">
+                    <label for="studioPropName">Name</label>
+                    <input type="text" id="studioPropName" maxlength="50">
+                    <label for="studioPropColor">Farbe</label>
+                    <input type="color" id="studioPropColor">
+                    <p class="studio-props-hint">Rechtsklick auf einen Block öffnet die Programmierung.</p>
+                </div>
+            </div>
+
+            <div class="studio-canvas-wrap">
+                <div class="studio-canvas" id="studioCanvas"></div>
+            </div>
+
+            <div class="studio-blocks-panel">
+                <div class="studio-blocks-panel-header">
+                    <h3>Blöcke</h3>
+                    <button type="button" id="studioNewBlockBtn" title="Neuer Block">+</button>
+                </div>
+                <ul class="studio-block-list" id="studioBlockList"></ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="studio-context-menu" id="studioContextMenu" style="display:none;">
+        <button type="button" id="studioContextProgramBtn">Programmierung</button>
+        <button type="button" id="studioContextDeleteBtn">Block löschen</button>
+    </div>
+
+    <div class="studio-code-panel" id="studioCodePanel" style="display:none;">
+        <div class="studio-code-panel-header" id="studioCodePanelHeader">
+            <span id="studioCodePanelTitle">Programmierung</span>
+            <button type="button" id="studioCodePanelClose">&times;</button>
+        </div>
+        <textarea id="studioCodeTextarea" class="studio-code-textarea" spellcheck="false"></textarea>
+        <div class="studio-code-panel-resize" id="studioCodePanelResize"></div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/studio-dsl.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/studio-editor.js') }}"></script>
+{% endblock %}

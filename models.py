@@ -273,3 +273,36 @@ class Message(db.Model):
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     viewed_at = db.Column(db.DateTime, nullable=True)
     sender = db.relationship("User", foreign_keys=[sender_id])
+
+
+class StudioProject(db.Model):
+    """A user-built 2D game from timeskip studio. Publishing makes it show
+    up as a normal game in the games list."""
+    id = db.Column(db.Integer, primary_key=True)
+    owner_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    name = db.Column(db.String(100), nullable=False)
+    published = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    owner = db.relationship("User")
+    blocks = db.relationship(
+        "StudioBlock", backref="project", lazy=True, cascade="all, delete-orphan",
+        order_by="StudioBlock.id",
+    )
+
+
+class StudioBlock(db.Model):
+    """A rectangular game object on a studio project's 2D canvas. x/y/width
+    /height are its design-time (spawn) placement; script_code holds its
+    attached DSL program, written via the block's own "Programmierung" panel."""
+    id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, db.ForeignKey("studio_project.id"), nullable=False)
+    name = db.Column(db.String(50), nullable=False)
+    is_default = db.Column(db.Boolean, nullable=False, default=False)
+    x = db.Column(db.Integer, nullable=False, default=40)
+    y = db.Column(db.Integer, nullable=False, default=40)
+    width = db.Column(db.Integer, nullable=False, default=140)
+    height = db.Column(db.Integer, nullable=False, default=40)
+    color = db.Column(db.String(20), nullable=False, default="#3ea6ff")
+    script_code = db.Column(db.Text, nullable=True)
+    __table_args__ = (db.UniqueConstraint("project_id", "name", name="uq_studioblock_project_name"),)

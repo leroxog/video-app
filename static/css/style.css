@@ -1431,6 +1431,14 @@ h1 {
         linear-gradient(135deg, #ff3b30 25%, #3ea6ff 25% 50%, #4caf50 50% 75%, #ffcc00 75%);
 }
 
+.studio-game-icon {
+    background:
+        radial-gradient(circle at 24px 16px, #0f0f0f 0 4px, transparent 5px),
+        linear-gradient(#0f0f0f, #0f0f0f) 22px 20px / 4px 12px no-repeat,
+        linear-gradient(#0f0f0f, #0f0f0f) 10px 36px / 28px 6px no-repeat,
+        var(--gradient-primary);
+}
+
 .tictactoe-page {
     max-width: 420px;
 }
@@ -4236,4 +4244,518 @@ a:active {
     text-align: center;
     color: #9fd3ff;
     font-size: 0.85rem;
+}
+
+/* timeskip studio -- stays on its own fixed dark "classic" palette
+   regardless of the site-wide light/dark theme, same as the bottom nav
+   and other immersive game screens. Colors below are intentionally
+   hardcoded rather than themed variables. */
+body.studio-fullscreen {
+    background: #0a0a0c;
+    color: #f1f1f1;
+}
+
+.studio-page {
+    max-width: 900px;
+}
+
+.studio-create-form {
+    display: flex;
+    gap: 0.6rem;
+    margin: 1rem 0 1.5rem;
+}
+
+.studio-create-form input {
+    flex: 1 1 auto;
+    padding: 0.6rem 0.8rem;
+    border-radius: 8px;
+    border: 1px solid #3c3c3c;
+    background: #1c1c1c;
+    color: #fff;
+}
+
+.studio-create-form button {
+    padding: 0.6rem 1.2rem;
+    border: none;
+    border-radius: 8px;
+    background: var(--gradient-primary);
+    color: #0f0f0f;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.studio-project-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.studio-project-card {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 0.8rem 1rem;
+    border-radius: 10px;
+    background: #1c1c1c;
+    border: 1px solid #2c2c2c;
+    flex-wrap: wrap;
+}
+
+.studio-project-card-name {
+    font-weight: 600;
+    color: #f1f1f1;
+    text-decoration: none;
+    margin-right: auto;
+}
+
+.studio-project-status {
+    font-size: 0.8rem;
+    color: #aaa;
+    padding: 0.2rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid #3c3c3c;
+}
+
+.studio-project-status.is-published {
+    color: #0f0f0f;
+    background: var(--gradient-primary);
+    border-color: transparent;
+}
+
+.studio-project-card-actions {
+    display: flex;
+    gap: 0.6rem;
+    align-items: center;
+}
+
+.studio-project-card-actions a {
+    color: #9fd3ff;
+    font-size: 0.9rem;
+}
+
+.studio-project-delete-btn {
+    background: none;
+    border: none;
+    color: #ff6b6b;
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 0;
+}
+
+.studio-empty-note {
+    color: #aaa;
+}
+
+/* --- Editor --- */
+.studio-editor-page {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 60px);
+}
+
+.studio-editor-topbar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.7rem 1rem;
+    background: #1c1c1c;
+    border-bottom: 1px solid #2c2c2c;
+    flex-wrap: wrap;
+}
+
+.studio-editor-back {
+    color: #9fd3ff;
+    text-decoration: none;
+    flex-shrink: 0;
+}
+
+.studio-editor-title {
+    font-weight: 600;
+    margin-right: auto;
+}
+
+.studio-editor-topbar-actions {
+    display: flex;
+    gap: 0.6rem;
+    align-items: center;
+}
+
+.studio-editor-play-btn {
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    border: 1px solid #3c3c3c;
+    color: #f1f1f1;
+    text-decoration: none;
+    font-size: 0.9rem;
+}
+
+.studio-editor-publish-btn {
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    border: none;
+    background: var(--gradient-primary);
+    color: #0f0f0f;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.studio-editor-publish-btn.is-published {
+    background: #2c2c2c;
+    color: #f1f1f1;
+}
+
+.studio-editor-body {
+    flex: 1 1 auto;
+    display: flex;
+    min-height: 0;
+}
+
+.studio-props-panel {
+    width: 220px;
+    flex-shrink: 0;
+    padding: 1rem;
+    background: #141416;
+    border-right: 1px solid #2c2c2c;
+    overflow-y: auto;
+}
+
+.studio-props-panel h3 {
+    margin-top: 0;
+    font-size: 0.95rem;
+    color: #aaa;
+}
+
+.studio-props-empty {
+    color: #666;
+    font-size: 0.9rem;
+}
+
+.studio-props-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.studio-props-form label {
+    font-size: 0.8rem;
+    color: #aaa;
+    margin-top: 0.4rem;
+}
+
+.studio-props-form input[type="text"] {
+    padding: 0.5rem;
+    border-radius: 6px;
+    border: 1px solid #3c3c3c;
+    background: #1c1c1c;
+    color: #fff;
+}
+
+.studio-props-form input[type="color"] {
+    width: 100%;
+    height: 36px;
+    border: 1px solid #3c3c3c;
+    border-radius: 6px;
+    background: #1c1c1c;
+    padding: 2px;
+}
+
+.studio-props-hint {
+    margin-top: 1rem;
+    font-size: 0.78rem;
+    color: #666;
+}
+
+.studio-canvas-wrap {
+    flex: 1 1 auto;
+    overflow: auto;
+    background:
+        linear-gradient(#1a1a1d 1px, transparent 1px) 0 0 / 24px 24px,
+        linear-gradient(90deg, #1a1a1d 1px, transparent 1px) 0 0 / 24px 24px,
+        #0f0f11;
+}
+
+.studio-canvas {
+    position: relative;
+    width: 2000px;
+    height: 1400px;
+}
+
+.studio-block {
+    position: absolute;
+    border: 2px solid transparent;
+    box-sizing: border-box;
+    cursor: grab;
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-start;
+    touch-action: none;
+}
+
+.studio-block.is-selected {
+    border-color: #fff;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.25);
+}
+
+.studio-block-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #0f0f0f;
+    background: rgba(255, 255, 255, 0.55);
+    padding: 1px 5px;
+    border-radius: 4px;
+    margin: 3px;
+    pointer-events: none;
+    white-space: nowrap;
+}
+
+.studio-block-resize-handle {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 14px;
+    height: 14px;
+    background: rgba(0, 0, 0, 0.5);
+    border-top-left-radius: 4px;
+    cursor: nwse-resize;
+    touch-action: none;
+}
+
+.studio-blocks-panel {
+    width: 220px;
+    flex-shrink: 0;
+    padding: 1rem;
+    background: #141416;
+    border-left: 1px solid #2c2c2c;
+    overflow-y: auto;
+}
+
+.studio-blocks-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.6rem;
+}
+
+.studio-blocks-panel-header h3 {
+    margin: 0;
+    font-size: 0.95rem;
+    color: #aaa;
+}
+
+#studioNewBlockBtn {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: none;
+    background: var(--gradient-primary);
+    color: #0f0f0f;
+    font-size: 1.1rem;
+    font-weight: 700;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.studio-block-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.studio-block-list-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.5rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: #ddd;
+}
+
+.studio-block-list-item:hover {
+    background: #1c1c1c;
+}
+
+.studio-block-list-item.is-selected {
+    background: #2c2c2c;
+    color: #fff;
+}
+
+.studio-block-list-swatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+
+.studio-context-menu {
+    position: fixed;
+    z-index: 500;
+    flex-direction: column;
+    background: #1c1c1c;
+    border: 1px solid #3c3c3c;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.studio-context-menu button {
+    background: none;
+    border: none;
+    color: #f1f1f1;
+    padding: 0.6rem 1rem;
+    text-align: left;
+    cursor: pointer;
+    font-size: 0.88rem;
+    white-space: nowrap;
+}
+
+.studio-context-menu button:hover {
+    background: #2c2c2c;
+}
+
+#studioContextDeleteBtn {
+    color: #ff6b6b;
+}
+
+.studio-code-panel {
+    position: fixed;
+    top: 15%;
+    left: 30%;
+    width: 420px;
+    height: 320px;
+    min-width: 260px;
+    min-height: 180px;
+    z-index: 600;
+    display: flex;
+    flex-direction: column;
+    background: #161618;
+    border: 1px solid #3c3c3c;
+    border-radius: 10px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+    overflow: hidden;
+}
+
+.studio-code-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 0.8rem;
+    background: #1c1c1c;
+    border-bottom: 1px solid #2c2c2c;
+    cursor: move;
+    font-size: 0.85rem;
+    font-weight: 600;
+    touch-action: none;
+}
+
+.studio-code-panel-header button {
+    background: none;
+    border: none;
+    color: #aaa;
+    font-size: 1.1rem;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.studio-code-textarea {
+    flex: 1 1 auto;
+    resize: none;
+    border: none;
+    outline: none;
+    background: #0f0f11;
+    color: #7ef9c0;
+    font-family: "Consolas", "Courier New", monospace;
+    font-size: 0.9rem;
+    padding: 0.7rem;
+    line-height: 1.5;
+}
+
+.studio-code-panel-resize {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 16px;
+    height: 16px;
+    cursor: nwse-resize;
+    background: linear-gradient(135deg, transparent 50%, #3c3c3c 50%);
+}
+
+/* --- Play (runtime) --- */
+.studio-play-page {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    background: #0f0f11;
+}
+
+.studio-play-hud {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 0.6rem 1rem;
+    background: #1c1c1c;
+    border-bottom: 1px solid #2c2c2c;
+    flex-shrink: 0;
+}
+
+.studio-play-back {
+    color: #f1f1f1;
+    text-decoration: none;
+    font-size: 1.1rem;
+}
+
+.studio-play-title {
+    font-weight: 600;
+    margin-right: auto;
+}
+
+.studio-play-coins {
+    font-weight: 600;
+    color: #ffcc00;
+}
+
+#studioPlayCanvas {
+    flex: 1 1 auto;
+    width: 100%;
+    display: block;
+    touch-action: none;
+    cursor: pointer;
+}
+
+.studio-play-touch-controls {
+    position: absolute;
+    bottom: 16px;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: space-between;
+    padding: 0 16px;
+    pointer-events: none;
+}
+
+.studio-play-touch-move,
+.studio-play-touch-controls button {
+    pointer-events: auto;
+}
+
+.studio-play-touch-move {
+    display: flex;
+    gap: 0.6rem;
+}
+
+.studio-play-touch-controls button {
+    width: 54px;
+    height: 54px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    font-size: 1.3rem;
+    -webkit-user-select: none;
+    user-select: none;
 }

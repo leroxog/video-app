@@ -14,4 +14,19 @@
             </a>
         {% endfor %}
     </div>
+
+    {% if studio_games %}
+        <h2>timeskip studio</h2>
+        <div class="games-grid">
+            {% for project in studio_games %}
+                <a class="place-label games-grid-card" href="{{ url_for('studio_play_page', project_id=project.id) }}">
+                    <div class="place-label-icon studio-game-icon"></div>
+                    <div>
+                        <div class="place-label-title">{{ project.name }}</div>
+                        <div class="place-label-sub">von {{ project.owner.username }}</div>
+                    </div>
+                </a>
+            {% endfor %}
+        </div>
+    {% endif %}
 {% endblock %}

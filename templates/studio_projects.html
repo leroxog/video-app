@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}timeskip studio{% endblock %}
+{% block body_class %}studio-fullscreen{% endblock %}
+{% block content %}
+    <div class="studio-page">
+        <h1>timeskip studio</h1>
+
+        <form action="{{ url_for('studio_create_project') }}" method="post" class="studio-create-form">
+            <input type="text" name="name" maxlength="100" placeholder="Projektname" required>
+            <button type="submit">Neues Projekt</button>
+        </form>
+
+        {% if projects %}
+            <div class="studio-project-list">
+                {% for project in projects %}
+                    <div class="studio-project-card">
+                        <a class="studio-project-card-name" href="{{ url_for('studio_editor_page', project_id=project.id) }}">
+                            {{ project.name }}
+                        </a>
+                        <span class="studio-project-status {{ 'is-published' if project.published else '' }}">
+                            {{ 'Veröffentlicht' if project.published else 'Entwurf' }}
+                        </span>
+                        <div class="studio-project-card-actions">
+                            <a href="{{ url_for('studio_editor_page', project_id=project.id) }}">Bearbeiten</a>
+                            {% if project.published %}
+                                <a href="{{ url_for('studio_play_page', project_id=project.id) }}">Spielen</a>
+                            {% endif %}
+                            <form action="{{ url_for('studio_delete_project', project_id=project.id) }}" method="post"
+                                  onsubmit="return confirm('Dieses Projekt wirklich löschen?');">
+                                <button type="submit" class="studio-project-delete-btn">Löschen</button>
+                            </form>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="studio-empty-note">Noch keine Projekte. Erstelle oben dein erstes Spiel.</p>
+        {% endif %}
+    </div>
+{% endblock %}
