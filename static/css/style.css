@@ -2,7 +2,44 @@
     box-sizing: border-box;
 }
 
+/* Light theme is the default (new visitors + guests always start here).
+   Dark is opt-in via the toggle in account settings, stored client-side
+   and applied as data-theme="dark" on <html>. The bottom nav, headers,
+   and immersive/game screens intentionally stay on their own fixed dark
+   palette either way -- retheming every inline SVG icon fill and every
+   game canvas was out of scope here, so this covers the main content
+   surface (backgrounds, text, panels, forms) rather than every pixel. */
 :root {
+    --bg-primary: #ffffff;
+    --bg-body-tint-1: rgba(62, 166, 255, 0.10);
+    --bg-body-tint-2: rgba(62, 166, 255, 0.06);
+    --text-primary: #17181a;
+    --text-secondary: #5b5f66;
+    --panel-bg-solid: #f3f4f6;
+    --panel-border-solid: #e0e2e6;
+    --input-bg: #ffffff;
+    --input-border: #cfd2d8;
+    --input-text: #17181a;
+    --glass-bg: rgba(20, 30, 45, 0.045);
+    --glass-bg-strong: rgba(20, 30, 45, 0.08);
+    --glass-border: 1px solid rgba(20, 30, 45, 0.1);
+    --glass-blur: blur(20px) saturate(1.7);
+    --glass-shadow: 0 8px 26px rgba(20, 30, 45, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+    --accent-blue: #2f8fe0;
+    --accent-blue-bright: #1f74c4;
+}
+
+:root[data-theme="dark"] {
+    --bg-primary: #0a0a0c;
+    --bg-body-tint-1: rgba(62, 166, 255, 0.16);
+    --bg-body-tint-2: rgba(62, 166, 255, 0.10);
+    --text-primary: #f1f1f1;
+    --text-secondary: #aaaaaa;
+    --panel-bg-solid: #1c1c1c;
+    --panel-border-solid: #2c2c2c;
+    --input-bg: #1c1c1c;
+    --input-border: #3c3c3c;
+    --input-text: #ffffff;
     --glass-bg: rgba(255, 255, 255, 0.07);
     --glass-bg-strong: rgba(255, 255, 255, 0.1);
     --glass-border: 1px solid rgba(255, 255, 255, 0.14);
@@ -20,11 +57,11 @@ body {
     margin: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     background:
-        radial-gradient(ellipse 900px 500px at 15% -10%, rgba(62, 166, 255, 0.16), transparent 60%),
-        radial-gradient(ellipse 700px 500px at 100% 0%, rgba(62, 166, 255, 0.10), transparent 55%),
-        #0a0a0c;
+        radial-gradient(ellipse 900px 500px at 15% -10%, var(--bg-body-tint-1), transparent 60%),
+        radial-gradient(ellipse 700px 500px at 100% 0%, var(--bg-body-tint-2), transparent 55%),
+        var(--bg-primary);
     background-attachment: fixed;
-    color: #f1f1f1;
+    color: var(--text-primary);
 }
 
 a, button {
@@ -533,6 +570,21 @@ main {
     justify-content: center;
     cursor: pointer;
     flex-shrink: 0;
+}
+
+/* Current-page indicator: a plain gray fill behind whichever bottom-nav
+   icon matches the page you're on. Press-hold gets its own frosted-glass
+   treatment layered on top via box-shadow so it doesn't fight with each
+   icon's own background (flat color or the "+" button's gradient), and
+   only exists while the finger/pointer is actually still down. */
+.bottom-nav-current {
+    box-shadow: inset 0 0 0 40px rgba(140, 140, 140, 0.4);
+}
+
+.bottom-nav-pressed {
+    box-shadow: inset 0 0 0 40px rgba(255, 255, 255, 0.3);
+    backdrop-filter: blur(14px) saturate(1.8);
+    -webkit-backdrop-filter: blur(14px) saturate(1.8);
 }
 
 h1 {
@@ -2367,6 +2419,28 @@ body.shorts-fullscreen main {
     cursor: pointer;
 }
 
+.theme-toggle-row {
+    display: flex;
+    gap: 0.6rem;
+    margin-bottom: 1.5rem;
+}
+
+.theme-toggle-btn {
+    padding: 0.6rem 1.1rem;
+    border-radius: 999px;
+    border: 1px solid var(--input-border);
+    background: var(--panel-bg-solid);
+    color: var(--text-primary);
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.theme-toggle-btn.active {
+    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    border-color: transparent;
+    color: #0f0f0f;
+}
+
 .settings-id-row {
     display: flex;
     align-items: center;
@@ -2415,9 +2489,9 @@ body.shorts-fullscreen main {
 .form input, .form textarea, .form select {
     padding: 0.6rem;
     border-radius: 4px;
-    border: 1px solid #3c3c3c;
-    background: #1c1c1c;
-    color: #fff;
+    border: 1px solid var(--input-border);
+    background: var(--input-bg);
+    color: var(--input-text);
     font-family: inherit;
     resize: vertical;
 }
@@ -3904,29 +3978,35 @@ a:active {
 
 .camera-filter-row {
     position: absolute;
-    bottom: 6.5rem;
-    left: 50%;
-    transform: translateX(-50%);
+    top: 50%;
+    right: 0.8rem;
+    transform: translateY(-50%);
     display: flex;
-    gap: 0.5rem;
+    flex-direction: column;
+    gap: 0.7rem;
     z-index: 10;
 }
 
 .camera-filter-btn {
-    padding: 0.5rem 0.9rem;
-    border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    background: rgba(0, 0, 0, 0.5);
+    width: 48px;
+    height: 48px;
+    padding: 0;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    background: rgba(0, 0, 0, 0.45);
     color: #fff;
-    font-size: 0.85rem;
+    font-size: 1.4rem;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
 }
 
 .camera-filter-btn.active {
-    background: #3ea6ff;
     border-color: #3ea6ff;
-    color: #0f0f0f;
-    font-weight: 600;
+    box-shadow: 0 0 0 2px rgba(62, 166, 255, 0.5);
+    transform: scale(1.08);
 }
 
 .camera-shutter-btn {

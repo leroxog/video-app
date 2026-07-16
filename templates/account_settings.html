@@ -3,6 +3,12 @@
 {% block content %}
     <h1>Einstellungen</h1>
 
+    <h2>Design</h2>
+    <div class="theme-toggle-row">
+        <button type="button" id="themeLightBtn" class="theme-toggle-btn">&#9728; Hell</button>
+        <button type="button" id="themeDarkBtn" class="theme-toggle-btn">&#9790; Dunkel</button>
+    </div>
+
     <h2>Account</h2>
     <div class="settings-id-row">
         <span>ID: <code id="publicIdText">{{ user.public_id }}</code></span>
@@ -70,5 +76,28 @@
                 setTimeout(() => { this.textContent = "Kopieren"; }, 1500);
             });
         });
+
+        const themeLightBtn = document.getElementById("themeLightBtn");
+        const themeDarkBtn = document.getElementById("themeDarkBtn");
+
+        function updateThemeButtons() {
+            const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+            themeLightBtn.classList.toggle("active", !isDark);
+            themeDarkBtn.classList.toggle("active", isDark);
+        }
+
+        function setTheme(theme) {
+            if (theme === "dark") {
+                document.documentElement.setAttribute("data-theme", "dark");
+            } else {
+                document.documentElement.removeAttribute("data-theme");
+            }
+            try { localStorage.setItem("timeskip_theme", theme); } catch (e) {}
+            updateThemeButtons();
+        }
+
+        themeLightBtn.addEventListener("click", () => setTheme("light"));
+        themeDarkBtn.addEventListener("click", () => setTheme("dark"));
+        updateThemeButtons();
     </script>
 {% endblock %}
