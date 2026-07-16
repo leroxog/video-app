@@ -2401,16 +2401,54 @@ body.shorts-fullscreen main {
     border: 1px solid #3c3c3c;
 }
 
-.profile-header {
+/* TikTok-style profile: centered avatar/name, a Following/Follower/Likes
+   stat row, then action buttons -- the brand gradient is reserved for the
+   one "important" CTA (primary follow button, active tab), everything
+   else stays neutral text/border so that accent still reads as an accent. */
+.profile-header-new {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 0.5rem;
+    padding-top: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.profile-settings-gear {
+    width: 40px;
+    height: 40px;
     display: flex;
     align-items: center;
-    gap: 1.2rem;
-    margin-bottom: 1.5rem;
+    justify-content: center;
+    border: 1px solid var(--panel-border-solid);
+    border-radius: 50%;
+    font-size: 1.2rem;
+    text-decoration: none;
+    color: var(--text-primary);
+    flex-shrink: 0;
+}
+
+.profile-settings-gear:hover {
+    background: var(--glass-bg-strong);
+}
+
+.profile-header-new .profile-settings-gear {
+    position: absolute;
+    top: 0;
+    right: 0;
+}
+
+.profile-avatar-wrap {
+    position: relative;
+    width: 96px;
+    height: 96px;
 }
 
 .profile-avatar {
-    width: 80px;
-    height: 80px;
+    width: 96px;
+    height: 96px;
     border-radius: 50%;
     object-fit: cover;
 }
@@ -2421,54 +2459,126 @@ body.shorts-fullscreen main {
     justify-content: center;
     background: var(--gradient-primary);
     color: #0f0f0f;
-    font-size: 2rem;
+    font-size: 2.4rem;
     font-weight: 700;
 }
 
-.profile-subscribe-form {
-    margin-left: auto;
+.profile-avatar-wrap form {
+    position: absolute;
+    inset: auto;
 }
 
-.profile-settings-gear {
-    margin-left: auto;
-    width: 40px;
-    height: 40px;
+.profile-avatar-edit-btn {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 1px solid #3c3c3c;
-    border-radius: 50%;
-    font-size: 1.2rem;
-    text-decoration: none;
-    color: #f1f1f1;
-    flex-shrink: 0;
-}
-
-.profile-settings-gear:hover {
-    background: #2c2c2c;
-}
-
-.profile-picture-form {
-    display: flex;
-    align-items: center;
-    gap: 0.8rem;
-    margin-bottom: 2rem;
-    flex-wrap: wrap;
-}
-
-.profile-picture-form label {
-    color: #ccc;
-    font-size: 0.9rem;
-}
-
-.profile-picture-form button {
-    padding: 0.5rem 1rem;
-    border: none;
-    border-radius: 4px;
     background: var(--gradient-primary);
     color: #0f0f0f;
-    font-weight: 600;
+    font-size: 0.9rem;
+    border: 2px solid var(--bg-primary);
     cursor: pointer;
+}
+
+.profile-avatar-wrap input[type="file"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.profile-username {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    margin: 0.4rem 0 0;
+    font-size: 1.3rem;
+}
+
+.profile-stats-row {
+    display: flex;
+    gap: 2rem;
+    margin: 0.6rem 0 0.2rem;
+}
+
+.profile-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.1rem;
+}
+
+.profile-stat-count {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.profile-stat-label {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.profile-action-row {
+    display: flex;
+    gap: 0.6rem;
+    margin-top: 0.4rem;
+}
+
+.profile-action-btn {
+    padding: 0.55rem 1.4rem;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    text-decoration: none;
+    border: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.profile-action-btn-primary {
+    background: var(--gradient-primary);
+    color: #0f0f0f;
+}
+
+.profile-action-btn-outline {
+    background: transparent;
+    border: 1px solid var(--panel-border-solid);
+    color: var(--text-primary);
+}
+
+.profile-tabs-row {
+    display: flex;
+    justify-content: center;
+    border-bottom: 1px solid var(--panel-border-solid);
+    margin-bottom: 1rem;
+}
+
+.profile-tab {
+    padding: 0.7rem 1.4rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    border-bottom: 2px solid transparent;
+}
+
+.profile-tab-active {
+    color: var(--text-primary);
+    border-bottom: 2px solid;
+    border-image: var(--gradient-primary) 1;
+}
+
+.profile-empty-note {
+    text-align: center;
+    color: var(--text-secondary);
 }
 
 .theme-toggle-row {

@@ -1,59 +1,78 @@
 {% extends "base.html" %}
 {% block title %}{{ profile_user.username }} - timeskip{% endblock %}
 {% block content %}
-    <div class="profile-header">
-        {% if profile_user.profile_image %}
-            <img class="profile-avatar" src="{{ media_url('profile_pics', profile_user.profile_image) }}" alt="">
-        {% else %}
-            <div class="profile-avatar profile-avatar-placeholder">{{ profile_user.username[0]|upper }}</div>
-        {% endif %}
-
-        <div>
-            <h1>
-                {{ profile_user.username }}
-                {% set badges = user_badges(profile_user) %}
-                {% if badges %}
-                    <button type="button" class="profile-badge-btn {{ 'is-owner' if is_own_profile else '' }}"
-                            {% if is_own_profile %}id="badgeModalOpenBtn"{% endif %}
-                            title="Abzeichen">
-                        <span class="profile-badge-icon"></span>
-                    </button>
-                {% endif %}
-            </h1>
-            <p class="video-meta">{{ subscriber_count }} Follower &middot; {{ posts|length }} Fotos</p>
-            {% set streak = effective_streak(profile_user) %}
-            {% if is_streak_secured_today(profile_user) %}
-                {% set bonus_pct = ((streak_points_multiplier(profile_user) - 1) * 100)|round|int %}
-                <div class="streak-display streak-display-reveal">
-                    <span class="streak-flame"></span>
-                    <span class="streak-count">{{ streak }}</span>
-                    <span class="streak-label">{{ "Tag" if streak == 1 else "Tage" }} Streak &mdash; +{{ bonus_pct }}% Punkte</span>
-                </div>
-            {% endif %}
-        </div>
-
+    <div class="profile-header-new">
         {% if is_own_profile %}
             <a class="profile-settings-gear" href="{{ url_for('account_settings') }}" title="Einstellungen">&#9881;</a>
         {% endif %}
 
-        {% if user and not is_own_profile %}
-            <form action="{{ url_for('subscribe', username=profile_user.username) }}" method="post" class="profile-subscribe-form">
-                <button type="submit" class="{{ 'subscribed' if is_subscribed else '' }}">
-                    {{ 'Gefolgt' if is_subscribed else 'Folgen' }}
+        <div class="profile-avatar-wrap">
+            {% if profile_user.profile_image %}
+                <img class="profile-avatar" src="{{ media_url('profile_pics', profile_user.profile_image) }}" alt="">
+            {% else %}
+                <div class="profile-avatar profile-avatar-placeholder">{{ profile_user.username[0]|upper }}</div>
+            {% endif %}
+            {% if is_own_profile %}
+                <form action="{{ url_for('upload_profile_picture') }}" method="post" enctype="multipart/form-data" id="profilePictureForm">
+                    <label for="profile_image" class="profile-avatar-edit-btn" title="Profilbild ändern">&#9998;</label>
+                    <input type="file" id="profile_image" name="profile_image" accept="image/png,image/jpeg,image/gif,image/webp" required>
+                </form>
+            {% endif %}
+        </div>
+
+        <h1 class="profile-username">
+            {{ profile_user.username }}
+            {% set badges = user_badges(profile_user) %}
+            {% if badges %}
+                <button type="button" class="profile-badge-btn {{ 'is-owner' if is_own_profile else '' }}"
+                        {% if is_own_profile %}id="badgeModalOpenBtn"{% endif %}
+                        title="Abzeichen">
+                    <span class="profile-badge-icon"></span>
                 </button>
-            </form>
+            {% endif %}
+        </h1>
+
+        <div class="profile-stats-row">
+            <div class="profile-stat">
+                <span class="profile-stat-count">{{ following_count }}</span>
+                <span class="profile-stat-label">Folge ich</span>
+            </div>
+            <div class="profile-stat">
+                <span class="profile-stat-count">{{ subscriber_count }}</span>
+                <span class="profile-stat-label">Follower</span>
+            </div>
+            <div class="profile-stat">
+                <span class="profile-stat-count">{{ likes_received }}</span>
+                <span class="profile-stat-label">Gefällt mir</span>
+            </div>
+        </div>
+
+        <div class="profile-action-row">
+            {% if user and not is_own_profile %}
+                <form action="{{ url_for('subscribe', username=profile_user.username) }}" method="post">
+                    <button type="submit" class="profile-action-btn {{ 'profile-action-btn-outline' if is_subscribed else 'profile-action-btn-primary' }}">
+                        {{ 'Gefolgt' if is_subscribed else 'Folgen' }}
+                    </button>
+                </form>
+                <a class="profile-action-btn profile-action-btn-outline" href="{{ url_for('messages_page') }}">Nachricht</a>
+            {% endif %}
+        </div>
+
+        {% set streak = effective_streak(profile_user) %}
+        {% if is_streak_secured_today(profile_user) %}
+            {% set bonus_pct = ((streak_points_multiplier(profile_user) - 1) * 100)|round|int %}
+            <div class="streak-display streak-display-reveal">
+                <span class="streak-flame"></span>
+                <span class="streak-count">{{ streak }}</span>
+                <span class="streak-label">{{ "Tag" if streak == 1 else "Tage" }} Streak &mdash; +{{ bonus_pct }}% Punkte</span>
+            </div>
         {% endif %}
     </div>
 
-    {% if is_own_profile %}
-        <form action="{{ url_for('upload_profile_picture') }}" method="post" enctype="multipart/form-data" class="profile-picture-form">
-            <label for="profile_image">Profilbild ändern</label>
-            <input type="file" id="profile_image" name="profile_image" accept="image/png,image/jpeg,image/gif,image/webp" required>
-            <button type="submit">Hochladen</button>
-        </form>
-    {% endif %}
+    <div class="profile-tabs-row">
+        <span class="profile-tab profile-tab-active">Fotos</span>
+    </div>
 
-    <h2>Fotos</h2>
     {% if posts %}
         <div class="video-grid">
             {% for post in posts %}
@@ -74,7 +93,7 @@
             {% endfor %}
         </div>
     {% else %}
-        <p>Noch keine Fotos hochgeladen.</p>
+        <p class="profile-empty-note">Noch keine Fotos hochgeladen.</p>
     {% endif %}
 
     {% if is_own_profile and badges %}
@@ -101,6 +120,19 @@
                 closeBtn.addEventListener("click", () => backdrop.classList.remove("show"));
                 backdrop.addEventListener("click", (e) => {
                     if (e.target === backdrop) backdrop.classList.remove("show");
+                });
+            })();
+        </script>
+    {% endif %}
+
+    {% if is_own_profile %}
+        <script>
+            (function () {
+                const form = document.getElementById("profilePictureForm");
+                const input = document.getElementById("profile_image");
+                if (!form || !input) return;
+                input.addEventListener("change", () => {
+                    if (input.files.length) form.submit();
                 });
             })();
         </script>

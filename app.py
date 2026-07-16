@@ -1482,6 +1482,7 @@ def profile(username):
         ).first() is not None
 
     posts = Post.query.filter_by(user_id=profile_user.id).order_by(Post.created_at.desc()).all()
+    likes_received = sum(len(p.likes) for p in posts)
 
     return render_template(
         "profile.html",
@@ -1491,6 +1492,8 @@ def profile(username):
         is_own_profile=is_own_profile,
         is_subscribed=is_subscribed,
         subscriber_count=len(profile_user.subscribers),
+        following_count=len(profile_user.subscriptions_made),
+        likes_received=likes_received,
     )
 
 
