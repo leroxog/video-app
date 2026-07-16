@@ -63,7 +63,9 @@
             </a>
         {% endif %}
 
-        <a class="bottom-nav-plus" href="{{ url_for('upload') }}" title="Hochladen">+</a>
+        <a class="bottom-nav-plus" href="{{ url_for('upload') }}" title="Hochladen">
+            <svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 4 V20 M4 12 H20" stroke="#0f0f0f" stroke-width="3" stroke-linecap="round"/></svg>
+        </a>
 
         <a class="bottom-nav-house" href="{{ url_for('feed') }}" title="Fotos entdecken">
             <svg viewBox="0 0 32 56" width="20" height="34"><path d="M16 2 L30 14 V54 H2 V14 Z" fill="#ffffff"/></svg>

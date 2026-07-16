@@ -1217,13 +1217,12 @@ def test_streak_starts_at_one_after_earning_100_points_in_a_day(client):
 
 def test_streak_multiplier_boosts_points_earned(client):
     import app as app_module
-    from datetime import date
 
     register(client, username="alice")
     user = User.query.filter_by(username="alice").first()
     user.current_streak = 3
     user.best_streak = 3
-    user.last_streak_date = date.today()  # active streak, counted by effective_streak
+    user.last_streak_date = app_module.streak_today()  # active streak, counted by effective_streak
     db.session.commit()
 
     assert app_module.streak_points_multiplier(user) == 1.3  # 1 + 3*0.1
@@ -1234,23 +1233,22 @@ def test_streak_multiplier_boosts_points_earned(client):
     assert user.total_score == before + 130  # 100 * 1.3
 
 
-def test_streak_multiplier_caps_at_100_percent(client):
+def test_streak_multiplier_caps_at_30_percent(client):
     import app as app_module
-    from datetime import date
 
     register(client, username="alice")
     user = User.query.filter_by(username="alice").first()
-    user.current_streak = 25  # way past the 10-day cap point
+    user.current_streak = 25  # way past the 3-day cap point
     user.best_streak = 25
-    user.last_streak_date = date.today()
+    user.last_streak_date = app_module.streak_today()
     db.session.commit()
 
-    assert app_module.streak_points_multiplier(user) == 2.0  # capped at +100%
+    assert app_module.streak_points_multiplier(user) == 1.3  # capped at +30%
 
     before = user.total_score
     app_module.adjust_points(user, 100)
     db.session.commit()
-    assert user.total_score == before + 200
+    assert user.total_score == before + 130
 
 
 def test_no_streak_means_no_multiplier_bonus(client):
@@ -1267,13 +1265,13 @@ def test_no_streak_means_no_multiplier_bonus(client):
 
 
 def test_like_unlike_stays_symmetric_with_active_streak_bonus(client):
-    from datetime import date
+    import app as app_module
 
     register(client, username="owner")
     owner = User.query.filter_by(username="owner").first()
     owner.current_streak = 5
     owner.best_streak = 5
-    owner.last_streak_date = date.today()
+    owner.last_streak_date = app_module.streak_today()
     post = Post(caption="Photo", user_id=owner.id)
     db.session.add(post)
     db.session.flush()
@@ -1286,7 +1284,7 @@ def test_like_unlike_stays_symmetric_with_active_streak_bonus(client):
     client.post(f"/api/post/{post_id}/like")
 
     owner = User.query.filter_by(username="owner").first()
-    assert owner.total_score == 90  # 60 * 1.5 (5-day streak = +50%)
+    assert owner.total_score == 78  # 60 * 1.3 (5-day streak, capped at +30%)
 
     client.post(f"/api/post/{post_id}/like")  # unlike
     owner = User.query.filter_by(username="owner").first()
@@ -1295,12 +1293,12 @@ def test_like_unlike_stays_symmetric_with_active_streak_bonus(client):
 
 def test_streak_continues_on_consecutive_day_and_resets_after_gap(client):
     import app as app_module
-    from datetime import date, timedelta
+    from datetime import timedelta
 
     register(client, username="alice")
     user = User.query.filter_by(username="alice").first()
 
-    yesterday = date.today() - timedelta(days=1)
+    yesterday = app_module.streak_today() - timedelta(days=1)
     user.current_streak = 3
     user.best_streak = 3
     user.last_streak_date = yesterday
@@ -1314,7 +1312,7 @@ def test_streak_continues_on_consecutive_day_and_resets_after_gap(client):
     assert user.best_streak == 4
 
     # Now simulate a missed day (streak was 4, two days ago) -> should reset to 1
-    two_days_ago = date.today() - timedelta(days=2)
+    two_days_ago = app_module.streak_today() - timedelta(days=2)
     user.current_streak = 4
     user.last_streak_date = two_days_ago
     user.points_today_date = two_days_ago
@@ -1364,18 +1362,90 @@ def test_leaderboard_marks_top_user_as_ever_rank_one(client):
 
 def test_profile_shows_streak_and_badge_for_owner(client):
     import app as app_module
-    from datetime import date
 
     register(client, username="alice")
     user = User.query.filter_by(username="alice").first()
     user.current_streak = 2
     user.best_streak = 2
-    user.last_streak_date = date.today()
+    user.last_streak_date = app_module.streak_today()
     db.session.commit()
 
     response = client.get("/user/alice")
     assert b"Tage Streak" in response.data
     assert b"badgeModalOpenBtn" in response.data
+
+
+def test_streak_day_rolls_over_at_11am_berlin(client, monkeypatch):
+    import app as app_module
+    from datetime import datetime, timezone, timedelta
+    from zoneinfo import ZoneInfo
+
+    berlin = ZoneInfo("Europe/Berlin")
+    just_before = datetime(2025, 6, 15, 10, 59, tzinfo=berlin).astimezone(timezone.utc)
+    just_after = datetime(2025, 6, 15, 11, 1, tzinfo=berlin).astimezone(timezone.utc)
+
+    class FakeDateTime(datetime):
+        fixed_now = just_before
+
+        @classmethod
+        def now(cls, tz=None):
+            return cls.fixed_now
+
+    monkeypatch.setattr(app_module, "datetime", FakeDateTime)
+
+    day_before = app_module.streak_today()
+    FakeDateTime.fixed_now = just_after
+    day_after = app_module.streak_today()
+
+    assert day_after == day_before + timedelta(days=1)
+
+
+def test_streak_display_hidden_until_secured_today(client):
+    import app as app_module
+    from datetime import timedelta
+
+    register(client, username="alice")
+    user = User.query.filter_by(username="alice").first()
+    user.current_streak = 3
+    user.best_streak = 3
+    # streak is still alive (yesterday), but not yet secured for today
+    user.last_streak_date = app_module.streak_today() - timedelta(days=1)
+    db.session.commit()
+
+    assert app_module.effective_streak(user) == 3  # still counts for the multiplier
+    assert app_module.is_streak_secured_today(user) is False  # but not shown yet
+
+    response = client.get("/user/alice")
+    assert b"Tage Streak" not in response.data
+
+    user.last_streak_date = app_module.streak_today()
+    db.session.commit()
+    assert app_module.is_streak_secured_today(user) is True
+
+    response = client.get("/user/alice")
+    assert b"Tage Streak" in response.data
+
+
+def test_leaderboard_shows_streak_only_when_secured(client):
+    import app as app_module
+    from datetime import timedelta
+
+    register(client, username="alice")
+    user = User.query.filter_by(username="alice").first()
+    user.total_score = 500
+    user.current_streak = 4
+    user.best_streak = 4
+    user.last_streak_date = app_module.streak_today() - timedelta(days=1)
+    db.session.commit()
+
+    response = client.get("/leaderboard")
+    assert b"leaderboard-streak" not in response.data
+
+    user.last_streak_date = app_module.streak_today()
+    db.session.commit()
+
+    response = client.get("/leaderboard")
+    assert b"leaderboard-streak" in response.data
 
 
 def make_eligible_for_code_creation(username, total_score=1000):
@@ -2495,3 +2565,52 @@ def test_admin_meme_template_upload_requires_admin(client):
         content_type="multipart/form-data",
     )
     assert response.status_code == 403
+
+
+def test_r2_cors_left_alone_when_already_configured(client, monkeypatch):
+    import app as app_module
+    from unittest.mock import MagicMock
+
+    fake_r2 = MagicMock()
+    fake_r2.get_bucket_cors.return_value = {"CORSRules": [{"AllowedOrigins": ["*"]}]}
+    monkeypatch.setattr(app_module, "USE_R2", True)
+    monkeypatch.setattr(app_module, "r2_client", fake_r2)
+    monkeypatch.setattr(app_module, "R2_BUCKET_NAME", "test-bucket")
+
+    app_module.ensure_r2_cors_configured()
+    fake_r2.put_bucket_cors.assert_not_called()
+
+
+def test_r2_cors_applied_when_missing(client, monkeypatch):
+    import app as app_module
+    from unittest.mock import MagicMock
+    from botocore.exceptions import ClientError
+
+    fake_r2 = MagicMock()
+    fake_r2.get_bucket_cors.side_effect = ClientError(
+        {"Error": {"Code": "NoSuchCORSConfiguration"}}, "GetBucketCors"
+    )
+    monkeypatch.setattr(app_module, "USE_R2", True)
+    monkeypatch.setattr(app_module, "r2_client", fake_r2)
+    monkeypatch.setattr(app_module, "R2_BUCKET_NAME", "test-bucket")
+
+    app_module.ensure_r2_cors_configured()
+
+    fake_r2.put_bucket_cors.assert_called_once()
+    call_kwargs = fake_r2.put_bucket_cors.call_args.kwargs
+    assert call_kwargs["Bucket"] == "test-bucket"
+    rule = call_kwargs["CORSConfiguration"]["CORSRules"][0]
+    assert rule["AllowedOrigins"] == ["*"]
+    assert "GET" in rule["AllowedMethods"]
+
+
+def test_r2_cors_skipped_when_r2_not_in_use(client, monkeypatch):
+    import app as app_module
+    from unittest.mock import MagicMock
+
+    fake_r2 = MagicMock()
+    monkeypatch.setattr(app_module, "USE_R2", False)
+    monkeypatch.setattr(app_module, "r2_client", fake_r2)
+
+    app_module.ensure_r2_cors_configured()
+    fake_r2.get_bucket_cors.assert_not_called()

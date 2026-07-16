@@ -8,6 +8,7 @@ import difflib
 import logging
 import threading
 from datetime import datetime, timezone, date, timedelta
+from zoneinfo import ZoneInfo
 from flask import (
     Flask, render_template, request, redirect, url_for,
     session, send_from_directory, abort, flash, jsonify, Response
@@ -179,7 +180,12 @@ PUBLIC_PROMO_CODE = "FREE FOR ALL"
 HEX_COLOR_RE = re.compile(r"#[0-9a-fA-F]{6}")
 STREAK_DAILY_THRESHOLD = 100
 STREAK_POINTS_MULTIPLIER_STEP = 0.1
-STREAK_POINTS_MULTIPLIER_CAP = 1.0  # bonus caps at +100% (i.e. max 2x) at a 10-day streak
+# Lowered from 1.0 (which let a 10-day streak double every point gain) --
+# still +0.1x per streak day, but the ceiling is now +30% at a 3-day streak.
+STREAK_POINTS_MULTIPLIER_CAP = 0.3
+# The "streak day" rolls over at 11:00 Europe/Berlin instead of midnight.
+STREAK_TIMEZONE = ZoneInfo("Europe/Berlin")
+STREAK_ROLLOVER_HOUR = 11
 
 CODE_CREATION_MIN_ORGANIC_POINTS = 500
 CODE_CREATION_FEE_PERCENT = 3
@@ -195,6 +201,13 @@ def generate_unique_code():
         if UserCreatedCode.query.filter_by(code=candidate).first() is not None:
             continue
         return candidate
+
+
+def streak_today():
+    """The "streak day" -- rolls over at STREAK_ROLLOVER_HOUR (11:00)
+    Europe/Berlin instead of at midnight."""
+    now_local = datetime.now(timezone.utc).astimezone(STREAK_TIMEZONE)
+    return (now_local - timedelta(hours=STREAK_ROLLOVER_HOUR)).date()
 
 
 def _update_streak(user, today):
@@ -236,7 +249,7 @@ def adjust_points(user, delta, from_code=False):
     delta = int(delta * streak_points_multiplier(user))
     user.total_score += delta
 
-    today = date.today()
+    today = streak_today()
     if user.points_today_date != today:
         user.points_today_date = today
         user.points_earned_today = 0
@@ -257,9 +270,18 @@ def effective_streak(user):
     lazily, on the next day the user actually earns enough points)."""
     if user.last_streak_date is None:
         return 0
-    if user.last_streak_date >= date.today() - timedelta(days=1):
+    if user.last_streak_date >= streak_today() - timedelta(days=1):
         return user.current_streak
     return 0
+
+
+def is_streak_secured_today(user):
+    """True once today's streak requirement has already been met, i.e.
+    the streak can no longer be lost today. Used to gate the streak
+    *display* -- unlike effective_streak (used for the point multiplier),
+    this stays hidden while the streak is merely "at risk" from a prior
+    day and only shows once it's locked in for today."""
+    return user.last_streak_date == streak_today() and effective_streak(user) > 0
 
 
 def user_badges(user):
@@ -423,6 +445,7 @@ def get_r2_bucket_usage():
 app.template_global()(effective_streak)
 app.template_global()(user_badges)
 app.template_global()(streak_points_multiplier)
+app.template_global()(is_streak_secured_today)
 app.jinja_env.globals["GENDER_CHOICES"] = GENDER_CHOICES
 app.jinja_env.globals["APP_SHARE_POINTS"] = APP_SHARE_POINTS
 
@@ -442,6 +465,45 @@ def media_url(kind, stored_filename):
     return url_for("static", filename=f"profile_pics/{stored_filename}")
 
 db.init_app(app)
+
+
+def ensure_r2_cors_configured():
+    """Self-healing fix for scripts/check_r2_cors.py's finding: a fresh R2
+    bucket has no CORS policy at all, and Safari (unlike Chrome/Firefox) is
+    strict enough about it to fail loading range-requested/cross-origin
+    media -- this showed up first as broken video playback on iPad and
+    again as photos not displaying on iPad Safari. Apply a permissive
+    GET/HEAD policy on every boot if one isn't already set, the same way
+    ensure_columns_exist() self-heals the schema."""
+    if not USE_R2:
+        return
+    try:
+        r2_client.get_bucket_cors(Bucket=R2_BUCKET_NAME)
+        return  # already configured, leave it alone
+    except Exception as exc:
+        error_code = getattr(exc, "response", {}).get("Error", {}).get("Code")
+        if error_code != "NoSuchCORSConfiguration":
+            logger.exception("Konnte R2-CORS-Konfiguration nicht pruefen.")
+            return
+
+    try:
+        r2_client.put_bucket_cors(
+            Bucket=R2_BUCKET_NAME,
+            CORSConfiguration={
+                "CORSRules": [
+                    {
+                        "AllowedOrigins": ["*"],
+                        "AllowedMethods": ["GET", "HEAD"],
+                        "AllowedHeaders": ["*"],
+                        "ExposeHeaders": ["Content-Length", "Content-Range", "Content-Type", "Accept-Ranges"],
+                        "MaxAgeSeconds": 3600,
+                    }
+                ]
+            },
+        )
+        logger.info("R2-Bucket hatte keine CORS-Regeln -- permissive GET/HEAD-Policy angewendet.")
+    except Exception:
+        logger.exception("Konnte R2-CORS-Konfiguration nicht setzen.")
 
 
 def ensure_columns_exist():
@@ -499,6 +561,7 @@ def ensure_columns_exist():
 with app.app_context():
     db.create_all()
     ensure_columns_exist()
+    ensure_r2_cors_configured()
 
     admin_username = os.environ.get("ADMIN_USERNAME")
     admin_password = os.environ.get("ADMIN_PASSWORD")
