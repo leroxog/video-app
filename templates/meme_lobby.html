@@ -21,7 +21,10 @@
                 </div>
                 <p class="meme-start-status" id="memeStartStatus"></p>
             </div>
-            <p class="upload-storage-note" id="memeWaitingForLeaderNote">Warte, bis der Lobby-Leiter startet...</p>
+            <p class="upload-storage-note" id="memeWaitingForLeaderNote">
+                Warte, bis der Lobby-Leiter startet
+                <span class="loading-dots"><span></span><span></span></span>
+            </p>
 
             <h2>Zeitvertreib: Flappy Bird (ohne Punkte)</h2>
             <iframe class="meme-practice-iframe" src="{{ url_for('flappybird') }}?practice=1" title="Flappy Bird"></iframe>

@@ -27,6 +27,7 @@
     --glass-shadow: 0 8px 26px rgba(20, 30, 45, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.7);
     --accent-blue: #2f8fe0;
     --accent-blue-bright: #1f74c4;
+    --gradient-primary: linear-gradient(135deg, #22d1ee 0%, #6a5cff 48%, #ff3d81 100%);
 }
 
 :root[data-theme="dark"] {
@@ -47,6 +48,7 @@
     --glass-shadow: 0 8px 26px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.12);
     --accent-blue: #3ea6ff;
     --accent-blue-bright: #6fc0ff;
+    --gradient-primary: linear-gradient(135deg, #22d1ee 0%, #6a5cff 48%, #ff3d81 100%);
 }
 
 * {
@@ -212,7 +214,7 @@ a, button {
 }
 
 .badge-chip {
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
     font-weight: bold;
     border-radius: 999px;
@@ -233,7 +235,7 @@ a, button {
 }
 
 .upload-storage-note {
-    color: #aaa;
+    color: var(--text-secondary);
     font-size: 0.9rem;
     background: var(--glass-bg);
     backdrop-filter: var(--glass-blur);
@@ -315,6 +317,52 @@ header {
     justify-content: center;
     width: 260px;
     height: 208px;
+}
+
+.loading-dots {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 20px;
+}
+
+.loading-dots span {
+    width: 14px;
+    height: 14px;
+    margin-left: -3px;
+    border-radius: 50%;
+    animation: loading-dots-move 0.9s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+
+.loading-dots span:first-child {
+    background: #22d1ee;
+    margin-left: 0;
+    animation-delay: 0s;
+}
+
+.loading-dots span:last-child {
+    background: #ff3d81;
+    animation-delay: -0.45s;
+}
+
+@keyframes loading-dots-move {
+    0%, 100% { transform: translateX(-7px); }
+    50% { transform: translateX(7px); }
+}
+
+/* On the black splash screen the dots can safely screen-blend to get the
+   classic overlapping-highlight look; elsewhere the backdrop isn't
+   guaranteed dark so the dots stay flat, readable circles. */
+.splash-loading-dots {
+    position: absolute;
+    bottom: 64px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.splash-loading-dots .loading-dots span {
+    mix-blend-mode: screen;
 }
 
 .splash-logo .timeskip-logo {
@@ -441,12 +489,16 @@ main {
     align-items: center;
     gap: 1.2rem;
     padding: 0.55rem 1.1rem;
-    background: rgba(255, 255, 255, 0.08);
+    /* Deliberately a dark tint (not a white one) so this reads as a
+       floating dark pill on both the light and dark themes -- a white
+       tint only looks like frosted glass when it's sitting on a dark
+       page, and goes nearly invisible on the light-by-default theme. */
+    background: rgba(18, 18, 22, 0.75);
     backdrop-filter: blur(20px) saturate(1.6);
     -webkit-backdrop-filter: blur(20px) saturate(1.6);
-    border: 1px solid rgba(255, 255, 255, 0.18);
+    border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 999px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.1);
     z-index: 200;
 }
 
@@ -489,7 +541,7 @@ main {
     align-items: center;
     gap: 0.35rem;
     padding: 0.4rem 0.7rem;
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
     border-radius: 999px;
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
@@ -545,7 +597,7 @@ main {
     margin: 0;
     border: none;
     border-radius: 50%;
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
     display: flex;
     align-items: center;
@@ -606,7 +658,7 @@ h1 {
 }
 
 .clear-search {
-    color: #aaa;
+    color: var(--text-secondary);
     font-size: 0.85rem;
 }
 
@@ -662,7 +714,7 @@ h1 {
     padding: 0.6rem 1.2rem;
     border: none;
     border-radius: 999px;
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
     font-weight: 700;
     cursor: pointer;
@@ -777,7 +829,7 @@ h1 {
     margin-top: 0.9rem;
     padding: 0.6rem 1.6rem;
     border-radius: 999px;
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
     font-weight: 700;
     text-decoration: none;
@@ -832,7 +884,7 @@ h1 {
     padding: 0.6rem 1.2rem;
     border: none;
     border-radius: 999px;
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
     font-weight: 600;
     cursor: pointer;
@@ -857,7 +909,7 @@ h1 {
     padding: 0.6rem 0;
     border: none;
     border-radius: 999px;
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
     font-weight: 700;
     font-size: 1.1rem;
@@ -879,7 +931,7 @@ h1 {
 .create-code-panel label {
     display: block;
     font-size: 0.85rem;
-    color: #aaa;
+    color: var(--text-secondary);
     margin-top: 0.6rem;
 }
 
@@ -894,7 +946,7 @@ h1 {
 }
 
 .create-code-hint {
-    color: #aaa;
+    color: var(--text-secondary);
     font-size: 0.9rem;
 }
 
@@ -915,7 +967,7 @@ h1 {
     padding: 0.6rem 1.2rem;
     border: none;
     border-radius: 999px;
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
     font-weight: 600;
     cursor: pointer;
@@ -961,14 +1013,14 @@ h1 {
     right: 0.7rem;
     border: none;
     background: none;
-    color: #aaa;
+    color: var(--text-secondary);
     font-size: 1.3rem;
     line-height: 1;
     cursor: pointer;
 }
 
 .promo-close:hover {
-    color: #fff;
+    color: var(--text-primary);
 }
 
 .promo-title {
@@ -988,7 +1040,7 @@ h1 {
     display: inline-block;
     padding: 0.7rem 2rem;
     border-radius: 6px;
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
     font-weight: 800;
     text-decoration: none;
@@ -1073,7 +1125,7 @@ h1 {
     display: inline-block;
     padding: 0.7rem 2rem;
     border-radius: 6px;
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
     font-weight: 800;
     text-decoration: none;
@@ -1184,7 +1236,7 @@ h1 {
     border-radius: 4px;
     font-weight: 600;
     cursor: pointer;
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
 }
 
@@ -1205,7 +1257,7 @@ h1 {
     padding: 0.7rem 1.4rem;
     border: none;
     border-radius: 6px;
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
     font-weight: 700;
     cursor: pointer;
@@ -1295,7 +1347,7 @@ h1 {
 }
 
 .place-label-sub {
-    color: #aaa;
+    color: var(--text-secondary);
     font-size: 0.85rem;
 }
 
@@ -1415,7 +1467,7 @@ h1 {
     padding: 0.6rem 1.2rem;
     border: none;
     border-radius: 4px;
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
     font-weight: 600;
     cursor: pointer;
@@ -1659,7 +1711,7 @@ body.shorts-fullscreen main {
     height: 20px;
     border-radius: 50%;
     border: none;
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
     font-weight: 800;
     font-size: 0.8rem;
@@ -1744,7 +1796,7 @@ body.shorts-fullscreen main {
 .shorts-comments-header button {
     background: none;
     border: none;
-    color: #aaa;
+    color: var(--text-secondary);
     font-size: 1.4rem;
     cursor: pointer;
     line-height: 1;
@@ -1821,7 +1873,7 @@ body.shorts-fullscreen main {
     padding: 0.6rem 1.1rem;
     border: none;
     border-radius: 999px;
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
     font-weight: 600;
     cursor: pointer;
@@ -1829,7 +1881,7 @@ body.shorts-fullscreen main {
 
 .shorts-comments-login-hint {
     padding: 0.9rem 1.1rem;
-    color: #aaa;
+    color: var(--text-secondary);
     font-size: 0.85rem;
     text-align: center;
 }
@@ -1864,13 +1916,13 @@ body.shorts-fullscreen main {
 }
 
 #zoomLevel {
-    color: #aaa;
+    color: var(--text-secondary);
     font-size: 0.9rem;
     min-width: 2.5rem;
 }
 
 #cooldown {
-    color: #aaa;
+    color: var(--text-secondary);
     font-size: 0.9rem;
 }
 
@@ -1887,7 +1939,7 @@ body.shorts-fullscreen main {
     padding: 0.4rem 0.8rem;
     border: none;
     border-radius: 20px;
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
     text-decoration: none;
     font-size: 0.85rem;
@@ -2028,7 +2080,7 @@ body.shorts-fullscreen main {
     padding: 0.35rem 0.7rem;
     border: none;
     border-radius: 6px;
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
     font-weight: 600;
     cursor: pointer;
@@ -2061,7 +2113,7 @@ body.shorts-fullscreen main {
 
 .sound-own-upload-notice {
     font-size: 0.75rem;
-    color: #aaa;
+    color: var(--text-secondary);
     margin: 0.5rem 0 0;
 }
 
@@ -2071,7 +2123,7 @@ body.shorts-fullscreen main {
 
 .sound-status {
     font-size: 0.8rem;
-    color: #aaa;
+    color: var(--text-secondary);
     margin-bottom: 0.8rem;
 }
 
@@ -2129,7 +2181,7 @@ body.shorts-fullscreen main {
 }
 
 .video-meta {
-    color: #aaa;
+    color: var(--text-secondary);
     font-size: 0.85rem;
 }
 
@@ -2174,7 +2226,7 @@ body.shorts-fullscreen main {
     padding: 0.6rem 1.2rem;
     border: none;
     border-radius: 999px;
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
     font-weight: 600;
     cursor: pointer;
@@ -2258,7 +2310,7 @@ body.shorts-fullscreen main {
     padding: 0.6rem 1.1rem;
     border: none;
     border-radius: 20px;
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
     font-weight: 600;
     cursor: pointer;
@@ -2275,7 +2327,7 @@ body.shorts-fullscreen main {
 }
 
 .like-count-readonly {
-    color: #aaa;
+    color: var(--text-secondary);
     font-size: 0.9rem;
 }
 
@@ -2320,7 +2372,7 @@ body.shorts-fullscreen main {
     padding: 0.5rem 1.1rem;
     border: none;
     border-radius: 20px;
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
     font-weight: 600;
     cursor: pointer;
@@ -2336,7 +2388,7 @@ body.shorts-fullscreen main {
     padding: 0.35rem 0.9rem;
     border: none;
     border-radius: 20px;
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
     font-weight: 600;
     font-size: 0.85rem;
@@ -2367,7 +2419,7 @@ body.shorts-fullscreen main {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
     font-size: 2rem;
     font-weight: 700;
@@ -2413,7 +2465,7 @@ body.shorts-fullscreen main {
     padding: 0.5rem 1rem;
     border: none;
     border-radius: 4px;
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
     font-weight: 600;
     cursor: pointer;
@@ -2436,7 +2488,7 @@ body.shorts-fullscreen main {
 }
 
 .theme-toggle-btn.active {
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     border-color: transparent;
     color: #0f0f0f;
 }
@@ -2459,7 +2511,7 @@ body.shorts-fullscreen main {
     padding: 0.4rem 0.9rem;
     border: none;
     border-radius: 4px;
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
     font-weight: 600;
     cursor: pointer;
@@ -2521,7 +2573,7 @@ body.shorts-fullscreen main {
     display: inline-block;
     padding: 0.6rem 1rem;
     border-radius: 999px;
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
     font-weight: 600;
     cursor: pointer;
@@ -2679,7 +2731,7 @@ body.shorts-fullscreen main {
     padding: 0.7rem;
     border: none;
     border-radius: 4px;
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
     font-weight: 600;
     cursor: pointer;
@@ -2779,7 +2831,7 @@ body.shorts-fullscreen main {
 
 .fruitmerge-powerups button.active {
     border-color: #3ea6ff;
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
 }
 
@@ -2826,7 +2878,7 @@ body.shorts-fullscreen main {
     padding: 0.6rem 1.2rem;
     border: none;
     border-radius: 4px;
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
     font-weight: 600;
     cursor: pointer;
@@ -2856,7 +2908,7 @@ body.shorts-fullscreen main {
     padding: 0.7rem 1.2rem;
     border: none;
     border-radius: 6px;
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
     font-weight: 600;
     cursor: pointer;
@@ -2917,7 +2969,7 @@ body.shorts-fullscreen main {
     padding: 0.7rem 1.2rem;
     border: none;
     border-radius: 4px;
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
     font-weight: 600;
     cursor: pointer;
@@ -3046,7 +3098,7 @@ body.shorts-fullscreen main {
     padding: 0.7rem 1.2rem;
     border: none;
     border-radius: 999px;
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
     font-weight: 700;
     cursor: pointer;
@@ -3118,7 +3170,7 @@ body.shorts-fullscreen main {
     padding: 0.7rem;
     border-radius: 8px;
     border: none;
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
     font-weight: 600;
     cursor: pointer;
@@ -3218,7 +3270,7 @@ body.shorts-fullscreen main {
     display: flex;
     flex-direction: column;
     font-size: 0.85rem;
-    color: #aaa;
+    color: var(--text-secondary);
 }
 
 .meme-result-actions {
@@ -3265,7 +3317,7 @@ body.shorts-fullscreen main {
     padding: 0.7rem 1.4rem;
     border: none;
     border-radius: 999px;
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
     font-weight: 700;
     cursor: pointer;
@@ -3350,7 +3402,7 @@ body.shorts-fullscreen main {
     padding: 0.55rem 1.1rem;
     border-radius: 999px;
     border: none;
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
     font-weight: 700;
     font-size: 0.95rem;
@@ -3381,7 +3433,7 @@ body.shorts-fullscreen main {
 .create-group-panel label:not(.group-member-checkbox) {
     display: block;
     font-size: 0.85rem;
-    color: #aaa;
+    color: var(--text-secondary);
     margin-top: 0.4rem;
 }
 
@@ -3411,7 +3463,7 @@ body.shorts-fullscreen main {
     padding: 0.5rem 1.1rem;
     border: none;
     border-radius: 999px;
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
     font-weight: 600;
     cursor: pointer;
@@ -3474,7 +3526,7 @@ body.shorts-fullscreen main {
 
 .conversation-message.mine {
     align-self: flex-end;
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
 }
 
@@ -3520,7 +3572,7 @@ body.shorts-fullscreen main {
     padding: 0.6rem 1.2rem;
     border: none;
     border-radius: 999px;
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
     font-weight: 600;
     cursor: pointer;
@@ -3639,7 +3691,7 @@ body.shorts-fullscreen main {
 }
 
 .coinflip-controls label {
-    color: #aaa;
+    color: var(--text-secondary);
     font-size: 0.9rem;
 }
 
@@ -3656,7 +3708,7 @@ body.shorts-fullscreen main {
     padding: 0.6rem 1.4rem;
     border: none;
     border-radius: 999px;
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
     font-weight: 600;
     cursor: pointer;
@@ -3728,7 +3780,7 @@ body.shorts-fullscreen main {
     padding: 0.4rem 0.9rem;
     border: none;
     border-radius: 999px;
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
     font-weight: 600;
     cursor: pointer;
@@ -3802,7 +3854,7 @@ body.shorts-fullscreen main {
     align-items: center;
     justify-content: space-between;
     gap: 0.6rem;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--glass-bg);
     border-radius: 8px;
     padding: 0.5rem 0.7rem;
     font-size: 0.85rem;
@@ -3812,7 +3864,7 @@ body.shorts-fullscreen main {
     padding: 0.35rem 0.8rem;
     border: none;
     border-radius: 999px;
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
     font-weight: 600;
     cursor: pointer;
@@ -4062,7 +4114,7 @@ a:active {
     padding: 0.6rem 0.8rem;
     border-radius: 8px;
     border: none;
-    background: linear-gradient(to bottom, #6dc0ff, #2f8fe0);
+    background: var(--gradient-primary);
     color: #0f0f0f;
     font-weight: 600;
     cursor: pointer;
