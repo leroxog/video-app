@@ -357,6 +357,8 @@
         return match ? match.slice(typed.length) : "";
     }
 
+    // Rules are two content lines now: `"Block"=trigger` then the effect
+    // (optionally `=duration`), closed by canColide(...).
     function computeGhostSuggestion(fullText, cursorPos) {
         const before = fullText.slice(0, cursorPos);
         const lines = before.split("\n");
@@ -378,20 +380,24 @@
         const hasInfinite = sinceBoundary.length > 0 && /^infinit\.true$/i.test(sinceBoundary[0]);
         const slot = hasInfinite ? sinceBoundary.length - 1 : sinceBoundary.length;
 
-        let candidates;
         if (slot === 0) {
-            candidates = blocks.map((b) => b.name).concat([INFINITE_WORD]);
-        } else if (slot === 1) {
-            candidates = TRIGGER_WORDS;
-        } else if (slot === 2) {
-            candidates = EFFECT_WORDS;
-        } else if (slot === 3) {
-            candidates = COLLIDE_WORDS;
-        } else {
+            const eqIdx = currentLineText.indexOf("=");
+            if (eqIdx === -1) {
+                const candidates = blocks.map((b) => `"${b.name}"`).concat([INFINITE_WORD]);
+                return suggestCompletion(candidates, currentLineText);
+            }
+            return suggestCompletion(TRIGGER_WORDS.concat([","]), currentLineText.slice(eqIdx + 1));
+        }
+        if (slot === 1) {
+            if (!/[\s="]/.test(currentLineText)) {
+                return suggestCompletion(EFFECT_WORDS, currentLineText);
+            }
             return "";
         }
-        if (!candidates.length) return "";
-        return suggestCompletion(candidates, currentLineText);
+        if (slot === 2) {
+            return suggestCompletion(COLLIDE_WORDS, currentLineText);
+        }
+        return "";
     }
 
     function escapeHtml(text) {

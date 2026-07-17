@@ -107,6 +107,46 @@
         return ax <= bx + bw && ax + aw >= bx && ay <= by + bh && ay + ah >= by;
     }
 
+    // Rules with a duration (currently just "move") animate smoothly over
+    // that many ms instead of snapping instantly. While an animation is in
+    // flight for a rule, re-firing that same rule is ignored -- which is
+    // also what makes an ambient + infinit.true move rule read as a
+    // continuously sliding platform: as soon as one leg finishes, the next
+    // frame's re-fire starts the next leg.
+    const activeAnimations = [];
+
+    function startMoveAnimation(block, rule, effect) {
+        if (rule._anim) return;
+        rule._anim = {
+            block,
+            startX: block.x,
+            startY: block.y,
+            targetX: block.x + effect.dx,
+            targetY: block.y + effect.dy,
+            startTime: performance.now(),
+            duration: effect.duration,
+        };
+        activeAnimations.push(rule);
+    }
+
+    function updateAnimations(now) {
+        for (let i = activeAnimations.length - 1; i >= 0; i--) {
+            const rule = activeAnimations[i];
+            const anim = rule._anim;
+            if (!anim) {
+                activeAnimations.splice(i, 1);
+                continue;
+            }
+            const t = Math.min(1, (now - anim.startTime) / Math.max(1, anim.duration));
+            anim.block.x = anim.startX + (anim.targetX - anim.startX) * t;
+            anim.block.y = anim.startY + (anim.targetY - anim.startY) * t;
+            if (t >= 1) {
+                rule._anim = null;
+                activeAnimations.splice(i, 1);
+            }
+        }
+    }
+
     function runEffect(block, rule) {
         const effect = rule.effect;
         if (!effect) return;
@@ -118,8 +158,12 @@
                 giveCoins(effect.amount);
                 break;
             case "move":
-                block.x += effect.dx;
-                block.y += effect.dy;
+                if (effect.duration) {
+                    startMoveAnimation(block, rule, effect);
+                } else {
+                    block.x += effect.dx;
+                    block.y += effect.dy;
+                }
                 break;
             case "trampoline":
                 player.vy = -Math.abs(effect.power);
@@ -147,6 +191,21 @@
     function fireClickRules(block) {
         for (const rule of block.rules) {
             if (rule.trigger === "click") runEffect(block, rule);
+        }
+    }
+
+    // Ambient rules need no touch/click at all: infinit.true ones re-fire
+    // every frame (a permanent background behavior), non-infinite ones
+    // fire exactly once, the first frame they're seen.
+    function fireAmbientRules(block) {
+        for (const rule of block.rules) {
+            if (rule.trigger !== "ambient") continue;
+            if (rule.infinite) {
+                runEffect(block, rule);
+            } else if (!rule._ambientFired) {
+                rule._ambientFired = true;
+                runEffect(block, rule);
+            }
         }
     }
 
@@ -189,6 +248,9 @@
 
     function update() {
         if (!player.alive) return;
+
+        updateAnimations(performance.now());
+        for (const b of blocks) fireAmbientRules(b);
 
         player.vx = 0;
         if (keys["arrowleft"] || keys["a"]) { player.vx = -MOVE_SPEED; player.facing = -1; }
