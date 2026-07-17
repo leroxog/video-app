@@ -9,22 +9,24 @@
     const propsForm = document.getElementById("studioPropsForm");
     const propName = document.getElementById("studioPropName");
     const propColor = document.getElementById("studioPropColor");
+    const propsKind = document.getElementById("studioPropsKind");
     const newBlockBtn = document.getElementById("studioNewBlockBtn");
+    const newBlockMenu = document.getElementById("studioNewBlockMenu");
     const contextMenu = document.getElementById("studioContextMenu");
-    const contextProgramBtn = document.getElementById("studioContextProgramBtn");
     const contextDeleteBtn = document.getElementById("studioContextDeleteBtn");
+    const toggleCodeBtn = document.getElementById("studioToggleCodeBtn");
     const codePanel = document.getElementById("studioCodePanel");
     const codePanelHeader = document.getElementById("studioCodePanelHeader");
-    const codePanelTitle = document.getElementById("studioCodePanelTitle");
     const codePanelClose = document.getElementById("studioCodePanelClose");
     const codeTextarea = document.getElementById("studioCodeTextarea");
+    const codeGhost = document.getElementById("studioCodeGhost");
     const codePanelResize = document.getElementById("studioCodePanelResize");
 
     let blocks = [];
     let selectedId = null;
     let contextBlockId = null;
-    let codeBlockId = null;
     let saveTimer = null;
+    let currentSuggestion = "";
 
     function api(path, method, body) {
         return fetch(path, {
@@ -36,6 +38,12 @@
 
     function getBlock(id) {
         return blocks.find((b) => b.id === id) || null;
+    }
+
+    function kindLabel(b) {
+        if (b.kind === "spawn") return "Spawn-Punkt — hier startet jeder Spieler.";
+        if (b.kind === "checkpoint") return "Checkpoint — einmal berührt, spawnt man ab dann hier.";
+        return "Normaler Block.";
     }
 
     function renderBlockList() {
@@ -77,7 +85,9 @@
         el.style.height = b.height + "px";
         el.style.background = b.color;
         el.classList.toggle("is-selected", b.id === selectedId);
-        el.querySelector(".studio-block-label").textContent = b.name;
+        const label = el.querySelector(".studio-block-label");
+        const badge = b.kind === "spawn" ? " (Spawn)" : b.kind === "checkpoint" ? " (Checkpoint)" : "";
+        label.textContent = b.name + badge;
     }
 
     function renderCanvas() {
@@ -101,7 +111,9 @@
         propsEmpty.style.display = "none";
         propsForm.style.display = "flex";
         propName.value = b.name;
+        propName.disabled = !!b.is_default;
         propColor.value = b.color;
+        propsKind.textContent = kindLabel(b);
     }
 
     function patchBlock(id, patch) {
@@ -123,14 +135,27 @@
             renderCanvas();
             renderBlockList();
             selectBlock(selectedId);
+            codeTextarea.value = res.script_code && res.script_code.trim() ? res.script_code : ARROW + " ";
+            updateGhost();
         });
     }
 
-    newBlockBtn.addEventListener("click", () => {
-        api(`/api/studio/${projectId}/block`, "POST", { name: "Block" }).then((res) => {
+    function createBlock(kind) {
+        api(`/api/studio/${projectId}/block`, "POST", { kind }).then((res) => {
             if (!res.ok) return;
             blocks.push(res.block);
             selectBlock(res.block.id);
+        });
+    }
+
+    newBlockBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        newBlockMenu.style.display = newBlockMenu.style.display === "none" ? "flex" : "none";
+    });
+    newBlockMenu.querySelectorAll("button").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            createBlock(btn.dataset.kind);
+            newBlockMenu.style.display = "none";
         });
     });
 
@@ -229,6 +254,7 @@
 
     document.addEventListener("click", () => {
         contextMenu.style.display = "none";
+        newBlockMenu.style.display = "none";
     });
 
     contextDeleteBtn.addEventListener("click", () => {
@@ -246,9 +272,25 @@
         contextMenu.style.display = "none";
     });
 
-    // --- Code panel: the DSL editor with its immutable "⇒" / "⇓" glyphs ---
+    toggleCodeBtn.addEventListener("click", () => {
+        codePanel.style.display = codePanel.style.display === "none" ? "flex" : "none";
+    });
+    codePanelClose.addEventListener("click", () => {
+        codePanel.style.display = "none";
+    });
+
+    // --- Code panel: one shared DSL script for the whole game, with its
+    // immutable "⇒" / "⇓" glyphs and inline ghost-text suggestions. ---
     const ARROW = "⇒";
     const END = "⇓";
+    const TRIGGER_WORDS = ["touch", "click"];
+    const EFFECT_WORDS = ["kill", "give", "move", "trampoline", "teleport", "transparents"];
+    const COLLIDE_WORDS = ["canColide(.true)", "canColide(.false)"];
+    const INFINITE_WORD = "infinit.true";
+
+    function stripArrow(line) {
+        return line.replace(new RegExp("^\\s*" + ARROW + "\\s?"), "");
+    }
 
     function normalizeCode(raw, cursorPos) {
         const before = raw.slice(0, cursorPos);
@@ -258,7 +300,7 @@
         const rawLines = raw.split("\n");
         const contentLines = rawLines.map((l) => {
             if (l.trim() === END) return { end: true, text: "" };
-            return { end: false, text: l.replace(new RegExp("^\\s*" + ARROW + "\\s?"), "") };
+            return { end: false, text: stripArrow(l) };
         });
 
         const hasEndMarker = contentLines.some((l) => l.end);
@@ -308,34 +350,117 @@
         return { text, cursor: newCursor };
     }
 
+    function suggestCompletion(candidates, typed) {
+        const lower = typed.toLowerCase();
+        if (!lower) return candidates[0] || "";
+        const match = candidates.find((c) => c.toLowerCase().startsWith(lower) && c.toLowerCase() !== lower);
+        return match ? match.slice(typed.length) : "";
+    }
+
+    function computeGhostSuggestion(fullText, cursorPos) {
+        const before = fullText.slice(0, cursorPos);
+        const lines = before.split("\n");
+        const currentLineText = stripArrow(lines[lines.length - 1]);
+
+        const priorLines = lines.slice(0, -1)
+            .map((l) => stripArrow(l).trim())
+            .filter((l) => l && l !== END);
+
+        let sinceBoundary = [];
+        for (const l of priorLines) {
+            if (/canColide\s*\(/i.test(l)) {
+                sinceBoundary = [];
+            } else {
+                sinceBoundary.push(l);
+            }
+        }
+
+        const hasInfinite = sinceBoundary.length > 0 && /^infinit\.true$/i.test(sinceBoundary[0]);
+        const slot = hasInfinite ? sinceBoundary.length - 1 : sinceBoundary.length;
+
+        let candidates;
+        if (slot === 0) {
+            candidates = blocks.map((b) => b.name).concat([INFINITE_WORD]);
+        } else if (slot === 1) {
+            candidates = TRIGGER_WORDS;
+        } else if (slot === 2) {
+            candidates = EFFECT_WORDS;
+        } else if (slot === 3) {
+            candidates = COLLIDE_WORDS;
+        } else {
+            return "";
+        }
+        if (!candidates.length) return "";
+        return suggestCompletion(candidates, currentLineText);
+    }
+
+    function escapeHtml(text) {
+        return text
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+    }
+
+    function updateGhost() {
+        const cursor = codeTextarea.selectionStart;
+        currentSuggestion = codeTextarea.selectionStart === codeTextarea.selectionEnd
+            ? computeGhostSuggestion(codeTextarea.value, cursor)
+            : "";
+        const before = codeTextarea.value.slice(0, cursor);
+        const after = codeTextarea.value.slice(cursor);
+        codeGhost.innerHTML = escapeHtml(before) +
+            (currentSuggestion ? `<span class="ghost-suggestion">${escapeHtml(currentSuggestion)}</span>` : "") +
+            escapeHtml(after);
+    }
+
+    function acceptSuggestion() {
+        if (!currentSuggestion) return false;
+        const cursor = codeTextarea.selectionStart;
+        const value = codeTextarea.value;
+        codeTextarea.value = value.slice(0, cursor) + currentSuggestion + value.slice(cursor);
+        const newCursor = cursor + currentSuggestion.length;
+        codeTextarea.setSelectionRange(newCursor, newCursor);
+        currentSuggestion = "";
+        return true;
+    }
+
+    function saveScript() {
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(() => {
+            api(`/api/studio/${projectId}/script`, "POST", { script_code: codeTextarea.value });
+        }, 500);
+    }
+
     codeTextarea.addEventListener("input", () => {
         const result = normalizeCode(codeTextarea.value, codeTextarea.selectionStart);
         codeTextarea.value = result.text;
         codeTextarea.setSelectionRange(result.cursor, result.cursor);
-        if (!codeBlockId) return;
-        clearTimeout(saveTimer);
-        saveTimer = setTimeout(() => {
-            api(`/api/studio/${projectId}/block/${codeBlockId}`, "POST", { script_code: codeTextarea.value });
-        }, 500);
+        updateGhost();
+        saveScript();
     });
 
-    function openCodePanel(blockId) {
-        const b = getBlock(blockId);
-        if (!b) return;
-        codeBlockId = blockId;
-        codePanelTitle.textContent = "Programmierung: " + b.name;
-        codeTextarea.value = b.script_code && b.script_code.trim() ? b.script_code : ARROW + " ";
-        codePanel.style.display = "flex";
-    }
-
-    contextProgramBtn.addEventListener("click", () => {
-        if (contextBlockId) openCodePanel(contextBlockId);
-        contextMenu.style.display = "none";
+    codeTextarea.addEventListener("keydown", (e) => {
+        if ((e.key === "Tab" || e.key === "ArrowRight") && currentSuggestion) {
+            const cursor = codeTextarea.selectionStart;
+            const atEnd = cursor === codeTextarea.selectionEnd &&
+                (e.key === "Tab" || codeTextarea.value.slice(cursor, cursor + 1).match(/^($|\n)/));
+            if (atEnd) {
+                e.preventDefault();
+                if (acceptSuggestion()) {
+                    updateGhost();
+                    saveScript();
+                }
+            }
+        }
     });
-
-    codePanelClose.addEventListener("click", () => {
-        codePanel.style.display = "none";
-        codeBlockId = null;
+    codeTextarea.addEventListener("keyup", (e) => {
+        if (e.key === "Tab" || e.key === "ArrowRight") return;
+        updateGhost();
+    });
+    codeTextarea.addEventListener("click", updateGhost);
+    codeTextarea.addEventListener("scroll", () => {
+        codeGhost.scrollTop = codeTextarea.scrollTop;
+        codeGhost.scrollLeft = codeTextarea.scrollLeft;
     });
 
     (function makeDraggable() {

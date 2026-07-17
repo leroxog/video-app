@@ -4,6 +4,7 @@
     const projectId = page.dataset.projectId;
     const loggedIn = page.dataset.loggedIn === "1";
     const rawBlocks = JSON.parse(page.dataset.blocks || "[]");
+    const scriptCode = JSON.parse(page.dataset.script || "\"\"");
 
     const canvas = document.getElementById("studioPlayCanvas");
     const ctx = canvas.getContext("2d");
@@ -12,19 +13,19 @@
     const GRAVITY = 0.6;
     const MOVE_SPEED = 3.4;
     const JUMP_POWER = 12;
-    const SPAWN_X = 60;
-    const SPAWN_Y = 60;
     const WORLD_W = 2000;
     const WORLD_H = 1400;
+    const PLAYER_W = 18;
+    const PLAYER_H = 34;
 
-    const showFigure = !rawBlocks.some((b) => /figures\s*=\s*false/i.test(b.script_code || ""));
+    const showFigure = !/figures\s*=\s*false/i.test(scriptCode);
 
-    // A block's own "Programmierung" panel is just where the rule is
-    // written -- each rule names the block it actually applies to (its
-    // "target"), which is usually but not necessarily the same block.
+    // One shared script for the whole game -- each rule names the block it
+    // applies to, so a single script can drive any number of blocks.
     const blocks = rawBlocks.map((b) => ({
         id: b.id,
         name: b.name,
+        kind: b.kind,
         color: b.color,
         x: b.x,
         y: b.y,
@@ -38,21 +39,26 @@
     const blocksByName = {};
     blocks.forEach((b) => { blocksByName[b.name] = b; });
 
-    rawBlocks.forEach((b) => {
-        const rules = window.StudioDSL.parseStudioScript(b.script_code || "");
-        rules.forEach((rule) => {
-            const target = blocksByName[rule.target] || blocksByName[b.name];
-            if (!target) return;
-            if (rule.canCollide === false) target.collidable = false;
-            target.rules.push(rule);
-        });
+    const rules = window.StudioDSL.parseStudioScript(scriptCode);
+    rules.forEach((rule) => {
+        const target = blocksByName[rule.target];
+        if (!target) return;
+        if (rule.canCollide === false) target.collidable = false;
+        target.rules.push(rule);
     });
 
+    const spawnBlock = blocks.find((b) => b.kind === "spawn") || blocks[0] || { x: 60, y: 60, width: 0, height: 0 };
+    const spawnPoint = {
+        x: spawnBlock.x + spawnBlock.width / 2 - PLAYER_W / 2,
+        y: spawnBlock.y - PLAYER_H,
+    };
+    const respawnPoint = { x: spawnPoint.x, y: spawnPoint.y };
+
     const player = {
-        x: SPAWN_X,
-        y: SPAWN_Y,
-        w: 18,
-        h: 34,
+        x: spawnPoint.x,
+        y: spawnPoint.y,
+        w: PLAYER_W,
+        h: PLAYER_H,
         vx: 0,
         vy: 0,
         grounded: false,
@@ -88,8 +94,8 @@
     }
 
     function respawnPlayer() {
-        player.x = SPAWN_X;
-        player.y = SPAWN_Y;
+        player.x = respawnPoint.x;
+        player.y = respawnPoint.y;
         player.vx = 0;
         player.vy = 0;
     }
@@ -222,6 +228,10 @@
 
         for (const b of blocks) {
             const touching = overlaps(player.x, player.y, player.w, player.h, b.x, b.y, b.width, b.height);
+            if (touching && b.kind === "checkpoint") {
+                respawnPoint.x = b.x + b.width / 2 - PLAYER_W / 2;
+                respawnPoint.y = b.y - PLAYER_H;
+            }
             fireTouchRules(b, touching);
             b.wasTouching = touching;
         }

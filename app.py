@@ -541,6 +541,8 @@ def ensure_columns_exist():
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS gender VARCHAR(20)',
         'ALTER TABLE post ADD COLUMN IF NOT EXISTS hashtags TEXT',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS last_app_share_at TIMESTAMP',
+        'ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS script_code TEXT',
+        "ALTER TABLE studio_block ADD COLUMN IF NOT EXISTS kind VARCHAR(20) NOT NULL DEFAULT 'normal'",
     ]
     with db.engine.connect() as conn:
         for statement in statements:
@@ -803,8 +805,11 @@ def camera_page():
 
 
 STUDIO_DEFAULT_BLOCK_NAME = "Part1"
+STUDIO_SPAWN_BLOCK_NAME = "SpawnPart"
+STUDIO_BLOCK_KINDS = {"normal", "checkpoint"}
 STUDIO_MAX_BLOCKS_PER_PROJECT = 40
 STUDIO_MAX_PROJECTS_PER_USER = 20
+STUDIO_MAX_SCRIPT_LENGTH = 40000
 
 
 def serialize_studio_block(block):
@@ -812,12 +817,12 @@ def serialize_studio_block(block):
         "id": block.id,
         "name": block.name,
         "is_default": block.is_default,
+        "kind": block.kind,
         "x": block.x,
         "y": block.y,
         "width": block.width,
         "height": block.height,
         "color": block.color,
-        "script_code": block.script_code or "",
     }
 
 
@@ -848,8 +853,12 @@ def studio_create_project():
     db.session.add(project)
     db.session.flush()
     db.session.add(StudioBlock(
-        project_id=project.id, name=STUDIO_DEFAULT_BLOCK_NAME, is_default=True,
+        project_id=project.id, name=STUDIO_DEFAULT_BLOCK_NAME, is_default=True, kind="normal",
         x=80, y=200, width=160, height=40, color="#3ea6ff",
+    ))
+    db.session.add(StudioBlock(
+        project_id=project.id, name=STUDIO_SPAWN_BLOCK_NAME, is_default=True, kind="spawn",
+        x=80, y=100, width=40, height=40, color="#3ea6ff",
     ))
     db.session.commit()
     return redirect(url_for("studio_editor_page", project_id=project.id))
@@ -900,7 +909,31 @@ def api_studio_state(project_id):
     project = db.get_or_404(StudioProject, project_id)
     if project.owner_id != user.id:
         return jsonify({"ok": False, "error": "forbidden"}), 403
-    return jsonify({"ok": True, "blocks": [serialize_studio_block(b) for b in project.blocks]})
+    return jsonify({
+        "ok": True,
+        "blocks": [serialize_studio_block(b) for b in project.blocks],
+        "script_code": project.script_code or "",
+    })
+
+
+@app.route("/api/studio/<int:project_id>/script", methods=["POST"])
+def api_studio_update_script(project_id):
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    project = db.get_or_404(StudioProject, project_id)
+    if project.owner_id != user.id:
+        return jsonify({"ok": False, "error": "forbidden"}), 403
+
+    data = request.get_json(silent=True) or {}
+    code = data.get("script_code") or ""
+    if len(code) > STUDIO_MAX_SCRIPT_LENGTH:
+        return jsonify({"ok": False, "error": "script_too_long"}), 400
+
+    project.script_code = code
+    project.updated_at = datetime.now(timezone.utc)
+    db.session.commit()
+    return jsonify({"ok": True})
 
 
 @app.route("/api/studio/<int:project_id>/block", methods=["POST"])
@@ -915,7 +948,10 @@ def api_studio_create_block(project_id):
         return jsonify({"ok": False, "error": "too_many_blocks"}), 400
 
     data = request.get_json(silent=True) or {}
-    base_name = (data.get("name") or "Block").strip()[:50] or "Block"
+    kind = data.get("kind") or "normal"
+    if kind not in STUDIO_BLOCK_KINDS:
+        kind = "normal"
+    base_name = (data.get("name") or ("Checkpoint" if kind == "checkpoint" else "Block")).strip()[:50] or "Block"
     name = base_name
     suffix = 2
     existing_names = {b.name for b in project.blocks}
@@ -923,7 +959,10 @@ def api_studio_create_block(project_id):
         name = f"{base_name}{suffix}"
         suffix += 1
 
-    block = StudioBlock(project_id=project.id, name=name, x=40, y=40, width=140, height=40, color="#3ea6ff")
+    block = StudioBlock(
+        project_id=project.id, name=name, kind=kind,
+        x=40, y=40, width=140, height=40, color="#3ea6ff",
+    )
     db.session.add(block)
     project.updated_at = datetime.now(timezone.utc)
     db.session.commit()
@@ -967,12 +1006,6 @@ def api_studio_update_block(project_id, block_id):
                 value = max(10, value)
             setattr(block, field, value)
 
-    if "script_code" in data:
-        code = data.get("script_code") or ""
-        if len(code) > 20000:
-            return jsonify({"ok": False, "error": "script_too_long"}), 400
-        block.script_code = code
-
     project.updated_at = datetime.now(timezone.utc)
     db.session.commit()
     return jsonify({"ok": True, "block": serialize_studio_block(block)})
@@ -1003,7 +1036,10 @@ def studio_play_page(project_id):
     if not project.published and not is_owner:
         abort(404)
     blocks = [serialize_studio_block(b) for b in project.blocks]
-    return render_template("studio_play.html", user=user, project=project, blocks_json=blocks)
+    return render_template(
+        "studio_play.html", user=user, project=project,
+        blocks_json=blocks, script_code=project.script_code or "",
+    )
 
 
 @app.route("/api/studio/<int:project_id>/award", methods=["POST"])

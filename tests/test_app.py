@@ -2627,16 +2627,17 @@ def test_studio_requires_login(client):
     assert "/login" in response.headers["Location"]
 
 
-def test_studio_create_project_adds_default_block(client):
+def test_studio_create_project_adds_default_blocks(client):
     register(client)
     create_studio_project(client)
 
     project = StudioProject.query.filter_by(name="Testspiel").first()
     assert project is not None
     assert project.published is False
-    assert len(project.blocks) == 1
-    assert project.blocks[0].name == "Part1"
-    assert project.blocks[0].is_default is True
+    assert len(project.blocks) == 2
+    names_and_kinds = {b.name: b.kind for b in project.blocks}
+    assert names_and_kinds == {"Part1": "normal", "SpawnPart": "spawn"}
+    assert all(b.is_default for b in project.blocks)
 
 
 def test_studio_editor_forbidden_for_non_owner(client):
@@ -2753,5 +2754,56 @@ def test_studio_award_rejects_absurd_amount(client):
 
     response = client.post(f"/api/studio/{project.id}/award", json={"amount": 999999})
     assert response.status_code == 400
+
+
+def test_studio_create_block_accepts_checkpoint_kind(client):
+    register(client)
+    create_studio_project(client)
+    project = StudioProject.query.filter_by(name="Testspiel").first()
+
+    res = client.post(f"/api/studio/{project.id}/block", json={"kind": "checkpoint"})
+    data = res.get_json()
+    assert data["ok"] is True
+    assert data["block"]["kind"] == "checkpoint"
+
+    invalid_res = client.post(f"/api/studio/{project.id}/block", json={"kind": "not-a-real-kind"})
+    assert invalid_res.get_json()["block"]["kind"] == "normal"
+
+
+def test_studio_spawn_block_cannot_be_deleted(client):
+    register(client)
+    create_studio_project(client)
+    project = StudioProject.query.filter_by(name="Testspiel").first()
+    spawn_block = next(b for b in project.blocks if b.kind == "spawn")
+
+    res = client.post(f"/api/studio/{project.id}/block/{spawn_block.id}/delete")
+    assert res.status_code == 400
+    assert res.get_json()["error"] == "default_block_locked"
+
+
+def test_studio_script_is_project_wide_not_per_block(client):
+    register(client)
+    create_studio_project(client)
+    project = StudioProject.query.filter_by(name="Testspiel").first()
+
+    script = "⇒ Part1\n⇒ touch\n⇒ give .Player \"Bonus\",\"+5\",\"coins\"\n⇒ canColide(.true)\n⇓"
+    save_res = client.post(f"/api/studio/{project.id}/script", json={"script_code": script})
+    assert save_res.get_json()["ok"] is True
+
+    state_res = client.get(f"/api/studio/{project.id}/state")
+    state_data = state_res.get_json()
+    assert state_data["script_code"] == script
+    assert "script_code" not in state_data["blocks"][0]
+
+
+def test_studio_script_endpoint_requires_ownership(client):
+    register(client, username="alice")
+    create_studio_project(client)
+    project = StudioProject.query.filter_by(name="Testspiel").first()
+
+    client.post("/logout")
+    register(client, username="bob")
+    res = client.post(f"/api/studio/{project.id}/script", json={"script_code": "⇒ x"})
+    assert res.status_code == 403
 
 

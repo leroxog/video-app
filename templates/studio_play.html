@@ -5,7 +5,8 @@
     <div class="studio-play-page" id="studioPlayPage"
          data-project-id="{{ project.id }}"
          data-logged-in="{{ '1' if user else '0' }}"
-         data-blocks='{{ blocks_json|tojson }}'>
+         data-blocks='{{ blocks_json|tojson }}'
+         data-script='{{ script_code|tojson }}'>
         <div class="studio-play-hud">
             <a class="studio-play-back" href="{{ url_for('games_page') }}">&larr;</a>
             <span class="studio-play-title">{{ project.name }}</span>

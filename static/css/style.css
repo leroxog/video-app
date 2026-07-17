@@ -4459,10 +4459,10 @@ body.studio-fullscreen {
     padding: 2px;
 }
 
-.studio-props-hint {
+.studio-props-kind {
     margin-top: 1rem;
     font-size: 0.78rem;
-    color: #666;
+    color: #9fd3ff;
 }
 
 .studio-canvas-wrap {
@@ -4542,6 +4542,10 @@ body.studio-fullscreen {
     color: #aaa;
 }
 
+.studio-new-block-wrap {
+    position: relative;
+}
+
 #studioNewBlockBtn {
     width: 30px;
     height: 30px;
@@ -4553,6 +4557,34 @@ body.studio-fullscreen {
     font-weight: 700;
     cursor: pointer;
     line-height: 1;
+}
+
+.studio-new-block-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 50;
+    flex-direction: column;
+    background: #1c1c1c;
+    border: 1px solid #3c3c3c;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.studio-new-block-menu button {
+    background: none;
+    border: none;
+    color: #f1f1f1;
+    padding: 0.55rem 0.9rem;
+    text-align: left;
+    cursor: pointer;
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+
+.studio-new-block-menu button:hover {
+    background: #2c2c2c;
 }
 
 .studio-block-list {
@@ -4625,8 +4657,8 @@ body.studio-fullscreen {
     position: fixed;
     top: 15%;
     left: 30%;
-    width: 420px;
-    height: 320px;
+    width: 460px;
+    height: 360px;
     min-width: 260px;
     min-height: 180px;
     z-index: 600;
@@ -4661,17 +4693,62 @@ body.studio-fullscreen {
     line-height: 1;
 }
 
-.studio-code-textarea {
+.studio-code-editor-wrap {
+    position: relative;
     flex: 1 1 auto;
-    resize: none;
+    min-height: 0;
+}
+
+.studio-code-textarea,
+.studio-code-ghost {
+    position: absolute;
+    inset: 0;
+    margin: 0;
     border: none;
-    outline: none;
-    background: #0f0f11;
-    color: #7ef9c0;
     font-family: "Consolas", "Courier New", monospace;
     font-size: 0.9rem;
-    padding: 0.7rem;
     line-height: 1.5;
+    padding: 0.7rem;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+.studio-code-textarea {
+    resize: none;
+    outline: none;
+    background: transparent;
+    color: #7ef9c0;
+    caret-color: #7ef9c0;
+    overflow: auto;
+}
+
+.studio-code-ghost {
+    color: transparent;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+.studio-code-ghost .ghost-suggestion {
+    color: #5a5f66;
+}
+
+.studio-code-hint {
+    margin: 0;
+    padding: 0.35rem 0.7rem;
+    font-size: 0.72rem;
+    color: #666;
+    border-top: 1px solid #2c2c2c;
+}
+
+.studio-editor-code-toggle-btn {
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    border: 1px solid #3c3c3c;
+    background: none;
+    color: #f1f1f1;
+    font-size: 0.9rem;
+    cursor: pointer;
 }
 
 .studio-code-panel-resize {
