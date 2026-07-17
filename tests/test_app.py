@@ -191,12 +191,6 @@ def test_api_upload_sound_defaults_title_from_filename(client):
     assert payload["sound"]["title"] == "mein_toller_sound"
 
 
-def test_index_shows_upload_bonus_banner(client):
-    response = client.get("/")
-    assert b"upload-bonus-banner" in response.data
-    assert "+100 Punkte".encode() in response.data
-
-
 def test_upload_awards_bonus_points(client):
     register(client)
     with flask_app.app_context():
@@ -303,28 +297,10 @@ def test_upload_rejects_bad_extension(client):
     assert "erlaubt".encode() in response.data
 
 
-def test_search_easter_egg_shows_place_label(client):
-    response = client.get("/?q=timeskip/place")
-    assert b"timeskip/place" in response.data
-    assert b"place-label" in response.data
-
-
-def test_search_easter_egg_shows_tictactoe_label(client):
-    response = client.get("/?q=timeskip/tic.tac.toe")
-    assert "timeskip/tic.tac.toe".encode() in response.data
-    assert b"place-label" in response.data
-
-
 def test_tictactoe_page_accessible_without_login(client):
     response = client.get("/tictactoe")
     assert response.status_code == 200
     assert b"tictactoe-board" in response.data
-
-
-def test_search_easter_egg_shows_fruitmerge_label(client):
-    response = client.get("/?q=timeskip/fruit.merge")
-    assert "timeskip/fruit.merge".encode() in response.data
-    assert b"place-label" in response.data
 
 
 def test_fruitmerge_page_accessible_without_login(client):
@@ -337,7 +313,7 @@ def test_header_search_bar_present_on_every_page(client):
     for path in ["/", "/login", "/register"]:
         response = client.get(path)
         assert b"headerSearchInput" in response.data
-        assert b"bottom-nav-house" in response.data
+        assert b"bottom-nav-games-btn" in response.data
 
 
 def test_service_worker_served_from_root_for_full_scope(client):
@@ -366,38 +342,11 @@ def test_header_search_bar_present_on_feed_page(client):
     assert b"headerSearchInput" in response.data
 
 
-def test_search_hint_shows_a_game_suggestion(client):
-    response = client.get("/")
-    assert b"search-hint" in response.data
-    assert any(
-        term.encode() in response.data
-        for term in [
-            "timeskip/place",
-            "timeskip/tic.tac.toe",
-            "timeskip/fruit.merge",
-            "timeskip/gravity.run",
-            "timeskip/knife.hit",
-        ]
-    )
-
-
-def test_search_easter_egg_shows_gravityrun_label(client):
-    response = client.get("/?q=timeskip/gravity.run")
-    assert "timeskip/gravity.run".encode() in response.data
-    assert b"place-label" in response.data
-
-
 def test_gravityrun_page_accessible_without_login(client):
     response = client.get("/gravityrun")
     assert response.status_code == 200
     assert b"runCanvas" in response.data
     assert b"mp-lobby-options" in response.data
-
-
-def test_search_easter_egg_shows_knifehit_label(client):
-    response = client.get("/?q=timeskip/knife.hit")
-    assert "timeskip/knife.hit".encode() in response.data
-    assert b"place-label" in response.data
 
 
 def test_knifehit_page_accessible_without_login(client):
@@ -407,22 +356,10 @@ def test_knifehit_page_accessible_without_login(client):
     assert b"mp-lobby-options" in response.data
 
 
-def test_search_easter_egg_shows_flappybird_label(client):
-    response = client.get("/?q=timeskip/flappy.bird")
-    assert "timeskip/flappy.bird".encode() in response.data
-    assert b"place-label" in response.data
-
-
 def test_flappybird_page_accessible_without_login(client):
     response = client.get("/flappybird")
     assert response.status_code == 200
     assert b"flappyCanvas" in response.data
-
-
-def test_search_easter_egg_shows_blockbuster_label(client):
-    response = client.get("/?q=timeskip/block.buster")
-    assert "timeskip/block.buster".encode() in response.data
-    assert b"place-label" in response.data
 
 
 def test_blockbuster_page_accessible_without_login(client):
@@ -436,11 +373,16 @@ def test_place_requires_login(client):
     assert b"Login" in response.data
 
 
-def test_games_page_accessible_without_login_and_lists_all_games(client):
+def test_games_page_accessible_without_login_and_lists_published_studio_games(client):
+    register(client)
+    client.post("/studio/create", data={"name": "Testspiel"}, follow_redirects=True)
+    project = StudioProject.query.filter_by(name="Testspiel").first()
+    client.post(f"/studio/{project.id}/publish")
+    client.post("/logout")
+
     response = client.get("/games")
     assert response.status_code == 200
-    assert b"timeskip/fruit.merge" in response.data
-    assert b"timeskip/coin.flip" in response.data
+    assert b"Testspiel" in response.data
 
 
 def test_camera_page_requires_login(client):
@@ -455,37 +397,11 @@ def test_camera_page_accessible_when_logged_in(client):
     assert b"cameraCanvas" in response.data
 
 
-def test_bottom_nav_has_games_and_camera_buttons(client):
+def test_bottom_nav_has_games_and_plus_buttons(client):
     response = client.get("/")
     assert b"bottom-nav-games-btn" in response.data
-    assert b"bottom-nav-camera-btn" in response.data
-
-
-def test_fuzzy_search_matches_game_without_exact_term(client):
-    response = client.get("/?q=fruit merge")
-    assert "timeskip/fruit.merge".encode() in response.data
-    assert b"place-label" in response.data
-
-
-def test_fuzzy_search_matches_typo_in_game_term(client):
-    response = client.get("/?q=fruitmerge")
-    assert "timeskip/fruit.merge".encode() in response.data
-
-
-def test_homepage_shows_game_showcase_row(client):
-    response = client.get("/")
-    assert b"game-showcase-row" in response.data
-    assert b"game-showcase-card" in response.data
-
-
-def test_most_played_game_gets_highlighted(client):
-    client.get("/fruitmerge")
-    client.get("/fruitmerge")
-    client.get("/gravityrun")
-
-    response = client.get("/")
-    assert b"most-played" in response.data
-    assert b"MEISTGESPIELT" in response.data
+    assert b"bottom-nav-plus" in response.data
+    assert b"bottom-nav-avatar" in response.data
 
 
 def test_redeem_code_awards_points(client):
@@ -584,37 +500,10 @@ def test_share_app_available_again_after_cooldown_window(client):
     assert data["total_score"] == app_module.APP_SHARE_POINTS
 
 
-def test_homepage_shows_app_share_banner_for_logged_in_user(client):
-    import app as app_module
-
-    register(client, username="alice")
+def test_homepage_shows_three_step_explainer(client):
     response = client.get("/")
-    assert b"app-share-banner" in response.data
-    assert str(app_module.APP_SHARE_POINTS).encode() in response.data
-
-
-def test_homepage_shows_redeem_section_for_guest(client):
-    response = client.get("/")
-    assert b"CODES EINL\xc3\x96SEN" in response.data
-    assert "+ 500 PUNKTE BEI ANMELDUNG".encode() in response.data
-
-
-def test_homepage_shows_redeem_code_chip_for_user(client):
-    register(client)
-    response = client.get("/")
-    assert b"FREE FOR ALL" in response.data
-    assert "CODE ERHALTEN".encode() in response.data
-
-
-def test_homepage_shows_secret_tip_only_for_logged_in_users(client):
-    guest_response = client.get("/")
-    assert "GEHEIM TIPP".encode() not in guest_response.data
-
-    register(client)
-    user_response = client.get("/")
-    assert "GEHEIM TIPP".encode() in user_response.data
-    assert "COIN FLIPP".encode() in user_response.data
-    assert b'href="/coinflip"' in user_response.data
+    assert response.status_code == 200
+    assert b"steps-row" in response.data
 
 
 def test_place_pixel_flow(client):
@@ -674,13 +563,16 @@ def test_feed_page_has_download_link(client):
     assert b"Herunterladen" in response.data
 
 
-def test_profile_page_shows_username_and_posts(client):
+def test_profile_page_shows_username_and_published_games(client):
     register(client, username="bob")
-    upload_post(client, caption="Bobs Foto")
+    client.post("/studio/create", data={"name": "Bobs Spiel"}, follow_redirects=True)
+    project = StudioProject.query.filter_by(name="Bobs Spiel").first()
+    client.post(f"/studio/{project.id}/publish")
+
     response = client.get("/user/bob")
     assert response.status_code == 200
     assert b"bob" in response.data
-    assert b"Bobs Foto" in response.data
+    assert b"Bobs Spiel" in response.data
 
 
 def test_profile_page_404_for_unknown_user(client):
@@ -1020,9 +912,8 @@ def test_feed_shows_swipe_dots_for_multi_photo_post(client):
     assert b"post-photo-dot" in response.data
 
 
-def test_homepage_shows_redeem_login_button_for_guest(client):
+def test_homepage_shows_register_cta_for_guest(client):
     response = client.get("/")
-    assert b"redeem-login-btn" in response.data
     assert b'href="/register"' in response.data
 
 
@@ -1031,25 +922,22 @@ def test_api_my_stats_requires_login(client):
     assert response.status_code == 401
 
 
-def test_api_my_stats_reports_likes_and_followers(client):
+def test_api_my_stats_reports_published_games_and_followers(client):
     register(client, username="alice")
-    upload_post(client, caption="Stats Photo")
+    create_studio_project(client)
+    project = StudioProject.query.filter_by(name="Testspiel").first()
+    client.post(f"/studio/{project.id}/publish")
     client.post("/logout")
 
     register(client, username="bob")
-    client.post("/api/post/1/like")
     client.post("/user/alice/subscribe")
-    client.post("/logout")
-
-    register(client, username="carol")
-    client.post("/api/post/1/like")
     client.post("/logout")
 
     client.post("/login", data={"username": "alice", "password": "secret123"})
     response = client.get("/api/my-stats")
     assert response.status_code == 200
     data = response.get_json()
-    assert data == {"ok": True, "likes_received": 2, "followers": 1}
+    assert data == {"ok": True, "games_published": 1, "followers": 1}
 
 
 def test_homepage_bottom_nav_has_stats_bubble_markup_for_user(client):
@@ -2130,11 +2018,6 @@ def start_lobby_via_api(client, lobby_id):
 def test_make_a_meme_page_requires_login(client):
     response = client.get("/make-a-meme", follow_redirects=True)
     assert b"Login" in response.data
-
-
-def test_games_page_includes_make_a_meme(client):
-    response = client.get("/games")
-    assert b"timeskip/make.a.meme" in response.data
 
 
 def test_meme_create_lobby_and_join(client):

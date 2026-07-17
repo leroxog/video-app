@@ -688,32 +688,9 @@ def offline_page():
 
 @app.route("/")
 def index():
-    query = request.args.get("q", "").strip()
-    matched_game = find_best_game_match(query)
-
-    play_counts = {row.game_key: row.count for row in GamePlayCount.query.all()}
-    games_ordered = sorted(GAMES, key=lambda g: play_counts.get(g["key"], 0), reverse=True)
-    most_played_key = games_ordered[0]["key"] if play_counts.get(games_ordered[0]["key"], 0) > 0 else None
-
     user = current_user()
-    redeemed_codes = set()
-    if user is not None:
-        redeemed_codes = {r.code for r in RedeemedCode.query.filter_by(user_id=user.id).all()}
-
-    return render_template(
-        "index.html",
-        user=user,
-        query=query,
-        matched_game=matched_game,
-        games_ordered=games_ordered,
-        most_played_key=most_played_key,
-        public_promo_code=PUBLIC_PROMO_CODE,
-        public_promo_code_redeemed=PUBLIC_PROMO_CODE in redeemed_codes,
-        game_suggestion=random.choice(GAME_SUGGESTIONS),
-        code_creation_min_points=CODE_CREATION_MIN_ORGANIC_POINTS,
-        code_creation_fee_percent=CODE_CREATION_FEE_PERCENT,
-        max_codes_per_batch=MAX_CODES_PER_BATCH,
-    )
+    recent_games = StudioProject.query.filter_by(published=True).order_by(StudioProject.updated_at.desc()).limit(8).all()
+    return render_template("index.html", user=user, recent_games=recent_games)
 
 
 @app.route("/register", methods=["GET", "POST"])
@@ -792,8 +769,14 @@ def leaderboard():
 @app.route("/games")
 def games_page():
     user = current_user()
-    studio_games = StudioProject.query.filter_by(published=True).order_by(StudioProject.updated_at.desc()).all()
-    return render_template("games.html", user=user, games=GAMES, studio_games=studio_games)
+    query = request.args.get("q", "").strip()
+    studio_query = StudioProject.query.filter_by(published=True)
+    if query:
+        studio_query = studio_query.join(User, StudioProject.owner_id == User.id).filter(
+            db.or_(StudioProject.name.ilike(f"%{query}%"), User.username.ilike(f"%{query}%"))
+        )
+    studio_games = studio_query.order_by(StudioProject.updated_at.desc()).all()
+    return render_template("games.html", user=user, studio_games=studio_games, query=query)
 
 
 @app.route("/camera")
@@ -824,6 +807,55 @@ def serialize_studio_block(block):
         "height": block.height,
         "color": block.color,
     }
+
+
+def studio_project_thumbnail_svg(project):
+    """A deterministic SVG preview of a project's level, built straight from
+    its own blocks -- every game's thumbnail genuinely reflects what its
+    creator built, the way a real screenshot would, without needing an
+    upload/storage pipeline for it."""
+    view_w, view_h = 320, 240
+    blocks = project.blocks
+    if not blocks:
+        return (
+            f'<svg viewBox="0 0 {view_w} {view_h}" xmlns="http://www.w3.org/2000/svg">'
+            f'<rect width="{view_w}" height="{view_h}" fill="#dfe9f5"/></svg>'
+        )
+
+    min_x = min(b.x for b in blocks)
+    min_y = min(b.y for b in blocks)
+    max_x = max(b.x + b.width for b in blocks)
+    max_y = max(b.y + b.height for b in blocks)
+    span_x = max(max_x - min_x, 1)
+    span_y = max(max_y - min_y, 1)
+    pad = max(span_x, span_y) * 0.15
+    min_x -= pad
+    min_y -= pad
+    span_x += pad * 2
+    span_y += pad * 2
+
+    scale = min(view_w / span_x, view_h / span_y)
+    offset_x = (view_w - span_x * scale) / 2
+    offset_y = (view_h - span_y * scale) / 2
+
+    rects = []
+    for b in blocks:
+        rx = offset_x + (b.x - min_x) * scale
+        ry = offset_y + (b.y - min_y) * scale
+        rw = max(b.width * scale, 2)
+        rh = max(b.height * scale, 2)
+        color = b.color if re.fullmatch(r"#[0-9a-fA-F]{6}", b.color or "") else "#3ea6ff"
+        rects.append(f'<rect x="{rx:.1f}" y="{ry:.1f}" width="{rw:.1f}" height="{rh:.1f}" fill="{color}" rx="2"/>')
+
+    return (
+        f'<svg viewBox="0 0 {view_w} {view_h}" xmlns="http://www.w3.org/2000/svg">'
+        f'<rect width="{view_w}" height="{view_h}" fill="#dfe9f5"/>'
+        + "".join(rects) +
+        "</svg>"
+    )
+
+
+app.template_global()(studio_project_thumbnail_svg)
 
 
 @app.route("/studio")
@@ -1235,9 +1267,9 @@ def api_my_stats():
     if user is None:
         return jsonify({"ok": False, "error": "not_logged_in"}), 401
 
-    likes_received = sum(len(p.likes) for p in user.posts)
+    games_published = StudioProject.query.filter_by(owner_id=user.id, published=True).count()
     followers = len(user.subscribers)
-    return jsonify({"ok": True, "likes_received": likes_received, "followers": followers})
+    return jsonify({"ok": True, "games_published": games_published, "followers": followers})
 
 
 @app.route("/upload", methods=["GET", "POST"])
@@ -1742,19 +1774,18 @@ def profile(username):
             subscriber_id=user.id, channel_id=profile_user.id
         ).first() is not None
 
-    posts = Post.query.filter_by(user_id=profile_user.id).order_by(Post.created_at.desc()).all()
-    likes_received = sum(len(p.likes) for p in posts)
+    games = StudioProject.query.filter_by(owner_id=profile_user.id, published=True) \
+        .order_by(StudioProject.updated_at.desc()).all()
 
     return render_template(
         "profile.html",
         profile_user=profile_user,
-        posts=posts,
+        games=games,
         user=user,
         is_own_profile=is_own_profile,
         is_subscribed=is_subscribed,
         subscriber_count=len(profile_user.subscribers),
         following_count=len(profile_user.subscriptions_made),
-        likes_received=likes_received,
     )
 
 

@@ -1,32 +1,27 @@
 {% extends "base.html" %}
 {% block title %}Spiele - timeskip{% endblock %}
 {% block content %}
-    <h1>Alle Spiele</h1>
-    {% include "partials/_app_share_banner.html" %}
-    <div class="games-grid">
-        {% for game in games %}
-            <a class="place-label games-grid-card" href="{{ url_for(game.endpoint) }}">
-                <div class="place-label-icon {{ game.icon_class }}"></div>
-                <div>
-                    <div class="place-label-title">{{ game.title }}</div>
-                    <div class="place-label-sub">{{ game.subtitle }}</div>
-                </div>
-            </a>
-        {% endfor %}
-    </div>
+    <div class="gallery-page">
+        <h1>Spiele</h1>
+        {% if query %}
+            <p class="gallery-query-note">Ergebnisse f&uuml;r &bdquo;{{ query }}&ldquo; &mdash; <a href="{{ url_for('games_page') }}">Suche zur&uuml;cksetzen</a></p>
+        {% endif %}
 
-    {% if studio_games %}
-        <h2>timeskip studio</h2>
-        <div class="games-grid">
-            {% for project in studio_games %}
-                <a class="place-label games-grid-card" href="{{ url_for('studio_play_page', project_id=project.id) }}">
-                    <div class="place-label-icon studio-game-icon"></div>
-                    <div>
-                        <div class="place-label-title">{{ project.name }}</div>
-                        <div class="place-label-sub">von {{ project.owner.username }}</div>
-                    </div>
-                </a>
-            {% endfor %}
-        </div>
-    {% endif %}
+        {% if studio_games %}
+            <div class="games-grid">
+                {% for project in studio_games %}
+                    {% include "partials/_game_card.html" %}
+                {% endfor %}
+            </div>
+        {% elif query %}
+            <p class="gallery-empty-note">Kein Spiel gefunden f&uuml;r &bdquo;{{ query }}&ldquo;.</p>
+        {% else %}
+            <div class="gallery-empty-state">
+                <p>Noch keine Spiele ver&ouml;ffentlicht.</p>
+                {% if user %}
+                    <a class="hero-cta-primary" href="{{ url_for('studio_projects_page') }}">Erstes Spiel programmieren</a>
+                {% endif %}
+            </div>
+        {% endif %}
+    </div>
 {% endblock %}

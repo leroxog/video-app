@@ -1,220 +1,54 @@
 {% extends "base.html" %}
-{% block title %}timeskip{% endblock %}
+{% block title %}timeskip &mdash; Spiele programmieren lernen{% endblock %}
 {% block content %}
-    {% if not user %}
-        <div class="promo-banner" id="promoBanner">
-            <button type="button" class="promo-close" id="promoClose" title="Schliessen">&times;</button>
-            <div class="promo-title">Empfehlung von Hersteller!</div>
-            <div class="promo-game">Spiel Fruit Merge</div>
-            <a class="promo-play" href="{{ url_for('fruitmerge') }}">SPIELEN</a>
+    <section class="hero">
+        <h1 class="hero-title">Programmiere dein eigenes Spiel.</h1>
+        <p class="hero-subtitle">
+            timeskip studio ist eine Lernplattform f&uuml;r Schulen und Kinder &mdash;
+            baue Level, schreibe die Regeln daf&uuml;r und ver&ouml;ffentliche dein Spiel
+            f&uuml;r alle.
+        </p>
+        <div class="hero-actions">
+            {% if user %}
+                <a class="hero-cta-primary" href="{{ url_for('studio_projects_page') }}">Jetzt programmieren</a>
+            {% else %}
+                <a class="hero-cta-primary" href="{{ url_for('register') }}">Kostenlos loslegen</a>
+                <a class="hero-cta-secondary" href="{{ url_for('games_page') }}">Spiele entdecken</a>
+            {% endif %}
         </div>
-        <script>
-            document.getElementById("promoClose").addEventListener("click", function () {
-                document.getElementById("promoBanner").remove();
-            });
-        </script>
-    {% else %}
-        <div class="secret-tip-banner">
-            <div class="secret-tip-label">GEHEIM TIPP</div>
-            <div class="secret-tip-title">Spiele COIN FLIPP</div>
-            <div class="secret-tip-preview">
-                <div class="secret-tip-coin">
-                    <div class="secret-tip-coin-inner">
-                        <div class="secret-tip-coin-face secret-tip-coin-front">
-                            <svg viewBox="0 0 60 60"><circle cx="30" cy="30" r="28" fill="#e8b923" stroke="#b8890f" stroke-width="3"/><text x="30" y="40" text-anchor="middle" font-size="28" font-weight="bold" fill="#7a5c0a">$</text></svg>
-                        </div>
-                        <div class="secret-tip-coin-face secret-tip-coin-back">
-                            <svg viewBox="0 0 60 60"><circle cx="30" cy="30" r="28" fill="#c9c9c9" stroke="#8f8f8f" stroke-width="3"/><rect x="16" y="24" width="8" height="18" fill="#6b6b6b"/><rect x="26" y="18" width="8" height="24" fill="#5a5a5a"/><rect x="36" y="27" width="8" height="15" fill="#6b6b6b"/></svg>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <a class="secret-tip-play" href="{{ url_for('coinflip') }}">SPIELEN</a>
+    </section>
+
+    <section class="steps-row">
+        <div class="step-card">
+            <div class="step-number">1</div>
+            <h2>Programmieren</h2>
+            <p>Baue dein Level aus Bl&ouml;cken und schreibe mit unserer einfachen Sprache, was passieren soll.</p>
         </div>
-    {% endif %}
+        <div class="step-arrow" aria-hidden="true">&rarr;</div>
+        <div class="step-card">
+            <div class="step-number">2</div>
+            <h2>Ver&ouml;ffentlichen</h2>
+            <p>Ein Klick auf &bdquo;Ver&ouml;ffentlichen&ldquo; und dein Spiel ist online.</p>
+        </div>
+        <div class="step-arrow" aria-hidden="true">&rarr;</div>
+        <div class="step-card">
+            <div class="step-number">3</div>
+            <h2>Spielen</h2>
+            <p>Dein Spiel erscheint in der Galerie &mdash; alle k&ouml;nnen es sofort ausprobieren.</p>
+        </div>
+    </section>
 
-    <div class="upload-bonus-banner">Jedes hochgeladene Foto bringt <strong>+100 Punkte</strong>, jeder Like <strong>+60 Punkte</strong> &mdash; <a href="{{ url_for('feed') }}">Fotos ansehen</a></div>
-
-    {% include "partials/_app_share_banner.html" %}
-
-    <div class="game-showcase-row">
-        {% for game in games_ordered %}
-            <a class="game-showcase-card {{ 'most-played' if game.key == most_played_key else '' }}" href="{{ url_for(game.endpoint) }}">
-                {% if game.key == most_played_key %}
-                    <div class="game-showcase-badge">MEISTGESPIELT</div>
-                {% endif %}
-                <div class="game-showcase-icon {{ game.icon_class }}"></div>
-                <div class="game-showcase-title">{{ game.title }}</div>
-            </a>
-        {% endfor %}
-    </div>
-
-    {% if query %}
-        <p><a class="clear-search" href="{{ url_for('index') }}">&times; Suche zurücksetzen</a></p>
-    {% endif %}
-    <div class="search-hint-row" id="searchHintRow">
-        <button type="button" class="search-hint" id="searchHintBtn" data-suggestion="{{ game_suggestion }}">
-            &#128161; Probiere z.B. {{ game_suggestion }}
-        </button>
-        <button type="button" class="search-hint-reroll" id="searchHintReroll" title="Anderer Vorschlag">&#128260;</button>
-    </div>
-    {% if matched_game %}
-        <a class="place-label" href="{{ url_for(matched_game.endpoint) }}">
-            <div class="place-label-icon {{ matched_game.icon_class }}"></div>
-            <div>
-                <div class="place-label-title">{{ matched_game.title }}</div>
-                <div class="place-label-sub">{{ matched_game.subtitle }} &mdash; jetzt spielen</div>
+    {% if recent_games %}
+        <section class="recent-games-section">
+            <div class="recent-games-header">
+                <h2>Neueste Spiele</h2>
+                <a class="recent-games-see-all" href="{{ url_for('games_page') }}">Alle ansehen &rarr;</a>
             </div>
-        </a>
-    {% elif query %}
-        <p>Kein Spiel gefunden für "{{ query }}".</p>
-    {% endif %}
-
-    <div class="redeem-section">
-        <h2>CODES EINLÖSEN</h2>
-        {% if not user %}
-            <p class="redeem-guest-teaser">+ 500 PUNKTE BEI ANMELDUNG</p>
-            <a class="redeem-login-btn" href="{{ url_for('register') }}">Anmelden</a>
-        {% else %}
-            <p class="redeem-gold-msg">CODE ERHALTEN</p>
-            <div class="redeem-code-chip">{{ public_promo_code }}{% if public_promo_code_redeemed %} <span class="redeem-code-used">(eingelöst)</span>{% endif %}</div>
-            <form id="redeemForm" class="redeem-form">
-                <input type="text" id="redeemInput" placeholder="Code eingeben" autocomplete="off" required>
-                <button type="submit">Einlösen</button>
-                <button type="button" class="create-code-toggle-btn" id="createCodeToggleBtn" title="Eigenen Code erstellen">+</button>
-            </form>
-            <p class="redeem-status" id="redeemStatus"></p>
-
-            <div class="create-code-panel" id="createCodePanel" style="display:none;">
-                {% if user.organic_points_earned < code_creation_min_points %}
-                    <p class="create-code-hint">Du brauchst mindestens {{ code_creation_min_points }} selbst erspielte Punkte (ohne Codes), um eigene Codes zu erstellen. Du hast aktuell {{ user.organic_points_earned }}.</p>
-                {% else %}
-                    <label for="codePointsInput">Punkte pro Code</label>
-                    <input type="number" id="codePointsInput" min="1" value="100">
-
-                    <label for="codeCountInput">Wie viele Codes?</label>
-                    <input type="number" id="codeCountInput" min="1" max="{{ max_codes_per_batch }}" value="1">
-
-                    <p class="create-code-fee-note">Bei jedem Code werden {{ code_creation_fee_percent }}% von den ursprünglichen Punkten abgezogen. Codes sind immer anonym.</p>
-                    <p class="create-code-preview" id="createCodePreview"></p>
-
-                    <button type="button" id="createCodeSubmitBtn">Codes erstellen</button>
-                    <p class="create-code-status" id="createCodeStatus"></p>
-                    <div class="create-code-results" id="createCodeResults" style="display:none;"></div>
-                {% endif %}
+            <div class="games-grid">
+                {% for project in recent_games %}
+                    {% include "partials/_game_card.html" %}
+                {% endfor %}
             </div>
-        {% endif %}
-    </div>
-
-    <script>
-        const GAME_TERMS = {{ games_ordered | map(attribute='search_term') | list | tojson }};
-        const hintBtn = document.getElementById("searchHintBtn");
-
-        hintBtn.addEventListener("click", function () {
-            const input = document.getElementById("headerSearchInput");
-            input.value = this.dataset.suggestion;
-            input.focus();
-        });
-
-        document.getElementById("searchHintReroll").addEventListener("click", function () {
-            let next;
-            do {
-                next = GAME_TERMS[Math.floor(Math.random() * GAME_TERMS.length)];
-            } while (next === hintBtn.dataset.suggestion && GAME_TERMS.length > 1);
-            hintBtn.dataset.suggestion = next;
-            hintBtn.innerHTML = "&#128161; Probiere z.B. " + next;
-        });
-
-        setTimeout(() => {
-            const row = document.getElementById("searchHintRow");
-            if (row) row.remove();
-        }, 7000);
-
-        const redeemForm = document.getElementById("redeemForm");
-        if (redeemForm) {
-            redeemForm.addEventListener("submit", async (event) => {
-                event.preventDefault();
-                const input = document.getElementById("redeemInput");
-                const status = document.getElementById("redeemStatus");
-                const code = input.value.trim();
-                if (!code) return;
-
-                const res = await fetch("{{ url_for('api_redeem_code') }}", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ code }),
-                });
-                const data = await res.json();
-                if (data.ok) {
-                    status.textContent = `Code eingelöst: +${data.points} Punkte!`;
-                    status.className = "redeem-status success";
-                    input.value = "";
-                } else if (data.error === "already_redeemed") {
-                    status.textContent = "Diesen Code hast du schon eingelöst.";
-                    status.className = "redeem-status error";
-                } else {
-                    status.textContent = "Ungültiger Code.";
-                    status.className = "redeem-status error";
-                }
-            });
-        }
-
-        const createCodeToggleBtn = document.getElementById("createCodeToggleBtn");
-        const createCodePanel = document.getElementById("createCodePanel");
-        if (createCodeToggleBtn && createCodePanel) {
-            createCodeToggleBtn.addEventListener("click", () => {
-                createCodePanel.style.display = createCodePanel.style.display === "none" ? "block" : "none";
-            });
-        }
-
-        const codePointsInput = document.getElementById("codePointsInput");
-        const codeCountInput = document.getElementById("codeCountInput");
-        const createCodePreview = document.getElementById("createCodePreview");
-        const FEE_PERCENT = {{ code_creation_fee_percent }};
-
-        function updateCodePreview() {
-            if (!createCodePreview) return;
-            const points = parseInt(codePointsInput.value, 10) || 0;
-            const count = parseInt(codeCountInput.value, 10) || 0;
-            const valuePerCode = Math.floor(points * (100 - FEE_PERCENT) / 100);
-            const totalCost = points * count;
-            createCodePreview.textContent =
-                `${count}x Code(s) im Wert von je ${valuePerCode} Punkten (nach ${FEE_PERCENT}% Gebühr) — kostet dich insgesamt ${totalCost} Punkte.`;
-        }
-
-        if (codePointsInput && codeCountInput) {
-            codePointsInput.addEventListener("input", updateCodePreview);
-            codeCountInput.addEventListener("input", updateCodePreview);
-            updateCodePreview();
-        }
-
-        const createCodeSubmitBtn = document.getElementById("createCodeSubmitBtn");
-        if (createCodeSubmitBtn) {
-            createCodeSubmitBtn.addEventListener("click", async () => {
-                const status = document.getElementById("createCodeStatus");
-                const results = document.getElementById("createCodeResults");
-                const points_per_code = parseInt(codePointsInput.value, 10);
-                const count = parseInt(codeCountInput.value, 10);
-
-                const res = await fetch("{{ url_for('api_create_codes') }}", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ points_per_code, count }),
-                });
-                const data = await res.json();
-                if (data.ok) {
-                    status.textContent = `${data.codes.length} Code(s) erstellt, je ${data.points_value} Punkte wert.`;
-                    status.className = "create-code-status success";
-                    results.style.display = "block";
-                    results.innerHTML = data.codes.map(c => `<div class="redeem-code-chip">${c}</div>`).join("");
-                } else if (data.error === "insufficient_funds") {
-                    status.textContent = "Du hast nicht genug Punkte dafür.";
-                    status.className = "create-code-status error";
-                } else {
-                    status.textContent = "Das hat nicht geklappt.";
-                    status.className = "create-code-status error";
-                }
-            });
-        }
-    </script>
+        </section>
+    {% endif %}
 {% endblock %}

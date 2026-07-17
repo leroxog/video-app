@@ -34,6 +34,10 @@
 
         <div class="profile-stats-row">
             <div class="profile-stat">
+                <span class="profile-stat-count">{{ games|length }}</span>
+                <span class="profile-stat-label">Spiele</span>
+            </div>
+            <div class="profile-stat">
                 <span class="profile-stat-count">{{ following_count }}</span>
                 <span class="profile-stat-label">Folge ich</span>
             </div>
@@ -41,20 +45,17 @@
                 <span class="profile-stat-count">{{ subscriber_count }}</span>
                 <span class="profile-stat-label">Follower</span>
             </div>
-            <div class="profile-stat">
-                <span class="profile-stat-count">{{ likes_received }}</span>
-                <span class="profile-stat-label">Gefällt mir</span>
-            </div>
         </div>
 
         <div class="profile-action-row">
-            {% if user and not is_own_profile %}
+            {% if is_own_profile %}
+                <a class="profile-action-btn profile-action-btn-primary" href="{{ url_for('studio_projects_page') }}">+ Neues Spiel</a>
+            {% elif user %}
                 <form action="{{ url_for('subscribe', username=profile_user.username) }}" method="post">
                     <button type="submit" class="profile-action-btn {{ 'profile-action-btn-outline' if is_subscribed else 'profile-action-btn-primary' }}">
                         {{ 'Gefolgt' if is_subscribed else 'Folgen' }}
                     </button>
                 </form>
-                <a class="profile-action-btn profile-action-btn-outline" href="{{ url_for('messages_page') }}">Nachricht</a>
             {% endif %}
         </div>
 
@@ -70,30 +71,19 @@
     </div>
 
     <div class="profile-tabs-row">
-        <span class="profile-tab profile-tab-active">Fotos</span>
+        <span class="profile-tab profile-tab-active">Spiele</span>
     </div>
 
-    {% if posts %}
-        <div class="video-grid">
-            {% for post in posts %}
-                <div class="video-card-wrap">
-                    <a class="video-card" href="{{ url_for('feed', post_id=post.id) }}">
-                        <img src="{{ media_url('posts', post.photos[0].filename) }}" alt="" loading="lazy">
-                        {% if post.photos|length > 1 %}
-                            <span class="post-card-multi-badge">1/{{ post.photos|length }}</span>
-                        {% endif %}
-                        <div class="video-card-info">
-                            {% if post.caption %}
-                                <div class="video-card-description">{{ post.caption }}</div>
-                            {% endif %}
-                        </div>
-                    </a>
-                    {% include "partials/_post_report_menu.html" %}
-                </div>
+    {% if games %}
+        <div class="games-grid">
+            {% for project in games %}
+                {% include "partials/_game_card.html" %}
             {% endfor %}
         </div>
     {% else %}
-        <p class="profile-empty-note">Noch keine Fotos hochgeladen.</p>
+        <p class="profile-empty-note">
+            {{ 'Noch keine Spiele veröffentlicht.' if not is_own_profile else 'Du hast noch keine Spiele veröffentlicht.' }}
+        </p>
     {% endif %}
 
     {% if is_own_profile and badges %}

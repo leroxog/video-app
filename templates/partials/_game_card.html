@@ -1,0 +1,14 @@
+<a class="game-card" href="{{ url_for('studio_play_page', project_id=project.id) }}">
+    <div class="game-card-thumb">{{ studio_project_thumbnail_svg(project)|safe }}</div>
+    <div class="game-card-info">
+        <div class="game-card-title">{{ project.name }}</div>
+        <div class="game-card-creator">
+            {% if project.owner.profile_image %}
+                <img class="game-card-avatar" src="{{ media_url('profile_pics', project.owner.profile_image) }}" alt="">
+            {% else %}
+                <span class="game-card-avatar game-card-avatar-placeholder">{{ project.owner.username[0]|upper }}</span>
+            {% endif %}
+            <span>{{ project.owner.username }}</span>
+        </div>
+    </div>
+</a>
