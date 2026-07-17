@@ -74,9 +74,9 @@
             chip.type = "button";
             chip.className = "studio-palette-block-chip";
             chip.style.background = b.color;
-            chip.textContent = `"${b.name}"`;
-            chip.title = `"${b.name}" einfügen`;
-            chip.addEventListener("click", () => insertAtCursor(`"${b.name}"`));
+            chip.textContent = `BLOCK "${b.name}"`;
+            chip.title = `BLOCK "${b.name}" einfügen`;
+            chip.addEventListener("click", () => insertAtCursor(`BLOCK "${b.name}"`));
             paletteBlocks.appendChild(chip);
         });
     }
@@ -300,10 +300,10 @@
     // immutable "⇒" / "⇓" glyphs and inline ghost-text suggestions. ---
     const ARROW = "⇒";
     const END = "⇓";
-    const TRIGGER_WORDS = ["touch", "click"];
-    const EFFECT_WORDS = ["kill", "give", "move", "trampoline", "teleport", "transparents"];
-    const COLLIDE_WORDS = ["canColide(.true)", "canColide(.false)"];
-    const INFINITE_WORD = "infinit.true";
+    const TRIGGER_WORDS = ["WENN BERÜHRT", "WENN KLICK", "WENN IMMER"];
+    const EFFECT_WORDS = ["TÖTEN", "GIB", "BEWEGEN", "SPRUNG", "TELEPORT", "DURCHSICHTIG"];
+    const COLLIDE_WORDS = ["FEST", "DURCHLÄSSIG"];
+    const INFINITE_WORD = "WIEDERHOLEN";
 
     function stripArrow(line) {
         return line.replace(new RegExp("^\\s*" + ARROW + "\\s?"), "");
@@ -374,8 +374,8 @@
         return match ? match.slice(typed.length) : "";
     }
 
-    // Rules are two content lines now: `"Block"=trigger` then the effect
-    // (optionally `=duration`), closed by canColide(...).
+    // Rules are three content lines: BLOCK "Name", WENN ..., then the
+    // effect, closed by FEST/DURCHLÄSSIG.
     function computeGhostSuggestion(fullText, cursorPos) {
         const before = fullText.slice(0, cursorPos);
         const lines = before.split("\n");
@@ -387,31 +387,27 @@
 
         let sinceBoundary = [];
         for (const l of priorLines) {
-            if (/canColide\s*\(/i.test(l)) {
+            if (/^(FEST|DURCHL[ÄA]SSIG)$/i.test(l)) {
                 sinceBoundary = [];
             } else {
                 sinceBoundary.push(l);
             }
         }
 
-        const hasInfinite = sinceBoundary.length > 0 && /^infinit\.true$/i.test(sinceBoundary[0]);
+        const hasInfinite = sinceBoundary.length > 0 && /^WIEDERHOLEN$/i.test(sinceBoundary[0]);
         const slot = hasInfinite ? sinceBoundary.length - 1 : sinceBoundary.length;
 
         if (slot === 0) {
-            const eqIdx = currentLineText.indexOf("=");
-            if (eqIdx === -1) {
-                const candidates = blocks.map((b) => `"${b.name}"`).concat([INFINITE_WORD]);
-                return suggestCompletion(candidates, currentLineText);
-            }
-            return suggestCompletion(TRIGGER_WORDS.concat([","]), currentLineText.slice(eqIdx + 1));
+            const candidates = blocks.map((b) => `BLOCK "${b.name}"`).concat([INFINITE_WORD]);
+            return suggestCompletion(candidates, currentLineText);
         }
         if (slot === 1) {
-            if (!/[\s="]/.test(currentLineText)) {
-                return suggestCompletion(EFFECT_WORDS, currentLineText);
-            }
-            return "";
+            return suggestCompletion(TRIGGER_WORDS, currentLineText);
         }
         if (slot === 2) {
+            return suggestCompletion(EFFECT_WORDS, currentLineText);
+        }
+        if (slot === 3) {
             return suggestCompletion(COLLIDE_WORDS, currentLineText);
         }
         return "";

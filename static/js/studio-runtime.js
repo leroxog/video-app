@@ -18,7 +18,7 @@
     const PLAYER_W = 18;
     const PLAYER_H = 34;
 
-    const showFigure = !/figures\s*=\s*false/i.test(scriptCode);
+    const showFigure = !window.StudioDSL.figuresDisabled(scriptCode);
 
     // One shared script for the whole game -- each rule names the block it
     // applies to, so a single script can drive any number of blocks.

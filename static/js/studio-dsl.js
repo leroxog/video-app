@@ -1,22 +1,23 @@
-// timeskip studio's block scripting language.
+// timeskip studio's block scripting language (v3 -- simple keyword form).
 //
 // Every real line starts with the (immutable) glyph "⇒" and a finished
-// script ends with an immutable "⇓" line. Each rule is a fixed sequence:
-//   [⇒ infinit.true]                 -- optional, repeats the effect every
-//                                        frame instead of firing once
-//   ⇒ "BlockName"=touch               -- which block, then when it fires:
-//                                        touch, click, or "," for an
-//                                        ambient rule that needs no player
-//                                        action at all
-//   ⇒ <effect> ...params...[=15sec.]  -- kill | give | move | trampoline |
-//                                        teleport | transparents, optionally
-//                                        followed by a duration (sec/min/
-//                                        hour) -- e.g. how long a move
-//                                        animates for
-//   ⇒ canColide(.true|.false)
-// canColide(...) always closes a rule, so a script can chain several rules.
-// Quotes around block names, numbers, and other literal values are the
-// intended style, but the parser accepts bare words too.
+// script ends with an immutable "⇓" line. Each rule is a fixed sequence
+// of plain keyword lines, no "=" anywhere -- values are always quoted:
+//   [⇒ WIEDERHOLEN]                    -- optional, repeats every frame
+//   ⇒ BLOCK "Name"                      -- which block the rule is about
+//   ⇒ WENN BERÜHRT | WENN KLICK | WENN IMMER
+//   ⇒ <effect line, see below>
+//   ⇒ FEST | DURCHLÄSSIG                -- solid, or players fall through
+// FEST/DURCHLÄSSIG always closes a rule, so a script can chain several.
+// Anywhere in the script: ⇒ FIGUREN AUS turns off the little player figure.
+//
+// Effects:
+//   TÖTEN [ALLE]
+//   GIB [ALLE] "+5" MÜNZEN
+//   BEWEGEN X"-84" Y"+3" [IN "15" SEKUNDEN|MINUTEN|STUNDEN]
+//   SPRUNG "15"
+//   TELEPORT [ALLE] X"10" Y"20"
+//   DURCHSICHTIG "50"
 (function (global) {
     function stripGlyphLines(code) {
         return (code || "")
@@ -25,89 +26,76 @@
             .filter((l) => l && l !== "⇓");
     }
 
-    function unquote(str) {
-        return String(str || "").trim().replace(/^["']|["']$/g, "");
+    function quoted(line, key) {
+        const m = line.match(new RegExp("\\b" + key + '\\s*"([^"]*)"', "i"));
+        return m ? m[1] : null;
     }
 
-    function num(str, fallback) {
-        const m = String(str).match(/[-+]?\d+(\.\d+)?/);
-        return m ? parseFloat(m[0]) : fallback;
+    function quotedNumber(line, key, fallback) {
+        const v = quoted(line, key);
+        if (v === null) return fallback;
+        const n = parseFloat(v);
+        return isNaN(n) ? fallback : n;
     }
 
-    function parseDurationMs(str) {
-        const m = String(str).match(/([-+]?\d+(?:\.\d+)?)\s*(sec|min|hour)/i);
+    function parseDuration(line) {
+        const m = line.match(/IN\s*"(-?\d+(?:\.\d+)?)"\s*(SEKUNDEN|MINUTEN|STUNDEN)/i);
         if (!m) return null;
         const value = parseFloat(m[1]);
-        const unit = m[2].toLowerCase();
-        const perUnit = { sec: 1000, min: 60000, hour: 3600000 }[unit];
+        const perUnit = { SEKUNDEN: 1000, MINUTEN: 60000, STUNDEN: 3600000 }[m[2].toUpperCase()];
         return Math.max(0, value * perUnit);
     }
 
-    function parseTrigger(raw) {
-        const trimmed = String(raw || "").trim();
-        if (trimmed === "," || trimmed === '","' || trimmed === '"' + "," + '"') return "ambient";
-        if (/click/i.test(trimmed)) return "click";
-        if (/touch/i.test(trimmed)) return "touch";
-        return null;
-    }
-
-    // A combined "target=trigger" line, e.g. "Part1"=touch or "Part1"=,
-    function parseTargetTriggerLine(line) {
-        const eq = line.indexOf("=");
-        if (eq === -1) return null;
-        const target = unquote(line.slice(0, eq));
-        const trigger = parseTrigger(line.slice(eq + 1));
-        if (!target || !trigger) return null;
-        return { target, trigger };
-    }
-
     function parseEffectLine(line) {
-        const duration = parseDurationMs(line);
-        const body = duration === null ? line : line.slice(0, line.lastIndexOf("="));
-        const lower = body.toLowerCase();
-        const allPlayers = /allplayer/i.test(body);
+        const upper = line.toUpperCase();
+        const allPlayers = /\bALLE\b/i.test(line);
 
-        if (lower.startsWith("kill")) {
-            return { type: "kill", allPlayers, duration };
+        if (upper.startsWith("TÖTEN") || upper.startsWith("TOETEN") || upper.startsWith("TOTEN")) {
+            return { type: "kill", allPlayers };
         }
-        if (lower.startsWith("give")) {
-            const quoted = (body.match(/"([^"]*)"/g) || []).map((p) => p.replace(/"/g, ""));
-            let amount = 0;
-            let label = "";
-            for (const part of quoted) {
-                if (/^[-+]?\d+$/.test(part)) amount = parseInt(part, 10);
-                else if (!/coin/i.test(part) && !label) label = part;
-            }
-            return { type: "give", amount, currency: "coins", label, allPlayers, duration };
-        }
-        if (lower.startsWith("move")) {
-            const xMatch = body.match(/x\s*=\s*"?([-+]?\d+)"?/i);
-            const yMatch = body.match(/y\s*=\s*"?([-+]?\d+)"?/i);
+        if (upper.startsWith("GIB")) {
+            const m = line.match(/"([-+]?\d+)"/);
             return {
-                type: "move",
-                dx: xMatch ? parseInt(xMatch[1], 10) : 0,
-                dy: yMatch ? parseInt(yMatch[1], 10) : 0,
-                duration,
+                type: "give",
+                amount: m ? parseInt(m[1], 10) : 0,
+                currency: "coins",
+                allPlayers,
+                duration: null,
             };
         }
-        if (lower.startsWith("trampoline")) {
-            return { type: "trampoline", power: Math.abs(num(body, 15)), duration };
+        if (upper.startsWith("BEWEGEN")) {
+            return {
+                type: "move",
+                dx: quotedNumber(line, "X", 0),
+                dy: quotedNumber(line, "Y", 0),
+                duration: parseDuration(line),
+            };
         }
-        if (lower.startsWith("teleport")) {
-            const xMatch = body.match(/x\s*=\s*"?([-+]?\d+)"?/i);
-            const yMatch = body.match(/y\s*=\s*"?([-+]?\d+)"?/i);
+        if (upper.startsWith("SPRUNG")) {
+            const m = line.match(/"(-?\d+(?:\.\d+)?)"/);
+            return { type: "trampoline", power: m ? Math.abs(parseFloat(m[1])) : 15, duration: null };
+        }
+        if (upper.startsWith("TELEPORT")) {
             return {
                 type: "teleport",
                 allPlayers,
-                x: xMatch ? parseInt(xMatch[1], 10) : 0,
-                y: yMatch ? parseInt(yMatch[1], 10) : 0,
-                duration,
+                x: quotedNumber(line, "X", 0),
+                y: quotedNumber(line, "Y", 0),
+                duration: null,
             };
         }
-        if (lower.startsWith("transparents")) {
-            const pct = body.match(/(\d+)\s*%/);
-            return { type: "transparents", percent: pct ? parseInt(pct[1], 10) : 100, duration };
+        if (upper.startsWith("DURCHSICHTIG")) {
+            const m = line.match(/"(\d+(?:\.\d+)?)"/);
+            return { type: "transparents", percent: m ? parseFloat(m[1]) : 100, duration: null };
         }
+        return null;
+    }
+
+    function parseTrigger(line) {
+        const upper = line.toUpperCase();
+        if (/^WENN\s+BER[UÜ]HRT$/.test(upper)) return "touch";
+        if (/^WENN\s+KLICK$/.test(upper)) return "click";
+        if (/^WENN\s+IMMER$/.test(upper)) return "ambient";
         return null;
     }
 
@@ -119,26 +107,24 @@
         current = fresh();
 
         for (const line of lines) {
-            if (/^infinit\.true$/i.test(line)) {
+            const upper = line.toUpperCase();
+
+            if (/^WIEDERHOLEN$/.test(upper)) {
                 current.infinite = true;
                 continue;
             }
-            const collide = line.match(/canColide\s*\(\s*\.?(true|false)\s*\)/i);
-            if (collide) {
-                current.canCollide = collide[1].toLowerCase() === "true";
+            if (/^FIGUREN\s+AUS$/.test(upper)) {
+                continue; // handled separately by scanning the raw script text
+            }
+            if (/^FEST$/.test(upper) || /^DURCHL[ÄA]SSIG$/.test(upper)) {
+                current.canCollide = /^FEST$/.test(upper);
                 if (current.target && current.trigger && current.effect) rules.push(current);
                 current = fresh();
                 continue;
             }
             if (!current.target) {
-                // Preferred style: "BlockName"=touch (target + trigger together).
-                const combined = parseTargetTriggerLine(line);
-                if (combined) {
-                    current.target = combined.target;
-                    current.trigger = combined.trigger;
-                } else {
-                    current.target = unquote(line);
-                }
+                const name = quoted(line, "BLOCK");
+                if (name !== null) current.target = name;
                 continue;
             }
             if (!current.trigger) {
@@ -152,5 +138,9 @@
         return rules;
     }
 
-    global.StudioDSL = { parseStudioScript, stripGlyphLines };
+    function figuresDisabled(code) {
+        return /FIGUREN\s+AUS/i.test(code || "");
+    }
+
+    global.StudioDSL = { parseStudioScript, stripGlyphLines, figuresDisabled };
 })(window);
