@@ -21,6 +21,7 @@
     const codeTextarea = document.getElementById("studioCodeTextarea");
     const codeGhost = document.getElementById("studioCodeGhost");
     const codePanelResize = document.getElementById("studioCodePanelResize");
+    const paletteBlocks = document.getElementById("studioPaletteBlocks");
 
     let blocks = [];
     let selectedId = null;
@@ -61,6 +62,22 @@
             li.appendChild(name);
             li.addEventListener("click", () => selectBlock(b.id));
             blockList.appendChild(li);
+        });
+        renderPaletteBlocks();
+    }
+
+    function renderPaletteBlocks() {
+        if (!paletteBlocks) return;
+        paletteBlocks.innerHTML = "";
+        blocks.forEach((b) => {
+            const chip = document.createElement("button");
+            chip.type = "button";
+            chip.className = "studio-palette-block-chip";
+            chip.style.background = b.color;
+            chip.textContent = `"${b.name}"`;
+            chip.title = `"${b.name}" einfügen`;
+            chip.addEventListener("click", () => insertAtCursor(`"${b.name}"`));
+            paletteBlocks.appendChild(chip);
         });
     }
 
@@ -436,6 +453,24 @@
             api(`/api/studio/${projectId}/script`, "POST", { script_code: codeTextarea.value });
         }, 500);
     }
+
+    // Palette: clicking a chip inserts its snippet right where the cursor
+    // currently is, exactly like typing it -- then the normal input
+    // handling below re-normalizes the ⇒/⇓ glyphs and re-suggests.
+    function insertAtCursor(text) {
+        const start = codeTextarea.selectionStart;
+        const end = codeTextarea.selectionEnd;
+        const value = codeTextarea.value;
+        codeTextarea.value = value.slice(0, start) + text + value.slice(end);
+        const newPos = start + text.length;
+        codeTextarea.setSelectionRange(newPos, newPos);
+        codeTextarea.focus();
+        codeTextarea.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+
+    document.querySelectorAll(".studio-palette-chip").forEach((chip) => {
+        chip.addEventListener("click", () => insertAtCursor(chip.dataset.insert));
+    });
 
     codeTextarea.addEventListener("input", () => {
         const result = normalizeCode(codeTextarea.value, codeTextarea.selectionStart);

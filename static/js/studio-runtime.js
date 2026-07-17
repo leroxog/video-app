@@ -318,8 +318,8 @@
 
         if (showFigure) {
             const cx = player.x + player.w / 2;
-            ctx.strokeStyle = "#000";
-            ctx.fillStyle = "#000";
+            ctx.strokeStyle = "#fff";
+            ctx.fillStyle = "#fff";
             ctx.lineWidth = 2;
             ctx.beginPath();
             ctx.arc(cx, player.y + 7, 6, 0, Math.PI * 2);

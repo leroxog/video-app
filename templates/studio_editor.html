@@ -59,11 +59,46 @@
             <span id="studioCodePanelTitle">Programmierung</span>
             <button type="button" id="studioCodePanelClose">&times;</button>
         </div>
-        <div class="studio-code-editor-wrap">
-            <div class="studio-code-ghost" id="studioCodeGhost"></div>
-            <textarea id="studioCodeTextarea" class="studio-code-textarea" spellcheck="false"></textarea>
+        <div class="studio-code-body">
+            <div class="studio-code-editor-wrap">
+                <div class="studio-code-ghost" id="studioCodeGhost"></div>
+                <textarea id="studioCodeTextarea" class="studio-code-textarea" spellcheck="false"></textarea>
+            </div>
+            <div class="studio-code-palette" id="studioCodePalette">
+                <div class="studio-palette-group">
+                    <div class="studio-palette-label">Wann</div>
+                    <button type="button" class="studio-palette-chip studio-palette-chip-wann" data-insert="infinit.true">infinit.true</button>
+                    <button type="button" class="studio-palette-chip studio-palette-chip-wann" data-insert="touch">touch</button>
+                    <button type="button" class="studio-palette-chip studio-palette-chip-wann" data-insert="click">click</button>
+                    <button type="button" class="studio-palette-chip studio-palette-chip-wann" data-insert=",">, (immer)</button>
+                </div>
+                <div class="studio-palette-group">
+                    <div class="studio-palette-label">Aktion</div>
+                    <button type="button" class="studio-palette-chip studio-palette-chip-aktion" data-insert="kill .Player &quot;123&quot;">kill</button>
+                    <button type="button" class="studio-palette-chip studio-palette-chip-aktion" data-insert="give .Player &quot;Name&quot;,&quot;+5&quot;,&quot;coins&quot;">give</button>
+                    <button type="button" class="studio-palette-chip studio-palette-chip-aktion" data-insert="move x=&quot;-84&quot;,y=&quot;+3&quot;">move</button>
+                    <button type="button" class="studio-palette-chip studio-palette-chip-aktion" data-insert="trampoline=&quot;+15&quot; jump">trampoline</button>
+                    <button type="button" class="studio-palette-chip studio-palette-chip-aktion" data-insert="teleport .Player x=&quot;10&quot;,y=&quot;20&quot;">teleport</button>
+                    <button type="button" class="studio-palette-chip studio-palette-chip-aktion" data-insert="transparents=&quot;50%&quot;">transparents</button>
+                </div>
+                <div class="studio-palette-group">
+                    <div class="studio-palette-label">Dauer</div>
+                    <button type="button" class="studio-palette-chip studio-palette-chip-dauer" data-insert="=15sec.">15sec.</button>
+                    <button type="button" class="studio-palette-chip studio-palette-chip-dauer" data-insert="=15min.">15min.</button>
+                    <button type="button" class="studio-palette-chip studio-palette-chip-dauer" data-insert="=1hour.">1hour.</button>
+                </div>
+                <div class="studio-palette-group">
+                    <div class="studio-palette-label">Ende</div>
+                    <button type="button" class="studio-palette-chip studio-palette-chip-ende" data-insert="canColide(.true)">canColide true</button>
+                    <button type="button" class="studio-palette-chip studio-palette-chip-ende" data-insert="canColide(.false)">canColide false</button>
+                </div>
+                <div class="studio-palette-group">
+                    <div class="studio-palette-label">Bl&ouml;cke</div>
+                    <div class="studio-palette-blocks" id="studioPaletteBlocks"></div>
+                </div>
+            </div>
         </div>
-        <p class="studio-code-hint">Tab oder &rarr; am Zeilenende &uuml;bernimmt den grauen Vorschlag.</p>
+        <p class="studio-code-hint">Tab oder &rarr; am Zeilenende &uuml;bernimmt den grauen Vorschlag. Klicke einen Baustein rechts, um ihn einzuf&uuml;gen.</p>
         <div class="studio-code-panel-resize" id="studioCodePanelResize"></div>
     </div>
 
