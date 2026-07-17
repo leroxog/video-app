@@ -47,6 +47,26 @@
         target.rules.push(rule);
     });
 
+    // Named variables (SET/CHANGE), scoped to this play session. Unset
+    // variables read as 0, matching how a fresh number would start.
+    const variables = {};
+    function getVar(name) {
+        return variables[name] || 0;
+    }
+    function conditionHolds(condition) {
+        if (!condition) return true;
+        const value = getVar(condition.varName);
+        switch (condition.operator) {
+            case ">": return value > condition.value;
+            case "<": return value < condition.value;
+            case ">=": return value >= condition.value;
+            case "<=": return value <= condition.value;
+            case "!=": return value !== condition.value;
+            case "=": return value === condition.value;
+            default: return true;
+        }
+    }
+
     const spawnBlock = blocks.find((b) => b.kind === "spawn") || blocks[0] || { x: 60, y: 60, width: 0, height: 0 };
     const spawnPoint = {
         x: spawnBlock.x + spawnBlock.width / 2 - PLAYER_W / 2,
@@ -150,6 +170,7 @@
     function runEffect(block, rule) {
         const effect = rule.effect;
         if (!effect) return;
+        if (!conditionHolds(rule.condition)) return;
         switch (effect.type) {
             case "kill":
                 respawnPlayer();
@@ -176,6 +197,12 @@
                 break;
             case "transparents":
                 block.opacity = Math.max(0, Math.min(100, effect.percent)) / 100;
+                break;
+            case "set":
+                variables[effect.varName] = effect.value;
+                break;
+            case "change":
+                variables[effect.varName] = getVar(effect.varName) + effect.value;
                 break;
         }
     }

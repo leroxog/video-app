@@ -66,44 +66,55 @@
             </div>
             <div class="studio-code-palette" id="studioCodePalette">
                 <div class="studio-palette-group">
-                    <div class="studio-palette-label">Wann</div>
-                    <button type="button" class="studio-palette-chip studio-palette-chip-wann" data-insert="WIEDERHOLEN">WIEDERHOLEN</button>
-                    <button type="button" class="studio-palette-chip studio-palette-chip-wann" data-insert="WENN BERÜHRT">WENN BERÜHRT</button>
-                    <button type="button" class="studio-palette-chip studio-palette-chip-wann" data-insert="WENN KLICK">WENN KLICK</button>
-                    <button type="button" class="studio-palette-chip studio-palette-chip-wann" data-insert="WENN IMMER">WENN IMMER</button>
+                    <div class="studio-palette-label">When</div>
+                    <button type="button" class="studio-palette-chip studio-palette-chip-wann" data-insert="REPEAT">REPEAT</button>
+                    <button type="button" class="studio-palette-chip studio-palette-chip-wann" data-insert="WHEN TOUCHED">WHEN TOUCHED</button>
+                    <button type="button" class="studio-palette-chip studio-palette-chip-wann" data-insert="WHEN CLICKED">WHEN CLICKED</button>
+                    <button type="button" class="studio-palette-chip studio-palette-chip-wann" data-insert="WHEN ALWAYS">WHEN ALWAYS</button>
                 </div>
                 <div class="studio-palette-group">
-                    <div class="studio-palette-label">Aktion</div>
-                    <button type="button" class="studio-palette-chip studio-palette-chip-aktion" data-insert="TÖTEN">TÖTEN</button>
-                    <button type="button" class="studio-palette-chip studio-palette-chip-aktion" data-insert="TÖTEN ALLE">TÖTEN ALLE</button>
-                    <button type="button" class="studio-palette-chip studio-palette-chip-aktion" data-insert="GIB &quot;+5&quot; MÜNZEN">GIB "+5" MÜNZEN</button>
-                    <button type="button" class="studio-palette-chip studio-palette-chip-aktion" data-insert="BEWEGEN X&quot;-84&quot; Y&quot;+3&quot;">BEWEGEN X Y</button>
-                    <button type="button" class="studio-palette-chip studio-palette-chip-aktion" data-insert="SPRUNG &quot;15&quot;">SPRUNG</button>
+                    <div class="studio-palette-label">Condition</div>
+                    <button type="button" class="studio-palette-chip studio-palette-chip-condition" data-insert="IF &quot;score&quot; > &quot;10&quot;">IF &gt;</button>
+                    <button type="button" class="studio-palette-chip studio-palette-chip-condition" data-insert="IF &quot;score&quot; = &quot;10&quot;">IF =</button>
+                    <button type="button" class="studio-palette-chip studio-palette-chip-condition" data-insert="IF &quot;score&quot; < &quot;10&quot;">IF &lt;</button>
+                </div>
+                <div class="studio-palette-group">
+                    <div class="studio-palette-label">Action</div>
+                    <button type="button" class="studio-palette-chip studio-palette-chip-aktion" data-insert="KILL">KILL</button>
+                    <button type="button" class="studio-palette-chip studio-palette-chip-aktion" data-insert="KILL ALL">KILL ALL</button>
+                    <button type="button" class="studio-palette-chip studio-palette-chip-aktion" data-insert="GIVE &quot;+5&quot; COINS">GIVE "+5" COINS</button>
+                    <button type="button" class="studio-palette-chip studio-palette-chip-aktion" data-insert="MOVE X&quot;-84&quot; Y&quot;+3&quot;">MOVE X Y</button>
+                    <button type="button" class="studio-palette-chip studio-palette-chip-aktion" data-insert="JUMP &quot;15&quot;">JUMP</button>
                     <button type="button" class="studio-palette-chip studio-palette-chip-aktion" data-insert="TELEPORT X&quot;10&quot; Y&quot;20&quot;">TELEPORT X Y</button>
-                    <button type="button" class="studio-palette-chip studio-palette-chip-aktion" data-insert="DURCHSICHTIG &quot;50&quot;">DURCHSICHTIG</button>
+                    <button type="button" class="studio-palette-chip studio-palette-chip-aktion" data-insert="TRANSPARENT &quot;50&quot;">TRANSPARENT</button>
                 </div>
                 <div class="studio-palette-group">
-                    <div class="studio-palette-label">Dauer (bei BEWEGEN)</div>
-                    <button type="button" class="studio-palette-chip studio-palette-chip-dauer" data-insert=" IN &quot;15&quot; SEKUNDEN">15 SEKUNDEN</button>
-                    <button type="button" class="studio-palette-chip studio-palette-chip-dauer" data-insert=" IN &quot;5&quot; MINUTEN">5 MINUTEN</button>
-                    <button type="button" class="studio-palette-chip studio-palette-chip-dauer" data-insert=" IN &quot;1&quot; STUNDEN">1 STUNDE</button>
+                    <div class="studio-palette-label">Variables</div>
+                    <button type="button" class="studio-palette-chip studio-palette-chip-var" data-insert="SET &quot;score&quot; TO &quot;0&quot;">SET "name" TO</button>
+                    <button type="button" class="studio-palette-chip studio-palette-chip-var" data-insert="CHANGE &quot;score&quot; BY &quot;+1&quot;">CHANGE "name" BY</button>
                 </div>
                 <div class="studio-palette-group">
-                    <div class="studio-palette-label">Ende</div>
-                    <button type="button" class="studio-palette-chip studio-palette-chip-ende" data-insert="FEST">FEST</button>
-                    <button type="button" class="studio-palette-chip studio-palette-chip-ende" data-insert="DURCHLÄSSIG">DURCHLÄSSIG</button>
+                    <div class="studio-palette-label">Duration (for MOVE)</div>
+                    <button type="button" class="studio-palette-chip studio-palette-chip-dauer" data-insert=" IN &quot;15&quot; SECONDS">15 SECONDS</button>
+                    <button type="button" class="studio-palette-chip studio-palette-chip-dauer" data-insert=" IN &quot;5&quot; MINUTES">5 MINUTES</button>
+                    <button type="button" class="studio-palette-chip studio-palette-chip-dauer" data-insert=" IN &quot;1&quot; HOURS">1 HOUR</button>
                 </div>
                 <div class="studio-palette-group">
-                    <div class="studio-palette-label">Sonstiges</div>
-                    <button type="button" class="studio-palette-chip studio-palette-chip-wann" data-insert="FIGUREN AUS">FIGUREN AUS</button>
+                    <div class="studio-palette-label">End</div>
+                    <button type="button" class="studio-palette-chip studio-palette-chip-ende" data-insert="SOLID">SOLID</button>
+                    <button type="button" class="studio-palette-chip studio-palette-chip-ende" data-insert="PASSABLE">PASSABLE</button>
                 </div>
                 <div class="studio-palette-group">
-                    <div class="studio-palette-label">Bl&ouml;cke</div>
+                    <div class="studio-palette-label">Other</div>
+                    <button type="button" class="studio-palette-chip studio-palette-chip-wann" data-insert="FIGURES OFF">FIGURES OFF</button>
+                </div>
+                <div class="studio-palette-group">
+                    <div class="studio-palette-label">Blocks</div>
                     <div class="studio-palette-blocks" id="studioPaletteBlocks"></div>
                 </div>
             </div>
         </div>
-        <p class="studio-code-hint">Tab oder &rarr; am Zeilenende &uuml;bernimmt den grauen Vorschlag. Klicke einen Baustein rechts, um ihn einzuf&uuml;gen.</p>
+        <p class="studio-code-hint">Tab or &rarr; at end of line accepts the gray suggestion. Click a block on the right to insert it.</p>
         <div class="studio-code-panel-resize" id="studioCodePanelResize"></div>
     </div>
 

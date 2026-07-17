@@ -300,10 +300,10 @@
     // immutable "⇒" / "⇓" glyphs and inline ghost-text suggestions. ---
     const ARROW = "⇒";
     const END = "⇓";
-    const TRIGGER_WORDS = ["WENN BERÜHRT", "WENN KLICK", "WENN IMMER"];
-    const EFFECT_WORDS = ["TÖTEN", "GIB", "BEWEGEN", "SPRUNG", "TELEPORT", "DURCHSICHTIG"];
-    const COLLIDE_WORDS = ["FEST", "DURCHLÄSSIG"];
-    const INFINITE_WORD = "WIEDERHOLEN";
+    const TRIGGER_WORDS = ["WHEN TOUCHED", "WHEN CLICKED", "WHEN ALWAYS"];
+    const EFFECT_WORDS = ["KILL", "GIVE", "MOVE", "JUMP", "TELEPORT", "TRANSPARENT", "SET", "CHANGE", "IF"];
+    const COLLIDE_WORDS = ["SOLID", "PASSABLE"];
+    const INFINITE_WORD = "REPEAT";
 
     function stripArrow(line) {
         return line.replace(new RegExp("^\\s*" + ARROW + "\\s?"), "");
@@ -374,8 +374,9 @@
         return match ? match.slice(typed.length) : "";
     }
 
-    // Rules are three content lines: BLOCK "Name", WENN ..., then the
-    // effect, closed by FEST/DURCHLÄSSIG.
+    // Rules are: BLOCK "Name", WHEN ..., an optional IF condition, then the
+    // effect, closed by SOLID/PASSABLE. The optional IF line doesn't count
+    // toward the slot position -- it's a detour right before the effect.
     function computeGhostSuggestion(fullText, cursorPos) {
         const before = fullText.slice(0, cursorPos);
         const lines = before.split("\n");
@@ -387,14 +388,14 @@
 
         let sinceBoundary = [];
         for (const l of priorLines) {
-            if (/^(FEST|DURCHL[ÄA]SSIG)$/i.test(l)) {
+            if (/^(SOLID|PASSABLE)$/i.test(l)) {
                 sinceBoundary = [];
-            } else {
+            } else if (!/^IF\s/i.test(l)) {
                 sinceBoundary.push(l);
             }
         }
 
-        const hasInfinite = sinceBoundary.length > 0 && /^WIEDERHOLEN$/i.test(sinceBoundary[0]);
+        const hasInfinite = sinceBoundary.length > 0 && /^REPEAT$/i.test(sinceBoundary[0]);
         const slot = hasInfinite ? sinceBoundary.length - 1 : sinceBoundary.length;
 
         if (slot === 0) {
