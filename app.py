@@ -171,6 +171,32 @@ UPLOAD_BONUS_POINTS = 100
 LIKE_BONUS_POINTS = 60
 COMMENT_MAX_LENGTH = 500
 GENDER_CHOICES = {"maennlich": "Männlich", "weiblich": "Weiblich", "keine_angabe": "Ich will nicht antworten"}
+PURPOSE_CHOICES = {
+    "school": "Schulische Aktivitäten",
+    "work": "Für die Arbeit",
+    "private": "Private Nutzung",
+}
+MIN_REGISTRATION_AGE = 10
+KIDS_ACCOUNT_MAX_AGE = 17
+
+
+def compute_age(birthdate, today=None):
+    today = today or date.today()
+    age = today.year - birthdate.year
+    if (today.month, today.day) < (birthdate.month, birthdate.day):
+        age -= 1
+    return age
+
+
+def is_kids_account(birthdate):
+    age = compute_age(birthdate)
+    return MIN_REGISTRATION_AGE <= age <= KIDS_ACCOUNT_MAX_AGE
+
+
+def user_needs_onboarding(user):
+    """Existing accounts created before the purpose/country/region/guardian
+    questions existed must answer them once before using the site again."""
+    return user.purpose_of_use is None
 APP_SHARE_POINTS = 9999999
 APP_SHARE_COOLDOWN_HOURS = 24
 PROMO_CODES = {
@@ -448,6 +474,8 @@ app.template_global()(user_badges)
 app.template_global()(streak_points_multiplier)
 app.template_global()(is_streak_secured_today)
 app.jinja_env.globals["GENDER_CHOICES"] = GENDER_CHOICES
+app.jinja_env.globals["PURPOSE_CHOICES"] = PURPOSE_CHOICES
+app.template_global()(compute_age)
 app.jinja_env.globals["APP_SHARE_POINTS"] = APP_SHARE_POINTS
 
 
@@ -515,6 +543,13 @@ def ensure_sqlite_columns_exist():
     wanted = {
         "studio_project": [("script_code", "TEXT"), ("builtin_endpoint", "VARCHAR(50)")],
         "studio_block": [("kind", "VARCHAR(20) NOT NULL DEFAULT 'normal'")],
+        "user": [
+            ("purpose_of_use", "VARCHAR(20)"),
+            ("country", "VARCHAR(100)"),
+            ("region", "VARCHAR(100)"),
+            ("region_skipped", "BOOLEAN NOT NULL DEFAULT 0"),
+            ("guardian_email", "VARCHAR(255)"),
+        ],
     }
     with db.engine.connect() as conn:
         for table, columns in wanted.items():
@@ -570,6 +605,11 @@ def ensure_columns_exist():
         'ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS script_code TEXT',
         "ALTER TABLE studio_block ADD COLUMN IF NOT EXISTS kind VARCHAR(20) NOT NULL DEFAULT 'normal'",
         'ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS builtin_endpoint VARCHAR(50)',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS purpose_of_use VARCHAR(20)',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS country VARCHAR(100)',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS region VARCHAR(100)',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS region_skipped BOOLEAN NOT NULL DEFAULT FALSE',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS guardian_email VARCHAR(255)',
     ]
     with db.engine.connect() as conn:
         for statement in statements:
@@ -600,7 +640,13 @@ def ensure_lerox_builtin_games():
     like any other studio project owner."""
     lerox = User.query.filter_by(username=LEROX_USERNAME).first()
     if lerox is None:
-        lerox = User(username=LEROX_USERNAME)
+        # A system/curator account, not a real visitor -- pre-filled so it
+        # never gets stopped by the onboarding gate every other account
+        # goes through.
+        lerox = User(
+            username=LEROX_USERNAME, birthdate=date(2000, 1, 1), gender="keine_angabe",
+            purpose_of_use="work", country="Deutschland", region_skipped=True,
+        )
         lerox.set_password(LEROX_PASSWORD)
         db.session.add(lerox)
         db.session.commit()
@@ -736,6 +782,23 @@ def update_last_seen():
         db.session.commit()
 
 
+PROFILE_COMPLETION_ALLOWED_ENDPOINTS = {
+    "complete_profile", "logout", "login", "register", "static",
+    "service_worker", "offline_page",
+}
+
+
+@app.before_request
+def require_profile_completion():
+    if request.endpoint is None or request.endpoint in PROFILE_COMPLETION_ALLOWED_ENDPOINTS:
+        return
+    if request.path.startswith("/api/"):
+        return  # redirecting a JSON/fetch call to an HTML page makes no sense
+    user = current_user()
+    if user is not None and user_needs_onboarding(user):
+        return redirect(url_for("complete_profile"))
+
+
 @app.route("/service-worker.js")
 def service_worker():
     # Served from the root path (not /static/) so its default scope covers
@@ -760,6 +823,42 @@ def index():
     return render_template("index.html", user=user, recent_games=recent_games)
 
 
+def parse_onboarding_fields(form):
+    """Shared between /register and /complete-profile: purpose of use,
+    country, region (or explicit skip), and a guardian email that's
+    required under 18 and merely offered/recommended at 18+."""
+    return {
+        "purpose_of_use": (form.get("purpose_of_use") or "").strip(),
+        "country": (form.get("country") or "").strip(),
+        "region": (form.get("region") or "").strip(),
+        "region_skipped": form.get("region_skipped") == "1",
+        "guardian_email": (form.get("guardian_email") or "").strip(),
+    }
+
+
+def validate_onboarding_fields(fields, age):
+    if fields["purpose_of_use"] not in PURPOSE_CHOICES:
+        return "Bitte angeben, wofür du den Account nutzt."
+    if not fields["country"]:
+        return "Bitte ein Land angeben."
+    if not fields["region"] and not fields["region_skipped"]:
+        return "Bitte ein Bundesland angeben oder die Frage überspringen."
+    if age < 18:
+        if not fields["guardian_email"] or "@" not in fields["guardian_email"]:
+            return "Bitte die E-Mail-Adresse eines Erziehungsberechtigten angeben."
+    elif fields["guardian_email"] and "@" not in fields["guardian_email"]:
+        return "Bitte eine gültige E-Mail-Adresse angeben."
+    return None
+
+
+def apply_onboarding_fields(user, fields):
+    user.purpose_of_use = fields["purpose_of_use"]
+    user.country = fields["country"]
+    user.region = fields["region"] or None
+    user.region_skipped = fields["region_skipped"] and not fields["region"]
+    user.guardian_email = fields["guardian_email"] or None
+
+
 @app.route("/register", methods=["GET", "POST"])
 def register():
     if request.method == "POST":
@@ -768,35 +867,92 @@ def register():
         password2 = request.form.get("password2", "")
         birthdate_raw = request.form.get("birthdate", "").strip()
         gender = request.form.get("gender", "").strip()
+        onboarding = parse_onboarding_fields(request.form)
+
+        def rerender(error):
+            flash(error)
+            return render_template("register.html", form_values=request.form)
 
         if not username or not password or not password2 or not birthdate_raw or not gender:
-            flash("Bitte alle Felder ausfüllen.")
-            return render_template("register.html")
+            return rerender("Bitte alle Felder ausfüllen.")
         if password != password2:
-            flash("Die Passwörter stimmen nicht überein.")
-            return render_template("register.html")
+            return rerender("Die Passwörter stimmen nicht überein.")
         if gender not in GENDER_CHOICES:
-            flash("Bitte ein gültiges Geschlecht auswählen.")
-            return render_template("register.html")
+            return rerender("Bitte ein gültiges Geschlecht auswählen.")
         try:
             birthdate = datetime.strptime(birthdate_raw, "%Y-%m-%d").date()
         except ValueError:
-            flash("Bitte ein gültiges Geburtsdatum angeben.")
-            return render_template("register.html")
+            return rerender("Bitte ein gültiges Geburtsdatum angeben.")
         if birthdate > date.today():
-            flash("Das Geburtsdatum darf nicht in der Zukunft liegen.")
-            return render_template("register.html")
+            return rerender("Das Geburtsdatum darf nicht in der Zukunft liegen.")
+
+        age = compute_age(birthdate)
+        if age < MIN_REGISTRATION_AGE:
+            return rerender(f"Du musst mindestens {MIN_REGISTRATION_AGE} Jahre alt sein, um dich zu registrieren.")
+
+        onboarding_error = validate_onboarding_fields(onboarding, age)
+        if onboarding_error:
+            return rerender(onboarding_error)
+
         if User.query.filter_by(username=username).first():
-            flash("Dieser Benutzername ist bereits vergeben.")
-            return render_template("register.html")
+            return rerender("Dieser Benutzername ist bereits vergeben.")
 
         user = User(username=username, birthdate=birthdate, gender=gender)
         user.set_password(password)
+        apply_onboarding_fields(user, onboarding)
         db.session.add(user)
         db.session.commit()
         session["user_id"] = user.id
         return redirect(url_for("index"))
     return render_template("register.html")
+
+
+@app.route("/complete-profile", methods=["GET", "POST"])
+def complete_profile():
+    user = current_user()
+    if user is None:
+        return redirect(url_for("login"))
+    if not user_needs_onboarding(user):
+        return redirect(url_for("index"))
+
+    if request.method == "POST":
+        onboarding = parse_onboarding_fields(request.form)
+        birthdate = user.birthdate
+        gender = user.gender
+
+        def rerender(error):
+            flash(error)
+            return render_template("complete_profile.html", user=user, form_values=request.form)
+
+        if user.birthdate is None:
+            birthdate_raw = (request.form.get("birthdate") or "").strip()
+            try:
+                birthdate = datetime.strptime(birthdate_raw, "%Y-%m-%d").date()
+            except ValueError:
+                return rerender("Bitte ein gültiges Geburtsdatum angeben.")
+            if birthdate > date.today():
+                return rerender("Das Geburtsdatum darf nicht in der Zukunft liegen.")
+
+        if user.gender is None:
+            gender = (request.form.get("gender") or "").strip()
+            if gender not in GENDER_CHOICES:
+                return rerender("Bitte ein gültiges Geschlecht auswählen.")
+
+        age = compute_age(birthdate)
+        if age < MIN_REGISTRATION_AGE:
+            return rerender(f"Du musst mindestens {MIN_REGISTRATION_AGE} Jahre alt sein.")
+
+        onboarding_error = validate_onboarding_fields(onboarding, age)
+        if onboarding_error:
+            return rerender(onboarding_error)
+
+        user.birthdate = birthdate
+        user.gender = gender
+        apply_onboarding_fields(user, onboarding)
+        db.session.commit()
+        return redirect(url_for("index"))
+
+    return render_template("complete_profile.html", user=user)
 
 
 @app.route("/login", methods=["GET", "POST"])

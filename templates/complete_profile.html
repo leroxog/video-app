@@ -1,19 +1,20 @@
 {% extends "base.html" %}
-{% block title %}Registrieren - timeskip{% endblock %}
+{% block title %}Bitte ergänzen - timeskip{% endblock %}
 {% block content %}
-    <h1>Registrieren</h1>
-    <form action="{{ url_for('register') }}" method="post" class="form" id="registerForm">
-        <label for="username">Benutzername</label>
-        <input type="text" id="username" name="username" required maxlength="50" value="{{ form_values.username if form_values else '' }}">
+    <h1>Bevor es weitergeht...</h1>
+    <p>Bitte beantworte diese Fragen einmalig, dann kannst du timeskip wie gewohnt weiter nutzen.</p>
 
-        <label for="password">Passwort</label>
-        <input type="password" id="password" name="password" required>
+    <form action="{{ url_for('complete_profile') }}" method="post" class="form" id="completeProfileForm">
+        <label>Benutzername</label>
+        <p class="onboarding-label-value">{{ user.username }}</p>
 
-        <label for="password2">Passwort wiederholen</label>
-        <input type="password" id="password2" name="password2" required>
-
-        <label for="birthdate">Geburtsdatum</label>
-        <input type="date" id="birthdate" name="birthdate" required value="{{ form_values.birthdate if form_values else '' }}">
+        {% if user.birthdate %}
+            <label>Geburtsdatum</label>
+            <p class="onboarding-label-value">{{ user.birthdate.strftime("%d.%m.%Y") }}</p>
+        {% else %}
+            <label for="birthdate">Geburtsdatum</label>
+            <input type="date" id="birthdate" name="birthdate" required value="{{ form_values.birthdate if form_values else '' }}">
+        {% endif %}
 
         <div class="kids-account-bubble" id="kidsAccountBubble" style="display:none;">
             <p>Mit dem angegebenen Alter benutzt du einen <strong>KIDS ACCOUNT</strong>!</p>
@@ -21,54 +22,62 @@
         </div>
         <p class="age-error" id="ageErrorNote" style="display:none;"></p>
 
-        <label for="gender">Geschlecht</label>
-        <select id="gender" name="gender" required>
-            <option value="" disabled {{ '' if form_values else 'selected' }}>Bitte auswählen</option>
-            {% for value, label in GENDER_CHOICES.items() %}
-                <option value="{{ value }}" {{ 'selected' if form_values and form_values.gender == value else '' }}>{{ label }}</option>
-            {% endfor %}
-        </select>
+        {% if user.gender %}
+            <label>Geschlecht</label>
+            <p class="onboarding-label-value">{{ GENDER_CHOICES.get(user.gender, user.gender) }}</p>
+        {% else %}
+            <label for="gender">Geschlecht</label>
+            <select id="gender" name="gender" required>
+                <option value="" disabled selected>Bitte auswählen</option>
+                {% for value, label in GENDER_CHOICES.items() %}
+                    <option value="{{ value }}">{{ label }}</option>
+                {% endfor %}
+            </select>
+        {% endif %}
 
         <label for="purpose_of_use">Wofür nutzt du den Account?</label>
         <select id="purpose_of_use" name="purpose_of_use" required>
-            <option value="" disabled {{ '' if form_values else 'selected' }}>Bitte auswählen</option>
+            <option value="" disabled selected>Bitte auswählen</option>
             {% for value, label in PURPOSE_CHOICES.items() %}
-                <option value="{{ value }}" {{ 'selected' if form_values and form_values.purpose_of_use == value else '' }}>{{ label }}</option>
+                <option value="{{ value }}">{{ label }}</option>
             {% endfor %}
         </select>
 
         <label for="country">Land</label>
-        <input type="text" id="country" name="country" required maxlength="100" value="{{ form_values.country if form_values else '' }}">
+        <input type="text" id="country" name="country" required maxlength="100">
 
         <label for="region">Bundesland</label>
-        <input type="text" id="region" name="region" maxlength="100" value="{{ form_values.region if form_values else '' }}">
+        <input type="text" id="region" name="region" maxlength="100">
         <label class="checkbox-label">
-            <input type="checkbox" id="regionSkipped" name="region_skipped" value="1" {{ 'checked' if form_values and form_values.region_skipped == '1' else '' }}>
+            <input type="checkbox" id="regionSkipped" name="region_skipped" value="1">
             Diese Frage möchte ich nicht beantworten
         </label>
 
         <label for="guardian_email" id="guardianEmailLabel">E-Mail eines Erziehungsberechtigten</label>
-        <input type="email" id="guardian_email" name="guardian_email" maxlength="255" value="{{ form_values.guardian_email if form_values else '' }}">
+        <input type="email" id="guardian_email" name="guardian_email" maxlength="255">
         <p class="field-hint" id="guardianEmailHint"></p>
 
-        <button type="submit">Konto erstellen</button>
+        <button type="submit">Weiter</button>
         <p class="privacy-note">Alle Angaben werden gespeichert.</p>
     </form>
-    <p>Bereits registriert? <a href="{{ url_for('login') }}">Login</a></p>
+
+    <form action="{{ url_for('logout') }}" method="post" class="settings-logout-form">
+        <button type="submit" class="danger">Stattdessen ausloggen</button>
+    </form>
 
     <script>
         (function () {
             const birthdateInput = document.getElementById("birthdate");
+            const knownAge = {{ compute_age(user.birthdate) if user.birthdate else 'null' }};
             const bubble = document.getElementById("kidsAccountBubble");
             const ackBtn = document.getElementById("kidsAccountAckBtn");
             const ageError = document.getElementById("ageErrorNote");
-            const guardianInput = document.getElementById("guardian_email");
             const guardianLabel = document.getElementById("guardianEmailLabel");
             const guardianHint = document.getElementById("guardianEmailHint");
-            const form = document.getElementById("registerForm");
+            const form = document.getElementById("completeProfileForm");
             let acknowledged = false;
 
-            function age(birthdateStr) {
+            function ageFromInput(birthdateStr) {
                 const b = new Date(birthdateStr);
                 if (isNaN(b.getTime())) return null;
                 const today = new Date();
@@ -79,18 +88,21 @@
                 return a;
             }
 
+            function currentAge() {
+                if (knownAge !== null) return knownAge;
+                return birthdateInput ? ageFromInput(birthdateInput.value) : null;
+            }
+
             function refresh() {
-                const a = age(birthdateInput.value);
+                const a = currentAge();
                 ageError.style.display = "none";
                 if (a === null) {
                     bubble.style.display = "none";
-                    guardianLabel.textContent = "E-Mail eines Erziehungsberechtigten";
-                    guardianHint.textContent = "";
                     return;
                 }
                 if (a < 10) {
                     bubble.style.display = "none";
-                    ageError.textContent = "Du musst mindestens 10 Jahre alt sein, um dich zu registrieren.";
+                    ageError.textContent = "Du musst mindestens 10 Jahre alt sein.";
                     ageError.style.display = "block";
                 } else if (a < 18) {
                     bubble.style.display = acknowledged ? "none" : "flex";
@@ -103,17 +115,19 @@
                 }
             }
 
-            birthdateInput.addEventListener("change", () => {
-                acknowledged = false;
-                refresh();
-            });
+            if (birthdateInput) {
+                birthdateInput.addEventListener("change", () => {
+                    acknowledged = false;
+                    refresh();
+                });
+            }
             ackBtn.addEventListener("click", () => {
                 acknowledged = true;
                 refresh();
             });
 
             form.addEventListener("submit", (event) => {
-                const a = age(birthdateInput.value);
+                const a = currentAge();
                 if (a === null) return;
                 if (a < 10) {
                     event.preventDefault();

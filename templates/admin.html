@@ -16,7 +16,7 @@
 
     <h2>Accounts verwalten</h2>
     <table class="admin-table">
-        <thead><tr><th>Benutzername</th><th>Fotos</th><th>Punkte</th><th>Rolle</th><th>Status</th><th>Zuletzt online</th><th></th></tr></thead>
+        <thead><tr><th>Benutzername</th><th>Fotos</th><th>Punkte</th><th>Rolle</th><th>Status</th><th>Zuletzt online</th><th>Angaben</th><th></th></tr></thead>
         <tbody>
             {% for u in users %}
                 <tr>
@@ -37,6 +37,17 @@
                         {% endif %}
                     </td>
                     <td>{{ u.last_seen.strftime("%d.%m.%Y %H:%M") if u.last_seen else "Noch nie" }}</td>
+                    <td>
+                        <details class="admin-user-details">
+                            <summary>{{ 'Kids' if u.birthdate and compute_age(u.birthdate) < 18 else 'Details' }}</summary>
+                            <p>Alter: {{ compute_age(u.birthdate) if u.birthdate else '—' }}</p>
+                            <p>Geschlecht: {{ GENDER_CHOICES.get(u.gender, '—') }}</p>
+                            <p>Zweck: {{ PURPOSE_CHOICES.get(u.purpose_of_use, '—') }}</p>
+                            <p>Land: {{ u.country or '—' }}</p>
+                            <p>Bundesland: {{ u.region or ('nicht beantwortet' if u.region_skipped else '—') }}</p>
+                            <p>Erziehungsberechtigte(r): {{ u.guardian_email or '—' }}</p>
+                        </details>
+                    </td>
                     <td>
                         {% if u.id != user.id %}
                             <form action="{{ url_for('admin_delete_user', user_id=u.id) }}" method="post"

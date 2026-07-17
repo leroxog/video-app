@@ -3,6 +3,7 @@ import os
 import shutil
 import sys
 import tempfile
+from datetime import date
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -37,18 +38,20 @@ def client():
     shutil.rmtree(sound_dir, ignore_errors=True)
 
 
-def register(client, username="alice", password="secret123"):
-    return client.post(
-        "/register",
-        data={
-            "username": username,
-            "password": password,
-            "password2": password,
-            "birthdate": "2005-01-01",
-            "gender": "keine_angabe",
-        },
-        follow_redirects=True,
-    )
+def register(client, username="alice", password="secret123", birthdate="2005-01-01", extra=None):
+    data = {
+        "username": username,
+        "password": password,
+        "password2": password,
+        "birthdate": birthdate,
+        "gender": "keine_angabe",
+        "purpose_of_use": "private",
+        "country": "Deutschland",
+        "region_skipped": "1",
+    }
+    if extra:
+        data.update(extra)
+    return client.post("/register", data=data, follow_redirects=True)
 
 
 def make_admin(username):
@@ -120,6 +123,99 @@ def test_register_requires_birthdate_and_gender(client):
     )
     assert "alle Felder".encode() in response.data
     assert User.query.filter_by(username="alice").first() is None
+
+
+def test_register_blocks_under_10(client):
+    too_young = date.today().replace(year=date.today().year - 8)
+    response = register(client, username="young", birthdate=too_young.isoformat())
+    assert "mindestens 10 Jahre".encode() in response.data
+    assert User.query.filter_by(username="young").first() is None
+
+
+def test_register_kids_account_requires_guardian_email(client):
+    teen_birthdate = date.today().replace(year=date.today().year - 15)
+    response = register(client, username="teen", birthdate=teen_birthdate.isoformat())
+    assert "Erziehungsberechtigten".encode() in response.data
+    assert User.query.filter_by(username="teen").first() is None
+
+    register(
+        client, username="teen", birthdate=teen_birthdate.isoformat(),
+        extra={"guardian_email": "parent@example.com"},
+    )
+    user = User.query.filter_by(username="teen").first()
+    assert user is not None
+    assert user.guardian_email == "parent@example.com"
+
+
+def test_register_adult_guardian_email_optional(client):
+    register(client, username="adult")
+    user = User.query.filter_by(username="adult").first()
+    assert user is not None
+    assert user.guardian_email is None
+
+
+def test_register_requires_purpose_and_country(client):
+    response = client.post(
+        "/register",
+        data={
+            "username": "nopurpose", "password": "secret123", "password2": "secret123",
+            "birthdate": "2000-01-01", "gender": "keine_angabe",
+        },
+        follow_redirects=True,
+    )
+    assert "wofür du den Account nutzt".encode() in response.data
+    assert User.query.filter_by(username="nopurpose").first() is None
+
+
+def test_register_region_can_be_skipped(client):
+    register(client, username="skipregion")
+    user = User.query.filter_by(username="skipregion").first()
+    assert user.region is None
+    assert user.region_skipped is True
+
+
+def test_existing_account_gated_until_onboarding_completed(client):
+    register(client, username="oldtimer")
+    user = User.query.filter_by(username="oldtimer").first()
+    user.purpose_of_use = None
+    user.country = None
+    db.session.commit()
+
+    response = client.get("/games", follow_redirects=False)
+    assert response.status_code == 302
+    assert "/complete-profile" in response.headers["Location"]
+
+    complete_res = client.post(
+        "/complete-profile",
+        data={"purpose_of_use": "private", "country": "Deutschland", "region_skipped": "1"},
+        follow_redirects=True,
+    )
+    assert complete_res.status_code == 200
+
+    response2 = client.get("/games")
+    assert response2.status_code == 200
+
+
+def test_complete_profile_asks_for_missing_birthdate_on_ancient_accounts(client):
+    register(client, username="prehistoric")
+    user = User.query.filter_by(username="prehistoric").first()
+    user.purpose_of_use = None
+    user.birthdate = None
+    db.session.commit()
+
+    response = client.get("/complete-profile")
+    assert response.status_code == 200
+    assert b'name="birthdate"' in response.data
+
+
+def test_api_endpoints_not_blocked_by_onboarding_gate(client):
+    register(client, username="apiuser")
+    user = User.query.filter_by(username="apiuser").first()
+    user.purpose_of_use = None
+    db.session.commit()
+
+    response = client.get("/api/my-stats")
+    assert response.status_code != 302
 
 
 def test_login_wrong_password(client):

@@ -2659,7 +2659,7 @@ body.shorts-fullscreen main {
 .form label {
     margin-top: 0.5rem;
     font-size: 0.9rem;
-    color: #ccc;
+    color: var(--text-secondary);
 }
 
 .form input, .form textarea, .form select {
@@ -2670,6 +2670,87 @@ body.shorts-fullscreen main {
     color: var(--input-text);
     font-family: inherit;
     resize: vertical;
+}
+
+.kids-account-bubble {
+    position: relative;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.6rem;
+    margin-top: 0.7rem;
+    padding: 0.8rem 1rem;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #ff3d81, #c94fd6);
+    color: #fff;
+}
+
+.kids-account-bubble::before {
+    content: "";
+    position: absolute;
+    top: -8px;
+    left: 24px;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-bottom: 8px solid #ff3d81;
+}
+
+.kids-account-bubble p {
+    margin: 0;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.kids-account-bubble button {
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 6px;
+    background: #fff;
+    color: #c94fd6;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.age-error {
+    margin: 0.4rem 0 0;
+    padding: 0.6rem 0.8rem;
+    border-radius: 8px;
+    background: rgba(255, 61, 129, 0.12);
+    border: 1px solid #ff3d81;
+    color: #ff3d81;
+    font-size: 0.85rem;
+}
+
+.checkbox-label {
+    display: flex !important;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.3rem !important;
+    font-size: 0.85rem !important;
+}
+
+.checkbox-label input {
+    width: auto;
+}
+
+.field-hint {
+    margin: 0.15rem 0 0;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+}
+
+.privacy-note {
+    margin-top: 0.6rem;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.onboarding-label-value {
+    margin: 0;
+    padding: 0.6rem;
+    border-radius: 4px;
+    background: var(--panel-bg-solid);
+    color: var(--text-primary);
+    font-weight: 600;
 }
 
 .upload-name-input {
@@ -3122,6 +3203,22 @@ body.shorts-fullscreen main {
 
 .admin-table a {
     color: #3ea6ff;
+}
+
+.admin-user-details {
+    font-size: 0.8rem;
+}
+
+.admin-user-details summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--accent-blue);
+}
+
+.admin-user-details p {
+    margin: 0.25rem 0;
+    color: var(--text-secondary);
+    white-space: nowrap;
 }
 
 .meme-template-admin-grid {
@@ -4806,6 +4903,15 @@ body.studio-fullscreen {
 
 .studio-palette-chip-ende {
     background: linear-gradient(135deg, #22d1ee, #3ea6ff);
+}
+
+.studio-palette-chip-condition {
+    background: linear-gradient(135deg, #6a5cff, #5842d6);
+    color: #fff;
+}
+
+.studio-palette-chip-var {
+    background: linear-gradient(135deg, #ff3d81, #c94fd6);
 }
 
 .studio-palette-blocks {
