@@ -507,12 +507,38 @@ def ensure_r2_cors_configured():
         logger.exception("Konnte R2-CORS-Konfiguration nicht setzen.")
 
 
+def ensure_sqlite_columns_exist():
+    """SQLite equivalent of ensure_columns_exist() below -- db.create_all()
+    doesn't add columns to tables that already exist there either, and
+    unlike Postgres, SQLite's ALTER TABLE has no "IF NOT EXISTS" clause,
+    so existing columns are checked via PRAGMA first."""
+    wanted = {
+        "studio_project": [("script_code", "TEXT"), ("builtin_endpoint", "VARCHAR(50)")],
+        "studio_block": [("kind", "VARCHAR(20) NOT NULL DEFAULT 'normal'")],
+    }
+    with db.engine.connect() as conn:
+        for table, columns in wanted.items():
+            existing = {row[1] for row in conn.execute(text(f"PRAGMA table_info({table})"))}
+            for entry in columns:
+                col_name = entry[0]
+                col_def = entry[1] if len(entry) > 1 else entry[0]
+                if col_name in existing:
+                    continue
+                try:
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_def}"))
+                    conn.commit()
+                except Exception:
+                    conn.rollback()
+                    logger.exception("SQLite migration step failed: %s.%s", table, col_name)
+
+
 def ensure_columns_exist():
     """Self-healing migration: db.create_all() only creates missing tables,
     it never adds columns to tables that already exist (e.g. on Postgres
     after the model gained new fields). Add any columns the current models
     need but the live database is still missing."""
     if "sqlite" in database_url:
+        ensure_sqlite_columns_exist()
         return
 
     statements = [
@@ -543,6 +569,7 @@ def ensure_columns_exist():
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS last_app_share_at TIMESTAMP',
         'ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS script_code TEXT',
         "ALTER TABLE studio_block ADD COLUMN IF NOT EXISTS kind VARCHAR(20) NOT NULL DEFAULT 'normal'",
+        'ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS builtin_endpoint VARCHAR(50)',
     ]
     with db.engine.connect() as conn:
         for statement in statements:
@@ -561,10 +588,50 @@ def ensure_columns_exist():
         logger.info("Backfilled public_id for %d existing user(s).", len(missing_public_id))
 
 
+LEROX_USERNAME = "LEROX"
+LEROX_PASSWORD = "Lerox2026!"
+
+
+def ensure_lerox_builtin_games():
+    """The pre-Studio built-in games (fruit.merge, coin.flip, etc.) are
+    re-listed as normal published gallery entries "uploaded by" a LEROX
+    account, so they keep showing up alongside user-made games instead of
+    just disappearing. LEROX can log in and delete/unpublish any of them
+    like any other studio project owner."""
+    lerox = User.query.filter_by(username=LEROX_USERNAME).first()
+    if lerox is None:
+        lerox = User(username=LEROX_USERNAME)
+        lerox.set_password(LEROX_PASSWORD)
+        db.session.add(lerox)
+        db.session.commit()
+        logger.info("LEROX-Account angelegt.")
+
+    existing_endpoints = {
+        p.builtin_endpoint for p in StudioProject.query.filter(
+            StudioProject.builtin_endpoint.isnot(None)
+        ).all()
+    }
+    created = False
+    for game in GAMES:
+        if game["endpoint"] in existing_endpoints:
+            continue
+        db.session.add(StudioProject(
+            owner_id=lerox.id,
+            name=game["title"],
+            published=True,
+            builtin_endpoint=game["endpoint"],
+        ))
+        created = True
+    if created:
+        db.session.commit()
+        logger.info("Legacy-Spiele als LEROX-Projekte angelegt.")
+
+
 with app.app_context():
     db.create_all()
     ensure_columns_exist()
     ensure_r2_cors_configured()
+    ensure_lerox_builtin_games()
 
     admin_username = os.environ.get("ADMIN_USERNAME")
     admin_password = os.environ.get("ADMIN_PASSWORD")
@@ -855,7 +922,19 @@ def studio_project_thumbnail_svg(project):
     )
 
 
+def builtin_game_meta(project):
+    """For a StudioProject that represents a legacy built-in game, look up
+    its route, icon and subtitle from the GAMES list."""
+    if not project.builtin_endpoint:
+        return None
+    for game in GAMES:
+        if game["endpoint"] == project.builtin_endpoint:
+            return game
+    return None
+
+
 app.template_global()(studio_project_thumbnail_svg)
+app.template_global()(builtin_game_meta)
 
 
 @app.route("/studio")

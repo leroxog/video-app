@@ -2690,3 +2690,50 @@ def test_studio_script_endpoint_requires_ownership(client):
     assert res.status_code == 403
 
 
+def test_lerox_bootstrap_creates_account_and_legacy_games(client):
+    import app as app_module
+
+    with flask_app.app_context():
+        app_module.ensure_lerox_builtin_games()
+
+    lerox = User.query.filter_by(username="LEROX").first()
+    assert lerox is not None
+    assert lerox.check_password(app_module.LEROX_PASSWORD)
+
+    legacy_projects = StudioProject.query.filter_by(owner_id=lerox.id).all()
+    assert len(legacy_projects) == len(app_module.GAMES)
+    assert all(p.published for p in legacy_projects)
+    assert {p.builtin_endpoint for p in legacy_projects} == {g["endpoint"] for g in app_module.GAMES}
+
+    # running it again must not create duplicates
+    with flask_app.app_context():
+        app_module.ensure_lerox_builtin_games()
+    assert StudioProject.query.filter_by(owner_id=lerox.id).count() == len(app_module.GAMES)
+
+
+def test_lerox_can_delete_a_legacy_game_listing(client):
+    import app as app_module
+
+    with flask_app.app_context():
+        app_module.ensure_lerox_builtin_games()
+
+    client.post("/login", data={"username": "LEROX", "password": app_module.LEROX_PASSWORD})
+    project = StudioProject.query.filter_by(builtin_endpoint="fruitmerge").first()
+    assert project is not None
+
+    res = client.post(f"/studio/{project.id}/delete", follow_redirects=True)
+    assert res.status_code == 200
+    with flask_app.app_context():
+        assert db.session.get(StudioProject, project.id) is None
+
+
+def test_legacy_game_card_links_to_its_own_route_not_studio_play(client):
+    import app as app_module
+
+    with flask_app.app_context():
+        app_module.ensure_lerox_builtin_games()
+
+    response = client.get("/games")
+    assert b'href="/fruitmerge"' in response.data
+
+

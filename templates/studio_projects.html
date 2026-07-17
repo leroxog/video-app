@@ -13,17 +13,26 @@
         {% if projects %}
             <div class="studio-project-list">
                 {% for project in projects %}
+                    {% set builtin = builtin_game_meta(project) %}
                     <div class="studio-project-card">
-                        <a class="studio-project-card-name" href="{{ url_for('studio_editor_page', project_id=project.id) }}">
-                            {{ project.name }}
-                        </a>
+                        {% if builtin %}
+                            <a class="studio-project-card-name" href="{{ url_for(builtin.endpoint) }}">{{ project.name }}</a>
+                        {% else %}
+                            <a class="studio-project-card-name" href="{{ url_for('studio_editor_page', project_id=project.id) }}">
+                                {{ project.name }}
+                            </a>
+                        {% endif %}
                         <span class="studio-project-status {{ 'is-published' if project.published else '' }}">
                             {{ 'Veröffentlicht' if project.published else 'Entwurf' }}
                         </span>
                         <div class="studio-project-card-actions">
-                            <a href="{{ url_for('studio_editor_page', project_id=project.id) }}">Bearbeiten</a>
-                            {% if project.published %}
-                                <a href="{{ url_for('studio_play_page', project_id=project.id) }}">Spielen</a>
+                            {% if builtin %}
+                                <a href="{{ url_for(builtin.endpoint) }}">Spielen</a>
+                            {% else %}
+                                <a href="{{ url_for('studio_editor_page', project_id=project.id) }}">Bearbeiten</a>
+                                {% if project.published %}
+                                    <a href="{{ url_for('studio_play_page', project_id=project.id) }}">Spielen</a>
+                                {% endif %}
                             {% endif %}
                             <form action="{{ url_for('studio_delete_project', project_id=project.id) }}" method="post"
                                   onsubmit="return confirm('Dieses Projekt wirklich löschen?');">

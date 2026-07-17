@@ -285,6 +285,10 @@ class StudioProject(db.Model):
     name = db.Column(db.String(100), nullable=False)
     published = db.Column(db.Boolean, nullable=False, default=False)
     script_code = db.Column(db.Text, nullable=True)
+    # Set only for the legacy built-in games, re-listed as normal gallery
+    # entries "uploaded by" the LEROX account -- points at the game's own
+    # route (e.g. "fruitmerge") instead of the studio block runtime.
+    builtin_endpoint = db.Column(db.String(50), nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     owner = db.relationship("User")

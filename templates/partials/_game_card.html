@@ -1,5 +1,14 @@
-<a class="game-card" href="{{ url_for('studio_play_page', project_id=project.id) }}">
-    <div class="game-card-thumb">{{ studio_project_thumbnail_svg(project)|safe }}</div>
+{% set builtin = builtin_game_meta(project) %}
+<a class="game-card" href="{{ url_for(builtin.endpoint) if builtin else url_for('studio_play_page', project_id=project.id) }}">
+    <div class="game-card-thumb">
+        {% if builtin %}
+            <div class="game-card-thumb-icon-wrap">
+                <div class="{{ builtin.icon_class }}"></div>
+            </div>
+        {% else %}
+            {{ studio_project_thumbnail_svg(project)|safe }}
+        {% endif %}
+    </div>
     <div class="game-card-info">
         <div class="game-card-title">{{ project.name }}</div>
         <div class="game-card-creator">

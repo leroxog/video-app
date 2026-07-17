@@ -214,7 +214,7 @@ a, button {
 }
 
 .badge-chip {
-    background: #22d1ee;
+    background: linear-gradient(135deg, #22d1ee, #3ea6ff);
     color: #0f0f0f;
     font-weight: bold;
     border-radius: 999px;
@@ -336,13 +336,13 @@ header {
 }
 
 .loading-dots span:first-child {
-    background: #22d1ee;
+    background: linear-gradient(135deg, #22d1ee, #3ea6ff);
     margin-left: 0;
     animation-delay: 0s;
 }
 
 .loading-dots span:last-child {
-    background: #ff3d81;
+    background: linear-gradient(135deg, #ff3d81, #c94fd6);
     animation-delay: -0.45s;
 }
 
@@ -541,7 +541,7 @@ main {
     align-items: center;
     gap: 0.35rem;
     padding: 0.4rem 0.7rem;
-    background: #6a5cff;
+    background: linear-gradient(135deg, #6a5cff, #5842d6);
     color: #fff;
     border-radius: 999px;
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
@@ -603,7 +603,7 @@ main {
     margin: 0;
     border: none;
     border-radius: 50%;
-    background: #ff3d81;
+    background: linear-gradient(135deg, #ff3d81, #c94fd6);
     color: #0f0f0f;
     display: flex;
     align-items: center;
@@ -720,7 +720,7 @@ h1 {
     padding: 0.6rem 1.2rem;
     border: none;
     border-radius: 999px;
-    background: #22d1ee;
+    background: linear-gradient(135deg, #22d1ee, #3ea6ff);
     color: #0f0f0f;
     font-weight: 700;
     cursor: pointer;
@@ -835,7 +835,7 @@ h1 {
     margin-top: 0.9rem;
     padding: 0.6rem 1.6rem;
     border-radius: 999px;
-    background: #6a5cff;
+    background: linear-gradient(135deg, #6a5cff, #5842d6);
     color: #fff;
     font-weight: 700;
     text-decoration: none;
@@ -890,7 +890,7 @@ h1 {
     padding: 0.6rem 1.2rem;
     border: none;
     border-radius: 999px;
-    background: #ff3d81;
+    background: linear-gradient(135deg, #ff3d81, #c94fd6);
     color: #0f0f0f;
     font-weight: 600;
     cursor: pointer;
@@ -915,7 +915,7 @@ h1 {
     padding: 0.6rem 0;
     border: none;
     border-radius: 999px;
-    background: #22d1ee;
+    background: linear-gradient(135deg, #22d1ee, #3ea6ff);
     color: #0f0f0f;
     font-weight: 700;
     font-size: 1.1rem;
@@ -973,7 +973,7 @@ h1 {
     padding: 0.6rem 1.2rem;
     border: none;
     border-radius: 999px;
-    background: #6a5cff;
+    background: linear-gradient(135deg, #6a5cff, #5842d6);
     color: #fff;
     font-weight: 600;
     cursor: pointer;
@@ -1046,7 +1046,7 @@ h1 {
     display: inline-block;
     padding: 0.7rem 2rem;
     border-radius: 6px;
-    background: #ff3d81;
+    background: linear-gradient(135deg, #ff3d81, #c94fd6);
     color: #0f0f0f;
     font-weight: 800;
     text-decoration: none;
@@ -1131,7 +1131,7 @@ h1 {
     display: inline-block;
     padding: 0.7rem 2rem;
     border-radius: 6px;
-    background: #22d1ee;
+    background: linear-gradient(135deg, #22d1ee, #3ea6ff);
     color: #0f0f0f;
     font-weight: 800;
     text-decoration: none;
@@ -1242,7 +1242,7 @@ h1 {
     border-radius: 4px;
     font-weight: 600;
     cursor: pointer;
-    background: #6a5cff;
+    background: linear-gradient(135deg, #6a5cff, #5842d6);
     color: #fff;
 }
 
@@ -1263,7 +1263,7 @@ h1 {
     padding: 0.7rem 1.4rem;
     border: none;
     border-radius: 6px;
-    background: #ff3d81;
+    background: linear-gradient(135deg, #ff3d81, #c94fd6);
     color: #0f0f0f;
     font-weight: 700;
     cursor: pointer;
@@ -1481,7 +1481,7 @@ h1 {
     padding: 0.6rem 1.2rem;
     border: none;
     border-radius: 4px;
-    background: #22d1ee;
+    background: linear-gradient(135deg, #22d1ee, #3ea6ff);
     color: #0f0f0f;
     font-weight: 600;
     cursor: pointer;
@@ -1725,7 +1725,7 @@ body.shorts-fullscreen main {
     height: 20px;
     border-radius: 50%;
     border: none;
-    background: #6a5cff;
+    background: linear-gradient(135deg, #6a5cff, #5842d6);
     color: #fff;
     font-weight: 800;
     font-size: 0.8rem;
@@ -1887,7 +1887,7 @@ body.shorts-fullscreen main {
     padding: 0.6rem 1.1rem;
     border: none;
     border-radius: 999px;
-    background: #ff3d81;
+    background: linear-gradient(135deg, #ff3d81, #c94fd6);
     color: #0f0f0f;
     font-weight: 600;
     cursor: pointer;
@@ -1953,7 +1953,7 @@ body.shorts-fullscreen main {
     padding: 0.4rem 0.8rem;
     border: none;
     border-radius: 20px;
-    background: #22d1ee;
+    background: linear-gradient(135deg, #22d1ee, #3ea6ff);
     color: #0f0f0f;
     text-decoration: none;
     font-size: 0.85rem;
@@ -2094,7 +2094,7 @@ body.shorts-fullscreen main {
     padding: 0.35rem 0.7rem;
     border: none;
     border-radius: 6px;
-    background: #6a5cff;
+    background: linear-gradient(135deg, #6a5cff, #5842d6);
     color: #fff;
     font-weight: 600;
     cursor: pointer;
@@ -2240,7 +2240,7 @@ body.shorts-fullscreen main {
     padding: 0.6rem 1.2rem;
     border: none;
     border-radius: 999px;
-    background: #ff3d81;
+    background: linear-gradient(135deg, #ff3d81, #c94fd6);
     color: #0f0f0f;
     font-weight: 600;
     cursor: pointer;
@@ -2324,7 +2324,7 @@ body.shorts-fullscreen main {
     padding: 0.6rem 1.1rem;
     border: none;
     border-radius: 20px;
-    background: #22d1ee;
+    background: linear-gradient(135deg, #22d1ee, #3ea6ff);
     color: #0f0f0f;
     font-weight: 600;
     cursor: pointer;
@@ -2386,7 +2386,7 @@ body.shorts-fullscreen main {
     padding: 0.5rem 1.1rem;
     border: none;
     border-radius: 20px;
-    background: #6a5cff;
+    background: linear-gradient(135deg, #6a5cff, #5842d6);
     color: #fff;
     font-weight: 600;
     cursor: pointer;
@@ -2402,7 +2402,7 @@ body.shorts-fullscreen main {
     padding: 0.35rem 0.9rem;
     border: none;
     border-radius: 20px;
-    background: #ff3d81;
+    background: linear-gradient(135deg, #ff3d81, #c94fd6);
     color: #0f0f0f;
     font-weight: 600;
     font-size: 0.85rem;
@@ -2471,7 +2471,7 @@ body.shorts-fullscreen main {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #22d1ee;
+    background: linear-gradient(135deg, #22d1ee, #3ea6ff);
     color: #0f0f0f;
     font-size: 2.4rem;
     font-weight: 700;
@@ -2492,7 +2492,7 @@ body.shorts-fullscreen main {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #6a5cff;
+    background: linear-gradient(135deg, #6a5cff, #5842d6);
     color: #fff;
     font-size: 0.9rem;
     border: 2px solid var(--bg-primary);
@@ -2560,7 +2560,7 @@ body.shorts-fullscreen main {
 }
 
 .profile-action-btn-primary {
-    background: #ff3d81;
+    background: linear-gradient(135deg, #ff3d81, #c94fd6);
     color: #0f0f0f;
 }
 
@@ -2587,7 +2587,7 @@ body.shorts-fullscreen main {
 .profile-tab-active {
     color: var(--text-primary);
     border-bottom: 2px solid;
-    border-color: #22d1ee;
+    border-image: linear-gradient(135deg, #22d1ee, #3ea6ff) 1;
 }
 
 .profile-empty-note {
@@ -2612,7 +2612,7 @@ body.shorts-fullscreen main {
 }
 
 .theme-toggle-btn.active {
-    background: #6a5cff;
+    background: linear-gradient(135deg, #6a5cff, #5842d6);
     border-color: transparent;
     color: #fff;
 }
@@ -2635,7 +2635,7 @@ body.shorts-fullscreen main {
     padding: 0.4rem 0.9rem;
     border: none;
     border-radius: 4px;
-    background: #ff3d81;
+    background: linear-gradient(135deg, #ff3d81, #c94fd6);
     color: #0f0f0f;
     font-weight: 600;
     cursor: pointer;
@@ -2697,7 +2697,7 @@ body.shorts-fullscreen main {
     display: inline-block;
     padding: 0.6rem 1rem;
     border-radius: 999px;
-    background: #22d1ee;
+    background: linear-gradient(135deg, #22d1ee, #3ea6ff);
     color: #0f0f0f;
     font-weight: 600;
     cursor: pointer;
@@ -2855,7 +2855,7 @@ body.shorts-fullscreen main {
     padding: 0.7rem;
     border: none;
     border-radius: 4px;
-    background: #6a5cff;
+    background: linear-gradient(135deg, #6a5cff, #5842d6);
     color: #fff;
     font-weight: 600;
     cursor: pointer;
@@ -2955,7 +2955,7 @@ body.shorts-fullscreen main {
 
 .fruitmerge-powerups button.active {
     border-color: #3ea6ff;
-    background: #ff3d81;
+    background: linear-gradient(135deg, #ff3d81, #c94fd6);
     color: #0f0f0f;
 }
 
@@ -3002,7 +3002,7 @@ body.shorts-fullscreen main {
     padding: 0.6rem 1.2rem;
     border: none;
     border-radius: 4px;
-    background: #22d1ee;
+    background: linear-gradient(135deg, #22d1ee, #3ea6ff);
     color: #0f0f0f;
     font-weight: 600;
     cursor: pointer;
@@ -3032,7 +3032,7 @@ body.shorts-fullscreen main {
     padding: 0.7rem 1.2rem;
     border: none;
     border-radius: 6px;
-    background: #6a5cff;
+    background: linear-gradient(135deg, #6a5cff, #5842d6);
     color: #fff;
     font-weight: 600;
     cursor: pointer;
@@ -3093,7 +3093,7 @@ body.shorts-fullscreen main {
     padding: 0.7rem 1.2rem;
     border: none;
     border-radius: 4px;
-    background: #ff3d81;
+    background: linear-gradient(135deg, #ff3d81, #c94fd6);
     color: #0f0f0f;
     font-weight: 600;
     cursor: pointer;
@@ -3222,7 +3222,7 @@ body.shorts-fullscreen main {
     padding: 0.7rem 1.2rem;
     border: none;
     border-radius: 999px;
-    background: #22d1ee;
+    background: linear-gradient(135deg, #22d1ee, #3ea6ff);
     color: #0f0f0f;
     font-weight: 700;
     cursor: pointer;
@@ -3294,7 +3294,7 @@ body.shorts-fullscreen main {
     padding: 0.7rem;
     border-radius: 8px;
     border: none;
-    background: #6a5cff;
+    background: linear-gradient(135deg, #6a5cff, #5842d6);
     color: #fff;
     font-weight: 600;
     cursor: pointer;
@@ -3441,7 +3441,7 @@ body.shorts-fullscreen main {
     padding: 0.7rem 1.4rem;
     border: none;
     border-radius: 999px;
-    background: #ff3d81;
+    background: linear-gradient(135deg, #ff3d81, #c94fd6);
     color: #0f0f0f;
     font-weight: 700;
     cursor: pointer;
@@ -3526,7 +3526,7 @@ body.shorts-fullscreen main {
     padding: 0.55rem 1.1rem;
     border-radius: 999px;
     border: none;
-    background: #22d1ee;
+    background: linear-gradient(135deg, #22d1ee, #3ea6ff);
     color: #0f0f0f;
     font-weight: 700;
     font-size: 0.95rem;
@@ -3587,7 +3587,7 @@ body.shorts-fullscreen main {
     padding: 0.5rem 1.1rem;
     border: none;
     border-radius: 999px;
-    background: #6a5cff;
+    background: linear-gradient(135deg, #6a5cff, #5842d6);
     color: #fff;
     font-weight: 600;
     cursor: pointer;
@@ -3650,7 +3650,7 @@ body.shorts-fullscreen main {
 
 .conversation-message.mine {
     align-self: flex-end;
-    background: #ff3d81;
+    background: linear-gradient(135deg, #ff3d81, #c94fd6);
     color: #0f0f0f;
 }
 
@@ -3696,7 +3696,7 @@ body.shorts-fullscreen main {
     padding: 0.6rem 1.2rem;
     border: none;
     border-radius: 999px;
-    background: #22d1ee;
+    background: linear-gradient(135deg, #22d1ee, #3ea6ff);
     color: #0f0f0f;
     font-weight: 600;
     cursor: pointer;
@@ -3832,7 +3832,7 @@ body.shorts-fullscreen main {
     padding: 0.6rem 1.4rem;
     border: none;
     border-radius: 999px;
-    background: #6a5cff;
+    background: linear-gradient(135deg, #6a5cff, #5842d6);
     color: #fff;
     font-weight: 600;
     cursor: pointer;
@@ -3904,7 +3904,7 @@ body.shorts-fullscreen main {
     padding: 0.4rem 0.9rem;
     border: none;
     border-radius: 999px;
-    background: #ff3d81;
+    background: linear-gradient(135deg, #ff3d81, #c94fd6);
     color: #0f0f0f;
     font-weight: 600;
     cursor: pointer;
@@ -3988,7 +3988,7 @@ body.shorts-fullscreen main {
     padding: 0.35rem 0.8rem;
     border: none;
     border-radius: 999px;
-    background: #22d1ee;
+    background: linear-gradient(135deg, #22d1ee, #3ea6ff);
     color: #0f0f0f;
     font-weight: 600;
     cursor: pointer;
@@ -4238,7 +4238,7 @@ a:active {
     padding: 0.6rem 0.8rem;
     border-radius: 8px;
     border: none;
-    background: #6a5cff;
+    background: linear-gradient(135deg, #6a5cff, #5842d6);
     color: #fff;
     font-weight: 600;
     cursor: pointer;
@@ -4284,7 +4284,7 @@ body.studio-fullscreen {
     padding: 0.6rem 1.2rem;
     border: none;
     border-radius: 8px;
-    background: #ff3d81;
+    background: linear-gradient(135deg, #ff3d81, #c94fd6);
     color: #0f0f0f;
     font-weight: 600;
     cursor: pointer;
@@ -4324,7 +4324,7 @@ body.studio-fullscreen {
 
 .studio-project-status.is-published {
     color: #0f0f0f;
-    background: #22d1ee;
+    background: linear-gradient(135deg, #22d1ee, #3ea6ff);
     border-color: transparent;
 }
 
@@ -4399,7 +4399,7 @@ body.studio-fullscreen {
     padding: 0.5rem 1rem;
     border-radius: 8px;
     border: none;
-    background: #6a5cff;
+    background: linear-gradient(135deg, #6a5cff, #5842d6);
     color: #fff;
     font-weight: 600;
     cursor: pointer;
@@ -4557,7 +4557,7 @@ body.studio-fullscreen {
     height: 30px;
     border-radius: 50%;
     border: none;
-    background: #ff3d81;
+    background: linear-gradient(135deg, #ff3d81, #c94fd6);
     color: #0f0f0f;
     font-size: 1.1rem;
     font-weight: 700;
@@ -4792,20 +4792,20 @@ body.studio-fullscreen {
 }
 
 .studio-palette-chip-wann {
-    background: #22d1ee;
+    background: linear-gradient(135deg, #22d1ee, #3ea6ff);
 }
 
 .studio-palette-chip-aktion {
-    background: #ff3d81;
+    background: linear-gradient(135deg, #ff3d81, #c94fd6);
 }
 
 .studio-palette-chip-dauer {
-    background: #6a5cff;
+    background: linear-gradient(135deg, #6a5cff, #5842d6);
     color: #fff;
 }
 
 .studio-palette-chip-ende {
-    background: #22d1ee;
+    background: linear-gradient(135deg, #22d1ee, #3ea6ff);
 }
 
 .studio-palette-blocks {
@@ -4972,7 +4972,7 @@ body.studio-fullscreen {
 }
 
 .hero-cta-primary {
-    background: #22d1ee;
+    background: linear-gradient(135deg, #22d1ee, #3ea6ff);
     color: #0f0f0f;
 }
 
@@ -5018,7 +5018,7 @@ body.studio-fullscreen {
     height: 36px;
     margin: 0 auto;
     border-radius: 50%;
-    background: #6a5cff;
+    background: linear-gradient(135deg, #6a5cff, #5842d6);
     color: #fff;
     font-weight: 700;
     font-size: 1.1rem;
@@ -5112,6 +5112,20 @@ body.studio-fullscreen {
     display: block;
 }
 
+.game-card-thumb-icon-wrap {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #1c1c1c;
+}
+
+.game-card-thumb-icon-wrap .place-label-icon {
+    flex-shrink: 0;
+    transform: scale(1.4);
+}
+
 .game-card-info {
     padding: 0.7rem 0.8rem;
 }
@@ -5145,7 +5159,7 @@ body.studio-fullscreen {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #ff3d81;
+    background: linear-gradient(135deg, #ff3d81, #c94fd6);
     color: #0f0f0f;
     font-size: 0.7rem;
     font-weight: 700;
