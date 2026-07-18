@@ -47,15 +47,21 @@
         <input type="text" id="country" name="country" required maxlength="100">
 
         <label for="region">Bundesland</label>
-        <input type="text" id="region" name="region" maxlength="100">
-        <label class="checkbox-label">
-            <input type="checkbox" id="regionSkipped" name="region_skipped" value="1">
-            Diese Frage möchte ich nicht beantworten
-        </label>
+        <select id="region" name="region">
+            <option value="" selected>Bitte auswählen</option>
+            {% for state in REGION_CHOICES %}
+                <option value="{{ state }}">{{ state }}</option>
+            {% endfor %}
+        </select>
 
         <label for="guardian_email" id="guardianEmailLabel">E-Mail eines Erziehungsberechtigten</label>
         <input type="email" id="guardian_email" name="guardian_email" maxlength="255">
         <p class="field-hint" id="guardianEmailHint"></p>
+
+        <label class="checkbox-label" id="skipLastTwoWrap">
+            <input type="checkbox" id="regionSkipped" name="region_skipped" value="1">
+            <span id="skipLastTwoLabel">Diese letzten beiden Fragen möchte ich nicht beantworten</span>
+        </label>
 
         <button type="submit">Weiter</button>
         <p class="privacy-note">Alle Angaben werden gespeichert.</p>
@@ -72,10 +78,31 @@
             const bubble = document.getElementById("kidsAccountBubble");
             const ackBtn = document.getElementById("kidsAccountAckBtn");
             const ageError = document.getElementById("ageErrorNote");
+            const regionSelect = document.getElementById("region");
+            const guardianInput = document.getElementById("guardian_email");
             const guardianLabel = document.getElementById("guardianEmailLabel");
             const guardianHint = document.getElementById("guardianEmailHint");
+            const skipLastTwo = document.getElementById("regionSkipped");
+            const skipLastTwoLabel = document.getElementById("skipLastTwoLabel");
             const form = document.getElementById("completeProfileForm");
             let acknowledged = false;
+
+            function updateSkipUI() {
+                const a = currentAge();
+                const isKid = a !== null && a < 18;
+                skipLastTwoLabel.textContent = isKid
+                    ? "Diese Frage (Bundesland) möchte ich nicht beantworten"
+                    : "Diese letzten beiden Fragen möchte ich nicht beantworten";
+                regionSelect.disabled = skipLastTwo.checked;
+                if (skipLastTwo.checked) regionSelect.value = "";
+                if (isKid) {
+                    guardianInput.disabled = false;
+                } else {
+                    guardianInput.disabled = skipLastTwo.checked;
+                    if (skipLastTwo.checked) guardianInput.value = "";
+                }
+            }
+            skipLastTwo.addEventListener("change", updateSkipUI);
 
             function ageFromInput(birthdateStr) {
                 const b = new Date(birthdateStr);
@@ -98,6 +125,7 @@
                 ageError.style.display = "none";
                 if (a === null) {
                     bubble.style.display = "none";
+                    updateSkipUI();
                     return;
                 }
                 if (a < 10) {
@@ -113,6 +141,7 @@
                     guardianLabel.textContent = "E-Mail (optional)";
                     guardianHint.textContent = "Empfohlen, aber nicht verpflichtend.";
                 }
+                updateSkipUI();
             }
 
             if (birthdateInput) {

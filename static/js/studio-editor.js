@@ -2,6 +2,8 @@
     const page = document.getElementById("studioEditorPage");
     if (!page) return;
     const projectId = page.dataset.projectId;
+    const language = page.dataset.language || "timeskipcode";
+    const dialect = window.StudioDialects.get(language);
 
     const canvas = document.getElementById("studioCanvas");
     const blockList = document.getElementById("studioBlockList");
@@ -21,7 +23,10 @@
     const codeTextarea = document.getElementById("studioCodeTextarea");
     const codeGhost = document.getElementById("studioCodeGhost");
     const codePanelResize = document.getElementById("studioCodePanelResize");
-    const paletteBlocks = document.getElementById("studioPaletteBlocks");
+    const palettePanel = document.getElementById("studioCodePalette");
+    const translationBtn = document.getElementById("studioTranslationBtn");
+    const translationBar = document.getElementById("studioTranslationBar");
+    let paletteBlocks = null;
 
     let blocks = [];
     let selectedId = null;
@@ -70,13 +75,14 @@
         if (!paletteBlocks) return;
         paletteBlocks.innerHTML = "";
         blocks.forEach((b) => {
+            const insertText = dialect.block.insert(b.name);
             const chip = document.createElement("button");
             chip.type = "button";
             chip.className = "studio-palette-block-chip";
             chip.style.background = b.color;
-            chip.textContent = `BLOCK "${b.name}"`;
-            chip.title = `BLOCK "${b.name}" einfügen`;
-            chip.addEventListener("click", () => insertAtCursor(`BLOCK "${b.name}"`));
+            chip.textContent = insertText;
+            chip.title = `${insertText} einfügen`;
+            chip.addEventListener("click", () => insertAtCursor(insertText));
             paletteBlocks.appendChild(chip);
         });
     }
@@ -297,13 +303,19 @@
     });
 
     // --- Code panel: one shared DSL script for the whole game, with its
-    // immutable "⇒" / "⇓" glyphs and inline ghost-text suggestions. ---
+    // immutable "⇒" / "⇓" glyphs and inline ghost-text suggestions. Which
+    // keywords exist comes entirely from the active language dialect. ---
     const ARROW = "⇒";
     const END = "⇓";
-    const TRIGGER_WORDS = ["WHEN TOUCHED", "WHEN CLICKED", "WHEN ALWAYS"];
-    const EFFECT_WORDS = ["KILL", "GIVE", "MOVE", "JUMP", "TELEPORT", "TRANSPARENT", "SET", "CHANGE", "IF"];
-    const COLLIDE_WORDS = ["SOLID", "PASSABLE"];
-    const INFINITE_WORD = "REPEAT";
+    const TRIGGER_WORDS = dialect.triggers.map((t) => t.insert);
+    const EFFECT_WORDS = dialect.effects.map((e) => e.insert).concat([dialect.conditionGhostWord]);
+    const COLLIDE_WORDS = [dialect.close.solidInsert, dialect.close.passableInsert];
+    const INFINITE_WORD = dialect.repeat.insert;
+    // Example templates used once a keyword is fully typed -- keeps a gray
+    // hint alive while the user fills in its parameters, since at that point
+    // there's no fixed word list left to prefix-match against.
+    const EFFECT_TEMPLATES = { [dialect.conditionGhostWord]: dialect.conditionTemplate };
+    dialect.effects.forEach((e) => { EFFECT_TEMPLATES[e.insert] = e.template; });
 
     function stripArrow(line) {
         return line.replace(new RegExp("^\\s*" + ARROW + "\\s?"), "");
@@ -371,7 +383,30 @@
         const lower = typed.toLowerCase();
         if (!lower) return candidates[0] || "";
         const match = candidates.find((c) => c.toLowerCase().startsWith(lower) && c.toLowerCase() !== lower);
-        return match ? match.slice(typed.length) : "";
+        if (match) return match.slice(typed.length);
+
+        // The keyword itself is fully typed and the user has moved on to its
+        // parameters -- keep suggesting that keyword's example template for
+        // whatever part still lines up, instead of going silent. Templates
+        // already embed whatever separator (space, "(", ...) comes next.
+        const keyword = candidates.find((c) => lower.startsWith(c.toLowerCase()));
+        if (keyword) {
+            const template = EFFECT_TEMPLATES[keyword];
+            if (template) {
+                const afterKeyword = typed.slice(keyword.length);
+                if (template.toLowerCase().startsWith(afterKeyword.toLowerCase())) {
+                    return template.slice(afterKeyword.length);
+                }
+            }
+        }
+        return "";
+    }
+
+    // Last-resort guess when nothing else applies: if the user is mid-way
+    // through a quoted value, at least offer to close the quote.
+    function fallbackSuggestion(currentLineText) {
+        const quoteCount = (currentLineText.match(/"/g) || []).length;
+        return quoteCount % 2 === 1 ? '"' : "";
     }
 
     // Rules are: BLOCK "Name", WHEN ..., an optional IF condition, then the
@@ -388,30 +423,28 @@
 
         let sinceBoundary = [];
         for (const l of priorLines) {
-            if (/^(SOLID|PASSABLE)$/i.test(l)) {
+            if (dialect.close.match(l) !== null) {
                 sinceBoundary = [];
-            } else if (!/^IF\s/i.test(l)) {
+            } else if (!dialect.matchCondition(l)) {
                 sinceBoundary.push(l);
             }
         }
 
-        const hasInfinite = sinceBoundary.length > 0 && /^REPEAT$/i.test(sinceBoundary[0]);
+        const hasInfinite = sinceBoundary.length > 0 && dialect.repeat.match(sinceBoundary[0]);
         const slot = hasInfinite ? sinceBoundary.length - 1 : sinceBoundary.length;
 
+        let suggestion = "";
         if (slot === 0) {
-            const candidates = blocks.map((b) => `BLOCK "${b.name}"`).concat([INFINITE_WORD]);
-            return suggestCompletion(candidates, currentLineText);
+            const candidates = blocks.map((b) => dialect.block.insert(b.name)).concat([INFINITE_WORD]);
+            suggestion = suggestCompletion(candidates, currentLineText);
+        } else if (slot === 1) {
+            suggestion = suggestCompletion(TRIGGER_WORDS, currentLineText);
+        } else if (slot === 2) {
+            suggestion = suggestCompletion(EFFECT_WORDS, currentLineText);
+        } else if (slot === 3) {
+            suggestion = suggestCompletion(COLLIDE_WORDS, currentLineText);
         }
-        if (slot === 1) {
-            return suggestCompletion(TRIGGER_WORDS, currentLineText);
-        }
-        if (slot === 2) {
-            return suggestCompletion(EFFECT_WORDS, currentLineText);
-        }
-        if (slot === 3) {
-            return suggestCompletion(COLLIDE_WORDS, currentLineText);
-        }
-        return "";
+        return suggestion || fallbackSuggestion(currentLineText);
     }
 
     function escapeHtml(text) {
@@ -465,9 +498,115 @@
         codeTextarea.dispatchEvent(new Event("input", { bubbles: true }));
     }
 
-    document.querySelectorAll(".studio-palette-chip").forEach((chip) => {
-        chip.addEventListener("click", () => insertAtCursor(chip.dataset.insert));
+    // The palette (and its chips' syntax) is entirely dialect-driven, so it's
+    // built from scratch here instead of living as static markup.
+    function makeChip(label, insertText, cssClass, titleText) {
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "studio-palette-chip " + cssClass;
+        chip.textContent = label;
+        if (titleText) chip.title = titleText;
+        chip.addEventListener("click", () => insertAtCursor(insertText));
+        return chip;
+    }
+
+    function makeGroup(labelText) {
+        const group = document.createElement("div");
+        group.className = "studio-palette-group";
+        const label = document.createElement("div");
+        label.className = "studio-palette-label";
+        label.textContent = labelText;
+        group.appendChild(label);
+        return group;
+    }
+
+    function renderPalette() {
+        const cat = window.StudioDialects.categoryLabels;
+        palettePanel.innerHTML = "";
+
+        const whenGroup = makeGroup(cat.when);
+        whenGroup.appendChild(makeChip(dialect.repeat.insert, dialect.repeat.insert, "studio-palette-chip-wann", dialect.repeat.de));
+        dialect.triggers.forEach((t) => whenGroup.appendChild(makeChip(t.insert, t.insert, "studio-palette-chip-wann", t.de)));
+        palettePanel.appendChild(whenGroup);
+
+        const condGroup = makeGroup(cat.condition);
+        dialect.conditions.forEach((c) => condGroup.appendChild(makeChip(`IF ${c.op}`, c.insert, "studio-palette-chip-condition", dialect.conditionDe)));
+        palettePanel.appendChild(condGroup);
+
+        const actionGroup = makeGroup(cat.action);
+        dialect.effects.filter((e) => e.key !== "set" && e.key !== "change").forEach((e) => {
+            actionGroup.appendChild(makeChip(e.insert + e.template, e.insert + e.template, "studio-palette-chip-aktion", e.de));
+        });
+        (dialect.extraActionChips || []).forEach((c) => {
+            actionGroup.appendChild(makeChip(c.label, c.insert, "studio-palette-chip-aktion", c.de));
+        });
+        palettePanel.appendChild(actionGroup);
+
+        const varGroup = makeGroup(cat.variables);
+        dialect.effects.filter((e) => e.key === "set" || e.key === "change").forEach((e) => {
+            varGroup.appendChild(makeChip(e.insert + e.template, e.insert + e.template, "studio-palette-chip-var", e.de));
+        });
+        palettePanel.appendChild(varGroup);
+
+        const durGroup = makeGroup(cat.duration + " (für MOVE)");
+        dialect.duration.forEach((d) => durGroup.appendChild(makeChip(d.label, d.insert, "studio-palette-chip-dauer", d.de)));
+        palettePanel.appendChild(durGroup);
+
+        const endGroup = makeGroup(cat.end);
+        endGroup.appendChild(makeChip(dialect.close.solidInsert, dialect.close.solidInsert, "studio-palette-chip-ende", dialect.close.solidDe));
+        endGroup.appendChild(makeChip(dialect.close.passableInsert, dialect.close.passableInsert, "studio-palette-chip-ende", dialect.close.passableDe));
+        palettePanel.appendChild(endGroup);
+
+        const otherGroup = makeGroup(cat.other);
+        otherGroup.appendChild(makeChip(dialect.figuresOff.insert, dialect.figuresOff.insert, "studio-palette-chip-wann", dialect.figuresOff.de));
+        palettePanel.appendChild(otherGroup);
+
+        const blocksGroup = makeGroup(cat.blocks);
+        const blocksContainer = document.createElement("div");
+        blocksContainer.className = "studio-palette-blocks";
+        blocksGroup.appendChild(blocksContainer);
+        palettePanel.appendChild(blocksGroup);
+        paletteBlocks = blocksContainer;
+        renderPaletteBlocks();
+    }
+
+    function buildTranslationEntries() {
+        const entries = [
+            { code: dialect.repeat.insert, de: dialect.repeat.de },
+            { code: dialect.block.insert("Name"), de: dialect.block.de },
+        ];
+        dialect.triggers.forEach((t) => entries.push({ code: t.insert, de: t.de }));
+        entries.push({ code: dialect.conditions[0].insert, de: dialect.conditionDe });
+        dialect.effects.forEach((e) => entries.push({ code: e.insert + e.template, de: e.de }));
+        dialect.duration.forEach((d) => entries.push({ code: d.insert.trim(), de: d.de }));
+        entries.push({ code: dialect.close.solidInsert, de: dialect.close.solidDe });
+        entries.push({ code: dialect.close.passableInsert, de: dialect.close.passableDe });
+        entries.push({ code: dialect.figuresOff.insert, de: dialect.figuresOff.de });
+        return entries;
+    }
+
+    function renderTranslationBar() {
+        translationBar.innerHTML = "";
+        buildTranslationEntries().forEach((entry) => {
+            const row = document.createElement("div");
+            row.className = "studio-translation-row";
+            const code = document.createElement("code");
+            code.textContent = entry.code;
+            const de = document.createElement("span");
+            de.textContent = entry.de;
+            row.appendChild(code);
+            row.appendChild(de);
+            translationBar.appendChild(row);
+        });
+    }
+
+    translationBtn.addEventListener("click", () => {
+        const showing = translationBar.style.display !== "none";
+        translationBar.style.display = showing ? "none" : "flex";
     });
+
+    renderPalette();
+    renderTranslationBar();
 
     codeTextarea.addEventListener("input", () => {
         const result = normalizeCode(codeTextarea.value, codeTextarea.selectionStart);
@@ -489,6 +628,14 @@
                     saveScript();
                 }
             }
+        }
+    });
+    codeTextarea.addEventListener("dblclick", (e) => {
+        if (!currentSuggestion) return;
+        e.preventDefault();
+        if (acceptSuggestion()) {
+            updateGhost();
+            saveScript();
         }
     });
     codeTextarea.addEventListener("keyup", (e) => {

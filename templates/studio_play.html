@@ -5,6 +5,7 @@
     <div class="studio-play-page" id="studioPlayPage"
          data-project-id="{{ project.id }}"
          data-logged-in="{{ '1' if user else '0' }}"
+         data-language="{{ project.language }}"
          data-blocks='{{ blocks_json|tojson }}'
          data-script='{{ script_code|tojson }}'>
         <div class="studio-play-hud">
@@ -22,6 +23,7 @@
         </div>
     </div>
 
+    <script src="{{ url_for('static', filename='js/studio-dialects.js') }}"></script>
     <script src="{{ url_for('static', filename='js/studio-dsl.js') }}"></script>
     <script src="{{ url_for('static', filename='js/studio-runtime.js') }}"></script>
 {% endblock %}

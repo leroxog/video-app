@@ -3,6 +3,7 @@
     if (!page) return;
     const projectId = page.dataset.projectId;
     const loggedIn = page.dataset.loggedIn === "1";
+    const language = page.dataset.language || "timeskipcode";
     const rawBlocks = JSON.parse(page.dataset.blocks || "[]");
     const scriptCode = JSON.parse(page.dataset.script || "\"\"");
 
@@ -18,7 +19,7 @@
     const PLAYER_W = 18;
     const PLAYER_H = 34;
 
-    const showFigure = !window.StudioDSL.figuresDisabled(scriptCode);
+    const showFigure = !window.StudioDSL.figuresDisabled(scriptCode, language);
 
     // One shared script for the whole game -- each rule names the block it
     // applies to, so a single script can drive any number of blocks.
@@ -39,7 +40,7 @@
     const blocksByName = {};
     blocks.forEach((b) => { blocksByName[b.name] = b; });
 
-    const rules = window.StudioDSL.parseStudioScript(scriptCode);
+    const rules = window.StudioDSL.parseStudioScript(scriptCode, language);
     rules.forEach((rule) => {
         const target = blocksByName[rule.target];
         if (!target) return;

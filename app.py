@@ -178,6 +178,12 @@ PURPOSE_CHOICES = {
 }
 MIN_REGISTRATION_AGE = 10
 KIDS_ACCOUNT_MAX_AGE = 17
+REGION_CHOICES = [
+    "Baden-Württemberg", "Bayern", "Berlin", "Brandenburg", "Bremen", "Hamburg",
+    "Hessen", "Mecklenburg-Vorpommern", "Niedersachsen", "Nordrhein-Westfalen",
+    "Rheinland-Pfalz", "Saarland", "Sachsen", "Sachsen-Anhalt",
+    "Schleswig-Holstein", "Thüringen", "Anderes",
+]
 
 
 def compute_age(birthdate, today=None):
@@ -475,6 +481,7 @@ app.template_global()(streak_points_multiplier)
 app.template_global()(is_streak_secured_today)
 app.jinja_env.globals["GENDER_CHOICES"] = GENDER_CHOICES
 app.jinja_env.globals["PURPOSE_CHOICES"] = PURPOSE_CHOICES
+app.jinja_env.globals["REGION_CHOICES"] = REGION_CHOICES
 app.template_global()(compute_age)
 app.jinja_env.globals["APP_SHARE_POINTS"] = APP_SHARE_POINTS
 
@@ -541,7 +548,11 @@ def ensure_sqlite_columns_exist():
     unlike Postgres, SQLite's ALTER TABLE has no "IF NOT EXISTS" clause,
     so existing columns are checked via PRAGMA first."""
     wanted = {
-        "studio_project": [("script_code", "TEXT"), ("builtin_endpoint", "VARCHAR(50)")],
+        "studio_project": [
+            ("script_code", "TEXT"),
+            ("builtin_endpoint", "VARCHAR(50)"),
+            ("language", "VARCHAR(20) NOT NULL DEFAULT 'timeskipcode'"),
+        ],
         "studio_block": [("kind", "VARCHAR(20) NOT NULL DEFAULT 'normal'")],
         "user": [
             ("purpose_of_use", "VARCHAR(20)"),
@@ -605,6 +616,7 @@ def ensure_columns_exist():
         'ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS script_code TEXT',
         "ALTER TABLE studio_block ADD COLUMN IF NOT EXISTS kind VARCHAR(20) NOT NULL DEFAULT 'normal'",
         'ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS builtin_endpoint VARCHAR(50)',
+        "ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS language VARCHAR(20) NOT NULL DEFAULT 'timeskipcode'",
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS purpose_of_use VARCHAR(20)',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS country VARCHAR(100)',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS region VARCHAR(100)',
@@ -1015,6 +1027,14 @@ STUDIO_SPAWN_BLOCK_NAME = "SpawnPart"
 STUDIO_BLOCK_KINDS = {"normal", "checkpoint"}
 STUDIO_MAX_BLOCKS_PER_PROJECT = 40
 STUDIO_MAX_PROJECTS_PER_USER = 20
+# The dialect codes here must match the keys in static/js/studio-dialects.js.
+STUDIO_LANGUAGE_CHOICES = {
+    "timeskipcode": "timeskipcode (empfohlen)",
+    "html": "HTML",
+    "python": "Python",
+    "csharp": "C#",
+}
+app.jinja_env.globals["STUDIO_LANGUAGE_CHOICES"] = STUDIO_LANGUAGE_CHOICES
 STUDIO_MAX_SCRIPT_LENGTH = 40000
 
 
@@ -1109,6 +1129,9 @@ def studio_create_project():
         return redirect(url_for("login"))
 
     name = (request.form.get("name") or "").strip()[:100]
+    language = request.form.get("language") or "timeskipcode"
+    if language not in STUDIO_LANGUAGE_CHOICES:
+        language = "timeskipcode"
     if not name:
         flash("Bitte einen Projektnamen eingeben.")
         return redirect(url_for("studio_projects_page"))
@@ -1116,7 +1139,7 @@ def studio_create_project():
         flash("Maximale Anzahl an Projekten erreicht.")
         return redirect(url_for("studio_projects_page"))
 
-    project = StudioProject(owner_id=user.id, name=name)
+    project = StudioProject(owner_id=user.id, name=name, language=language)
     db.session.add(project)
     db.session.flush()
     db.session.add(StudioBlock(

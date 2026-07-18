@@ -4377,6 +4377,14 @@ body.studio-fullscreen {
     color: #fff;
 }
 
+.studio-create-form select {
+    padding: 0.6rem 0.8rem;
+    border-radius: 8px;
+    border: 1px solid #3c3c3c;
+    background: #1c1c1c;
+    color: #fff;
+}
+
 .studio-create-form button {
     padding: 0.6rem 1.2rem;
     border: none;
@@ -4385,6 +4393,12 @@ body.studio-fullscreen {
     color: #0f0f0f;
     font-weight: 600;
     cursor: pointer;
+}
+
+.studio-language-hint {
+    margin: -1rem 0 1.5rem;
+    font-size: 0.8rem;
+    color: #999;
 }
 
 .studio-project-list {
@@ -4800,6 +4814,45 @@ body.studio-fullscreen {
     font-size: 1.1rem;
     cursor: pointer;
     line-height: 1;
+}
+
+.studio-translation-btn {
+    font-size: 0.72rem !important;
+    font-weight: 600;
+    padding: 0.25rem 0.6rem;
+    border: 1px solid #3c3c3c !important;
+    border-radius: 6px;
+    color: var(--text-secondary, #aaa) !important;
+    line-height: 1.4 !important;
+}
+
+.studio-translation-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    max-height: 40%;
+    overflow-y: auto;
+    padding: 0.6rem 0.8rem;
+    background: #16161a;
+    border-bottom: 1px solid #2c2c2c;
+}
+
+.studio-translation-row {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    font-size: 0.78rem;
+}
+
+.studio-translation-row code {
+    flex: 0 0 auto;
+    color: #7ef9c0;
+    font-family: "Consolas", "Courier New", monospace;
+    white-space: pre;
+}
+
+.studio-translation-row span {
+    color: #999;
 }
 
 .studio-code-editor-wrap {

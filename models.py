@@ -290,6 +290,10 @@ class StudioProject(db.Model):
     name = db.Column(db.String(100), nullable=False)
     published = db.Column(db.Boolean, nullable=False, default=False)
     script_code = db.Column(db.Text, nullable=True)
+    # Which syntax dialect script_code is written in -- "timeskipcode" (our
+    # own, recommended) or one of the HTML/Python/C#-flavored alternatives.
+    # All dialects compile to the exact same rule engine, see studio-dialects.js.
+    language = db.Column(db.String(20), nullable=False, default="timeskipcode")
     # Set only for the legacy built-in games, re-listed as normal gallery
     # entries "uploaded by" the LEROX account -- points at the game's own
     # route (e.g. "fruitmerge") instead of the studio block runtime.
