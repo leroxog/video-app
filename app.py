@@ -9,6 +9,13 @@ import logging
 import threading
 from datetime import datetime, timezone, date, timedelta
 from zoneinfo import ZoneInfo
+from dotenv import load_dotenv
+
+# Reads a local .env file (if present) into the process environment before
+# anything below reads os.environ -- lets secrets like GROQ_API_KEY be set
+# locally without exporting them in the shell every time. Railway itself
+# doesn't need this: its dashboard sets real environment variables directly.
+load_dotenv()
 from flask import (
     Flask, render_template, request, redirect, url_for,
     session, send_from_directory, abort, flash, jsonify, Response
@@ -16,17 +23,17 @@ from flask import (
 from sqlalchemy import text
 from werkzeug.utils import secure_filename
 from models import (
-    db, User, Post, PostPhoto, Pixel, PostLike, Subscription, PostComment, RedeemedCode,
+    db, User, Pixel, Subscription, RedeemedCode,
     GamePlayCount, Sound, UserCreatedCode, Conversation, ConversationMember, Message,
-    PostReport, CoinflipDeposit, MemeTemplate, MemeLobby, MemeLobbyPlayer, MemeCreation, MemeVote,
-    StudioProject, StudioBlock,
+    CoinflipDeposit, MemeTemplate, MemeLobby, MemeLobbyPlayer, MemeCreation, MemeVote,
+    StudioProject, StudioBlock, StudioProjectLike, StudioProjectComment, StudioProjectReport,
 )
+import ai_assistant
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 ALLOWED_IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
-MAX_PHOTOS_PER_POST = 10
 ALLOWED_SOUND_EXTENSIONS = {"mp3", "wav", "ogg", "m4a", "aac", "mp4", "webm", "mov"}
 SOUND_TITLE_MAX_LENGTH = 100
 PLACE_GRID_SIZE = 100
@@ -167,8 +174,6 @@ def coinflip_win_chance(user):
 
 def coinflip_rebirth_cost(user):
     return COINFLIP_REBIRTH_COST_STEP * (user.coinflip_rebirths + 1)
-UPLOAD_BONUS_POINTS = 100
-LIKE_BONUS_POINTS = 60
 COMMENT_MAX_LENGTH = 500
 GENDER_CHOICES = {"maennlich": "Männlich", "weiblich": "Weiblich", "keine_angabe": "Ich will nicht antworten"}
 PURPOSE_CHOICES = {
@@ -710,16 +715,6 @@ def allowed_image_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS
 
 
-def normalize_hashtags(raw):
-    tokens = raw.replace(",", " ").split()
-    seen = []
-    for token in tokens:
-        tag = "#" + token.lstrip("#")
-        if len(tag) > 1 and tag.lower() not in [t.lower() for t in seen]:
-            seen.append(tag)
-    return " ".join(seen)
-
-
 def allowed_sound_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_SOUND_EXTENSIONS
 
@@ -831,8 +826,15 @@ def offline_page():
 @app.route("/")
 def index():
     user = current_user()
-    recent_games = StudioProject.query.filter_by(published=True).order_by(StudioProject.updated_at.desc()).limit(8).all()
-    return render_template("index.html", user=user, recent_games=recent_games)
+    sort = request.args.get("sort", "newest")
+    if sort not in ("newest", "popular"):
+        sort = "newest"
+    games = StudioProject.query.filter_by(published=True).all()
+    if sort == "popular":
+        games.sort(key=lambda g: (len(g.likes), g.created_at), reverse=True)
+    else:
+        games.sort(key=lambda g: g.created_at, reverse=True)
+    return render_template("index.html", user=user, games=games, sort=sort)
 
 
 def parse_onboarding_fields(form):
@@ -1014,14 +1016,6 @@ def games_page():
     return render_template("games.html", user=user, studio_games=studio_games, query=query)
 
 
-@app.route("/camera")
-def camera_page():
-    user = current_user()
-    if user is None:
-        return redirect(url_for("login"))
-    return render_template("camera.html", user=user, max_photos=MAX_PHOTOS_PER_POST)
-
-
 STUDIO_DEFAULT_BLOCK_NAME = "Part1"
 STUDIO_SPAWN_BLOCK_NAME = "SpawnPart"
 STUDIO_BLOCK_KINDS = {"normal", "checkpoint"}
@@ -1122,6 +1116,39 @@ def studio_projects_page():
     return render_template("studio_projects.html", user=user, projects=projects)
 
 
+@app.route("/studio/help")
+def studio_help_page():
+    return render_template("studio_help.html", user=current_user())
+
+
+@app.route("/api/ai/chat", methods=["POST"])
+def api_ai_chat():
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+
+    data = request.get_json(silent=True) or {}
+    message = (data.get("message") or "").strip()
+    context = (data.get("context") or "").strip() or None
+    if not message:
+        return jsonify({"ok": False, "error": "empty_message"}), 400
+
+    job_id = ai_assistant.start_chat_job(message, context)
+    return jsonify({"ok": True, "job_id": job_id})
+
+
+@app.route("/api/ai/chat/<job_id>")
+def api_ai_chat_status(job_id):
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+
+    job = ai_assistant.get_job_status(job_id)
+    if job is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    return jsonify({"ok": True, **job})
+
+
 @app.route("/studio/create", methods=["POST"])
 def studio_create_project():
     user = current_user()
@@ -1160,7 +1187,7 @@ def studio_delete_project(project_id):
     if user is None:
         return redirect(url_for("login"))
     project = db.get_or_404(StudioProject, project_id)
-    if project.owner_id != user.id:
+    if project.owner_id != user.id and not user.is_admin:
         abort(403)
     db.session.delete(project)
     db.session.commit()
@@ -1326,9 +1353,16 @@ def studio_play_page(project_id):
     if not project.published and not is_owner:
         abort(404)
     blocks = [serialize_studio_block(b) for b in project.blocks]
+    has_liked = user is not None and StudioProjectLike.query.filter_by(
+        user_id=user.id, project_id=project.id
+    ).first() is not None
+    has_reported = user is not None and StudioProjectReport.query.filter_by(
+        reporter_id=user.id, project_id=project.id
+    ).first() is not None
     return render_template(
         "studio_play.html", user=user, project=project,
         blocks_json=blocks, script_code=project.script_code or "",
+        like_count=len(project.likes), has_liked=has_liked, has_reported=has_reported,
     )
 
 
@@ -1530,60 +1564,6 @@ def api_my_stats():
     return jsonify({"ok": True, "games_published": games_published, "followers": followers})
 
 
-@app.route("/upload", methods=["GET", "POST"])
-def upload():
-    user = current_user()
-    if user is None:
-        return redirect(url_for("login"))
-
-    if request.method == "POST":
-        caption = request.form.get("caption", "").strip()
-        hashtags = normalize_hashtags(request.form.get("hashtags", ""))
-        files = [f for f in request.files.getlist("photos") if f and f.filename]
-
-        if not files:
-            flash("Bitte mindestens ein Foto auswählen.")
-            return render_template("upload.html", user=user)
-        if len(files) > MAX_PHOTOS_PER_POST:
-            flash(f"Maximal {MAX_PHOTOS_PER_POST} Fotos pro Beitrag.")
-            return render_template("upload.html", user=user)
-        for f in files:
-            if not allowed_image_file(f.filename):
-                flash("Nur folgende Bildformate sind erlaubt: " + ", ".join(sorted(ALLOWED_IMAGE_EXTENSIONS)))
-                return render_template("upload.html", user=user)
-
-        hashes = []
-        for f in files:
-            digest = hashlib.sha256()
-            for chunk in iter(lambda: f.stream.read(65536), b""):
-                digest.update(chunk)
-            hashes.append(digest.hexdigest())
-            f.stream.seek(0)
-
-        existing = PostPhoto.query.filter(PostPhoto.content_hash.in_(hashes)).first()
-        if existing is not None:
-            flash("Eines dieser Fotos wurde bereits hochgeladen.")
-            return render_template("upload.html", user=user)
-
-        post = Post(caption=caption or None, hashtags=hashtags or None, user_id=user.id)
-        db.session.add(post)
-        db.session.flush()
-
-        for position, (f, content_hash) in enumerate(zip(files, hashes)):
-            extension = secure_filename(f.filename).rsplit(".", 1)[1].lower()
-            stored_filename = f"{uuid.uuid4().hex}.{extension}"
-            save_media(f, "posts", stored_filename)
-            db.session.add(PostPhoto(
-                post_id=post.id, filename=stored_filename, position=position, content_hash=content_hash,
-            ))
-
-        adjust_points(user, UPLOAD_BONUS_POINTS)
-        db.session.commit()
-        return redirect(url_for("feed", post_id=post.id))
-
-    return render_template("upload.html", user=user, max_photos=MAX_PHOTOS_PER_POST)
-
-
 def serialize_sound(sound):
     return {
         "id": sound.id,
@@ -1627,27 +1607,25 @@ def api_upload_sound():
     return jsonify({"ok": True, "sound": serialize_sound(sound)})
 
 
-@app.route("/api/post/<int:post_id>/like", methods=["POST"])
-def api_like_post(post_id):
+@app.route("/api/studio/<int:project_id>/like", methods=["POST"])
+def api_like_studio_project(project_id):
     user = current_user()
     if user is None:
         return jsonify({"ok": False, "error": "not_logged_in"}), 401
-    post = db.get_or_404(Post, post_id)
+    project = db.get_or_404(StudioProject, project_id)
 
-    existing = PostLike.query.filter_by(user_id=user.id, post_id=post.id).first()
+    existing = StudioProjectLike.query.filter_by(user_id=user.id, project_id=project.id).first()
     if existing:
         db.session.delete(existing)
         liked = False
-        adjust_points(post.uploader, -existing.points_awarded)
     else:
-        awarded = adjust_points(post.uploader, LIKE_BONUS_POINTS)
-        db.session.add(PostLike(user_id=user.id, post_id=post.id, points_awarded=awarded))
+        db.session.add(StudioProjectLike(user_id=user.id, project_id=project.id))
         liked = True
     db.session.commit()
-    return jsonify({"ok": True, "liked": liked, "like_count": len(post.likes)})
+    return jsonify({"ok": True, "liked": liked, "like_count": len(project.likes)})
 
 
-def serialize_comment(comment):
+def serialize_studio_comment(comment):
     return {
         "id": comment.id,
         "username": comment.author.username,
@@ -1657,19 +1635,19 @@ def serialize_comment(comment):
     }
 
 
-@app.route("/api/post/<int:post_id>/comments")
-def api_list_post_comments(post_id):
-    post = db.get_or_404(Post, post_id)
-    comments = PostComment.query.filter_by(post_id=post.id).order_by(PostComment.created_at).all()
-    return jsonify({"ok": True, "comments": [serialize_comment(c) for c in comments]})
+@app.route("/api/studio/<int:project_id>/comments")
+def api_list_studio_comments(project_id):
+    project = db.get_or_404(StudioProject, project_id)
+    comments = StudioProjectComment.query.filter_by(project_id=project.id).order_by(StudioProjectComment.created_at).all()
+    return jsonify({"ok": True, "comments": [serialize_studio_comment(c) for c in comments]})
 
 
-@app.route("/api/post/<int:post_id>/comment", methods=["POST"])
-def api_add_post_comment(post_id):
+@app.route("/api/studio/<int:project_id>/comment", methods=["POST"])
+def api_add_studio_comment(project_id):
     user = current_user()
     if user is None:
         return jsonify({"ok": False, "error": "not_logged_in"}), 401
-    post = db.get_or_404(Post, post_id)
+    project = db.get_or_404(StudioProject, project_id)
 
     data = request.get_json(silent=True) or {}
     text = (data.get("text") or "").strip()
@@ -1677,28 +1655,28 @@ def api_add_post_comment(post_id):
         return jsonify({"ok": False, "error": "empty_comment"}), 400
     text = text[:COMMENT_MAX_LENGTH]
 
-    comment = PostComment(user_id=user.id, post_id=post.id, text=text)
+    comment = StudioProjectComment(user_id=user.id, project_id=project.id, text=text)
     db.session.add(comment)
     db.session.commit()
 
     return jsonify({
         "ok": True,
-        "comment": serialize_comment(comment),
-        "comment_count": len(post.comments),
+        "comment": serialize_studio_comment(comment),
+        "comment_count": len(project.comments),
     })
 
 
-@app.route("/api/post/<int:post_id>/report", methods=["POST"])
-def api_report_post(post_id):
+@app.route("/api/studio/<int:project_id>/report", methods=["POST"])
+def api_report_studio_project(project_id):
     user = current_user()
     if user is None:
         return jsonify({"ok": False, "error": "not_logged_in"}), 401
-    post = db.get_or_404(Post, post_id)
+    project = db.get_or_404(StudioProject, project_id)
 
-    if PostReport.query.filter_by(post_id=post.id, reporter_id=user.id).first() is not None:
+    if StudioProjectReport.query.filter_by(project_id=project.id, reporter_id=user.id).first() is not None:
         return jsonify({"ok": False, "error": "already_reported"}), 400
 
-    db.session.add(PostReport(post_id=post.id, reporter_id=user.id))
+    db.session.add(StudioProjectReport(project_id=project.id, reporter_id=user.id))
     db.session.commit()
     return jsonify({"ok": True})
 
@@ -1725,7 +1703,7 @@ def api_subscribe(username):
 
 
 def serialize_message(message, viewer_id):
-    entry = {
+    return {
         "id": message.id,
         "sender_id": message.sender_id,
         "sender_username": message.sender.username,
@@ -1733,16 +1711,6 @@ def serialize_message(message, viewer_id):
         "created_at": message.created_at.strftime("%H:%M"),
         "is_mine": message.sender_id == viewer_id,
     }
-    if message.shared_post_id is not None:
-        post = db.session.get(Post, message.shared_post_id)
-        if post is not None:
-            entry["shared_post"] = {
-                "id": post.id,
-                "caption": post.caption or "Foto",
-                "thumbnail": media_url("posts", post.photos[0].filename) if post.photos else "",
-                "url": url_for("feed", post_id=post.id),
-            }
-    return entry
 
 
 def conversation_display_name(conversation, viewer):
@@ -1769,9 +1737,7 @@ def messages_page():
             "id": conv.id,
             "name": conversation_display_name(conv, user),
             "is_group": conv.is_group,
-            "last_message": last_message.text if last_message and last_message.text else (
-                "[Foto geteilt]" if last_message and last_message.shared_post_id else ""
-            ),
+            "last_message": last_message.text if last_message and last_message.text else "",
         })
     conversations.sort(key=lambda c: c["id"], reverse=True)
 
@@ -1927,97 +1893,14 @@ def api_send_message(conversation_id):
 
     data = request.get_json(silent=True) or {}
     text = (data.get("text") or "").strip()[:2000]
-    shared_post_id = data.get("shared_post_id")
 
-    if not text and not shared_post_id:
+    if not text:
         return jsonify({"ok": False, "error": "empty_message"}), 400
 
-    post = None
-    if shared_post_id is not None:
-        post = db.session.get(Post, shared_post_id)
-        if post is None:
-            return jsonify({"ok": False, "error": "invalid_post"}), 400
-
-    message = Message(
-        conversation_id=conversation.id,
-        sender_id=user.id,
-        text=text or None,
-        shared_post_id=post.id if post else None,
-    )
+    message = Message(conversation_id=conversation.id, sender_id=user.id, text=text)
     db.session.add(message)
     db.session.commit()
     return jsonify({"ok": True, "message": serialize_message(message, user.id)})
-
-
-@app.route("/api/posts/<int:post_id>/share", methods=["POST"])
-def api_share_post(post_id):
-    user = current_user()
-    if user is None:
-        return jsonify({"ok": False, "error": "not_logged_in"}), 401
-    post = db.get_or_404(Post, post_id)
-
-    data = request.get_json(silent=True) or {}
-    conversation_id = data.get("conversation_id")
-    conversation = db.session.get(Conversation, conversation_id) if conversation_id else None
-    if conversation is None or not is_conversation_member(user, conversation):
-        return jsonify({"ok": False, "error": "invalid_conversation"}), 400
-
-    message = Message(conversation_id=conversation.id, sender_id=user.id, shared_post_id=post.id)
-    db.session.add(message)
-    db.session.commit()
-    return jsonify({"ok": True})
-
-
-@app.route("/liked-posts")
-def liked_posts_page():
-    user = current_user()
-    if user is None:
-        return redirect(url_for("login"))
-    posts = [like.post for like in PostLike.query.filter_by(user_id=user.id).order_by(PostLike.id.desc()).all()]
-    return render_template("liked_posts.html", user=user, posts=posts)
-
-
-def fetch_photo_bytes(photo):
-    if USE_R2:
-        obj = r2_client.get_object(Bucket=R2_BUCKET_NAME, Key=f"posts/{photo.filename}")
-        return obj["Body"].read()
-    with open(os.path.join(app.config["UPLOAD_FOLDER"], photo.filename), "rb") as f:
-        return f.read()
-
-
-@app.route("/photo/<int:photo_id>/download")
-def download_photo(photo_id):
-    photo = db.get_or_404(PostPhoto, photo_id)
-    extension = photo.filename.rsplit(".", 1)[-1]
-    download_name = f"foto.{extension}"
-    if USE_R2:
-        data = fetch_photo_bytes(photo)
-        mimetype = f"image/{'jpeg' if extension == 'jpg' else extension}"
-        return Response(
-            data, mimetype=mimetype,
-            headers={"Content-Disposition": f'attachment; filename="{download_name}"'},
-        )
-    return send_from_directory(
-        app.config["UPLOAD_FOLDER"], photo.filename, as_attachment=True, download_name=download_name,
-    )
-
-
-@app.route("/posts/<path:filename>")
-def post_photo_file(filename):
-    return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
-
-
-@app.route("/post/<int:post_id>/delete", methods=["POST"])
-def delete_post(post_id):
-    user = current_user()
-    post = db.get_or_404(Post, post_id)
-    if user is None or (post.user_id != user.id and not user.is_admin):
-        abort(403)
-    for photo in post.photos:
-        delete_media("posts", photo.filename)
-    db.session.delete(post)
-    db.session.commit()
-    return redirect(url_for("feed"))
 
 
 @app.route("/user/<username>")
@@ -2219,6 +2102,59 @@ def admin_wipe_legacy_videos_status():
     return jsonify(video_wipe_status)
 
 
+def run_post_wipe():
+    """One-off, irreversible cleanup: delete every legacy photo Post (and
+    its R2 files) left over from before the site switched from photos to
+    being a pure games/Studio platform. Safe to call repeatedly (no-ops
+    once the table is empty)."""
+    try:
+        with db.engine.connect() as conn:
+            rows = conn.execute(text('SELECT id, filename FROM post_photo')).fetchall()
+            for row in rows:
+                delete_media("posts", row.filename)
+            conn.execute(text('UPDATE message SET shared_post_id = NULL WHERE shared_post_id IS NOT NULL'))
+            conn.execute(text('DELETE FROM post_report'))
+            conn.execute(text('DELETE FROM post_comment'))
+            conn.execute(text('DELETE FROM post_like'))
+            conn.execute(text('DELETE FROM post_photo'))
+            conn.execute(text('DELETE FROM post'))
+            conn.commit()
+        return {"ok": True, "deleted": len(rows)}
+    except Exception as exc:
+        logger.exception("Post-Wipe fehlgeschlagen.")
+        return {"ok": False, "error": str(exc)}
+
+
+post_wipe_status = {"running": False, "last_report": None}
+
+
+def _run_post_wipe_background():
+    post_wipe_status["running"] = True
+    try:
+        with app.app_context():
+            report = run_post_wipe()
+        post_wipe_status["last_report"] = report
+        logger.info("Post-Wipe abgeschlossen: %s", report)
+    finally:
+        post_wipe_status["running"] = False
+
+
+@app.route("/admin/wipe-legacy-posts", methods=["POST"])
+def admin_wipe_legacy_posts():
+    require_admin()
+    if post_wipe_status["running"]:
+        return jsonify({"ok": False, "error": "already_running"}), 409
+    thread = threading.Thread(target=_run_post_wipe_background, daemon=True)
+    thread.start()
+    return jsonify({"ok": True, "status": "started"})
+
+
+@app.route("/admin/wipe-legacy-posts/status")
+def admin_wipe_legacy_posts_status():
+    require_admin()
+    return jsonify(post_wipe_status)
+
+
 def is_user_online(user):
     if user.last_seen is None:
         return False
@@ -2232,12 +2168,12 @@ def is_user_online(user):
 def admin_dashboard():
     admin_user = require_admin()
     users = User.query.order_by(User.username).all()
-    posts = Post.query.order_by(Post.created_at.desc()).all()
+    games = StudioProject.query.order_by(StudioProject.created_at.desc()).all()
     online_status = {u.id: is_user_online(u) for u in users}
-    reports = PostReport.query.order_by(PostReport.created_at.desc()).all()
+    reports = StudioProjectReport.query.order_by(StudioProjectReport.created_at.desc()).all()
     meme_templates = MemeTemplate.query.filter_by(active=True).order_by(MemeTemplate.created_at.desc()).all()
     return render_template(
-        "admin.html", user=admin_user, users=users, posts=posts, online_status=online_status,
+        "admin.html", user=admin_user, users=users, games=games, online_status=online_status,
         reports=reports, meme_templates=meme_templates,
     )
 
@@ -2245,7 +2181,7 @@ def admin_dashboard():
 @app.route("/admin/reports/<int:report_id>/dismiss", methods=["POST"])
 def admin_dismiss_report(report_id):
     require_admin()
-    report = db.get_or_404(PostReport, report_id)
+    report = db.get_or_404(StudioProjectReport, report_id)
     db.session.delete(report)
     db.session.commit()
     return redirect(url_for("admin_dashboard"))
@@ -2278,9 +2214,6 @@ def admin_delete_user(user_id):
     if target.id == admin_user.id:
         abort(400)
 
-    for post in target.posts:
-        for photo in post.photos:
-            delete_media("posts", photo.filename)
     if target.profile_image:
         delete_media("profile_pics", target.profile_image)
 
@@ -2306,30 +2239,6 @@ def admin_set_points(user_id):
 
 def seconds_since(moment):
     return (datetime.now(timezone.utc) - moment.replace(tzinfo=timezone.utc)).total_seconds()
-
-
-@app.route("/feed")
-def feed():
-    user = current_user()
-    posts = Post.query.order_by(Post.created_at.desc()).all()
-    jump_to_post_id = request.args.get("post_id", type=int)
-
-    liked_ids = set()
-    subscribed_channel_ids = set()
-    if user is not None:
-        liked_ids = {like.post_id for like in PostLike.query.filter_by(user_id=user.id).all()}
-        subscribed_channel_ids = {
-            sub.channel_id for sub in Subscription.query.filter_by(subscriber_id=user.id).all()
-        }
-
-    return render_template(
-        "feed.html",
-        posts=posts,
-        user=user,
-        liked_ids=liked_ids,
-        subscribed_channel_ids=subscribed_channel_ids,
-        jump_to_post_id=jump_to_post_id,
-    )
 
 
 @app.route("/tictactoe")

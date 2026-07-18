@@ -101,6 +101,32 @@
         </div>
     </div>
 
+    {% if user %}
+        <div class="ai-chat-widget" id="aiChatWidget">
+            <button type="button" class="ai-chat-toggle-btn" id="aiChatToggleBtn" title="KI-Assistent">🤖</button>
+            <div class="ai-chat-panel" id="aiChatPanel" style="display:none;">
+                <div class="ai-chat-panel-header">
+                    <span>KI-Assistent</span>
+                    <button type="button" id="aiChatCloseBtn">&times;</button>
+                </div>
+                <div class="ai-chat-messages" id="aiChatMessages">
+                    <div class="ai-chat-message ai-chat-message-bot">
+                        Hallo! Frag mich etwas, oder &mdash; wenn du gerade im Studio-Editor programmierst &mdash;
+                        lass dir bei deinem Code helfen.
+                    </div>
+                </div>
+                <label class="ai-chat-context-toggle" id="aiChatContextToggleWrap" style="display:none;">
+                    <input type="checkbox" id="aiChatContextToggle" checked>
+                    Meinen aktuellen Code mitschicken
+                </label>
+                <form class="ai-chat-form" id="aiChatForm">
+                    <input type="text" id="aiChatInput" placeholder="Frage stellen..." maxlength="2000" autocomplete="off">
+                    <button type="submit">Senden</button>
+                </form>
+            </div>
+        </div>
+    {% endif %}
+
     <script>
         (function () {
             const path = window.location.pathname;
@@ -120,41 +146,6 @@
                 el.addEventListener("pointerup", release);
                 el.addEventListener("pointercancel", release);
                 el.addEventListener("pointerleave", release);
-            });
-        })();
-    </script>
-
-    <script>
-        (function () {
-            document.addEventListener("click", (event) => {
-                const dotsBtn = event.target.closest(".post-menu-dots");
-                if (dotsBtn) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    const dropdown = dotsBtn.nextElementSibling;
-                    document.querySelectorAll(".post-menu-dropdown").forEach((d) => {
-                        if (d !== dropdown) d.style.display = "none";
-                    });
-                    dropdown.style.display = dropdown.style.display === "none" ? "block" : "none";
-                    return;
-                }
-
-                const reportBtn = event.target.closest(".post-menu-report-btn");
-                if (reportBtn) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    if (reportBtn.disabled) return;
-                    const postId = reportBtn.dataset.postId;
-                    fetch(`/api/post/${postId}/report`, { method: "POST" })
-                        .then((res) => res.json())
-                        .then((data) => {
-                            reportBtn.textContent = data.ok ? "Gemeldet" : (data.error === "already_reported" ? "Bereits gemeldet" : "Fehler");
-                            reportBtn.disabled = true;
-                        });
-                    return;
-                }
-
-                document.querySelectorAll(".post-menu-dropdown").forEach((d) => { d.style.display = "none"; });
             });
         })();
     </script>
@@ -256,5 +247,92 @@
             });
         }
     </script>
+
+    {% if user %}
+        <script>
+            (function () {
+                const widget = document.getElementById("aiChatWidget");
+                const toggleBtn = document.getElementById("aiChatToggleBtn");
+                const panel = document.getElementById("aiChatPanel");
+                const closeBtn = document.getElementById("aiChatCloseBtn");
+                const messagesEl = document.getElementById("aiChatMessages");
+                const form = document.getElementById("aiChatForm");
+                const input = document.getElementById("aiChatInput");
+                const contextToggleWrap = document.getElementById("aiChatContextToggleWrap");
+                const contextToggle = document.getElementById("aiChatContextToggle");
+
+                // If the current page has timeskip studio's code editor open,
+                // offer to send the user's current script along as context so
+                // the assistant can help with the actual code being written.
+                const studioTextarea = document.getElementById("studioCodeTextarea");
+                if (studioTextarea) contextToggleWrap.style.display = "flex";
+
+                toggleBtn.addEventListener("click", () => {
+                    panel.style.display = panel.style.display === "none" ? "flex" : "none";
+                    if (panel.style.display === "flex") input.focus();
+                });
+                closeBtn.addEventListener("click", () => { panel.style.display = "none"; });
+
+                function addMessage(text, who) {
+                    const bubble = document.createElement("div");
+                    bubble.className = "ai-chat-message ai-chat-message-" + who;
+                    bubble.textContent = text;
+                    messagesEl.appendChild(bubble);
+                    messagesEl.scrollTop = messagesEl.scrollHeight;
+                    return bubble;
+                }
+
+                function pollJob(jobId, bubble) {
+                    fetch(`/api/ai/chat/${jobId}`)
+                        .then((res) => res.json())
+                        .then((data) => {
+                            if (!data.ok) {
+                                bubble.textContent = "Fehler bei der Anfrage.";
+                                return;
+                            }
+                            if (data.status === "running") {
+                                setTimeout(() => pollJob(jobId, bubble), 1200);
+                                return;
+                            }
+                            if (data.status === "done") {
+                                bubble.textContent = data.reply || "(keine Antwort)";
+                            } else {
+                                bubble.textContent = "Die KI ist gerade nicht verfügbar.";
+                            }
+                            messagesEl.scrollTop = messagesEl.scrollHeight;
+                        })
+                        .catch(() => { bubble.textContent = "Fehler bei der Anfrage."; });
+                }
+
+                form.addEventListener("submit", (event) => {
+                    event.preventDefault();
+                    const text = input.value.trim();
+                    if (!text) return;
+                    addMessage(text, "user");
+                    input.value = "";
+
+                    const includeContext = studioTextarea && contextToggle.checked;
+                    const body = { message: text };
+                    if (includeContext) body.context = studioTextarea.value;
+
+                    const thinkingBubble = addMessage("Denkt nach...", "bot");
+                    fetch("/api/ai/chat", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(body),
+                    })
+                        .then((res) => res.json())
+                        .then((data) => {
+                            if (!data.ok) {
+                                thinkingBubble.textContent = "Fehler bei der Anfrage.";
+                                return;
+                            }
+                            pollJob(data.job_id, thinkingBubble);
+                        })
+                        .catch(() => { thinkingBubble.textContent = "Fehler bei der Anfrage."; });
+                });
+            })();
+        </script>
+    {% endif %}
 </body>
 </html>

@@ -36,9 +36,6 @@ class User(db.Model):
     coinflip_coins = db.Column(db.Integer, nullable=False, default=1)
     coinflip_worker_count = db.Column(db.Integer, nullable=False, default=0)
     coinflip_rebirths = db.Column(db.Integer, nullable=False, default=0)
-    posts = db.relationship("Post", backref="uploader", lazy=True, cascade="all, delete-orphan")
-    post_likes_given = db.relationship("PostLike", backref="liker", lazy=True, cascade="all, delete-orphan")
-    post_comments_made = db.relationship("PostComment", backref="author", lazy=True, cascade="all, delete-orphan")
     sounds_uploaded = db.relationship("Sound", backref="uploader", lazy=True, cascade="all, delete-orphan")
     subscriptions_made = db.relationship(
         "Subscription",
@@ -60,61 +57,6 @@ class User(db.Model):
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
-
-
-class Post(db.Model):
-    """A photo post -- can have one or many photos, swipeable in the feed."""
-    id = db.Column(db.Integer, primary_key=True)
-    caption = db.Column(db.Text, nullable=True)
-    hashtags = db.Column(db.Text, nullable=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    photos = db.relationship(
-        "PostPhoto", backref="post", lazy=True, cascade="all, delete-orphan",
-        order_by="PostPhoto.position",
-    )
-    likes = db.relationship("PostLike", backref="post", lazy=True, cascade="all, delete-orphan")
-    comments = db.relationship(
-        "PostComment", backref="post", lazy=True, cascade="all, delete-orphan",
-        order_by="PostComment.created_at",
-    )
-    reports = db.relationship(
-        "PostReport", backref="post", lazy=True, cascade="all, delete-orphan",
-        order_by="PostReport.created_at",
-    )
-
-
-class PostPhoto(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    post_id = db.Column(db.Integer, db.ForeignKey("post.id"), nullable=False)
-    filename = db.Column(db.String(255), nullable=False)
-    position = db.Column(db.Integer, nullable=False, default=0)
-    content_hash = db.Column(db.String(64), nullable=True, index=True)
-
-
-class PostReport(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    post_id = db.Column(db.Integer, db.ForeignKey("post.id"), nullable=False)
-    reporter_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    reporter = db.relationship("User")
-    __table_args__ = (db.UniqueConstraint("post_id", "reporter_id", name="uq_postreport_post_reporter"),)
-
-
-class PostLike(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    post_id = db.Column(db.Integer, db.ForeignKey("post.id"), nullable=False)
-    points_awarded = db.Column(db.Integer, nullable=False, default=0)
-    __table_args__ = (db.UniqueConstraint("user_id", "post_id", name="uq_postlike_user_post"),)
-
-
-class PostComment(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    post_id = db.Column(db.Integer, db.ForeignKey("post.id"), nullable=False)
-    text = db.Column(db.String(500), nullable=False)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class Subscription(db.Model):
@@ -274,7 +216,6 @@ class Message(db.Model):
     conversation_id = db.Column(db.Integer, db.ForeignKey("conversation.id"), nullable=False)
     sender_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     text = db.Column(db.Text, nullable=True)
-    shared_post_id = db.Column(db.Integer, db.ForeignKey("post.id"), nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     viewed_at = db.Column(db.DateTime, nullable=True)
     sender = db.relationship("User", foreign_keys=[sender_id])
@@ -300,11 +241,47 @@ class StudioProject(db.Model):
     builtin_endpoint = db.Column(db.String(50), nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    owner = db.relationship("User")
+    owner = db.relationship("User", backref="studio_projects")
     blocks = db.relationship(
         "StudioBlock", backref="project", lazy=True, cascade="all, delete-orphan",
         order_by="StudioBlock.id",
     )
+    likes = db.relationship("StudioProjectLike", backref="project", lazy=True, cascade="all, delete-orphan")
+    comments = db.relationship(
+        "StudioProjectComment", backref="project", lazy=True, cascade="all, delete-orphan",
+        order_by="StudioProjectComment.created_at",
+    )
+    reports = db.relationship(
+        "StudioProjectReport", backref="project", lazy=True, cascade="all, delete-orphan",
+        order_by="StudioProjectReport.created_at",
+    )
+
+
+class StudioProjectLike(db.Model):
+    """No points are awarded for liking/publishing a game -- this is a
+    plain popularity signal, used to sort the homepage's "Beliebteste" tab."""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    project_id = db.Column(db.Integer, db.ForeignKey("studio_project.id"), nullable=False)
+    __table_args__ = (db.UniqueConstraint("user_id", "project_id", name="uq_studioprojectlike_user_project"),)
+
+
+class StudioProjectComment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    project_id = db.Column(db.Integer, db.ForeignKey("studio_project.id"), nullable=False)
+    text = db.Column(db.String(500), nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    author = db.relationship("User")
+
+
+class StudioProjectReport(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, db.ForeignKey("studio_project.id"), nullable=False)
+    reporter_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    reporter = db.relationship("User")
+    __table_args__ = (db.UniqueConstraint("project_id", "reporter_id", name="uq_studioprojectreport_project_reporter"),)
 
 
 class StudioBlock(db.Model):

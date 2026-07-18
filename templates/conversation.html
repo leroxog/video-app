@@ -37,14 +37,6 @@
                     item.appendChild(text);
                 }
 
-                if (m.shared_post) {
-                    const shared = document.createElement("a");
-                    shared.className = "conversation-shared-post";
-                    shared.href = m.shared_post.url;
-                    shared.textContent = "📷 " + m.shared_post.caption;
-                    item.appendChild(shared);
-                }
-
                 const time = document.createElement("div");
                 time.className = "conversation-message-time";
                 time.textContent = m.created_at;

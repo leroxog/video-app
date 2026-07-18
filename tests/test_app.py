@@ -10,9 +10,9 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 import pytest
 from app import app as flask_app, db
 from models import (
-    User, Post, PostPhoto, PostLike, PostComment, PostReport, Sound, Conversation, Message,
+    User, Sound, Conversation, Message,
     MemeTemplate, MemeLobby, MemeLobbyPlayer, MemeCreation, MemeVote,
-    StudioProject, StudioBlock,
+    StudioProject, StudioBlock, StudioProjectLike, StudioProjectComment, StudioProjectReport,
 )
 
 
@@ -58,23 +58,6 @@ def make_admin(username):
     user = User.query.filter_by(username=username).first()
     user.is_admin = True
     db.session.commit()
-
-
-def upload_post(client, caption="Testfoto", filenames=None, content=None, hashtags=""):
-    if filenames is None:
-        filenames = ["clip.png"]
-    if content is None:
-        contents = [f"fake image bytes for {caption}-{name}".encode() for name in filenames]
-    elif isinstance(content, bytes):
-        contents = [content] * len(filenames)
-    else:
-        contents = content
-    data = {
-        "caption": caption,
-        "hashtags": hashtags,
-        "photos": [(io.BytesIO(c), name) for c, name in zip(contents, filenames)],
-    }
-    return client.post("/upload", data=data, content_type="multipart/form-data", follow_redirects=True)
 
 
 def test_register_and_login(client):
@@ -229,11 +212,6 @@ def test_login_wrong_password(client):
     assert "falsch".encode() in response.data
 
 
-def test_upload_requires_login(client):
-    response = client.get("/upload", follow_redirects=True)
-    assert b"Login" in response.data
-
-
 def test_api_upload_sound_requires_login(client):
     data = {"sound": (io.BytesIO(b"fake audio bytes"), "clip.mp3")}
     response = client.post("/api/sounds", data=data, content_type="multipart/form-data")
@@ -287,112 +265,6 @@ def test_api_upload_sound_defaults_title_from_filename(client):
     assert payload["sound"]["title"] == "mein_toller_sound"
 
 
-def test_upload_awards_bonus_points(client):
-    register(client)
-    with flask_app.app_context():
-        user = User.query.filter_by(username="alice").first()
-        assert user.total_score == 0
-
-    upload_post(client, caption="Bonus Testfoto")
-
-    with flask_app.app_context():
-        user = User.query.filter_by(username="alice").first()
-        assert user.total_score == 100
-
-
-def test_duplicate_photo_upload_is_rejected(client):
-    register(client)
-    upload_post(client, caption="Original", filenames=["clip.png"], content=b"identical photo bytes")
-
-    with flask_app.app_context():
-        user = User.query.filter_by(username="alice").first()
-        assert user.total_score == 100
-
-    response = upload_post(client, caption="Duplicate", filenames=["clip2.png"], content=b"identical photo bytes")
-    assert b"bereits hochgeladen" in response.data
-
-    with flask_app.app_context():
-        user = User.query.filter_by(username="alice").first()
-        assert user.total_score == 100
-        assert Post.query.count() == 1
-
-
-def test_like_awards_and_removes_bonus_points(client):
-    register(client, username="alice", password="secret123")
-    upload_post(client, caption="Likeable Photo")
-    client.post("/logout")
-
-    register(client, username="bob", password="secret123")
-    with flask_app.app_context():
-        post = Post.query.filter_by(caption="Likeable Photo").first()
-        post_id = post.id
-
-    client.post(f"/api/post/{post_id}/like")
-    with flask_app.app_context():
-        alice = User.query.filter_by(username="alice").first()
-        # Alice's upload already crossed the 100pt daily threshold, so her
-        # streak is active by the time the like lands -> +10% streak bonus
-        # on the 60pt like bonus (60 * 1.1 = 66).
-        assert alice.total_score == 166
-
-    client.post(f"/api/post/{post_id}/like")
-    with flask_app.app_context():
-        alice = User.query.filter_by(username="alice").first()
-        # Unliking must remove the exact same (boosted) amount that was
-        # awarded, not the flat 60, otherwise like/unlike would leak points.
-        assert alice.total_score == 100
-
-
-def test_upload_and_view_in_feed(client):
-    register(client)
-    response = upload_post(client, caption="Mein Testfoto")
-    assert response.status_code == 200
-    assert "Mein Testfoto".encode() in response.data
-
-    response = client.get("/feed")
-    assert "Mein Testfoto".encode() in response.data
-
-
-def test_upload_with_caption_is_shown_in_feed(client):
-    register(client)
-    response = upload_post(client, caption="Das ist eine Testbeschreibung.")
-    assert response.status_code == 200
-    assert "Das ist eine Testbeschreibung.".encode() in response.data
-
-
-def test_upload_with_hashtags_normalizes_and_shows_in_feed(client):
-    register(client)
-    response = upload_post(client, caption="Mit Hashtags", hashtags="schule, #freunde #Freunde lustig")
-    assert response.status_code == 200
-    assert b"#schule" in response.data
-    assert b"#freunde" in response.data
-    assert b"#lustig" in response.data
-
-    with flask_app.app_context():
-        post = Post.query.filter_by(caption="Mit Hashtags").first()
-        # duplicate #freunde/#Freunde collapses to a single tag, case-insensitively
-        assert post.hashtags == "#schule #freunde #lustig"
-
-
-def test_upload_without_caption_works(client):
-    register(client)
-    response = upload_post(client, caption="")
-    assert response.status_code == 200
-    with flask_app.app_context():
-        assert Post.query.count() == 1
-
-
-def test_upload_rejects_bad_extension(client):
-    register(client)
-    response = client.post(
-        "/upload",
-        data={"caption": "Boeses Format", "photos": [(io.BytesIO(b"not an image"), "clip.exe")]},
-        content_type="multipart/form-data",
-        follow_redirects=True,
-    )
-    assert "erlaubt".encode() in response.data
-
-
 def test_tictactoe_page_accessible_without_login(client):
     response = client.get("/tictactoe")
     assert response.status_code == 200
@@ -429,13 +301,6 @@ def test_manifest_and_service_worker_referenced_in_every_page(client):
     response = client.get("/")
     assert b'rel="manifest"' in response.data
     assert b"/service-worker.js" in response.data
-
-
-def test_header_search_bar_present_on_feed_page(client):
-    register(client)
-    upload_post(client, caption="Header Test")
-    response = client.get("/feed")
-    assert b"headerSearchInput" in response.data
 
 
 def test_gravityrun_page_accessible_without_login(client):
@@ -479,18 +344,6 @@ def test_games_page_accessible_without_login_and_lists_published_studio_games(cl
     response = client.get("/games")
     assert response.status_code == 200
     assert b"Testspiel" in response.data
-
-
-def test_camera_page_requires_login(client):
-    response = client.get("/camera", follow_redirects=True)
-    assert b"Login" in response.data
-
-
-def test_camera_page_accessible_when_logged_in(client):
-    register(client)
-    response = client.get("/camera")
-    assert response.status_code == 200
-    assert b"cameraCanvas" in response.data
 
 
 def test_bottom_nav_has_games_and_plus_buttons(client):
@@ -631,34 +484,6 @@ def test_place_pixel_rejects_bad_color(client):
     assert response.get_json()["error"] == "invalid_color"
 
 
-def test_api_like_post_toggle(client):
-    register(client)
-    upload_post(client, caption="Like API Test")
-    with flask_app.app_context():
-        post_id = Post.query.filter_by(caption="Like API Test").first().id
-
-    response = client.post(f"/api/post/{post_id}/like")
-    assert response.status_code == 200
-    data = response.get_json()
-    assert data == {"ok": True, "liked": True, "like_count": 1}
-
-    response = client.post(f"/api/post/{post_id}/like")
-    assert response.get_json() == {"ok": True, "liked": False, "like_count": 0}
-
-
-def test_api_like_post_requires_login(client):
-    response = client.post("/api/post/1/like")
-    assert response.status_code == 401
-
-
-def test_feed_page_has_download_link(client):
-    register(client)
-    upload_post(client, caption="Download Test")
-    response = client.get("/feed")
-    assert b"post-download-btn" in response.data
-    assert b"Herunterladen" in response.data
-
-
 def test_profile_page_shows_username_and_published_games(client):
     register(client, username="bob")
     client.post("/studio/create", data={"name": "Bobs Spiel"}, follow_redirects=True)
@@ -693,7 +518,7 @@ def test_subscribe_toggle(client):
 
 def test_leaderboard_shows_follow_button(client):
     register(client, username="alice", password="secret123")
-    upload_post(client, caption="Leaderboard Clip")
+    client.post("/api/score", json={"game": "block.buster", "score": 50})
     client.post("/logout")
 
     register(client, username="bob", password="secret123")
@@ -885,127 +710,6 @@ def test_admin_set_points_clamps_negative_to_zero(client):
     client.post(f"/admin/users/{target.id}/set-points", data={"total_score": "-50"})
     target = User.query.filter_by(username="boss").first()
     assert target.total_score == 0
-
-
-def test_admin_can_delete_any_post(client):
-    register(client, username="owner")
-    upload_post(client, caption="Owned Photo")
-    client.post("/logout")
-
-    register(client, username="boss")
-    make_admin("boss")
-
-    with flask_app.app_context():
-        post_id = Post.query.filter_by(caption="Owned Photo").first().id
-
-    response = client.post(f"/post/{post_id}/delete", follow_redirects=True)
-    assert response.status_code == 200
-    assert Post.query.count() == 0
-
-
-def test_report_post_requires_login(client):
-    register(client, username="owner")
-    upload_post(client, caption="Photo")
-    client.post("/logout")
-
-    response = client.post("/api/post/1/report")
-    data = response.get_json()
-    assert data["ok"] is False
-    assert data["error"] == "not_logged_in"
-
-
-def test_report_post_success(client):
-    register(client, username="owner")
-    upload_post(client, caption="Photo")
-    client.post("/logout")
-
-    register(client, username="reporter")
-    response = client.post("/api/post/1/report")
-    data = response.get_json()
-    assert data["ok"] is True
-
-    reports = PostReport.query.filter_by(post_id=1).all()
-    assert len(reports) == 1
-    assert reports[0].reporter.username == "reporter"
-
-
-def test_report_post_twice_by_same_user_fails(client):
-    register(client, username="owner")
-    upload_post(client, caption="Photo")
-    client.post("/logout")
-
-    register(client, username="reporter")
-    client.post("/api/post/1/report")
-    response = client.post("/api/post/1/report")
-    data = response.get_json()
-    assert data["ok"] is False
-    assert data["error"] == "already_reported"
-
-
-def test_admin_sees_reported_posts(client):
-    register(client, username="owner")
-    upload_post(client, caption="Reported Photo")
-    client.post("/logout")
-
-    register(client, username="reporter")
-    client.post("/api/post/1/report")
-    client.post("/logout")
-
-    register(client, username="boss")
-    make_admin("boss")
-    response = client.get("/admin")
-    assert b"Reported Photo" in response.data
-    assert b"reporter" in response.data
-
-
-def test_admin_can_dismiss_report(client):
-    register(client, username="owner")
-    upload_post(client, caption="Photo")
-    client.post("/logout")
-
-    register(client, username="reporter")
-    client.post("/api/post/1/report")
-    client.post("/logout")
-
-    register(client, username="boss")
-    make_admin("boss")
-    report = PostReport.query.first()
-    response = client.post(f"/admin/reports/{report.id}/dismiss", follow_redirects=True)
-    assert response.status_code == 200
-    assert PostReport.query.count() == 0
-    # dismissing a report does not delete the post itself
-    assert Post.query.count() == 1
-
-
-def test_regular_user_still_cannot_delete_others_post(client):
-    register(client, username="owner")
-    upload_post(client, caption="Protected Photo")
-    client.post("/logout")
-
-    register(client, username="stranger")
-    response = client.post("/post/1/delete")
-    assert response.status_code == 403
-
-
-def test_feed_page_accessible_and_shows_photo(client):
-    register(client)
-    upload_post(client, caption="Feed Photo")
-    response = client.get("/feed")
-    assert response.status_code == 200
-    assert b"Feed Photo" in response.data
-
-
-def test_feed_page_empty_state(client):
-    response = client.get("/feed")
-    assert response.status_code == 200
-    assert "Noch keine Fotos vorhanden".encode() in response.data
-
-
-def test_feed_shows_swipe_dots_for_multi_photo_post(client):
-    register(client)
-    upload_post(client, caption="Multi", filenames=["a.png", "b.png"])
-    response = client.get("/feed")
-    assert b"post-photo-dot" in response.data
 
 
 def test_homepage_shows_register_cta_for_guest(client):
@@ -1247,33 +951,6 @@ def test_no_streak_means_no_multiplier_bonus(client):
     app_module.adjust_points(user, 100)
     db.session.commit()
     assert user.total_score == before + 100
-
-
-def test_like_unlike_stays_symmetric_with_active_streak_bonus(client):
-    import app as app_module
-
-    register(client, username="owner")
-    owner = User.query.filter_by(username="owner").first()
-    owner.current_streak = 5
-    owner.best_streak = 5
-    owner.last_streak_date = app_module.streak_today()
-    post = Post(caption="Photo", user_id=owner.id)
-    db.session.add(post)
-    db.session.flush()
-    db.session.add(PostPhoto(post_id=post.id, filename="clip.png", position=0, content_hash="hash1"))
-    db.session.commit()
-    post_id = post.id
-    client.post("/logout")
-
-    register(client, username="liker")
-    client.post(f"/api/post/{post_id}/like")
-
-    owner = User.query.filter_by(username="owner").first()
-    assert owner.total_score == 78  # 60 * 1.3 (5-day streak, capped at +30%)
-
-    client.post(f"/api/post/{post_id}/like")  # unlike
-    owner = User.query.filter_by(username="owner").first()
-    assert owner.total_score == 0  # exact reversal, no leftover leak
 
 
 def test_streak_continues_on_consecutive_day_and_resets_after_gap(client):
@@ -1658,45 +1335,6 @@ def test_create_group_rejects_non_mutual_follow_member(client):
     client.post("/login", data={"username": "alice", "password": "secret123"})
     response = client.post("/api/messages/create-group", json={"name": "Team", "usernames": ["carol"]})
     assert response.get_json()["ok"] is False
-
-
-def test_share_post_creates_message_with_shared_post(client):
-    register(client, username="alice")
-    alice = User.query.filter_by(username="alice").first()
-    post = Post(caption="cool photo", user_id=alice.id)
-    db.session.add(post)
-    db.session.flush()
-    db.session.add(PostPhoto(post_id=post.id, filename="clip.png", position=0, content_hash="clip-hash"))
-    db.session.commit()
-    post_id = post.id
-    client.post("/logout")
-
-    register(client, username="bob")
-    client.post("/logout")
-    mutual_follow(client, "alice", "bob")
-
-    client.post("/login", data={"username": "alice", "password": "secret123"})
-    conv_id = client.post("/api/messages/start-dm", json={"username": "bob"}).get_json()["conversation_id"]
-    response = client.post(f"/api/posts/{post_id}/share", json={"conversation_id": conv_id})
-    assert response.get_json()["ok"] is True
-
-    messages_data = client.get(f"/api/messages/{conv_id}").get_json()["messages"]
-    assert messages_data[0]["shared_post"]["caption"] == "cool photo"
-
-
-def test_liked_posts_page_lists_liked_posts(client):
-    register(client, username="alice")
-    alice = User.query.filter_by(username="alice").first()
-    post = Post(caption="liked photo", user_id=alice.id)
-    db.session.add(post)
-    db.session.flush()
-    db.session.add(PostPhoto(post_id=post.id, filename="liked.png", position=0, content_hash="liked-hash"))
-    db.session.commit()
-    post_id = post.id
-
-    client.post(f"/api/post/{post_id}/like")
-    response = client.get("/liked-posts")
-    assert b"liked photo" in response.data
 
 
 def test_coinflip_page_loads(client):
@@ -2831,5 +2469,203 @@ def test_legacy_game_card_links_to_its_own_route_not_studio_play(client):
 
     response = client.get("/games")
     assert b'href="/fruitmerge"' in response.data
+
+
+def publish_studio_project(client):
+    create_studio_project(client)
+    project = StudioProject.query.filter_by(name="Testspiel").first()
+    client.post(f"/studio/{project.id}/publish")
+    return project
+
+
+def test_studio_like_toggle_awards_no_points(client):
+    register(client, username="owner")
+    project = publish_studio_project(client)
+    client.post("/logout")
+
+    register(client, username="liker")
+    res = client.post(f"/api/studio/{project.id}/like")
+    data = res.get_json()
+    assert data["ok"] is True
+    assert data["liked"] is True
+    assert data["like_count"] == 1
+
+    owner = User.query.filter_by(username="owner").first()
+    assert owner.total_score == 0  # likes on games don't award points
+
+    res = client.post(f"/api/studio/{project.id}/like")
+    data = res.get_json()
+    assert data["liked"] is False
+    assert data["like_count"] == 0
+
+
+def test_studio_like_requires_login(client):
+    register(client)
+    project = publish_studio_project(client)
+    client.post("/logout")
+    res = client.post(f"/api/studio/{project.id}/like")
+    assert res.status_code == 401
+
+
+def test_studio_comment_add_and_list(client):
+    register(client, username="alice")
+    project = publish_studio_project(client)
+
+    res = client.post(f"/api/studio/{project.id}/comment", json={"text": "Cooles Spiel!"})
+    data = res.get_json()
+    assert data["ok"] is True
+    assert data["comment"]["username"] == "alice"
+    assert data["comment_count"] == 1
+
+    list_res = client.get(f"/api/studio/{project.id}/comments")
+    comments = list_res.get_json()["comments"]
+    assert len(comments) == 1
+    assert comments[0]["text"] == "Cooles Spiel!"
+
+
+def test_studio_comment_requires_login(client):
+    register(client)
+    project = publish_studio_project(client)
+    client.post("/logout")
+    res = client.post(f"/api/studio/{project.id}/comment", json={"text": "Hallo"})
+    assert res.status_code == 401
+
+
+def test_studio_report_success_and_twice_fails(client):
+    register(client, username="owner")
+    project = publish_studio_project(client)
+    client.post("/logout")
+
+    register(client, username="reporter")
+    res = client.post(f"/api/studio/{project.id}/report")
+    assert res.get_json()["ok"] is True
+
+    res2 = client.post(f"/api/studio/{project.id}/report")
+    assert res2.status_code == 400
+    assert res2.get_json()["error"] == "already_reported"
+
+    reports = StudioProjectReport.query.filter_by(project_id=project.id).all()
+    assert len(reports) == 1
+
+
+def test_admin_sees_reported_games_and_can_dismiss(client):
+    register(client, username="owner")
+    project = publish_studio_project(client)
+    client.post("/logout")
+
+    register(client, username="reporter")
+    client.post(f"/api/studio/{project.id}/report")
+    client.post("/logout")
+
+    register(client, username="admin")
+    make_admin("admin")
+    response = client.get("/admin")
+    assert b"Testspiel" in response.data
+
+    report = StudioProjectReport.query.first()
+    client.post(f"/admin/reports/{report.id}/dismiss")
+    assert StudioProjectReport.query.count() == 0
+
+
+def test_admin_can_delete_any_studio_project(client):
+    register(client, username="owner")
+    project = publish_studio_project(client)
+    project_id = project.id
+    client.post("/logout")
+
+    register(client, username="admin")
+    make_admin("admin")
+    res = client.post(f"/studio/{project_id}/delete")
+    assert res.status_code in (302, 200)
+    assert db.session.get(StudioProject, project_id) is None
+
+
+def test_studio_help_page_lists_commands_for_every_dialect(client):
+    response = client.get("/studio/help")
+    assert response.status_code == 200
+    assert b"timeskipcode" in response.data
+    assert b"studio-dialects.js" in response.data
+
+
+def test_homepage_shows_sort_tabs_and_published_games(client):
+    register(client)
+    publish_studio_project(client)
+
+    response = client.get("/")
+    assert b"Beliebteste" in response.data
+    assert b"Neueste" in response.data
+    assert b"Testspiel" in response.data
+
+    popular_response = client.get("/?sort=popular")
+    assert b"Testspiel" in popular_response.data
+
+
+def test_ai_chat_requires_login(client):
+    response = client.post("/api/ai/chat", json={"message": "Hallo"})
+    assert response.status_code == 401
+
+
+def test_ai_chat_rejects_empty_message(client):
+    register(client)
+    response = client.post("/api/ai/chat", json={"message": "  "})
+    assert response.status_code == 400
+
+
+def test_ai_chat_starts_job_and_reports_status(client, monkeypatch):
+    import ai_assistant
+
+    monkeypatch.setattr(ai_assistant, "generate_reply", lambda message, context=None: f"Antwort auf: {message}")
+    register(client)
+
+    start_res = client.post("/api/ai/chat", json={"message": "Wie geht KILL?"})
+    data = start_res.get_json()
+    assert data["ok"] is True
+    job_id = data["job_id"]
+
+    # the background thread runs generate_reply almost immediately since it's
+    # stubbed above, but poll a couple of times to avoid a flaky race.
+    import time
+    status_data = None
+    for _ in range(20):
+        status_res = client.get(f"/api/ai/chat/{job_id}")
+        status_data = status_res.get_json()
+        if status_data["status"] != "running":
+            break
+        time.sleep(0.05)
+
+    assert status_data["status"] == "done"
+    assert status_data["reply"] == "Antwort auf: Wie geht KILL?"
+
+
+def test_ai_chat_status_requires_login(client):
+    response = client.get("/api/ai/chat/doesnotexist")
+    assert response.status_code == 401
+
+
+def test_ai_chat_status_unknown_job_404s(client):
+    register(client)
+    response = client.get("/api/ai/chat/doesnotexist")
+    assert response.status_code == 404
+
+
+def test_ai_chat_reports_error_when_groq_api_key_missing(client, monkeypatch):
+    import ai_assistant
+
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    register(client)
+
+    start_res = client.post("/api/ai/chat", json={"message": "Hallo"})
+    job_id = start_res.get_json()["job_id"]
+
+    import time
+    status_data = None
+    for _ in range(20):
+        status_data = client.get(f"/api/ai/chat/{job_id}").get_json()
+        if status_data["status"] != "running":
+            break
+        time.sleep(0.05)
+
+    assert status_data["status"] == "error"
+    assert "GROQ_API_KEY" in status_data["error"]
 
 

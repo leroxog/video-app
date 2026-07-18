@@ -14,7 +14,10 @@
             </select>
             <button type="submit">Neues Projekt</button>
         </form>
-        <p class="studio-language-hint">timeskipcode ist unsere eigene, einfache Sprache und wird empfohlen &mdash; HTML, Python und C# sind alternative Schreibweisen mit dem gleichen Funktionsumfang.</p>
+        <p class="studio-language-hint">
+            timeskipcode ist unsere eigene, einfache Sprache und wird empfohlen &mdash; HTML, Python und C# sind alternative Schreibweisen mit dem gleichen Funktionsumfang.
+            <a href="{{ url_for('studio_help_page') }}" target="_blank">Alle Befehle ansehen &rarr;</a>
+        </p>
 
         {% if projects %}
             <div class="studio-project-list">

@@ -16,12 +16,12 @@
 
     <h2>Accounts verwalten</h2>
     <table class="admin-table">
-        <thead><tr><th>Benutzername</th><th>Fotos</th><th>Punkte</th><th>Rolle</th><th>Status</th><th>Zuletzt online</th><th>Angaben</th><th></th></tr></thead>
+        <thead><tr><th>Benutzername</th><th>Spiele</th><th>Punkte</th><th>Rolle</th><th>Status</th><th>Zuletzt online</th><th>Angaben</th><th></th></tr></thead>
         <tbody>
             {% for u in users %}
                 <tr>
                     <td><a href="{{ url_for('profile', username=u.username) }}">{{ u.username }}</a></td>
-                    <td>{{ u.posts|length }}</td>
+                    <td>{{ u.studio_projects|length }}</td>
                     <td>
                         <form action="{{ url_for('admin_set_points', user_id=u.id) }}" method="post" class="admin-points-form">
                             <input type="number" name="total_score" value="{{ u.total_score }}" min="0">
@@ -51,7 +51,7 @@
                     <td>
                         {% if u.id != user.id %}
                             <form action="{{ url_for('admin_delete_user', user_id=u.id) }}" method="post"
-                                  onsubmit="return confirm('Account {{ u.username }} wirklich löschen? Alle Fotos, Likes und Abos werden mitgelöscht.');">
+                                  onsubmit="return confirm('Account {{ u.username }} wirklich löschen? Alle Spiele, Likes und Abos werden mitgelöscht.');">
                                 <button type="submit" class="danger admin-inline-btn">Löschen</button>
                             </form>
                         {% endif %}
@@ -83,24 +83,24 @@
         <p>Noch keine Meme-Vorlagen hochgeladen &mdash; ohne Vorlagen kann keine Lobby gestartet werden.</p>
     {% endif %}
 
-    <h2>Gemeldete Fotos</h2>
+    <h2>Gemeldete Spiele</h2>
     {% if reports %}
         <table class="admin-table">
-            <thead><tr><th>Beitrag</th><th>Von</th><th>Gemeldet von</th><th>Gemeldet am</th><th></th></tr></thead>
+            <thead><tr><th>Spiel</th><th>Von</th><th>Gemeldet von</th><th>Gemeldet am</th><th></th></tr></thead>
             <tbody>
                 {% for report in reports %}
                     <tr>
-                        <td><a href="{{ url_for('feed', post_id=report.post.id) }}">{{ report.post.caption or ('Foto #' ~ report.post.id) }}</a></td>
-                        <td>{{ report.post.uploader.username }}</td>
+                        <td><a href="{{ url_for('studio_play_page', project_id=report.project.id) }}">{{ report.project.name }}</a></td>
+                        <td>{{ report.project.owner.username }}</td>
                         <td>{{ report.reporter.username }}</td>
                         <td>{{ report.created_at.strftime("%d.%m.%Y %H:%M") }}</td>
                         <td>
                             <form action="{{ url_for('admin_dismiss_report', report_id=report.id) }}" method="post" class="admin-inline-form">
                                 <button type="submit" class="admin-inline-btn">Erledigt</button>
                             </form>
-                            <form action="{{ url_for('delete_post', post_id=report.post.id) }}" method="post" class="admin-inline-form"
-                                  onsubmit="return confirm('Beitrag wirklich löschen?');">
-                                <button type="submit" class="danger admin-inline-btn">Foto löschen</button>
+                            <form action="{{ url_for('studio_delete_project', project_id=report.project.id) }}" method="post" class="admin-inline-form"
+                                  onsubmit="return confirm('Spiel wirklich löschen?');">
+                                <button type="submit" class="danger admin-inline-btn">Spiel löschen</button>
                             </form>
                         </td>
                     </tr>
@@ -108,21 +108,21 @@
             </tbody>
         </table>
     {% else %}
-        <p>Keine gemeldeten Fotos.</p>
+        <p>Keine gemeldeten Spiele.</p>
     {% endif %}
 
-    <h2>Alle Fotos</h2>
+    <h2>Alle Spiele</h2>
     <table class="admin-table">
-        <thead><tr><th>Beitrag</th><th>Von</th><th>Hochgeladen</th><th></th></tr></thead>
+        <thead><tr><th>Spiel</th><th>Von</th><th>Erstellt</th><th></th></tr></thead>
         <tbody>
-            {% for post in posts %}
+            {% for game in games %}
                 <tr>
-                    <td><a href="{{ url_for('feed', post_id=post.id) }}">{{ post.caption or ('Foto #' ~ post.id) }}</a></td>
-                    <td>{{ post.uploader.username }}</td>
-                    <td>{{ post.created_at.strftime("%d.%m.%Y") }}</td>
+                    <td><a href="{{ url_for('studio_play_page', project_id=game.id) }}">{{ game.name }}</a></td>
+                    <td>{{ game.owner.username }}</td>
+                    <td>{{ game.created_at.strftime("%d.%m.%Y") }}</td>
                     <td>
-                        <form action="{{ url_for('delete_post', post_id=post.id) }}" method="post"
-                              onsubmit="return confirm('Beitrag wirklich löschen?');">
+                        <form action="{{ url_for('studio_delete_project', project_id=game.id) }}" method="post"
+                              onsubmit="return confirm('Spiel wirklich löschen?');">
                             <button type="submit" class="danger admin-inline-btn">Löschen</button>
                         </form>
                     </td>

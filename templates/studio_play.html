@@ -21,9 +21,124 @@
             </div>
             <button type="button" id="studioTouchJump">&#8963;</button>
         </div>
+
+        <div class="studio-play-social">
+            <button type="button" id="studioLikeBtn" class="studio-like-btn {{ 'is-liked' if has_liked else '' }}" {{ '' if user else 'disabled' }}>
+                <span class="studio-like-icon">&#9829;</span>
+                <span id="studioLikeCount">{{ like_count }}</span>
+            </button>
+            <button type="button" id="studioCommentsToggleBtn" class="studio-comments-toggle-btn">Kommentare</button>
+            {% if user %}
+                <button type="button" id="studioReportBtn" class="studio-report-btn" {{ 'disabled' if has_reported else '' }}>
+                    {{ 'Gemeldet' if has_reported else 'Melden' }}
+                </button>
+            {% endif %}
+        </div>
+
+        <div class="studio-comments-panel" id="studioCommentsPanel" style="display:none;">
+            <div class="studio-comments-list" id="studioCommentsList"></div>
+            {% if user %}
+                <form class="studio-comment-form" id="studioCommentForm">
+                    <input type="text" id="studioCommentInput" placeholder="Kommentar schreiben..." maxlength="500" autocomplete="off">
+                    <button type="submit">Senden</button>
+                </form>
+            {% endif %}
+        </div>
     </div>
 
     <script src="{{ url_for('static', filename='js/studio-dialects.js') }}"></script>
     <script src="{{ url_for('static', filename='js/studio-dsl.js') }}"></script>
     <script src="{{ url_for('static', filename='js/studio-runtime.js') }}"></script>
+    <script>
+        (function () {
+            const projectId = document.getElementById("studioPlayPage").dataset.projectId;
+            const likeBtn = document.getElementById("studioLikeBtn");
+            const likeCount = document.getElementById("studioLikeCount");
+            const reportBtn = document.getElementById("studioReportBtn");
+            const commentsToggleBtn = document.getElementById("studioCommentsToggleBtn");
+            const commentsPanel = document.getElementById("studioCommentsPanel");
+            const commentsList = document.getElementById("studioCommentsList");
+            const commentForm = document.getElementById("studioCommentForm");
+            const commentInput = document.getElementById("studioCommentInput");
+            let commentsLoaded = false;
+
+            if (likeBtn) {
+                likeBtn.addEventListener("click", () => {
+                    if (likeBtn.disabled) return;
+                    fetch(`/api/studio/${projectId}/like`, { method: "POST" })
+                        .then((res) => res.json())
+                        .then((data) => {
+                            if (!data.ok) return;
+                            likeCount.textContent = data.like_count;
+                            likeBtn.classList.toggle("is-liked", data.liked);
+                        });
+                });
+            }
+
+            if (reportBtn) {
+                reportBtn.addEventListener("click", () => {
+                    if (reportBtn.disabled) return;
+                    fetch(`/api/studio/${projectId}/report`, { method: "POST" })
+                        .then((res) => res.json())
+                        .then((data) => {
+                            reportBtn.textContent = data.ok ? "Gemeldet" : (data.error === "already_reported" ? "Bereits gemeldet" : "Fehler");
+                            reportBtn.disabled = true;
+                        });
+                });
+            }
+
+            function renderComments(comments) {
+                commentsList.innerHTML = "";
+                if (!comments.length) {
+                    commentsList.innerHTML = '<p class="studio-comments-empty">Noch keine Kommentare.</p>';
+                    return;
+                }
+                comments.forEach((c) => {
+                    const item = document.createElement("div");
+                    item.className = "studio-comment-item";
+                    const header = document.createElement("div");
+                    header.className = "studio-comment-header";
+                    header.textContent = c.username + " · " + c.created_at;
+                    const text = document.createElement("div");
+                    text.className = "studio-comment-text";
+                    text.textContent = c.text;
+                    item.appendChild(header);
+                    item.appendChild(text);
+                    commentsList.appendChild(item);
+                });
+            }
+
+            function loadComments() {
+                fetch(`/api/studio/${projectId}/comments`)
+                    .then((res) => res.json())
+                    .then((data) => {
+                        if (data.ok) renderComments(data.comments);
+                        commentsLoaded = true;
+                    });
+            }
+
+            commentsToggleBtn.addEventListener("click", () => {
+                const showing = commentsPanel.style.display !== "none";
+                commentsPanel.style.display = showing ? "none" : "flex";
+                if (!showing && !commentsLoaded) loadComments();
+            });
+
+            if (commentForm) {
+                commentForm.addEventListener("submit", (event) => {
+                    event.preventDefault();
+                    const text = commentInput.value.trim();
+                    if (!text) return;
+                    fetch(`/api/studio/${projectId}/comment`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ text }),
+                    }).then((res) => res.json()).then((data) => {
+                        if (!data.ok) return;
+                        commentInput.value = "";
+                        loadComments();
+                    });
+                });
+            }
+        })();
+    </script>
 {% endblock %}

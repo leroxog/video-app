@@ -38,17 +38,22 @@
         </div>
     </section>
 
-    {% if recent_games %}
-        <section class="recent-games-section">
-            <div class="recent-games-header">
-                <h2>Neueste Spiele</h2>
-                <a class="recent-games-see-all" href="{{ url_for('games_page') }}">Alle ansehen &rarr;</a>
+    <section class="recent-games-section">
+        <div class="recent-games-header">
+            <h2>Spiele</h2>
+            <div class="games-sort-tabs">
+                <a class="games-sort-tab {{ 'is-active' if sort == 'popular' else '' }}" href="{{ url_for('index', sort='popular') }}">Beliebteste</a>
+                <a class="games-sort-tab {{ 'is-active' if sort == 'newest' else '' }}" href="{{ url_for('index', sort='newest') }}">Neueste</a>
             </div>
+        </div>
+        {% if games %}
             <div class="games-grid">
-                {% for project in recent_games %}
+                {% for project in games %}
                     {% include "partials/_game_card.html" %}
                 {% endfor %}
             </div>
-        </section>
-    {% endif %}
+        {% else %}
+            <p class="studio-empty-note">Noch keine veröffentlichten Spiele.</p>
+        {% endif %}
+    </section>
 {% endblock %}

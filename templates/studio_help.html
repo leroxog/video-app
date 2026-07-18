@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Hilfe: timeskipcode - timeskip studio{% endblock %}
+{% block content %}
+    <div class="studio-help-page">
+        <h1>timeskipcode Grundlagen</h1>
+        <p>
+            timeskipcode ist unsere eigene, einfache Programmiersprache f&uuml;r timeskip studio
+            (empfohlen). Du kannst deine Spiele aber auch in HTML-, Python- oder C#-Schreibweise
+            programmieren &mdash; alle vier Varianten k&ouml;nnen genau dasselbe, nur die Syntax
+            sieht anders aus. Wähle unten deine Sprache, um die passenden Befehle zu sehen.
+        </p>
+
+        <div class="studio-help-tabs" id="studioHelpTabs"></div>
+
+        <h2>Wie eine Regel aufgebaut ist</h2>
+        <p>Jede Regel besteht aus diesen Teilen, in dieser Reihenfolge:</p>
+        <ol class="studio-help-structure">
+            <li><strong>REPEAT</strong> (optional) &mdash; wiederholt die Regel jeden Frame statt nur einmal.</li>
+            <li><strong>Block</strong> &mdash; f&uuml;r welchen Teil des Spiels die Regel gilt.</li>
+            <li><strong>Wann</strong> &mdash; ber&uuml;hrt / geklickt / immer.</li>
+            <li><strong>Bedingung</strong> (optional) &mdash; die Regel feuert nur, wenn sie wahr ist.</li>
+            <li><strong>Aktion</strong> &mdash; was passieren soll.</li>
+            <li><strong>Ende</strong> &mdash; SOLID (fest) oder PASSABLE (durchl&auml;ssig) schlie&szlig;t die Regel ab.</li>
+        </ol>
+        <p>
+            Im Editor beginnt jede Zeile automatisch mit dem Pfeil-Symbol "⇒", und ein fertiges
+            Skript endet mit "⇓" &mdash; das musst du nicht selbst eintippen, das &uuml;bernimmt der Editor.
+        </p>
+
+        <h2>Alle Befehle</h2>
+        <div class="studio-help-reference" id="studioHelpReference"></div>
+
+        <h2>Beispiel-Skript</h2>
+        <pre class="studio-help-example" id="studioHelpExample"></pre>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/studio-dialects.js') }}"></script>
+    <script>
+        (function () {
+            const tabsEl = document.getElementById("studioHelpTabs");
+            const referenceEl = document.getElementById("studioHelpReference");
+            const exampleEl = document.getElementById("studioHelpExample");
+
+            function buildEntries(dialect) {
+                const entries = [
+                    { code: dialect.repeat.insert, de: dialect.repeat.de },
+                    { code: dialect.block.insert("Name"), de: dialect.block.de },
+                ];
+                dialect.triggers.forEach((t) => entries.push({ code: t.insert, de: t.de }));
+                dialect.conditions.forEach((c) => entries.push({ code: c.insert, de: dialect.conditionDe }));
+                dialect.effects.forEach((e) => entries.push({ code: e.insert + e.template, de: e.de }));
+                dialect.duration.forEach((d) => entries.push({ code: d.insert.trim(), de: d.de }));
+                entries.push({ code: dialect.close.solidInsert, de: dialect.close.solidDe });
+                entries.push({ code: dialect.close.passableInsert, de: dialect.close.passableDe });
+                entries.push({ code: dialect.figuresOff.insert, de: dialect.figuresOff.de });
+                return entries;
+            }
+
+            function buildExample(dialect) {
+                const kill = dialect.effects.find((e) => e.key === "kill");
+                const lines = [
+                    dialect.block.insert("Part1"),
+                    dialect.triggers.find((t) => t.type === "touch").insert,
+                    kill.insert + kill.template,
+                    dialect.close.solidInsert,
+                ];
+                return lines.map((l) => "⇒ " + l).join("\n") + "\n⇓";
+            }
+
+            function render(langId) {
+                const dialect = window.StudioDialects.get(langId);
+
+                referenceEl.innerHTML = "";
+                buildEntries(dialect).forEach((entry) => {
+                    const row = document.createElement("div");
+                    row.className = "studio-help-row";
+                    const code = document.createElement("code");
+                    code.textContent = entry.code;
+                    const de = document.createElement("span");
+                    de.textContent = entry.de;
+                    row.appendChild(code);
+                    row.appendChild(de);
+                    referenceEl.appendChild(row);
+                });
+
+                exampleEl.textContent = buildExample(dialect);
+            }
+
+            tabsEl.innerHTML = "";
+            window.StudioDialects.list.forEach((dialect) => {
+                const btn = document.createElement("button");
+                btn.type = "button";
+                btn.className = "studio-help-tab" + (dialect.recommended ? " is-recommended" : "");
+                btn.textContent = dialect.label + (dialect.recommended ? " (empfohlen)" : "");
+                btn.dataset.lang = dialect.id;
+                btn.addEventListener("click", () => {
+                    tabsEl.querySelectorAll(".studio-help-tab").forEach((b) => b.classList.remove("is-active"));
+                    btn.classList.add("is-active");
+                    render(dialect.id);
+                });
+                tabsEl.appendChild(btn);
+            });
+            tabsEl.querySelector(".studio-help-tab").classList.add("is-active");
+            render(window.StudioDialects.list[0].id);
+        })();
+    </script>
+{% endblock %}
