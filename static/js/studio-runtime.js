@@ -3,7 +3,7 @@
     if (!page) return;
     const projectId = page.dataset.projectId;
     const loggedIn = page.dataset.loggedIn === "1";
-    const language = page.dataset.language || "timeskipcode";
+    const language = page.dataset.language || "python";
     const rawBlocks = JSON.parse(page.dataset.blocks || "[]");
     const scriptCode = JSON.parse(page.dataset.script || "\"\"");
 

@@ -2583,7 +2583,7 @@ def test_admin_can_delete_any_studio_project(client):
 def test_studio_help_page_lists_commands_for_every_dialect(client):
     response = client.get("/studio/help")
     assert response.status_code == 200
-    assert b"timeskipcode" in response.data
+    assert b"Python" in response.data
     assert b"studio-dialects.js" in response.data
 
 
@@ -2614,7 +2614,7 @@ def test_ai_chat_rejects_empty_message(client):
 def test_ai_chat_starts_job_and_reports_status(client, monkeypatch):
     import ai_assistant
 
-    monkeypatch.setattr(ai_assistant, "generate_reply", lambda message, context=None: f"Antwort auf: {message}")
+    monkeypatch.setattr(ai_assistant, "generate_reply", lambda message, context=None, history=None: f"Antwort auf: {message}")
     register(client)
 
     start_res = client.post("/api/ai/chat", json={"message": "Wie geht KILL?"})
@@ -2667,5 +2667,96 @@ def test_ai_chat_reports_error_when_groq_api_key_missing(client, monkeypatch):
 
     assert status_data["status"] == "error"
     assert "GROQ_API_KEY" in status_data["error"]
+
+
+def test_ai_chats_requires_login(client):
+    assert client.get("/api/ai/chats").status_code == 401
+    assert client.post("/api/ai/chats").status_code == 401
+
+
+def test_ai_chats_create_list_rename_delete(client):
+    register(client)
+
+    create_res = client.post("/api/ai/chats")
+    chat = create_res.get_json()["chat"]
+    assert chat["title"] == "Neuer Chat"
+    assert chat["mode"] == "general"
+
+    list_res = client.get("/api/ai/chats")
+    chats = list_res.get_json()["chats"]
+    assert len(chats) == 1
+    assert chats[0]["id"] == chat["id"]
+
+    rename_res = client.patch(f"/api/ai/chats/{chat['id']}", json={"title": "Meine Frage"})
+    assert rename_res.get_json()["chat"]["title"] == "Meine Frage"
+
+    mode_res = client.patch(f"/api/ai/chats/{chat['id']}", json={"mode": "code", "specialize_prompted": True})
+    updated = mode_res.get_json()["chat"]
+    assert updated["mode"] == "code"
+    assert updated["specialize_prompted"] is True
+
+    delete_res = client.post(f"/api/ai/chats/{chat['id']}/delete")
+    assert delete_res.get_json()["ok"] is True
+    assert client.get("/api/ai/chats").get_json()["chats"] == []
+
+
+def test_ai_chats_scoped_to_owner(client):
+    register(client, username="alice")
+    chat = client.post("/api/ai/chats").get_json()["chat"]
+    client.post("/logout")
+
+    register(client, username="bob")
+    assert client.get(f"/api/ai/chats/{chat['id']}/messages").status_code == 404
+    assert client.patch(f"/api/ai/chats/{chat['id']}", json={"title": "x"}).status_code == 404
+    assert client.post(f"/api/ai/chats/{chat['id']}/delete").status_code == 404
+
+
+def test_ai_chat_persists_messages_and_generates_title(client, monkeypatch):
+    import ai_assistant
+
+    monkeypatch.setattr(ai_assistant, "generate_reply", lambda message, context=None, history=None: "Klar, gerne!")
+    monkeypatch.setattr(ai_assistant, "generate_title", lambda first_message: "Frage zu Punkten")
+    register(client)
+
+    start_res = client.post("/api/ai/chat", json={"message": "Wie bekomme ich Punkte?"})
+    data = start_res.get_json()
+    chat_id = data["chat_id"]
+
+    import time
+    for _ in range(20):
+        status = client.get(f"/api/ai/chat/{data['job_id']}").get_json()
+        if status["status"] != "running":
+            break
+        time.sleep(0.05)
+
+    messages_res = client.get(f"/api/ai/chats/{chat_id}/messages")
+    messages_data = messages_res.get_json()
+    assert messages_data["messages"] == [
+        {"role": "user", "content": "Wie bekomme ich Punkte?"},
+        {"role": "assistant", "content": "Klar, gerne!"},
+    ]
+    assert messages_data["chat"]["title"] == "Frage zu Punkten"
+
+
+def test_ai_feedback_requires_login(client):
+    response = client.post("/api/ai/feedback", json={"message": "Hi", "reply": "Hallo", "rating": 1})
+    assert response.status_code == 401
+
+
+def test_ai_feedback_rejects_invalid_rating(client):
+    register(client)
+    response = client.post("/api/ai/feedback", json={"message": "Hi", "reply": "Hallo", "rating": 0})
+    assert response.status_code == 400
+
+
+def test_ai_feedback_stores_rating_and_shows_in_admin(client):
+    register(client, username="alice")
+    make_admin("alice")
+    res = client.post("/api/ai/feedback", json={"message": "Wie geht KILL?", "reply": "So: KILL", "rating": 1})
+    assert res.get_json()["ok"] is True
+
+    admin_response = client.get("/admin")
+    assert b"Wie geht KILL?" in admin_response.data
+    assert "👍".encode() in admin_response.data
 
 

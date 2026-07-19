@@ -2,7 +2,7 @@
     const page = document.getElementById("studioEditorPage");
     if (!page) return;
     const projectId = page.dataset.projectId;
-    const language = page.dataset.language || "timeskipcode";
+    const language = page.dataset.language || "python";
     const dialect = window.StudioDialects.get(language);
 
     const canvas = document.getElementById("studioCanvas");
@@ -23,10 +23,8 @@
     const codeTextarea = document.getElementById("studioCodeTextarea");
     const codeGhost = document.getElementById("studioCodeGhost");
     const codePanelResize = document.getElementById("studioCodePanelResize");
-    const palettePanel = document.getElementById("studioCodePalette");
     const translationBtn = document.getElementById("studioTranslationBtn");
     const translationBar = document.getElementById("studioTranslationBar");
-    let paletteBlocks = null;
 
     let blocks = [];
     let selectedId = null;
@@ -67,23 +65,6 @@
             li.appendChild(name);
             li.addEventListener("click", () => selectBlock(b.id));
             blockList.appendChild(li);
-        });
-        renderPaletteBlocks();
-    }
-
-    function renderPaletteBlocks() {
-        if (!paletteBlocks) return;
-        paletteBlocks.innerHTML = "";
-        blocks.forEach((b) => {
-            const insertText = dialect.block.insert(b.name);
-            const chip = document.createElement("button");
-            chip.type = "button";
-            chip.className = "studio-palette-block-chip";
-            chip.style.background = b.color;
-            chip.textContent = insertText;
-            chip.title = `${insertText} einfügen`;
-            chip.addEventListener("click", () => insertAtCursor(insertText));
-            paletteBlocks.appendChild(chip);
         });
     }
 
@@ -484,92 +465,6 @@
         }, 500);
     }
 
-    // Palette: clicking a chip inserts its snippet right where the cursor
-    // currently is, exactly like typing it -- then the normal input
-    // handling below re-normalizes the ⇒/⇓ glyphs and re-suggests.
-    function insertAtCursor(text) {
-        const start = codeTextarea.selectionStart;
-        const end = codeTextarea.selectionEnd;
-        const value = codeTextarea.value;
-        codeTextarea.value = value.slice(0, start) + text + value.slice(end);
-        const newPos = start + text.length;
-        codeTextarea.setSelectionRange(newPos, newPos);
-        codeTextarea.focus();
-        codeTextarea.dispatchEvent(new Event("input", { bubbles: true }));
-    }
-
-    // The palette (and its chips' syntax) is entirely dialect-driven, so it's
-    // built from scratch here instead of living as static markup.
-    function makeChip(label, insertText, cssClass, titleText) {
-        const chip = document.createElement("button");
-        chip.type = "button";
-        chip.className = "studio-palette-chip " + cssClass;
-        chip.textContent = label;
-        if (titleText) chip.title = titleText;
-        chip.addEventListener("click", () => insertAtCursor(insertText));
-        return chip;
-    }
-
-    function makeGroup(labelText) {
-        const group = document.createElement("div");
-        group.className = "studio-palette-group";
-        const label = document.createElement("div");
-        label.className = "studio-palette-label";
-        label.textContent = labelText;
-        group.appendChild(label);
-        return group;
-    }
-
-    function renderPalette() {
-        const cat = window.StudioDialects.categoryLabels;
-        palettePanel.innerHTML = "";
-
-        const whenGroup = makeGroup(cat.when);
-        whenGroup.appendChild(makeChip(dialect.repeat.insert, dialect.repeat.insert, "studio-palette-chip-wann", dialect.repeat.de));
-        dialect.triggers.forEach((t) => whenGroup.appendChild(makeChip(t.insert, t.insert, "studio-palette-chip-wann", t.de)));
-        palettePanel.appendChild(whenGroup);
-
-        const condGroup = makeGroup(cat.condition);
-        dialect.conditions.forEach((c) => condGroup.appendChild(makeChip(`IF ${c.op}`, c.insert, "studio-palette-chip-condition", dialect.conditionDe)));
-        palettePanel.appendChild(condGroup);
-
-        const actionGroup = makeGroup(cat.action);
-        dialect.effects.filter((e) => e.key !== "set" && e.key !== "change").forEach((e) => {
-            actionGroup.appendChild(makeChip(e.insert + e.template, e.insert + e.template, "studio-palette-chip-aktion", e.de));
-        });
-        (dialect.extraActionChips || []).forEach((c) => {
-            actionGroup.appendChild(makeChip(c.label, c.insert, "studio-palette-chip-aktion", c.de));
-        });
-        palettePanel.appendChild(actionGroup);
-
-        const varGroup = makeGroup(cat.variables);
-        dialect.effects.filter((e) => e.key === "set" || e.key === "change").forEach((e) => {
-            varGroup.appendChild(makeChip(e.insert + e.template, e.insert + e.template, "studio-palette-chip-var", e.de));
-        });
-        palettePanel.appendChild(varGroup);
-
-        const durGroup = makeGroup(cat.duration + " (für MOVE)");
-        dialect.duration.forEach((d) => durGroup.appendChild(makeChip(d.label, d.insert, "studio-palette-chip-dauer", d.de)));
-        palettePanel.appendChild(durGroup);
-
-        const endGroup = makeGroup(cat.end);
-        endGroup.appendChild(makeChip(dialect.close.solidInsert, dialect.close.solidInsert, "studio-palette-chip-ende", dialect.close.solidDe));
-        endGroup.appendChild(makeChip(dialect.close.passableInsert, dialect.close.passableInsert, "studio-palette-chip-ende", dialect.close.passableDe));
-        palettePanel.appendChild(endGroup);
-
-        const otherGroup = makeGroup(cat.other);
-        otherGroup.appendChild(makeChip(dialect.figuresOff.insert, dialect.figuresOff.insert, "studio-palette-chip-wann", dialect.figuresOff.de));
-        palettePanel.appendChild(otherGroup);
-
-        const blocksGroup = makeGroup(cat.blocks);
-        const blocksContainer = document.createElement("div");
-        blocksContainer.className = "studio-palette-blocks";
-        blocksGroup.appendChild(blocksContainer);
-        palettePanel.appendChild(blocksGroup);
-        paletteBlocks = blocksContainer;
-        renderPaletteBlocks();
-    }
-
     function buildTranslationEntries() {
         const entries = [
             { code: dialect.repeat.insert, de: dialect.repeat.de },
@@ -605,7 +500,6 @@
         translationBar.style.display = showing ? "none" : "flex";
     });
 
-    renderPalette();
     renderTranslationBar();
 
     codeTextarea.addEventListener("input", () => {

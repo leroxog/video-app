@@ -664,18 +664,218 @@ main {
     cursor: pointer;
 }
 
+.ai-chat-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 290;
+}
+
+/* Non-embedded (floating robot button) chat opens as a large fixed window
+   with a persistent sidebar, similar to the Claude desktop app -- the
+   Studio-editor-embedded chat overrides this back to a compact single
+   column further down, since it lives in a narrow side panel instead. */
 .ai-chat-panel {
-    position: absolute;
-    right: 0;
-    bottom: calc(100% + 12px);
-    width: min(320px, calc(100vw - 32px));
-    height: min(440px, 60vh);
+    position: fixed;
+    inset: 0;
+    margin: auto;
+    width: min(1000px, calc(100vw - 32px));
+    height: min(720px, calc(100vh - 64px));
     background: var(--panel-bg-solid);
     border: 1px solid var(--panel-border-solid);
     border-radius: 16px;
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
-    flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+    flex-direction: row;
     overflow: hidden;
+    z-index: 300;
+}
+
+.ai-chat-widget-embedded {
+    position: static;
+    right: auto;
+    bottom: auto;
+}
+
+.ai-chat-panel-embedded {
+    position: static;
+    inset: auto;
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+    flex-direction: column;
+}
+
+.ai-chat-panel-embedded .ai-chat-sidebar {
+    display: none;
+}
+
+.ai-chat-sidebar {
+    width: 230px;
+    flex: 0 0 230px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.8rem 0.6rem;
+    border-right: 1px solid var(--panel-border-solid);
+    background: rgba(127, 127, 127, 0.05);
+}
+
+.ai-chat-sidebar-tabs {
+    display: flex;
+    gap: 0.25rem;
+    padding: 0.2rem;
+    border-radius: 10px;
+    background: rgba(127, 127, 127, 0.1);
+}
+
+.ai-chat-sidebar-tab {
+    flex: 1 1 auto;
+    border: none;
+    background: none;
+    padding: 0.4rem 0.5rem;
+    border-radius: 8px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.ai-chat-sidebar-tab.is-active {
+    background: var(--panel-bg-solid);
+    color: var(--text-primary);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+.ai-chat-sidebar-new-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--panel-border-solid);
+    border-radius: 8px;
+    padding: 0.5rem;
+    background: none;
+    color: var(--text-primary);
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.ai-chat-sidebar-label {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text-secondary);
+    padding: 0.2rem 0.3rem 0;
+}
+
+.ai-chat-sidebar-list {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.ai-chat-sidebar-row {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.45rem 0.5rem;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    color: var(--text-primary);
+    cursor: default;
+}
+
+.ai-chat-sidebar-row:hover {
+    background: rgba(127, 127, 127, 0.12);
+}
+
+.ai-chat-sidebar-row.is-current {
+    background: rgba(106, 92, 255, 0.16);
+}
+
+.ai-chat-sidebar-row-title {
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.ai-chat-sidebar-row-empty {
+    color: var(--text-secondary);
+    font-size: 0.76rem;
+    text-align: center;
+    padding: 0.8rem 0.4rem;
+}
+
+.ai-chat-sidebar-manage-btn {
+    border: none;
+    background: none;
+    text-align: left;
+    padding: 0.5rem 0.4rem 0;
+    font-size: 0.76rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-top: 1px solid var(--panel-border-solid);
+}
+
+.ai-chat-sidebar-manage-btn.is-active {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.ai-chat-main {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+/* The mobile sidebar-toggle hamburger only makes sense once the sidebar
+   itself is collapsed into an overlay (see the media query below); the
+   old embedded-chat hamburger ("Anpassen" -> list view) only applies to
+   the Studio-editor-embedded layout, which has no sidebar at all. */
+#aiChatSidebarToggleBtn {
+    display: none;
+}
+
+.ai-chat-embedded-only-btn {
+    display: none;
+}
+
+.ai-chat-panel-embedded .ai-chat-embedded-only-btn {
+    display: inline-block;
+}
+
+@media (max-width: 640px) {
+    .ai-chat-panel:not(.ai-chat-panel-embedded) {
+        width: calc(100vw - 16px);
+        height: calc(100vh - 32px);
+    }
+
+    .ai-chat-panel:not(.ai-chat-panel-embedded) .ai-chat-sidebar {
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        width: 100%;
+        flex: none;
+        transform: translateX(-100%);
+        transition: transform 0.2s ease;
+    }
+
+    .ai-chat-panel.sidebar-open:not(.ai-chat-panel-embedded) .ai-chat-sidebar {
+        transform: translateX(0);
+    }
+
+    .ai-chat-panel:not(.ai-chat-panel-embedded) #aiChatSidebarToggleBtn {
+        display: inline-block;
+    }
 }
 
 .ai-chat-panel-header {
@@ -694,6 +894,118 @@ main {
     font-size: 1.2rem;
     color: var(--text-secondary);
     cursor: pointer;
+}
+
+.ai-chat-panel-header span {
+    flex: 1 1 auto;
+    text-align: center;
+    font-size: 0.9rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ai-chat-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.ai-chat-icon-btn {
+    background: none;
+    border: none;
+    font-size: 1rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 0.1rem 0.3rem;
+}
+
+.ai-chat-icon-btn-danger:hover {
+    color: #ff3d81;
+}
+
+.ai-chat-conversation-view {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.ai-chat-list-view {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 0.6rem;
+}
+
+.ai-chat-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.ai-chat-list-empty {
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    text-align: center;
+    margin-top: 1rem;
+}
+
+.ai-chat-list-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 0.7rem;
+    border-radius: 8px;
+    background: rgba(127, 127, 127, 0.08);
+}
+
+.ai-chat-list-title {
+    flex: 1 1 auto;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ai-chat-specialize-box {
+    align-self: flex-start;
+    max-width: 90%;
+    padding: 0.6rem 0.8rem;
+    border-radius: 12px;
+    background: rgba(127, 127, 127, 0.14);
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.ai-chat-specialize-box p {
+    margin: 0;
+    font-size: 0.82rem;
+    color: var(--text-primary);
+}
+
+.ai-chat-specialize-accept, .ai-chat-specialize-decline {
+    align-self: flex-start;
+    border: none;
+    border-radius: 8px;
+    padding: 0.35rem 0.8rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.ai-chat-specialize-accept {
+    background: linear-gradient(135deg, #ff3d81, #c94fd6);
+    color: #0f0f0f;
+}
+
+.ai-chat-specialize-decline {
+    background: none;
+    color: var(--text-secondary);
+    border: 1px solid var(--panel-border-solid);
 }
 
 .ai-chat-messages {
@@ -779,6 +1091,38 @@ main {
     color: #0f0f0f;
     font-weight: 600;
     cursor: pointer;
+}
+
+.ai-chat-disclaimer {
+    margin: 0;
+    padding: 0 0.9rem 0.6rem;
+    font-size: 0.68rem;
+    color: #888;
+    text-align: center;
+}
+
+.ai-chat-feedback-row {
+    display: flex;
+    gap: 0.4rem;
+    margin-top: 0.4rem;
+    opacity: 0.55;
+}
+
+.ai-chat-feedback-row.is-answered {
+    opacity: 0.3;
+}
+
+.ai-chat-feedback-btn {
+    border: none;
+    background: none;
+    padding: 0.1rem 0.3rem;
+    font-size: 0.75rem;
+    cursor: pointer;
+    filter: grayscale(1);
+}
+
+.ai-chat-feedback-btn:disabled {
+    cursor: default;
 }
 
 h1 {
@@ -4445,15 +4789,13 @@ body.studio-fullscreen {
 }
 
 .studio-code-palette {
-    width: 180px;
+    width: 300px;
     flex-shrink: 0;
     overflow-y: auto;
-    padding: 0.6rem;
     background: #131315;
     border-left: 1px solid #2c2c2c;
     display: flex;
     flex-direction: column;
-    gap: 0.7rem;
 }
 
 .studio-palette-group {

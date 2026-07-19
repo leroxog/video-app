@@ -7,7 +7,7 @@
             <a class="studio-editor-back" href="{{ url_for('studio_projects_page') }}">&larr; timeskip studio</a>
             <span class="studio-editor-title">{{ project.name }}</span>
             <div class="studio-editor-topbar-actions">
-                <a class="studio-editor-help-btn" href="{{ url_for('studio_help_page') }}" target="_blank" title="Hilfe zu timeskipcode">?</a>
+                <a class="studio-editor-help-btn" href="{{ url_for('studio_help_page') }}" target="_blank" title="Hilfe zu den Programmiersprachen">?</a>
                 <button type="button" id="studioToggleCodeBtn" class="studio-editor-code-toggle-btn">Programmierung</button>
                 <a class="studio-editor-play-btn" href="{{ url_for('studio_play_page', project_id=project.id) }}" target="_blank">Testen</a>
                 <form action="{{ url_for('studio_publish_project', project_id=project.id) }}" method="post">
@@ -69,7 +69,7 @@
             </div>
             <div class="studio-code-palette" id="studioCodePalette"></div>
         </div>
-        <p class="studio-code-hint">Tab, &rarr; oder Doppelklick auf den grauen Vorschlag übernimmt ihn. Klicke rechts auf einen Baustein, um ihn einzufügen.</p>
+        <p class="studio-code-hint">Tab, &rarr; oder Doppelklick auf den grauen Vorschlag übernimmt ihn. Frag rechts die KI, sie kann Code direkt einfügen.</p>
         <div class="studio-code-panel-resize" id="studioCodePanelResize"></div>
     </div>
 

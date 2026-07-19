@@ -67,7 +67,10 @@
     const timeskipcode = {
         id: "timeskipcode",
         label: "timeskipcode",
-        recommended: true,
+        // No longer offered when creating a new project (see
+        // STUDIO_LANGUAGE_CHOICES in app.py) -- kept here only so any
+        // project that already used it keeps parsing/playing correctly.
+        recommended: false,
         repeat: { insert: "REPEAT", match: (l) => /^REPEAT$/i.test(l), de: DESCRIPTIONS.repeat },
         block: {
             insert: (name) => `BLOCK "${name}"`,
@@ -217,7 +220,7 @@
     const python = {
         id: "python",
         label: "Python",
-        recommended: false,
+        recommended: true,
         repeat: { insert: "repeat", match: (l) => /^repeat$/i.test(l), de: DESCRIPTIONS.repeat },
         block: {
             insert: (name) => `block("${name}")`,
@@ -348,15 +351,169 @@
         extraActionChips: [{ insert: "Kill(all: true);", label: "Kill(all: true);", de: DESCRIPTIONS.kill }],
     };
 
-    const DIALECTS = { timeskipcode, html, python, csharp };
+    // ---------- JavaScript: function-call-flavoured syntax ----------
+    function stripQuotes(s) {
+        return (s || "").replace(/^"|"$/g, "").trim();
+    }
+    function splitArgs(args) {
+        return (args || "").split(",").map((a) => a.trim());
+    }
+
+    const javascript = {
+        id: "javascript",
+        label: "JavaScript",
+        recommended: false,
+        repeat: { insert: "repeat();", match: (l) => /^repeat\(\s*\)\s*;$/i.test(l), de: DESCRIPTIONS.repeat },
+        block: {
+            insert: (name) => `block("${name}");`,
+            match: (l) => { const m = l.match(/^block\(\s*"([^"]*)"\s*\)\s*;$/i); return m ? m[1] : null; },
+            de: DESCRIPTIONS.block,
+        },
+        triggers: [
+            { type: "touch", insert: 'when("touched");', match: (l) => /^when\(\s*"touched"\s*\)\s*;$/i.test(l), de: DESCRIPTIONS.touch },
+            { type: "click", insert: 'when("clicked");', match: (l) => /^when\(\s*"clicked"\s*\)\s*;$/i.test(l), de: DESCRIPTIONS.click },
+            { type: "ambient", insert: 'when("always");', match: (l) => /^when\(\s*"always"\s*\)\s*;$/i.test(l), de: DESCRIPTIONS.ambient },
+        ],
+        conditions: [
+            { op: ">", insert: "if (score > 10)" },
+            { op: "=", insert: "if (score === 10)" },
+            { op: "<", insert: "if (score < 10)" },
+        ],
+        matchCondition: (l) => {
+            const m = l.match(/^if\s*\(\s*(\w+)\s*(>=|<=|!=|===|==|>|<)\s*(-?\d+(?:\.\d+)?)\s*\)$/i);
+            if (!m) return null;
+            const op = (m[2] === "===" || m[2] === "==") ? "=" : m[2];
+            return { varName: m[1], operator: op, value: parseFloat(m[3]) };
+        },
+        conditionDe: DESCRIPTIONS.condition,
+        conditionGhostWord: "if (",
+        conditionTemplate: "score > 10)",
+        effects: [
+            { key: "kill", insert: "kill(", template: ");", de: DESCRIPTIONS.kill,
+                match: (l) => { const c = callArgs(l); return !!c && c.name === "kill"; },
+                build: (l) => ({ type: "kill", allPlayers: /true/i.test(l) }) },
+            { key: "give", insert: "give(", template: '5, "coins");', de: DESCRIPTIONS.give,
+                match: (l) => { const c = callArgs(l); return !!c && c.name === "give"; },
+                build: (l) => { const c = callArgs(l); const parts = splitArgs(c.args); return { type: "give", amount: num(parts[0], 0), currency: "coins", allPlayers: /true/i.test(l), duration: null }; } },
+            { key: "move", insert: "move(", template: "-84, 3);", de: DESCRIPTIONS.move,
+                match: (l) => { const c = callArgs(l); return !!c && c.name === "move"; },
+                build: (l) => { const c = callArgs(l); const parts = splitArgs(c.args); return { type: "move", dx: num(parts[0], 0), dy: num(parts[1], 0), duration: parseTrailingDuration(l) }; } },
+            { key: "jump", insert: "jump(", template: "15);", de: DESCRIPTIONS.jump,
+                match: (l) => { const c = callArgs(l); return !!c && c.name === "jump"; },
+                build: (l) => { const c = callArgs(l); const parts = splitArgs(c.args); return { type: "trampoline", power: Math.abs(num(parts[0], 15)), duration: null }; } },
+            { key: "teleport", insert: "teleport(", template: "10, 20);", de: DESCRIPTIONS.teleport,
+                match: (l) => { const c = callArgs(l); return !!c && c.name === "teleport"; },
+                build: (l) => { const c = callArgs(l); const parts = splitArgs(c.args); return { type: "teleport", allPlayers: /true/i.test(l), x: num(parts[0], 0), y: num(parts[1], 0), duration: null }; } },
+            { key: "transparent", insert: "transparent(", template: "50);", de: DESCRIPTIONS.transparent,
+                match: (l) => { const c = callArgs(l); return !!c && c.name === "transparent"; },
+                build: (l) => { const c = callArgs(l); const parts = splitArgs(c.args); return { type: "transparents", percent: num(parts[0], 100), duration: null }; } },
+            { key: "set", insert: "set(", template: '"score", 0);', de: DESCRIPTIONS.set,
+                match: (l) => { const c = callArgs(l); return !!c && c.name === "set"; },
+                build: (l) => { const c = callArgs(l); const parts = splitArgs(c.args); return { type: "set", varName: stripQuotes(parts[0]), value: num(parts[1], 0) }; } },
+            { key: "change", insert: "change(", template: '"score", 1);', de: DESCRIPTIONS.change,
+                match: (l) => { const c = callArgs(l); return !!c && c.name === "change"; },
+                build: (l) => { const c = callArgs(l); const parts = splitArgs(c.args); return { type: "change", varName: stripQuotes(parts[0]), value: num(parts[1], 0) }; } },
+        ],
+        duration: [
+            { insert: ' for "15s"', label: "15 Sekunden", de: DESCRIPTIONS.duration },
+            { insert: ' for "5m"', label: "5 Minuten", de: DESCRIPTIONS.duration },
+            { insert: ' for "1h"', label: "1 Stunde", de: DESCRIPTIONS.duration },
+        ],
+        close: {
+            solidInsert: "solid();", passableInsert: "passable();",
+            solidDe: DESCRIPTIONS.solid, passableDe: DESCRIPTIONS.passable,
+            match: (l) => (/^solid\(\s*\)\s*;$/i.test(l) ? true : /^passable\(\s*\)\s*;$/i.test(l) ? false : null),
+        },
+        figuresOff: { insert: "figuresOff();", match: (code) => /figuresOff\(\s*\)\s*;/i.test(code || ""), de: DESCRIPTIONS.figuresOff },
+        extraActionChips: [{ insert: "kill(true);", label: "kill(true);", de: DESCRIPTIONS.kill }],
+    };
+
+    // ---------- Java: Game.xxx()-flavoured static-call syntax ----------
+    function gameCallArgs(line) {
+        const m = line.match(/^Game\.([a-zA-Z_]\w*)\s*\(([^)]*)\)/i);
+        return m ? { name: m[1].toLowerCase(), args: m[2] } : null;
+    }
+
+    const java = {
+        id: "java",
+        label: "Java",
+        recommended: false,
+        repeat: { insert: "Game.repeat();", match: (l) => { const c = gameCallArgs(l); return !!c && c.name === "repeat"; }, de: DESCRIPTIONS.repeat },
+        block: {
+            insert: (name) => `Game.block("${name}");`,
+            match: (l) => { const c = gameCallArgs(l); return c && c.name === "block" ? stripQuotes(c.args) : null; },
+            de: DESCRIPTIONS.block,
+        },
+        triggers: [
+            { type: "touch", insert: 'Game.when("touched");', match: (l) => { const c = gameCallArgs(l); return !!c && c.name === "when" && /touched/i.test(c.args); }, de: DESCRIPTIONS.touch },
+            { type: "click", insert: 'Game.when("clicked");', match: (l) => { const c = gameCallArgs(l); return !!c && c.name === "when" && /clicked/i.test(c.args); }, de: DESCRIPTIONS.click },
+            { type: "ambient", insert: 'Game.when("always");', match: (l) => { const c = gameCallArgs(l); return !!c && c.name === "when" && /always/i.test(c.args); }, de: DESCRIPTIONS.ambient },
+        ],
+        conditions: [
+            { op: ">", insert: "if (score > 10)" },
+            { op: "=", insert: "if (score == 10)" },
+            { op: "<", insert: "if (score < 10)" },
+        ],
+        matchCondition: (l) => {
+            const m = l.match(/^if\s*\(\s*(\w+)\s*(>=|<=|!=|==|>|<)\s*(-?\d+(?:\.\d+)?)\s*\)$/i);
+            if (!m) return null;
+            return { varName: m[1], operator: m[2] === "==" ? "=" : m[2], value: parseFloat(m[3]) };
+        },
+        conditionDe: DESCRIPTIONS.condition,
+        conditionGhostWord: "if (",
+        conditionTemplate: "score > 10)",
+        effects: [
+            { key: "kill", insert: "Game.kill(", template: ");", de: DESCRIPTIONS.kill,
+                match: (l) => { const c = gameCallArgs(l); return !!c && c.name === "kill"; },
+                build: (l) => ({ type: "kill", allPlayers: /true/i.test(l) }) },
+            { key: "give", insert: "Game.give(", template: '5, "coins");', de: DESCRIPTIONS.give,
+                match: (l) => { const c = gameCallArgs(l); return !!c && c.name === "give"; },
+                build: (l) => { const c = gameCallArgs(l); const parts = splitArgs(c.args); return { type: "give", amount: num(parts[0], 0), currency: "coins", allPlayers: /true/i.test(l), duration: null }; } },
+            { key: "move", insert: "Game.move(", template: "-84, 3);", de: DESCRIPTIONS.move,
+                match: (l) => { const c = gameCallArgs(l); return !!c && c.name === "move"; },
+                build: (l) => { const c = gameCallArgs(l); const parts = splitArgs(c.args); return { type: "move", dx: num(parts[0], 0), dy: num(parts[1], 0), duration: parseTrailingDuration(l) }; } },
+            { key: "jump", insert: "Game.jump(", template: "15);", de: DESCRIPTIONS.jump,
+                match: (l) => { const c = gameCallArgs(l); return !!c && c.name === "jump"; },
+                build: (l) => { const c = gameCallArgs(l); const parts = splitArgs(c.args); return { type: "trampoline", power: Math.abs(num(parts[0], 15)), duration: null }; } },
+            { key: "teleport", insert: "Game.teleport(", template: "10, 20);", de: DESCRIPTIONS.teleport,
+                match: (l) => { const c = gameCallArgs(l); return !!c && c.name === "teleport"; },
+                build: (l) => { const c = gameCallArgs(l); const parts = splitArgs(c.args); return { type: "teleport", allPlayers: /true/i.test(l), x: num(parts[0], 0), y: num(parts[1], 0), duration: null }; } },
+            { key: "transparent", insert: "Game.transparent(", template: "50);", de: DESCRIPTIONS.transparent,
+                match: (l) => { const c = gameCallArgs(l); return !!c && c.name === "transparent"; },
+                build: (l) => { const c = gameCallArgs(l); const parts = splitArgs(c.args); return { type: "transparents", percent: num(parts[0], 100), duration: null }; } },
+            { key: "set", insert: "Game.set(", template: '"score", 0);', de: DESCRIPTIONS.set,
+                match: (l) => { const c = gameCallArgs(l); return !!c && c.name === "set"; },
+                build: (l) => { const c = gameCallArgs(l); const parts = splitArgs(c.args); return { type: "set", varName: stripQuotes(parts[0]), value: num(parts[1], 0) }; } },
+            { key: "change", insert: "Game.change(", template: '"score", 1);', de: DESCRIPTIONS.change,
+                match: (l) => { const c = gameCallArgs(l); return !!c && c.name === "change"; },
+                build: (l) => { const c = gameCallArgs(l); const parts = splitArgs(c.args); return { type: "change", varName: stripQuotes(parts[0]), value: num(parts[1], 0) }; } },
+        ],
+        duration: [
+            { insert: ' for "15s"', label: "15 Sekunden", de: DESCRIPTIONS.duration },
+            { insert: ' for "5m"', label: "5 Minuten", de: DESCRIPTIONS.duration },
+            { insert: ' for "1h"', label: "1 Stunde", de: DESCRIPTIONS.duration },
+        ],
+        close: {
+            solidInsert: "Game.solid();", passableInsert: "Game.passable();",
+            solidDe: DESCRIPTIONS.solid, passableDe: DESCRIPTIONS.passable,
+            match: (l) => { const c = gameCallArgs(l); if (!c) return null; if (c.name === "solid") return true; if (c.name === "passable") return false; return null; },
+        },
+        figuresOff: { insert: "Game.figuresOff();", match: (code) => /game\.figuresoff\(\s*\)\s*;/i.test(code || ""), de: DESCRIPTIONS.figuresOff },
+        extraActionChips: [{ insert: "Game.kill(true);", label: "Game.kill(true);", de: DESCRIPTIONS.kill }],
+    };
+
+    const DIALECTS = { timeskipcode, html, python, csharp, javascript, java };
 
     function get(id) {
-        return DIALECTS[id] || DIALECTS.timeskipcode;
+        return DIALECTS[id] || DIALECTS.python;
     }
 
     global.StudioDialects = {
         get,
-        list: Object.values(DIALECTS),
+        // timeskipcode is deliberately left out here -- it's no longer
+        // offered anywhere a *new* choice is made (project creation, the
+        // help page), only still parseable for projects that already used it.
+        list: Object.values(DIALECTS).filter((d) => d.id !== "timeskipcode"),
         categoryLabels: {
             when: "Wann", condition: "Bedingung", action: "Aktion",
             variables: "Variablen", duration: "Dauer", end: "Ende",

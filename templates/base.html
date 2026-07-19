@@ -102,27 +102,54 @@
     </div>
 
     {% if user %}
+        <div class="ai-chat-backdrop" id="aiChatBackdrop" style="display:none;"></div>
         <div class="ai-chat-widget" id="aiChatWidget">
             <button type="button" class="ai-chat-toggle-btn" id="aiChatToggleBtn" title="KI-Assistent">🤖</button>
             <div class="ai-chat-panel" id="aiChatPanel" style="display:none;">
-                <div class="ai-chat-panel-header">
-                    <span>KI-Assistent</span>
-                    <button type="button" id="aiChatCloseBtn">&times;</button>
+                <div class="ai-chat-sidebar" id="aiChatSidebar">
+                    <div class="ai-chat-sidebar-tabs">
+                        <button type="button" class="ai-chat-sidebar-tab is-active" id="aiChatTabGeneral" data-mode="general">Startseite</button>
+                        <button type="button" class="ai-chat-sidebar-tab" id="aiChatTabCode" data-mode="code">Code</button>
+                    </div>
+                    <button type="button" class="ai-chat-sidebar-new-btn" id="aiChatSidebarNewBtn">+ Neuer Chat</button>
+                    <div class="ai-chat-sidebar-label">Zuletzt verwendet</div>
+                    <div class="ai-chat-sidebar-list" id="aiChatSidebarList"></div>
+                    <button type="button" class="ai-chat-sidebar-manage-btn" id="aiChatSidebarManageBtn">&#9776; Anpassen</button>
                 </div>
-                <div class="ai-chat-messages" id="aiChatMessages">
-                    <div class="ai-chat-message ai-chat-message-bot">
-                        Hallo! Frag mich etwas, oder &mdash; wenn du gerade im Studio-Editor programmierst &mdash;
-                        lass dir bei deinem Code helfen.
+
+                <div class="ai-chat-main" id="aiChatMain">
+                    <div class="ai-chat-panel-header">
+                        <button type="button" class="ai-chat-icon-btn" id="aiChatSidebarToggleBtn" title="Chats">&#9776;</button>
+                        <button type="button" class="ai-chat-icon-btn ai-chat-embedded-only-btn" id="aiChatManageBtn" title="Anpassen">&#9776;</button>
+                        <span id="aiChatHeaderTitle">Startseite</span>
+                        <div class="ai-chat-header-actions">
+                            <button type="button" class="ai-chat-icon-btn" id="aiChatNewBtn" title="Neuer Chat">+</button>
+                            <button type="button" id="aiChatCloseBtn">&times;</button>
+                        </div>
+                    </div>
+
+                    <div class="ai-chat-list-view" id="aiChatListView" style="display:none;">
+                        <div class="ai-chat-list" id="aiChatList"></div>
+                    </div>
+
+                    <div class="ai-chat-conversation-view" id="aiChatConversationView">
+                        <div class="ai-chat-messages" id="aiChatMessages">
+                            <div class="ai-chat-message ai-chat-message-bot">
+                                Hallo! Frag mich etwas, oder &mdash; wenn du gerade im Studio-Editor programmierst &mdash;
+                                lass dir bei deinem Code helfen.
+                            </div>
+                        </div>
+                        <label class="ai-chat-context-toggle" id="aiChatContextToggleWrap" style="display:none;">
+                            <input type="checkbox" id="aiChatContextToggle" checked>
+                            Meinen aktuellen Code mitschicken
+                        </label>
+                        <form class="ai-chat-form" id="aiChatForm">
+                            <input type="text" id="aiChatInput" placeholder="Frage stellen..." maxlength="2000" autocomplete="off">
+                            <button type="submit">Senden</button>
+                        </form>
+                        <p class="ai-chat-disclaimer">Sie schreiben mit einer KI, nicht mit einem Menschen. Eine KI kann Fehler machen.</p>
                     </div>
                 </div>
-                <label class="ai-chat-context-toggle" id="aiChatContextToggleWrap" style="display:none;">
-                    <input type="checkbox" id="aiChatContextToggle" checked>
-                    Meinen aktuellen Code mitschicken
-                </label>
-                <form class="ai-chat-form" id="aiChatForm">
-                    <input type="text" id="aiChatInput" placeholder="Frage stellen..." maxlength="2000" autocomplete="off">
-                    <button type="submit">Senden</button>
-                </form>
             </div>
         </div>
     {% endif %}
@@ -252,14 +279,37 @@
         <script>
             (function () {
                 const widget = document.getElementById("aiChatWidget");
+                const backdrop = document.getElementById("aiChatBackdrop");
                 const toggleBtn = document.getElementById("aiChatToggleBtn");
                 const panel = document.getElementById("aiChatPanel");
                 const closeBtn = document.getElementById("aiChatCloseBtn");
+                const manageBtn = document.getElementById("aiChatManageBtn");
+                const newBtn = document.getElementById("aiChatNewBtn");
+                const headerTitle = document.getElementById("aiChatHeaderTitle");
+                const listView = document.getElementById("aiChatListView");
+                const listEl = document.getElementById("aiChatList");
+                const conversationView = document.getElementById("aiChatConversationView");
                 const messagesEl = document.getElementById("aiChatMessages");
                 const form = document.getElementById("aiChatForm");
                 const input = document.getElementById("aiChatInput");
                 const contextToggleWrap = document.getElementById("aiChatContextToggleWrap");
                 const contextToggle = document.getElementById("aiChatContextToggle");
+                const GREETING = messagesEl.innerHTML;
+
+                // The sidebar (persistent "Zuletzt verwendet" chat list with
+                // Startseite/Code tabs) is only used in the big floating
+                // window -- the Studio-editor-embedded chat stays in its
+                // older, narrower single-column layout (wired further down).
+                const sidebar = document.getElementById("aiChatSidebar");
+                const tabGeneral = document.getElementById("aiChatTabGeneral");
+                const tabCode = document.getElementById("aiChatTabCode");
+                const sidebarNewBtn = document.getElementById("aiChatSidebarNewBtn");
+                const sidebarList = document.getElementById("aiChatSidebarList");
+                const sidebarManageBtn = document.getElementById("aiChatSidebarManageBtn");
+                const sidebarToggleBtn = document.getElementById("aiChatSidebarToggleBtn");
+                let sidebarTabMode = "general";
+                let sidebarManageMode = false;
+                let allChatsCache = [];
 
                 // If the current page has timeskip studio's code editor open,
                 // offer to send the user's current script along as context so
@@ -269,7 +319,28 @@
                 // available by the time this script runs.
                 const studioTextarea = document.getElementById("studioCodeTextarea");
                 const studioPage = document.getElementById("studioEditorPage");
-                if (studioTextarea) contextToggleWrap.style.display = "flex";
+                const embedTarget = document.getElementById("studioCodePalette");
+
+                let currentChatId = null;
+                let currentChatMode = "general";
+                let currentChatSpecializePrompted = false;
+
+                function updateContextToggleVisibility() {
+                    contextToggleWrap.style.display = (studioTextarea && currentChatMode === "code") ? "flex" : "none";
+                }
+                updateContextToggleVisibility();
+
+                // In the Studio editor, the chat lives embedded in the side
+                // panel (where the old click-to-insert palette used to be)
+                // instead of floating -- always open, no toggle bubble needed.
+                if (embedTarget) {
+                    widget.classList.add("ai-chat-widget-embedded");
+                    panel.classList.add("ai-chat-panel-embedded");
+                    embedTarget.appendChild(panel);
+                    panel.style.display = "flex";
+                    toggleBtn.style.display = "none";
+                    closeBtn.style.display = "none";
+                }
 
                 function buildSyntaxReference() {
                     if (!studioPage || !window.StudioDialects) return null;
@@ -284,11 +355,224 @@
                     return `Sprache: ${dialect.label}\nErlaubte Befehle (genau so schreiben):\n` + lines.join("\n");
                 }
 
+                function closeMobileSidebar() {
+                    panel.classList.remove("sidebar-open");
+                }
+
+                function openPanel() {
+                    panel.style.display = "flex";
+                    if (!embedTarget) {
+                        backdrop.style.display = "block";
+                        loadSidebarList();
+                    }
+                    input.focus();
+                }
+
+                function closePanel() {
+                    panel.style.display = "none";
+                    backdrop.style.display = "none";
+                    closeMobileSidebar();
+                }
+
                 toggleBtn.addEventListener("click", () => {
-                    panel.style.display = panel.style.display === "none" ? "flex" : "none";
-                    if (panel.style.display === "flex") input.focus();
+                    if (panel.style.display === "none") openPanel(); else closePanel();
                 });
-                closeBtn.addEventListener("click", () => { panel.style.display = "none"; });
+                closeBtn.addEventListener("click", closePanel);
+                backdrop.addEventListener("click", closePanel);
+                sidebarToggleBtn.addEventListener("click", () => {
+                    panel.classList.toggle("sidebar-open");
+                });
+
+                function showConversationView() {
+                    listView.style.display = "none";
+                    conversationView.style.display = "flex";
+                }
+
+                function renderSidebarRows(chats) {
+                    if (!sidebarList) return;
+                    sidebarList.innerHTML = "";
+                    const filtered = chats.filter((c) => (c.mode || "general") === sidebarTabMode);
+                    if (!filtered.length) {
+                        sidebarList.innerHTML = '<p class="ai-chat-sidebar-row-empty">Noch keine Chats.</p>';
+                        return;
+                    }
+                    filtered.forEach((chat) => {
+                        const row = document.createElement("div");
+                        row.className = "ai-chat-sidebar-row" + (chat.id === currentChatId ? " is-current" : "");
+
+                        const titleEl = document.createElement("span");
+                        titleEl.className = "ai-chat-sidebar-row-title";
+                        titleEl.textContent = chat.title;
+                        titleEl.addEventListener("click", () => { openChat(chat.id); closeMobileSidebar(); });
+                        row.appendChild(titleEl);
+
+                        if (sidebarManageMode) {
+                            const renameBtn = document.createElement("button");
+                            renameBtn.type = "button";
+                            renameBtn.className = "ai-chat-icon-btn";
+                            renameBtn.title = "Umbenennen";
+                            renameBtn.textContent = "✎";
+                            renameBtn.addEventListener("click", (event) => {
+                                event.stopPropagation();
+                                const newTitle = window.prompt("Neuer Name für diesen Chat:", chat.title);
+                                if (!newTitle || !newTitle.trim()) return;
+                                fetch(`/api/ai/chats/${chat.id}`, {
+                                    method: "PATCH",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ title: newTitle.trim() }),
+                                }).then(() => loadSidebarList());
+                            });
+
+                            const deleteBtn = document.createElement("button");
+                            deleteBtn.type = "button";
+                            deleteBtn.className = "ai-chat-icon-btn ai-chat-icon-btn-danger";
+                            deleteBtn.title = "Löschen";
+                            deleteBtn.textContent = "🗑";
+                            deleteBtn.addEventListener("click", (event) => {
+                                event.stopPropagation();
+                                if (!window.confirm(`Chat "${chat.title}" wirklich löschen?`)) return;
+                                fetch(`/api/ai/chats/${chat.id}/delete`, { method: "POST" }).then(() => {
+                                    if (currentChatId === chat.id) startNewChat();
+                                    loadSidebarList();
+                                });
+                            });
+
+                            row.appendChild(renameBtn);
+                            row.appendChild(deleteBtn);
+                        }
+
+                        sidebarList.appendChild(row);
+                    });
+                }
+
+                function loadSidebarList() {
+                    fetch("/api/ai/chats")
+                        .then((res) => res.json())
+                        .then((data) => {
+                            if (!data.ok) return;
+                            allChatsCache = data.chats;
+                            renderSidebarRows(allChatsCache);
+                        });
+                }
+
+                function setSidebarTab(mode) {
+                    sidebarTabMode = mode;
+                    tabGeneral.classList.toggle("is-active", mode === "general");
+                    tabCode.classList.toggle("is-active", mode === "code");
+                    renderSidebarRows(allChatsCache);
+                }
+                tabGeneral.addEventListener("click", () => setSidebarTab("general"));
+                tabCode.addEventListener("click", () => setSidebarTab("code"));
+
+                sidebarNewBtn.addEventListener("click", () => { startNewChat(); closeMobileSidebar(); });
+                sidebarManageBtn.addEventListener("click", () => {
+                    sidebarManageMode = !sidebarManageMode;
+                    sidebarManageBtn.classList.toggle("is-active", sidebarManageMode);
+                    renderSidebarRows(allChatsCache);
+                });
+
+                function startNewChat() {
+                    currentChatId = null;
+                    currentChatMode = "general";
+                    currentChatSpecializePrompted = false;
+                    headerTitle.textContent = "Startseite";
+                    messagesEl.innerHTML = GREETING;
+                    updateContextToggleVisibility();
+                    showConversationView();
+                    if (!embedTarget) renderSidebarRows(allChatsCache);
+                    input.focus();
+                }
+                newBtn.addEventListener("click", startNewChat);
+
+                function renderMessageHistory(messages) {
+                    messagesEl.innerHTML = "";
+                    if (!messages.length) {
+                        messagesEl.innerHTML = GREETING;
+                        return;
+                    }
+                    messages.forEach((m) => addMessage(m.content, m.role === "user" ? "user" : "bot"));
+                }
+
+                function openChat(chatId) {
+                    fetch(`/api/ai/chats/${chatId}/messages`)
+                        .then((res) => res.json())
+                        .then((data) => {
+                            if (!data.ok) return;
+                            currentChatId = data.chat.id;
+                            currentChatMode = data.chat.mode;
+                            currentChatSpecializePrompted = data.chat.specialize_prompted;
+                            headerTitle.textContent = data.chat.title;
+                            updateContextToggleVisibility();
+                            renderMessageHistory(data.messages);
+                            showConversationView();
+                            if (!embedTarget) renderSidebarRows(allChatsCache);
+                        });
+                }
+
+                function renderChatList(chats) {
+                    listEl.innerHTML = "";
+                    if (!chats.length) {
+                        listEl.innerHTML = '<p class="ai-chat-list-empty">Noch keine gespeicherten Chats.</p>';
+                        return;
+                    }
+                    chats.forEach((chat) => {
+                        const row = document.createElement("div");
+                        row.className = "ai-chat-list-row";
+
+                        const titleEl = document.createElement("span");
+                        titleEl.className = "ai-chat-list-title";
+                        titleEl.textContent = chat.title;
+                        titleEl.addEventListener("click", () => openChat(chat.id));
+
+                        const renameBtn = document.createElement("button");
+                        renameBtn.type = "button";
+                        renameBtn.className = "ai-chat-icon-btn";
+                        renameBtn.title = "Umbenennen";
+                        renameBtn.textContent = "✎";
+                        renameBtn.addEventListener("click", (event) => {
+                            event.stopPropagation();
+                            const newTitle = window.prompt("Neuer Name für diesen Chat:", chat.title);
+                            if (!newTitle || !newTitle.trim()) return;
+                            fetch(`/api/ai/chats/${chat.id}`, {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ title: newTitle.trim() }),
+                            }).then(() => loadChatList());
+                        });
+
+                        const deleteBtn = document.createElement("button");
+                        deleteBtn.type = "button";
+                        deleteBtn.className = "ai-chat-icon-btn ai-chat-icon-btn-danger";
+                        deleteBtn.title = "Löschen";
+                        deleteBtn.textContent = "🗑";
+                        deleteBtn.addEventListener("click", (event) => {
+                            event.stopPropagation();
+                            if (!window.confirm(`Chat "${chat.title}" wirklich löschen?`)) return;
+                            fetch(`/api/ai/chats/${chat.id}/delete`, { method: "POST" }).then(() => {
+                                if (currentChatId === chat.id) startNewChat();
+                                loadChatList();
+                            });
+                        });
+
+                        row.appendChild(titleEl);
+                        row.appendChild(renameBtn);
+                        row.appendChild(deleteBtn);
+                        listEl.appendChild(row);
+                    });
+                }
+
+                function loadChatList() {
+                    fetch("/api/ai/chats")
+                        .then((res) => res.json())
+                        .then((data) => { if (data.ok) renderChatList(data.chats); });
+                }
+
+                manageBtn.addEventListener("click", () => {
+                    headerTitle.textContent = "Anpassen";
+                    conversationView.style.display = "none";
+                    listView.style.display = "flex";
+                    loadChatList();
+                });
 
                 function insertCodeIntoEditor(code) {
                     if (!studioTextarea) return;
@@ -311,6 +595,27 @@
                     return match ? match[1].trim() : null;
                 }
 
+                // The model occasionally invents a stray extra line (a
+                // hallucinated keyword, a leftover "end", ...) even with a
+                // strict prompt -- drop anything that isn't actually one of
+                // the active dialect's recognized line types before ever
+                // offering it for insertion, rather than trusting the model
+                // to always get this exactly right.
+                function sanitizeCodeForDialect(code) {
+                    if (!studioPage || !window.StudioDialects) return code;
+                    const dialect = window.StudioDialects.get(studioPage.dataset.language);
+                    const isRecognized = (line) => {
+                        if (dialect.repeat.match(line)) return true;
+                        if (dialect.block.match(line) !== null) return true;
+                        if (dialect.triggers.some((t) => t.match(line))) return true;
+                        if (dialect.matchCondition(line)) return true;
+                        if (dialect.effects.some((e) => e.match(line))) return true;
+                        if (dialect.close.match(line) !== null) return true;
+                        return false;
+                    };
+                    return code.split("\n").map((l) => l.trim()).filter((l) => l && isRecognized(l)).join("\n");
+                }
+
                 function addMessage(text, who) {
                     const bubble = document.createElement("div");
                     bubble.className = "ai-chat-message ai-chat-message-" + who;
@@ -320,9 +625,81 @@
                     return bubble;
                 }
 
-                function finalizeBotMessage(bubble, text) {
+                function addFeedbackRow(bubble, userMessage, replyText) {
+                    const row = document.createElement("div");
+                    row.className = "ai-chat-feedback-row";
+                    const up = document.createElement("button");
+                    up.type = "button";
+                    up.className = "ai-chat-feedback-btn";
+                    up.title = "Gute Antwort";
+                    up.textContent = "👍";
+                    const down = document.createElement("button");
+                    down.type = "button";
+                    down.className = "ai-chat-feedback-btn";
+                    down.title = "Schlechte Antwort";
+                    down.textContent = "👎";
+                    function send(rating) {
+                        up.disabled = true;
+                        down.disabled = true;
+                        row.classList.add("is-answered");
+                        fetch("/api/ai/feedback", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ message: userMessage, reply: replyText, rating }),
+                        }).catch(() => {});
+                    }
+                    up.addEventListener("click", () => send(1));
+                    down.addEventListener("click", () => send(-1));
+                    row.appendChild(up);
+                    row.appendChild(down);
+                    bubble.appendChild(row);
+                }
+
+                function offerSpecializeToCode() {
+                    const box = document.createElement("div");
+                    box.className = "ai-chat-specialize-box";
+                    const label = document.createElement("p");
+                    label.textContent = "Diesen Chat auf Code spezialisieren?";
+                    const acceptBtn = document.createElement("button");
+                    acceptBtn.type = "button";
+                    acceptBtn.className = "ai-chat-specialize-accept";
+                    acceptBtn.textContent = "Akzeptieren";
+                    const declineBtn = document.createElement("button");
+                    declineBtn.type = "button";
+                    declineBtn.className = "ai-chat-specialize-decline";
+                    declineBtn.textContent = "Nein, danke";
+
+                    function respond(accepted) {
+                        box.remove();
+                        currentChatSpecializePrompted = true;
+                        const patch = { specialize_prompted: true };
+                        if (accepted) {
+                            currentChatMode = "code";
+                            patch.mode = "code";
+                            updateContextToggleVisibility();
+                        }
+                        if (currentChatId) {
+                            fetch(`/api/ai/chats/${currentChatId}`, {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify(patch),
+                            }).then(() => { if (!embedTarget) loadSidebarList(); });
+                        }
+                    }
+                    acceptBtn.addEventListener("click", () => respond(true));
+                    declineBtn.addEventListener("click", () => respond(false));
+
+                    box.appendChild(label);
+                    box.appendChild(acceptBtn);
+                    box.appendChild(declineBtn);
+                    messagesEl.appendChild(box);
+                    messagesEl.scrollTop = messagesEl.scrollHeight;
+                }
+
+                function finalizeBotMessage(bubble, text, userMessage) {
                     bubble.textContent = text;
-                    const code = studioTextarea ? extractCodeBlock(text) : null;
+                    const rawCode = studioTextarea ? extractCodeBlock(text) : null;
+                    const code = rawCode ? sanitizeCodeForDialect(rawCode) : null;
                     if (code) {
                         const insertBtn = document.createElement("button");
                         insertBtn.type = "button";
@@ -335,10 +712,16 @@
                         });
                         bubble.appendChild(insertBtn);
                     }
+                    addFeedbackRow(bubble, userMessage, text);
                     messagesEl.scrollTop = messagesEl.scrollHeight;
+
+                    if (studioTextarea && currentChatMode === "general" && !currentChatSpecializePrompted) {
+                        offerSpecializeToCode();
+                    }
+                    if (!embedTarget) loadSidebarList();
                 }
 
-                function pollJob(jobId, bubble) {
+                function pollJob(jobId, bubble, userMessage) {
                     fetch(`/api/ai/chat/${jobId}`)
                         .then((res) => res.json())
                         .then((data) => {
@@ -347,11 +730,11 @@
                                 return;
                             }
                             if (data.status === "running") {
-                                setTimeout(() => pollJob(jobId, bubble), 1200);
+                                setTimeout(() => pollJob(jobId, bubble, userMessage), 1200);
                                 return;
                             }
                             if (data.status === "done") {
-                                finalizeBotMessage(bubble, data.reply || "(keine Antwort)");
+                                finalizeBotMessage(bubble, data.reply || "(keine Antwort)", userMessage);
                             } else {
                                 bubble.textContent = "Die KI ist gerade nicht verfügbar.";
                             }
@@ -367,8 +750,9 @@
                     addMessage(text, "user");
                     input.value = "";
 
-                    const includeContext = studioTextarea && contextToggle.checked;
+                    const includeContext = studioTextarea && currentChatMode === "code" && contextToggle.checked;
                     const body = { message: text };
+                    if (currentChatId) body.chat_id = currentChatId;
                     if (includeContext) {
                         const reference = buildSyntaxReference();
                         body.context = (reference ? reference + "\n\n" : "") + "Aktueller Code:\n" + studioTextarea.value;
@@ -386,7 +770,9 @@
                                 thinkingBubble.textContent = "Fehler bei der Anfrage.";
                                 return;
                             }
-                            pollJob(data.job_id, thinkingBubble);
+                            currentChatId = data.chat_id;
+                            if (headerTitle.textContent === "Startseite") headerTitle.textContent = "Neuer Chat";
+                            pollJob(data.job_id, thinkingBubble, text);
                         })
                         .catch(() => { thinkingBubble.textContent = "Fehler bei der Anfrage."; });
                 });

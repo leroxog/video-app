@@ -27,6 +27,7 @@ from models import (
     GamePlayCount, Sound, UserCreatedCode, Conversation, ConversationMember, Message,
     CoinflipDeposit, MemeTemplate, MemeLobby, MemeLobbyPlayer, MemeCreation, MemeVote,
     StudioProject, StudioBlock, StudioProjectLike, StudioProjectComment, StudioProjectReport,
+    AiChatFeedback, AiChat, AiChatMessage,
 )
 import ai_assistant
 
@@ -1022,13 +1023,19 @@ STUDIO_BLOCK_KINDS = {"normal", "checkpoint"}
 STUDIO_MAX_BLOCKS_PER_PROJECT = 40
 STUDIO_MAX_PROJECTS_PER_USER = 20
 # The dialect codes here must match the keys in static/js/studio-dialects.js.
+# timeskipcode (our own language) isn't offered for new projects anymore --
+# it's still fully supported for playback/editing on any project that
+# already used it, just not selectable here.
 STUDIO_LANGUAGE_CHOICES = {
-    "timeskipcode": "timeskipcode (empfohlen)",
+    "python": "Python (empfohlen)",
     "html": "HTML",
-    "python": "Python",
     "csharp": "C#",
+    "javascript": "JavaScript",
+    "java": "Java",
 }
+STUDIO_DEFAULT_LANGUAGE = "python"
 app.jinja_env.globals["STUDIO_LANGUAGE_CHOICES"] = STUDIO_LANGUAGE_CHOICES
+app.jinja_env.globals["STUDIO_DEFAULT_LANGUAGE"] = STUDIO_DEFAULT_LANGUAGE
 STUDIO_MAX_SCRIPT_LENGTH = 40000
 
 
@@ -1121,6 +1128,78 @@ def studio_help_page():
     return render_template("studio_help.html", user=current_user())
 
 
+def serialize_ai_chat(chat):
+    return {
+        "id": chat.id,
+        "title": chat.title or "Neuer Chat",
+        "mode": chat.mode,
+        "specialize_prompted": chat.specialize_prompted,
+        "updated_at": chat.updated_at.strftime("%d.%m.%Y %H:%M"),
+    }
+
+
+@app.route("/api/ai/chats")
+def api_ai_list_chats():
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    chats = AiChat.query.filter_by(user_id=user.id).order_by(AiChat.updated_at.desc()).all()
+    return jsonify({"ok": True, "chats": [serialize_ai_chat(c) for c in chats]})
+
+
+@app.route("/api/ai/chats", methods=["POST"])
+def api_ai_create_chat():
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    chat = AiChat(user_id=user.id)
+    db.session.add(chat)
+    db.session.commit()
+    return jsonify({"ok": True, "chat": serialize_ai_chat(chat)})
+
+
+@app.route("/api/ai/chats/<int:chat_id>/messages")
+def api_ai_chat_messages(chat_id):
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    chat = AiChat.query.filter_by(id=chat_id, user_id=user.id).first_or_404()
+    messages = [{"role": m.role, "content": m.content} for m in chat.messages]
+    return jsonify({"ok": True, "chat": serialize_ai_chat(chat), "messages": messages})
+
+
+@app.route("/api/ai/chats/<int:chat_id>", methods=["PATCH"])
+def api_ai_update_chat(chat_id):
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    chat = AiChat.query.filter_by(id=chat_id, user_id=user.id).first_or_404()
+
+    data = request.get_json(silent=True) or {}
+    if "title" in data:
+        title = (data.get("title") or "").strip()[:100]
+        if not title:
+            return jsonify({"ok": False, "error": "invalid_title"}), 400
+        chat.title = title
+    if "mode" in data and data["mode"] in ("general", "code"):
+        chat.mode = data["mode"]
+    if "specialize_prompted" in data:
+        chat.specialize_prompted = bool(data["specialize_prompted"])
+    db.session.commit()
+    return jsonify({"ok": True, "chat": serialize_ai_chat(chat)})
+
+
+@app.route("/api/ai/chats/<int:chat_id>/delete", methods=["POST"])
+def api_ai_delete_chat(chat_id):
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    chat = AiChat.query.filter_by(id=chat_id, user_id=user.id).first_or_404()
+    db.session.delete(chat)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
 @app.route("/api/ai/chat", methods=["POST"])
 def api_ai_chat():
     user = current_user()
@@ -1130,11 +1209,41 @@ def api_ai_chat():
     data = request.get_json(silent=True) or {}
     message = (data.get("message") or "").strip()
     context = (data.get("context") or "").strip() or None
+    chat_id = data.get("chat_id")
     if not message:
         return jsonify({"ok": False, "error": "empty_message"}), 400
 
-    job_id = ai_assistant.start_chat_job(message, context)
-    return jsonify({"ok": True, "job_id": job_id})
+    chat = None
+    if chat_id:
+        chat = AiChat.query.filter_by(id=chat_id, user_id=user.id).first()
+    if chat is None:
+        chat = AiChat(user_id=user.id)
+        db.session.add(chat)
+        db.session.flush()
+
+    is_first_message = len(chat.messages) == 0
+    history = [{"role": m.role, "content": m.content} for m in chat.messages]
+
+    db.session.add(AiChatMessage(chat_id=chat.id, role="user", content=message))
+    chat.updated_at = datetime.now(timezone.utc)
+    db.session.commit()
+    chat_id_captured = chat.id
+
+    def on_done(reply, error):
+        with app.app_context():
+            if reply:
+                db.session.add(AiChatMessage(chat_id=chat_id_captured, role="assistant", content=reply))
+                db.session.commit()
+                if is_first_message:
+                    title = ai_assistant.generate_title(message)
+                    if title:
+                        chat_row = db.session.get(AiChat, chat_id_captured)
+                        if chat_row is not None:
+                            chat_row.title = title
+                            db.session.commit()
+
+    job_id = ai_assistant.start_chat_job(message, context, history=history, on_done=on_done)
+    return jsonify({"ok": True, "job_id": job_id, "chat_id": chat.id})
 
 
 @app.route("/api/ai/chat/<job_id>")
@@ -1149,6 +1258,24 @@ def api_ai_chat_status(job_id):
     return jsonify({"ok": True, **job})
 
 
+@app.route("/api/ai/feedback", methods=["POST"])
+def api_ai_feedback():
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+
+    data = request.get_json(silent=True) or {}
+    message = (data.get("message") or "").strip()[:2000]
+    reply = (data.get("reply") or "").strip()[:4000]
+    rating = data.get("rating")
+    if rating not in (1, -1) or not message or not reply:
+        return jsonify({"ok": False, "error": "invalid_feedback"}), 400
+
+    db.session.add(AiChatFeedback(user_id=user.id, message=message, reply=reply, rating=rating))
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
 @app.route("/studio/create", methods=["POST"])
 def studio_create_project():
     user = current_user()
@@ -1156,9 +1283,9 @@ def studio_create_project():
         return redirect(url_for("login"))
 
     name = (request.form.get("name") or "").strip()[:100]
-    language = request.form.get("language") or "timeskipcode"
+    language = request.form.get("language") or STUDIO_DEFAULT_LANGUAGE
     if language not in STUDIO_LANGUAGE_CHOICES:
-        language = "timeskipcode"
+        language = STUDIO_DEFAULT_LANGUAGE
     if not name:
         flash("Bitte einen Projektnamen eingeben.")
         return redirect(url_for("studio_projects_page"))
@@ -2172,9 +2299,10 @@ def admin_dashboard():
     online_status = {u.id: is_user_online(u) for u in users}
     reports = StudioProjectReport.query.order_by(StudioProjectReport.created_at.desc()).all()
     meme_templates = MemeTemplate.query.filter_by(active=True).order_by(MemeTemplate.created_at.desc()).all()
+    ai_feedback = AiChatFeedback.query.order_by(AiChatFeedback.created_at.desc()).limit(100).all()
     return render_template(
         "admin.html", user=admin_user, users=users, games=games, online_status=online_status,
-        reports=reports, meme_templates=meme_templates,
+        reports=reports, meme_templates=meme_templates, ai_feedback=ai_feedback,
     )
 
 

@@ -83,6 +83,26 @@
         <p>Noch keine Meme-Vorlagen hochgeladen &mdash; ohne Vorlagen kann keine Lobby gestartet werden.</p>
     {% endif %}
 
+    <h2>KI-Chat-Feedback (Daumen hoch/runter)</h2>
+    {% if ai_feedback %}
+        <table class="admin-table">
+            <thead><tr><th>Von</th><th>Frage</th><th>Antwort</th><th>Bewertung</th><th>Am</th></tr></thead>
+            <tbody>
+                {% for fb in ai_feedback %}
+                    <tr>
+                        <td>{{ fb.user.username }}</td>
+                        <td>{{ fb.message }}</td>
+                        <td>{{ fb.reply }}</td>
+                        <td>{{ '👍' if fb.rating == 1 else '👎' }}</td>
+                        <td>{{ fb.created_at.strftime("%d.%m.%Y %H:%M") }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>Noch kein Feedback zum KI-Chat.</p>
+    {% endif %}
+
     <h2>Gemeldete Spiele</h2>
     {% if reports %}
         <table class="admin-table">

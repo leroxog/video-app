@@ -234,7 +234,7 @@ class StudioProject(db.Model):
     # Which syntax dialect script_code is written in -- "timeskipcode" (our
     # own, recommended) or one of the HTML/Python/C#-flavored alternatives.
     # All dialects compile to the exact same rule engine, see studio-dialects.js.
-    language = db.Column(db.String(20), nullable=False, default="timeskipcode")
+    language = db.Column(db.String(20), nullable=False, default="python")
     # Set only for the legacy built-in games, re-listed as normal gallery
     # entries "uploaded by" the LEROX account -- points at the game's own
     # route (e.g. "fruitmerge") instead of the studio block runtime.
@@ -282,6 +282,47 @@ class StudioProjectReport(db.Model):
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     reporter = db.relationship("User")
     __table_args__ = (db.UniqueConstraint("project_id", "reporter_id", name="uq_studioprojectreport_project_reporter"),)
+
+
+class AiChatFeedback(db.Model):
+    """A thumbs up/down on one AI chat reply. Purely a record for human
+    review -- the hosted model isn't retrained from this automatically."""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    reply = db.Column(db.Text, nullable=False)
+    rating = db.Column(db.Integer, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    user = db.relationship("User")
+
+
+class AiChat(db.Model):
+    """One saved conversation with the AI assistant. Only ever read back
+    for the same user who owns it -- never used to influence another
+    user's replies."""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    title = db.Column(db.String(100), nullable=True)
+    # "general" chats never send Studio code context automatically; "code"
+    # chats do (after the user accepts the "Chat auf Code spezialisieren"
+    # suggestion, or by starting the chat from inside the Studio editor).
+    mode = db.Column(db.String(20), nullable=False, default="general")
+    specialize_prompted = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    user = db.relationship("User")
+    messages = db.relationship(
+        "AiChatMessage", backref="chat", lazy=True, cascade="all, delete-orphan",
+        order_by="AiChatMessage.created_at",
+    )
+
+
+class AiChatMessage(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    chat_id = db.Column(db.Integer, db.ForeignKey("ai_chat.id"), nullable=False)
+    role = db.Column(db.String(20), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class StudioBlock(db.Model):

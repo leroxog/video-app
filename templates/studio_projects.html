@@ -9,13 +9,13 @@
             <input type="text" name="name" maxlength="100" placeholder="Projektname" required>
             <select name="language" title="Programmiersprache">
                 {% for value, label in STUDIO_LANGUAGE_CHOICES.items() %}
-                    <option value="{{ value }}" {{ 'selected' if value == 'timeskipcode' else '' }}>{{ label }}</option>
+                    <option value="{{ value }}" {{ 'selected' if value == STUDIO_DEFAULT_LANGUAGE else '' }}>{{ label }}</option>
                 {% endfor %}
             </select>
             <button type="submit">Neues Projekt</button>
         </form>
         <p class="studio-language-hint">
-            timeskipcode ist unsere eigene, einfache Sprache und wird empfohlen &mdash; HTML, Python und C# sind alternative Schreibweisen mit dem gleichen Funktionsumfang.
+            Python wird empfohlen &mdash; HTML, C#, JavaScript und Java sind alternative Schreibweisen mit dem gleichen Funktionsumfang.
             <a href="{{ url_for('studio_help_page') }}" target="_blank">Alle Befehle ansehen &rarr;</a>
         </p>
 
