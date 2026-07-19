@@ -727,6 +727,24 @@ main {
     color: #fff;
 }
 
+.ai-chat-insert-btn {
+    display: block;
+    margin-top: 0.5rem;
+    padding: 0.35rem 0.7rem;
+    border: none;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #ff3d81, #c94fd6);
+    color: #0f0f0f;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.ai-chat-insert-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
 .ai-chat-context-toggle {
     display: flex;
     align-items: center;

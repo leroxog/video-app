@@ -263,15 +263,53 @@
 
                 // If the current page has timeskip studio's code editor open,
                 // offer to send the user's current script along as context so
-                // the assistant can help with the actual code being written.
+                // the assistant can help with the actual code being written --
+                // studio-dialects.js is loaded earlier in the page by
+                // studio_editor.html, so window.StudioDialects is already
+                // available by the time this script runs.
                 const studioTextarea = document.getElementById("studioCodeTextarea");
+                const studioPage = document.getElementById("studioEditorPage");
                 if (studioTextarea) contextToggleWrap.style.display = "flex";
+
+                function buildSyntaxReference() {
+                    if (!studioPage || !window.StudioDialects) return null;
+                    const dialect = window.StudioDialects.get(studioPage.dataset.language);
+                    const lines = [
+                        dialect.repeat.insert, dialect.block.insert("Name"),
+                    ];
+                    dialect.triggers.forEach((t) => lines.push(t.insert));
+                    dialect.conditions.forEach((c) => lines.push(c.insert));
+                    dialect.effects.forEach((e) => lines.push(e.insert + e.template));
+                    lines.push(dialect.close.solidInsert, dialect.close.passableInsert, dialect.figuresOff.insert);
+                    return `Sprache: ${dialect.label}\nErlaubte Befehle (genau so schreiben):\n` + lines.join("\n");
+                }
 
                 toggleBtn.addEventListener("click", () => {
                     panel.style.display = panel.style.display === "none" ? "flex" : "none";
                     if (panel.style.display === "flex") input.focus();
                 });
                 closeBtn.addEventListener("click", () => { panel.style.display = "none"; });
+
+                function insertCodeIntoEditor(code) {
+                    if (!studioTextarea) return;
+                    const start = studioTextarea.selectionStart;
+                    const end = studioTextarea.selectionEnd;
+                    const value = studioTextarea.value;
+                    const insertText = code.trim() + "\n";
+                    studioTextarea.value = value.slice(0, start) + insertText + value.slice(end);
+                    const newPos = start + insertText.length;
+                    studioTextarea.setSelectionRange(newPos, newPos);
+                    studioTextarea.focus();
+                    studioTextarea.dispatchEvent(new Event("input", { bubbles: true }));
+                }
+
+                // The assistant is asked (see ai_assistant.py's SYSTEM_PROMPT)
+                // to wrap any code it suggests in a ``` fenced block -- pull
+                // that out so it can be offered as a one-click insert.
+                function extractCodeBlock(text) {
+                    const match = text.match(/```[a-zA-Z]*\n?([\s\S]*?)```/);
+                    return match ? match[1].trim() : null;
+                }
 
                 function addMessage(text, who) {
                     const bubble = document.createElement("div");
@@ -280,6 +318,24 @@
                     messagesEl.appendChild(bubble);
                     messagesEl.scrollTop = messagesEl.scrollHeight;
                     return bubble;
+                }
+
+                function finalizeBotMessage(bubble, text) {
+                    bubble.textContent = text;
+                    const code = studioTextarea ? extractCodeBlock(text) : null;
+                    if (code) {
+                        const insertBtn = document.createElement("button");
+                        insertBtn.type = "button";
+                        insertBtn.className = "ai-chat-insert-btn";
+                        insertBtn.textContent = "In Editor einfügen";
+                        insertBtn.addEventListener("click", () => {
+                            insertCodeIntoEditor(code);
+                            insertBtn.textContent = "Eingefügt ✓";
+                            insertBtn.disabled = true;
+                        });
+                        bubble.appendChild(insertBtn);
+                    }
+                    messagesEl.scrollTop = messagesEl.scrollHeight;
                 }
 
                 function pollJob(jobId, bubble) {
@@ -295,7 +351,7 @@
                                 return;
                             }
                             if (data.status === "done") {
-                                bubble.textContent = data.reply || "(keine Antwort)";
+                                finalizeBotMessage(bubble, data.reply || "(keine Antwort)");
                             } else {
                                 bubble.textContent = "Die KI ist gerade nicht verfügbar.";
                             }
@@ -313,7 +369,10 @@
 
                     const includeContext = studioTextarea && contextToggle.checked;
                     const body = { message: text };
-                    if (includeContext) body.context = studioTextarea.value;
+                    if (includeContext) {
+                        const reference = buildSyntaxReference();
+                        body.context = (reference ? reference + "\n\n" : "") + "Aktueller Code:\n" + studioTextarea.value;
+                    }
 
                     const thinkingBubble = addMessage("Denkt nach...", "bot");
                     fetch("/api/ai/chat", {

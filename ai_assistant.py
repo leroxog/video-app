@@ -28,13 +28,19 @@ GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-20b")
 MAX_MESSAGE_CHARS = 2000
 MAX_CONTEXT_CHARS = 4000
-MAX_REPLY_TOKENS = 400
+MAX_REPLY_TOKENS = 600
 REQUEST_TIMEOUT_SECONDS = 30
 
 SYSTEM_PROMPT = (
     "Du bist der freundliche KI-Assistent von timeskip, einer Lernplattform, auf der Kinder "
-    "und Jugendliche eigene 2D-Spiele programmieren. Antworte kurz, einfach und auf Deutsch. "
-    "Wenn nach Programmcode gefragt wird, hilf konkret beim Schreiben der Spielregeln."
+    "und Jugendliche eigene 2D-Spiele programmieren. Antworte kurz, einfach und auf Deutsch.\n\n"
+    "Wenn der Nutzer gerade im Studio-Code-Editor ist, bekommst du zusätzlich eine Liste der "
+    "in seiner aktuell gewählten Sprache erlaubten Befehle sowie seinen aktuellen Code. "
+    "Wenn du Spielcode vorschlägst: benutze AUSSCHLIESSLICH Befehle aus dieser Liste, in genau "
+    "der gezeigten Schreibweise (nur Platzhalterwerte wie Zahlen/Namen darfst du anpassen). "
+    "Schreibe JEDE Anweisung auf einer EIGENEN Zeile. Packe NUR den Code -- eine Anweisung pro "
+    "Zeile, ohne Kommentare oder Erklärungen dazwischen -- in einen einzigen Codeblock mit "
+    "dreifachen Backticks (```). Erklärungen schreibst du außerhalb des Codeblocks."
 )
 
 
@@ -54,7 +60,9 @@ def generate_reply(message, context=None):
 
     user_content = message
     if context:
-        user_content = f"Aktueller Code im Studio-Editor:\n{context[:MAX_CONTEXT_CHARS]}\n\nFrage: {message}"
+        # The frontend already formats this as a syntax reference plus the
+        # current script (see buildSyntaxReference() in base.html).
+        user_content = f"{context[:MAX_CONTEXT_CHARS]}\n\nFrage: {message}"
 
     response = requests.post(
         GROQ_API_URL,
@@ -67,6 +75,10 @@ def generate_reply(message, context=None):
             ],
             "max_tokens": MAX_REPLY_TOKENS,
             "temperature": 0.7,
+            # gpt-oss models spend a chunk of their token budget on hidden
+            # "reasoning" before the visible answer; "low" keeps that short
+            # so there's always room left for the actual reply.
+            "reasoning_effort": "low",
         },
         timeout=REQUEST_TIMEOUT_SECONDS,
     )
