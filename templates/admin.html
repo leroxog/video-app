@@ -3,6 +3,32 @@
 {% block content %}
     <h1>Admin</h1>
 
+    <h2>KI-Wissen (global)</h2>
+    <p class="admin-facts-hint">
+        Was du der KI hier schreibst, merkt sie sich als bestätigten Fakt und behandelt es ab sofort in
+        JEDEM Chat mit JEDEM Nutzer als wahr &mdash; nicht nur in deinem eigenen.
+    </p>
+    <div class="admin-facts-layout">
+        <div class="admin-facts-chat" id="adminFactsChatEmbed"></div>
+        <div class="admin-facts-list">
+            {% if admin_facts %}
+                <ul>
+                    {% for fact in admin_facts %}
+                        <li>
+                            <span>{{ fact.content }}</span>
+                            <form action="{{ url_for('admin_delete_fact', fact_id=fact.id) }}" method="post" class="admin-inline-form"
+                                  onsubmit="return confirm('Diesen Fakt wirklich löschen?');">
+                                <button type="submit" class="danger admin-inline-btn">Löschen</button>
+                            </form>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p>Noch keine Fakten gespeichert.</p>
+            {% endif %}
+        </div>
+    </div>
+
     <h2>Neuen Account erstellen</h2>
     <form action="{{ url_for('admin_create_user') }}" method="post" class="form admin-create-form">
         <label for="username">Benutzername</label>

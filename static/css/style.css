@@ -3272,6 +3272,55 @@ body.shorts-fullscreen main {
     color: #3ea6ff;
 }
 
+.admin-facts-hint {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    max-width: 700px;
+}
+
+.admin-facts-layout {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 2rem;
+}
+
+.admin-facts-chat {
+    width: min(380px, 100%);
+    height: 420px;
+    flex-shrink: 0;
+    border: 1px solid var(--panel-border-solid);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.admin-facts-list {
+    flex: 1 1 260px;
+    min-width: 220px;
+    max-height: 420px;
+    overflow-y: auto;
+}
+
+.admin-facts-list ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.admin-facts-list li {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.6rem;
+    padding: 0.5rem 0.7rem;
+    border-radius: 8px;
+    background: rgba(127, 127, 127, 0.08);
+    font-size: 0.85rem;
+}
+
 .admin-user-details {
     font-size: 0.8rem;
 }
@@ -4656,14 +4705,6 @@ body.studio-fullscreen {
     color: #0f0f0f;
     font-weight: 700;
     text-decoration: none;
-}
-
-.webapp-offline-no {
-    padding: 0.7rem 1.4rem;
-    border-radius: 999px;
-    color: var(--text-secondary);
-    text-decoration: none;
-    font-size: 0.9rem;
 }
 
 .agb-page {

@@ -428,13 +428,29 @@ def _call_groq(messages, max_tokens, tools=None):
     return "", captured["proposed_change"]
 
 
-def generate_reply(message, context=None, history=None, project_type=None):
+def _facts_addendum(facts):
+    """`facts` are statements an admin made through the admin dashboard's
+    dedicated "KI-Wissen" chat (see app.py's api_ai_chat/save_as_fact) --
+    deliberately global and injected into every mode's prompt, since an
+    admin using that specific chat is the one place this app treats a
+    single person's statement as ground truth for every user."""
+    if not facts:
+        return ""
+    lines = "\n".join(f"- {fact}" for fact in facts)
+    return (
+        "\n\nVom timeskip-Team über den Admin-Bereich bestätigte Fakten -- behandle diese als "
+        "sicher wahr, ohne sie infrage zu stellen:\n" + lines
+    )
+
+
+def generate_reply(message, context=None, history=None, project_type=None, facts=None):
     """Runs one turn against Groq's hosted chat-completions API. Not meant
     to be called directly from a request handler -- see start_chat_job().
     `history` is this same chat's own prior turns (a list of
     {"role": "user"|"assistant", "content": str} dicts, oldest first).
     `project_type` is "game", "webapp", or None (general chat) and picks
-    both the system prompt variant and which tools are offered. Returns
+    both the system prompt variant and which tools are offered. `facts`
+    is the list of admin-confirmed facts (see _facts_addendum). Returns
     (reply_text, proposed_change)."""
     message = (message or "").strip()[:MAX_MESSAGE_CHARS]
     if not message:
@@ -462,6 +478,7 @@ def generate_reply(message, context=None, history=None, project_type=None):
     else:
         system_prompt = BASE_SYSTEM_PROMPT + GENERAL_TOOLS_ADDENDUM
         tools = AI_TOOLS
+    system_prompt += _facts_addendum(facts)
 
     messages = [{"role": "system", "content": system_prompt}]
     if history:
@@ -498,7 +515,7 @@ _jobs = {}
 _jobs_lock = threading.Lock()
 
 
-def start_chat_job(message, context=None, history=None, project_type=None, on_done=None):
+def start_chat_job(message, context=None, history=None, project_type=None, facts=None, on_done=None):
     job_id = uuid.uuid4().hex
     with _jobs_lock:
         _jobs[job_id] = {"status": "running", "reply": None, "error": None, "proposed_change": None}
@@ -512,7 +529,7 @@ def start_chat_job(message, context=None, history=None, project_type=None, on_do
         # poll, matching how the existing "insert code" button also only
         # appears live and not when reopening an old chat.
         try:
-            reply, proposed_change = generate_reply(message, context, history, project_type)
+            reply, proposed_change = generate_reply(message, context, history, project_type, facts)
             if on_done:
                 on_done(reply, None, proposed_change)
             with _jobs_lock:

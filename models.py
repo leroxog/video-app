@@ -332,6 +332,22 @@ class AiChatMessage(db.Model):
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
 
+class AiAdminFact(db.Model):
+    """A fact an admin has told the AI assistant through the admin
+    dashboard's dedicated "KI-Wissen" chat -- unlike every other AI chat in
+    this app, these are deliberately global: the assistant treats them as
+    confirmed truth in its replies to every user, not just the admin who
+    stated them. Only messages sent through that specific chat become a
+    fact (see app.py's api_ai_chat's save_as_fact handling); an admin's own
+    ordinary chats elsewhere are not treated any differently from anyone
+    else's."""
+    id = db.Column(db.Integer, primary_key=True)
+    admin_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    admin = db.relationship("User")
+
+
 class StudioBlock(db.Model):
     """A rectangular game object on a studio project's 2D canvas. x/y/width
     /height are its design-time (spawn) placement. kind is "normal",

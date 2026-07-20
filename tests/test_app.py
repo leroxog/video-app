@@ -13,6 +13,7 @@ from models import (
     User, Sound, Conversation, Message,
     MemeTemplate, MemeLobby, MemeLobbyPlayer, MemeCreation, MemeVote,
     StudioProject, StudioBlock, StudioProjectLike, StudioProjectComment, StudioProjectReport,
+    AiAdminFact,
 )
 
 
@@ -2616,7 +2617,7 @@ def test_ai_chat_starts_job_and_reports_status(client, monkeypatch):
 
     monkeypatch.setattr(
         ai_assistant, "generate_reply",
-        lambda message, context=None, history=None, project_type=None: (f"Antwort auf: {message}", None),
+        lambda message, context=None, history=None, project_type=None, facts=None: (f"Antwort auf: {message}", None),
     )
     register(client)
 
@@ -2719,7 +2720,7 @@ def test_ai_chat_persists_messages_and_generates_title(client, monkeypatch):
 
     monkeypatch.setattr(
         ai_assistant, "generate_reply",
-        lambda message, context=None, history=None, project_type=None: ("Klar, gerne!", None),
+        lambda message, context=None, history=None, project_type=None, facts=None: ("Klar, gerne!", None),
     )
     monkeypatch.setattr(ai_assistant, "generate_title", lambda first_message: "Frage zu Punkten")
     register(client)
@@ -2813,8 +2814,8 @@ def test_webapp_publish_requires_slug_first(client):
 def test_webapp_offline_page_shown_when_unpublished(client):
     response = client.get("/w/does-not-exist")
     assert response.status_code == 200
-    assert "Leider ist diese Seite offline".encode() in response.data
-    assert "Ja, gerne!".encode() in response.data
+    assert "Diese Webseite ist anscheinend offline".encode() in response.data
+    assert "Wollen Sie mehr über timeskip erfahren?".encode() in response.data
 
 
 def test_webapp_live_page_renders_sandboxed_code(client):
@@ -2972,5 +2973,55 @@ def test_call_groq_returns_proposed_change_from_propose_project_change(monkeypat
         "new_code": "WENN\nBlock\nberührt\nVERSTECKEN\nfest",
         "summary": "Block verschwindet bei Berührung",
     }
+
+
+def test_facts_addendum_included_for_every_mode(monkeypatch):
+    import ai_assistant
+
+    captured = {}
+
+    def fake_call_groq(messages, max_tokens, tools=None):
+        captured["system"] = messages[0]["content"]
+        return "ok", None
+
+    monkeypatch.setattr(ai_assistant, "_call_groq", fake_call_groq)
+
+    ai_assistant.generate_reply("Hallo!", facts=["timeskip wurde 2024 gegründet."])
+    assert "timeskip wurde 2024 gegründet." in captured["system"]
+
+    ai_assistant.generate_reply("Ändere etwas.", context="Code: ...", project_type="webapp", facts=["Fakt X"])
+    assert "Fakt X" in captured["system"]
+
+
+def test_only_admin_can_save_a_fact(client, monkeypatch):
+    import ai_assistant
+
+    monkeypatch.setattr(
+        ai_assistant, "generate_reply",
+        lambda message, context=None, history=None, project_type=None, facts=None: ("ok", None),
+    )
+    register(client, username="notadmin")
+    client.post("/api/ai/chat", json={"message": "Die Sonne ist aus Käse.", "save_as_fact": True})
+    assert AiAdminFact.query.count() == 0
+
+    client.post("/logout")
+    register(client, username="admin1")
+    make_admin("admin1")
+    client.post("/api/ai/chat", json={"message": "timeskip ist kostenlos.", "save_as_fact": True})
+    assert AiAdminFact.query.count() == 1
+    assert AiAdminFact.query.first().content == "timeskip ist kostenlos."
+
+
+def test_admin_can_delete_a_fact(client):
+    register(client, username="admin2")
+    make_admin("admin2")
+    fact = AiAdminFact(admin_id=User.query.filter_by(username="admin2").first().id, content="Testfakt")
+    db.session.add(fact)
+    db.session.commit()
+    fact_id = fact.id
+
+    response = client.post(f"/admin/facts/{fact_id}/delete", follow_redirects=True)
+    assert response.status_code == 200
+    assert AiAdminFact.query.count() == 0
 
 

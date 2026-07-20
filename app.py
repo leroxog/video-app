@@ -27,7 +27,7 @@ from models import (
     GamePlayCount, Sound, UserCreatedCode, Conversation, ConversationMember, Message,
     CoinflipDeposit, MemeTemplate, MemeLobby, MemeLobbyPlayer, MemeCreation, MemeVote,
     StudioProject, StudioBlock, StudioProjectLike, StudioProjectComment, StudioProjectReport,
-    AiChatFeedback, AiChat, AiChatMessage,
+    AiChatFeedback, AiChat, AiChatMessage, AiAdminFact,
 )
 import ai_assistant
 
@@ -1046,8 +1046,8 @@ app.jinja_env.globals["STUDIO_DEFAULT_LANGUAGE"] = STUDIO_DEFAULT_LANGUAGE
 STUDIO_MAX_SCRIPT_LENGTH = 40000
 
 STUDIO_PROJECT_TYPES = {
-    "game": "Spiel (Baukasten)",
-    "webapp": "Web-in-Web-App (eigener Code)",
+    "game": "Spiel",
+    "webapp": "Etwas anderes",
 }
 STUDIO_DEFAULT_PROJECT_TYPE = "game"
 app.jinja_env.globals["STUDIO_PROJECT_TYPES"] = STUDIO_PROJECT_TYPES
@@ -1251,6 +1251,10 @@ def api_ai_delete_chat(chat_id):
     return jsonify({"ok": True})
 
 
+ADMIN_FACT_MAX_LENGTH = 500
+ADMIN_FACTS_PROMPT_LIMIT = 20
+
+
 @app.route("/api/ai/chat", methods=["POST"])
 def api_ai_chat():
     user = current_user()
@@ -1261,6 +1265,11 @@ def api_ai_chat():
     message = (data.get("message") or "").strip()
     context = (data.get("context") or "").strip() or None
     project_type = data.get("project_type") if data.get("project_type") in ("game", "webapp") else None
+    # Only messages sent through the admin dashboard's dedicated "KI-Wissen"
+    # chat become a global fact -- an admin's ordinary chats elsewhere are
+    # unaffected, and a non-admin can never set save_as_fact regardless of
+    # what the request body claims.
+    save_as_fact = bool(data.get("save_as_fact")) and user.is_admin
     chat_id = data.get("chat_id")
     if not message:
         return jsonify({"ok": False, "error": "empty_message"}), 400
@@ -1277,9 +1286,16 @@ def api_ai_chat():
     history = [{"role": m.role, "content": m.content} for m in chat.messages]
 
     db.session.add(AiChatMessage(chat_id=chat.id, role="user", content=message))
+    if save_as_fact:
+        db.session.add(AiAdminFact(admin_id=user.id, content=message[:ADMIN_FACT_MAX_LENGTH]))
     chat.updated_at = datetime.now(timezone.utc)
     db.session.commit()
     chat_id_captured = chat.id
+
+    facts = [
+        f.content for f in
+        AiAdminFact.query.order_by(AiAdminFact.created_at.desc()).limit(ADMIN_FACTS_PROMPT_LIMIT).all()
+    ]
 
     def on_done(reply, error, proposed_change):
         with app.app_context():
@@ -1295,7 +1311,7 @@ def api_ai_chat():
                             db.session.commit()
 
     job_id = ai_assistant.start_chat_job(
-        message, context, history=history, project_type=project_type, on_done=on_done,
+        message, context, history=history, project_type=project_type, facts=facts, on_done=on_done,
     )
     return jsonify({"ok": True, "job_id": job_id, "chat_id": chat.id})
 
@@ -2446,9 +2462,10 @@ def admin_dashboard():
     reports = StudioProjectReport.query.order_by(StudioProjectReport.created_at.desc()).all()
     meme_templates = MemeTemplate.query.filter_by(active=True).order_by(MemeTemplate.created_at.desc()).all()
     ai_feedback = AiChatFeedback.query.order_by(AiChatFeedback.created_at.desc()).limit(100).all()
+    admin_facts = AiAdminFact.query.order_by(AiAdminFact.created_at.desc()).all()
     return render_template(
         "admin.html", user=admin_user, users=users, games=games, online_status=online_status,
-        reports=reports, meme_templates=meme_templates, ai_feedback=ai_feedback,
+        reports=reports, meme_templates=meme_templates, ai_feedback=ai_feedback, admin_facts=admin_facts,
     )
 
 
@@ -2457,6 +2474,15 @@ def admin_dismiss_report(report_id):
     require_admin()
     report = db.get_or_404(StudioProjectReport, report_id)
     db.session.delete(report)
+    db.session.commit()
+    return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/admin/facts/<int:fact_id>/delete", methods=["POST"])
+def admin_delete_fact(fact_id):
+    require_admin()
+    fact = db.get_or_404(AiAdminFact, fact_id)
+    db.session.delete(fact)
     db.session.commit()
     return redirect(url_for("admin_dashboard"))
 

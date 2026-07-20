@@ -326,7 +326,15 @@
                 const webappPage = document.getElementById("webappEditorPage");
                 const codeTextarea = gameTextarea || webappTextarea;
                 const projectType = gameTextarea ? "game" : (webappTextarea ? "webapp" : null);
-                const embedTarget = document.getElementById("studioCodePalette") || document.getElementById("webappCodePalette");
+                // The admin dashboard's dedicated "KI-Wissen" chat (see
+                // admin.html) has no code textarea -- every message an
+                // admin sends there is saved server-side as a fact the
+                // assistant treats as true for every user, everywhere
+                // (see api_ai_chat's save_as_fact handling).
+                const adminFactsTarget = document.getElementById("adminFactsChatEmbed");
+                const embedTarget = document.getElementById("studioCodePalette")
+                    || document.getElementById("webappCodePalette")
+                    || adminFactsTarget;
                 // Present only on the dedicated /assistant page (see
                 // assistant.html) -- clicking the robot emoji navigates
                 // there via a plain link instead of opening an overlay, so
@@ -824,6 +832,7 @@
                             body.context = "Aktueller Code:\n" + codeTextarea.value;
                         }
                     }
+                    if (adminFactsTarget) body.save_as_fact = true;
 
                     const thinkingBubble = addMessage("Denkt nach...", "bot");
                     fetch("/api/ai/chat", {
