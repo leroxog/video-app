@@ -59,6 +59,40 @@ class User(db.Model):
         return check_password_hash(self.password_hash, password)
 
 
+class PasswordResetCode(db.Model):
+    """A 6-digit, 15-minute, single-use code for the "forgot password or
+    username" flow -- issued either by /forgot-password/send-code (emailed
+    to the address the user has on file) or by an admin approving an
+    AccountRecoveryRequest (shown to the admin to relay manually, for
+    accounts with no email on file). Requesting a fresh code doesn't
+    delete the old row, it's simply superseded -- the redemption lookup
+    always takes the newest unused, unexpired code for a user."""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    code = db.Column(db.String(6), nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    expires_at = db.Column(db.DateTime, nullable=False)
+    used = db.Column(db.Boolean, nullable=False, default=False)
+    user = db.relationship("User")
+
+
+class AccountRecoveryRequest(db.Model):
+    """A manual account-recovery request from someone who has no email on
+    file (so the automated emailed-code flow isn't possible) -- shown in
+    the admin dashboard for a human to approve or deny. Approving issues a
+    PasswordResetCode the admin relays to the person themselves, through
+    whatever channel they used to verify who they are; timeskip's own
+    systems never contact anyone on the requester's behalf here."""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    submitted_username = db.Column(db.String(50), nullable=True)
+    message = db.Column(db.Text, nullable=True)
+    status = db.Column(db.String(20), nullable=False, default="pending")
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    resolved_at = db.Column(db.DateTime, nullable=True)
+    user = db.relationship("User")
+
+
 class Subscription(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     subscriber_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)

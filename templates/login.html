@@ -11,5 +11,6 @@
 
         <button type="submit">Einloggen</button>
     </form>
+    <p class="login-forgot-link"><a href="{{ url_for('forgot_password') }}">Ich habe mein Passwort oder Benutzername vergessen.</a></p>
     <p>Noch kein Konto? <a href="{{ url_for('register') }}">Registrieren</a></p>
 {% endblock %}

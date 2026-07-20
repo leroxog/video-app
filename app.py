@@ -3,10 +3,13 @@ import re
 import math
 import uuid
 import random
+import secrets
 import hashlib
 import difflib
 import logging
+import smtplib
 import threading
+from email.mime.text import MIMEText
 from datetime import datetime, timezone, date, timedelta
 from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
@@ -27,7 +30,7 @@ from models import (
     GamePlayCount, Sound, UserCreatedCode, Conversation, ConversationMember, Message,
     CoinflipDeposit, MemeTemplate, MemeLobby, MemeLobbyPlayer, MemeCreation, MemeVote,
     StudioProject, StudioBlock, StudioProjectLike, StudioProjectComment, StudioProjectReport,
-    AiChatFeedback, AiChat, AiChatMessage, AiAdminFact,
+    AiChatFeedback, AiChat, AiChatMessage, AiAdminFact, PasswordResetCode, AccountRecoveryRequest,
 )
 import ai_assistant
 
@@ -419,6 +422,37 @@ else:
         "kostenlosen Hosting-Plattformen (z.B. Railway) ist dieser Speicher nicht "
         "dauerhaft und Dateien können bei einem Neustart/Deploy verloren gehen."
     )
+
+# Generic SMTP config for the account-recovery email (works with any
+# provider's SMTP relay -- Gmail app password, SendGrid, Mailgun, etc. --
+# so there's no dependency on one specific transactional-email vendor.
+SMTP_HOST = os.environ.get("SMTP_HOST")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_USERNAME = os.environ.get("SMTP_USERNAME")
+SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD")
+SMTP_FROM_ADDRESS = os.environ.get("SMTP_FROM_ADDRESS") or SMTP_USERNAME
+USE_SMTP = all([SMTP_HOST, SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM_ADDRESS])
+if not USE_SMTP:
+    logger.warning(
+        "HINWEIS: Kein SMTP konfiguriert (SMTP_HOST/SMTP_USERNAME/SMTP_PASSWORD) -- "
+        "die Passwort-vergessen-E-Mails können nicht verschickt werden."
+    )
+
+
+def send_email(to_address, subject, body):
+    if not USE_SMTP:
+        raise RuntimeError(
+            "SMTP ist nicht konfiguriert. SMTP_HOST, SMTP_USERNAME, SMTP_PASSWORD (und optional "
+            "SMTP_FROM_ADDRESS) als Umgebungsvariablen setzen."
+        )
+    message = MIMEText(body, "plain", "utf-8")
+    message["Subject"] = subject
+    message["From"] = SMTP_FROM_ADDRESS
+    message["To"] = to_address
+    with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as server:
+        server.starttls()
+        server.login(SMTP_USERNAME, SMTP_PASSWORD)
+        server.sendmail(SMTP_FROM_ADDRESS, [to_address], message.as_string())
 
 
 LOCAL_MEDIA_FOLDERS = {
@@ -837,7 +871,10 @@ def index():
     sort = request.args.get("sort", "newest")
     if sort not in ("newest", "popular"):
         sort = "newest"
-    games = StudioProject.query.filter_by(published=True, project_type="game").all()
+    games = [
+        p for p in StudioProject.query.filter_by(published=True).all()
+        if p.project_type == "game" or p.web_slug
+    ]
     if sort == "popular":
         games.sort(key=lambda g: (len(g.likes), g.created_at), reverse=True)
     else:
@@ -994,6 +1031,156 @@ def login():
 def logout():
     session.pop("user_id", None)
     return redirect(url_for("index"))
+
+
+OTP_EXPIRY_MINUTES = 15
+
+
+def _issue_reset_code(user):
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    db.session.add(PasswordResetCode(
+        user_id=user.id, code=code,
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=OTP_EXPIRY_MINUTES),
+    ))
+    db.session.commit()
+    return code
+
+
+@app.route("/forgot-password")
+def forgot_password():
+    return render_template("forgot_password.html")
+
+
+@app.route("/forgot-password/email", methods=["GET", "POST"])
+def forgot_password_email():
+    if request.method == "POST":
+        email = (request.form.get("email") or "").strip()
+        user = User.query.filter_by(email=email).first() if email else None
+        if user is not None:
+            code = _issue_reset_code(user)
+            try:
+                send_email(
+                    email, "Dein timeskip-Code",
+                    f"Dein Code lautet: {code}\nEr ist {OTP_EXPIRY_MINUTES} Minuten gültig.",
+                )
+            except Exception:
+                logger.exception("Passwort-Code-E-Mail konnte nicht verschickt werden.")
+                flash("Die E-Mail konnte gerade nicht verschickt werden. Bitte später erneut versuchen.")
+                return redirect(url_for("forgot_password_email"))
+            session["recovery_user_id"] = user.id
+        # Same redirect regardless of a match -- this is an account-
+        # enumeration safeguard, so a stranger can't use this form to
+        # learn whether a given email address has an account here.
+        flash("Falls diese E-Mail-Adresse bei uns hinterlegt ist, wurde ein Code verschickt.")
+        return redirect(url_for("forgot_password_verify"))
+    return render_template("forgot_password_email.html")
+
+
+@app.route("/forgot-password/verify", methods=["GET", "POST"])
+def forgot_password_verify():
+    if request.method == "POST":
+        user_id = session.get("recovery_user_id")
+
+        if request.form.get("action") == "resend":
+            if user_id:
+                user = db.session.get(User, user_id)
+                if user is not None and user.email:
+                    code = _issue_reset_code(user)
+                    try:
+                        send_email(
+                            user.email, "Dein neuer timeskip-Code",
+                            f"Dein neuer Code lautet: {code}\nEr ist {OTP_EXPIRY_MINUTES} Minuten gültig.",
+                        )
+                    except Exception:
+                        logger.exception("Erneuter Code konnte nicht verschickt werden.")
+            flash("Falls ein Code angefordert werden konnte, wurde ein neuer verschickt.")
+            return redirect(url_for("forgot_password_verify"))
+
+        code = (request.form.get("code") or "").strip()
+        new_password = request.form.get("new_password") or ""
+        new_password2 = request.form.get("new_password2") or ""
+        if not code or not new_password:
+            flash("Bitte Code und neues Passwort angeben.")
+            return redirect(url_for("forgot_password_verify"))
+        if new_password != new_password2:
+            flash("Die Passwörter stimmen nicht überein.")
+            return redirect(url_for("forgot_password_verify"))
+
+        # The email flow already knows which account this is (set in
+        # session by /forgot-password/email) -- someone redeeming a code
+        # an admin approved for them never went through that route in
+        # this browser session, so they identify their account by
+        # username instead (they already typed it once, on the "Eine
+        # Mail an unser Team schicken" form).
+        if user_id is None:
+            typed_username = (request.form.get("username") or "").strip()
+            typed_user = User.query.filter_by(username=typed_username).first() if typed_username else None
+            if typed_user is not None:
+                user_id = typed_user.id
+
+        reset_code = None
+        if user_id:
+            reset_code = PasswordResetCode.query.filter_by(
+                user_id=user_id, code=code, used=False,
+            ).filter(PasswordResetCode.expires_at > datetime.now(timezone.utc)) \
+                .order_by(PasswordResetCode.created_at.desc()).first()
+        if reset_code is None:
+            flash("Der Code ist ungültig oder abgelaufen.")
+            return redirect(url_for("forgot_password_verify"))
+
+        target_user = db.session.get(User, user_id)
+        target_user.set_password(new_password)
+        reset_code.used = True
+        db.session.commit()
+        session.pop("recovery_user_id", None)
+        session["user_id"] = target_user.id
+        flash("Dein Passwort wurde geändert.")
+        return redirect(url_for("index"))
+
+    return render_template("forgot_password_verify.html")
+
+
+@app.route("/forgot-password/help", methods=["GET", "POST"])
+def forgot_password_help():
+    if request.method == "POST":
+        submitted_username = (request.form.get("username") or "").strip()[:50]
+        message = (request.form.get("message") or "").strip()[:1000]
+        matched_user = User.query.filter_by(username=submitted_username).first() if submitted_username else None
+        db.session.add(AccountRecoveryRequest(
+            user_id=matched_user.id if matched_user else None,
+            submitted_username=submitted_username or None,
+            message=message or None,
+        ))
+        db.session.commit()
+        flash("Deine Anfrage wurde an unser Team gesendet.")
+        return redirect(url_for("login"))
+    return render_template("forgot_password_help.html")
+
+
+@app.route("/admin/recovery/<int:request_id>/approve", methods=["POST"])
+def admin_approve_recovery(request_id):
+    require_admin()
+    recovery = db.get_or_404(AccountRecoveryRequest, request_id)
+    if recovery.user_id is None:
+        flash("Zu dieser Anfrage konnte kein Konto gefunden werden.")
+        return redirect(url_for("admin_dashboard"))
+    user = db.session.get(User, recovery.user_id)
+    code = _issue_reset_code(user)
+    recovery.status = "approved"
+    recovery.resolved_at = datetime.now(timezone.utc)
+    db.session.commit()
+    flash(f"Code für {user.username}: {code} ({OTP_EXPIRY_MINUTES} Minuten gültig) -- dem Nutzer manuell mitteilen.")
+    return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/admin/recovery/<int:request_id>/deny", methods=["POST"])
+def admin_deny_recovery(request_id):
+    require_admin()
+    recovery = db.get_or_404(AccountRecoveryRequest, request_id)
+    recovery.status = "denied"
+    recovery.resolved_at = datetime.now(timezone.utc)
+    db.session.commit()
+    return redirect(url_for("admin_dashboard"))
 
 
 @app.route("/leaderboard")
@@ -2463,9 +2650,12 @@ def admin_dashboard():
     meme_templates = MemeTemplate.query.filter_by(active=True).order_by(MemeTemplate.created_at.desc()).all()
     ai_feedback = AiChatFeedback.query.order_by(AiChatFeedback.created_at.desc()).limit(100).all()
     admin_facts = AiAdminFact.query.order_by(AiAdminFact.created_at.desc()).all()
+    recovery_requests = AccountRecoveryRequest.query.filter_by(status="pending") \
+        .order_by(AccountRecoveryRequest.created_at.desc()).all()
     return render_template(
         "admin.html", user=admin_user, users=users, games=games, online_status=online_status,
         reports=reports, meme_templates=meme_templates, ai_feedback=ai_feedback, admin_facts=admin_facts,
+        recovery_requests=recovery_requests,
     )
 
 

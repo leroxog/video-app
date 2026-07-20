@@ -40,7 +40,7 @@
 
     <section class="recent-games-section">
         <div class="recent-games-header">
-            <h2>Spiele</h2>
+            <h2>Nutzer generierte Inhalte</h2>
             <div class="games-sort-tabs">
                 <a class="games-sort-tab {{ 'is-active' if sort == 'popular' else '' }}" href="{{ url_for('index', sort='popular') }}">Beliebteste</a>
                 <a class="games-sort-tab {{ 'is-active' if sort == 'newest' else '' }}" href="{{ url_for('index', sort='newest') }}">Neueste</a>
@@ -53,7 +53,7 @@
                 {% endfor %}
             </div>
         {% else %}
-            <p class="studio-empty-note">Noch keine veröffentlichten Spiele.</p>
+            <p class="studio-empty-note">Noch keine veröffentlichten Inhalte.</p>
         {% endif %}
     </section>
 {% endblock %}

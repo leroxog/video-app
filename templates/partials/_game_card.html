@@ -1,10 +1,19 @@
 {% set builtin = builtin_game_meta(project) %}
-<a class="game-card" href="{{ url_for(builtin.endpoint) if builtin else url_for('studio_play_page', project_id=project.id) }}">
+{% if builtin %}
+    {% set card_href = url_for(builtin.endpoint) %}
+{% elif project.project_type == "webapp" %}
+    {% set card_href = url_for('studio_webapp_view', slug=project.web_slug) %}
+{% else %}
+    {% set card_href = url_for('studio_play_page', project_id=project.id) %}
+{% endif %}
+<a class="game-card" href="{{ card_href }}">
     <div class="game-card-thumb">
         {% if builtin %}
             <div class="game-card-thumb-icon-wrap">
                 <div class="{{ builtin.icon_class }}"></div>
             </div>
+        {% elif project.project_type == "webapp" %}
+            <div class="game-card-thumb-webapp-icon-wrap">🌐</div>
         {% else %}
             {{ studio_project_thumbnail_svg(project)|safe }}
         {% endif %}

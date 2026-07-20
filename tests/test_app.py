@@ -13,7 +13,7 @@ from models import (
     User, Sound, Conversation, Message,
     MemeTemplate, MemeLobby, MemeLobbyPlayer, MemeCreation, MemeVote,
     StudioProject, StudioBlock, StudioProjectLike, StudioProjectComment, StudioProjectReport,
-    AiAdminFact,
+    AiAdminFact, PasswordResetCode, AccountRecoveryRequest,
 )
 
 
@@ -2601,6 +2601,18 @@ def test_homepage_shows_sort_tabs_and_published_games(client):
     assert b"Testspiel" in popular_response.data
 
 
+def test_homepage_includes_published_webapp_projects(client):
+    register(client)
+    project = create_webapp_project(client, name="Meine Homepage Webapp")
+    client.post(f"/api/studio/{project.id}/web-slug", json={"web_slug": "homepage-app"})
+    client.post(f"/studio/{project.id}/publish", follow_redirects=True)
+
+    response = client.get("/")
+    assert "Meine Homepage Webapp".encode() in response.data
+    assert b'href="/w/homepage-app"' in response.data
+    assert "Nutzer generierte Inhalte".encode() in response.data
+
+
 def test_ai_chat_requires_login(client):
     response = client.post("/api/ai/chat", json={"message": "Hallo"})
     assert response.status_code == 401
@@ -3023,5 +3035,182 @@ def test_admin_can_delete_a_fact(client):
     response = client.post(f"/admin/facts/{fact_id}/delete", follow_redirects=True)
     assert response.status_code == 200
     assert AiAdminFact.query.count() == 0
+
+
+def set_email(username, email):
+    user = User.query.filter_by(username=username).first()
+    user.email = email
+    db.session.commit()
+
+
+def test_login_page_shows_forgot_password_link(client):
+    response = client.get("/login")
+    assert "Ich habe mein Passwort oder Benutzername vergessen.".encode() in response.data
+
+
+def test_forgot_password_choice_page(client):
+    response = client.get("/forgot-password")
+    assert response.status_code == 200
+    assert b">Ja<" in response.data
+    assert b">Nein<" in response.data
+
+
+def test_forgot_password_email_flow_full_cycle(client, monkeypatch):
+    import app as app_module
+
+    sent = []
+    monkeypatch.setattr(app_module, "send_email", lambda to, subject, body: sent.append((to, subject, body)))
+
+    register(client, username="recoveryuser")
+    set_email("recoveryuser", "recoveryuser@example.com")
+
+    response = client.post("/forgot-password/email", data={"email": "recoveryuser@example.com"}, follow_redirects=True)
+    assert response.status_code == 200
+    assert len(sent) == 1
+    assert sent[0][0] == "recoveryuser@example.com"
+
+    code_row = PasswordResetCode.query.filter_by(
+        user_id=User.query.filter_by(username="recoveryuser").first().id
+    ).first()
+    assert code_row is not None
+    code = sent[0][2].split("Dein Code lautet: ")[1].split("\n")[0]
+    assert code == code_row.code
+
+    bad = client.post("/forgot-password/verify", data={
+        "code": "000000", "new_password": "NeuesPasswort123!", "new_password2": "NeuesPasswort123!",
+    }, follow_redirects=True)
+    assert "ungültig oder abgelaufen".encode() in bad.data
+
+    good = client.post("/forgot-password/verify", data={
+        "code": code, "new_password": "NeuesPasswort123!", "new_password2": "NeuesPasswort123!",
+    }, follow_redirects=True)
+    assert good.status_code == 200
+
+    updated_user = User.query.filter_by(username="recoveryuser").first()
+    assert updated_user.check_password("NeuesPasswort123!")
+    assert db.session.get(PasswordResetCode, code_row.id).used is True
+
+
+def test_forgot_password_email_does_not_reveal_unknown_address(client, monkeypatch):
+    import app as app_module
+
+    sent = []
+    monkeypatch.setattr(app_module, "send_email", lambda to, subject, body: sent.append(to))
+
+    response = client.post(
+        "/forgot-password/email", data={"email": "nobody-here@example.com"}, follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert len(sent) == 0
+    assert PasswordResetCode.query.count() == 0
+
+
+def test_forgot_password_resend_issues_a_new_code(client, monkeypatch):
+    import app as app_module
+
+    sent = []
+    monkeypatch.setattr(app_module, "send_email", lambda to, subject, body: sent.append((to, subject, body)))
+
+    register(client, username="resenduser")
+    set_email("resenduser", "resend@example.com")
+    client.post("/forgot-password/email", data={"email": "resend@example.com"})
+
+    client.post("/forgot-password/verify", data={"action": "resend"})
+    assert len(sent) == 2
+    second_code = sent[1][2].split("Dein neuer Code lautet: ")[1].split("\n")[0]
+
+    response = client.post("/forgot-password/verify", data={
+        "code": second_code, "new_password": "AnderesPasswort123!", "new_password2": "AnderesPasswort123!",
+    }, follow_redirects=True)
+    assert response.status_code == 200
+    assert User.query.filter_by(username="resenduser").first().check_password("AnderesPasswort123!")
+
+
+def test_forgot_password_help_creates_recovery_request(client):
+    register(client, username="helpuser")
+    response = client.post("/forgot-password/help", data={
+        "username": "helpuser", "message": "Ich komme nicht mehr rein.",
+    }, follow_redirects=True)
+    assert response.status_code == 200
+    request_row = AccountRecoveryRequest.query.first()
+    assert request_row is not None
+    assert request_row.user_id == User.query.filter_by(username="helpuser").first().id
+    assert request_row.status == "pending"
+
+
+def test_forgot_password_help_with_unknown_username_has_no_match(client):
+    client.post("/forgot-password/help", data={"username": "existiertnicht", "message": "Hilfe"})
+    request_row = AccountRecoveryRequest.query.first()
+    assert request_row.user_id is None
+
+
+def test_admin_approve_recovery_issues_code(client):
+    register(client, username="recoveredme")
+    client.post("/forgot-password/help", data={"username": "recoveredme", "message": "Bitte helfen"})
+    request_row = AccountRecoveryRequest.query.first()
+
+    client.post("/logout")
+    register(client, username="adminrecov")
+    make_admin("adminrecov")
+
+    response = client.post(f"/admin/recovery/{request_row.id}/approve", follow_redirects=True)
+    assert response.status_code == 200
+    updated = db.session.get(AccountRecoveryRequest, request_row.id)
+    assert updated.status == "approved"
+    assert PasswordResetCode.query.filter_by(
+        user_id=User.query.filter_by(username="recoveredme").first().id
+    ).count() == 1
+
+
+def test_admin_issued_code_redeemable_via_username_in_a_different_session(client):
+    # Simulates the real gap this caught: the person redeeming an admin-
+    # approved code never went through /forgot-password/email in their
+    # browser, so there's no session state tying them to their account --
+    # they must be able to identify themselves by username instead.
+    register(client, username="recoveredme2")
+    client.post("/forgot-password/help", data={"username": "recoveredme2", "message": "Bitte helfen"})
+    request_row = AccountRecoveryRequest.query.first()
+
+    client.post("/logout")
+    register(client, username="adminrecov3")
+    make_admin("adminrecov3")
+    client.post(f"/admin/recovery/{request_row.id}/approve")
+    code_row = PasswordResetCode.query.filter_by(
+        user_id=User.query.filter_by(username="recoveredme2").first().id
+    ).first()
+
+    client.post("/logout")
+    response = client.post("/forgot-password/verify", data={
+        "username": "recoveredme2", "code": code_row.code,
+        "new_password": "FreshPassword123!", "new_password2": "FreshPassword123!",
+    }, follow_redirects=True)
+    assert response.status_code == 200
+    assert User.query.filter_by(username="recoveredme2").first().check_password("FreshPassword123!")
+
+
+def test_admin_deny_recovery(client):
+    register(client, username="denyme")
+    client.post("/forgot-password/help", data={"username": "denyme", "message": "Bitte"})
+    request_row = AccountRecoveryRequest.query.first()
+
+    client.post("/logout")
+    register(client, username="adminrecov2")
+    make_admin("adminrecov2")
+
+    client.post(f"/admin/recovery/{request_row.id}/deny", follow_redirects=True)
+    updated = db.session.get(AccountRecoveryRequest, request_row.id)
+    assert updated.status == "denied"
+    assert PasswordResetCode.query.count() == 0
+
+
+def test_non_admin_cannot_approve_recovery(client):
+    register(client, username="victim")
+    client.post("/forgot-password/help", data={"username": "victim", "message": "Hilfe"})
+    request_row = AccountRecoveryRequest.query.first()
+
+    client.post("/logout")
+    register(client, username="notadmin2")
+    response = client.post(f"/admin/recovery/{request_row.id}/approve")
+    assert response.status_code == 403
 
 

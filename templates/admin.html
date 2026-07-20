@@ -3,6 +3,35 @@
 {% block content %}
     <h1>Admin</h1>
 
+    <h2>Konto-Wiederherstellungsanfragen</h2>
+    {% if recovery_requests %}
+        <table class="admin-table">
+            <thead><tr><th>Angegebener Benutzername</th><th>Nachricht</th><th>Am</th><th></th></tr></thead>
+            <tbody>
+                {% for rec in recovery_requests %}
+                    <tr>
+                        <td>
+                            {{ rec.submitted_username or '—' }}
+                            {% if not rec.user_id %}<br><span class="admin-recovery-no-match">Kein Konto gefunden</span>{% endif %}
+                        </td>
+                        <td>{{ rec.message or '—' }}</td>
+                        <td>{{ rec.created_at.strftime("%d.%m.%Y %H:%M") }}</td>
+                        <td>
+                            <form action="{{ url_for('admin_approve_recovery', request_id=rec.id) }}" method="post" class="admin-inline-form">
+                                <button type="submit" class="admin-inline-btn">Ja</button>
+                            </form>
+                            <form action="{{ url_for('admin_deny_recovery', request_id=rec.id) }}" method="post" class="admin-inline-form">
+                                <button type="submit" class="danger admin-inline-btn">Nein</button>
+                            </form>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>Keine offenen Wiederherstellungsanfragen.</p>
+    {% endif %}
+
     <h2>KI-Wissen (global)</h2>
     <p class="admin-facts-hint">
         Was du der KI hier schreibst, merkt sie sich als bestätigten Fakt und behandelt es ab sofort in

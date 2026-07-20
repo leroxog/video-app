@@ -830,6 +830,12 @@ main {
 .ai-chat-main {
     flex: 1 1 auto;
     min-width: 0;
+    /* Without this, a flex item that's itself a column flex container
+       grows to fit its content instead of respecting the height stretched
+       onto it by its row parent (.ai-chat-panel) -- that let the whole
+       chat balloon to fit every message instead of staying a fixed size
+       with .ai-chat-messages as the one scrollable region inside it. */
+    min-height: 0;
     display: flex;
     flex-direction: column;
 }
@@ -1078,6 +1084,14 @@ main {
     align-self: flex-start;
     background: rgba(127, 127, 127, 0.14);
     color: var(--text-primary);
+}
+
+/* The Studio editor forces a dark background regardless of the site-wide
+   light/dark theme (see body.studio-fullscreen), but --text-primary still
+   follows that site-wide theme -- on light mode that left the embedded
+   chat's bot bubbles rendering near-black text on a dark bubble. */
+body.studio-fullscreen .ai-chat-message-bot {
+    color: #f1f1f1;
 }
 
 .ai-chat-message-user {
@@ -2861,6 +2875,51 @@ body.shorts-fullscreen main {
     resize: vertical;
 }
 
+.login-forgot-link {
+    font-size: 0.78rem;
+    margin: 0.4rem 0 0;
+}
+
+.login-forgot-link a {
+    color: var(--accent-blue);
+}
+
+.forgot-password-choice {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.forgot-password-yes {
+    padding: 0.6rem 1.4rem;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #6a5cff, #5842d6);
+    color: #fff;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.forgot-password-no {
+    padding: 0.6rem 1.4rem;
+    border-radius: 999px;
+    border: 1px solid var(--panel-border-solid);
+    color: var(--text-secondary);
+    text-decoration: none;
+}
+
+.forgot-password-resend-form {
+    margin-top: 0.8rem;
+}
+
+.forgot-password-resend-btn {
+    background: none;
+    border: none;
+    color: var(--accent-blue);
+    font-size: 0.85rem;
+    cursor: pointer;
+    padding: 0;
+}
+
 .kids-account-bubble {
     position: relative;
     flex-direction: column;
@@ -3270,6 +3329,11 @@ body.shorts-fullscreen main {
 
 .admin-table a {
     color: #3ea6ff;
+}
+
+.admin-recovery-no-match {
+    font-size: 0.75rem;
+    color: #ff6b6b;
 }
 
 .admin-facts-hint {
@@ -4554,7 +4618,11 @@ body.studio-fullscreen {
 .webapp-code-palette {
     width: 300px;
     flex-shrink: 0;
-    overflow-y: auto;
+    /* Only holds the embedded AI chat now, which manages its own
+       scrolling (.ai-chat-messages) -- overflow here as well would give
+       two nested scrollable regions fighting over wheel/touch-swipe
+       gestures aimed at the chat's message history. */
+    overflow: hidden;
     background: #131315;
     border-left: 1px solid #2c2c2c;
     display: flex;
@@ -5096,7 +5164,11 @@ body.studio-fullscreen {
 .studio-code-palette {
     width: 300px;
     flex-shrink: 0;
-    overflow-y: auto;
+    /* Only holds the embedded AI chat now, which manages its own
+       scrolling (.ai-chat-messages) -- overflow here as well would give
+       two nested scrollable regions fighting over wheel/touch-swipe
+       gestures aimed at the chat's message history. */
+    overflow: hidden;
     background: #131315;
     border-left: 1px solid #2c2c2c;
     display: flex;
@@ -5611,6 +5683,16 @@ body.studio-fullscreen {
     align-items: center;
     justify-content: center;
     background: #1c1c1c;
+}
+
+.game-card-thumb-webapp-icon-wrap {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #1c1c1c;
+    font-size: 2.4rem;
 }
 
 .game-card-thumb-icon-wrap .place-label-icon {
