@@ -558,6 +558,9 @@ def ensure_sqlite_columns_exist():
             ("script_code", "TEXT"),
             ("builtin_endpoint", "VARCHAR(50)"),
             ("language", "VARCHAR(20) NOT NULL DEFAULT 'timeskipcode'"),
+            ("project_type", "VARCHAR(20) NOT NULL DEFAULT 'game'"),
+            ("web_code", "TEXT"),
+            ("web_slug", "VARCHAR(50)"),
         ],
         "studio_block": [("kind", "VARCHAR(20) NOT NULL DEFAULT 'normal'")],
         "user": [
@@ -623,6 +626,10 @@ def ensure_columns_exist():
         "ALTER TABLE studio_block ADD COLUMN IF NOT EXISTS kind VARCHAR(20) NOT NULL DEFAULT 'normal'",
         'ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS builtin_endpoint VARCHAR(50)',
         "ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS language VARCHAR(20) NOT NULL DEFAULT 'timeskipcode'",
+        "ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS project_type VARCHAR(20) NOT NULL DEFAULT 'game'",
+        'ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS web_code TEXT',
+        'ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS web_slug VARCHAR(50)',
+        'CREATE UNIQUE INDEX IF NOT EXISTS uq_studio_project_web_slug ON studio_project (web_slug) WHERE web_slug IS NOT NULL',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS purpose_of_use VARCHAR(20)',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS country VARCHAR(100)',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS region VARCHAR(100)',
@@ -830,7 +837,7 @@ def index():
     sort = request.args.get("sort", "newest")
     if sort not in ("newest", "popular"):
         sort = "newest"
-    games = StudioProject.query.filter_by(published=True).all()
+    games = StudioProject.query.filter_by(published=True, project_type="game").all()
     if sort == "popular":
         games.sort(key=lambda g: (len(g.likes), g.created_at), reverse=True)
     else:
@@ -1008,7 +1015,7 @@ def leaderboard():
 def games_page():
     user = current_user()
     query = request.args.get("q", "").strip()
-    studio_query = StudioProject.query.filter_by(published=True)
+    studio_query = StudioProject.query.filter_by(published=True, project_type="game")
     if query:
         studio_query = studio_query.join(User, StudioProject.owner_id == User.id).filter(
             db.or_(StudioProject.name.ilike(f"%{query}%"), User.username.ilike(f"%{query}%"))
@@ -1037,6 +1044,42 @@ STUDIO_DEFAULT_LANGUAGE = "python"
 app.jinja_env.globals["STUDIO_LANGUAGE_CHOICES"] = STUDIO_LANGUAGE_CHOICES
 app.jinja_env.globals["STUDIO_DEFAULT_LANGUAGE"] = STUDIO_DEFAULT_LANGUAGE
 STUDIO_MAX_SCRIPT_LENGTH = 40000
+
+STUDIO_PROJECT_TYPES = {
+    "game": "Spiel (Baukasten)",
+    "webapp": "Web-in-Web-App (eigener Code)",
+}
+STUDIO_DEFAULT_PROJECT_TYPE = "game"
+app.jinja_env.globals["STUDIO_PROJECT_TYPES"] = STUDIO_PROJECT_TYPES
+STUDIO_MAX_WEB_CODE_LENGTH = 100000
+STUDIO_WEB_SLUG_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$")
+STUDIO_WEB_SLUG_RESERVED = {"www", "api", "admin", "app", "static", "assistant", "studio", "login", "register"}
+STUDIO_WEB_STARTER_CODE = (
+    "<!doctype html>\n"
+    "<html lang=\"de\">\n"
+    "<head>\n"
+    "  <meta charset=\"UTF-8\">\n"
+    "  <title>Meine Web-App</title>\n"
+    "  <style>\n"
+    "    body { font-family: sans-serif; text-align: center; margin-top: 3rem; }\n"
+    "  </style>\n"
+    "</head>\n"
+    "<body>\n"
+    "  <h1>Hallo Welt!</h1>\n"
+    "  <p>Schreib hier deinen eigenen HTML-, CSS- und JavaScript-Code.</p>\n"
+    "</body>\n"
+    "</html>\n"
+)
+
+
+def studio_web_url(slug):
+    """The real, working URL for a published Web-in-Web-App -- path-based
+    rather than a true wildcard subdomain, since Railway's free shared
+    *.up.railway.app domain doesn't support per-project subdomains (that
+    needs a custom domain you own plus a paid plan). Shown to users as the
+    project's shareable link instead of the subdomain form they might
+    expect from the "name.timeskip.up.railway.app" idea."""
+    return url_for("studio_webapp_view", slug=slug, _external=True)
 
 
 def serialize_studio_block(block):
@@ -1126,6 +1169,14 @@ def studio_projects_page():
 @app.route("/studio/help")
 def studio_help_page():
     return render_template("studio_help.html", user=current_user())
+
+
+@app.route("/assistant")
+def assistant_page():
+    user = current_user()
+    if user is None:
+        return redirect(url_for("login"))
+    return render_template("assistant.html", user=user)
 
 
 def serialize_ai_chat(chat):
@@ -1286,6 +1337,9 @@ def studio_create_project():
     language = request.form.get("language") or STUDIO_DEFAULT_LANGUAGE
     if language not in STUDIO_LANGUAGE_CHOICES:
         language = STUDIO_DEFAULT_LANGUAGE
+    project_type = request.form.get("project_type") or STUDIO_DEFAULT_PROJECT_TYPE
+    if project_type not in STUDIO_PROJECT_TYPES:
+        project_type = STUDIO_DEFAULT_PROJECT_TYPE
     if not name:
         flash("Bitte einen Projektnamen eingeben.")
         return redirect(url_for("studio_projects_page"))
@@ -1293,17 +1347,20 @@ def studio_create_project():
         flash("Maximale Anzahl an Projekten erreicht.")
         return redirect(url_for("studio_projects_page"))
 
-    project = StudioProject(owner_id=user.id, name=name, language=language)
+    project = StudioProject(owner_id=user.id, name=name, language=language, project_type=project_type)
     db.session.add(project)
     db.session.flush()
-    db.session.add(StudioBlock(
-        project_id=project.id, name=STUDIO_DEFAULT_BLOCK_NAME, is_default=True, kind="normal",
-        x=80, y=200, width=160, height=40, color="#3ea6ff",
-    ))
-    db.session.add(StudioBlock(
-        project_id=project.id, name=STUDIO_SPAWN_BLOCK_NAME, is_default=True, kind="spawn",
-        x=80, y=100, width=40, height=40, color="#3ea6ff",
-    ))
+    if project_type == "webapp":
+        project.web_code = STUDIO_WEB_STARTER_CODE
+    else:
+        db.session.add(StudioBlock(
+            project_id=project.id, name=STUDIO_DEFAULT_BLOCK_NAME, is_default=True, kind="normal",
+            x=80, y=200, width=160, height=40, color="#3ea6ff",
+        ))
+        db.session.add(StudioBlock(
+            project_id=project.id, name=STUDIO_SPAWN_BLOCK_NAME, is_default=True, kind="spawn",
+            x=80, y=100, width=40, height=40, color="#3ea6ff",
+        ))
     db.session.commit()
     return redirect(url_for("studio_editor_page", project_id=project.id))
 
@@ -1329,9 +1386,63 @@ def studio_publish_project(project_id):
     project = db.get_or_404(StudioProject, project_id)
     if project.owner_id != user.id:
         abort(403)
+    if project.project_type == "webapp" and not project.published and not project.web_slug:
+        flash("Bitte zuerst über das Zahnrad einen Namen für deine Web-App vergeben.")
+        return redirect(url_for("studio_editor_page", project_id=project.id))
     project.published = not project.published
     db.session.commit()
     return redirect(url_for("studio_editor_page", project_id=project.id))
+
+
+@app.route("/api/studio/<int:project_id>/web-code", methods=["POST"])
+def api_studio_update_web_code(project_id):
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    project = db.get_or_404(StudioProject, project_id)
+    if project.owner_id != user.id:
+        return jsonify({"ok": False, "error": "forbidden"}), 403
+    if project.project_type != "webapp":
+        return jsonify({"ok": False, "error": "wrong_project_type"}), 400
+
+    data = request.get_json(silent=True) or {}
+    code = data.get("web_code") or ""
+    if len(code) > STUDIO_MAX_WEB_CODE_LENGTH:
+        return jsonify({"ok": False, "error": "code_too_long"}), 400
+
+    project.web_code = code
+    project.updated_at = datetime.now(timezone.utc)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/studio/<int:project_id>/web-slug", methods=["POST"])
+def api_studio_update_web_slug(project_id):
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    project = db.get_or_404(StudioProject, project_id)
+    if project.owner_id != user.id:
+        return jsonify({"ok": False, "error": "forbidden"}), 403
+    if project.project_type != "webapp":
+        return jsonify({"ok": False, "error": "wrong_project_type"}), 400
+
+    data = request.get_json(silent=True) or {}
+    slug = (data.get("web_slug") or "").strip().lower()
+    if not STUDIO_WEB_SLUG_PATTERN.match(slug):
+        return jsonify({
+            "ok": False, "error": "invalid_slug",
+            "message": "3-30 Zeichen, nur Kleinbuchstaben, Ziffern und Bindestriche.",
+        }), 400
+    if slug in STUDIO_WEB_SLUG_RESERVED:
+        return jsonify({"ok": False, "error": "reserved_slug", "message": "Dieser Name ist reserviert."}), 400
+    existing = StudioProject.query.filter_by(web_slug=slug).first()
+    if existing is not None and existing.id != project.id:
+        return jsonify({"ok": False, "error": "slug_taken", "message": "Dieser Name ist schon vergeben."}), 400
+
+    project.web_slug = slug
+    db.session.commit()
+    return jsonify({"ok": True, "web_url": studio_web_url(slug)})
 
 
 @app.route("/studio/<int:project_id>")
@@ -1342,6 +1453,9 @@ def studio_editor_page(project_id):
     project = db.get_or_404(StudioProject, project_id)
     if project.owner_id != user.id:
         abort(403)
+    if project.project_type == "webapp":
+        web_url = studio_web_url(project.web_slug) if project.web_slug else None
+        return render_template("studio_webapp_editor.html", user=user, project=project, web_url=web_url)
     return render_template("studio_editor.html", user=user, project=project)
 
 
@@ -1491,6 +1605,35 @@ def studio_play_page(project_id):
         blocks_json=blocks, script_code=project.script_code or "",
         like_count=len(project.likes), has_liked=has_liked, has_reported=has_reported,
     )
+
+
+@app.route("/w/<slug>")
+def studio_webapp_view(slug):
+    """Public view of a published Web-in-Web-App. The user's code runs
+    inside a sandboxed iframe (no allow-same-origin, no top navigation) so
+    it can never read timeskip cookies/session, steal real login forms, or
+    navigate the visitor away to somewhere else while pretending to still
+    be this page -- see studio_webapp_view.html for the sandbox attribute
+    and the small persistent "Nutzer-erstellt" badge rendered outside it."""
+    user = current_user()
+    project = StudioProject.query.filter_by(web_slug=slug.lower(), project_type="webapp").first()
+    if project is None or not project.published:
+        return render_template("studio_webapp_offline.html", user=user, slug=slug)
+
+    has_reported = user is not None and StudioProjectReport.query.filter_by(
+        reporter_id=user.id, project_id=project.id
+    ).first() is not None
+    response = Response(render_template(
+        "studio_webapp_view.html", user=user, project=project, has_reported=has_reported,
+    ))
+    response.headers["Content-Security-Policy"] = "frame-ancestors 'none'"
+    response.headers["X-Frame-Options"] = "DENY"
+    return response
+
+
+@app.route("/agb")
+def agb_page():
+    return render_template("agb.html", user=current_user())
 
 
 @app.route("/api/studio/<int:project_id>/award", methods=["POST"])

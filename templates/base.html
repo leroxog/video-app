@@ -102,9 +102,8 @@
     </div>
 
     {% if user %}
-        <div class="ai-chat-backdrop" id="aiChatBackdrop" style="display:none;"></div>
         <div class="ai-chat-widget" id="aiChatWidget">
-            <button type="button" class="ai-chat-toggle-btn" id="aiChatToggleBtn" title="KI-Assistent">🤖</button>
+            <a class="ai-chat-toggle-btn" id="aiChatToggleBtn" href="{{ url_for('assistant_page') }}" title="KI-Assistent">🤖</a>
             <div class="ai-chat-panel" id="aiChatPanel" style="display:none;">
                 <div class="ai-chat-sidebar" id="aiChatSidebar">
                     <div class="ai-chat-sidebar-tabs">
@@ -279,7 +278,6 @@
         <script>
             (function () {
                 const widget = document.getElementById("aiChatWidget");
-                const backdrop = document.getElementById("aiChatBackdrop");
                 const toggleBtn = document.getElementById("aiChatToggleBtn");
                 const panel = document.getElementById("aiChatPanel");
                 const closeBtn = document.getElementById("aiChatCloseBtn");
@@ -297,9 +295,10 @@
                 const GREETING = messagesEl.innerHTML;
 
                 // The sidebar (persistent "Zuletzt verwendet" chat list with
-                // Startseite/Code tabs) is only used in the big floating
-                // window -- the Studio-editor-embedded chat stays in its
-                // older, narrower single-column layout (wired further down).
+                // Startseite/Code tabs) shows on the dedicated /assistant page
+                // -- the Studio-editor-embedded chat stays in its older,
+                // narrower single-column layout without a sidebar (wired
+                // further down via the embedTarget/pageEmbedTarget branch).
                 const sidebar = document.getElementById("aiChatSidebar");
                 const tabGeneral = document.getElementById("aiChatTabGeneral");
                 const tabCode = document.getElementById("aiChatTabCode");
@@ -320,6 +319,12 @@
                 const studioTextarea = document.getElementById("studioCodeTextarea");
                 const studioPage = document.getElementById("studioEditorPage");
                 const embedTarget = document.getElementById("studioCodePalette");
+                // Present only on the dedicated /assistant page (see
+                // assistant.html) -- clicking the robot emoji navigates
+                // there via a plain link instead of opening an overlay, so
+                // the chat (with its full sidebar) lives on its own page
+                // rather than in a floating modal on every page.
+                const pageEmbedTarget = document.getElementById("aiChatPageEmbed");
 
                 let currentChatId = null;
                 let currentChatMode = "general";
@@ -331,8 +336,11 @@
                 updateContextToggleVisibility();
 
                 // In the Studio editor, the chat lives embedded in the side
-                // panel (where the old click-to-insert palette used to be)
-                // instead of floating -- always open, no toggle bubble needed.
+                // panel (where the old click-to-insert palette used to be),
+                // compact and without the sidebar. On /assistant it fills
+                // the page and keeps its full sidebar. On every other page
+                // the robot emoji is just a plain link to /assistant, so
+                // neither branch runs and the panel/toggle stay untouched.
                 if (embedTarget) {
                     widget.classList.add("ai-chat-widget-embedded");
                     panel.classList.add("ai-chat-panel-embedded");
@@ -340,6 +348,14 @@
                     panel.style.display = "flex";
                     toggleBtn.style.display = "none";
                     closeBtn.style.display = "none";
+                } else if (pageEmbedTarget) {
+                    widget.classList.add("ai-chat-widget-embedded");
+                    panel.classList.add("ai-chat-panel-page");
+                    pageEmbedTarget.appendChild(panel);
+                    panel.style.display = "flex";
+                    toggleBtn.style.display = "none";
+                    closeBtn.style.display = "none";
+                    loadSidebarList();
                 }
 
                 function buildSyntaxReference() {
@@ -359,26 +375,6 @@
                     panel.classList.remove("sidebar-open");
                 }
 
-                function openPanel() {
-                    panel.style.display = "flex";
-                    if (!embedTarget) {
-                        backdrop.style.display = "block";
-                        loadSidebarList();
-                    }
-                    input.focus();
-                }
-
-                function closePanel() {
-                    panel.style.display = "none";
-                    backdrop.style.display = "none";
-                    closeMobileSidebar();
-                }
-
-                toggleBtn.addEventListener("click", () => {
-                    if (panel.style.display === "none") openPanel(); else closePanel();
-                });
-                closeBtn.addEventListener("click", closePanel);
-                backdrop.addEventListener("click", closePanel);
                 sidebarToggleBtn.addEventListener("click", () => {
                     panel.classList.toggle("sidebar-open");
                 });
@@ -479,7 +475,7 @@
                     messagesEl.innerHTML = GREETING;
                     updateContextToggleVisibility();
                     showConversationView();
-                    if (!embedTarget) renderSidebarRows(allChatsCache);
+                    if (pageEmbedTarget) renderSidebarRows(allChatsCache);
                     input.focus();
                 }
                 newBtn.addEventListener("click", startNewChat);
@@ -505,7 +501,7 @@
                             updateContextToggleVisibility();
                             renderMessageHistory(data.messages);
                             showConversationView();
-                            if (!embedTarget) renderSidebarRows(allChatsCache);
+                            if (pageEmbedTarget) renderSidebarRows(allChatsCache);
                         });
                 }
 
@@ -683,7 +679,7 @@
                                 method: "PATCH",
                                 headers: { "Content-Type": "application/json" },
                                 body: JSON.stringify(patch),
-                            }).then(() => { if (!embedTarget) loadSidebarList(); });
+                            }).then(() => { if (pageEmbedTarget) loadSidebarList(); });
                         }
                     }
                     acceptBtn.addEventListener("click", () => respond(true));
@@ -718,7 +714,7 @@
                     if (studioTextarea && currentChatMode === "general" && !currentChatSpecializePrompted) {
                         offerSpecializeToCode();
                     }
-                    if (!embedTarget) loadSidebarList();
+                    if (pageEmbedTarget) loadSidebarList();
                 }
 
                 function pollJob(jobId, bubble, userMessage) {

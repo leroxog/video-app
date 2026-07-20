@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}{{ project.name }} - timeskip studio{% endblock %}
+{% block body_class %}studio-fullscreen{% endblock %}
+{% block content %}
+    <div class="webapp-editor-page" id="webappEditorPage" data-project-id="{{ project.id }}">
+        <div class="studio-editor-topbar">
+            <a class="studio-editor-back" href="{{ url_for('studio_projects_page') }}">&larr; timeskip studio</a>
+            <span class="studio-editor-title">{{ project.name }}</span>
+            <div class="studio-editor-topbar-actions">
+                <button type="button" id="webappSettingsBtn" class="studio-editor-help-btn" title="Einstellungen">&#9881;</button>
+                <button type="button" id="webappSaveBtn" class="studio-editor-code-toggle-btn">Speichern</button>
+                <form action="{{ url_for('studio_publish_project', project_id=project.id) }}" method="post">
+                    <button type="submit" class="studio-editor-publish-btn {{ 'is-published' if project.published else '' }}">
+                        {{ 'Veröffentlicht ✓' if project.published else 'Als Web-App hochladen' }}
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div class="webapp-editor-body">
+            <textarea id="webappCodeTextarea" class="webapp-code-textarea" spellcheck="false">{{ project.web_code or "" }}</textarea>
+            <div class="webapp-preview-wrap">
+                <div class="webapp-preview-header">
+                    <span>Vorschau</span>
+                    <button type="button" id="webappRefreshPreviewBtn">Aktualisieren</button>
+                </div>
+                <iframe id="webappPreviewFrame" class="webapp-preview-frame"
+                        sandbox="allow-scripts allow-forms allow-popups allow-modals"
+                        referrerpolicy="no-referrer"></iframe>
+            </div>
+        </div>
+        <p class="webapp-editor-hint">
+            Schreib hier deine eigene Webseite komplett selbst mit HTML, CSS und JavaScript &mdash; hier ist nichts vorgegeben.
+        </p>
+    </div>
+
+    <div class="webapp-settings-panel" id="webappSettingsPanel" style="display:none;">
+        <div class="webapp-settings-box">
+            <div class="webapp-settings-header">
+                <span>Einstellungen</span>
+                <button type="button" id="webappSettingsCloseBtn">&times;</button>
+            </div>
+            <label for="webappSlugInput">Adresse deiner Web-App</label>
+            <div class="webapp-slug-row">
+                <input type="text" id="webappSlugInput" maxlength="30" placeholder="mein-projekt"
+                       value="{{ project.web_slug or '' }}">
+                <button type="button" id="webappSlugSaveBtn">Übernehmen</button>
+            </div>
+            <p class="webapp-slug-note" id="webappSlugNote"></p>
+            <div class="webapp-url-row" id="webappUrlRow" style="{{ '' if web_url else 'display:none;' }}">
+                <input type="text" id="webappUrlDisplay" readonly value="{{ web_url or '' }}">
+                <button type="button" id="webappUrlCopyBtn">Kopieren</button>
+            </div>
+            <p class="webapp-settings-note">
+                Alle Rechte an deinem Projekt liegen bei timeskip, die Verantwortung für den Inhalt deiner
+                Web-in-Web-App liegt bei dir. Details in den <a href="{{ url_for('agb_page') }}" target="_blank">AGB</a>.
+            </p>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/studio-webapp-editor.js') }}"></script>
+{% endblock %}

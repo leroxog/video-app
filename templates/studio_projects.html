@@ -5,19 +5,43 @@
     <div class="studio-page">
         <h1>timeskip studio</h1>
 
-        <form action="{{ url_for('studio_create_project') }}" method="post" class="studio-create-form">
+        <form action="{{ url_for('studio_create_project') }}" method="post" class="studio-create-form" id="studioCreateForm">
             <input type="text" name="name" maxlength="100" placeholder="Projektname" required>
-            <select name="language" title="Programmiersprache">
+            <select name="project_type" id="studioProjectTypeSelect" title="Projektart">
+                {% for value, label in STUDIO_PROJECT_TYPES.items() %}
+                    <option value="{{ value }}" {{ 'selected' if value == STUDIO_DEFAULT_PROJECT_TYPE else '' }}>{{ label }}</option>
+                {% endfor %}
+            </select>
+            <select name="language" id="studioLanguageSelect" title="Programmiersprache">
                 {% for value, label in STUDIO_LANGUAGE_CHOICES.items() %}
                     <option value="{{ value }}" {{ 'selected' if value == STUDIO_DEFAULT_LANGUAGE else '' }}>{{ label }}</option>
                 {% endfor %}
             </select>
             <button type="submit">Neues Projekt</button>
         </form>
-        <p class="studio-language-hint">
+        <p class="studio-language-hint" id="studioLanguageHint">
             Python wird empfohlen &mdash; HTML, C#, JavaScript und Java sind alternative Schreibweisen mit dem gleichen Funktionsumfang.
             <a href="{{ url_for('studio_help_page') }}" target="_blank">Alle Befehle ansehen &rarr;</a>
         </p>
+        <p class="studio-language-hint" id="studioWebappHint" style="display:none;">
+            Eine Web-in-Web-App programmierst du komplett selbst mit HTML, CSS und JavaScript &mdash; ohne Baukasten.
+        </p>
+        <script>
+            (function () {
+                const typeSelect = document.getElementById("studioProjectTypeSelect");
+                const languageSelect = document.getElementById("studioLanguageSelect");
+                const languageHint = document.getElementById("studioLanguageHint");
+                const webappHint = document.getElementById("studioWebappHint");
+                function refresh() {
+                    const isWebapp = typeSelect.value === "webapp";
+                    languageSelect.style.display = isWebapp ? "none" : "";
+                    languageHint.style.display = isWebapp ? "none" : "";
+                    webappHint.style.display = isWebapp ? "" : "none";
+                }
+                typeSelect.addEventListener("change", refresh);
+                refresh();
+            })();
+        </script>
 
         {% if projects %}
             <div class="studio-project-list">
@@ -31,12 +55,20 @@
                                 {{ project.name }}
                             </a>
                         {% endif %}
+                        {% if project.project_type == "webapp" %}
+                            <span class="studio-project-type-tag">Web-App</span>
+                        {% endif %}
                         <span class="studio-project-status {{ 'is-published' if project.published else '' }}">
                             {{ 'Veröffentlicht' if project.published else 'Entwurf' }}
                         </span>
                         <div class="studio-project-card-actions">
                             {% if builtin %}
                                 <a href="{{ url_for(builtin.endpoint) }}">Spielen</a>
+                            {% elif project.project_type == "webapp" %}
+                                <a href="{{ url_for('studio_editor_page', project_id=project.id) }}">Bearbeiten</a>
+                                {% if project.published and project.web_slug %}
+                                    <a href="{{ url_for('studio_webapp_view', slug=project.web_slug) }}" target="_blank">Ansehen</a>
+                                {% endif %}
                             {% else %}
                                 <a href="{{ url_for('studio_editor_page', project_id=project.id) }}">Bearbeiten</a>
                                 {% if project.published %}
@@ -52,7 +84,7 @@
                 {% endfor %}
             </div>
         {% else %}
-            <p class="studio-empty-note">Noch keine Projekte. Erstelle oben dein erstes Spiel.</p>
+            <p class="studio-empty-note">Noch keine Projekte. Erstelle oben dein erstes Projekt.</p>
         {% endif %}
     </div>
 {% endblock %}

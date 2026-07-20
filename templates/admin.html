@@ -137,7 +137,17 @@
         <tbody>
             {% for game in games %}
                 <tr>
-                    <td><a href="{{ url_for('studio_play_page', project_id=game.id) }}">{{ game.name }}</a></td>
+                    <td>
+                        {% if game.project_type == "webapp" %}
+                            {% if game.published and game.web_slug %}
+                                <a href="{{ url_for('studio_webapp_view', slug=game.web_slug) }}">{{ game.name }} (Web-App)</a>
+                            {% else %}
+                                {{ game.name }} (Web-App, unveröffentlicht)
+                            {% endif %}
+                        {% else %}
+                            <a href="{{ url_for('studio_play_page', project_id=game.id) }}">{{ game.name }}</a>
+                        {% endif %}
+                    </td>
                     <td>{{ game.owner.username }}</td>
                     <td>{{ game.created_at.strftime("%d.%m.%Y") }}</td>
                     <td>

@@ -222,15 +222,22 @@ class Message(db.Model):
 
 
 class StudioProject(db.Model):
-    """A user-built 2D game from timeskip studio. Publishing makes it show
-    up as a normal game in the games list. script_code is the single,
-    project-wide DSL program -- each rule inside it names the block it
-    applies to, rather than every block carrying its own script."""
+    """A user-built project from timeskip studio -- either a 2D game
+    (project_type "game", publishing makes it show up in the games list) or
+    a Web-in-Web-App (project_type "webapp", publishing makes it reachable
+    at /w/<web_slug>, sandboxed, see api_report_studio_project for its
+    shared report flow). script_code is the single, project-wide DSL
+    program for games -- each rule inside it names the block it applies
+    to, rather than every block carrying its own script. web_code is the
+    freeform HTML/CSS/JS a webapp project's owner writes from scratch."""
     id = db.Column(db.Integer, primary_key=True)
     owner_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     name = db.Column(db.String(100), nullable=False)
     published = db.Column(db.Boolean, nullable=False, default=False)
+    project_type = db.Column(db.String(20), nullable=False, default="game")
     script_code = db.Column(db.Text, nullable=True)
+    web_code = db.Column(db.Text, nullable=True)
+    web_slug = db.Column(db.String(50), nullable=True, unique=True)
     # Which syntax dialect script_code is written in -- "timeskipcode" (our
     # own, recommended) or one of the HTML/Python/C#-flavored alternatives.
     # All dialects compile to the exact same rule engine, see studio-dialects.js.

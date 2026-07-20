@@ -2760,3 +2760,171 @@ def test_ai_feedback_stores_rating_and_shows_in_admin(client):
     assert "👍".encode() in admin_response.data
 
 
+def create_webapp_project(client, name="Meine Webapp"):
+    client.post("/studio/create", data={"name": name, "project_type": "webapp"}, follow_redirects=True)
+    return StudioProject.query.filter_by(name=name).first()
+
+
+def test_webapp_project_created_without_blocks(client):
+    register(client)
+    project = create_webapp_project(client)
+    assert project is not None
+    assert project.project_type == "webapp"
+    assert len(project.blocks) == 0
+    assert project.web_code
+
+
+def test_webapp_slug_must_be_valid_and_unique(client):
+    register(client, username="alice")
+    project = create_webapp_project(client)
+
+    bad = client.post(f"/api/studio/{project.id}/web-slug", json={"web_slug": "a"})
+    assert bad.status_code == 400
+
+    ok = client.post(f"/api/studio/{project.id}/web-slug", json={"web_slug": "alice-site"})
+    assert ok.status_code == 200
+    assert ok.get_json()["ok"] is True
+
+    client.post("/logout")
+    register(client, username="bob")
+    other = create_webapp_project(client, name="Bobs App")
+    taken = client.post(f"/api/studio/{other.id}/web-slug", json={"web_slug": "alice-site"})
+    assert taken.status_code == 400
+    assert taken.get_json()["error"] == "slug_taken"
+
+
+def test_webapp_publish_requires_slug_first(client):
+    register(client)
+    project = create_webapp_project(client)
+    client.post(f"/studio/{project.id}/publish", follow_redirects=True)
+    assert db.session.get(StudioProject, project.id).published is False
+
+    client.post(f"/api/studio/{project.id}/web-slug", json={"web_slug": "my-app"})
+    client.post(f"/studio/{project.id}/publish", follow_redirects=True)
+    assert db.session.get(StudioProject, project.id).published is True
+
+
+def test_webapp_offline_page_shown_when_unpublished(client):
+    response = client.get("/w/does-not-exist")
+    assert response.status_code == 200
+    assert "Leider ist diese Seite offline".encode() in response.data
+    assert "Ja, gerne!".encode() in response.data
+
+
+def test_webapp_live_page_renders_sandboxed_code(client):
+    register(client)
+    project = create_webapp_project(client)
+    client.post(f"/api/studio/{project.id}/web-code", json={"web_code": "<h1>Hallo von mir</h1>"})
+    client.post(f"/api/studio/{project.id}/web-slug", json={"web_slug": "meine-seite"})
+    client.post(f"/studio/{project.id}/publish", follow_redirects=True)
+
+    response = client.get("/w/meine-seite")
+    assert response.status_code == 200
+    assert b"Hallo von mir" in response.data
+    assert b'sandbox="allow-scripts allow-forms allow-popups allow-modals"' in response.data
+    assert b"allow-same-origin" not in response.data
+    assert "Nutzer-erstellt".encode() in response.data
+
+
+def test_webapp_projects_excluded_from_public_game_gallery(client):
+    register(client)
+    project = create_webapp_project(client)
+    client.post(f"/api/studio/{project.id}/web-slug", json={"web_slug": "hidden-app"})
+    client.post(f"/studio/{project.id}/publish", follow_redirects=True)
+
+    response = client.get("/games")
+    assert "Meine Webapp".encode() not in response.data
+
+
+class _FakeResponse:
+    def __init__(self, json_data=None, text_data="", status_code=200):
+        self._json_data = json_data or {}
+        self.text = text_data
+        self.status_code = status_code
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise Exception(f"HTTP {self.status_code}")
+
+    def json(self):
+        return self._json_data
+
+
+def test_tool_search_wikipedia_returns_summary(monkeypatch):
+    import ai_assistant
+
+    def fake_get(url, params=None, headers=None, timeout=None):
+        if "action" in (params or {}):
+            return _FakeResponse({"query": {"search": [{"title": "Katze"}]}})
+        return _FakeResponse({"extract": "Die Katze ist ein Haustier."})
+
+    monkeypatch.setattr(ai_assistant.requests, "get", fake_get)
+    result = ai_assistant._tool_search_wikipedia("Katze")
+    assert "Katze" in result
+    assert "Haustier" in result
+
+
+def test_tool_get_weather_returns_current_conditions(monkeypatch):
+    import ai_assistant
+
+    def fake_get(url, params=None, headers=None, timeout=None):
+        if "geocoding" in url:
+            return _FakeResponse({"results": [{"name": "Berlin", "latitude": 52.5, "longitude": 13.4}]})
+        return _FakeResponse({"current": {"temperature_2m": 21.5, "wind_speed_10m": 10, "weather_code": 1}})
+
+    monkeypatch.setattr(ai_assistant.requests, "get", fake_get)
+    result = ai_assistant._tool_get_weather("Berlin")
+    assert "Berlin" in result
+    assert "21.5" in result
+
+
+def test_tool_search_docs_respects_robots_disallow(monkeypatch):
+    import ai_assistant
+
+    monkeypatch.setattr(ai_assistant, "_docs_allowed", lambda url: False)
+    result = ai_assistant._tool_search_docs("python", "print")
+    assert "erlaubt kein automatisches Abrufen" in result
+
+
+def test_tools_are_omitted_when_studio_code_context_present(monkeypatch):
+    import ai_assistant
+
+    captured = {}
+
+    def fake_call_groq(messages, max_tokens, tools=None):
+        captured["tools"] = tools
+        return "ok"
+
+    monkeypatch.setattr(ai_assistant, "_call_groq", fake_call_groq)
+
+    ai_assistant.generate_reply("Wie geht KILL?", context="Erlaubte Befehle: ...")
+    assert captured["tools"] is None
+
+    ai_assistant.generate_reply("Wie alt ist die Erde?")
+    assert captured["tools"] == ai_assistant.AI_TOOLS
+
+
+def test_call_groq_executes_tool_call_then_returns_final_reply(monkeypatch):
+    import ai_assistant
+
+    calls = []
+
+    def fake_call_groq_message(messages, max_tokens, tools=None, tool_choice="auto"):
+        calls.append(messages)
+        if len(calls) == 1:
+            return {
+                "role": "assistant", "content": None,
+                "tool_calls": [{"id": "call1", "function": {"name": "get_weather", "arguments": '{"location": "Berlin"}'}}],
+            }
+        return {"role": "assistant", "content": "In Berlin sind es 21.5°C."}
+
+    monkeypatch.setattr(ai_assistant, "_call_groq_message", fake_call_groq_message)
+    monkeypatch.setattr(ai_assistant, "_tool_get_weather", lambda location: "Aktuelles Wetter in Berlin: 21.5°C.")
+
+    reply = ai_assistant._call_groq([{"role": "user", "content": "Wie ist das Wetter in Berlin?"}], 200, tools=ai_assistant.AI_TOOLS)
+    assert reply == "In Berlin sind es 21.5°C."
+    assert len(calls) == 2
+    assert calls[1][-1]["role"] == "tool"
+    assert "Berlin" in calls[1][-1]["content"]
+
+

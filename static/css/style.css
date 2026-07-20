@@ -662,32 +662,25 @@ main {
     font-size: 1.4rem;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
     cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
 }
 
-.ai-chat-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.45);
-    z-index: 290;
-}
-
-/* Non-embedded (floating robot button) chat opens as a large fixed window
-   with a persistent sidebar, similar to the Claude desktop app -- the
-   Studio-editor-embedded chat overrides this back to a compact single
-   column further down, since it lives in a narrow side panel instead. */
+/* The robot emoji is a plain link to the dedicated /assistant page (see
+   assistant.html) -- it does not open an overlay. This panel markup is
+   shared between that full page (row layout, sidebar visible, see
+   .ai-chat-panel-page) and the Studio-editor-embedded chat (compact
+   single column, no sidebar, see .ai-chat-panel-embedded further down).
+   On every other page neither target exists, so it just stays hidden. */
 .ai-chat-panel {
-    position: fixed;
-    inset: 0;
-    margin: auto;
-    width: min(1000px, calc(100vw - 32px));
-    height: min(720px, calc(100vh - 64px));
+    display: none;
+    flex-direction: row;
     background: var(--panel-bg-solid);
     border: 1px solid var(--panel-border-solid);
     border-radius: 16px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
-    flex-direction: row;
     overflow: hidden;
-    z-index: 300;
 }
 
 .ai-chat-widget-embedded {
@@ -696,10 +689,14 @@ main {
     bottom: auto;
 }
 
+.ai-chat-panel-page {
+    width: 100%;
+    height: 100%;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
+}
+
 .ai-chat-panel-embedded {
     position: static;
-    inset: auto;
-    margin: 0;
     width: 100%;
     height: 100%;
     border: none;
@@ -854,12 +851,7 @@ main {
 }
 
 @media (max-width: 640px) {
-    .ai-chat-panel:not(.ai-chat-panel-embedded) {
-        width: calc(100vw - 16px);
-        height: calc(100vh - 32px);
-    }
-
-    .ai-chat-panel:not(.ai-chat-panel-embedded) .ai-chat-sidebar {
+    .ai-chat-panel-page .ai-chat-sidebar {
         position: absolute;
         inset: 0;
         z-index: 2;
@@ -869,13 +861,22 @@ main {
         transition: transform 0.2s ease;
     }
 
-    .ai-chat-panel.sidebar-open:not(.ai-chat-panel-embedded) .ai-chat-sidebar {
+    .ai-chat-panel-page.sidebar-open .ai-chat-sidebar {
         transform: translateX(0);
     }
 
-    .ai-chat-panel:not(.ai-chat-panel-embedded) #aiChatSidebarToggleBtn {
+    .ai-chat-panel-page #aiChatSidebarToggleBtn {
         display: inline-block;
     }
+}
+
+/* Wraps the AI chat on its own dedicated page (assistant.html) -- fills
+   the space below the sticky header and above the floating bottom nav,
+   the same way .studio-editor-page fills the viewport for the editor. */
+.assistant-page {
+    display: flex;
+    height: calc(100vh - 220px);
+    min-height: 480px;
 }
 
 .ai-chat-panel-header {
@@ -4310,6 +4311,14 @@ body.studio-fullscreen {
     margin-right: auto;
 }
 
+.studio-project-type-tag {
+    font-size: 0.75rem;
+    color: #c9a8ff;
+    padding: 0.2rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid #4a3c6c;
+}
+
 .studio-project-status {
     font-size: 0.8rem;
     color: #aaa;
@@ -4410,6 +4419,205 @@ body.studio-fullscreen {
     flex: 1 1 auto;
     display: flex;
     min-height: 0;
+}
+
+/* --- Web-in-Web-App editor --- */
+.webapp-editor-page {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 60px);
+}
+
+.webapp-editor-body {
+    flex: 1 1 auto;
+    display: flex;
+    min-height: 0;
+}
+
+.webapp-code-textarea {
+    flex: 1 1 50%;
+    min-width: 0;
+    border: none;
+    border-right: 1px solid #2c2c2c;
+    background: #141414;
+    color: #f1f1f1;
+    font-family: "Consolas", "Courier New", monospace;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    padding: 1rem;
+    resize: none;
+}
+
+.webapp-preview-wrap {
+    flex: 1 1 50%;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    background: #1c1c1c;
+}
+
+.webapp-preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 0.8rem;
+    font-size: 0.85rem;
+    color: #ccc;
+    border-bottom: 1px solid #2c2c2c;
+}
+
+.webapp-preview-header button {
+    background: none;
+    border: 1px solid #3c3c3c;
+    color: #f1f1f1;
+    border-radius: 6px;
+    padding: 0.25rem 0.6rem;
+    font-size: 0.78rem;
+    cursor: pointer;
+}
+
+.webapp-preview-frame {
+    flex: 1 1 auto;
+    border: none;
+    background: #fff;
+}
+
+.webapp-editor-hint {
+    padding: 0.5rem 1rem;
+    margin: 0;
+    font-size: 0.8rem;
+    color: #999;
+    background: #1c1c1c;
+    border-top: 1px solid #2c2c2c;
+}
+
+.webapp-settings-panel {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    align-items: center;
+    justify-content: center;
+    z-index: 400;
+}
+
+.webapp-settings-box {
+    width: min(420px, calc(100vw - 32px));
+    background: #1c1c1c;
+    border: 1px solid #2c2c2c;
+    border-radius: 12px;
+    padding: 1rem 1.2rem;
+    color: #f1f1f1;
+}
+
+.webapp-settings-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-weight: 600;
+    margin-bottom: 0.8rem;
+}
+
+.webapp-settings-header button {
+    background: none;
+    border: none;
+    color: #ccc;
+    font-size: 1.2rem;
+    cursor: pointer;
+}
+
+.webapp-settings-box label {
+    display: block;
+    font-size: 0.82rem;
+    color: #ccc;
+    margin-bottom: 0.3rem;
+}
+
+.webapp-slug-row, .webapp-url-row {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.webapp-slug-row input, .webapp-url-row input {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0.5rem 0.6rem;
+    border-radius: 8px;
+    border: 1px solid #3c3c3c;
+    background: #141414;
+    color: #f1f1f1;
+}
+
+.webapp-slug-row button, .webapp-url-row button {
+    padding: 0.5rem 0.8rem;
+    border-radius: 8px;
+    border: none;
+    background: linear-gradient(135deg, #6a5cff, #5842d6);
+    color: #fff;
+    font-weight: 600;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.webapp-slug-note {
+    font-size: 0.78rem;
+    color: #ff9f6b;
+    min-height: 1.1em;
+    margin: 0 0 0.6rem;
+}
+
+.webapp-settings-note {
+    font-size: 0.75rem;
+    color: #999;
+    margin: 0.6rem 0 0;
+}
+
+.webapp-settings-note a {
+    color: #9fd3ff;
+}
+
+/* --- Web-in-Web-App: offline placeholder --- */
+.webapp-offline-page {
+    text-align: center;
+    padding: 4rem 1rem;
+}
+
+.webapp-offline-subtext {
+    color: var(--text-secondary);
+    margin-bottom: 1.5rem;
+}
+
+.webapp-offline-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+}
+
+.webapp-offline-yes {
+    padding: 0.7rem 1.4rem;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #ff3d81, #c94fd6);
+    color: #0f0f0f;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.webapp-offline-no {
+    padding: 0.7rem 1.4rem;
+    border-radius: 999px;
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 0.9rem;
+}
+
+.agb-page {
+    max-width: 720px;
+    margin: 0 auto;
+    line-height: 1.6;
+}
+
+.agb-page ul {
+    padding-left: 1.2rem;
 }
 
 .studio-props-panel {

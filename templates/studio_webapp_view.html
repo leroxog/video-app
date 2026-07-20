@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ project.name }}</title>
+    <style>
+        html, body { margin: 0; padding: 0; height: 100%; }
+        #webappFrame { position: fixed; inset: 0; width: 100%; height: 100%; border: none; }
+        #webappBadge {
+            position: fixed;
+            right: 10px;
+            bottom: 10px;
+            z-index: 999999;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.35rem 0.6rem;
+            border-radius: 999px;
+            background: rgba(20, 20, 22, 0.82);
+            color: #fff;
+            font: 12px/1.3 Arial, sans-serif;
+            text-decoration: none;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+        #webappBadge a { color: inherit; text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <iframe id="webappFrame" sandbox="allow-scripts allow-forms allow-popups allow-modals"
+            referrerpolicy="no-referrer" srcdoc="{{ project.web_code|e }}"></iframe>
+    <div id="webappBadge">
+        <span>Nutzer-erstellt auf <a href="{{ url_for('index') }}" target="_blank">timeskip</a></span>
+        {% if user %}
+            <span>&middot;</span>
+            <a href="#" id="webappReportLink">{{ 'Gemeldet' if has_reported else 'Melden' }}</a>
+        {% endif %}
+    </div>
+    {% if user and not has_reported %}
+        <script>
+            document.getElementById("webappReportLink").addEventListener("click", function (event) {
+                event.preventDefault();
+                if (!confirm("Diese Web-App wirklich melden?")) return;
+                fetch("/api/studio/{{ project.id }}/report", { method: "POST" })
+                    .then(function () { document.getElementById("webappReportLink").textContent = "Gemeldet"; });
+            });
+        </script>
+    {% endif %}
+</body>
+</html>

@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Seite offline - timeskip{% endblock %}
+{% block content %}
+    <div class="webapp-offline-page">
+        <h1>Leider ist diese Seite offline</h1>
+        <p class="webapp-offline-subtext">Selber eine Web-in-Web-App erstellen?!</p>
+        <div class="webapp-offline-actions">
+            <a class="webapp-offline-yes" href="{{ url_for('studio_projects_page') if user else url_for('register') }}">Ja, gerne!</a>
+            <a class="webapp-offline-no" href="{{ url_for('index') }}">Nein, danke!</a>
+        </div>
+    </div>
+{% endblock %}
