@@ -1260,6 +1260,7 @@ def api_ai_chat():
     data = request.get_json(silent=True) or {}
     message = (data.get("message") or "").strip()
     context = (data.get("context") or "").strip() or None
+    project_type = data.get("project_type") if data.get("project_type") in ("game", "webapp") else None
     chat_id = data.get("chat_id")
     if not message:
         return jsonify({"ok": False, "error": "empty_message"}), 400
@@ -1280,7 +1281,7 @@ def api_ai_chat():
     db.session.commit()
     chat_id_captured = chat.id
 
-    def on_done(reply, error):
+    def on_done(reply, error, proposed_change):
         with app.app_context():
             if reply:
                 db.session.add(AiChatMessage(chat_id=chat_id_captured, role="assistant", content=reply))
@@ -1293,7 +1294,9 @@ def api_ai_chat():
                             chat_row.title = title
                             db.session.commit()
 
-    job_id = ai_assistant.start_chat_job(message, context, history=history, on_done=on_done)
+    job_id = ai_assistant.start_chat_job(
+        message, context, history=history, project_type=project_type, on_done=on_done,
+    )
     return jsonify({"ok": True, "job_id": job_id, "chat_id": chat.id})
 
 

@@ -2614,7 +2614,10 @@ def test_ai_chat_rejects_empty_message(client):
 def test_ai_chat_starts_job_and_reports_status(client, monkeypatch):
     import ai_assistant
 
-    monkeypatch.setattr(ai_assistant, "generate_reply", lambda message, context=None, history=None: f"Antwort auf: {message}")
+    monkeypatch.setattr(
+        ai_assistant, "generate_reply",
+        lambda message, context=None, history=None, project_type=None: (f"Antwort auf: {message}", None),
+    )
     register(client)
 
     start_res = client.post("/api/ai/chat", json={"message": "Wie geht KILL?"})
@@ -2714,7 +2717,10 @@ def test_ai_chats_scoped_to_owner(client):
 def test_ai_chat_persists_messages_and_generates_title(client, monkeypatch):
     import ai_assistant
 
-    monkeypatch.setattr(ai_assistant, "generate_reply", lambda message, context=None, history=None: "Klar, gerne!")
+    monkeypatch.setattr(
+        ai_assistant, "generate_reply",
+        lambda message, context=None, history=None, project_type=None: ("Klar, gerne!", None),
+    )
     monkeypatch.setattr(ai_assistant, "generate_title", lambda first_message: "Frage zu Punkten")
     register(client)
 
@@ -2886,19 +2892,25 @@ def test_tool_search_docs_respects_robots_disallow(monkeypatch):
     assert "erlaubt kein automatisches Abrufen" in result
 
 
-def test_tools_are_omitted_when_studio_code_context_present(monkeypatch):
+def test_general_tools_vs_project_change_tools_by_mode(monkeypatch):
     import ai_assistant
 
     captured = {}
 
     def fake_call_groq(messages, max_tokens, tools=None):
         captured["tools"] = tools
-        return "ok"
+        return "ok", None
 
     monkeypatch.setattr(ai_assistant, "_call_groq", fake_call_groq)
 
+    # Code context without an explicit project_type defaults to "game" --
+    # it must never fall through to general mode (that would enable
+    # Wikipedia/weather/docs tools alongside Studio DSL code).
     ai_assistant.generate_reply("Wie geht KILL?", context="Erlaubte Befehle: ...")
-    assert captured["tools"] is None
+    assert captured["tools"] == ai_assistant.PROJECT_CHANGE_TOOLS
+
+    ai_assistant.generate_reply("Ändere die Farbe.", context="Aktueller Code: ...", project_type="webapp")
+    assert captured["tools"] == ai_assistant.PROJECT_CHANGE_TOOLS
 
     ai_assistant.generate_reply("Wie alt ist die Erde?")
     assert captured["tools"] == ai_assistant.AI_TOOLS
@@ -2921,10 +2933,44 @@ def test_call_groq_executes_tool_call_then_returns_final_reply(monkeypatch):
     monkeypatch.setattr(ai_assistant, "_call_groq_message", fake_call_groq_message)
     monkeypatch.setattr(ai_assistant, "_tool_get_weather", lambda location: "Aktuelles Wetter in Berlin: 21.5°C.")
 
-    reply = ai_assistant._call_groq([{"role": "user", "content": "Wie ist das Wetter in Berlin?"}], 200, tools=ai_assistant.AI_TOOLS)
+    reply, proposed_change = ai_assistant._call_groq(
+        [{"role": "user", "content": "Wie ist das Wetter in Berlin?"}], 200, tools=ai_assistant.AI_TOOLS,
+    )
     assert reply == "In Berlin sind es 21.5°C."
+    assert proposed_change is None
     assert len(calls) == 2
-    assert calls[1][-1]["role"] == "tool"
-    assert "Berlin" in calls[1][-1]["content"]
+
+
+def test_call_groq_returns_proposed_change_from_propose_project_change(monkeypatch):
+    import ai_assistant
+
+    calls = []
+
+    def fake_call_groq_message(messages, max_tokens, tools=None, tool_choice="auto"):
+        calls.append(messages)
+        if len(calls) == 1:
+            return {
+                "role": "assistant", "content": None,
+                "tool_calls": [{
+                    "id": "call1",
+                    "function": {
+                        "name": "propose_project_change",
+                        "arguments": '{"new_code": "WENN\\nBlock\\nberührt\\nVERSTECKEN\\nfest", "summary": "Block verschwindet bei Berührung"}',
+                    },
+                }],
+            }
+        return {"role": "assistant", "content": "Ich habe eine Änderung vorgeschlagen!"}
+
+    monkeypatch.setattr(ai_assistant, "_call_groq_message", fake_call_groq_message)
+
+    reply, proposed_change = ai_assistant._call_groq(
+        [{"role": "user", "content": "Lass den Block verschwinden, wenn man ihn berührt."}],
+        200, tools=ai_assistant.PROJECT_CHANGE_TOOLS,
+    )
+    assert reply == "Ich habe eine Änderung vorgeschlagen!"
+    assert proposed_change == {
+        "new_code": "WENN\nBlock\nberührt\nVERSTECKEN\nfest",
+        "summary": "Block verschwindet bei Berührung",
+    }
 
 

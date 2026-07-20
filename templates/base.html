@@ -316,9 +316,17 @@
                 // studio-dialects.js is loaded earlier in the page by
                 // studio_editor.html, so window.StudioDialects is already
                 // available by the time this script runs.
-                const studioTextarea = document.getElementById("studioCodeTextarea");
-                const studioPage = document.getElementById("studioEditorPage");
-                const embedTarget = document.getElementById("studioCodePalette");
+                // Two Studio editors embed this same chat: the game (DSL)
+                // editor and the Web-in-Web-App (real HTML/CSS/JS) editor.
+                // codeTextarea/projectType are whichever one of them is on
+                // the current page (or neither, on every other page).
+                const gameTextarea = document.getElementById("studioCodeTextarea");
+                const gamePage = document.getElementById("studioEditorPage");
+                const webappTextarea = document.getElementById("webappCodeTextarea");
+                const webappPage = document.getElementById("webappEditorPage");
+                const codeTextarea = gameTextarea || webappTextarea;
+                const projectType = gameTextarea ? "game" : (webappTextarea ? "webapp" : null);
+                const embedTarget = document.getElementById("studioCodePalette") || document.getElementById("webappCodePalette");
                 // Present only on the dedicated /assistant page (see
                 // assistant.html) -- clicking the robot emoji navigates
                 // there via a plain link instead of opening an overlay, so
@@ -331,7 +339,7 @@
                 let currentChatSpecializePrompted = false;
 
                 function updateContextToggleVisibility() {
-                    contextToggleWrap.style.display = (studioTextarea && currentChatMode === "code") ? "flex" : "none";
+                    contextToggleWrap.style.display = (codeTextarea && currentChatMode === "code") ? "flex" : "none";
                 }
                 updateContextToggleVisibility();
 
@@ -359,8 +367,8 @@
                 }
 
                 function buildSyntaxReference() {
-                    if (!studioPage || !window.StudioDialects) return null;
-                    const dialect = window.StudioDialects.get(studioPage.dataset.language);
+                    if (!gamePage || !window.StudioDialects) return null;
+                    const dialect = window.StudioDialects.get(gamePage.dataset.language);
                     const lines = [
                         dialect.repeat.insert, dialect.block.insert("Name"),
                     ];
@@ -571,16 +579,16 @@
                 });
 
                 function insertCodeIntoEditor(code) {
-                    if (!studioTextarea) return;
-                    const start = studioTextarea.selectionStart;
-                    const end = studioTextarea.selectionEnd;
-                    const value = studioTextarea.value;
+                    if (!codeTextarea) return;
+                    const start = codeTextarea.selectionStart;
+                    const end = codeTextarea.selectionEnd;
+                    const value = codeTextarea.value;
                     const insertText = code.trim() + "\n";
-                    studioTextarea.value = value.slice(0, start) + insertText + value.slice(end);
+                    codeTextarea.value = value.slice(0, start) + insertText + value.slice(end);
                     const newPos = start + insertText.length;
-                    studioTextarea.setSelectionRange(newPos, newPos);
-                    studioTextarea.focus();
-                    studioTextarea.dispatchEvent(new Event("input", { bubbles: true }));
+                    codeTextarea.setSelectionRange(newPos, newPos);
+                    codeTextarea.focus();
+                    codeTextarea.dispatchEvent(new Event("input", { bubbles: true }));
                 }
 
                 // The assistant is asked (see ai_assistant.py's SYSTEM_PROMPT)
@@ -598,8 +606,11 @@
                 // offering it for insertion, rather than trusting the model
                 // to always get this exactly right.
                 function sanitizeCodeForDialect(code) {
-                    if (!studioPage || !window.StudioDialects) return code;
-                    const dialect = window.StudioDialects.get(studioPage.dataset.language);
+                    // Only the game (DSL) editor needs this -- the webapp
+                    // editor's code is real, freeform HTML/CSS/JS with no
+                    // fixed vocabulary to check lines against.
+                    if (projectType !== "game" || !gamePage || !window.StudioDialects) return code;
+                    const dialect = window.StudioDialects.get(gamePage.dataset.language);
                     const isRecognized = (line) => {
                         if (dialect.repeat.match(line)) return true;
                         if (dialect.block.match(line) !== null) return true;
@@ -692,9 +703,61 @@
                     messagesEl.scrollTop = messagesEl.scrollHeight;
                 }
 
-                function finalizeBotMessage(bubble, text, userMessage) {
+                // The project-code save endpoints differ by project type;
+                // "Übernehmen" always writes the full file, matching how
+                // the AI was asked to always send the complete new code
+                // rather than a diff (see ai_assistant.py's PROJECT_CHANGE_TOOLS).
+                function saveProjectCode(newCode) {
+                    if (projectType === "game") {
+                        return fetch(`/api/studio/${gamePage.dataset.projectId}/script`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ script_code: newCode }),
+                        });
+                    }
+                    return fetch(`/api/studio/${webappPage.dataset.projectId}/web-code`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ web_code: newCode }),
+                    });
+                }
+
+                function addChangeProposal(bubble, proposedChange) {
+                    const box = document.createElement("div");
+                    box.className = "ai-chat-change-proposal";
+                    const label = document.createElement("p");
+                    label.textContent = "Vorschlag: " + proposedChange.summary;
+                    const acceptBtn = document.createElement("button");
+                    acceptBtn.type = "button";
+                    acceptBtn.className = "ai-chat-change-accept";
+                    acceptBtn.textContent = "Übernehmen";
+                    const declineBtn = document.createElement("button");
+                    declineBtn.type = "button";
+                    declineBtn.className = "ai-chat-change-decline";
+                    declineBtn.textContent = "Verwerfen";
+
+                    acceptBtn.addEventListener("click", () => {
+                        const newCode = projectType === "game"
+                            ? sanitizeCodeForDialect(proposedChange.new_code)
+                            : proposedChange.new_code;
+                        codeTextarea.value = newCode;
+                        codeTextarea.dispatchEvent(new Event("input", { bubbles: true }));
+                        saveProjectCode(newCode);
+                        acceptBtn.textContent = "Übernommen ✓";
+                        acceptBtn.disabled = true;
+                        declineBtn.disabled = true;
+                    });
+                    declineBtn.addEventListener("click", () => { box.remove(); });
+
+                    box.appendChild(label);
+                    box.appendChild(acceptBtn);
+                    box.appendChild(declineBtn);
+                    bubble.appendChild(box);
+                }
+
+                function finalizeBotMessage(bubble, text, userMessage, proposedChange) {
                     bubble.textContent = text;
-                    const rawCode = studioTextarea ? extractCodeBlock(text) : null;
+                    const rawCode = codeTextarea ? extractCodeBlock(text) : null;
                     const code = rawCode ? sanitizeCodeForDialect(rawCode) : null;
                     if (code) {
                         const insertBtn = document.createElement("button");
@@ -708,10 +771,13 @@
                         });
                         bubble.appendChild(insertBtn);
                     }
+                    if (proposedChange && codeTextarea) {
+                        addChangeProposal(bubble, proposedChange);
+                    }
                     addFeedbackRow(bubble, userMessage, text);
                     messagesEl.scrollTop = messagesEl.scrollHeight;
 
-                    if (studioTextarea && currentChatMode === "general" && !currentChatSpecializePrompted) {
+                    if (codeTextarea && currentChatMode === "general" && !currentChatSpecializePrompted) {
                         offerSpecializeToCode();
                     }
                     if (pageEmbedTarget) loadSidebarList();
@@ -730,7 +796,7 @@
                                 return;
                             }
                             if (data.status === "done") {
-                                finalizeBotMessage(bubble, data.reply || "(keine Antwort)", userMessage);
+                                finalizeBotMessage(bubble, data.reply || "(keine Antwort)", userMessage, data.proposed_change);
                             } else {
                                 bubble.textContent = "Die KI ist gerade nicht verfügbar.";
                             }
@@ -746,12 +812,17 @@
                     addMessage(text, "user");
                     input.value = "";
 
-                    const includeContext = studioTextarea && currentChatMode === "code" && contextToggle.checked;
+                    const includeContext = codeTextarea && currentChatMode === "code" && contextToggle.checked;
                     const body = { message: text };
                     if (currentChatId) body.chat_id = currentChatId;
                     if (includeContext) {
-                        const reference = buildSyntaxReference();
-                        body.context = (reference ? reference + "\n\n" : "") + "Aktueller Code:\n" + studioTextarea.value;
+                        body.project_type = projectType;
+                        if (projectType === "game") {
+                            const reference = buildSyntaxReference();
+                            body.context = (reference ? reference + "\n\n" : "") + "Aktueller Code:\n" + codeTextarea.value;
+                        } else {
+                            body.context = "Aktueller Code:\n" + codeTextarea.value;
+                        }
                     }
 
                     const thinkingBubble = addMessage("Denkt nach...", "bot");

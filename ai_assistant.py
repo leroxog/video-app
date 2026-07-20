@@ -21,15 +21,26 @@ lives in app.py (AiChat/AiChatMessage), which passes prior turns in as
 history is always scoped to the same user's own past chats; it is never
 shared with or used to influence another user's replies.
 
-Also gives the assistant three live lookup tools (Groq/OpenAI-style
+Also gives the assistant tool-calling abilities (Groq/OpenAI-style
 function calling, not model fine-tuning -- see the module docstring
 discussion this was chosen over: Groq's API is inference-only, there is
-no way to retrain/fine-tune the shared hosted model from this app):
-search_wikipedia, get_weather, search_docs. These only run in general
-chat mode (no Studio code `context` attached) -- the code-help prompt is
-tuned tightly around timeskip's own flat DSL, and pulling in real
-Python/JavaScript/Java/C# documentation there risks the model mixing in
-real language syntax instead of the DSL.
+no way to retrain/fine-tune the shared hosted model from this app), split
+by which of three modes generate_reply() runs in (`project_type`):
+  - None (general chat): search_wikipedia, get_weather, search_docs --
+    live lookups for factual questions, not available in the other two
+    modes since pulling in real Python/JS/Java/C# documentation there
+    risks the model mixing real language syntax into timeskip's own flat
+    DSL.
+  - "game" (Studio DSL editor): propose_project_change only, under the
+    same strict flat-DSL prompt as before.
+  - "webapp" (Web-in-Web-App editor): propose_project_change only, under
+    a prompt that explicitly allows real HTML/CSS/JS (there is no DSL to
+    protect there).
+propose_project_change is never applied automatically -- its arguments
+(the full new code plus a one-line summary) are surfaced back up through
+start_chat_job()'s job status as `proposed_change` for the frontend to
+show as a suggestion the user must explicitly accept (see aiChat's
+"Vorschlag"/"Übernehmen" UI in base.html) before it's saved anywhere.
 """
 import os
 import re
@@ -73,40 +84,93 @@ DOCS_SITES = {
     "csharp": "https://learn.microsoft.com/de-de/dotnet/csharp/",
 }
 
-SYSTEM_PROMPT = (
+BASE_SYSTEM_PROMPT = (
     "Du bist der freundliche KI-Assistent von timeskip, einer Lernplattform, auf der Kinder "
-    "und Jugendliche eigene 2D-Spiele programmieren. Antworte auf Deutsch, in einem warmen, "
-    "positiven Ton. Bei normalen Gesprächen (kein Code) darfst du ausführlich und ausführlich "
-    "antworten; nur bei Programmierfragen bleibt die Erklärung drumherum kurz, damit der Code "
-    "im Vordergrund steht. Sprich nicht schlecht über timeskip selbst -- wenn jemand sich über "
-    "die Plattform beschwert, bleib konstruktiv und hilfsbereit statt der Beschwerde zuzustimmen, "
-    "aber erfinde auch nichts und tu nicht so, als gäbe es ein Problem nicht, das es gibt.\n\n"
-    "Wenn der Nutzer gerade im Studio-Code-Editor ist, bekommst du zusätzlich eine Liste der "
-    "in seiner aktuell gewählten Sprache erlaubten Befehle sowie seinen aktuellen Code. Das ist "
-    "KEINE echte Programmiersprache mit Verschachtelung -- es ist eine flache Abfolge von "
-    "Zeilen, IMMER in dieser Reihenfolge: (1) optional eine Wiederholen-Zeile, (2) die "
-    "Block-Referenz-Zeile (welcher Teil gemeint ist), (3) die Wann-Zeile (berührt/geklickt/immer), "
-    "(4) optional eine Bedingungs-Zeile, (5) genau eine Aktions-Zeile, (6) die Ende-Zeile "
-    "(fest/durchlässig) -- NICHTS danach, keine weiteren Zeilen. Wenn du Spielcode vorschlägst: "
-    "benutze AUSSCHLIESSLICH Befehle aus der gegebenen Liste, in genau der gezeigten Schreibweise "
-    "(nur Platzhalterwerte wie Zahlen/Namen darfst du anpassen), IMMER in genau dieser "
-    "Reihenfolge. Erfinde NIEMALS eigene Befehle oder Wörter, die nicht wortwörtlich in der "
-    "gegebenen Liste stehen -- auch keine, die in echten Programmiersprachen üblich wären (z.B. "
-    "'end', Kommentare, zusätzliche Aufrufe). Nimm nur genau die Zeilen, die für die Anfrage "
-    "nötig sind, keine zusätzlichen wie REPEAT wenn nicht danach gefragt wurde. KEINE Einrückung, "
-    "KEINE verschachtelten Blöcke, KEIN führendes Leerzeichen -- jede Zeile beginnt ganz links, "
-    "auch wenn es in der jeweiligen Sprache (z.B. Python) sonst üblich wäre einzurücken. Schreibe "
-    "JEDE Anweisung auf einer EIGENEN Zeile. Packe NUR den Code -- eine Anweisung pro Zeile, "
-    "ohne Kommentare oder Erklärungen dazwischen -- in einen einzigen Codeblock mit dreifachen "
-    "Backticks (```). Erklärungen schreibst du außerhalb des Codeblocks."
+    "und Jugendliche eigene Projekte programmieren. Antworte auf Deutsch, in einem warmen, "
+    "positiven Ton. Bei normalen Gesprächen (kein Code) darfst du ausführlich antworten; nur "
+    "bei Programmierfragen bleibt die Erklärung drumherum kurz, damit der Code im Vordergrund "
+    "steht. Sprich nicht schlecht über timeskip selbst -- wenn jemand sich über die Plattform "
+    "beschwert, bleib konstruktiv und hilfsbereit statt der Beschwerde zuzustimmen, aber erfinde "
+    "auch nichts und tu nicht so, als gäbe es ein Problem nicht, das es gibt."
 )
 
-TOOLS_SYSTEM_ADDENDUM = (
+GENERAL_TOOLS_ADDENDUM = (
     "\n\nDu hast Zugriff auf drei Werkzeuge: search_wikipedia (aktuelle Wissensfragen), "
     "get_weather (Live-Wetter für einen Ort) und search_docs (offizielle Dokumentation von "
     "Python, JavaScript, HTML, Java oder C#). Nutze sie, wenn eine Frage aktuelle, "
     "nachprüfbare Fakten braucht, statt zu raten oder dir etwas auszudenken."
 )
+
+GAME_DSL_ADDENDUM = (
+    "\n\nDer Nutzer ist gerade im Studio-Code-Editor eines Spiel-Projekts. Du bekommst "
+    "zusätzlich eine Liste der in seiner aktuell gewählten Sprache erlaubten Befehle sowie "
+    "seinen aktuellen Code. Das ist KEINE echte Programmiersprache mit Verschachtelung -- es "
+    "ist eine flache Abfolge von Zeilen, IMMER in dieser Reihenfolge: (1) optional eine "
+    "Wiederholen-Zeile, (2) die Block-Referenz-Zeile (welcher Teil gemeint ist), (3) die "
+    "Wann-Zeile (berührt/geklickt/immer), (4) optional eine Bedingungs-Zeile, (5) genau eine "
+    "Aktions-Zeile, (6) die Ende-Zeile (fest/durchlässig) -- NICHTS danach, keine weiteren "
+    "Zeilen. Wenn du Spielcode vorschlägst: benutze AUSSCHLIESSLICH Befehle aus der gegebenen "
+    "Liste, in genau der gezeigten Schreibweise (nur Platzhalterwerte wie Zahlen/Namen darfst "
+    "du anpassen), IMMER in genau dieser Reihenfolge. Erfinde NIEMALS eigene Befehle oder "
+    "Wörter, die nicht wortwörtlich in der gegebenen Liste stehen -- auch keine, die in echten "
+    "Programmiersprachen üblich wären (z.B. 'end', Kommentare, zusätzliche Aufrufe). Nimm nur "
+    "genau die Zeilen, die für die Anfrage nötig sind, keine zusätzlichen wie REPEAT wenn nicht "
+    "danach gefragt wurde. KEINE Einrückung, KEINE verschachtelten Blöcke, KEIN führendes "
+    "Leerzeichen -- jede Zeile beginnt ganz links, auch wenn es in der jeweiligen Sprache (z.B. "
+    "Python) sonst üblich wäre einzurücken. Schreibe JEDE Anweisung auf einer EIGENEN Zeile. "
+    "Packe NUR den Code -- eine Anweisung pro Zeile, ohne Kommentare oder Erklärungen "
+    "dazwischen -- in einen einzigen Codeblock mit dreifachen Backticks (```). Erklärungen "
+    "schreibst du außerhalb des Codeblocks.\n\n"
+    "Wenn der Nutzer eine ÄNDERUNG an seinem BESTEHENDEN Code möchte (z.B. eine Regel "
+    "entfernen, anpassen, oder etwas ergänzen, das sich auf schon vorhandenen Code bezieht), "
+    "rufe das Werkzeug propose_project_change auf und gib dort den KOMPLETTEN neuen Code an "
+    "(alle bestehenden Regeln plus deine Änderung, in der gleichen flachen Zeilen-Reihenfolge "
+    "wie oben beschrieben) -- nicht nur den geänderten Teil, er ersetzt den ganzen aktuellen "
+    "Code. Für eine einzelne NEUE Regel, die den bestehenden Code nicht verändert, zeig "
+    "stattdessen wie gewohnt einen Codeblock in deiner Antwort."
+)
+
+WEBAPP_CODE_ADDENDUM = (
+    "\n\nDer Nutzer programmiert gerade seine eigene Webseite (eine \"Web-in-Web-App\") "
+    "komplett selbst mit echtem HTML, CSS und JavaScript -- hier gelten KEINE Einschränkungen "
+    "wie bei der Studio-Baukastensprache, benutze ganz normale, moderne Web-Standards und "
+    "erkläre auch echte Sprachfeatures wenn gefragt. Du bekommst den aktuellen Code der Seite "
+    "mitgeschickt.\n\n"
+    "Wenn der Nutzer eine ÄNDERUNG an seinem bestehenden Projekt möchte, rufe das Werkzeug "
+    "propose_project_change auf und gib dort den KOMPLETTEN neuen Code der Seite an (die "
+    "ganze HTML-Datei inklusive <style> und <script>), nicht nur einen Ausschnitt -- er "
+    "ersetzt den ganzen aktuellen Code. Für ein einzelnes NEUES Beispiel, das der Nutzer sich "
+    "erst ansehen will, zeig stattdessen wie gewohnt einen Codeblock in deiner Antwort."
+)
+
+PROJECT_CHANGE_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "propose_project_change",
+            "description": (
+                "Schlägt eine geänderte Version des aktuellen Projekt-Codes vor, wenn der "
+                "Nutzer wirklich eine Änderung an seinem bestehenden Projekt möchte. Wird dem "
+                "Nutzer zur Bestätigung angezeigt -- er entscheidet, ob die Änderung übernommen "
+                "wird."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "new_code": {
+                        "type": "string",
+                        "description": "Der komplette neue Code, der den gesamten aktuellen Code ersetzt.",
+                    },
+                    "summary": {
+                        "type": "string",
+                        "description": "Kurze Zusammenfassung der Änderung in einem Satz, auf Deutsch.",
+                    },
+                },
+                "required": ["new_code", "summary"],
+            },
+        },
+    },
+]
 
 AI_TOOLS = [
     {
@@ -279,7 +343,12 @@ TOOL_IMPLEMENTATIONS = {
 }
 
 
-def _run_tool_calls(tool_calls):
+def _run_tool_calls(tool_calls, captured):
+    """Executes each requested tool and returns the "tool" role messages
+    to feed back to the model. propose_project_change is special-cased:
+    instead of fetching anything, its arguments are stashed into
+    `captured` (a single dict shared across the whole _call_groq() loop)
+    so the caller can return them alongside the final text reply."""
     outputs = []
     for call in tool_calls:
         name = call.get("function", {}).get("name")
@@ -287,8 +356,15 @@ def _run_tool_calls(tool_calls):
             args = json.loads(call.get("function", {}).get("arguments") or "{}")
         except (json.JSONDecodeError, TypeError):
             args = {}
-        impl = TOOL_IMPLEMENTATIONS.get(name)
-        result = impl(args) if impl else f"Unbekanntes Werkzeug: {name}"
+        if name == "propose_project_change":
+            captured["proposed_change"] = {
+                "new_code": args.get("new_code") or "",
+                "summary": (args.get("summary") or "").strip() or "Änderung vorgeschlagen",
+            }
+            result = "Der Änderungsvorschlag wurde dem Nutzer zur Bestätigung angezeigt."
+        else:
+            impl = TOOL_IMPLEMENTATIONS.get(name)
+            result = impl(args) if impl else f"Unbekanntes Werkzeug: {name}"
         outputs.append({"role": "tool", "tool_call_id": call.get("id"), "content": result})
     return outputs
 
@@ -333,8 +409,12 @@ def _call_groq(messages, max_tokens, tools=None):
     to "none" -- Groq errors ("tool choice is none, but model called a
     tool") if tools are omitted entirely from a follow-up call after the
     model has already started a tool-calling turn, so the schema stays
-    attached and only the choice is what forces a final text answer."""
+    attached and only the choice is what forces a final text answer.
+    Returns (content, proposed_change) -- proposed_change is a
+    {"new_code", "summary"} dict if propose_project_change was called
+    during the loop, else None."""
     current_messages = messages
+    captured = {"proposed_change": None}
     for round_index in range(MAX_TOOL_ROUNDS):
         is_last_round = round_index == MAX_TOOL_ROUNDS - 1
         message = _call_groq_message(
@@ -343,30 +423,45 @@ def _call_groq(messages, max_tokens, tools=None):
         )
         tool_calls = message.get("tool_calls")
         if not tool_calls:
-            return (message.get("content") or "").strip()
-        current_messages = current_messages + [message] + _run_tool_calls(tool_calls)
-    return ""
+            return (message.get("content") or "").strip(), captured["proposed_change"]
+        current_messages = current_messages + [message] + _run_tool_calls(tool_calls, captured)
+    return "", captured["proposed_change"]
 
 
-def generate_reply(message, context=None, history=None):
+def generate_reply(message, context=None, history=None, project_type=None):
     """Runs one turn against Groq's hosted chat-completions API. Not meant
     to be called directly from a request handler -- see start_chat_job().
     `history` is this same chat's own prior turns (a list of
-    {"role": "user"|"assistant", "content": str} dicts, oldest first)."""
+    {"role": "user"|"assistant", "content": str} dicts, oldest first).
+    `project_type` is "game", "webapp", or None (general chat) and picks
+    both the system prompt variant and which tools are offered. Returns
+    (reply_text, proposed_change)."""
     message = (message or "").strip()[:MAX_MESSAGE_CHARS]
     if not message:
-        return ""
+        return "", None
+
+    # A code `context` without an explicit project_type defaults to "game"
+    # rather than falling through to general mode -- that would otherwise
+    # enable Wikipedia/weather/docs tools alongside Studio DSL code, the
+    # exact contamination this split was meant to prevent.
+    if project_type not in ("game", "webapp"):
+        project_type = "game" if context else None
 
     user_content = message
     if context:
-        # The frontend already formats this as a syntax reference plus the
-        # current script (see buildSyntaxReference() in base.html).
+        # The frontend already formats this as a syntax reference (game)
+        # or the current file (webapp) plus the question.
         user_content = f"{context[:MAX_CONTEXT_CHARS]}\n\nFrage: {message}"
 
-    # Tools are only offered in general chat -- see the module docstring on
-    # why Studio's code-help mode (context present) stays tool-free.
-    system_prompt = SYSTEM_PROMPT if context else SYSTEM_PROMPT + TOOLS_SYSTEM_ADDENDUM
-    tools = None if context else AI_TOOLS
+    if project_type == "game":
+        system_prompt = BASE_SYSTEM_PROMPT + GAME_DSL_ADDENDUM
+        tools = PROJECT_CHANGE_TOOLS
+    elif project_type == "webapp":
+        system_prompt = BASE_SYSTEM_PROMPT + WEBAPP_CODE_ADDENDUM
+        tools = PROJECT_CHANGE_TOOLS
+    else:
+        system_prompt = BASE_SYSTEM_PROMPT + GENERAL_TOOLS_ADDENDUM
+        tools = AI_TOOLS
 
     messages = [{"role": "system", "content": system_prompt}]
     if history:
@@ -380,7 +475,7 @@ def generate_title(first_message):
     """One extra, cheap request that turns a chat's opening message into a
     short 2-4 word label for the chat list."""
     try:
-        title = _call_groq(
+        title, _ = _call_groq(
             [
                 {"role": "system", "content": (
                     "Fasse die folgende Nachricht in genau 2 bis 4 Wörtern auf Deutsch zusammen, als "
@@ -403,27 +498,33 @@ _jobs = {}
 _jobs_lock = threading.Lock()
 
 
-def start_chat_job(message, context=None, history=None, on_done=None):
+def start_chat_job(message, context=None, history=None, project_type=None, on_done=None):
     job_id = uuid.uuid4().hex
     with _jobs_lock:
-        _jobs[job_id] = {"status": "running", "reply": None, "error": None}
+        _jobs[job_id] = {"status": "running", "reply": None, "error": None, "proposed_change": None}
 
     def run():
         # on_done (persisting to the database) runs *before* the status
         # flips to "done"/"error", so a poller can never observe "done" and
         # then fetch message history that hasn't been written yet.
+        # proposed_change is never persisted to the database -- it's only
+        # ever surfaced through this job's status for the current, live
+        # poll, matching how the existing "insert code" button also only
+        # appears live and not when reopening an old chat.
         try:
-            reply = generate_reply(message, context, history)
+            reply, proposed_change = generate_reply(message, context, history, project_type)
             if on_done:
-                on_done(reply, None)
+                on_done(reply, None, proposed_change)
             with _jobs_lock:
-                _jobs[job_id] = {"status": "done", "reply": reply, "error": None}
+                _jobs[job_id] = {
+                    "status": "done", "reply": reply, "error": None, "proposed_change": proposed_change,
+                }
         except Exception as exc:
             logger.exception("KI-Antwort fehlgeschlagen.")
             if on_done:
-                on_done(None, str(exc))
+                on_done(None, str(exc), None)
             with _jobs_lock:
-                _jobs[job_id] = {"status": "error", "reply": None, "error": str(exc)}
+                _jobs[job_id] = {"status": "error", "reply": None, "error": str(exc), "proposed_change": None}
 
     threading.Thread(target=run, daemon=True).start()
     return job_id
