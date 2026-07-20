@@ -68,8 +68,13 @@
     </main>
 
     <div class="bottom-nav">
-        <a class="bottom-nav-games-btn" href="{{ url_for('games_page') }}" title="Spiele" data-nav-active="/games">
-            <svg viewBox="0 0 24 16" width="22" height="15"><path d="M6 2 H18 A4 4 0 0 1 22 6 V10 A4 4 0 0 1 18 14 H6 A4 4 0 0 1 2 10 V6 A4 4 0 0 1 6 2 Z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="7.5" cy="8" r="1.4" fill="currentColor"/><path d="M7.5 6.5 V9.5 M6 8 H9" stroke="currentColor" stroke-width="1.4"/><circle cx="16" cy="6.7" r="1.1" fill="currentColor"/><circle cx="18.2" cy="9" r="1.1" fill="currentColor"/></svg>
+        <a class="bottom-nav-apps-btn" href="{{ url_for('index') }}" title="Startseite" data-nav-active="/">
+            <svg viewBox="0 0 24 24" width="20" height="20">
+                <rect x="3" y="3" width="8" height="8" rx="2" fill="currentColor"/>
+                <rect x="13" y="3" width="8" height="8" rx="2" fill="currentColor"/>
+                <rect x="3" y="13" width="8" height="8" rx="2" fill="currentColor"/>
+                <rect x="13" y="13" width="8" height="8" rx="2" fill="currentColor"/>
+            </svg>
         </a>
 
         <a class="bottom-nav-plus" href="{{ url_for('studio_projects_page') if user else url_for('login') }}" title="Spiel programmieren">
@@ -163,7 +168,7 @@
             });
 
             const pressable = document.querySelectorAll(
-                ".bottom-nav-games-btn, .bottom-nav-plus, .bottom-nav-avatar"
+                ".bottom-nav-apps-btn, .bottom-nav-plus, .bottom-nav-avatar"
             );
             pressable.forEach((el) => {
                 const press = () => el.classList.add("bottom-nav-pressed");

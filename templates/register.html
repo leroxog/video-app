@@ -38,7 +38,7 @@
         </select>
 
         <label for="country">Land</label>
-        <input type="text" id="country" name="country" required maxlength="100" value="{{ form_values.country if form_values else '' }}">
+        <input type="text" id="country" name="country" maxlength="100" value="{{ form_values.country if form_values else '' }}">
 
         <label for="region">Bundesland</label>
         <select id="region" name="region">
@@ -50,11 +50,11 @@
 
         <label for="guardian_email" id="guardianEmailLabel">E-Mail eines Erziehungsberechtigten</label>
         <input type="email" id="guardian_email" name="guardian_email" maxlength="255" value="{{ form_values.guardian_email if form_values else '' }}">
-        <p class="field-hint" id="guardianEmailHint"></p>
+        <p class="field-hint">Empfohlen, aber nicht verpflichtend.</p>
 
         <label class="checkbox-label" id="skipLastTwoWrap">
             <input type="checkbox" id="regionSkipped" name="region_skipped" value="1" {{ 'checked' if form_values and form_values.region_skipped == '1' else '' }}>
-            <span id="skipLastTwoLabel">Diese letzten beiden Fragen möchte ich nicht beantworten</span>
+            <span>Diese letzten beiden Fragen (Land, Bundesland) möchte ich nicht beantworten</span>
         </label>
 
         <button type="submit">Konto erstellen</button>
@@ -68,30 +68,22 @@
             const bubble = document.getElementById("kidsAccountBubble");
             const ackBtn = document.getElementById("kidsAccountAckBtn");
             const ageError = document.getElementById("ageErrorNote");
+            const countryInput = document.getElementById("country");
             const regionSelect = document.getElementById("region");
-            const guardianInput = document.getElementById("guardian_email");
             const guardianLabel = document.getElementById("guardianEmailLabel");
-            const guardianHint = document.getElementById("guardianEmailHint");
             const skipLastTwo = document.getElementById("regionSkipped");
-            const skipLastTwoLabel = document.getElementById("skipLastTwoLabel");
             const form = document.getElementById("registerForm");
             let acknowledged = false;
 
+            // The e-mail field (guardian's for a minor, the user's own for
+            // an adult) is always optional-but-recommended -- never
+            // mandatory. The skip checkbox always covers country + region
+            // together, for every age.
             function updateSkipUI() {
-                const a = age(birthdateInput.value);
-                const isKid = a !== null && a < 18;
-                skipLastTwoLabel.textContent = isKid
-                    ? "Diese Frage (Bundesland) möchte ich nicht beantworten"
-                    : "Diese letzten beiden Fragen möchte ich nicht beantworten";
+                countryInput.disabled = skipLastTwo.checked;
+                if (skipLastTwo.checked) countryInput.value = "";
                 regionSelect.disabled = skipLastTwo.checked;
                 if (skipLastTwo.checked) regionSelect.value = "";
-                if (isKid) {
-                    // Guardian e-mail stays mandatory for kids accounts no matter what.
-                    guardianInput.disabled = false;
-                } else {
-                    guardianInput.disabled = skipLastTwo.checked;
-                    if (skipLastTwo.checked) guardianInput.value = "";
-                }
             }
             skipLastTwo.addEventListener("change", updateSkipUI);
 
@@ -111,8 +103,7 @@
                 ageError.style.display = "none";
                 if (a === null) {
                     bubble.style.display = "none";
-                    guardianLabel.textContent = "E-Mail eines Erziehungsberechtigten";
-                    guardianHint.textContent = "";
+                    guardianLabel.textContent = "E-Mail eines Erziehungsberechtigten (optional)";
                     return;
                 }
                 if (a < 10) {
@@ -121,12 +112,10 @@
                     ageError.style.display = "block";
                 } else if (a < 18) {
                     bubble.style.display = acknowledged ? "none" : "flex";
-                    guardianLabel.textContent = "E-Mail eines Erziehungsberechtigten (Pflicht unter 18)";
-                    guardianHint.textContent = "Für Kids-Accounts unter 18 ist diese Angabe erforderlich.";
+                    guardianLabel.textContent = "E-Mail eines Erziehungsberechtigten (optional)";
                 } else {
                     bubble.style.display = "none";
                     guardianLabel.textContent = "E-Mail (optional)";
-                    guardianHint.textContent = "Empfohlen, aber nicht verpflichtend.";
                 }
                 updateSkipUI();
             }

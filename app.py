@@ -895,24 +895,26 @@ def parse_onboarding_fields(form):
     }
 
 
-def validate_onboarding_fields(fields, age):
+def validate_onboarding_fields(fields):
+    """The e-mail (guardian's, for a minor; the user's own, for an adult)
+    is always optional-but-recommended -- never required, regardless of
+    age. "Diese letzten beiden Fragen möchte ich nicht beantworten" refers
+    to country + region together, for everyone; skipping it must bypass
+    both, not just region."""
     if fields["purpose_of_use"] not in PURPOSE_CHOICES:
         return "Bitte angeben, wofür du den Account nutzt."
-    if not fields["country"]:
-        return "Bitte ein Land angeben."
+    if not fields["country"] and not fields["region_skipped"]:
+        return "Bitte ein Land angeben oder die Frage überspringen."
     if not fields["region"] and not fields["region_skipped"]:
         return "Bitte ein Bundesland angeben oder die Frage überspringen."
-    if age < 18:
-        if not fields["guardian_email"] or "@" not in fields["guardian_email"]:
-            return "Bitte die E-Mail-Adresse eines Erziehungsberechtigten angeben."
-    elif fields["guardian_email"] and "@" not in fields["guardian_email"]:
+    if fields["guardian_email"] and "@" not in fields["guardian_email"]:
         return "Bitte eine gültige E-Mail-Adresse angeben."
     return None
 
 
 def apply_onboarding_fields(user, fields):
     user.purpose_of_use = fields["purpose_of_use"]
-    user.country = fields["country"]
+    user.country = fields["country"] or None
     user.region = fields["region"] or None
     user.region_skipped = fields["region_skipped"] and not fields["region"]
     user.guardian_email = fields["guardian_email"] or None
@@ -949,7 +951,7 @@ def register():
         if age < MIN_REGISTRATION_AGE:
             return rerender(f"Du musst mindestens {MIN_REGISTRATION_AGE} Jahre alt sein, um dich zu registrieren.")
 
-        onboarding_error = validate_onboarding_fields(onboarding, age)
+        onboarding_error = validate_onboarding_fields(onboarding)
         if onboarding_error:
             return rerender(onboarding_error)
 
@@ -1001,7 +1003,7 @@ def complete_profile():
         if age < MIN_REGISTRATION_AGE:
             return rerender(f"Du musst mindestens {MIN_REGISTRATION_AGE} Jahre alt sein.")
 
-        onboarding_error = validate_onboarding_fields(onboarding, age)
+        onboarding_error = validate_onboarding_fields(onboarding)
         if onboarding_error:
             return rerender(onboarding_error)
 

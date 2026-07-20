@@ -510,7 +510,7 @@ main {
     flex-shrink: 0;
 }
 
-.bottom-nav-message-btn, .bottom-nav-heart-btn, .bottom-nav-games-btn, .bottom-nav-camera-btn {
+.bottom-nav-message-btn, .bottom-nav-heart-btn, .bottom-nav-apps-btn, .bottom-nav-camera-btn {
     width: 34px;
     height: 34px;
     border-radius: 50%;

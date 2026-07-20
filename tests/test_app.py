@@ -116,19 +116,24 @@ def test_register_blocks_under_10(client):
     assert User.query.filter_by(username="young").first() is None
 
 
-def test_register_kids_account_requires_guardian_email(client):
+def test_register_teen_guardian_email_is_optional(client):
+    # Guardian e-mail is recommended but never required, at any age --
+    # a teen can register without one.
     teen_birthdate = date.today().replace(year=date.today().year - 15)
     response = register(client, username="teen", birthdate=teen_birthdate.isoformat())
-    assert "Erziehungsberechtigten".encode() in response.data
-    assert User.query.filter_by(username="teen").first() is None
-
-    register(
-        client, username="teen", birthdate=teen_birthdate.isoformat(),
-        extra={"guardian_email": "parent@example.com"},
-    )
+    assert response.status_code == 200
     user = User.query.filter_by(username="teen").first()
     assert user is not None
-    assert user.guardian_email == "parent@example.com"
+    assert user.guardian_email is None
+
+    client.post("/logout")
+    register(
+        client, username="teen2", birthdate=teen_birthdate.isoformat(),
+        extra={"guardian_email": "parent@example.com"},
+    )
+    user2 = User.query.filter_by(username="teen2").first()
+    assert user2 is not None
+    assert user2.guardian_email == "parent@example.com"
 
 
 def test_register_adult_guardian_email_optional(client):
@@ -156,6 +161,40 @@ def test_register_region_can_be_skipped(client):
     user = User.query.filter_by(username="skipregion").first()
     assert user.region is None
     assert user.region_skipped is True
+
+
+def test_register_country_and_region_both_skippable_together(client):
+    # "Diese letzten beiden Fragen möchte ich nicht beantworten" covers
+    # country AND region -- omitting country too (not just region) must
+    # not block registration when the skip checkbox is set.
+    response = client.post(
+        "/register",
+        data={
+            "username": "skipboth", "password": "secret123", "password2": "secret123",
+            "birthdate": "2000-01-01", "gender": "keine_angabe", "purpose_of_use": "private",
+            "region_skipped": "1",
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    user = User.query.filter_by(username="skipboth").first()
+    assert user is not None
+    assert user.country is None
+    assert user.region is None
+    assert user.region_skipped is True
+
+
+def test_register_requires_country_without_skip(client):
+    response = client.post(
+        "/register",
+        data={
+            "username": "nocountry", "password": "secret123", "password2": "secret123",
+            "birthdate": "2000-01-01", "gender": "keine_angabe", "purpose_of_use": "private",
+        },
+        follow_redirects=True,
+    )
+    assert "Land angeben".encode() in response.data
+    assert User.query.filter_by(username="nocountry").first() is None
 
 
 def test_existing_account_gated_until_onboarding_completed(client):
@@ -282,7 +321,7 @@ def test_header_search_bar_present_on_every_page(client):
     for path in ["/", "/login", "/register"]:
         response = client.get(path)
         assert b"headerSearchInput" in response.data
-        assert b"bottom-nav-games-btn" in response.data
+        assert b"bottom-nav-apps-btn" in response.data
 
 
 def test_service_worker_served_from_root_for_full_scope(client):
@@ -347,9 +386,9 @@ def test_games_page_accessible_without_login_and_lists_published_studio_games(cl
     assert b"Testspiel" in response.data
 
 
-def test_bottom_nav_has_games_and_plus_buttons(client):
+def test_bottom_nav_has_apps_and_plus_buttons(client):
     response = client.get("/")
-    assert b"bottom-nav-games-btn" in response.data
+    assert b"bottom-nav-apps-btn" in response.data
     assert b"bottom-nav-plus" in response.data
     assert b"bottom-nav-avatar" in response.data
 
