@@ -140,85 +140,95 @@ WEBAPP_CODE_ADDENDUM = (
     "propose_project_change auf und gib dort den KOMPLETTEN neuen Code der Seite an (die "
     "ganze HTML-Datei inklusive <style> und <script>), nicht nur einen Ausschnitt -- er "
     "ersetzt den ganzen aktuellen Code. Für ein einzelnes NEUES Beispiel, das der Nutzer sich "
-    "erst ansehen will, zeig stattdessen wie gewohnt einen Codeblock in deiner Antwort."
+    "erst ansehen will, zeig stattdessen wie gewohnt einen Codeblock in deiner Antwort.\n\n"
+    "Du hast außerdem Zugriff auf das Werkzeug search_docs (offizielle Dokumentation von "
+    "Python, JavaScript, HTML, Java oder C#). Nutze es bei konkreten Fragen zu echten "
+    "Sprachfeatures, statt dir Details auszudenken."
 )
 
-PROJECT_CHANGE_TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "propose_project_change",
-            "description": (
-                "Schlägt eine geänderte Version des aktuellen Projekt-Codes vor, wenn der "
-                "Nutzer wirklich eine Änderung an seinem bestehenden Projekt möchte. Wird dem "
-                "Nutzer zur Bestätigung angezeigt -- er entscheidet, ob die Änderung übernommen "
-                "wird."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "new_code": {
-                        "type": "string",
-                        "description": "Der komplette neue Code, der den gesamten aktuellen Code ersetzt.",
-                    },
-                    "summary": {
-                        "type": "string",
-                        "description": "Kurze Zusammenfassung der Änderung in einem Satz, auf Deutsch.",
-                    },
+PROPOSE_PROJECT_CHANGE_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "propose_project_change",
+        "description": (
+            "Schlägt eine geänderte Version des aktuellen Projekt-Codes vor, wenn der "
+            "Nutzer wirklich eine Änderung an seinem bestehenden Projekt möchte. Wird dem "
+            "Nutzer zur Bestätigung angezeigt -- er entscheidet, ob die Änderung übernommen "
+            "wird."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "new_code": {
+                    "type": "string",
+                    "description": "Der komplette neue Code, der den gesamten aktuellen Code ersetzt.",
                 },
-                "required": ["new_code", "summary"],
+                "summary": {
+                    "type": "string",
+                    "description": "Kurze Zusammenfassung der Änderung in einem Satz, auf Deutsch.",
+                },
             },
+            "required": ["new_code", "summary"],
         },
     },
-]
+}
 
-AI_TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "search_wikipedia",
-            "description": (
-                "Sucht einen Begriff auf der deutschen Wikipedia und liefert eine kurze "
-                "Zusammenfassung des passendsten Artikels. Für allgemeine Wissensfragen "
-                "(Geschichte, Wissenschaft, Personen, Orte, Begriffe usw.)."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {"query": {"type": "string", "description": "Suchbegriff"}},
-                "required": ["query"],
-            },
+SEARCH_WIKIPEDIA_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "search_wikipedia",
+        "description": (
+            "Sucht einen Begriff auf der deutschen Wikipedia und liefert eine kurze "
+            "Zusammenfassung des passendsten Artikels. Für allgemeine Wissensfragen "
+            "(Geschichte, Wissenschaft, Personen, Orte, Begriffe usw.)."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {"query": {"type": "string", "description": "Suchbegriff"}},
+            "required": ["query"],
         },
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_weather",
-            "description": "Ruft das aktuelle Live-Wetter für einen Ort ab.",
-            "parameters": {
-                "type": "object",
-                "properties": {"location": {"type": "string", "description": "Ortsname, z.B. 'Berlin'"}},
-                "required": ["location"],
-            },
+}
+
+GET_WEATHER_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "get_weather",
+        "description": "Ruft das aktuelle Live-Wetter für einen Ort ab.",
+        "parameters": {
+            "type": "object",
+            "properties": {"location": {"type": "string", "description": "Ortsname, z.B. 'Berlin'"}},
+            "required": ["location"],
         },
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "search_docs",
-            "description": (
-                "Durchsucht die offizielle Dokumentation einer Programmiersprache nach einem Begriff."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "language": {"type": "string", "enum": list(DOCS_SITES.keys())},
-                    "query": {"type": "string", "description": "Suchbegriff"},
-                },
-                "required": ["language", "query"],
+}
+
+SEARCH_DOCS_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "search_docs",
+        "description": (
+            "Durchsucht die offizielle Dokumentation einer Programmiersprache nach einem Begriff."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "language": {"type": "string", "enum": list(DOCS_SITES.keys())},
+                "query": {"type": "string", "description": "Suchbegriff"},
             },
+            "required": ["language", "query"],
         },
     },
-]
+}
+
+# game (DSL) mode only gets propose_project_change -- real documentation
+# for Python/JS/Java/C# would risk the model mixing real language syntax
+# into timeskip's own flat DSL. webapp mode has no such risk (it's real
+# HTML/CSS/JS already), so it also gets search_docs for grounded, accurate
+# answers instead of guessing from the base model's training alone.
+PROJECT_CHANGE_TOOLS = [PROPOSE_PROJECT_CHANGE_TOOL]
+WEBAPP_TOOLS = [PROPOSE_PROJECT_CHANGE_TOOL, SEARCH_DOCS_TOOL]
+AI_TOOLS = [SEARCH_WIKIPEDIA_TOOL, GET_WEATHER_TOOL, SEARCH_DOCS_TOOL]
 
 
 def _strip_html(raw_html):
@@ -474,7 +484,7 @@ def generate_reply(message, context=None, history=None, project_type=None, facts
         tools = PROJECT_CHANGE_TOOLS
     elif project_type == "webapp":
         system_prompt = BASE_SYSTEM_PROMPT + WEBAPP_CODE_ADDENDUM
-        tools = PROJECT_CHANGE_TOOLS
+        tools = WEBAPP_TOOLS
     else:
         system_prompt = BASE_SYSTEM_PROMPT + GENERAL_TOOLS_ADDENDUM
         tools = AI_TOOLS

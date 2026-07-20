@@ -2957,12 +2957,17 @@ def test_general_tools_vs_project_change_tools_by_mode(monkeypatch):
 
     # Code context without an explicit project_type defaults to "game" --
     # it must never fall through to general mode (that would enable
-    # Wikipedia/weather/docs tools alongside Studio DSL code).
+    # Wikipedia/weather/docs tools alongside Studio DSL code). game mode
+    # only gets propose_project_change, no doc lookups (protects the
+    # flat-DSL prompt from real-language contamination); webapp mode also
+    # gets search_docs since it's real, unrestricted code already.
     ai_assistant.generate_reply("Wie geht KILL?", context="Erlaubte Befehle: ...")
     assert captured["tools"] == ai_assistant.PROJECT_CHANGE_TOOLS
 
     ai_assistant.generate_reply("Ändere die Farbe.", context="Aktueller Code: ...", project_type="webapp")
-    assert captured["tools"] == ai_assistant.PROJECT_CHANGE_TOOLS
+    assert captured["tools"] == ai_assistant.WEBAPP_TOOLS
+    assert ai_assistant.SEARCH_DOCS_TOOL in ai_assistant.WEBAPP_TOOLS
+    assert ai_assistant.SEARCH_DOCS_TOOL not in ai_assistant.PROJECT_CHANGE_TOOLS
 
     ai_assistant.generate_reply("Wie alt ist die Erde?")
     assert captured["tools"] == ai_assistant.AI_TOOLS
