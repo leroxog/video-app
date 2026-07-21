@@ -13,7 +13,7 @@ from models import (
     User, Sound, Conversation, Message,
     MemeTemplate, MemeLobby, MemeLobbyPlayer, MemeCreation, MemeVote,
     StudioProject, StudioBlock, StudioProjectLike, StudioProjectComment, StudioProjectReport,
-    AiAdminFact, PasswordResetCode, AccountRecoveryRequest,
+    AiAdminFact, PasswordResetCode, AccountRecoveryRequest, ErrorLog,
 )
 
 
@@ -3256,5 +3256,83 @@ def test_non_admin_cannot_approve_recovery(client):
     register(client, username="notadmin2")
     response = client.post(f"/admin/recovery/{request_row.id}/approve")
     assert response.status_code == 403
+
+
+def test_unhandled_exception_is_logged_and_shows_friendly_page(client, monkeypatch):
+    import app as app_module
+
+    def boom(user):
+        raise RuntimeError("kaboom")
+
+    monkeypatch.setattr(app_module, "is_user_online", boom)
+
+    register(client, username="admintester")
+    make_admin("admintester")
+
+    flask_app.config["PROPAGATE_EXCEPTIONS"] = False
+    try:
+        response = client.get("/admin")
+    finally:
+        flask_app.config["PROPAGATE_EXCEPTIONS"] = None
+
+    assert response.status_code == 500
+    assert "schiefgelaufen".encode() in response.data
+    assert ErrorLog.query.count() == 1
+    error_row = ErrorLog.query.first()
+    assert error_row.path == "/admin"
+    assert "kaboom" in error_row.message
+    assert error_row.user.username == "admintester"
+
+
+def test_http_exceptions_are_not_logged_as_errors(client):
+    response = client.post("/admin/errors/clear")
+    assert response.status_code == 403
+    assert ErrorLog.query.count() == 0
+
+
+def test_admin_can_view_and_clear_error_log(client):
+    db.session.add(ErrorLog(path="/somewhere", method="GET", message="Testfehler"))
+    db.session.commit()
+
+    register(client, username="clearadmin")
+    make_admin("clearadmin")
+
+    response = client.get("/admin")
+    assert "Testfehler".encode() in response.data
+
+    clear_response = client.post("/admin/errors/clear", follow_redirects=True)
+    assert clear_response.status_code == 200
+    assert ErrorLog.query.count() == 0
+
+
+def test_non_admin_cannot_clear_error_log(client):
+    register(client, username="notadmin3")
+    response = client.post("/admin/errors/clear")
+    assert response.status_code == 403
+
+
+def test_ai_job_failure_is_logged_to_error_log(client, monkeypatch):
+    import ai_assistant
+
+    def failing_generate_reply(message, context=None, history=None, project_type=None, facts=None):
+        raise RuntimeError("Groq ist down")
+
+    monkeypatch.setattr(ai_assistant, "generate_reply", failing_generate_reply)
+    register(client, username="aierroruser")
+
+    start_res = client.post("/api/ai/chat", json={"message": "Hallo"})
+    job_id = start_res.get_json()["job_id"]
+
+    import time
+    status_data = None
+    for _ in range(20):
+        status_data = client.get(f"/api/ai/chat/{job_id}").get_json()
+        if status_data["status"] != "running":
+            break
+        time.sleep(0.05)
+
+    assert status_data["status"] == "error"
+    assert ErrorLog.query.count() == 1
+    assert "Groq ist down" in ErrorLog.query.first().message
 
 

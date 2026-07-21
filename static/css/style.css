@@ -3331,6 +3331,19 @@ body.shorts-fullscreen main {
     color: #3ea6ff;
 }
 
+.admin-error-traceback {
+    max-width: 500px;
+    max-height: 300px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: 0.75rem;
+    background: rgba(127, 127, 127, 0.08);
+    padding: 0.5rem;
+    border-radius: 6px;
+    margin-top: 0.4rem;
+}
+
 .admin-recovery-no-match {
     font-size: 0.75rem;
     color: #ff6b6b;
@@ -4750,9 +4763,14 @@ body.studio-fullscreen {
 }
 
 /* --- Web-in-Web-App: offline placeholder --- */
-.webapp-offline-page {
+.webapp-offline-page, .error-page {
     text-align: center;
     padding: 4rem 1rem;
+}
+
+.error-page p {
+    color: var(--text-secondary);
+    margin-bottom: 1.5rem;
 }
 
 .webapp-offline-subtext {

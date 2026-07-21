@@ -3,6 +3,34 @@
 {% block content %}
     <h1>Admin</h1>
 
+    <h2>Fehlerprotokoll</h2>
+    {% if error_logs %}
+        <form action="{{ url_for('admin_clear_errors') }}" method="post" class="admin-inline-form"
+              onsubmit="return confirm('Das gesamte Fehlerprotokoll wirklich löschen?');">
+            <button type="submit" class="danger admin-inline-btn">Alle löschen</button>
+        </form>
+        <table class="admin-table">
+            <thead><tr><th>Wann</th><th>Wo</th><th>Fehler</th><th>Von</th></tr></thead>
+            <tbody>
+                {% for err in error_logs %}
+                    <tr>
+                        <td>{{ err.created_at.strftime("%d.%m.%Y %H:%M") }}</td>
+                        <td>{{ err.method or '' }} {{ err.path or '—' }}</td>
+                        <td>
+                            <details>
+                                <summary>{{ err.message[:120] }}</summary>
+                                {% if err.traceback %}<pre class="admin-error-traceback">{{ err.traceback }}</pre>{% endif %}
+                            </details>
+                        </td>
+                        <td>{{ err.user.username if err.user else '—' }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>Keine Fehler protokolliert.</p>
+    {% endif %}
+
     <h2>Konto-Wiederherstellungsanfragen</h2>
     {% if recovery_requests %}
         <table class="admin-table">

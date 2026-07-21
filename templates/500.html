@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Fehler - timeskip{% endblock %}
+{% block content %}
+    <div class="error-page">
+        <h1>Etwas ist schiefgelaufen</h1>
+        <p>Das war unerwartet -- unser Team wurde automatisch benachrichtigt. Bitte versuch es später erneut.</p>
+        <a href="{{ url_for('index') }}">Zurück zur Startseite</a>
+    </div>
+{% endblock %}

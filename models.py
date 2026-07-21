@@ -93,6 +93,21 @@ class AccountRecoveryRequest(db.Model):
     user = db.relationship("User")
 
 
+class ErrorLog(db.Model):
+    """One unhandled exception the live site hit -- caught by app.py's
+    global error handler and shown in the admin dashboard, so problems
+    (including things like a Groq outage/rate limit breaking the AI chat)
+    are visible instead of only living in server logs nobody is watching."""
+    id = db.Column(db.Integer, primary_key=True)
+    path = db.Column(db.String(255), nullable=True)
+    method = db.Column(db.String(10), nullable=True)
+    message = db.Column(db.Text, nullable=False)
+    traceback = db.Column(db.Text, nullable=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    user = db.relationship("User")
+
+
 class Subscription(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     subscriber_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)

@@ -9,6 +9,7 @@ import difflib
 import logging
 import smtplib
 import threading
+import traceback
 from email.mime.text import MIMEText
 from datetime import datetime, timezone, date, timedelta
 from zoneinfo import ZoneInfo
@@ -25,12 +26,14 @@ from flask import (
 )
 from sqlalchemy import text
 from werkzeug.utils import secure_filename
+from werkzeug.exceptions import HTTPException
 from models import (
     db, User, Pixel, Subscription, RedeemedCode,
     GamePlayCount, Sound, UserCreatedCode, Conversation, ConversationMember, Message,
     CoinflipDeposit, MemeTemplate, MemeLobby, MemeLobbyPlayer, MemeCreation, MemeVote,
     StudioProject, StudioBlock, StudioProjectLike, StudioProjectComment, StudioProjectReport,
     AiChatFeedback, AiChat, AiChatMessage, AiAdminFact, PasswordResetCode, AccountRecoveryRequest,
+    ErrorLog,
 )
 import ai_assistant
 
@@ -775,6 +778,42 @@ def require_admin():
     return user
 
 
+def log_error(message, path=None, method=None, tb=None, user_id=None):
+    """Shared by the global error handler below and the AI chat job's
+    failure path (a Groq outage/rate limit/bad key doesn't raise an
+    exception in a request handler -- it fails inside a background
+    thread), so both land in the same admin-visible log. Rolls back first
+    -- whatever failed may have left the session mid-transaction, and any
+    query (even an unrelated one) would otherwise fail too."""
+    try:
+        db.session.rollback()
+        db.session.add(ErrorLog(
+            path=path, method=method, message=str(message)[:2000],
+            traceback=(tb or "")[:8000], user_id=user_id,
+        ))
+        db.session.commit()
+    except Exception:
+        logger.exception("Fehler konnte nicht ins Fehlerprotokoll geschrieben werden.")
+
+
+@app.errorhandler(Exception)
+def handle_unexpected_error(exc):
+    # HTTPException subclasses (404, 403, the redirect-based onboarding
+    # gate, etc.) are expected control flow, not bugs -- only genuinely
+    # unhandled exceptions (which would otherwise be a bare 500) get
+    # logged here.
+    if isinstance(exc, HTTPException):
+        return exc
+    logger.exception("Unbehandelter Fehler bei %s %s", request.method, request.path)
+    db.session.rollback()
+    user = current_user()
+    log_error(
+        exc, path=request.path, method=request.method,
+        tb=traceback.format_exc(), user_id=user.id if user else None,
+    )
+    return render_template("500.html", user=user), 500
+
+
 MESSAGE_VIEW_TTL_SECONDS = 15
 MIN_GROUP_MEMBERS = 2
 MAX_GROUP_MEMBERS = 99
@@ -1480,6 +1519,7 @@ def api_ai_chat():
     chat.updated_at = datetime.now(timezone.utc)
     db.session.commit()
     chat_id_captured = chat.id
+    user_id_captured = user.id
 
     facts = [
         f.content for f in
@@ -1498,6 +1538,13 @@ def api_ai_chat():
                         if chat_row is not None:
                             chat_row.title = title
                             db.session.commit()
+            elif error:
+                # A Groq outage/rate limit/bad key fails silently from the
+                # user's perspective (they just see "KI gerade nicht
+                # verfügbar") -- this is the background-thread equivalent
+                # of the global error handler, since nothing here ever
+                # raises into a request handler for that to catch.
+                log_error(error, path="/api/ai/chat", method="POST", user_id=user_id_captured)
 
     job_id = ai_assistant.start_chat_job(
         message, context, history=history, project_type=project_type, facts=facts, on_done=on_done,
@@ -2654,10 +2701,11 @@ def admin_dashboard():
     admin_facts = AiAdminFact.query.order_by(AiAdminFact.created_at.desc()).all()
     recovery_requests = AccountRecoveryRequest.query.filter_by(status="pending") \
         .order_by(AccountRecoveryRequest.created_at.desc()).all()
+    error_logs = ErrorLog.query.order_by(ErrorLog.created_at.desc()).limit(100).all()
     return render_template(
         "admin.html", user=admin_user, users=users, games=games, online_status=online_status,
         reports=reports, meme_templates=meme_templates, ai_feedback=ai_feedback, admin_facts=admin_facts,
-        recovery_requests=recovery_requests,
+        recovery_requests=recovery_requests, error_logs=error_logs,
     )
 
 
@@ -2675,6 +2723,14 @@ def admin_delete_fact(fact_id):
     require_admin()
     fact = db.get_or_404(AiAdminFact, fact_id)
     db.session.delete(fact)
+    db.session.commit()
+    return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/admin/errors/clear", methods=["POST"])
+def admin_clear_errors():
+    require_admin()
+    ErrorLog.query.delete()
     db.session.commit()
     return redirect(url_for("admin_dashboard"))
 
