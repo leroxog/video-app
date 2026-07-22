@@ -433,7 +433,7 @@ SMTP_HOST = os.environ.get("SMTP_HOST")
 SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
 SMTP_USERNAME = os.environ.get("SMTP_USERNAME")
 SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD")
-SMTP_FROM_ADDRESS = os.environ.get("SMTP_FROM_ADDRESS") or SMTP_USERNAME
+SMTP_FROM_ADDRESS = os.environ.get("SMTP_FROM_ADDRESS") or SMTP_USERNAME or "timeskip_support@gmail.com"
 USE_SMTP = all([SMTP_HOST, SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM_ADDRESS])
 if not USE_SMTP:
     logger.warning(
@@ -606,6 +606,7 @@ def ensure_sqlite_columns_exist():
             ("region", "VARCHAR(100)"),
             ("region_skipped", "BOOLEAN NOT NULL DEFAULT 0"),
             ("guardian_email", "VARCHAR(255)"),
+            ("terms_accepted_at", "DATETIME"),
         ],
     }
     with db.engine.connect() as conn:
@@ -651,6 +652,7 @@ def ensure_columns_exist():
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS coinflip_coins INTEGER NOT NULL DEFAULT 1',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS coinflip_worker_count INTEGER NOT NULL DEFAULT 0',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS coinflip_rebirths INTEGER NOT NULL DEFAULT 0',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMP',
         'ALTER TABLE "user" ALTER COLUMN total_score TYPE BIGINT',
         'ALTER TABLE "user" ALTER COLUMN points_earned_today TYPE BIGINT',
         'ALTER TABLE "user" ALTER COLUMN organic_points_earned TYPE BIGINT',
@@ -870,10 +872,35 @@ def update_last_seen():
         db.session.commit()
 
 
+TERMS_ALLOWED_ENDPOINTS = {
+    "terms_page", "terms_accept", "terms_decline", "terms_declined_page",
+    "logout", "static", "service_worker", "offline_page",
+}
+
+
+@app.before_request
+def require_terms_acceptance():
+    """Shown before anything else on the site, for every visitor -- logged
+    in or not. Acceptance is tracked per-account (User.terms_accepted_at)
+    once logged in, or per-browser-session before that; declining logs a
+    logged-in user out too, since continuing a session while "not
+    agreeing" would be contradictory."""
+    if request.endpoint is None or request.endpoint in TERMS_ALLOWED_ENDPOINTS:
+        return
+    if request.path.startswith("/api/"):
+        return  # redirecting a JSON/fetch call to an HTML page makes no sense
+    user = current_user()
+    if user is not None:
+        if user.terms_accepted_at is None:
+            return redirect(url_for("terms_page"))
+    elif not session.get("terms_accepted"):
+        return redirect(url_for("terms_page"))
+
+
 PROFILE_COMPLETION_ALLOWED_ENDPOINTS = {
     "complete_profile", "logout", "login", "register", "static",
     "service_worker", "offline_page",
-}
+} | TERMS_ALLOWED_ENDPOINTS
 
 
 @app.before_request
@@ -885,6 +912,42 @@ def require_profile_completion():
     user = current_user()
     if user is not None and user_needs_onboarding(user):
         return redirect(url_for("complete_profile"))
+
+
+@app.route("/terms")
+def terms_page():
+    return render_template("terms.html", user=current_user())
+
+
+@app.route("/terms/accept", methods=["POST"])
+def terms_accept():
+    user = current_user()
+    if user is not None:
+        user.terms_accepted_at = datetime.now(timezone.utc)
+        db.session.commit()
+    else:
+        session["terms_accepted"] = True
+    return redirect(url_for("index"))
+
+
+@app.route("/terms/decline", methods=["POST"])
+def terms_decline():
+    session.pop("user_id", None)
+    session.pop("terms_accepted", None)
+    return redirect(url_for("terms_declined_page"))
+
+
+@app.route("/terms/declined")
+def terms_declined_page():
+    return render_template("terms_declined.html", user=None)
+
+
+@app.route("/agb")
+def agb_page():
+    # Retired in favor of the comprehensive /terms page -- kept as a
+    # redirect so old links (e.g. in the Web-in-Web-App editor settings
+    # panel) don't break.
+    return redirect(url_for("terms_page"))
 
 
 @app.route("/service-worker.js")
@@ -1884,11 +1947,6 @@ def studio_webapp_view(slug):
     response.headers["Content-Security-Policy"] = "frame-ancestors 'none'"
     response.headers["X-Frame-Options"] = "DENY"
     return response
-
-
-@app.route("/agb")
-def agb_page():
-    return render_template("agb.html", user=current_user())
 
 
 @app.route("/api/studio/<int:project_id>/award", methods=["POST"])

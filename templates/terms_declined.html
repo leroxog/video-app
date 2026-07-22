@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Nutzungsbedingungen abgelehnt - timeskip{% endblock %}
+{% block content %}
+    <div class="terms-page terms-declined-page">
+        <h1>Sie haben die Nutzungsbedingungen abgelehnt</h1>
+        <p>
+            Sie werden Ihren timeskip-Account solange nicht nutzen können, bis Sie den Nutzungsbedingungen wieder
+            zustimmen. Das hat unter anderem auch damit zu tun, dass wir ab dem Zeitpunkt weder Verantwortung für
+            Sie übernehmen können, noch Ihnen die Nutzung unseres Dienstes gewährleisten müssen.
+        </p>
+        <p>
+            Wenn Sie uns mitteilen möchten, warum Sie nicht zustimmen möchten, schreiben Sie uns gerne eine
+            E-Mail:
+        </p>
+        <p>
+            <a class="terms-support-mail" href="mailto:timeskip_support@gmail.com?subject=Nutzungsbedingungen%20nicht%20akzeptiert&amp;body=Ich%20m%C3%B6chte%20den%20Nutzungsbedingungen%20nicht%20zustimmen%2C%20weil%3A%20">
+                timeskip_support@gmail.com
+            </a>
+        </p>
+        <p>Wenn Sie es sich anders überlegt haben, können Sie die Nutzungsbedingungen jederzeit erneut ansehen und akzeptieren.</p>
+        <a class="terms-review-again-btn" href="{{ url_for('terms_page') }}">Nutzungsbedingungen erneut ansehen</a>
+    </div>
+{% endblock %}

@@ -36,6 +36,7 @@ class User(db.Model):
     coinflip_coins = db.Column(db.Integer, nullable=False, default=1)
     coinflip_worker_count = db.Column(db.Integer, nullable=False, default=0)
     coinflip_rebirths = db.Column(db.Integer, nullable=False, default=0)
+    terms_accepted_at = db.Column(db.DateTime, nullable=True)
     sounds_uploaded = db.relationship("Sound", backref="uploader", lazy=True, cascade="all, delete-orphan")
     subscriptions_made = db.relationship(
         "Subscription",

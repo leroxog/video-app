@@ -31,7 +31,14 @@ def client():
 
     with flask_app.app_context():
         db.create_all()
-        yield flask_app.test_client()
+        test_client = flask_app.test_client()
+        # Nearly every existing test predates the terms-of-service gate and
+        # assumes gate-free browsing, mirroring a returning visitor who has
+        # already accepted. Tests that specifically exercise the gate itself
+        # use raw_client below instead.
+        with test_client.session_transaction() as sess:
+            sess["terms_accepted"] = True
+        yield test_client
         db.drop_all()
 
     shutil.rmtree(upload_dir, ignore_errors=True)
@@ -39,7 +46,17 @@ def client():
     shutil.rmtree(sound_dir, ignore_errors=True)
 
 
+@pytest.fixture
+def raw_client(client):
+    """A client fixture without the pre-accepted terms-of-service session
+    flag, for tests that exercise the gate itself."""
+    with client.session_transaction() as sess:
+        sess.pop("terms_accepted", None)
+    return client
+
+
 def register(client, username="alice", password="secret123", birthdate="2005-01-01", extra=None):
+    client.post("/terms/accept")
     data = {
         "username": username,
         "password": password,
@@ -52,7 +69,11 @@ def register(client, username="alice", password="secret123", birthdate="2005-01-
     }
     if extra:
         data.update(extra)
-    return client.post("/register", data=data, follow_redirects=True)
+    response = client.post("/register", data=data)
+    if response.status_code in (301, 302, 303, 307, 308):
+        client.post("/terms/accept")
+        response = client.get(response.headers["Location"], follow_redirects=True)
+    return response
 
 
 def make_admin(username):
@@ -3334,5 +3355,76 @@ def test_ai_job_failure_is_logged_to_error_log(client, monkeypatch):
     assert status_data["status"] == "error"
     assert ErrorLog.query.count() == 1
     assert "Groq ist down" in ErrorLog.query.first().message
+
+
+def test_anonymous_visitor_is_gated_by_terms_before_anything_else(raw_client):
+    response = raw_client.get("/", follow_redirects=False)
+    assert response.status_code == 302
+    assert "/terms" in response.headers["Location"]
+
+    response2 = raw_client.get("/register", follow_redirects=False)
+    assert response2.status_code == 302
+    assert "/terms" in response2.headers["Location"]
+
+
+def test_terms_page_itself_is_reachable_without_accepting(raw_client):
+    response = raw_client.get("/terms")
+    assert response.status_code == 200
+    assert "Nutzungsbedingungen".encode() in response.data
+
+
+def test_terms_accept_unblocks_anonymous_session(raw_client):
+    accept_res = raw_client.post("/terms/accept", follow_redirects=True)
+    assert accept_res.status_code == 200
+
+    response = raw_client.get("/", follow_redirects=False)
+    assert response.status_code == 200
+
+
+def test_api_endpoints_not_blocked_by_terms_gate(raw_client):
+    response = raw_client.get("/api/my-stats")
+    assert response.status_code != 302
+
+
+def test_register_sets_terms_accepted_at_for_new_account(client):
+    register(client, username="termsuser")
+    user = User.query.filter_by(username="termsuser").first()
+    assert user.terms_accepted_at is not None
+
+
+def test_terms_decline_logs_out_and_redirects_to_declined_page(client):
+    register(client, username="declineuser")
+
+    response = client.post("/terms/decline", follow_redirects=False)
+    assert response.status_code == 302
+    assert "/terms/declined" in response.headers["Location"]
+
+    declined_page = client.get(response.headers["Location"])
+    assert declined_page.status_code == 200
+    assert "timeskip_support@gmail.com".encode() in declined_page.data
+
+    stats_res = client.get("/api/my-stats")
+    assert stats_res.status_code == 401
+
+
+def test_existing_account_without_terms_accepted_is_gated_on_next_visit(client):
+    register(client, username="legacyuser")
+    user = User.query.filter_by(username="legacyuser").first()
+    user.terms_accepted_at = None
+    db.session.commit()
+
+    response = client.get("/games", follow_redirects=False)
+    assert response.status_code == 302
+    assert "/terms" in response.headers["Location"]
+
+    client.post("/terms/accept")
+    response2 = client.get("/games")
+    assert response2.status_code == 200
+
+
+def test_agb_redirects_to_terms_page(client):
+    response = client.get("/agb", follow_redirects=False)
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/terms")
 
 
