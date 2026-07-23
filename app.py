@@ -382,6 +382,7 @@ app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-change-in-production")
 app.config["MAX_CONTENT_LENGTH"] = 200 * 1024 * 1024  # 200 MB pro Upload
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
 
 UPLOAD_FOLDER = os.path.join(app.root_path, "static", "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -870,6 +871,17 @@ def update_last_seen():
     if last_seen is None or (now - last_seen).total_seconds() >= LAST_SEEN_UPDATE_THROTTLE_SECONDS:
         user.last_seen = now
         db.session.commit()
+
+
+@app.before_request
+def _make_session_permanent():
+    # Without this, Flask issues a session cookie that expires as soon as
+    # the browser is closed -- on mobile in particular that meant users got
+    # logged out constantly (backgrounding the browser, restarting the
+    # phone, etc.). Marking the session permanent + a long lifetime above
+    # gives it a real expiry date instead, and Flask refreshes that expiry
+    # on every request by default, so active users effectively never expire.
+    session.permanent = True
 
 
 TERMS_ALLOWED_ENDPOINTS = {
