@@ -459,6 +459,16 @@ def send_email(to_address, subject, body):
         server.sendmail(SMTP_FROM_ADDRESS, [to_address], message.as_string())
 
 
+def send_email_best_effort(to_address, subject, body):
+    """Like send_email, but a delivery failure (or SMTP simply not being
+    configured) never blocks the caller's primary action -- registering,
+    closing an account, etc. still succeed either way, it's just logged."""
+    try:
+        send_email(to_address, subject, body)
+    except Exception:
+        logger.exception("E-Mail an %s konnte nicht verschickt werden.", to_address)
+
+
 LOCAL_MEDIA_FOLDERS = {
     "posts": "UPLOAD_FOLDER",
     "profile_pics": "PROFILE_PIC_FOLDER",
@@ -1075,8 +1085,25 @@ def register():
         user = User(username=username, birthdate=birthdate, gender=gender)
         user.set_password(password)
         apply_onboarding_fields(user, onboarding)
+        # Reaching this form at all already required accepting the terms
+        # gate as an anonymous visitor (it blocks GET /register otherwise)
+        # -- carry that acceptance onto the new account itself, or the
+        # terms gate would immediately re-trigger on the very next request
+        # since a fresh User's terms_accepted_at is still None.
+        user.terms_accepted_at = datetime.now(timezone.utc)
         db.session.add(user)
         db.session.commit()
+        # The only e-mail actually collected during registration itself is
+        # the guardian's (the account owner's own address is set later, in
+        # account settings) -- so that's who gets the welcome notice here.
+        if user.guardian_email:
+            send_email_best_effort(
+                user.guardian_email, "Willkommen bei timeskip",
+                f"Hallo,\n\n"
+                f"für {user.username} wurde gerade ein timeskip-Konto erstellt. Diese E-Mail-Adresse "
+                "wurde bei der Registrierung als Kontakt eines Erziehungsberechtigten angegeben.\n\n"
+                "Das timeskip-Team",
+            )
         session["user_id"] = user.id
         return redirect(url_for("index"))
     return render_template("register.html")
@@ -2597,6 +2624,14 @@ def update_email():
 
     user.email = email
     db.session.commit()
+    send_email_best_effort(
+        email, "E-Mail-Adresse bei timeskip hinterlegt",
+        f"Hallo {user.username},\n\n"
+        "diese E-Mail-Adresse wurde gerade bei deinem timeskip-Konto hinterlegt. Über sie "
+        "kannst du ab jetzt z. B. dein Passwort zurücksetzen, falls du es einmal vergisst.\n\n"
+        "Wenn du das nicht warst, ändere bitte umgehend dein Passwort.\n\n"
+        "Das timeskip-Team",
+    )
     flash("E-Mail-Adresse gespeichert.")
     return redirect(url_for("account_settings"))
 
@@ -2831,6 +2866,16 @@ def admin_delete_user(user_id):
     target = db.get_or_404(User, user_id)
     if target.id == admin_user.id:
         abort(400)
+
+    if target.email:
+        send_email_best_effort(
+            target.email, "Dein timeskip-Konto wurde geschlossen",
+            f"Hallo {target.username},\n\n"
+            "dein timeskip-Konto wurde von einem Administrator geschlossen.\n\n"
+            "Falls du glaubst, dass das zu Unrecht geschehen ist, kannst du uns unter "
+            "timeskip_support@gmail.com kontaktieren.\n\n"
+            "Das timeskip-Team",
+        )
 
     if target.profile_image:
         delete_media("profile_pics", target.profile_image)

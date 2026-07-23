@@ -3392,6 +3392,21 @@ def test_register_sets_terms_accepted_at_for_new_account(client):
     assert user.terms_accepted_at is not None
 
 
+def test_fresh_registration_does_not_immediately_re_gate_on_terms(raw_client):
+    raw_client.post("/terms/accept")
+    params = {
+        "username": "nogateloop", "password": "secret123", "password2": "secret123",
+        "birthdate": "1990-01-01", "gender": "keine_angabe", "purpose_of_use": "private",
+        "country": "Deutschland", "region_skipped": "1",
+    }
+    register_res = raw_client.post("/register", data=params)
+    assert register_res.status_code == 302
+    assert "/terms" not in register_res.headers["Location"]
+
+    response = raw_client.get("/games", follow_redirects=False)
+    assert response.status_code == 200
+
+
 def test_terms_decline_logs_out_and_redirects_to_declined_page(client):
     register(client, username="declineuser")
 
@@ -3426,5 +3441,85 @@ def test_agb_redirects_to_terms_page(client):
     response = client.get("/agb", follow_redirects=False)
     assert response.status_code == 302
     assert response.headers["Location"].endswith("/terms")
+
+
+def test_registration_with_guardian_email_sends_welcome_notice(client, monkeypatch):
+    import app as app_module
+
+    sent = []
+    monkeypatch.setattr(app_module, "send_email", lambda to, subject, body: sent.append((to, subject, body)))
+
+    register(client, username="kiduser", extra={"guardian_email": "parent@example.com"})
+
+    assert len(sent) == 1
+    assert sent[0][0] == "parent@example.com"
+    assert "Willkommen" in sent[0][1]
+
+
+def test_registration_without_guardian_email_sends_no_welcome_notice(client, monkeypatch):
+    import app as app_module
+
+    sent = []
+    monkeypatch.setattr(app_module, "send_email", lambda to, subject, body: sent.append((to, subject, body)))
+
+    register(client, username="noguardianuser")
+
+    assert len(sent) == 0
+
+
+def test_saving_account_email_sends_confirmation_notice(client, monkeypatch):
+    import app as app_module
+
+    sent = []
+    monkeypatch.setattr(app_module, "send_email", lambda to, subject, body: sent.append((to, subject, body)))
+
+    register(client, username="emailsaver")
+    response = client.post(
+        "/account/email", data={"email": "emailsaver@example.com"}, follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert User.query.filter_by(username="emailsaver").first().email == "emailsaver@example.com"
+
+    assert len(sent) == 1
+    assert sent[0][0] == "emailsaver@example.com"
+    assert "hinterlegt" in sent[0][1]
+
+
+def test_admin_deleting_account_notifies_the_users_email(client, monkeypatch):
+    import app as app_module
+
+    sent = []
+    monkeypatch.setattr(app_module, "send_email", lambda to, subject, body: sent.append((to, subject, body)))
+
+    register(client, username="boss")
+    make_admin("boss")
+    client.post("/admin/users", data={"username": "throwaway", "password": "secret123"})
+    target = User.query.filter_by(username="throwaway").first()
+    target.email = "throwaway@example.com"
+    db.session.commit()
+
+    response = client.post(f"/admin/users/{target.id}/delete", follow_redirects=True)
+    assert response.status_code == 200
+    assert User.query.filter_by(username="throwaway").first() is None
+
+    assert len(sent) == 1
+    assert sent[0][0] == "throwaway@example.com"
+    assert "geschlossen" in sent[0][1]
+
+
+def test_admin_deleting_account_without_email_sends_no_notification(client, monkeypatch):
+    import app as app_module
+
+    sent = []
+    monkeypatch.setattr(app_module, "send_email", lambda to, subject, body: sent.append((to, subject, body)))
+
+    register(client, username="boss2")
+    make_admin("boss2")
+    client.post("/admin/users", data={"username": "noemailuser", "password": "secret123"})
+    target = User.query.filter_by(username="noemailuser").first()
+
+    response = client.post(f"/admin/users/{target.id}/delete", follow_redirects=True)
+    assert response.status_code == 200
+    assert len(sent) == 0
 
 
