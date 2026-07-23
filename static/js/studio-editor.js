@@ -25,6 +25,12 @@
     const codePanelResize = document.getElementById("studioCodePanelResize");
     const translationBtn = document.getElementById("studioTranslationBtn");
     const translationBar = document.getElementById("studioTranslationBar");
+    const settingsBtn = document.getElementById("studioSettingsBtn");
+    const settingsPanel = document.getElementById("studioSettingsPanel");
+    const settingsCloseBtn = document.getElementById("studioSettingsCloseBtn");
+    const iconInput = document.getElementById("studioIconInput");
+    const iconPreview = document.getElementById("studioIconPreview");
+    const iconNote = document.getElementById("studioIconNote");
 
     let blocks = [];
     let selectedId = null;
@@ -588,6 +594,28 @@
         });
         codePanelResize.addEventListener("pointerup", () => { resizing = false; });
     })();
+
+    settingsBtn.addEventListener("click", () => { settingsPanel.style.display = "flex"; });
+    settingsCloseBtn.addEventListener("click", () => { settingsPanel.style.display = "none"; });
+
+    iconInput.addEventListener("change", () => {
+        const file = iconInput.files[0];
+        if (!file) return;
+        iconNote.textContent = "Wird hochgeladen …";
+        const formData = new FormData();
+        formData.append("icon", file);
+        fetch(`/api/studio/${projectId}/icon`, { method: "POST", body: formData })
+            .then((res) => res.json())
+            .then((data) => {
+                if (!data.ok) {
+                    iconNote.textContent = data.message || "Das Symbol konnte nicht hochgeladen werden.";
+                    return;
+                }
+                iconPreview.innerHTML = `<img src="${data.icon_url}" alt="">`;
+                iconNote.textContent = "Gespeichert!";
+            })
+            .catch(() => { iconNote.textContent = "Fehler beim Hochladen."; });
+    });
 
     loadState();
 })();

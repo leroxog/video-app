@@ -407,11 +407,18 @@ def test_games_page_accessible_without_login_and_lists_published_studio_games(cl
     assert b"Testspiel" in response.data
 
 
-def test_bottom_nav_has_apps_and_plus_buttons(client):
+def test_bottom_nav_has_apps_plus_and_library_buttons(client):
     response = client.get("/")
     assert b"bottom-nav-apps-btn" in response.data
     assert b"bottom-nav-plus" in response.data
-    assert b"bottom-nav-avatar" in response.data
+    assert b"bottom-nav-library-btn" in response.data
+
+
+def test_header_shows_account_avatar_link_when_logged_in(client):
+    register(client, username="headertest")
+    response = client.get("/")
+    assert "header-account-avatar".encode() in response.data
+    assert b'href="/user/headertest"' in response.data
 
 
 def test_redeem_code_awards_points(client):
@@ -2532,6 +2539,26 @@ def test_legacy_game_card_links_to_its_own_route_not_studio_play(client):
     assert b'href="/fruitmerge"' in response.data
 
 
+def test_legacy_game_card_is_installable_like_an_app(client):
+    import app as app_module
+
+    with flask_app.app_context():
+        app_module.ensure_lerox_builtin_games()
+
+    response = client.get("/games")
+    assert b'class="game-card game-card-installable"' in response.data
+    assert b'data-app-url="/fruitmerge"' in response.data
+    assert "Laden".encode() in response.data
+
+
+def test_studio_game_card_is_installable_like_an_app(client):
+    register(client)
+    project = publish_studio_project(client)
+
+    response = client.get("/games")
+    assert f'data-app-url="/studio/play/{project.id}"'.encode() in response.data
+
+
 def publish_studio_project(client):
     create_studio_project(client)
     project = StudioProject.query.filter_by(name="Testspiel").first()
@@ -2895,7 +2922,9 @@ def test_webapp_icon_upload_requires_ownership(client):
     assert response.status_code == 403
 
 
-def test_game_project_cannot_upload_icon(client):
+def test_game_project_can_also_upload_icon(client):
+    # Games and Web-in-Web-Apps get the same app-store treatment -- both
+    # can have an icon, both render as installable cards.
     register(client)
     create_studio_project(client)
     project = StudioProject.query.filter_by(name="Testspiel").first()
@@ -2904,7 +2933,10 @@ def test_game_project_cannot_upload_icon(client):
     response = client.post(
         f"/api/studio/{project.id}/icon", data=data, content_type="multipart/form-data",
     )
-    assert response.status_code == 400
+    body = response.get_json()
+    assert response.status_code == 200
+    assert body["ok"] is True
+    assert db.session.get(StudioProject, project.id).icon_image is not None
 
 
 def test_webapp_slug_must_be_valid_and_unique(client):
@@ -3489,6 +3521,12 @@ def test_existing_account_without_terms_accepted_is_gated_on_next_visit(client):
     client.post("/terms/accept")
     response2 = client.get("/games")
     assert response2.status_code == 200
+
+
+def test_library_page_loads(client):
+    response = client.get("/library")
+    assert response.status_code == 200
+    assert "Bibliothek".encode() in response.data
 
 
 def test_agb_redirects_to_terms_page(client):

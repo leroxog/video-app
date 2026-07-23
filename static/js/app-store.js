@@ -14,10 +14,14 @@
         }
     }
 
-    function markInstalled(slug) {
+    function isInstalled(key) {
+        return getInstalled().some((item) => item.url === key);
+    }
+
+    function markInstalled(item) {
         const installed = getInstalled();
-        if (!installed.includes(slug)) {
-            installed.push(slug);
+        if (!installed.some((existing) => existing.url === item.url)) {
+            installed.push(item);
             localStorage.setItem(STORAGE_KEY, JSON.stringify(installed));
         }
     }
@@ -27,13 +31,46 @@
         button.textContent = label;
     }
 
+    // A Web-in-Web-App's whole page is one self-contained document (its
+    // code runs from an inline srcdoc iframe), so caching that one URL is
+    // enough. A game's page instead pulls in separate JS/CSS files -- those
+    // need caching too, or the page loads offline but renders broken.
+    function extractSameOriginAssetUrls(html) {
+        const doc = new DOMParser().parseFromString(html, "text/html");
+        const urls = [];
+        doc.querySelectorAll('script[src], link[rel="stylesheet"][href]').forEach((el) => {
+            const src = el.getAttribute("src") || el.getAttribute("href");
+            if (src && src.startsWith("/static/")) urls.push(src);
+        });
+        return urls;
+    }
+
+    function installUrl(url) {
+        return caches.open(CACHE_NAME).then((cache) =>
+            fetch(url).then((response) => {
+                if (!response.ok) throw new Error("Netzwerkantwort war nicht ok.");
+                const stored = response.clone();
+                return response.text().then((html) => {
+                    cache.put(url, stored);
+                    const assetUrls = extractSameOriginAssetUrls(html);
+                    return Promise.all(assetUrls.map((assetUrl) =>
+                        fetch(assetUrl)
+                            .then((assetResponse) => {
+                                if (assetResponse.ok) cache.put(assetUrl, assetResponse);
+                            })
+                            .catch(() => {})
+                    ));
+                });
+            })
+        );
+    }
+
     function initCard(card) {
         const button = card.querySelector(".game-card-app-action");
-        const slug = card.dataset.appSlug;
         const url = card.dataset.appUrl;
-        if (!button || !slug || !url) return;
+        if (!button || !url) return;
 
-        if (getInstalled().includes(slug)) {
+        if (isInstalled(url)) {
             setButtonState(button, "open", "Öffnen");
         }
 
@@ -51,10 +88,13 @@
                 setTimeout(() => setButtonState(button, "download", "Laden"), 2500);
                 return;
             }
-            caches.open(CACHE_NAME)
-                .then((cache) => cache.add(url))
+            installUrl(url)
                 .then(() => {
-                    markInstalled(slug);
+                    markInstalled({
+                        url: url,
+                        name: card.dataset.appName || url,
+                        iconUrl: card.dataset.appIcon || null,
+                    });
                     setButtonState(button, "open", "Öffnen");
                 })
                 .catch(() => {
@@ -64,5 +104,5 @@
         });
     }
 
-    document.querySelectorAll(".game-card-webapp").forEach(initCard);
+    document.querySelectorAll(".game-card-installable").forEach(initCard);
 })();

@@ -50,6 +50,28 @@
                 <a href="{{ url_for('login') }}">Login</a>
                 <a href="{{ url_for('register') }}">Registrieren</a>
             </nav>
+        {% else %}
+            <div class="header-account-wrap">
+                <a class="header-account-avatar" href="{{ url_for('profile', username=user.username) }}" title="Profil">
+                    {% if user.profile_image %}
+                        <img src="{{ media_url('profile_pics', user.profile_image) }}" alt="">
+                    {% else %}
+                        <span class="header-account-avatar-placeholder">{{ user.username[0]|upper }}</span>
+                    {% endif %}
+                </a>
+                <div class="stats-bubble" id="statsBubble" style="display:none;">
+                    <span class="stats-bubble-item">
+                        <span class="stats-bubble-count" id="statsGamesCount">0</span>
+                        <span class="stats-bubble-word">Spiele</span>
+                    </span>
+                    <span class="stats-bubble-sep">&middot;</span>
+                    <span class="stats-bubble-item">
+                        <span class="stats-bubble-count" id="statsFollowersCount">0</span>
+                        <svg class="stats-bubble-icon" viewBox="0 0 16 16"><circle cx="8" cy="5" r="3" fill="currentColor"/><path d="M2 15 a6 6 0 0 1 12 0 Z" fill="currentColor"/></svg>
+                    </span>
+                    <div class="stats-bubble-tail"></div>
+                </div>
+            </div>
         {% endif %}
     </header>
 
@@ -81,29 +103,12 @@
             <svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 4 V20 M4 12 H20" stroke="#0f0f0f" stroke-width="3" stroke-linecap="round"/></svg>
         </a>
 
-        <div class="bottom-nav-avatar-wrap">
-            <a class="bottom-nav-avatar" href="{{ url_for('profile', username=user.username) if user else url_for('login') }}" title="Profil" data-nav-active="{{ url_for('profile', username=user.username) if user else '' }}">
-                {% if user and user.profile_image %}
-                    <img src="{{ media_url('profile_pics', user.profile_image) }}" alt="">
-                {% else %}
-                    <span class="bottom-nav-avatar-placeholder">{{ user.username[0]|upper if user else '?' }}</span>
-                {% endif %}
-            </a>
-            {% if user %}
-                <div class="stats-bubble" id="statsBubble" style="display:none;">
-                    <span class="stats-bubble-item">
-                        <span class="stats-bubble-count" id="statsGamesCount">0</span>
-                        <span class="stats-bubble-word">Spiele</span>
-                    </span>
-                    <span class="stats-bubble-sep">&middot;</span>
-                    <span class="stats-bubble-item">
-                        <span class="stats-bubble-count" id="statsFollowersCount">0</span>
-                        <svg class="stats-bubble-icon" viewBox="0 0 16 16"><circle cx="8" cy="5" r="3" fill="currentColor"/><path d="M2 15 a6 6 0 0 1 12 0 Z" fill="currentColor"/></svg>
-                    </span>
-                    <div class="stats-bubble-tail"></div>
-                </div>
-            {% endif %}
-        </div>
+        <a class="bottom-nav-library-btn" href="{{ url_for('library_page') }}" title="Bibliothek" data-nav-active="{{ url_for('library_page') }}">
+            <svg viewBox="0 0 24 24" width="20" height="20">
+                <path d="M12 6.5 C10.5 5 8 4.3 4 4.3 V18 C8 18 10.5 18.7 12 20.2 C13.5 18.7 16 18 20 18 V4.3 C16 4.3 13.5 5 12 6.5 Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+                <path d="M12 6.5 V20.2" stroke="currentColor" stroke-width="1.6"/>
+            </svg>
+        </a>
     </div>
 
     {% if user %}
@@ -168,7 +173,7 @@
             });
 
             const pressable = document.querySelectorAll(
-                ".bottom-nav-apps-btn, .bottom-nav-plus, .bottom-nav-avatar"
+                ".bottom-nav-apps-btn, .bottom-nav-plus, .bottom-nav-library-btn"
             );
             pressable.forEach((el) => {
                 const press = () => el.classList.add("bottom-nav-pressed");

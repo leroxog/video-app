@@ -502,15 +502,7 @@ main {
     z-index: 200;
 }
 
-.bottom-nav-avatar-wrap {
-    position: relative;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    flex-shrink: 0;
-}
-
-.bottom-nav-message-btn, .bottom-nav-heart-btn, .bottom-nav-apps-btn, .bottom-nav-camera-btn {
+.bottom-nav-message-btn, .bottom-nav-heart-btn, .bottom-nav-apps-btn, .bottom-nav-camera-btn, .bottom-nav-library-btn {
     width: 34px;
     height: 34px;
     border-radius: 50%;
@@ -521,9 +513,19 @@ main {
     flex-shrink: 0;
 }
 
-.bottom-nav-avatar {
-    width: 34px;
-    height: 34px;
+/* Account avatar + its stats bubble now live in the header (top-right),
+   not the bottom nav -- the bottom nav slot they used to occupy is now
+   the "Bibliothek" link instead. */
+.header-account-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.header-account-avatar {
+    width: 38px;
+    height: 38px;
     border-radius: 50%;
     overflow: hidden;
     display: flex;
@@ -531,13 +533,25 @@ main {
     justify-content: center;
     background: var(--glass-bg-strong);
     flex-shrink: 0;
+    text-decoration: none;
+}
+
+.header-account-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.header-account-avatar-placeholder {
+    color: #fff;
+    font-weight: 700;
+    font-size: 0.95rem;
 }
 
 .stats-bubble {
     position: absolute;
-    bottom: calc(100% + 14px);
-    left: 50%;
-    transform: translateX(-50%);
+    top: calc(100% + 14px);
+    right: 0;
     align-items: center;
     gap: 0.35rem;
     padding: 0.4rem 0.7rem;
@@ -573,26 +587,13 @@ main {
 
 .stats-bubble-tail {
     position: absolute;
-    top: 100%;
-    left: 50%;
-    transform: translateX(-50%);
+    bottom: 100%;
+    right: 14px;
     width: 0;
     height: 0;
     border-left: 6px solid transparent;
     border-right: 6px solid transparent;
-    border-top: 7px solid #3ea6ff;
-}
-
-.bottom-nav-avatar img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-.bottom-nav-avatar-placeholder {
-    color: var(--text-primary);
-    font-weight: 700;
-    font-size: 0.9rem;
+    border-bottom: 7px solid #3ea6ff;
 }
 
 .bottom-nav-plus {
@@ -5835,7 +5836,7 @@ body.studio-fullscreen {
     font-weight: 700;
     font-size: 0.85rem;
     cursor: pointer;
-    background: var(--gradient-primary);
+    background: var(--accent-blue);
     color: #fff;
 }
 
@@ -5852,6 +5853,24 @@ body.studio-fullscreen {
 .game-card-app-action[data-state="error"] {
     background: #3c1c1c;
     color: #ff9f6b;
+}
+
+.game-card-library-actions {
+    display: flex;
+}
+
+.game-card-library-actions .game-card-app-action {
+    flex: 1 1 auto;
+}
+
+.game-card-library-remove {
+    flex-shrink: 0;
+    border: none;
+    background: var(--panel-bg-solid);
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    padding: 0.6rem 0.8rem;
+    cursor: pointer;
 }
 
 @media (max-width: 640px) {

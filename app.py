@@ -1363,6 +1363,15 @@ def games_page():
     return render_template("games.html", user=user, studio_games=studio_games, query=query)
 
 
+@app.route("/library")
+def library_page():
+    """Games and Web-in-Web-Apps the visitor has "geladen" (installed for
+    offline use) -- entirely client-rendered from the browser's own
+    localStorage, since that's where the installed-state and the cached
+    pages themselves actually live. See static/js/library.js."""
+    return render_template("library.html", user=current_user())
+
+
 STUDIO_DEFAULT_BLOCK_NAME = "Part1"
 STUDIO_SPAWN_BLOCK_NAME = "SpawnPart"
 STUDIO_BLOCK_KINDS = {"normal", "checkpoint"}
@@ -1815,16 +1824,16 @@ def api_studio_update_web_slug(project_id):
 
 @app.route("/api/studio/<int:project_id>/icon", methods=["POST"])
 def api_studio_upload_icon(project_id):
-    """App-store-style icon for a Web-in-Web-App, shown on its card wherever
-    project cards are listed instead of the generic globe placeholder."""
+    """App-store-style icon for a studio project (game or Web-in-Web-App
+    alike -- both render as the same kind of app-store card), shown on its
+    card wherever project cards are listed instead of the generic
+    placeholder icon."""
     user = current_user()
     if user is None:
         return jsonify({"ok": False, "error": "not_logged_in"}), 401
     project = db.get_or_404(StudioProject, project_id)
     if project.owner_id != user.id:
         return jsonify({"ok": False, "error": "forbidden"}), 403
-    if project.project_type != "webapp":
-        return jsonify({"ok": False, "error": "wrong_project_type"}), 400
 
     file = request.files.get("icon")
     if not file or file.filename == "":

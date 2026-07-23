@@ -8,6 +8,7 @@
             <span class="studio-editor-title">{{ project.name }}</span>
             <div class="studio-editor-topbar-actions">
                 <a class="studio-editor-help-btn" href="{{ url_for('studio_help_page') }}" target="_blank" title="Hilfe zu den Programmiersprachen">?</a>
+                <button type="button" id="studioSettingsBtn" class="studio-editor-help-btn" title="Einstellungen">&#9881;</button>
                 <button type="button" id="studioToggleCodeBtn" class="studio-editor-code-toggle-btn">Programmierung</button>
                 <a class="studio-editor-play-btn" href="{{ url_for('studio_play_page', project_id=project.id) }}" target="_blank">Testen</a>
                 <form action="{{ url_for('studio_publish_project', project_id=project.id) }}" method="post">
@@ -53,6 +54,29 @@
 
     <div class="studio-context-menu" id="studioContextMenu" style="display:none;">
         <button type="button" id="studioContextDeleteBtn">Teil löschen</button>
+    </div>
+
+    <div class="webapp-settings-panel" id="studioSettingsPanel" style="display:none;">
+        <div class="webapp-settings-box">
+            <div class="webapp-settings-header">
+                <span>Einstellungen</span>
+                <button type="button" id="studioSettingsCloseBtn">&times;</button>
+            </div>
+            <label>App-Symbol</label>
+            <div class="webapp-icon-row">
+                <div class="webapp-icon-preview" id="studioIconPreview">
+                    {% if project.icon_image %}
+                        <img src="{{ media_url('app_icons', project.icon_image) }}" alt="">
+                    {% else %}
+                        <span>🎮</span>
+                    {% endif %}
+                </div>
+                <div class="webapp-icon-upload-col">
+                    <input type="file" id="studioIconInput" accept="image/png,image/jpeg,image/gif,image/webp">
+                    <p class="webapp-icon-note" id="studioIconNote">Wird im App Store als dein App-Symbol angezeigt.</p>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="studio-code-panel" id="studioCodePanel">
