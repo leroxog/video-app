@@ -288,6 +288,9 @@ class StudioProject(db.Model):
     script_code = db.Column(db.Text, nullable=True)
     web_code = db.Column(db.Text, nullable=True)
     web_slug = db.Column(db.String(50), nullable=True, unique=True)
+    # App-store-style icon for a Web-in-Web-App -- shown on its card instead
+    # of the generic globe placeholder, wherever project cards are listed.
+    icon_image = db.Column(db.String(255), nullable=True)
     # Which syntax dialect script_code is written in -- "timeskipcode" (our
     # own, recommended) or one of the HTML/Python/C#-flavored alternatives.
     # All dialects compile to the exact same rule engine, see studio-dialects.js.

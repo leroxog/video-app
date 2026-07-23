@@ -400,6 +400,10 @@ MEME_FOLDER = os.path.join(app.root_path, "static", "meme")
 os.makedirs(MEME_FOLDER, exist_ok=True)
 app.config["MEME_FOLDER"] = MEME_FOLDER
 
+APP_ICON_FOLDER = os.path.join(app.root_path, "static", "app_icons")
+os.makedirs(APP_ICON_FOLDER, exist_ok=True)
+app.config["APP_ICON_FOLDER"] = APP_ICON_FOLDER
+
 R2_ACCOUNT_ID = os.environ.get("R2_ACCOUNT_ID")
 R2_ACCESS_KEY_ID = os.environ.get("R2_ACCESS_KEY_ID")
 R2_SECRET_ACCESS_KEY = os.environ.get("R2_SECRET_ACCESS_KEY")
@@ -475,6 +479,7 @@ LOCAL_MEDIA_FOLDERS = {
     "sounds": "SOUND_FOLDER",
     "meme_templates": "MEME_FOLDER",
     "meme_creations": "MEME_FOLDER",
+    "app_icons": "APP_ICON_FOLDER",
 }
 
 
@@ -552,6 +557,8 @@ def media_url(kind, stored_filename):
         return url_for("static", filename=f"sounds/{stored_filename}")
     if kind in ("meme_templates", "meme_creations"):
         return url_for("static", filename=f"meme/{stored_filename}")
+    if kind == "app_icons":
+        return url_for("static", filename=f"app_icons/{stored_filename}")
     return url_for("static", filename=f"profile_pics/{stored_filename}")
 
 db.init_app(app)
@@ -609,6 +616,7 @@ def ensure_sqlite_columns_exist():
             ("project_type", "VARCHAR(20) NOT NULL DEFAULT 'game'"),
             ("web_code", "TEXT"),
             ("web_slug", "VARCHAR(50)"),
+            ("icon_image", "VARCHAR(255)"),
         ],
         "studio_block": [("kind", "VARCHAR(20) NOT NULL DEFAULT 'normal'")],
         "user": [
@@ -680,6 +688,7 @@ def ensure_columns_exist():
         'ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS web_code TEXT',
         'ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS web_slug VARCHAR(50)',
         'CREATE UNIQUE INDEX IF NOT EXISTS uq_studio_project_web_slug ON studio_project (web_slug) WHERE web_slug IS NOT NULL',
+        'ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS icon_image VARCHAR(255)',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS purpose_of_use VARCHAR(20)',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS country VARCHAR(100)',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS region VARCHAR(100)',
@@ -1730,6 +1739,8 @@ def studio_delete_project(project_id):
     project = db.get_or_404(StudioProject, project_id)
     if project.owner_id != user.id and not user.is_admin:
         abort(403)
+    if project.icon_image:
+        delete_media("app_icons", project.icon_image)
     db.session.delete(project)
     db.session.commit()
     return redirect(url_for("studio_projects_page"))
@@ -1800,6 +1811,40 @@ def api_studio_update_web_slug(project_id):
     project.web_slug = slug
     db.session.commit()
     return jsonify({"ok": True, "web_url": studio_web_url(slug)})
+
+
+@app.route("/api/studio/<int:project_id>/icon", methods=["POST"])
+def api_studio_upload_icon(project_id):
+    """App-store-style icon for a Web-in-Web-App, shown on its card wherever
+    project cards are listed instead of the generic globe placeholder."""
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    project = db.get_or_404(StudioProject, project_id)
+    if project.owner_id != user.id:
+        return jsonify({"ok": False, "error": "forbidden"}), 403
+    if project.project_type != "webapp":
+        return jsonify({"ok": False, "error": "wrong_project_type"}), 400
+
+    file = request.files.get("icon")
+    if not file or file.filename == "":
+        return jsonify({"ok": False, "error": "no_file", "message": "Bitte ein Bild auswählen."}), 400
+    if not allowed_image_file(file.filename):
+        return jsonify({
+            "ok": False, "error": "bad_format",
+            "message": "Nur folgende Bildformate sind erlaubt: " + ", ".join(sorted(ALLOWED_IMAGE_EXTENSIONS)),
+        }), 400
+
+    extension = secure_filename(file.filename).rsplit(".", 1)[1].lower()
+    stored_filename = f"{uuid.uuid4().hex}.{extension}"
+    save_media(file, "app_icons", stored_filename)
+
+    if project.icon_image:
+        delete_media("app_icons", project.icon_image)
+
+    project.icon_image = stored_filename
+    db.session.commit()
+    return jsonify({"ok": True, "icon_url": media_url("app_icons", stored_filename)})
 
 
 @app.route("/studio/<int:project_id>")

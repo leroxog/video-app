@@ -17,6 +17,9 @@
     const urlRow = document.getElementById("webappUrlRow");
     const urlDisplay = document.getElementById("webappUrlDisplay");
     const urlCopyBtn = document.getElementById("webappUrlCopyBtn");
+    const iconInput = document.getElementById("webappIconInput");
+    const iconPreview = document.getElementById("webappIconPreview");
+    const iconNote = document.getElementById("webappIconNote");
 
     // The preview renders the current textarea content client-side, inside
     // the exact same sandbox restrictions the real published page uses (no
@@ -68,6 +71,25 @@
                 slugNote.textContent = "Gespeichert!";
             })
             .catch(() => { slugNote.textContent = "Fehler beim Speichern."; });
+    });
+
+    iconInput.addEventListener("change", () => {
+        const file = iconInput.files[0];
+        if (!file) return;
+        iconNote.textContent = "Wird hochgeladen …";
+        const formData = new FormData();
+        formData.append("icon", file);
+        fetch(`/api/studio/${projectId}/icon`, { method: "POST", body: formData })
+            .then((res) => res.json())
+            .then((data) => {
+                if (!data.ok) {
+                    iconNote.textContent = data.message || "Das Symbol konnte nicht hochgeladen werden.";
+                    return;
+                }
+                iconPreview.innerHTML = `<img src="${data.icon_url}" alt="">`;
+                iconNote.textContent = "Gespeichert!";
+            })
+            .catch(() => { iconNote.textContent = "Fehler beim Hochladen."; });
     });
 
     urlCopyBtn.addEventListener("click", () => {

@@ -1,32 +1,55 @@
 {% set builtin = builtin_game_meta(project) %}
-{% if builtin %}
-    {% set card_href = url_for(builtin.endpoint) %}
-{% elif project.project_type == "webapp" %}
-    {% set card_href = url_for('studio_webapp_view', slug=project.web_slug) %}
-{% else %}
-    {% set card_href = url_for('studio_play_page', project_id=project.id) %}
-{% endif %}
-<a class="game-card" href="{{ card_href }}">
-    <div class="game-card-thumb">
-        {% if builtin %}
-            <div class="game-card-thumb-icon-wrap">
-                <div class="{{ builtin.icon_class }}"></div>
+{% if project.project_type == "webapp" %}
+    <div class="game-card game-card-webapp" data-app-slug="{{ project.web_slug }}"
+         data-app-url="{{ url_for('studio_webapp_view', slug=project.web_slug) }}">
+        <a class="game-card-webapp-linkarea" href="{{ url_for('studio_webapp_view', slug=project.web_slug) }}">
+            <div class="game-card-thumb game-card-thumb-appicon">
+                {% if project.icon_image %}
+                    <img class="game-card-appicon-img" src="{{ media_url('app_icons', project.icon_image) }}" alt="">
+                {% else %}
+                    <div class="game-card-thumb-webapp-icon-wrap">🌐</div>
+                {% endif %}
             </div>
-        {% elif project.project_type == "webapp" %}
-            <div class="game-card-thumb-webapp-icon-wrap">🌐</div>
-        {% else %}
-            {{ studio_project_thumbnail_svg(project)|safe }}
-        {% endif %}
+            <div class="game-card-info">
+                <div class="game-card-title">{{ project.name }}</div>
+                <div class="game-card-creator">
+                    {% if project.owner.profile_image %}
+                        <img class="game-card-avatar" src="{{ media_url('profile_pics', project.owner.profile_image) }}" alt="">
+                    {% else %}
+                        <span class="game-card-avatar game-card-avatar-placeholder">{{ project.owner.username[0]|upper }}</span>
+                    {% endif %}
+                    <span>{{ project.owner.username }}</span>
+                </div>
+            </div>
+        </a>
+        <button type="button" class="game-card-app-action" data-state="download">Laden</button>
     </div>
-    <div class="game-card-info">
-        <div class="game-card-title">{{ project.name }}</div>
-        <div class="game-card-creator">
-            {% if project.owner.profile_image %}
-                <img class="game-card-avatar" src="{{ media_url('profile_pics', project.owner.profile_image) }}" alt="">
+{% else %}
+    {% if builtin %}
+        {% set card_href = url_for(builtin.endpoint) %}
+    {% else %}
+        {% set card_href = url_for('studio_play_page', project_id=project.id) %}
+    {% endif %}
+    <a class="game-card" href="{{ card_href }}">
+        <div class="game-card-thumb">
+            {% if builtin %}
+                <div class="game-card-thumb-icon-wrap">
+                    <div class="{{ builtin.icon_class }}"></div>
+                </div>
             {% else %}
-                <span class="game-card-avatar game-card-avatar-placeholder">{{ project.owner.username[0]|upper }}</span>
+                {{ studio_project_thumbnail_svg(project)|safe }}
             {% endif %}
-            <span>{{ project.owner.username }}</span>
         </div>
-    </div>
-</a>
+        <div class="game-card-info">
+            <div class="game-card-title">{{ project.name }}</div>
+            <div class="game-card-creator">
+                {% if project.owner.profile_image %}
+                    <img class="game-card-avatar" src="{{ media_url('profile_pics', project.owner.profile_image) }}" alt="">
+                {% else %}
+                    <span class="game-card-avatar game-card-avatar-placeholder">{{ project.owner.username[0]|upper }}</span>
+                {% endif %}
+                <span>{{ project.owner.username }}</span>
+            </div>
+        </div>
+    </a>
+{% endif %}

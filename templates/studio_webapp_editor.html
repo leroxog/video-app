@@ -41,6 +41,20 @@
                 <span>Einstellungen</span>
                 <button type="button" id="webappSettingsCloseBtn">&times;</button>
             </div>
+            <label>App-Symbol</label>
+            <div class="webapp-icon-row">
+                <div class="webapp-icon-preview" id="webappIconPreview">
+                    {% if project.icon_image %}
+                        <img src="{{ media_url('app_icons', project.icon_image) }}" alt="">
+                    {% else %}
+                        <span>🌐</span>
+                    {% endif %}
+                </div>
+                <div class="webapp-icon-upload-col">
+                    <input type="file" id="webappIconInput" accept="image/png,image/jpeg,image/gif,image/webp">
+                    <p class="webapp-icon-note" id="webappIconNote">Wird im App Store als dein App-Symbol angezeigt.</p>
+                </div>
+            </div>
             <label for="webappSlugInput">Adresse deiner Web-App</label>
             <div class="webapp-slug-row">
                 <input type="text" id="webappSlugInput" maxlength="30" placeholder="mein-projekt"

@@ -11,3 +11,5 @@ static/profile_pics/*
 !static/profile_pics/.gitkeep
 static/meme/*
 !static/meme/.gitkeep
+static/app_icons/*
+!static/app_icons/.gitkeep

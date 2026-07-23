@@ -2853,6 +2853,60 @@ def test_webapp_project_created_without_blocks(client):
     assert project.web_code
 
 
+def test_webapp_icon_upload_sets_icon_image(client):
+    register(client)
+    project = create_webapp_project(client)
+
+    data = {"icon": (io.BytesIO(b"fake icon bytes"), "icon.png")}
+    response = client.post(
+        f"/api/studio/{project.id}/icon", data=data, content_type="multipart/form-data",
+    )
+    body = response.get_json()
+    assert response.status_code == 200
+    assert body["ok"] is True
+    assert body["icon_url"]
+
+    updated = db.session.get(StudioProject, project.id)
+    assert updated.icon_image is not None
+
+
+def test_webapp_icon_upload_rejects_bad_format(client):
+    register(client)
+    project = create_webapp_project(client)
+
+    data = {"icon": (io.BytesIO(b"not an image"), "icon.exe")}
+    response = client.post(
+        f"/api/studio/{project.id}/icon", data=data, content_type="multipart/form-data",
+    )
+    assert response.status_code == 400
+    assert db.session.get(StudioProject, project.id).icon_image is None
+
+
+def test_webapp_icon_upload_requires_ownership(client):
+    register(client, username="owner")
+    project = create_webapp_project(client)
+    client.post("/logout")
+
+    register(client, username="intruder")
+    data = {"icon": (io.BytesIO(b"fake icon bytes"), "icon.png")}
+    response = client.post(
+        f"/api/studio/{project.id}/icon", data=data, content_type="multipart/form-data",
+    )
+    assert response.status_code == 403
+
+
+def test_game_project_cannot_upload_icon(client):
+    register(client)
+    create_studio_project(client)
+    project = StudioProject.query.filter_by(name="Testspiel").first()
+
+    data = {"icon": (io.BytesIO(b"fake icon bytes"), "icon.png")}
+    response = client.post(
+        f"/api/studio/{project.id}/icon", data=data, content_type="multipart/form-data",
+    )
+    assert response.status_code == 400
+
+
 def test_webapp_slug_must_be_valid_and_unique(client):
     register(client, username="alice")
     project = create_webapp_project(client)

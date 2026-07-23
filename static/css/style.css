@@ -4718,6 +4718,51 @@ body.studio-fullscreen {
     margin-bottom: 0.3rem;
 }
 
+.webapp-icon-row {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    margin-bottom: 0.8rem;
+}
+
+.webapp-icon-preview {
+    width: 56px;
+    height: 56px;
+    flex-shrink: 0;
+    border-radius: 14px;
+    background: #141414;
+    border: 1px solid #3c3c3c;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.6rem;
+    overflow: hidden;
+}
+
+.webapp-icon-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.webapp-icon-upload-col {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.webapp-icon-upload-col input[type="file"] {
+    font-size: 0.78rem;
+    color: #ccc;
+    max-width: 100%;
+}
+
+.webapp-icon-note {
+    font-size: 0.75rem;
+    color: #9fd3ff;
+    margin: 0.3rem 0 0;
+    min-height: 1.1em;
+}
+
 .webapp-slug-row, .webapp-url-row {
     display: flex;
     gap: 0.5rem;
@@ -5755,6 +5800,58 @@ body.studio-fullscreen {
     color: #0f0f0f;
     font-size: 0.7rem;
     font-weight: 700;
+}
+
+/* --- App-store-style card for Web-in-Web-Apps --- */
+.game-card-webapp-linkarea {
+    display: contents;
+    color: inherit;
+    text-decoration: none;
+}
+
+.game-card-thumb-appicon {
+    aspect-ratio: 1 / 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #1c1c1c;
+    padding: 13%;
+}
+
+.game-card-appicon-img {
+    width: 100%;
+    height: 100%;
+    border-radius: 22%;
+    object-fit: cover;
+    display: block;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+}
+
+.game-card-app-action {
+    display: block;
+    width: 100%;
+    border: none;
+    padding: 0.6rem 0;
+    font-weight: 700;
+    font-size: 0.85rem;
+    cursor: pointer;
+    background: var(--gradient-primary);
+    color: #fff;
+}
+
+.game-card-app-action[data-state="open"] {
+    background: #1c1c1c;
+    color: #f1f1f1;
+}
+
+.game-card-app-action[data-state="installing"] {
+    opacity: 0.7;
+    cursor: default;
+}
+
+.game-card-app-action[data-state="error"] {
+    background: #3c1c1c;
+    color: #ff9f6b;
 }
 
 @media (max-width: 640px) {
