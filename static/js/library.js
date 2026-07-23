@@ -19,9 +19,9 @@
         const card = document.createElement("div");
         card.className = "game-card game-card-installable";
 
-        const link = document.createElement("a");
+        // Not a link -- entry is only allowed via the "Öffnen" button below.
+        const link = document.createElement("div");
         link.className = "game-card-webapp-linkarea";
-        link.href = item.url;
 
         const thumb = document.createElement("div");
         thumb.className = "game-card-thumb game-card-thumb-appicon";

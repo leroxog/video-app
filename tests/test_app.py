@@ -2536,7 +2536,7 @@ def test_legacy_game_card_links_to_its_own_route_not_studio_play(client):
         app_module.ensure_lerox_builtin_games()
 
     response = client.get("/games")
-    assert b'href="/fruitmerge"' in response.data
+    assert b'data-app-url="/fruitmerge"' in response.data
 
 
 def test_legacy_game_card_is_installable_like_an_app(client):
@@ -2557,6 +2557,17 @@ def test_studio_game_card_is_installable_like_an_app(client):
 
     response = client.get("/games")
     assert f'data-app-url="/studio/play/{project.id}"'.encode() in response.data
+
+
+def test_app_card_has_no_direct_link_only_the_button_can_open_it(client):
+    # Entry into a game/WiWA must only be possible via the "Öffnen" button
+    # (client-side JS), never by clicking the card's icon/title directly.
+    register(client)
+    project = publish_studio_project(client)
+
+    response = client.get("/games")
+    assert f'href="/studio/play/{project.id}"'.encode() not in response.data
+    assert b'<div class="game-card-webapp-linkarea">' in response.data
 
 
 def publish_studio_project(client):
@@ -2696,7 +2707,7 @@ def test_homepage_includes_published_webapp_projects(client):
 
     response = client.get("/")
     assert "Meine Homepage Webapp".encode() in response.data
-    assert b'href="/w/homepage-app"' in response.data
+    assert b'data-app-url="/w/homepage-app"' in response.data
     assert "Nutzer generierte Inhalte".encode() in response.data
 
 

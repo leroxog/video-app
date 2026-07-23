@@ -9,7 +9,7 @@
 <div class="game-card game-card-installable" data-app-key="{{ app_url }}" data-app-url="{{ app_url }}"
      data-app-name="{{ project.name }}"
      data-app-icon="{{ media_url('app_icons', project.icon_image) if project.icon_image else '' }}">
-    <a class="game-card-webapp-linkarea" href="{{ app_url }}">
+    <div class="game-card-webapp-linkarea">
         <div class="game-card-thumb game-card-thumb-appicon">
             {% if project.icon_image %}
                 <img class="game-card-appicon-img" src="{{ media_url('app_icons', project.icon_image) }}" alt="">
@@ -34,6 +34,6 @@
                 <span>{{ project.owner.username }}</span>
             </div>
         </div>
-    </a>
+    </div>
     <button type="button" class="game-card-app-action" data-state="download">Laden</button>
 </div>
