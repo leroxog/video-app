@@ -901,6 +901,63 @@ main {
     margin: 0.6rem 0 0;
 }
 
+.ai-voice-contribute {
+    margin-top: 1rem;
+    padding: 0.8rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid #2c2c2c;
+    border-radius: 10px;
+}
+
+.ai-voice-contribute-label {
+    font-size: 0.78rem;
+    color: #ccc;
+    margin: 0 0 0.5rem;
+}
+
+.ai-voice-contribute-row {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.ai-voice-contribute-row select {
+    background: #141414;
+    color: #f1f1f1;
+    border: 1px solid #3c3c3c;
+    border-radius: 8px;
+    padding: 0.4rem 0.5rem;
+    font-size: 0.8rem;
+}
+
+.ai-voice-contribute-row button {
+    border: none;
+    border-radius: 999px;
+    padding: 0.45rem 0.9rem;
+    background: linear-gradient(135deg, #ff3d81, #c94fd6);
+    color: #fff;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 0.8rem;
+}
+
+.ai-voice-consent {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.4rem;
+    font-size: 0.74rem;
+    color: #aaa;
+    margin-top: 0.6rem;
+    cursor: pointer;
+}
+
+.ai-voice-contribute-status {
+    font-size: 0.78rem;
+    color: #9fd3ff;
+    margin: 0.5rem 0 0;
+    min-height: 1.1em;
+}
+
 .ai-chat-sidebar-list {
     flex: 1 1 auto;
     overflow-y: auto;

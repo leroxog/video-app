@@ -34,6 +34,7 @@ from models import (
     StudioProject, StudioBlock, StudioProjectLike, StudioProjectComment, StudioProjectReport,
     AiChatFeedback, AiChat, AiChatMessage, AiAdminFact, AiLearnedFact, PasswordResetCode,
     AccountRecoveryRequest, ErrorLog, HumanSpotterImage, HumanSpotterClick, HumanSpotterReport,
+    AiVoiceProfile,
 )
 import ai_assistant
 
@@ -483,6 +484,61 @@ def send_email_best_effort(to_address, subject, body):
         send_email(to_address, subject, body)
     except Exception:
         logger.exception("E-Mail an %s konnte nicht verschickt werden.", to_address)
+
+
+# Real, single-person voice cloning for AI voice chat, via ElevenLabs'
+# hosted API -- there's no way to train or clone a voice from within this
+# app itself (no ML pipeline, no GPU; same constraint as ai_assistant.py's
+# module docstring about text). Entirely optional: without a key, voice
+# chat just uses the browser's own built-in text-to-speech, same as
+# before. Sign up at elevenlabs.io yourself and set ELEVENLABS_API_KEY --
+# this app never creates that account or enters payment details for you.
+ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY")
+ELEVENLABS_API_URL = "https://api.elevenlabs.io/v1"
+USE_ELEVENLABS = bool(ELEVENLABS_API_KEY)
+if not USE_ELEVENLABS:
+    logger.warning(
+        "HINWEIS: Kein ELEVENLABS_API_KEY gesetzt -- Sprachchat nutzt nur die eingebaute "
+        "Text-zu-Sprache-Funktion des Browsers, keine echte geklonte Stimme."
+    )
+
+
+def elevenlabs_clone_voice(name, audio_bytes, content_type):
+    if not USE_ELEVENLABS:
+        raise RuntimeError("ELEVENLABS_API_KEY ist nicht gesetzt.")
+    response = requests.post(
+        f"{ELEVENLABS_API_URL}/voices/add",
+        headers={"xi-api-key": ELEVENLABS_API_KEY},
+        data={"name": name},
+        files={"files": ("sample", audio_bytes, content_type or "audio/webm")},
+        timeout=30,
+    )
+    response.raise_for_status()
+    return response.json()["voice_id"]
+
+
+def elevenlabs_delete_voice(voice_id):
+    try:
+        requests.delete(
+            f"{ELEVENLABS_API_URL}/voices/{voice_id}",
+            headers={"xi-api-key": ELEVENLABS_API_KEY},
+            timeout=15,
+        )
+    except Exception:
+        logger.exception("ElevenLabs-Stimme %s konnte nicht gelöscht werden.", voice_id)
+
+
+def elevenlabs_text_to_speech(voice_id, text):
+    if not USE_ELEVENLABS:
+        raise RuntimeError("ELEVENLABS_API_KEY ist nicht gesetzt.")
+    response = requests.post(
+        f"{ELEVENLABS_API_URL}/text-to-speech/{voice_id}",
+        headers={"xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json"},
+        json={"text": text, "model_id": "eleven_multilingual_v2"},
+        timeout=30,
+    )
+    response.raise_for_status()
+    return response.content
 
 
 LOCAL_MEDIA_FOLDERS = {
@@ -2906,11 +2962,13 @@ def admin_dashboard():
         .order_by(db.func.max(HumanSpotterReport.created_at).desc())
         .all()
     ]
+    voice_profiles = {p.gender: p for p in AiVoiceProfile.query.all()}
     return render_template(
         "admin.html", user=admin_user, users=users, games=games, online_status=online_status,
         reports=reports, meme_templates=meme_templates, ai_feedback=ai_feedback, admin_facts=admin_facts,
         recovery_requests=recovery_requests, error_logs=error_logs,
-        human_spotter_reports=human_spotter_reports,
+        human_spotter_reports=human_spotter_reports, voice_profiles=voice_profiles,
+        use_elevenlabs=USE_ELEVENLABS,
     )
 
 
@@ -3834,6 +3892,109 @@ def admin_human_spotter_delete_image(image_id):
     delete_media("human_spotter", image.filename)
     db.session.delete(image)
     db.session.commit()
+    return redirect(url_for("admin_dashboard"))
+
+
+VOICE_PROFILE_GENDERS = {"male", "female"}
+
+
+@app.route("/api/voice-profile/status")
+def api_voice_profile_status():
+    profiles = AiVoiceProfile.query.all()
+    return jsonify({
+        "ok": True,
+        "profiles": {
+            p.gender: {
+                "cloned": bool(p.elevenlabs_voice_id),
+                "contributor": p.contributor.username if p.contributor else None,
+            }
+            for p in profiles
+        },
+    })
+
+
+@app.route("/api/voice-profile/<gender>/contribute", methods=["POST"])
+def api_voice_profile_contribute(gender):
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    if gender not in VOICE_PROFILE_GENDERS:
+        return jsonify({"ok": False, "error": "invalid_gender"}), 400
+    if not USE_ELEVENLABS:
+        return jsonify({
+            "ok": False, "error": "not_configured",
+            "message": "Stimmen-Klonen ist auf dieser Seite gerade nicht eingerichtet.",
+        }), 400
+
+    file = request.files.get("sample")
+    if not file or not file.filename:
+        return jsonify({"ok": False, "error": "no_file", "message": "Keine Sprachaufnahme erhalten."}), 400
+
+    profile = AiVoiceProfile.query.filter_by(gender=gender).first()
+    old_voice_id = profile.elevenlabs_voice_id if profile else None
+
+    try:
+        new_voice_id = elevenlabs_clone_voice(
+            f"timeskip-{gender}-{user.username}", file.stream.read(), file.mimetype,
+        )
+    except Exception:
+        logger.exception("ElevenLabs-Stimmenklon fehlgeschlagen.")
+        return jsonify({
+            "ok": False, "error": "clone_failed",
+            "message": "Die Stimme konnte nicht geklont werden. Versuch es später erneut.",
+        }), 502
+
+    if profile is None:
+        profile = AiVoiceProfile(gender=gender)
+        db.session.add(profile)
+    profile.elevenlabs_voice_id = new_voice_id
+    profile.contributor_id = user.id
+    profile.updated_at = datetime.now(timezone.utc)
+    db.session.commit()
+
+    if old_voice_id:
+        elevenlabs_delete_voice(old_voice_id)
+
+    return jsonify({"ok": True})
+
+
+@app.route("/api/voice-profile/<gender>/speak", methods=["POST"])
+def api_voice_profile_speak(gender):
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    if gender not in VOICE_PROFILE_GENDERS:
+        return jsonify({"ok": False, "error": "invalid_gender"}), 400
+
+    data = request.get_json(silent=True) or {}
+    text = (data.get("text") or "").strip()[:2000]
+    if not text:
+        return jsonify({"ok": False, "error": "empty_text"}), 400
+
+    profile = AiVoiceProfile.query.filter_by(gender=gender).first()
+    if profile is None or not profile.elevenlabs_voice_id:
+        return jsonify({"ok": False, "error": "no_cloned_voice"}), 404
+
+    try:
+        audio_bytes = elevenlabs_text_to_speech(profile.elevenlabs_voice_id, text)
+    except Exception:
+        logger.exception("ElevenLabs-Sprachausgabe fehlgeschlagen.")
+        return jsonify({"ok": False, "error": "speech_failed"}), 502
+
+    return Response(audio_bytes, mimetype="audio/mpeg")
+
+
+@app.route("/admin/voice-profile/<gender>/reset", methods=["POST"])
+def admin_voice_profile_reset(gender):
+    require_admin()
+    if gender not in VOICE_PROFILE_GENDERS:
+        abort(400)
+    profile = AiVoiceProfile.query.filter_by(gender=gender).first()
+    if profile is not None:
+        if profile.elevenlabs_voice_id:
+            elevenlabs_delete_voice(profile.elevenlabs_voice_id)
+        db.session.delete(profile)
+        db.session.commit()
     return redirect(url_for("admin_dashboard"))
 
 

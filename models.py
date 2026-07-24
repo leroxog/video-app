@@ -382,6 +382,24 @@ class HumanSpotterReport(db.Model):
     __table_args__ = (db.UniqueConstraint("image_id", "reporter_id", name="uq_humanspotterreport_image_reporter"),)
 
 
+class AiVoiceProfile(db.Model):
+    """The AI's spoken voice for voice chat, per gender bucket ("male" or
+    "female") -- a real, single-person voice actually cloned through
+    ElevenLabs (see app.py's elevenlabs_* helpers), not something trained
+    from everyone's samples blended together (that's not how voice cloning
+    works, and this app has no ML pipeline of its own regardless). Each new
+    contribution replaces the previous clone for that gender outright,
+    so the AI always speaks with whoever contributed most recently.
+    elevenlabs_voice_id is None until someone has contributed a sample --
+    voice chat falls back to the browser's own built-in TTS until then."""
+    id = db.Column(db.Integer, primary_key=True)
+    gender = db.Column(db.String(10), nullable=False, unique=True)
+    elevenlabs_voice_id = db.Column(db.String(100), nullable=True)
+    contributor_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    contributor = db.relationship("User")
+
+
 class AiChatFeedback(db.Model):
     """A thumbs up/down on one AI chat reply. Purely a record for human
     review -- the hosted model isn't retrained from this automatically."""

@@ -241,6 +241,32 @@
         <p>Keine gemeldeten Bilder.</p>
     {% endif %}
 
+    <h2>KI-Sprachchat: geklonte Stimmen</h2>
+    {% if not use_elevenlabs %}
+        <p>Kein ELEVENLABS_API_KEY gesetzt -- der Sprachchat nutzt nur die eingebaute Text-zu-Sprache-Funktion des Browsers.</p>
+    {% endif %}
+    <table class="admin-table">
+        <thead><tr><th>Stimme</th><th>Status</th><th>Zuletzt beigetragen von</th><th></th></tr></thead>
+        <tbody>
+            {% for gender, label in [("male", "Männlich"), ("female", "Weiblich")] %}
+                {% set profile = voice_profiles.get(gender) %}
+                <tr>
+                    <td>{{ label }}</td>
+                    <td>{{ "Geklont" if profile and profile.elevenlabs_voice_id else "Browser-Standardstimme" }}</td>
+                    <td>{{ profile.contributor.username if profile and profile.contributor else "—" }}</td>
+                    <td>
+                        {% if profile and profile.elevenlabs_voice_id %}
+                            <form action="{{ url_for('admin_voice_profile_reset', gender=gender) }}" method="post" class="admin-inline-form"
+                                  onsubmit="return confirm('Geklonte Stimme wirklich zurücksetzen?');">
+                                <button type="submit" class="danger admin-inline-btn">Zurücksetzen</button>
+                            </form>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
     <h2>Alle Spiele</h2>
     <table class="admin-table">
         <thead><tr><th>Spiel</th><th>Von</th><th>Erstellt</th><th></th></tr></thead>

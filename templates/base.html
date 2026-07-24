@@ -174,9 +174,28 @@
                     <div class="ai-voice-transcript" id="aiVoiceTranscript"></div>
                     <button type="button" class="ai-voice-mic-btn" id="aiVoiceMicBtn" title="Sprechen">🎤</button>
                     <p class="ai-voice-status" id="aiVoiceStatus">Tippe auf das Mikrofon und sprich.</p>
+
+                    <div class="ai-voice-contribute">
+                        <p class="ai-voice-contribute-label">Echte Stimme beisteuern (ersetzt die Stimme für alle):</p>
+                        <div class="ai-voice-contribute-row">
+                            <select id="aiVoiceContributeGender">
+                                <option value="male">Als männliche Stimme</option>
+                                <option value="female">Als weibliche Stimme</option>
+                            </select>
+                            <button type="button" id="aiVoiceRecordBtn">🔴 Aufnehmen</button>
+                        </div>
+                        <label class="ai-voice-consent">
+                            <input type="checkbox" id="aiVoiceConsentCheckbox">
+                            Das ist meine eigene Stimme, ich bin einverstanden, dass sie als KI-Stimme für alle genutzt wird.
+                        </label>
+                        <p class="ai-voice-contribute-status" id="aiVoiceContributeStatus"></p>
+                    </div>
+
                     <p class="ai-voice-disclaimer">
-                        Sprachein- und -ausgabe laufen über die Sprachfunktionen deines Browsers -- kostenlos,
-                        aber keine echten, von Personen eingesprochenen Stimmen. Sie sprechen mit einer KI,
+                        Sprachausgabe nutzt eine geklonte Stimme, sobald jemand eine beigesteuert hat -- vorher (und
+                        bei der Spracheingabe immer) laufen die Sprachfunktionen einfach über deinen Browser,
+                        kostenlos. Ein echtes "Training" aus vielen Stimmen gleichzeitig gibt es nicht -- die
+                        zuletzt beigesteuerte Stimme ersetzt für alle die vorherige. Sie sprechen mit einer KI,
                         nicht mit einem Menschen.
                     </p>
                 </div>
@@ -932,7 +951,7 @@
                         return matched || pool[0] || null;
                     }
 
-                    function speak(text) {
+                    function speakWithBrowser(text) {
                         if (!window.speechSynthesis) return;
                         window.speechSynthesis.cancel();
                         const utterance = new SpeechSynthesisUtterance(text);
@@ -940,6 +959,28 @@
                         const voice = pickVoice(voiceGenderSelect.value);
                         if (voice) utterance.voice = voice;
                         window.speechSynthesis.speak(utterance);
+                    }
+
+                    // Tries the real cloned voice for this gender bucket first
+                    // (see AiVoiceProfile/ElevenLabs in app.py); if none has
+                    // been contributed yet (404) or the request fails for any
+                    // other reason, falls back to the browser's own free,
+                    // built-in text-to-speech -- so voice chat always works
+                    // either way.
+                    function speak(text) {
+                        fetch(`/api/voice-profile/${voiceGenderSelect.value}/speak`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ text }),
+                        })
+                            .then((res) => {
+                                if (!res.ok) throw new Error("no cloned voice");
+                                return res.blob();
+                            })
+                            .then((blob) => {
+                                new Audio(URL.createObjectURL(blob)).play();
+                            })
+                            .catch(() => speakWithBrowser(text));
                     }
 
                     function addVoiceLine(text, role) {
@@ -1035,6 +1076,79 @@
                         if (recognition) {
                             try { recognition.stop(); } catch (e) {}
                         }
+                    });
+
+                    // "Echte Stimme beisteuern" -- records a short sample via
+                    // the browser's own microphone and uploads it to be
+                    // cloned through ElevenLabs (see app.py's
+                    // elevenlabs_clone_voice/AiVoiceProfile). This replaces
+                    // whichever voice was cloned before for that gender --
+                    // there's no way to blend many people's samples into one
+                    // trained voice, so it's simply "most recent wins".
+                    const contributeGenderSelect = document.getElementById("aiVoiceContributeGender");
+                    const recordBtn = document.getElementById("aiVoiceRecordBtn");
+                    const consentCheckbox = document.getElementById("aiVoiceConsentCheckbox");
+                    const contributeStatus = document.getElementById("aiVoiceContributeStatus");
+                    let mediaRecorder = null;
+                    let recordedChunks = [];
+
+                    function uploadRecording() {
+                        recordBtn.textContent = "🔴 Aufnehmen";
+                        if (!recordedChunks.length) return;
+                        contributeStatus.textContent = "Wird hochgeladen und geklont ...";
+                        const blob = new Blob(recordedChunks, { type: "audio/webm" });
+                        const formData = new FormData();
+                        formData.append("sample", blob, "sample.webm");
+                        fetch(`/api/voice-profile/${contributeGenderSelect.value}/contribute`, {
+                            method: "POST", body: formData,
+                        })
+                            .then((res) => res.json())
+                            .then((data) => {
+                                if (!data.ok) {
+                                    contributeStatus.textContent = data.message || "Konnte die Stimme nicht klonen.";
+                                    return;
+                                }
+                                contributeStatus.textContent = "Danke! Die KI spricht jetzt mit dieser Stimme.";
+                            })
+                            .catch(() => { contributeStatus.textContent = "Fehler beim Hochladen."; });
+                    }
+
+                    function startRecording() {
+                        if (!consentCheckbox.checked) {
+                            contributeStatus.textContent = "Bitte bestätige zuerst, dass es deine eigene Stimme ist.";
+                            return;
+                        }
+                        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
+                            contributeStatus.textContent = "Dein Browser unterstützt keine Audioaufnahme.";
+                            return;
+                        }
+                        navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
+                            recordedChunks = [];
+                            mediaRecorder = new MediaRecorder(stream);
+                            mediaRecorder.ondataavailable = (e) => {
+                                if (e.data.size > 0) recordedChunks.push(e.data);
+                            };
+                            mediaRecorder.onstop = () => {
+                                stream.getTracks().forEach((t) => t.stop());
+                                uploadRecording();
+                            };
+                            mediaRecorder.start();
+                            recordBtn.textContent = "⏹ Stoppen";
+                            contributeStatus.textContent = "Nimmt auf -- sprich ein paar Sätze (max. 10s).";
+                            setTimeout(() => {
+                                if (mediaRecorder && mediaRecorder.state === "recording") mediaRecorder.stop();
+                            }, 10000);
+                        }).catch(() => {
+                            contributeStatus.textContent = "Mikrofonzugriff wurde verweigert.";
+                        });
+                    }
+
+                    recordBtn.addEventListener("click", () => {
+                        if (mediaRecorder && mediaRecorder.state === "recording") {
+                            mediaRecorder.stop();
+                            return;
+                        }
+                        startRecording();
                     });
                 }
             })();

@@ -14,7 +14,7 @@ from models import (
     MemeTemplate, MemeLobby, MemeLobbyPlayer, MemeCreation, MemeVote,
     StudioProject, StudioBlock, StudioProjectLike, StudioProjectComment, StudioProjectReport,
     AiAdminFact, AiLearnedFact, PasswordResetCode, AccountRecoveryRequest, ErrorLog,
-    HumanSpotterImage, HumanSpotterClick, HumanSpotterReport,
+    HumanSpotterImage, HumanSpotterClick, HumanSpotterReport, AiVoiceProfile,
 )
 
 
@@ -3873,5 +3873,129 @@ def test_voice_chat_button_and_gender_attribute_present_when_logged_in(client):
 def test_voice_chat_widget_absent_when_logged_out(client):
     response = client.get("/terms")
     assert b'id="aiVoiceOverlay"' not in response.data
+
+
+def test_voice_profile_status_starts_empty(client):
+    response = client.get("/api/voice-profile/status")
+    data = response.get_json()
+    assert data["ok"] is True
+    assert data["profiles"] == {}
+
+
+def test_voice_profile_contribute_requires_login(client):
+    data = {"sample": (io.BytesIO(b"fake audio bytes"), "sample.webm")}
+    response = client.post(
+        "/api/voice-profile/male/contribute", data=data, content_type="multipart/form-data",
+    )
+    assert response.status_code == 401
+
+
+def test_voice_profile_contribute_invalid_gender(client):
+    register(client, username="voicecontributor")
+    data = {"sample": (io.BytesIO(b"fake audio bytes"), "sample.webm")}
+    response = client.post(
+        "/api/voice-profile/other/contribute", data=data, content_type="multipart/form-data",
+    )
+    assert response.status_code == 400
+
+
+def test_voice_profile_contribute_when_not_configured(client):
+    register(client, username="voicecontributor2")
+    data = {"sample": (io.BytesIO(b"fake audio bytes"), "sample.webm")}
+    response = client.post(
+        "/api/voice-profile/male/contribute", data=data, content_type="multipart/form-data",
+    )
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "not_configured"
+
+
+def test_voice_profile_contribute_success_replaces_previous_clone(client, monkeypatch):
+    import app as app_module
+
+    monkeypatch.setattr(app_module, "USE_ELEVENLABS", True)
+    clone_calls = []
+    deleted_ids = []
+    monkeypatch.setattr(
+        app_module, "elevenlabs_clone_voice",
+        lambda name, audio_bytes, content_type: (clone_calls.append(name), f"voice-{len(clone_calls)}")[1],
+    )
+    monkeypatch.setattr(app_module, "elevenlabs_delete_voice", lambda voice_id: deleted_ids.append(voice_id))
+
+    register(client, username="voicecontributor3")
+    data = {"sample": (io.BytesIO(b"fake audio bytes"), "sample.webm")}
+    first = client.post("/api/voice-profile/male/contribute", data=data, content_type="multipart/form-data")
+    assert first.status_code == 200
+    assert first.get_json()["ok"] is True
+
+    profile = AiVoiceProfile.query.filter_by(gender="male").first()
+    assert profile is not None
+    assert profile.elevenlabs_voice_id == "voice-1"
+    assert profile.contributor.username == "voicecontributor3"
+
+    data2 = {"sample": (io.BytesIO(b"more fake audio bytes"), "sample.webm")}
+    second = client.post("/api/voice-profile/male/contribute", data=data2, content_type="multipart/form-data")
+    assert second.status_code == 200
+    assert deleted_ids == ["voice-1"]
+    assert db.session.get(AiVoiceProfile, profile.id).elevenlabs_voice_id == "voice-2"
+
+
+def test_voice_profile_speak_requires_login(client):
+    response = client.post("/api/voice-profile/male/speak", json={"text": "Hallo"})
+    assert response.status_code == 401
+
+
+def test_voice_profile_speak_without_cloned_voice_404s(client):
+    register(client, username="voicespeaker")
+    response = client.post("/api/voice-profile/male/speak", json={"text": "Hallo"})
+    assert response.status_code == 404
+
+
+def test_voice_profile_speak_returns_audio_when_cloned(client, monkeypatch):
+    import app as app_module
+
+    monkeypatch.setattr(app_module, "USE_ELEVENLABS", True)
+    monkeypatch.setattr(app_module, "elevenlabs_clone_voice", lambda name, audio_bytes, content_type: "voice-x")
+    monkeypatch.setattr(app_module, "elevenlabs_text_to_speech", lambda voice_id, text: b"fake-mp3-bytes")
+
+    register(client, username="voicespeaker2")
+    upload = client.post(
+        "/api/voice-profile/male/contribute",
+        data={"sample": (io.BytesIO(b"fake audio bytes"), "sample.webm")},
+        content_type="multipart/form-data",
+    )
+    assert upload.status_code == 200
+
+    response = client.post("/api/voice-profile/male/speak", json={"text": "Hallo Stimme"})
+    assert response.status_code == 200
+    assert response.mimetype == "audio/mpeg"
+    assert response.data == b"fake-mp3-bytes"
+
+
+def test_admin_can_reset_voice_profile(client, monkeypatch):
+    import app as app_module
+
+    monkeypatch.setattr(app_module, "USE_ELEVENLABS", True)
+    monkeypatch.setattr(app_module, "elevenlabs_clone_voice", lambda name, audio_bytes, content_type: "voice-y")
+    deleted_ids = []
+    monkeypatch.setattr(app_module, "elevenlabs_delete_voice", lambda voice_id: deleted_ids.append(voice_id))
+
+    register(client, username="voicecontributor4")
+    client.post(
+        "/api/voice-profile/female/contribute",
+        data={"sample": (io.BytesIO(b"fake audio bytes"), "sample.webm")},
+        content_type="multipart/form-data",
+    )
+    client.post("/logout")
+
+    register(client, username="voiceadmin")
+    make_admin("voiceadmin")
+
+    dashboard = client.get("/admin")
+    assert "KI-Sprachchat".encode() in dashboard.data
+
+    reset_res = client.post("/admin/voice-profile/female/reset", follow_redirects=True)
+    assert reset_res.status_code == 200
+    assert deleted_ids == ["voice-y"]
+    assert AiVoiceProfile.query.filter_by(gender="female").first() is None
 
 
