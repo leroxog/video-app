@@ -344,6 +344,44 @@ class StudioProjectReport(db.Model):
     __table_args__ = (db.UniqueConstraint("project_id", "reporter_id", name="uq_studioprojectreport_project_reporter"),)
 
 
+class HumanSpotterImage(db.Model):
+    """One photo in the timeskip/erkenne.den.menschen game's pool -- every
+    logged-in user can contribute one, shown at random to everyone else who
+    plays. HumanSpotterClick rows are the actual crowdsourced "where is the
+    human in this photo" answers; see that model's docstring for what
+    honestly happens with them (spoiler: they're stored, not fed into a
+    live-trained vision model -- this app has no ML training pipeline)."""
+    id = db.Column(db.Integer, primary_key=True)
+    filename = db.Column(db.String(255), nullable=False)
+    uploader_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    uploader = db.relationship("User")
+    clicks = db.relationship("HumanSpotterClick", backref="image", lazy=True, cascade="all, delete-orphan")
+    reports = db.relationship("HumanSpotterReport", backref="image", lazy=True, cascade="all, delete-orphan")
+
+
+class HumanSpotterClick(db.Model):
+    """One player's answer for one photo: where they clicked, as a
+    fraction (0-1) of the image's width/height so it stays meaningful
+    regardless of how large the photo was shown. user_id is nullable --
+    playing doesn't require an account, only uploading a photo does."""
+    id = db.Column(db.Integer, primary_key=True)
+    image_id = db.Column(db.Integer, db.ForeignKey("human_spotter_image.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    x_fraction = db.Column(db.Float, nullable=False)
+    y_fraction = db.Column(db.Float, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class HumanSpotterReport(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    image_id = db.Column(db.Integer, db.ForeignKey("human_spotter_image.id"), nullable=False)
+    reporter_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    reporter = db.relationship("User")
+    __table_args__ = (db.UniqueConstraint("image_id", "reporter_id", name="uq_humanspotterreport_image_reporter"),)
+
+
 class AiChatFeedback(db.Model):
     """A thumbs up/down on one AI chat reply. Purely a record for human
     review -- the hosted model isn't retrained from this automatically."""

@@ -33,7 +33,7 @@ from models import (
     CoinflipDeposit, MemeTemplate, MemeLobby, MemeLobbyPlayer, MemeCreation, MemeVote,
     StudioProject, StudioBlock, StudioProjectLike, StudioProjectComment, StudioProjectReport,
     AiChatFeedback, AiChat, AiChatMessage, AiAdminFact, AiLearnedFact, PasswordResetCode,
-    AccountRecoveryRequest, ErrorLog,
+    AccountRecoveryRequest, ErrorLog, HumanSpotterImage, HumanSpotterClick, HumanSpotterReport,
 )
 import ai_assistant
 
@@ -118,6 +118,14 @@ GAMES = [
         "title": "timeskip/make.a.meme",
         "subtitle": "Meme-Party mit Freunden -- gemeinsam Memes bauen und abstimmen",
         "icon_class": "place-label-icon memeparty-icon",
+    },
+    {
+        "key": "erkenne.den.menschen",
+        "search_term": "timeskip/erkenne.den.menschen",
+        "endpoint": "human_spotter_page",
+        "title": "timeskip/erkenne.den.menschen",
+        "subtitle": "Klick auf den Menschen im Bild",
+        "icon_class": "place-label-icon humanspotter-icon",
     },
 ]
 GAME_SUGGESTIONS = [g["search_term"] for g in GAMES]
@@ -404,6 +412,10 @@ APP_ICON_FOLDER = os.path.join(app.root_path, "static", "app_icons")
 os.makedirs(APP_ICON_FOLDER, exist_ok=True)
 app.config["APP_ICON_FOLDER"] = APP_ICON_FOLDER
 
+HUMAN_SPOTTER_FOLDER = os.path.join(app.root_path, "static", "human_spotter")
+os.makedirs(HUMAN_SPOTTER_FOLDER, exist_ok=True)
+app.config["HUMAN_SPOTTER_FOLDER"] = HUMAN_SPOTTER_FOLDER
+
 R2_ACCOUNT_ID = os.environ.get("R2_ACCOUNT_ID")
 R2_ACCESS_KEY_ID = os.environ.get("R2_ACCESS_KEY_ID")
 R2_SECRET_ACCESS_KEY = os.environ.get("R2_SECRET_ACCESS_KEY")
@@ -480,6 +492,7 @@ LOCAL_MEDIA_FOLDERS = {
     "meme_templates": "MEME_FOLDER",
     "meme_creations": "MEME_FOLDER",
     "app_icons": "APP_ICON_FOLDER",
+    "human_spotter": "HUMAN_SPOTTER_FOLDER",
 }
 
 
@@ -559,6 +572,8 @@ def media_url(kind, stored_filename):
         return url_for("static", filename=f"meme/{stored_filename}")
     if kind == "app_icons":
         return url_for("static", filename=f"app_icons/{stored_filename}")
+    if kind == "human_spotter":
+        return url_for("static", filename=f"human_spotter/{stored_filename}")
     return url_for("static", filename=f"profile_pics/{stored_filename}")
 
 db.init_app(app)
@@ -2883,10 +2898,19 @@ def admin_dashboard():
     recovery_requests = AccountRecoveryRequest.query.filter_by(status="pending") \
         .order_by(AccountRecoveryRequest.created_at.desc()).all()
     error_logs = ErrorLog.query.order_by(ErrorLog.created_at.desc()).limit(100).all()
+    human_spotter_reports = [
+        {"image": image, "report_count": count} for image, count in
+        db.session.query(HumanSpotterImage, db.func.count(HumanSpotterReport.id))
+        .join(HumanSpotterReport, HumanSpotterReport.image_id == HumanSpotterImage.id)
+        .group_by(HumanSpotterImage.id)
+        .order_by(db.func.max(HumanSpotterReport.created_at).desc())
+        .all()
+    ]
     return render_template(
         "admin.html", user=admin_user, users=users, games=games, online_status=online_status,
         reports=reports, meme_templates=meme_templates, ai_feedback=ai_feedback, admin_facts=admin_facts,
         recovery_requests=recovery_requests, error_logs=error_logs,
+        human_spotter_reports=human_spotter_reports,
     )
 
 
@@ -3701,6 +3725,116 @@ def download_meme_creation(creation_id):
     return send_from_directory(
         app.config["MEME_FOLDER"], creation.filename, as_attachment=True, download_name=download_name,
     )
+
+
+HUMAN_SPOTTER_MAX_REPORTS_SHOWN = 3
+
+
+@app.route("/erkenne-den-menschen")
+def human_spotter_page():
+    record_game_play("erkenne.den.menschen")
+    return render_template("human_spotter.html", user=current_user())
+
+
+@app.route("/api/human-spotter/next")
+def api_human_spotter_next():
+    # Photos with several reports still exist (an admin decides whether to
+    # delete them, see admin_human_spotter_delete_image below) but stop
+    # being served to players while under review.
+    reported_ids = [
+        row[0] for row in
+        db.session.query(HumanSpotterReport.image_id)
+        .group_by(HumanSpotterReport.image_id)
+        .having(db.func.count(HumanSpotterReport.id) >= HUMAN_SPOTTER_MAX_REPORTS_SHOWN)
+        .all()
+    ]
+    query = HumanSpotterImage.query
+    if reported_ids:
+        query = query.filter(~HumanSpotterImage.id.in_(reported_ids))
+    image = query.order_by(db.func.random()).first()
+    if image is None:
+        return jsonify({"ok": False, "error": "no_images"})
+    return jsonify({"ok": True, "image": {"id": image.id, "url": media_url("human_spotter", image.filename)}})
+
+
+@app.route("/api/human-spotter/click", methods=["POST"])
+def api_human_spotter_click():
+    user = current_user()
+    data = request.get_json(silent=True) or {}
+    image_id = data.get("image_id")
+    try:
+        x_fraction = float(data.get("x_fraction"))
+        y_fraction = float(data.get("y_fraction"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "invalid_coordinates"}), 400
+    if not (0 <= x_fraction <= 1 and 0 <= y_fraction <= 1):
+        return jsonify({"ok": False, "error": "invalid_coordinates"}), 400
+    image = db.session.get(HumanSpotterImage, image_id)
+    if image is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+
+    db.session.add(HumanSpotterClick(
+        image_id=image.id, user_id=user.id if user else None,
+        x_fraction=x_fraction, y_fraction=y_fraction,
+    ))
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/human-spotter/upload", methods=["POST"])
+def api_human_spotter_upload():
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+
+    file = request.files.get("photo")
+    if not file or not file.filename:
+        return jsonify({"ok": False, "error": "no_file", "message": "Bitte ein Bild auswählen."}), 400
+    if not allowed_image_file(file.filename):
+        return jsonify({
+            "ok": False, "error": "bad_format",
+            "message": "Nur folgende Bildformate sind erlaubt: " + ", ".join(sorted(ALLOWED_IMAGE_EXTENSIONS)),
+        }), 400
+
+    extension = secure_filename(file.filename).rsplit(".", 1)[1].lower()
+    stored_filename = f"{uuid.uuid4().hex}.{extension}"
+    save_media(file, "human_spotter", stored_filename)
+
+    image = HumanSpotterImage(filename=stored_filename, uploader_id=user.id)
+    db.session.add(image)
+    db.session.commit()
+    return jsonify({"ok": True, "image": {"id": image.id, "url": media_url("human_spotter", stored_filename)}})
+
+
+@app.route("/api/human-spotter/<int:image_id>/report", methods=["POST"])
+def api_human_spotter_report(image_id):
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    image = db.get_or_404(HumanSpotterImage, image_id)
+    if HumanSpotterReport.query.filter_by(image_id=image.id, reporter_id=user.id).first() is not None:
+        return jsonify({"ok": False, "error": "already_reported"}), 400
+    db.session.add(HumanSpotterReport(image_id=image.id, reporter_id=user.id))
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/admin/human-spotter/<int:image_id>/dismiss-reports", methods=["POST"])
+def admin_human_spotter_dismiss_reports(image_id):
+    require_admin()
+    HumanSpotterReport.query.filter_by(image_id=image_id).delete()
+    db.session.commit()
+    return redirect(url_for("admin_dashboard"))
+
+
+@app.route("/admin/human-spotter/<int:image_id>/delete", methods=["POST"])
+def admin_human_spotter_delete_image(image_id):
+    require_admin()
+    image = db.get_or_404(HumanSpotterImage, image_id)
+    delete_media("human_spotter", image.filename)
+    db.session.delete(image)
+    db.session.commit()
+    return redirect(url_for("admin_dashboard"))
 
 
 @app.route("/admin/meme-templates", methods=["POST"])

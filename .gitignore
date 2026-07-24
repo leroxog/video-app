@@ -13,3 +13,5 @@ static/meme/*
 !static/meme/.gitkeep
 static/app_icons/*
 !static/app_icons/.gitkeep
+static/human_spotter/*
+!static/human_spotter/.gitkeep

@@ -214,6 +214,33 @@
         <p>Keine gemeldeten Spiele.</p>
     {% endif %}
 
+    <h2>Gemeldete Bilder (Erkenne den Menschen)</h2>
+    {% if human_spotter_reports %}
+        <table class="admin-table">
+            <thead><tr><th>Bild</th><th>Hochgeladen von</th><th>Meldungen</th><th></th></tr></thead>
+            <tbody>
+                {% for entry in human_spotter_reports %}
+                    <tr>
+                        <td><img class="admin-human-spotter-thumb" src="{{ media_url('human_spotter', entry.image.filename) }}" alt=""></td>
+                        <td>{{ entry.image.uploader.username }}</td>
+                        <td>{{ entry.report_count }}</td>
+                        <td>
+                            <form action="{{ url_for('admin_human_spotter_dismiss_reports', image_id=entry.image.id) }}" method="post" class="admin-inline-form">
+                                <button type="submit" class="admin-inline-btn">Erledigt</button>
+                            </form>
+                            <form action="{{ url_for('admin_human_spotter_delete_image', image_id=entry.image.id) }}" method="post" class="admin-inline-form"
+                                  onsubmit="return confirm('Bild wirklich löschen?');">
+                                <button type="submit" class="danger admin-inline-btn">Bild löschen</button>
+                            </form>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>Keine gemeldeten Bilder.</p>
+    {% endif %}
+
     <h2>Alle Spiele</h2>
     <table class="admin-table">
         <thead><tr><th>Spiel</th><th>Von</th><th>Erstellt</th><th></th></tr></thead>

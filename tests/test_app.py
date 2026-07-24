@@ -14,6 +14,7 @@ from models import (
     MemeTemplate, MemeLobby, MemeLobbyPlayer, MemeCreation, MemeVote,
     StudioProject, StudioBlock, StudioProjectLike, StudioProjectComment, StudioProjectReport,
     AiAdminFact, AiLearnedFact, PasswordResetCode, AccountRecoveryRequest, ErrorLog,
+    HumanSpotterImage, HumanSpotterClick, HumanSpotterReport,
 )
 
 
@@ -3698,5 +3699,166 @@ def test_admin_deleting_account_without_email_sends_no_notification(client, monk
     response = client.post(f"/admin/users/{target.id}/delete", follow_redirects=True)
     assert response.status_code == 200
     assert len(sent) == 0
+
+
+def test_human_spotter_page_loads(client):
+    response = client.get("/erkenne-den-menschen")
+    assert response.status_code == 200
+    assert "Erkenne den Menschen".encode() in response.data
+
+
+def test_human_spotter_next_with_no_images(client):
+    response = client.get("/api/human-spotter/next")
+    data = response.get_json()
+    assert data["ok"] is False
+
+
+def test_human_spotter_upload_requires_login(client):
+    data = {"photo": (io.BytesIO(b"fake image bytes"), "photo.png")}
+    response = client.post(
+        "/api/human-spotter/upload", data=data, content_type="multipart/form-data",
+    )
+    assert response.status_code == 401
+
+
+def test_human_spotter_upload_and_next(client):
+    register(client, username="uploader")
+    data = {"photo": (io.BytesIO(b"fake image bytes"), "photo.png")}
+    upload_res = client.post(
+        "/api/human-spotter/upload", data=data, content_type="multipart/form-data",
+    )
+    upload_data = upload_res.get_json()
+    assert upload_res.status_code == 200
+    assert upload_data["ok"] is True
+    assert HumanSpotterImage.query.count() == 1
+
+    next_res = client.get("/api/human-spotter/next")
+    next_data = next_res.get_json()
+    assert next_data["ok"] is True
+    assert next_data["image"]["id"] == upload_data["image"]["id"]
+
+
+def test_human_spotter_upload_rejects_bad_format(client):
+    register(client, username="baduploader")
+    data = {"photo": (io.BytesIO(b"not an image"), "photo.exe")}
+    response = client.post(
+        "/api/human-spotter/upload", data=data, content_type="multipart/form-data",
+    )
+    assert response.status_code == 400
+    assert HumanSpotterImage.query.count() == 0
+
+
+def test_human_spotter_click_records_coordinates(client):
+    register(client, username="clicker")
+    data = {"photo": (io.BytesIO(b"fake image bytes"), "photo.png")}
+    upload_res = client.post("/api/human-spotter/upload", data=data, content_type="multipart/form-data")
+    image_id = upload_res.get_json()["image"]["id"]
+
+    response = client.post(
+        "/api/human-spotter/click", json={"image_id": image_id, "x_fraction": 0.5, "y_fraction": 0.25},
+    )
+    assert response.status_code == 200
+    assert response.get_json()["ok"] is True
+    click = HumanSpotterClick.query.filter_by(image_id=image_id).first()
+    assert click is not None
+    assert click.x_fraction == 0.5
+    assert click.y_fraction == 0.25
+    assert click.user_id == User.query.filter_by(username="clicker").first().id
+
+
+def test_human_spotter_click_rejects_out_of_range_coordinates(client):
+    register(client, username="badclicker")
+    data = {"photo": (io.BytesIO(b"fake image bytes"), "photo.png")}
+    upload_res = client.post("/api/human-spotter/upload", data=data, content_type="multipart/form-data")
+    image_id = upload_res.get_json()["image"]["id"]
+
+    response = client.post(
+        "/api/human-spotter/click", json={"image_id": image_id, "x_fraction": 1.5, "y_fraction": 0.25},
+    )
+    assert response.status_code == 400
+
+
+def test_human_spotter_click_allowed_anonymously(client):
+    register(client, username="anonuploader")
+    data = {"photo": (io.BytesIO(b"fake image bytes"), "photo.png")}
+    upload_res = client.post("/api/human-spotter/upload", data=data, content_type="multipart/form-data")
+    image_id = upload_res.get_json()["image"]["id"]
+    client.post("/logout")
+
+    response = client.post(
+        "/api/human-spotter/click", json={"image_id": image_id, "x_fraction": 0.5, "y_fraction": 0.5},
+    )
+    assert response.status_code == 200
+    click = HumanSpotterClick.query.filter_by(image_id=image_id).first()
+    assert click.user_id is None
+
+
+def test_human_spotter_report_requires_login_and_prevents_duplicates(client):
+    register(client, username="reportuploader")
+    data = {"photo": (io.BytesIO(b"fake image bytes"), "photo.png")}
+    upload_res = client.post("/api/human-spotter/upload", data=data, content_type="multipart/form-data")
+    image_id = upload_res.get_json()["image"]["id"]
+    client.post("/logout")
+
+    anon_res = client.post(f"/api/human-spotter/{image_id}/report")
+    assert anon_res.status_code == 401
+
+    register(client, username="reporter")
+    first = client.post(f"/api/human-spotter/{image_id}/report")
+    assert first.status_code == 200
+    second = client.post(f"/api/human-spotter/{image_id}/report")
+    assert second.status_code == 400
+    assert HumanSpotterReport.query.filter_by(image_id=image_id).count() == 1
+
+
+def test_human_spotter_admin_can_dismiss_reports_and_delete_image(client):
+    register(client, username="reportuploader2")
+    data = {"photo": (io.BytesIO(b"fake image bytes"), "photo.png")}
+    upload_res = client.post("/api/human-spotter/upload", data=data, content_type="multipart/form-data")
+    image_id = upload_res.get_json()["image"]["id"]
+    client.post(f"/api/human-spotter/{image_id}/report")
+    client.post("/logout")
+
+    register(client, username="humanspotteradmin")
+    make_admin("humanspotteradmin")
+
+    dashboard = client.get("/admin")
+    assert dashboard.status_code == 200
+    assert "Gemeldete Bilder".encode() in dashboard.data
+
+    dismiss_res = client.post(f"/admin/human-spotter/{image_id}/dismiss-reports", follow_redirects=True)
+    assert dismiss_res.status_code == 200
+    assert HumanSpotterReport.query.filter_by(image_id=image_id).count() == 0
+
+    delete_res = client.post(f"/admin/human-spotter/{image_id}/delete", follow_redirects=True)
+    assert delete_res.status_code == 200
+    assert HumanSpotterImage.query.count() == 0
+
+
+def test_human_spotter_heavily_reported_image_excluded_from_next(client):
+    register(client, username="reportuploader3")
+    data = {"photo": (io.BytesIO(b"fake image bytes"), "photo.png")}
+    upload_res = client.post("/api/human-spotter/upload", data=data, content_type="multipart/form-data")
+    image_id = upload_res.get_json()["image"]["id"]
+    client.post("/logout")
+
+    for i in range(3):
+        register(client, username=f"reporter{i}")
+        client.post(f"/api/human-spotter/{image_id}/report")
+        client.post("/logout")
+
+    response = client.get("/api/human-spotter/next")
+    data = response.get_json()
+    assert data["ok"] is False
+
+
+def test_human_spotter_appears_in_games_listing(client):
+    import app as app_module
+
+    with flask_app.app_context():
+        app_module.ensure_lerox_builtin_games()
+
+    response = client.get("/games")
+    assert b'data-app-url="/erkenne-den-menschen"' in response.data
 
 

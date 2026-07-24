@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}Erkenne den Menschen - timeskip{% endblock %}
+{% block brand_text %}games{% endblock %}
+{% block body_class %}game-fullscreen{% endblock %}
+{% block content %}
+    <div class="humanspotter-page">
+        <div class="humanspotter-header">
+            <a class="game-leaderboard-link" href="{{ url_for('games_page') }}">&larr; Alle Spiele</a>
+            <h1>Erkenne den Menschen</h1>
+        </div>
+
+        <p class="humanspotter-disclaimer">
+            Klick auf der Stelle im Bild, an der ein Mensch zu sehen ist. Deine Klicks werden zusammen mit dem
+            Bild gespeichert -- eine echte Bilderkennungs-KI, die live daraus lernt, gibt es auf timeskip nicht,
+            aber die gesammelten Daten helfen dabei, später zu verstehen, wie Menschen "Mensch" in Bildern markieren.
+            {% if not user %}<a href="{{ url_for('login') }}">Melde dich an</a>, um eigene Fotos hochzuladen.{% endif %}
+        </p>
+
+        <div class="humanspotter-stage" id="humanspotterStage">
+            <img class="humanspotter-image" id="humanspotterImage" src="" alt="" style="display:none;">
+            <div class="humanspotter-empty" id="humanspotterEmpty" style="display:none;">
+                Noch keine Bilder vorhanden. {% if user %}Lade unten das erste hoch!{% else %}Melde dich an, um das erste hochzuladen.{% endif %}
+            </div>
+            <div class="humanspotter-loading" id="humanspotterLoading">Lädt...</div>
+        </div>
+
+        <div class="humanspotter-actions">
+            <button type="button" id="humanspotterNextBtn" class="humanspotter-next-btn" style="display:none;">Nächstes Bild &rarr;</button>
+            {% if user %}
+                <button type="button" id="humanspotterReportBtn" class="humanspotter-report-btn" style="display:none;">Bild melden</button>
+            {% endif %}
+        </div>
+
+        {% if user %}
+            <div class="humanspotter-upload-box">
+                <label for="humanspotterUploadInput">Eigenes Foto beisteuern</label>
+                <div class="humanspotter-upload-row">
+                    <input type="file" id="humanspotterUploadInput" accept="image/png,image/jpeg,image/gif,image/webp">
+                    <button type="button" id="humanspotterUploadBtn">Hochladen</button>
+                </div>
+                <p class="humanspotter-upload-note" id="humanspotterUploadNote"></p>
+            </div>
+        {% endif %}
+    </div>
+
+    <script>
+        (function () {
+            const stage = document.getElementById("humanspotterStage");
+            const imageEl = document.getElementById("humanspotterImage");
+            const emptyEl = document.getElementById("humanspotterEmpty");
+            const loadingEl = document.getElementById("humanspotterLoading");
+            const nextBtn = document.getElementById("humanspotterNextBtn");
+            const reportBtn = document.getElementById("humanspotterReportBtn");
+            const uploadInput = document.getElementById("humanspotterUploadInput");
+            const uploadBtn = document.getElementById("humanspotterUploadBtn");
+            const uploadNote = document.getElementById("humanspotterUploadNote");
+
+            let currentImage = null;
+            let hasClicked = false;
+
+            function setStage(state) {
+                imageEl.style.display = state === "image" ? "block" : "none";
+                emptyEl.style.display = state === "empty" ? "flex" : "none";
+                loadingEl.style.display = state === "loading" ? "block" : "none";
+                nextBtn.style.display = state === "image" ? "inline-block" : "none";
+                if (reportBtn) reportBtn.style.display = state === "image" ? "inline-block" : "none";
+            }
+
+            function loadNext() {
+                setStage("loading");
+                hasClicked = false;
+                clearMarkers();
+                fetch("/api/human-spotter/next")
+                    .then((res) => res.json())
+                    .then((data) => {
+                        if (!data.ok) {
+                            currentImage = null;
+                            setStage("empty");
+                            return;
+                        }
+                        currentImage = data.image;
+                        imageEl.src = data.image.url;
+                        setStage("image");
+                    })
+                    .catch(() => setStage("empty"));
+            }
+
+            function clearMarkers() {
+                stage.querySelectorAll(".humanspotter-marker").forEach((el) => el.remove());
+            }
+
+            function placeMarker(xPercent, yPercent) {
+                const marker = document.createElement("div");
+                marker.className = "humanspotter-marker";
+                marker.style.left = xPercent + "%";
+                marker.style.top = yPercent + "%";
+                stage.appendChild(marker);
+            }
+
+            imageEl.addEventListener("click", (event) => {
+                if (!currentImage) return;
+                const rect = imageEl.getBoundingClientRect();
+                const xFraction = (event.clientX - rect.left) / rect.width;
+                const yFraction = (event.clientY - rect.top) / rect.height;
+                clearMarkers();
+                placeMarker(xFraction * 100, yFraction * 100);
+                hasClicked = true;
+
+                fetch("/api/human-spotter/click", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        image_id: currentImage.id, x_fraction: xFraction, y_fraction: yFraction,
+                    }),
+                }).catch(() => {});
+
+                setTimeout(loadNext, 900);
+            });
+
+            nextBtn.addEventListener("click", loadNext);
+
+            if (reportBtn) {
+                reportBtn.addEventListener("click", () => {
+                    if (!currentImage) return;
+                    fetch(`/api/human-spotter/${currentImage.id}/report`, { method: "POST" })
+                        .then((res) => res.json())
+                        .then((data) => {
+                            if (data.ok) loadNext();
+                        });
+                });
+            }
+
+            if (uploadBtn) {
+                uploadBtn.addEventListener("click", () => {
+                    const file = uploadInput.files[0];
+                    if (!file) {
+                        uploadNote.textContent = "Bitte zuerst ein Bild auswählen.";
+                        return;
+                    }
+                    uploadNote.textContent = "Wird hochgeladen ...";
+                    const formData = new FormData();
+                    formData.append("photo", file);
+                    fetch("/api/human-spotter/upload", { method: "POST", body: formData })
+                        .then((res) => res.json())
+                        .then((data) => {
+                            if (!data.ok) {
+                                uploadNote.textContent = data.message || "Das Bild konnte nicht hochgeladen werden.";
+                                return;
+                            }
+                            uploadNote.textContent = "Danke! Dein Foto ist jetzt Teil des Spiels.";
+                            uploadInput.value = "";
+                            if (!currentImage) loadNext();
+                        })
+                        .catch(() => { uploadNote.textContent = "Fehler beim Hochladen."; });
+                });
+            }
+
+            loadNext();
+        })();
+    </script>
+{% endblock %}
