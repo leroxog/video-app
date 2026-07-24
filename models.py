@@ -398,6 +398,25 @@ class AiAdminFact(db.Model):
     admin_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     content = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class AiLearnedFact(db.Model):
+    """The honest version of "training" the assistant, given that Groq's
+    API is hosted inference only -- there is no way to actually fine-tune
+    the shared model from this app (see ai_assistant.py's module
+    docstring). Instead, in general (non-code) chats, two kinds of things
+    get remembered for future conversations: source="wikipedia" is the
+    takeaway from a successful search_wikipedia lookup, shared with every
+    user since it's independently verifiable; source="user" is something a
+    user told the assistant about themselves (name, hobby, preference...),
+    scoped to user_id alone and always framed to the model as an
+    unverified, self-reported claim -- never treated as confirmed truth
+    the way an AiAdminFact is."""
+    id = db.Column(db.Integer, primary_key=True)
+    source = db.Column(db.String(20), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     admin = db.relationship("User")
 
 

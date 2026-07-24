@@ -32,8 +32,8 @@ from models import (
     GamePlayCount, Sound, UserCreatedCode, Conversation, ConversationMember, Message,
     CoinflipDeposit, MemeTemplate, MemeLobby, MemeLobbyPlayer, MemeCreation, MemeVote,
     StudioProject, StudioBlock, StudioProjectLike, StudioProjectComment, StudioProjectReport,
-    AiChatFeedback, AiChat, AiChatMessage, AiAdminFact, PasswordResetCode, AccountRecoveryRequest,
-    ErrorLog,
+    AiChatFeedback, AiChat, AiChatMessage, AiAdminFact, AiLearnedFact, PasswordResetCode,
+    AccountRecoveryRequest, ErrorLog,
 )
 import ai_assistant
 
@@ -1601,6 +1601,7 @@ def api_ai_delete_chat(chat_id):
 
 ADMIN_FACT_MAX_LENGTH = 500
 ADMIN_FACTS_PROMPT_LIMIT = 20
+LEARNED_FACTS_PROMPT_LIMIT = 15
 
 
 @app.route("/api/ai/chat", methods=["POST"])
@@ -1646,10 +1647,30 @@ def api_ai_chat():
         AiAdminFact.query.order_by(AiAdminFact.created_at.desc()).limit(ADMIN_FACTS_PROMPT_LIMIT).all()
     ]
 
-    def on_done(reply, error, proposed_change):
+    # AiLearnedFact only ever applies in general mode (see ai_assistant.py's
+    # module docstring) -- game/webapp DSL prompts stay protected from it,
+    # same reasoning as the tool split.
+    learned_facts = None
+    if project_type is None:
+        learned_facts = {
+            "wikipedia": [
+                f.content for f in AiLearnedFact.query.filter_by(source="wikipedia")
+                .order_by(AiLearnedFact.created_at.desc()).limit(LEARNED_FACTS_PROMPT_LIMIT).all()
+            ],
+            "user": [
+                f.content for f in AiLearnedFact.query.filter_by(source="user", user_id=user.id)
+                .order_by(AiLearnedFact.created_at.desc()).limit(LEARNED_FACTS_PROMPT_LIMIT).all()
+            ],
+        }
+
+    def on_done(reply, error, proposed_change, new_learned_facts):
         with app.app_context():
             if reply:
                 db.session.add(AiChatMessage(chat_id=chat_id_captured, role="assistant", content=reply))
+                for fact in (new_learned_facts or {}).get("wikipedia", []):
+                    db.session.add(AiLearnedFact(source="wikipedia", content=fact))
+                for fact in (new_learned_facts or {}).get("user", []):
+                    db.session.add(AiLearnedFact(source="user", content=fact, user_id=user_id_captured))
                 db.session.commit()
                 if is_first_message:
                     title = ai_assistant.generate_title(message)
@@ -1667,7 +1688,8 @@ def api_ai_chat():
                 log_error(error, path="/api/ai/chat", method="POST", user_id=user_id_captured)
 
     job_id = ai_assistant.start_chat_job(
-        message, context, history=history, project_type=project_type, facts=facts, on_done=on_done,
+        message, context, history=history, project_type=project_type, facts=facts,
+        learned_facts=learned_facts, on_done=on_done,
     )
     return jsonify({"ok": True, "job_id": job_id, "chat_id": chat.id})
 

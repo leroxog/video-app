@@ -13,7 +13,7 @@ from models import (
     User, Sound, Conversation, Message,
     MemeTemplate, MemeLobby, MemeLobbyPlayer, MemeCreation, MemeVote,
     StudioProject, StudioBlock, StudioProjectLike, StudioProjectComment, StudioProjectReport,
-    AiAdminFact, PasswordResetCode, AccountRecoveryRequest, ErrorLog,
+    AiAdminFact, AiLearnedFact, PasswordResetCode, AccountRecoveryRequest, ErrorLog,
 )
 
 
@@ -2727,7 +2727,7 @@ def test_ai_chat_starts_job_and_reports_status(client, monkeypatch):
 
     monkeypatch.setattr(
         ai_assistant, "generate_reply",
-        lambda message, context=None, history=None, project_type=None, facts=None: (f"Antwort auf: {message}", None),
+        lambda message, context=None, history=None, project_type=None, facts=None, learned_facts=None, captured=None: (f"Antwort auf: {message}", None),
     )
     register(client)
 
@@ -2830,7 +2830,7 @@ def test_ai_chat_persists_messages_and_generates_title(client, monkeypatch):
 
     monkeypatch.setattr(
         ai_assistant, "generate_reply",
-        lambda message, context=None, history=None, project_type=None, facts=None: ("Klar, gerne!", None),
+        lambda message, context=None, history=None, project_type=None, facts=None, learned_facts=None, captured=None: ("Klar, gerne!", None),
     )
     monkeypatch.setattr(ai_assistant, "generate_title", lambda first_message: "Frage zu Punkten")
     register(client)
@@ -3067,7 +3067,7 @@ def test_general_tools_vs_project_change_tools_by_mode(monkeypatch):
 
     captured = {}
 
-    def fake_call_groq(messages, max_tokens, tools=None):
+    def fake_call_groq(messages, max_tokens, tools=None, **kwargs):
         captured["tools"] = tools
         return "ok", None
 
@@ -3154,7 +3154,7 @@ def test_facts_addendum_included_for_every_mode(monkeypatch):
 
     captured = {}
 
-    def fake_call_groq(messages, max_tokens, tools=None):
+    def fake_call_groq(messages, max_tokens, tools=None, **kwargs):
         captured["system"] = messages[0]["content"]
         return "ok", None
 
@@ -3167,12 +3167,86 @@ def test_facts_addendum_included_for_every_mode(monkeypatch):
     assert "Fakt X" in captured["system"]
 
 
+def test_learned_facts_addendum_only_applied_in_general_mode(monkeypatch):
+    import ai_assistant
+
+    captured = {}
+
+    def fake_call_groq(messages, max_tokens, tools=None, **kwargs):
+        captured["system"] = messages[0]["content"]
+        return "ok", None
+
+    monkeypatch.setattr(ai_assistant, "_call_groq", fake_call_groq)
+    learned = {"wikipedia": ["Paris ist die Hauptstadt von Frankreich."], "user": ["Der Nutzer heißt Timo."]}
+
+    ai_assistant.generate_reply("Hallo!", learned_facts=learned)
+    assert "Paris ist die Hauptstadt von Frankreich." in captured["system"]
+    assert "Der Nutzer heißt Timo." in captured["system"]
+
+    ai_assistant.generate_reply("Ändere etwas.", context="Code: ...", project_type="webapp", learned_facts=learned)
+    assert "Paris ist die Hauptstadt von Frankreich." not in captured["system"]
+    assert "Der Nutzer heißt Timo." not in captured["system"]
+
+
+def test_run_tool_calls_captures_wikipedia_result_and_user_fact():
+    import ai_assistant
+
+    captured = {"proposed_change": None, "wikipedia_facts": [], "user_facts": []}
+    tool_calls = [
+        {"id": "c1", "function": {"name": "search_wikipedia", "arguments": '{"query": "Paris"}'}},
+        {"id": "c2", "function": {"name": "remember_user_fact", "arguments": '{"fact": "Der Nutzer heißt Timo."}'}},
+    ]
+    original = ai_assistant.TOOL_IMPLEMENTATIONS["search_wikipedia"]
+    ai_assistant.TOOL_IMPLEMENTATIONS["search_wikipedia"] = lambda args: 'Wikipedia-Artikel "Paris": Paris ist die Hauptstadt von Frankreich.'
+    try:
+        outputs = ai_assistant._run_tool_calls(tool_calls, captured)
+    finally:
+        ai_assistant.TOOL_IMPLEMENTATIONS["search_wikipedia"] = original
+
+    assert len(outputs) == 2
+    assert captured["wikipedia_facts"] == ['Wikipedia-Artikel "Paris": Paris ist die Hauptstadt von Frankreich.']
+    assert captured["user_facts"] == ["Der Nutzer heißt Timo."]
+
+
+def test_learned_facts_persisted_after_general_chat(client, monkeypatch):
+    import ai_assistant
+
+    def fake_generate_reply(message, context=None, history=None, project_type=None, facts=None,
+                             learned_facts=None, captured=None):
+        if captured is not None:
+            captured["wikipedia_facts"] = ["Paris ist die Hauptstadt von Frankreich."]
+            captured["user_facts"] = ["Der Nutzer heißt Timo."]
+        return "Alles klar!", None
+
+    monkeypatch.setattr(ai_assistant, "generate_reply", fake_generate_reply)
+    register(client, username="learner")
+
+    start_res = client.post("/api/ai/chat", json={"message": "Ich heiße Timo."})
+    job_id = start_res.get_json()["job_id"]
+
+    import time
+    for _ in range(20):
+        status = client.get(f"/api/ai/chat/{job_id}").get_json()
+        if status["status"] != "running":
+            break
+        time.sleep(0.05)
+
+    wiki_facts = AiLearnedFact.query.filter_by(source="wikipedia").all()
+    user_facts = AiLearnedFact.query.filter_by(source="user").all()
+    assert len(wiki_facts) == 1
+    assert wiki_facts[0].content == "Paris ist die Hauptstadt von Frankreich."
+    assert wiki_facts[0].user_id is None
+    assert len(user_facts) == 1
+    assert user_facts[0].content == "Der Nutzer heißt Timo."
+    assert user_facts[0].user_id == User.query.filter_by(username="learner").first().id
+
+
 def test_only_admin_can_save_a_fact(client, monkeypatch):
     import ai_assistant
 
     monkeypatch.setattr(
         ai_assistant, "generate_reply",
-        lambda message, context=None, history=None, project_type=None, facts=None: ("ok", None),
+        lambda message, context=None, history=None, project_type=None, facts=None, learned_facts=None, captured=None: ("ok", None),
     )
     register(client, username="notadmin")
     client.post("/api/ai/chat", json={"message": "Die Sonne ist aus Käse.", "save_as_fact": True})
@@ -3432,7 +3506,7 @@ def test_non_admin_cannot_clear_error_log(client):
 def test_ai_job_failure_is_logged_to_error_log(client, monkeypatch):
     import ai_assistant
 
-    def failing_generate_reply(message, context=None, history=None, project_type=None, facts=None):
+    def failing_generate_reply(message, context=None, history=None, project_type=None, facts=None, learned_facts=None, captured=None):
         raise RuntimeError("Groq ist down")
 
     monkeypatch.setattr(ai_assistant, "generate_reply", failing_generate_reply)

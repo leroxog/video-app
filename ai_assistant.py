@@ -41,6 +41,19 @@ propose_project_change is never applied automatically -- its arguments
 start_chat_job()'s job status as `proposed_change` for the frontend to
 show as a suggestion the user must explicitly accept (see aiChat's
 "Vorschlag"/"Übernehmen" UI in base.html) before it's saved anywhere.
+
+General mode also gets a fourth tool, remember_user_fact, and both it and
+search_wikipedia double as the honest version of "training" the assistant
+with outside information: since real fine-tuning isn't possible (see
+above), every successful Wikipedia lookup's takeaway and every
+self-reported user fact are instead persisted (see app.py's AiLearnedFact
+handling in api_ai_chat/on_done) and fed back into every later general
+chat's system prompt (_learned_facts_addendum) -- Wikipedia facts shared
+with everyone since they're independently checkable, user facts scoped to
+that one user alone and always framed to the model as unverified, since
+one person's say-so is not ground truth for anyone else. This never
+touches game/webapp mode's prompts, matching the same contamination
+concern the tool split above already protects against.
 """
 import os
 import re
@@ -94,11 +107,31 @@ BASE_SYSTEM_PROMPT = (
     "auch nichts und tu nicht so, als gäbe es ein Problem nicht, das es gibt."
 )
 
+# Used only for general (non-code) chat -- deliberately leads with "helpful
+# assistant" rather than "timeskip's assistant", and points at real lookups
+# (Wikipedia) and what this user has said before, rather than talking about
+# timeskip itself by default. The code-mode prompts above keep the
+# timeskip/Studio framing since that context is directly relevant there.
+GENERAL_SYSTEM_PROMPT = (
+    "Du bist ein hilfsbereiter, wissbegieriger KI-Assistent für Nutzer von timeskip -- deine "
+    "Gespräche drehen sich aber meistens NICHT um timeskip selbst, sondern um das, was die "
+    "Person dich fragt. Antworte auf Deutsch, in einem warmen, positiven Ton, und darfst "
+    "ausführlich antworten. Bei Wissensfragen verlässt du dich lieber auf eine echte "
+    "Wikipedia-Recherche oder auf das, was dieser Nutzer dir selbst schon erzählt hat, statt "
+    "zu raten oder dir etwas auszudenken. Sprich nicht schlecht über timeskip -- wenn jemand "
+    "sich über die Plattform beschwert, bleib konstruktiv statt zuzustimmen, aber erfinde auch "
+    "nichts und tu nicht so, als gäbe es ein Problem nicht, das es gibt."
+)
+
 GENERAL_TOOLS_ADDENDUM = (
-    "\n\nDu hast Zugriff auf drei Werkzeuge: search_wikipedia (aktuelle Wissensfragen), "
-    "get_weather (Live-Wetter für einen Ort) und search_docs (offizielle Dokumentation von "
-    "Python, JavaScript, HTML, Java oder C#). Nutze sie, wenn eine Frage aktuelle, "
-    "nachprüfbare Fakten braucht, statt zu raten oder dir etwas auszudenken."
+    "\n\nDu hast Zugriff auf vier Werkzeuge: search_wikipedia (aktuelle Wissensfragen), "
+    "get_weather (Live-Wetter für einen Ort), search_docs (offizielle Dokumentation von "
+    "Python, JavaScript, HTML, Java oder C#) und remember_user_fact (merkt sich eine "
+    "Selbstauskunft des Nutzers für spätere Gespräche mit ihm). Nutze search_wikipedia, "
+    "get_weather oder search_docs, wenn eine Frage aktuelle, nachprüfbare Fakten braucht, statt "
+    "zu raten oder dir etwas auszudenken. Nutze remember_user_fact, wenn der Nutzer dir gerade "
+    "etwas Persönliches über sich selbst erzählt (Name, Hobby, Vorliebe usw.) -- nicht bei "
+    "jeder Nachricht, nur bei echten Selbstauskünften."
 )
 
 GAME_DSL_ADDENDUM = (
@@ -221,6 +254,26 @@ SEARCH_DOCS_TOOL = {
     },
 }
 
+REMEMBER_USER_FACT_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "remember_user_fact",
+        "description": (
+            "Merkt sich eine persönliche Angabe, die der Nutzer gerade selbst über sich "
+            "erzählt hat (z.B. Name, Hobby, Vorliebe), damit du dich in zukünftigen "
+            "Gesprächen mit genau diesem Nutzer daran erinnerst. Nur bei echten "
+            "Selbstauskünften aufrufen, nicht bei jeder Nachricht."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "fact": {"type": "string", "description": "Die zu merkende Angabe, kurz, ein Satz."},
+            },
+            "required": ["fact"],
+        },
+    },
+}
+
 # game (DSL) mode only gets propose_project_change -- real documentation
 # for Python/JS/Java/C# would risk the model mixing real language syntax
 # into timeskip's own flat DSL. webapp mode has no such risk (it's real
@@ -228,7 +281,7 @@ SEARCH_DOCS_TOOL = {
 # answers instead of guessing from the base model's training alone.
 PROJECT_CHANGE_TOOLS = [PROPOSE_PROJECT_CHANGE_TOOL]
 WEBAPP_TOOLS = [PROPOSE_PROJECT_CHANGE_TOOL, SEARCH_DOCS_TOOL]
-AI_TOOLS = [SEARCH_WIKIPEDIA_TOOL, GET_WEATHER_TOOL, SEARCH_DOCS_TOOL]
+AI_TOOLS = [SEARCH_WIKIPEDIA_TOOL, GET_WEATHER_TOOL, SEARCH_DOCS_TOOL, REMEMBER_USER_FACT_TOOL]
 
 
 def _strip_html(raw_html):
@@ -353,12 +406,22 @@ TOOL_IMPLEMENTATIONS = {
 }
 
 
+_WIKIPEDIA_LOOKUP_FAILURES = (
+    "Kein Wikipedia-Artikel", "Die Wikipedia-Suche ist gerade nicht verfügbar", "Kein Suchbegriff",
+)
+
+
 def _run_tool_calls(tool_calls, captured):
     """Executes each requested tool and returns the "tool" role messages
-    to feed back to the model. propose_project_change is special-cased:
-    instead of fetching anything, its arguments are stashed into
-    `captured` (a single dict shared across the whole _call_groq() loop)
-    so the caller can return them alongside the final text reply."""
+    to feed back to the model. `captured` is a single dict shared across
+    the whole _call_groq() loop, so the caller can read results back out
+    after it returns:
+    - propose_project_change stashes its arguments into captured["proposed_change"]
+      instead of fetching anything.
+    - remember_user_fact stashes its argument into captured["user_facts"]
+      instead of fetching anything -- see AiLearnedFact in models.py.
+    - a successful search_wikipedia result is also appended to
+      captured["wikipedia_facts"], for the same reason."""
     outputs = []
     for call in tool_calls:
         name = call.get("function", {}).get("name")
@@ -372,9 +435,16 @@ def _run_tool_calls(tool_calls, captured):
                 "summary": (args.get("summary") or "").strip() or "Änderung vorgeschlagen",
             }
             result = "Der Änderungsvorschlag wurde dem Nutzer zur Bestätigung angezeigt."
+        elif name == "remember_user_fact":
+            fact = (args.get("fact") or "").strip()[:500]
+            if fact:
+                captured.setdefault("user_facts", []).append(fact)
+            result = "Notiert."
         else:
             impl = TOOL_IMPLEMENTATIONS.get(name)
             result = impl(args) if impl else f"Unbekanntes Werkzeug: {name}"
+            if name == "search_wikipedia" and result and not result.startswith(_WIKIPEDIA_LOOKUP_FAILURES):
+                captured.setdefault("wikipedia_facts", []).append(result[:800])
         outputs.append({"role": "tool", "tool_call_id": call.get("id"), "content": result})
     return outputs
 
@@ -412,7 +482,7 @@ def _call_groq_message(messages, max_tokens, tools=None, tool_choice="auto"):
     return response.json()["choices"][0]["message"]
 
 
-def _call_groq(messages, max_tokens, tools=None):
+def _call_groq(messages, max_tokens, tools=None, captured=None):
     """Runs a tool-calling loop: as long as the model keeps requesting
     tools, executes them server-side and feeds the results back, up to
     MAX_TOOL_ROUNDS turns. On the last allowed turn, tool_choice is forced
@@ -422,9 +492,20 @@ def _call_groq(messages, max_tokens, tools=None):
     attached and only the choice is what forces a final text answer.
     Returns (content, proposed_change) -- proposed_change is a
     {"new_code", "summary"} dict if propose_project_change was called
-    during the loop, else None."""
+    during the loop, else None.
+
+    `captured` is an optional dict the caller can pass in (and keep a
+    reference to) in order to read back what search_wikipedia/
+    remember_user_fact turned up during this call -- see
+    captured["wikipedia_facts"]/captured["user_facts"] and
+    _run_tool_calls(). Callers that don't care (most of them: only
+    general-mode chats ever populate these) can simply omit it."""
     current_messages = messages
-    captured = {"proposed_change": None}
+    if captured is None:
+        captured = {}
+    captured.setdefault("proposed_change", None)
+    captured.setdefault("wikipedia_facts", [])
+    captured.setdefault("user_facts", [])
     for round_index in range(MAX_TOOL_ROUNDS):
         is_last_round = round_index == MAX_TOOL_ROUNDS - 1
         message = _call_groq_message(
@@ -453,15 +534,44 @@ def _facts_addendum(facts):
     )
 
 
-def generate_reply(message, context=None, history=None, project_type=None, facts=None):
+def _learned_facts_addendum(wikipedia_facts, user_facts):
+    """The general-mode-only counterpart to _facts_addendum: wikipedia_facts
+    are takeaways from this app's own past search_wikipedia lookups (global,
+    since a Wikipedia article is independently checkable), user_facts are
+    self-reported claims a user made about themselves in an earlier chat
+    (scoped to that one user, and explicitly framed as unverified -- unlike
+    an AiAdminFact, one user's say-so is never treated as confirmed truth)."""
+    parts = []
+    if wikipedia_facts:
+        lines = "\n".join(f"- {fact}" for fact in wikipedia_facts)
+        parts.append(
+            "\n\nAus früheren Wikipedia-Recherchen -- fachlich fundiert, aber bei sehr "
+            "aktuellen Ereignissen lieber erneut nachschlagen:\n" + lines
+        )
+    if user_facts:
+        lines = "\n".join(f"- {fact}" for fact in user_facts)
+        parts.append(
+            "\n\nWas dieser Nutzer dir in einem früheren Gespräch selbst über sich erzählt "
+            "hat -- unverifiziert und könnte veraltet oder falsch sein, aber darfst du als "
+            "Kontext über diesen Nutzer verwenden:\n" + lines
+        )
+    return "".join(parts)
+
+
+def generate_reply(message, context=None, history=None, project_type=None, facts=None,
+                    learned_facts=None, captured=None):
     """Runs one turn against Groq's hosted chat-completions API. Not meant
     to be called directly from a request handler -- see start_chat_job().
     `history` is this same chat's own prior turns (a list of
     {"role": "user"|"assistant", "content": str} dicts, oldest first).
     `project_type` is "game", "webapp", or None (general chat) and picks
     both the system prompt variant and which tools are offered. `facts`
-    is the list of admin-confirmed facts (see _facts_addendum). Returns
-    (reply_text, proposed_change)."""
+    is the list of admin-confirmed facts (see _facts_addendum). `learned_facts`
+    is an optional {"wikipedia": [...], "user": [...]} dict of previously
+    auto-learned facts (see _learned_facts_addendum) -- only applied in
+    general mode. `captured`, if given, is mutated in place with any new
+    wikipedia_facts/user_facts learned during *this* call, for the caller
+    to persist (see _call_groq). Returns (reply_text, proposed_change)."""
     message = (message or "").strip()[:MAX_MESSAGE_CHARS]
     if not message:
         return "", None
@@ -486,16 +596,20 @@ def generate_reply(message, context=None, history=None, project_type=None, facts
         system_prompt = BASE_SYSTEM_PROMPT + WEBAPP_CODE_ADDENDUM
         tools = WEBAPP_TOOLS
     else:
-        system_prompt = BASE_SYSTEM_PROMPT + GENERAL_TOOLS_ADDENDUM
+        system_prompt = GENERAL_SYSTEM_PROMPT + GENERAL_TOOLS_ADDENDUM
         tools = AI_TOOLS
     system_prompt += _facts_addendum(facts)
+    if project_type is None and learned_facts:
+        system_prompt += _learned_facts_addendum(
+            learned_facts.get("wikipedia") or [], learned_facts.get("user") or [],
+        )
 
     messages = [{"role": "system", "content": system_prompt}]
     if history:
         messages.extend(history[-MAX_HISTORY_MESSAGES:])
     messages.append({"role": "user", "content": user_content})
 
-    return _call_groq(messages, MAX_REPLY_TOKENS, tools=tools)
+    return _call_groq(messages, MAX_REPLY_TOKENS, tools=tools, captured=captured)
 
 
 def generate_title(first_message):
@@ -525,7 +639,12 @@ _jobs = {}
 _jobs_lock = threading.Lock()
 
 
-def start_chat_job(message, context=None, history=None, project_type=None, facts=None, on_done=None):
+def start_chat_job(message, context=None, history=None, project_type=None, facts=None,
+                    learned_facts=None, on_done=None):
+    """`on_done(reply, error, proposed_change, new_learned_facts)` --
+    new_learned_facts is always a {"wikipedia": [...], "user": [...]} dict
+    (possibly with empty lists) of facts learned *during this call*, for
+    the caller to persist as AiLearnedFact rows."""
     job_id = uuid.uuid4().hex
     with _jobs_lock:
         _jobs[job_id] = {"status": "running", "reply": None, "error": None, "proposed_change": None}
@@ -538,10 +657,17 @@ def start_chat_job(message, context=None, history=None, project_type=None, facts
         # ever surfaced through this job's status for the current, live
         # poll, matching how the existing "insert code" button also only
         # appears live and not when reopening an old chat.
+        captured = {}
         try:
-            reply, proposed_change = generate_reply(message, context, history, project_type, facts)
+            reply, proposed_change = generate_reply(
+                message, context, history, project_type, facts, learned_facts, captured,
+            )
+            new_learned_facts = {
+                "wikipedia": captured.get("wikipedia_facts") or [],
+                "user": captured.get("user_facts") or [],
+            }
             if on_done:
-                on_done(reply, None, proposed_change)
+                on_done(reply, None, proposed_change, new_learned_facts)
             with _jobs_lock:
                 _jobs[job_id] = {
                     "status": "done", "reply": reply, "error": None, "proposed_change": proposed_change,
@@ -549,7 +675,7 @@ def start_chat_job(message, context=None, history=None, project_type=None, facts
         except Exception as exc:
             logger.exception("KI-Antwort fehlgeschlagen.")
             if on_done:
-                on_done(None, str(exc), None)
+                on_done(None, str(exc), None, {"wikipedia": [], "user": []})
             with _jobs_lock:
                 _jobs[job_id] = {"status": "error", "reply": None, "error": str(exc), "proposed_change": None}
 

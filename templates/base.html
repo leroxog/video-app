@@ -148,10 +148,9 @@
                                 lass dir bei deinem Code helfen.
                             </div>
                         </div>
-                        <label class="ai-chat-context-toggle" id="aiChatContextToggleWrap" style="display:none;">
-                            <input type="checkbox" id="aiChatContextToggle" checked>
-                            Meinen aktuellen Code mitschicken
-                        </label>
+                        <p class="ai-chat-context-note" id="aiChatContextNote" style="display:none;">
+                            Dein aktueller Code und der bisherige Gesprächsverlauf werden bei jeder Nachricht mitgeschickt.
+                        </p>
                         <form class="ai-chat-form" id="aiChatForm">
                             <input type="text" id="aiChatInput" placeholder="Frage stellen..." maxlength="2000" autocomplete="off">
                             <button type="submit">Senden</button>
@@ -301,8 +300,7 @@
                 const messagesEl = document.getElementById("aiChatMessages");
                 const form = document.getElementById("aiChatForm");
                 const input = document.getElementById("aiChatInput");
-                const contextToggleWrap = document.getElementById("aiChatContextToggleWrap");
-                const contextToggle = document.getElementById("aiChatContextToggle");
+                const contextNote = document.getElementById("aiChatContextNote");
                 const GREETING = messagesEl.innerHTML;
 
                 // The sidebar (persistent "Zuletzt verwendet" chat list with
@@ -354,11 +352,18 @@
                 const pageEmbedTarget = document.getElementById("aiChatPageEmbed");
 
                 let currentChatId = null;
-                let currentChatMode = "general";
+                // Embedded directly in a code editor, there's no ambiguity
+                // to resolve -- default straight to "code" mode so the
+                // current code + history are sent from the very first
+                // message, instead of waiting on the "switch to code mode?"
+                // offer below (that offer still makes sense on the general
+                // assistant widget/page, where the user might not be there
+                // for code help at all).
+                let currentChatMode = codeTextarea ? "code" : "general";
                 let currentChatSpecializePrompted = false;
 
                 function updateContextToggleVisibility() {
-                    contextToggleWrap.style.display = (codeTextarea && currentChatMode === "code") ? "flex" : "none";
+                    contextNote.style.display = (codeTextarea && currentChatMode === "code") ? "block" : "none";
                 }
                 updateContextToggleVisibility();
 
@@ -496,7 +501,7 @@
 
                 function startNewChat() {
                     currentChatId = null;
-                    currentChatMode = "general";
+                    currentChatMode = codeTextarea ? "code" : "general";
                     currentChatSpecializePrompted = false;
                     headerTitle.textContent = "Startseite";
                     messagesEl.innerHTML = GREETING;
@@ -831,7 +836,7 @@
                     addMessage(text, "user");
                     input.value = "";
 
-                    const includeContext = codeTextarea && currentChatMode === "code" && contextToggle.checked;
+                    const includeContext = codeTextarea && currentChatMode === "code";
                     const body = { message: text };
                     if (currentChatId) body.chat_id = currentChatId;
                     if (includeContext) {

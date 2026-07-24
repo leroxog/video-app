@@ -1119,10 +1119,8 @@ body.studio-fullscreen .ai-chat-message-bot {
     cursor: default;
 }
 
-.ai-chat-context-toggle {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
+.ai-chat-context-note {
+    margin: 0;
     padding: 0.4rem 0.9rem;
     font-size: 0.78rem;
     color: var(--text-secondary);
