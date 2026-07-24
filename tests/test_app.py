@@ -3862,3 +3862,16 @@ def test_human_spotter_appears_in_games_listing(client):
     assert b'data-app-url="/erkenne-den-menschen"' in response.data
 
 
+def test_voice_chat_button_and_gender_attribute_present_when_logged_in(client):
+    register(client, username="voiceuser", extra={"gender": "weiblich"})
+    response = client.get("/assistant")
+    assert "Mit der KI reden".encode() in response.data
+    assert b'data-user-gender="weiblich"' in response.data
+    assert b'id="aiVoiceOverlay"' in response.data
+
+
+def test_voice_chat_widget_absent_when_logged_out(client):
+    response = client.get("/terms")
+    assert b'id="aiVoiceOverlay"' not in response.data
+
+

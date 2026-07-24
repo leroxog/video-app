@@ -112,7 +112,7 @@
     </div>
 
     {% if user %}
-        <div class="ai-chat-widget" id="aiChatWidget">
+        <div class="ai-chat-widget" id="aiChatWidget" data-user-gender="{{ user.gender or '' }}">
             <a class="ai-chat-toggle-btn" id="aiChatToggleBtn" href="{{ url_for('assistant_page') }}" title="KI-Assistent">🤖</a>
             <div class="ai-chat-panel" id="aiChatPanel" style="display:none;">
                 <div class="ai-chat-sidebar" id="aiChatSidebar">
@@ -121,6 +121,7 @@
                         <button type="button" class="ai-chat-sidebar-tab" id="aiChatTabCode" data-mode="code">Code</button>
                     </div>
                     <button type="button" class="ai-chat-sidebar-new-btn" id="aiChatSidebarNewBtn">+ Neuer Chat</button>
+                    <button type="button" class="ai-chat-sidebar-voice-btn" id="aiChatSidebarVoiceBtn">🎤 Mit der KI reden</button>
                     <div class="ai-chat-sidebar-label">Zuletzt verwendet</div>
                     <div class="ai-chat-sidebar-list" id="aiChatSidebarList"></div>
                     <button type="button" class="ai-chat-sidebar-manage-btn" id="aiChatSidebarManageBtn">&#9776; Anpassen</button>
@@ -157,6 +158,27 @@
                         </form>
                         <p class="ai-chat-disclaimer">Sie schreiben mit einer KI, nicht mit einem Menschen. Eine KI kann Fehler machen.</p>
                     </div>
+                </div>
+            </div>
+
+            <div class="ai-voice-overlay" id="aiVoiceOverlay" style="display:none;">
+                <div class="ai-voice-box">
+                    <div class="ai-voice-header">
+                        <span>Mit der KI reden</span>
+                        <select id="aiVoiceGenderSelect" class="ai-voice-gender-select" title="Stimme der KI">
+                            <option value="male">Männliche Stimme</option>
+                            <option value="female">Weibliche Stimme</option>
+                        </select>
+                        <button type="button" id="aiVoiceCloseBtn">&times;</button>
+                    </div>
+                    <div class="ai-voice-transcript" id="aiVoiceTranscript"></div>
+                    <button type="button" class="ai-voice-mic-btn" id="aiVoiceMicBtn" title="Sprechen">🎤</button>
+                    <p class="ai-voice-status" id="aiVoiceStatus">Tippe auf das Mikrofon und sprich.</p>
+                    <p class="ai-voice-disclaimer">
+                        Sprachein- und -ausgabe laufen über die Sprachfunktionen deines Browsers -- kostenlos,
+                        aber keine echten, von Personen eingesprochenen Stimmen. Sie sprechen mit einer KI,
+                        nicht mit einem Menschen.
+                    </p>
                 </div>
             </div>
         </div>
@@ -862,12 +884,159 @@
                                 thinkingBubble.textContent = "Fehler bei der Anfrage.";
                                 return;
                             }
-                            currentChatId = data.chat_id;
+            currentChatId = data.chat_id;
                             if (headerTitle.textContent === "Startseite") headerTitle.textContent = "Neuer Chat";
                             pollJob(data.job_id, thinkingBubble, text);
                         })
                         .catch(() => { thinkingBubble.textContent = "Fehler bei der Anfrage."; });
                 });
+
+                // --- Voice chat ("Mit der KI reden") -- free, browser-native
+                // speech recognition (input) and speech synthesis (output),
+                // see the on-page disclaimer: there's no way to actually
+                // train a custom voice model from this app, so "male"/
+                // "female" just picks among the browser's own installed
+                // voices instead.
+                const sidebarVoiceBtn = document.getElementById("aiChatSidebarVoiceBtn");
+                const voiceOverlay = document.getElementById("aiVoiceOverlay");
+                const voiceCloseBtn = document.getElementById("aiVoiceCloseBtn");
+                const voiceMicBtn = document.getElementById("aiVoiceMicBtn");
+                const voiceTranscript = document.getElementById("aiVoiceTranscript");
+                const voiceStatus = document.getElementById("aiVoiceStatus");
+                const voiceGenderSelect = document.getElementById("aiVoiceGenderSelect");
+
+                if (sidebarVoiceBtn && voiceOverlay) {
+                    const userGender = widget.dataset.userGender;
+                    voiceGenderSelect.value = userGender === "weiblich" ? "female" : "male";
+
+                    let voiceChatId = null;
+                    let recognition = null;
+                    let voices = [];
+
+                    function loadVoices() {
+                        voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
+                    }
+                    if (window.speechSynthesis) {
+                        loadVoices();
+                        window.speechSynthesis.onvoiceschanged = loadVoices;
+                    }
+
+                    const FEMALE_VOICE_HINTS = ["female", "frau", "weiblich", "hedda", "katja", "anna", "petra"];
+                    const MALE_VOICE_HINTS = ["male", "mann", "männlich", "stefan", "yannick", "markus", "conrad"];
+
+                    function pickVoice(gender) {
+                        const germanVoices = voices.filter((v) => v.lang && v.lang.toLowerCase().startsWith("de"));
+                        const pool = germanVoices.length ? germanVoices : voices;
+                        const hints = gender === "female" ? FEMALE_VOICE_HINTS : MALE_VOICE_HINTS;
+                        const matched = pool.find((v) => hints.some((h) => v.name.toLowerCase().includes(h)));
+                        return matched || pool[0] || null;
+                    }
+
+                    function speak(text) {
+                        if (!window.speechSynthesis) return;
+                        window.speechSynthesis.cancel();
+                        const utterance = new SpeechSynthesisUtterance(text);
+                        utterance.lang = "de-DE";
+                        const voice = pickVoice(voiceGenderSelect.value);
+                        if (voice) utterance.voice = voice;
+                        window.speechSynthesis.speak(utterance);
+                    }
+
+                    function addVoiceLine(text, role) {
+                        const line = document.createElement("div");
+                        line.className = "ai-voice-line ai-voice-line-" + role;
+                        line.textContent = text;
+                        voiceTranscript.appendChild(line);
+                        voiceTranscript.scrollTop = voiceTranscript.scrollHeight;
+                    }
+
+                    function pollVoiceJob(jobId) {
+                        fetch(`/api/ai/chat/${jobId}`)
+                            .then((res) => res.json())
+                            .then((data) => {
+                                if (!data.ok) { voiceStatus.textContent = "Fehler bei der Anfrage."; return; }
+                                if (data.status === "running") {
+                                    setTimeout(() => pollVoiceJob(jobId), 1000);
+                                    return;
+                                }
+                                if (data.status === "done") {
+                                    const reply = data.reply || "(keine Antwort)";
+                                    addVoiceLine(reply, "bot");
+                                    voiceStatus.textContent = "Tippe auf das Mikrofon und sprich.";
+                                    speak(reply);
+                                } else {
+                                    voiceStatus.textContent = "Die KI ist gerade nicht verfügbar.";
+                                }
+                            })
+                            .catch(() => { voiceStatus.textContent = "Fehler bei der Anfrage."; });
+                    }
+
+                    function sendVoiceMessage(text) {
+                        addVoiceLine(text, "user");
+                        voiceStatus.textContent = "Die KI denkt nach ...";
+                        const body = { message: text };
+                        if (voiceChatId) body.chat_id = voiceChatId;
+                        fetch("/api/ai/chat", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify(body),
+                        })
+                            .then((res) => res.json())
+                            .then((data) => {
+                                if (!data.ok) { voiceStatus.textContent = "Fehler bei der Anfrage."; return; }
+                                voiceChatId = data.chat_id;
+                                pollVoiceJob(data.job_id);
+                            })
+                            .catch(() => { voiceStatus.textContent = "Fehler bei der Anfrage."; });
+                    }
+
+                    const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+                    function startListening() {
+                        if (!SpeechRecognitionCtor) {
+                            voiceStatus.textContent = "Dein Browser unterstützt leider keine Spracheingabe.";
+                            return;
+                        }
+                        recognition = new SpeechRecognitionCtor();
+                        recognition.lang = "de-DE";
+                        recognition.interimResults = false;
+                        recognition.maxAlternatives = 1;
+                        voiceMicBtn.classList.add("is-listening");
+                        voiceStatus.textContent = "Ich höre zu ...";
+                        recognition.onresult = (event) => {
+                            const text = event.results[0][0].transcript;
+                            sendVoiceMessage(text);
+                        };
+                        recognition.onerror = () => {
+                            voiceStatus.textContent = "Konnte dich nicht verstehen. Versuch es nochmal.";
+                            voiceMicBtn.classList.remove("is-listening");
+                        };
+                        recognition.onend = () => {
+                            voiceMicBtn.classList.remove("is-listening");
+                        };
+                        recognition.start();
+                    }
+
+                    voiceMicBtn.addEventListener("click", () => {
+                        if (recognition) {
+                            try { recognition.stop(); } catch (e) {}
+                        }
+                        startListening();
+                    });
+
+                    sidebarVoiceBtn.addEventListener("click", () => {
+                        panel.style.display = "none";
+                        voiceOverlay.style.display = "flex";
+                    });
+
+                    voiceCloseBtn.addEventListener("click", () => {
+                        voiceOverlay.style.display = "none";
+                        if (window.speechSynthesis) window.speechSynthesis.cancel();
+                        if (recognition) {
+                            try { recognition.stop(); } catch (e) {}
+                        }
+                    });
+                }
             })();
         </script>
     {% endif %}
