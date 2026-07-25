@@ -10,6 +10,7 @@ import logging
 import smtplib
 import threading
 import traceback
+import requests
 from email.mime.text import MIMEText
 from datetime import datetime, timezone, date, timedelta
 from zoneinfo import ZoneInfo
@@ -1732,6 +1733,10 @@ def api_ai_chat():
                 f.content for f in AiLearnedFact.query.filter_by(source="user", user_id=user.id)
                 .order_by(AiLearnedFact.created_at.desc()).limit(LEARNED_FACTS_PROMPT_LIMIT).all()
             ],
+            "docs": [
+                f.content for f in AiLearnedFact.query.filter_by(source="python_docs")
+                .order_by(AiLearnedFact.created_at.desc()).limit(LEARNED_FACTS_PROMPT_LIMIT).all()
+            ],
         }
 
     def on_done(reply, error, proposed_change, new_learned_facts):
@@ -2963,12 +2968,17 @@ def admin_dashboard():
         .all()
     ]
     voice_profiles = {p.gender: p for p in AiVoiceProfile.query.all()}
+    learned_facts_counts = {
+        "wikipedia": AiLearnedFact.query.filter_by(source="wikipedia").count(),
+        "python_docs": AiLearnedFact.query.filter_by(source="python_docs").count(),
+        "user": AiLearnedFact.query.filter_by(source="user").count(),
+    }
     return render_template(
         "admin.html", user=admin_user, users=users, games=games, online_status=online_status,
         reports=reports, meme_templates=meme_templates, ai_feedback=ai_feedback, admin_facts=admin_facts,
         recovery_requests=recovery_requests, error_logs=error_logs,
         human_spotter_reports=human_spotter_reports, voice_profiles=voice_profiles,
-        use_elevenlabs=USE_ELEVENLABS,
+        use_elevenlabs=USE_ELEVENLABS, learned_facts_counts=learned_facts_counts,
     )
 
 
@@ -2987,6 +2997,100 @@ def admin_delete_fact(fact_id):
     fact = db.get_or_404(AiAdminFact, fact_id)
     db.session.delete(fact)
     db.session.commit()
+    return redirect(url_for("admin_dashboard"))
+
+
+# A curated, one-time "foundational knowledge" batch for the general-mode
+# assistant's learned facts (see AiLearnedFact/_learned_facts_addendum) --
+# not remotely "all of Wikipedia" (millions of articles, wouldn't fit in
+# any prompt anyway, and 9999 arbitrary scraped websites wouldn't either --
+# LEARNED_FACTS_PROMPT_LIMIT caps what actually reaches a single prompt
+# regardless of how many rows exist), just a broad, useful starting set on
+# top of the live per-question search_wikipedia/search_docs lookups that
+# already run during normal chats. Real Wikipedia summaries and real
+# Python documentation excerpts, fetched the same way a live lookup would.
+WIKIPEDIA_SEED_TOPICS = [
+    "Deutschland", "Europa", "Erde", "Sonnensystem", "Wasser", "Photosynthese",
+    "Zweiter Weltkrieg", "Römisches Reich", "Dinosaurier", "Klimawandel",
+    "Künstliche Intelligenz", "Internet", "Elektrizität", "Chemisches Element",
+    "Mathematik", "Physik", "Biologie", "Weltgeschichte", "Fußball", "Musik",
+    "Kunst", "Literatur", "Demokratie", "Menschenrechte", "Evolution", "DNA",
+    "Gehirn", "Vulkan", "Erdbeben", "Ozean",
+    "Programmierung", "Programmiersprache", "Quellcode", "Softwareentwicklung",
+]
+
+# _tool_search_docs's DuckDuckGo-based site search turned out to already be
+# broken independently of this feature -- DuckDuckGo's html.duckduckgo.com
+# endpoint now answers automated requests with a bot-detection challenge
+# page (HTTP 202, no real results) instead of search results, discovered
+# while building this seeding feature. Rather than depend on that fragile
+# search for a small, curated topic list we already know good pages for,
+# fetch these official docs.python.org pages directly.
+PYTHON_SEED_DOC_URLS = {
+    "list": "https://docs.python.org/3/tutorial/introduction.html#lists",
+    "dictionary": "https://docs.python.org/3/tutorial/datastructures.html#dictionaries",
+    "for loop": "https://docs.python.org/3/tutorial/controlflow.html#for-statements",
+    "function": "https://docs.python.org/3/tutorial/controlflow.html#defining-functions",
+    "class": "https://docs.python.org/3/tutorial/classes.html",
+    "exception handling": "https://docs.python.org/3/tutorial/errors.html",
+    "string methods": "https://docs.python.org/3/library/stdtypes.html#string-methods",
+    "file handling": "https://docs.python.org/3/tutorial/inputoutput.html#reading-and-writing-files",
+    "modules": "https://docs.python.org/3/tutorial/modules.html",
+    "list comprehension": "https://docs.python.org/3/tutorial/datastructures.html#list-comprehensions",
+    "lambda": "https://docs.python.org/3/reference/expressions.html#lambda",
+    "decorators": "https://docs.python.org/3/glossary.html#term-decorator",
+    "generators": "https://docs.python.org/3/tutorial/classes.html#generators",
+    "regular expressions": "https://docs.python.org/3/library/re.html",
+    "datetime": "https://docs.python.org/3/library/datetime.html",
+}
+
+
+def _fetch_python_doc_page(topic, url):
+    if not ai_assistant._docs_allowed(url):
+        return None
+    try:
+        response = requests.get(
+            url, headers={"User-Agent": ai_assistant.TOOL_USER_AGENT},
+            timeout=ai_assistant.TOOL_REQUEST_TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+        text = ai_assistant._strip_html(response.text)
+        return f"Aus der offiziellen python-Dokumentation ({url}):\n{text[:ai_assistant.MAX_TOOL_RESULT_CHARS]}"
+    except Exception:
+        logger.exception("Direkter Doku-Abruf für %s fehlgeschlagen.", url)
+        return None
+
+
+@app.route("/admin/ai/seed-knowledge", methods=["POST"])
+def admin_seed_ai_knowledge():
+    """One-time bulk import into AiLearnedFact -- see WIKIPEDIA_SEED_TOPICS/
+    PYTHON_SEED_DOC_URLS above. Skips topics already stored (by prefix
+    match on content) so re-running only fills in gaps rather than
+    duplicating."""
+    require_admin()
+    added = 0
+    for topic in WIKIPEDIA_SEED_TOPICS:
+        prefix = f'Wikipedia-Artikel "{topic}"'
+        if AiLearnedFact.query.filter_by(source="wikipedia").filter(
+            AiLearnedFact.content.like(f"{prefix}%")
+        ).first() is not None:
+            continue
+        result = ai_assistant._tool_search_wikipedia(topic)
+        if result and not result.startswith(ai_assistant._WIKIPEDIA_LOOKUP_FAILURES):
+            db.session.add(AiLearnedFact(source="wikipedia", content=result[:800]))
+            added += 1
+    for topic, url in PYTHON_SEED_DOC_URLS.items():
+        prefix = f"Python-Doku: {topic}"
+        if AiLearnedFact.query.filter_by(source="python_docs").filter(
+            AiLearnedFact.content.like(f"{prefix}%")
+        ).first() is not None:
+            continue
+        result = _fetch_python_doc_page(topic, url)
+        if result:
+            db.session.add(AiLearnedFact(source="python_docs", content=f"{prefix}: {result[:800]}"))
+            added += 1
+    db.session.commit()
+    flash(f"{added} neue Wissens-Einträge geladen.")
     return redirect(url_for("admin_dashboard"))
 
 

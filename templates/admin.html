@@ -241,6 +241,22 @@
         <p>Keine gemeldeten Bilder.</p>
     {% endif %}
 
+    <h2>KI-Grundwissen (Wikipedia &amp; Python-Doku)</h2>
+    <p>
+        Wikipedia-Einträge: {{ learned_facts_counts.wikipedia }} &middot;
+        Python-Doku-Einträge: {{ learned_facts_counts.python_docs }} &middot;
+        Von Nutzern gemerkte Angaben: {{ learned_facts_counts.user }}
+    </p>
+    <form action="{{ url_for('admin_seed_ai_knowledge') }}" method="post" class="admin-inline-form">
+        <button type="submit" class="admin-inline-btn">Grundwissen laden/auffüllen</button>
+    </form>
+    <p class="ai-chat-context-note">
+        Lädt einmalig echte Wikipedia-Zusammenfassungen und Python-Dokumentations-Auszüge zu einer
+        festen Themenliste -- nicht "ganz Wikipedia" (passt in keinen Prompt), aber ein echter,
+        dauerhafter Grundstock zusätzlich zu den Live-Nachschlagen während normaler Gespräche.
+        Kann gefahrlos mehrfach geklickt werden, bereits geladene Themen werden übersprungen.
+    </p>
+
     <h2>KI-Sprachchat: geklonte Stimmen</h2>
     {% if not use_elevenlabs %}
         <p>Kein ELEVENLABS_API_KEY gesetzt -- der Sprachchat nutzt nur die eingebaute Text-zu-Sprache-Funktion des Browsers.</p>

@@ -534,19 +534,29 @@ def _facts_addendum(facts):
     )
 
 
-def _learned_facts_addendum(wikipedia_facts, user_facts):
+def _learned_facts_addendum(wikipedia_facts, user_facts, docs_facts=None):
     """The general-mode-only counterpart to _facts_addendum: wikipedia_facts
     are takeaways from this app's own past search_wikipedia lookups (global,
-    since a Wikipedia article is independently checkable), user_facts are
-    self-reported claims a user made about themselves in an earlier chat
-    (scoped to that one user, and explicitly framed as unverified -- unlike
-    an AiAdminFact, one user's say-so is never treated as confirmed truth)."""
+    since a Wikipedia article is independently checkable), docs_facts are
+    likewise takeaways from past search_docs lookups of Python's official
+    documentation (also global, also independently checkable) -- both can
+    also be bulk-seeded once from a curated topic list via app.py's
+    admin_seed_ai_knowledge, rather than only accumulating one lookup at a
+    time. user_facts are self-reported claims a user made about themselves
+    in an earlier chat (scoped to that one user, and explicitly framed as
+    unverified -- unlike an AiAdminFact, one user's say-so is never treated
+    as confirmed truth)."""
     parts = []
     if wikipedia_facts:
         lines = "\n".join(f"- {fact}" for fact in wikipedia_facts)
         parts.append(
             "\n\nAus früheren Wikipedia-Recherchen -- fachlich fundiert, aber bei sehr "
             "aktuellen Ereignissen lieber erneut nachschlagen:\n" + lines
+        )
+    if docs_facts:
+        lines = "\n".join(f"- {fact}" for fact in docs_facts)
+        parts.append(
+            "\n\nAus der offiziellen Python-Dokumentation -- technisch verlässlich:\n" + lines
         )
     if user_facts:
         lines = "\n".join(f"- {fact}" for fact in user_facts)
@@ -567,11 +577,11 @@ def generate_reply(message, context=None, history=None, project_type=None, facts
     `project_type` is "game", "webapp", or None (general chat) and picks
     both the system prompt variant and which tools are offered. `facts`
     is the list of admin-confirmed facts (see _facts_addendum). `learned_facts`
-    is an optional {"wikipedia": [...], "user": [...]} dict of previously
-    auto-learned facts (see _learned_facts_addendum) -- only applied in
-    general mode. `captured`, if given, is mutated in place with any new
-    wikipedia_facts/user_facts learned during *this* call, for the caller
-    to persist (see _call_groq). Returns (reply_text, proposed_change)."""
+    is an optional {"wikipedia": [...], "user": [...], "docs": [...]} dict of
+    previously auto-learned/seeded facts (see _learned_facts_addendum) --
+    only applied in general mode. `captured`, if given, is mutated in place
+    with any new wikipedia_facts/user_facts learned during *this* call, for
+    the caller to persist (see _call_groq). Returns (reply_text, proposed_change)."""
     message = (message or "").strip()[:MAX_MESSAGE_CHARS]
     if not message:
         return "", None
@@ -602,6 +612,7 @@ def generate_reply(message, context=None, history=None, project_type=None, facts
     if project_type is None and learned_facts:
         system_prompt += _learned_facts_addendum(
             learned_facts.get("wikipedia") or [], learned_facts.get("user") or [],
+            learned_facts.get("docs") or [],
         )
 
     messages = [{"role": "system", "content": system_prompt}]

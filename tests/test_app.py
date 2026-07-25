@@ -3999,3 +3999,56 @@ def test_admin_can_reset_voice_profile(client, monkeypatch):
     assert AiVoiceProfile.query.filter_by(gender="female").first() is None
 
 
+def test_seed_ai_knowledge_requires_admin(client):
+    register(client, username="notanadmin")
+    response = client.post("/admin/ai/seed-knowledge")
+    assert response.status_code == 403
+
+
+def test_seed_ai_knowledge_bulk_imports_wikipedia_and_python_docs(client, monkeypatch):
+    import app as app_module
+
+    monkeypatch.setattr(
+        app_module.ai_assistant, "_tool_search_wikipedia",
+        lambda topic: f'Wikipedia-Artikel "{topic}": Ein Testartikel über {topic}.',
+    )
+    monkeypatch.setattr(
+        app_module, "_fetch_python_doc_page",
+        lambda topic, url: f"Aus der offiziellen python-Dokumentation ({url}): Infos zu {topic}.",
+    )
+    monkeypatch.setattr(app_module, "WIKIPEDIA_SEED_TOPICS", ["Testthema1", "Testthema2"])
+    monkeypatch.setattr(app_module, "PYTHON_SEED_DOC_URLS", {"list": "https://example.com/list", "function": "https://example.com/function"})
+
+    register(client, username="knowledgeadmin")
+    make_admin("knowledgeadmin")
+
+    response = client.post("/admin/ai/seed-knowledge", follow_redirects=True)
+    assert response.status_code == 200
+    assert AiLearnedFact.query.filter_by(source="wikipedia").count() == 2
+    assert AiLearnedFact.query.filter_by(source="python_docs").count() == 2
+
+    # Re-running skips topics already seeded instead of duplicating them.
+    client.post("/admin/ai/seed-knowledge")
+    assert AiLearnedFact.query.filter_by(source="wikipedia").count() == 2
+    assert AiLearnedFact.query.filter_by(source="python_docs").count() == 2
+
+
+def test_seeded_knowledge_reaches_general_chat_prompt(monkeypatch):
+    import ai_assistant
+
+    captured = {}
+
+    def fake_call_groq(messages, max_tokens, tools=None, **kwargs):
+        captured["system"] = messages[0]["content"]
+        return "ok", None
+
+    monkeypatch.setattr(ai_assistant, "_call_groq", fake_call_groq)
+    ai_assistant.generate_reply(
+        "Hallo!",
+        learned_facts={"wikipedia": ["Wiki-Fakt X"], "docs": ["Python-Doku-Fakt Y"], "user": ["Nutzer-Fakt Z"]},
+    )
+    assert "Wiki-Fakt X" in captured["system"]
+    assert "Python-Doku-Fakt Y" in captured["system"]
+    assert "Nutzer-Fakt Z" in captured["system"]
+
+
