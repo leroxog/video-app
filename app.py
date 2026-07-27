@@ -1685,7 +1685,7 @@ def api_ai_chat():
     data = request.get_json(silent=True) or {}
     message = (data.get("message") or "").strip()
     context = (data.get("context") or "").strip() or None
-    project_type = data.get("project_type") if data.get("project_type") in ("game", "webapp") else None
+    project_type = data.get("project_type") if data.get("project_type") in ("game", "webapp", "general") else None
     # Only messages sent through the admin dashboard's dedicated "KI-Wissen"
     # chat become a global fact -- an admin's ordinary chats elsewhere are
     # unaffected, and a non-admin can never set save_as_fact regardless of
@@ -1723,7 +1723,7 @@ def api_ai_chat():
     # module docstring) -- game/webapp DSL prompts stay protected from it,
     # same reasoning as the tool split.
     learned_facts = None
-    if project_type is None:
+    if project_type in (None, "general"):
         learned_facts = {
             "wikipedia": [
                 f.content for f in AiLearnedFact.query.filter_by(source="wikipedia")

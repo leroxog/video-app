@@ -2,12 +2,15 @@
 floating widget in base.html) and as programming help inside timeskip
 studio (where the user's current script is sent along as context).
 
-Runs an open-source model (openai/gpt-oss-20b, Apache 2.0) hosted on Groq's
-free inference API, since running even a small LLM directly on the server's
-CPU turned out to take 1-6 minutes per reply in testing -- Groq's hosted
-inference answers in well under a second. This means GROQ_API_KEY must be
-set (locally in a .env file, on Railway as a project environment variable);
-without it, requests fail with a clear error instead of hanging.
+Runs an open-source model (openai/gpt-oss-120b by default, Apache 2.0 --
+OpenAI's own open-weight release, the same company behind ChatGPT, just
+not their closed flagship model) hosted on Groq's free inference API,
+since running even a small LLM directly on the server's CPU turned out to
+take 1-6 minutes per reply in testing -- Groq's hosted inference answers
+in well under a second. This means GROQ_API_KEY must be set (locally in a
+.env file, on Railway as a project environment variable); without it,
+requests fail with a clear error instead of hanging. GROQ_MODEL env var
+overrides the default, e.g. back to the smaller/faster openai/gpt-oss-20b.
 
 Requests still run through a background-thread job queue and are polled by
 the client (see start_chat_job()/get_job_status()) even though Groq itself
@@ -70,7 +73,7 @@ import requests
 logger = logging.getLogger(__name__)
 
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
-GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-20b")
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
 MAX_MESSAGE_CHARS = 2000
 MAX_CONTEXT_CHARS = 4000
 MAX_REPLY_TOKENS = 900
@@ -589,8 +592,13 @@ def generate_reply(message, context=None, history=None, project_type=None, facts
     # A code `context` without an explicit project_type defaults to "game"
     # rather than falling through to general mode -- that would otherwise
     # enable Wikipedia/weather/docs tools alongside Studio DSL code, the
-    # exact contamination this split was meant to prevent.
-    if project_type not in ("game", "webapp"):
+    # exact contamination this split was meant to prevent. "general" is a
+    # separate explicit escape hatch for non-code context (an uploaded text
+    # file attached in general chat) that must NOT trigger the same
+    # game-mode fallback.
+    if project_type == "general":
+        project_type = None
+    elif project_type not in ("game", "webapp"):
         project_type = "game" if context else None
 
     user_content = message

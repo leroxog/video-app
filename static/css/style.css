@@ -865,6 +865,22 @@ main {
     color: #f1f1f1;
 }
 
+/* Voice chat replies go through the same renderMarkdown() as the text
+   chat's bot bubbles -- reuse the same nested-element styling. */
+.ai-voice-line-bot > *:first-child { margin-top: 0; }
+.ai-voice-line-bot > *:last-child { margin-bottom: 0; }
+.ai-voice-line-bot p { margin: 0.5em 0; }
+.ai-voice-line-bot h3, .ai-voice-line-bot h4, .ai-voice-line-bot h5 { margin: 0.7em 0 0.3em; line-height: 1.3; }
+.ai-voice-line-bot ul, .ai-voice-line-bot ol { margin: 0.4em 0; padding-left: 1.3em; }
+.ai-voice-line-bot li { margin: 0.15em 0; }
+.ai-voice-line-bot code {
+    background: rgba(255, 255, 255, 0.14);
+    border-radius: 4px;
+    padding: 0.1em 0.35em;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 0.9em;
+}
+
 .ai-voice-mic-btn {
     align-self: center;
     width: 64px;
@@ -1273,6 +1289,89 @@ main {
     align-self: flex-start;
     background: rgba(127, 127, 127, 0.14);
     color: var(--text-primary);
+    /* Bot replies are rendered as real HTML (see renderMarkdown in
+       base.html), unlike the plain-text user bubbles that still rely on
+       the shared .ai-chat-message's pre-wrap to preserve line breaks. */
+    white-space: normal;
+}
+
+.ai-chat-message-bot > *:first-child {
+    margin-top: 0;
+}
+
+.ai-chat-message-bot > *:last-child {
+    margin-bottom: 0;
+}
+
+.ai-chat-message-bot p {
+    margin: 0.5em 0;
+}
+
+.ai-chat-message-bot h3, .ai-chat-message-bot h4, .ai-chat-message-bot h5 {
+    margin: 0.7em 0 0.3em;
+    line-height: 1.3;
+}
+
+.ai-chat-message-bot h3 { font-size: 1.05em; }
+.ai-chat-message-bot h4 { font-size: 1em; }
+.ai-chat-message-bot h5 { font-size: 0.95em; }
+
+.ai-chat-message-bot ul, .ai-chat-message-bot ol {
+    margin: 0.4em 0;
+    padding-left: 1.3em;
+}
+
+.ai-chat-message-bot li {
+    margin: 0.15em 0;
+}
+
+.ai-chat-message-bot code {
+    background: rgba(127, 127, 127, 0.22);
+    border-radius: 4px;
+    padding: 0.1em 0.35em;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 0.9em;
+}
+
+.ai-chat-codeblock {
+    margin: 0.6em 0;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #1c1c1c;
+    border: 1px solid #2c2c2c;
+}
+
+.ai-chat-codeblock-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.3rem 0.6rem;
+    background: #141414;
+    color: #999;
+    font-size: 0.75rem;
+}
+
+.ai-chat-copy-btn {
+    border: none;
+    background: none;
+    color: #9fd3ff;
+    font-size: 0.75rem;
+    cursor: pointer;
+    padding: 0.1rem 0.3rem;
+}
+
+.ai-chat-codeblock pre {
+    margin: 0;
+    padding: 0.6rem;
+    overflow-x: auto;
+}
+
+.ai-chat-codeblock code {
+    background: none;
+    padding: 0;
+    color: #f1f1f1;
+    font-size: 0.82rem;
+    white-space: pre;
 }
 
 /* The Studio editor forces a dark background regardless of the site-wide
@@ -1320,6 +1419,45 @@ body.studio-fullscreen .ai-chat-message-bot {
     gap: 0.5rem;
     padding: 0.6rem 0.7rem;
     border-top: 1px solid var(--panel-border-solid);
+}
+
+.ai-chat-attach-btn {
+    flex: 0 0 auto;
+    padding: 0.5rem 0.6rem;
+    border: 1px solid var(--panel-border-solid);
+    border-radius: 8px;
+    background: var(--panel-bg-solid);
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 1rem;
+}
+
+.ai-chat-attachment-chip {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0;
+    padding: 0.4rem 0.9rem;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    border-top: 1px solid var(--panel-border-solid);
+}
+
+.ai-chat-attachment-chip span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ai-chat-attachment-chip button {
+    margin-left: auto;
+    border: none;
+    background: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    padding: 0 0.2rem;
 }
 
 .ai-chat-form input {

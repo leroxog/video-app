@@ -152,7 +152,13 @@
                         <p class="ai-chat-context-note" id="aiChatContextNote" style="display:none;">
                             Dein aktueller Code und der bisherige Gesprächsverlauf werden bei jeder Nachricht mitgeschickt.
                         </p>
+                        <p class="ai-chat-attachment-chip" id="aiChatAttachmentChip" style="display:none;">
+                            📎 <span id="aiChatAttachmentName"></span>
+                            <button type="button" id="aiChatAttachmentRemove" title="Anhang entfernen">&times;</button>
+                        </p>
                         <form class="ai-chat-form" id="aiChatForm">
+                            <input type="file" id="aiChatFileInput" accept=".txt,.md,.markdown,.py,.js,.jsx,.ts,.tsx,.json,.csv,.html,.htm,.css,.log,.yaml,.yml,.xml,.java,.c,.cpp,.cs,.sh" style="display:none;">
+                            <button type="button" class="ai-chat-attach-btn" id="aiChatAttachBtn" title="Text-Datei anhängen">📎</button>
                             <input type="text" id="aiChatInput" placeholder="Frage stellen..." maxlength="2000" autocomplete="off">
                             <button type="submit">Senden</button>
                         </form>
@@ -342,6 +348,11 @@
                 const form = document.getElementById("aiChatForm");
                 const input = document.getElementById("aiChatInput");
                 const contextNote = document.getElementById("aiChatContextNote");
+                const fileInput = document.getElementById("aiChatFileInput");
+                const attachBtn = document.getElementById("aiChatAttachBtn");
+                const attachmentChip = document.getElementById("aiChatAttachmentChip");
+                const attachmentName = document.getElementById("aiChatAttachmentName");
+                const attachmentRemove = document.getElementById("aiChatAttachmentRemove");
                 const GREETING = messagesEl.innerHTML;
 
                 // The sidebar (persistent "Zuletzt verwendet" chat list with
@@ -688,6 +699,122 @@
                     return code.split("\n").map((l) => l.trim()).filter((l) => l && isRecognized(l)).join("\n");
                 }
 
+                // Lightweight, dependency-free Markdown -> HTML, ChatGPT-
+                // style rendering for the assistant's own replies (never
+                // for what the user typed -- that stays plain text). HTML
+                // is escaped first via escapeHtml(), then safe tags are
+                // built back in around the escaped text, so nothing the
+                // model outputs (even if it tried to include real HTML/
+                // script tags) ever gets interpreted as markup.
+                function escapeHtml(str) {
+                    const div = document.createElement("div");
+                    div.textContent = str;
+                    return div.innerHTML;
+                }
+
+                function renderMarkdown(text) {
+                    // Two placeholder passes protect content from being
+                    // reinterpreted by later steps: fenced code blocks are
+                    // pulled out (and restored as real markup) before
+                    // paragraph-wrapping, since a <div> can't legally sit
+                    // inside a <p>; inline code spans are pulled out before
+                    // bold/italic so e.g. `x ** 2` doesn't get read as a
+                    // bold marker. Both placeholder tokens use a marker
+                    // character unlikely to appear in real text and survive
+                    // String.trim() untouched (no reliance on surrounding
+                    // whitespace, which a naive placeholder loses whenever
+                    // it ends up alone in a paragraph chunk).
+                    const codeBlocks = [];
+                    let working = text.replace(/```([a-zA-Z0-9_+-]*)\n?([\s\S]*?)```/g, (match, lang, code) => {
+                        const index = codeBlocks.length;
+                        codeBlocks.push({ lang: lang.trim(), code: code.replace(/\n$/, "") });
+                        return `✦CODEBLOCK${index}✦`;
+                    });
+
+                    working = escapeHtml(working);
+
+                    const inlineCodes = [];
+                    working = working.replace(/`([^`\n]+)`/g, (m, code) => {
+                        const index = inlineCodes.length;
+                        inlineCodes.push(code);
+                        return `✦INLINECODE${index}✦`;
+                    });
+
+                    working = working.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+                    working = working.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>");
+                    working = working.replace(/^### (.+)$/gm, "<h5>$1</h5>");
+                    working = working.replace(/^## (.+)$/gm, "<h4>$1</h4>");
+                    working = working.replace(/^# (.+)$/gm, "<h3>$1</h3>");
+
+                    const lines = working.split("\n");
+                    const htmlLines = [];
+                    let listType = null;
+                    function closeList() {
+                        if (listType) { htmlLines.push(`</${listType}>`); listType = null; }
+                    }
+                    lines.forEach((line) => {
+                        const bulletMatch = line.match(/^[-*]\s+(.*)$/);
+                        const numberMatch = line.match(/^\d+\.\s+(.*)$/);
+                        if (bulletMatch) {
+                            if (listType !== "ul") { closeList(); htmlLines.push("<ul>"); listType = "ul"; }
+                            htmlLines.push(`<li>${bulletMatch[1]}</li>`);
+                        } else if (numberMatch) {
+                            if (listType !== "ol") { closeList(); htmlLines.push("<ol>"); listType = "ol"; }
+                            htmlLines.push(`<li>${numberMatch[1]}</li>`);
+                        } else {
+                            closeList();
+                            htmlLines.push(line);
+                        }
+                    });
+                    closeList();
+                    working = htmlLines.join("\n");
+
+                    // Restore fenced code blocks as real markup *before*
+                    // paragraph-wrapping (excluded below via the /^<div/
+                    // check), so none end up nested inside a <p>.
+                    working = working.replace(/✦CODEBLOCK(\d+)✦/g, (m, index) => {
+                        const block = codeBlocks[Number(index)];
+                        const escapedCode = escapeHtml(block.code);
+                        const langLabel = escapeHtml(block.lang || "code");
+                        const langClass = block.lang ? ` class="language-${escapeHtml(block.lang)}"` : "";
+                        return `<div class="ai-chat-codeblock"><div class="ai-chat-codeblock-header">`
+                            + `<span>${langLabel}</span>`
+                            + `<button type="button" class="ai-chat-copy-btn" data-code="${encodeURIComponent(block.code)}">Kopieren</button>`
+                            + `</div><pre><code${langClass}>${escapedCode}</code></pre></div>`;
+                    });
+
+                    working = working
+                        .split(/\n{2,}/)
+                        .map((chunk) => {
+                            const trimmed = chunk.trim();
+                            if (!trimmed) return "";
+                            if (/^<(h\d|ul|ol|li|div)/.test(trimmed)) return trimmed;
+                            return `<p>${trimmed.replace(/\n/g, "<br>")}</p>`;
+                        })
+                        .join("\n");
+
+                    working = working.replace(/✦INLINECODE(\d+)✦/g, (m, index) => {
+                        // inlineCodes captured its text *after* the escapeHtml()
+                        // pass above already ran -- it's already escaped, so
+                        // don't run it through escapeHtml() again here (that
+                        // would double-escape entities like &lt; into &amp;lt;).
+                        return `<code>${inlineCodes[Number(index)]}</code>`;
+                    });
+
+                    return working;
+                }
+
+                messagesEl.addEventListener("click", (event) => {
+                    const btn = event.target.closest(".ai-chat-copy-btn");
+                    if (!btn) return;
+                    const code = decodeURIComponent(btn.dataset.code);
+                    navigator.clipboard.writeText(code).then(() => {
+                        const original = btn.textContent;
+                        btn.textContent = "Kopiert ✓";
+                        setTimeout(() => { btn.textContent = original; }, 1500);
+                    }).catch(() => {});
+                });
+
                 function addMessage(text, who) {
                     const bubble = document.createElement("div");
                     bubble.className = "ai-chat-message ai-chat-message-" + who;
@@ -821,7 +948,7 @@
                 }
 
                 function finalizeBotMessage(bubble, text, userMessage, proposedChange) {
-                    bubble.textContent = text;
+                    bubble.innerHTML = renderMarkdown(text);
                     const rawCode = codeTextarea ? extractCodeBlock(text) : null;
                     const code = rawCode ? sanitizeCodeForDialect(rawCode) : null;
                     if (code) {
@@ -870,25 +997,84 @@
                         .catch(() => { bubble.textContent = "Fehler bei der Anfrage."; });
                 }
 
+                // File upload: text-based files only -- there's no vision
+                // model available via Groq, so images can't actually be
+                // analyzed. The file's text is read client-side and sent as
+                // `context` (same field the code-editor integration uses),
+                // truncated server-side to MAX_CONTEXT_CHARS regardless.
+                const TEXT_ATTACHMENT_EXTENSIONS = [
+                    "txt", "md", "markdown", "py", "js", "jsx", "ts", "tsx", "json", "csv",
+                    "html", "htm", "css", "log", "yaml", "yml", "xml", "java", "c", "cpp", "cs", "sh",
+                ];
+                const MAX_ATTACHMENT_READ_CHARS = 20000;
+                let attachedFile = null;
+
+                attachBtn.addEventListener("click", () => fileInput.click());
+
+                attachmentRemove.addEventListener("click", () => {
+                    attachedFile = null;
+                    fileInput.value = "";
+                    attachmentChip.style.display = "none";
+                });
+
+                fileInput.addEventListener("change", () => {
+                    const file = fileInput.files[0];
+                    fileInput.value = "";
+                    if (!file) return;
+                    const ext = (file.name.split(".").pop() || "").toLowerCase();
+                    if (!TEXT_ATTACHMENT_EXTENSIONS.includes(ext)) {
+                        addMessage(
+                            "Dieser Dateityp wird nicht unterstützt -- ich kann aktuell nur Text-Dateien lesen "
+                            + "(z. B. .txt, .py, .js, .md, .json, .csv, .html, .css). Bilder kann ich nicht "
+                            + "analysieren, dafür gibt es kein Bildverständnis-Modell.",
+                            "bot",
+                        );
+                        return;
+                    }
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                        attachedFile = {
+                            name: file.name,
+                            content: String(reader.result || "").slice(0, MAX_ATTACHMENT_READ_CHARS),
+                        };
+                        attachmentName.textContent = file.name;
+                        attachmentChip.style.display = "";
+                    };
+                    reader.onerror = () => {
+                        addMessage("Die Datei \"" + file.name + "\" konnte nicht gelesen werden.", "bot");
+                    };
+                    reader.readAsText(file);
+                });
+
                 form.addEventListener("submit", (event) => {
                     event.preventDefault();
                     const text = input.value.trim();
                     if (!text) return;
-                    addMessage(text, "user");
-                    input.value = "";
 
                     const includeContext = codeTextarea && currentChatMode === "code";
                     const body = { message: text };
                     if (currentChatId) body.chat_id = currentChatId;
+                    const contextParts = [];
                     if (includeContext) {
                         body.project_type = projectType;
                         if (projectType === "game") {
                             const reference = buildSyntaxReference();
-                            body.context = (reference ? reference + "\n\n" : "") + "Aktueller Code:\n" + codeTextarea.value;
+                            contextParts.push((reference ? reference + "\n\n" : "") + "Aktueller Code:\n" + codeTextarea.value);
                         } else {
-                            body.context = "Aktueller Code:\n" + codeTextarea.value;
+                            contextParts.push("Aktueller Code:\n" + codeTextarea.value);
                         }
                     }
+                    if (attachedFile) {
+                        contextParts.push(`Angehängte Datei "${attachedFile.name}":\n${attachedFile.content}`);
+                        if (!includeContext) body.project_type = "general";
+                        attachmentName.textContent = "";
+                        attachmentChip.style.display = "none";
+                        addMessage("📎 " + attachedFile.name, "user");
+                        attachedFile = null;
+                    }
+                    addMessage(text, "user");
+                    input.value = "";
+                    if (contextParts.length) body.context = contextParts.join("\n\n");
                     if (adminFactsTarget) body.save_as_fact = true;
 
                     const thinkingBubble = addMessage("Denkt nach...", "bot");
@@ -986,7 +1172,11 @@
                     function addVoiceLine(text, role) {
                         const line = document.createElement("div");
                         line.className = "ai-voice-line ai-voice-line-" + role;
-                        line.textContent = text;
+                        if (role === "bot") {
+                            line.innerHTML = renderMarkdown(text);
+                        } else {
+                            line.textContent = text;
+                        }
                         voiceTranscript.appendChild(line);
                         voiceTranscript.scrollTop = voiceTranscript.scrollHeight;
                     }
