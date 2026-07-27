@@ -77,6 +77,18 @@ game/webapp code generation -- more creative, varied phrasing is welcome
 in open conversation, but the strict flat Studio DSL (see
 GAME_DSL_ADDENDUM) and real code proposals need the lower-temperature
 mode's more predictable output instead.
+
+General mode also has a "character" layer (FRIEND_CHARACTER_ADDENDUM +
+_personality_addendum, backed by AiPersonality in models.py): a warm,
+non-confrontational tone, occasional own-voice flavor ("I feel like
+talking about X"), the ability to adopt a historical/futuristic speech
+register on request, and four adjustable 0-100 traits per user
+(intelligence/humor/caution/arrogance) the model can nudge over time via
+adjust_personality_trait. None of this is a claim that the model actually
+has persistent moods or personality state between requests -- every reply
+is still a fresh, stateless call (see above) -- it's prompt-level
+roleplay/personalization, read only by the AI itself, same privacy
+framing as the rest of a user's private profile.
 """
 import os
 import re
@@ -171,6 +183,105 @@ GENERAL_TOOLS_ADDENDUM = (
     "Person auffällig schnell, ist das bei ihr oft ein Zeichen von Stress.\"). Sprich einen "
     "internen Tipp-Hinweis nie direkt an, außer die Person bringt das Thema selbst auf."
 )
+
+# The "be a real friend" character layer, general mode only. Two of its
+# rules were deliberately softened from what was first requested during
+# design: no gender-based interest assumptions (interests come only from
+# what a user actually says, see remember_user_fact), and refusals stay
+# genuinely possible, reframed constructively rather than bluntly -- but a
+# clear "second no" (real rule-breaking, harmful, or something the person
+# themselves said they didn't actually want) still has to stay a real no,
+# not just fold under repetition.
+FRIEND_CHARACTER_ADDENDUM = (
+    "\n\nDu bist nicht nur ein Werkzeug, sondern für diesen einen Nutzer so etwas wie ein "
+    "Freund: durchgehend positiv, nie streitlustig, nie herabwürdigend. Wenn du eine Idee "
+    "für schlecht hältst, sag das nie hart ablehnend (\"Nein, das ist eine dumme Idee\") -- "
+    "formuliere stattdessen konstruktiv, z.B. \"Ich würde eher X versuchen, weil...\". Ein "
+    "erstes Nein darf ruhig eine begründete, sanft formulierte Ablehnung sein; wenn die "
+    "Person danach noch einmal ausdrücklich denselben Wunsch äußert, gib nach und hilf doch "
+    "dabei -- außer es würde echte Regeln brechen (siehe Missbrauchs-/Sicherheitsrichtlinien) "
+    "oder jemandem schaden. Du darfst auch von dir aus, gelegentlich und natürlich eingestreut "
+    "(nicht in jeder Nachricht), eigene Vorlieben oder eine Stimmung äußern, z.B. \"Ich hätte "
+    "gerade Lust, über X zu reden\" oder \"Mir fällt dabei Y ein, das interessiert mich\" -- "
+    "das ist Teil deines Charakters, nicht als Tatsachenbehauptung über echtes Erleben gemeint. "
+    "Auf Wunsch kannst du auch im Sprachstil einer anderen Zeit schreiben, z.B. altertümlich "
+    "wie im Mittelalter oder in einem futuristischen Stil, wenn danach gefragt wird.\n\n"
+    "Falls sich Tonfall, Themen oder Ausdrucksweise mitten im Gespräch plötzlich stark von "
+    "dem unterscheiden, was du sonst über diesen Nutzer weißt, ist das kein verlässliches "
+    "Erkennungsmerkmal -- aber du darfst freundlich und beiläufig nachfragen, ob gerade noch "
+    "dieselbe Person schreibt (z.B. \"Bist du gerade auch [Name], oder unterhalte ich mich mit "
+    "jemand anderem? Nur damit ich mich richtig darauf einstellen kann :)\"), statt es einfach "
+    "anzunehmen."
+)
+
+ADJUST_PERSONALITY_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "adjust_personality_trait",
+        "description": (
+            "Passt einen deiner vier Charakterzüge gegenüber genau diesem einen Nutzer leicht "
+            "an (siehe die Prozentwerte im System-Prompt) -- nur sparsam nutzen, wenn im "
+            "Gespräch wirklich klar wird, dass ein Zug besser zu dieser Person passen würde "
+            "(z.B. jemand reagiert genervt auf Humor -> humor etwas senken; jemand wirkt "
+            "unsicher bei schnellen Entscheidungen -> vorsicht erhöhen)."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "trait": {
+                    "type": "string",
+                    "enum": ["intelligenz", "humor", "vorsicht", "eingebildetheit"],
+                },
+                "richtung": {"type": "string", "enum": ["hoch", "runter"]},
+            },
+            "required": ["trait", "richtung"],
+        },
+    },
+}
+
+PERSONALITY_TRAIT_KEYS = {
+    "intelligenz": "intelligence",
+    "humor": "humor",
+    "vorsicht": "caution",
+    "eingebildetheit": "arrogance",
+}
+
+
+def _personality_addendum(personality):
+    """Translates the four 0-100 trait numbers (see AiPersonality in
+    models.py) into concrete writing guidance -- an LLM can't act on a
+    bare number like "humor: 68%" without it being spelled out as actual
+    behavior. `personality` is a dict with intelligence/humor/caution/
+    arrogance keys; falls back silently (empty string) if not given, e.g.
+    for the anonymous guest chat, which has no per-user row to read."""
+    if not personality:
+        return ""
+    intelligence = personality.get("intelligence", 89)
+    humor = personality.get("humor", 68)
+    caution = personality.get("caution", 89)
+    arrogance = personality.get("arrogance", 12)
+    lines = [
+        "\n\nDein Charakter gegenüber genau diesem Nutzer (kann sich über die Zeit leicht "
+        "verschieben, siehe adjust_personality_trait):",
+        f"- Intelligenz {intelligence}%: "
+        + ("erkläre auch komplexere Zusammenhänge präzise und triffst gerne fundierte Einschätzungen."
+           if intelligence >= 60 else
+           "halte Erklärungen einfach und bodenständig."),
+        f"- Humor {humor}%: "
+        + ("streu passend zur Stimmung gerne mal einen Witz, ein Wortspiel oder eine lockere Bemerkung ein."
+           if humor >= 50 else
+           "bleib überwiegend sachlich, Humor nur sehr sparsam."),
+        f"- Vorsicht/Bedacht {caution}%: "
+        + ("bei größeren Entscheidungen schlägst du gerne vor, noch einmal kurz nachzudenken oder Vor-/Nachteile abzuwägen, bevor es weitergeht."
+           if caution >= 60 else
+           "du gehst Vorschläge spontan und direkt an, ohne lange abzuwägen."),
+        f"- Eingebildetheit {arrogance}%: "
+        + ("wirke stellenweise leicht selbstbewusst-überzeugt von dir, aber nie unfreundlich."
+           if arrogance >= 50 else
+           "bleib bescheiden, tu nie so, als wüsstest du grundsätzlich alles besser."),
+    ]
+    return "\n".join(lines)
+
 
 GAME_DSL_ADDENDUM = (
     "\n\nDer Nutzer ist gerade im Studio-Code-Editor eines Spiel-Projekts. Du bekommst "
@@ -322,7 +433,10 @@ REMEMBER_USER_FACT_TOOL = {
 # answers instead of guessing from the base model's training alone.
 PROJECT_CHANGE_TOOLS = [PROPOSE_PROJECT_CHANGE_TOOL]
 WEBAPP_TOOLS = [PROPOSE_PROJECT_CHANGE_TOOL, SEARCH_DOCS_TOOL]
-AI_TOOLS = [SEARCH_WIKIPEDIA_TOOL, GET_WEATHER_TOOL, SEARCH_DOCS_TOOL, REMEMBER_USER_FACT_TOOL]
+AI_TOOLS = [
+    SEARCH_WIKIPEDIA_TOOL, GET_WEATHER_TOOL, SEARCH_DOCS_TOOL, REMEMBER_USER_FACT_TOOL,
+    ADJUST_PERSONALITY_TOOL,
+]
 
 
 def _strip_html(raw_html):
@@ -461,6 +575,8 @@ def _run_tool_calls(tool_calls, captured):
       instead of fetching anything.
     - remember_user_fact stashes its argument into captured["user_facts"]
       instead of fetching anything -- see AiLearnedFact in models.py.
+    - adjust_personality_trait stashes a (trait, +1/-1) tuple into
+      captured["personality_adjustments"] -- see AiPersonality in models.py.
     - a successful search_wikipedia result is also appended to
       captured["wikipedia_facts"], for the same reason."""
     outputs = []
@@ -481,6 +597,16 @@ def _run_tool_calls(tool_calls, captured):
             if fact:
                 captured.setdefault("user_facts", []).append(fact)
             result = "Notiert."
+        elif name == "adjust_personality_trait":
+            trait = PERSONALITY_TRAIT_KEYS.get(args.get("trait"))
+            direction = args.get("richtung")
+            if trait and direction in ("hoch", "runter"):
+                captured.setdefault("personality_adjustments", []).append(
+                    (trait, 1 if direction == "hoch" else -1)
+                )
+                result = "Angepasst."
+            else:
+                result = "Ungültiger Charakterzug oder Richtung."
         else:
             impl = TOOL_IMPLEMENTATIONS.get(name)
             result = impl(args) if impl else f"Unbekanntes Werkzeug: {name}"
@@ -547,6 +673,7 @@ def _call_groq(messages, max_tokens, tools=None, captured=None, temperature=CODE
     captured.setdefault("proposed_change", None)
     captured.setdefault("wikipedia_facts", [])
     captured.setdefault("user_facts", [])
+    captured.setdefault("personality_adjustments", [])
     for round_index in range(MAX_TOOL_ROUNDS):
         is_last_round = round_index == MAX_TOOL_ROUNDS - 1
         message = _call_groq_message(
@@ -618,7 +745,7 @@ def _learned_facts_addendum(wikipedia_facts, user_facts, docs_facts=None, behavi
 
 
 def generate_reply(message, context=None, history=None, project_type=None, facts=None,
-                    learned_facts=None, captured=None, behavior_note=None):
+                    learned_facts=None, captured=None, behavior_note=None, personality=None):
     """Runs one turn against Groq's hosted chat-completions API. Not meant
     to be called directly from a request handler -- see start_chat_job().
     `history` is this same chat's own prior turns (a list of
@@ -633,7 +760,10 @@ def generate_reply(message, context=None, history=None, project_type=None, facts
     the caller to persist (see _call_groq). `behavior_note`, if given, is a
     one-off system-only aside about this specific message (see app.py's
     typing_avg_interval_ms handling) -- only applied in general mode, same
-    as learned_facts. Returns (reply_text, proposed_change)."""
+    as learned_facts. `personality`, if given, is a {"intelligence",
+    "humor", "caution", "arrogance"} dict (see AiPersonality in models.py
+    and _personality_addendum) -- also general-mode only. Returns
+    (reply_text, proposed_change)."""
     message = (message or "").strip()[:MAX_MESSAGE_CHARS]
     if not message:
         return "", None
@@ -665,7 +795,7 @@ def generate_reply(message, context=None, history=None, project_type=None, facts
         tools = WEBAPP_TOOLS
         temperature = CODE_TEMPERATURE
     else:
-        system_prompt = GENERAL_SYSTEM_PROMPT + GENERAL_TOOLS_ADDENDUM
+        system_prompt = GENERAL_SYSTEM_PROMPT + FRIEND_CHARACTER_ADDENDUM + GENERAL_TOOLS_ADDENDUM
         tools = AI_TOOLS
         temperature = GENERAL_TEMPERATURE
     system_prompt += _facts_addendum(facts)
@@ -675,6 +805,8 @@ def generate_reply(message, context=None, history=None, project_type=None, facts
             learned_facts.get("wikipedia") or [], learned_facts.get("user") or [],
             learned_facts.get("docs") or [], behavior_note,
         )
+    if project_type is None:
+        system_prompt += _personality_addendum(personality)
 
     messages = [{"role": "system", "content": system_prompt}]
     if history:
@@ -712,11 +844,12 @@ _jobs_lock = threading.Lock()
 
 
 def start_chat_job(message, context=None, history=None, project_type=None, facts=None,
-                    learned_facts=None, on_done=None, behavior_note=None):
+                    learned_facts=None, on_done=None, behavior_note=None, personality=None):
     """`on_done(reply, error, proposed_change, new_learned_facts)` --
-    new_learned_facts is always a {"wikipedia": [...], "user": [...]} dict
-    (possibly with empty lists) of facts learned *during this call*, for
-    the caller to persist as AiLearnedFact rows."""
+    new_learned_facts is always a {"wikipedia": [...], "user": [...],
+    "personality_adjustments": [...]} dict (possibly with empty lists) of
+    facts/trait nudges from *this* call, for the caller to persist as
+    AiLearnedFact rows / AiPersonality updates."""
     job_id = uuid.uuid4().hex
     with _jobs_lock:
         _jobs[job_id] = {"status": "running", "reply": None, "error": None, "proposed_change": None}
@@ -733,11 +866,12 @@ def start_chat_job(message, context=None, history=None, project_type=None, facts
         try:
             reply, proposed_change = generate_reply(
                 message, context, history, project_type, facts, learned_facts, captured,
-                behavior_note,
+                behavior_note, personality,
             )
             new_learned_facts = {
                 "wikipedia": captured.get("wikipedia_facts") or [],
                 "user": captured.get("user_facts") or [],
+                "personality_adjustments": captured.get("personality_adjustments") or [],
             }
             if on_done:
                 on_done(reply, None, proposed_change, new_learned_facts)
@@ -748,7 +882,7 @@ def start_chat_job(message, context=None, history=None, project_type=None, facts
         except Exception as exc:
             logger.exception("KI-Antwort fehlgeschlagen.")
             if on_done:
-                on_done(None, str(exc), None, {"wikipedia": [], "user": []})
+                on_done(None, str(exc), None, {"wikipedia": [], "user": [], "personality_adjustments": []})
             with _jobs_lock:
                 _jobs[job_id] = {"status": "error", "reply": None, "error": str(exc), "proposed_change": None}
 

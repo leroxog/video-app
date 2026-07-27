@@ -492,6 +492,29 @@ class AiLearnedFact(db.Model):
     admin = db.relationship("User")
 
 
+class AiPersonality(db.Model):
+    """A per-user "character dial" for the assistant's general-mode tone --
+    four 0-100 traits (see ai_assistant.py's _personality_addendum for how
+    each is translated into actual writing guidance for the model).
+    Everyone starts at the same defaults; the AI can nudge a trait for one
+    specific user over time via the adjust_personality_trait tool (see
+    api_ai_chat's personality_adjustments handling), the same "learned
+    over many chats, private to this one user" pattern as AiLearnedFact.
+    Not a claim that the model actually has stable character traits
+    between requests (it doesn't -- each reply is a fresh, stateless call,
+    see ai_assistant.py's module docstring) -- this is prompt-level
+    roleplay/personalization, same honesty framing as everything else
+    under "the honest version of training"."""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), unique=True, nullable=False)
+    intelligence = db.Column(db.Integer, nullable=False, default=89)
+    humor = db.Column(db.Integer, nullable=False, default=68)
+    caution = db.Column(db.Integer, nullable=False, default=89)
+    arrogance = db.Column(db.Integer, nullable=False, default=12)
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    user = db.relationship("User")
+
+
 class StudioBlock(db.Model):
     """A rectangular game object on a studio project's 2D canvas. x/y/width
     /height are its design-time (spawn) placement. kind is "normal",

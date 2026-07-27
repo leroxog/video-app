@@ -35,7 +35,7 @@ from models import (
     StudioProject, StudioBlock, StudioProjectLike, StudioProjectComment, StudioProjectReport,
     AiChatFeedback, AiChat, AiChatMessage, AiAdminFact, AiLearnedFact, PasswordResetCode,
     AccountRecoveryRequest, ErrorLog, HumanSpotterImage, HumanSpotterClick, HumanSpotterReport,
-    AiVoiceProfile,
+    AiVoiceProfile, AiPersonality,
 )
 import ai_assistant
 
@@ -1806,10 +1806,11 @@ def api_ai_chat():
         AiAdminFact.query.order_by(AiAdminFact.created_at.desc()).limit(ADMIN_FACTS_PROMPT_LIMIT).all()
     ]
 
-    # AiLearnedFact only ever applies in general mode (see ai_assistant.py's
-    # module docstring) -- game/webapp DSL prompts stay protected from it,
-    # same reasoning as the tool split.
+    # AiLearnedFact/AiPersonality only ever apply in general mode (see
+    # ai_assistant.py's module docstring) -- game/webapp DSL prompts stay
+    # protected from both, same reasoning as the tool split.
     learned_facts = None
+    personality = None
     if project_type in (None, "general"):
         learned_facts = {
             "wikipedia": [
@@ -1825,6 +1826,15 @@ def api_ai_chat():
                 .order_by(AiLearnedFact.created_at.desc()).limit(LEARNED_FACTS_PROMPT_LIMIT).all()
             ],
         }
+        personality_row = AiPersonality.query.filter_by(user_id=user.id).first()
+        if personality_row is None:
+            personality_row = AiPersonality(user_id=user.id)
+            db.session.add(personality_row)
+            db.session.commit()
+        personality = {
+            "intelligence": personality_row.intelligence, "humor": personality_row.humor,
+            "caution": personality_row.caution, "arrogance": personality_row.arrogance,
+        }
     else:
         behavior_note = None
 
@@ -1836,6 +1846,14 @@ def api_ai_chat():
                     db.session.add(AiLearnedFact(source="wikipedia", content=fact))
                 for fact in (new_learned_facts or {}).get("user", []):
                     db.session.add(AiLearnedFact(source="user", content=fact, user_id=user_id_captured))
+                adjustments = (new_learned_facts or {}).get("personality_adjustments") or []
+                if adjustments:
+                    personality_row = AiPersonality.query.filter_by(user_id=user_id_captured).first()
+                    if personality_row is not None:
+                        for trait, step in adjustments:
+                            current = getattr(personality_row, trait)
+                            setattr(personality_row, trait, max(0, min(100, current + step * 3)))
+                        personality_row.updated_at = datetime.now(timezone.utc)
                 db.session.commit()
                 if is_first_message:
                     title = ai_assistant.generate_title(message)
@@ -1855,6 +1873,7 @@ def api_ai_chat():
     job_id = ai_assistant.start_chat_job(
         message, context, history=history, project_type=project_type, facts=facts,
         learned_facts=learned_facts, on_done=on_done, behavior_note=behavior_note,
+        personality=personality,
     )
     return jsonify({"ok": True, "job_id": job_id, "chat_id": chat.id})
 
@@ -2976,6 +2995,7 @@ def delete_ai_profile():
         return redirect(url_for("login"))
 
     deleted = AiLearnedFact.query.filter_by(source="user", user_id=user.id).delete()
+    AiPersonality.query.filter_by(user_id=user.id).delete()
     user.avg_typing_interval_ms = None
     user.typing_sample_count = 0
     db.session.commit()

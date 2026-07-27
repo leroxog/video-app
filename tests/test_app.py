@@ -2742,7 +2742,7 @@ def test_guest_chat_works_without_login_and_persists_nothing(client, monkeypatch
 
     monkeypatch.setattr(
         ai_assistant, "generate_reply",
-        lambda message, context=None, history=None, project_type=None, facts=None, learned_facts=None, captured=None, behavior_note=None: (f"Gast-Antwort auf: {message}", None),
+        lambda message, context=None, history=None, project_type=None, facts=None, learned_facts=None, captured=None, behavior_note=None, personality=None: (f"Gast-Antwort auf: {message}", None),
     )
 
     start_res = client.post("/api/ai/guest-chat", json={"message": "Hallo KI"})
@@ -2774,7 +2774,7 @@ def test_guest_chat_enforces_message_limit(client, monkeypatch):
 
     monkeypatch.setattr(
         ai_assistant, "generate_reply",
-        lambda message, context=None, history=None, project_type=None, facts=None, learned_facts=None, captured=None, behavior_note=None: ("Klar!", None),
+        lambda message, context=None, history=None, project_type=None, facts=None, learned_facts=None, captured=None, behavior_note=None, personality=None: ("Klar!", None),
     )
 
     for _ in range(app_module.GUEST_CHAT_MESSAGE_LIMIT):
@@ -2803,7 +2803,7 @@ def test_ai_chat_starts_job_and_reports_status(client, monkeypatch):
 
     monkeypatch.setattr(
         ai_assistant, "generate_reply",
-        lambda message, context=None, history=None, project_type=None, facts=None, learned_facts=None, captured=None, behavior_note=None: (f"Antwort auf: {message}", None),
+        lambda message, context=None, history=None, project_type=None, facts=None, learned_facts=None, captured=None, behavior_note=None, personality=None: (f"Antwort auf: {message}", None),
     )
     register(client)
 
@@ -2910,7 +2910,7 @@ def test_ai_chat_persists_messages_and_generates_title(client, monkeypatch):
 
     monkeypatch.setattr(
         ai_assistant, "generate_reply",
-        lambda message, context=None, history=None, project_type=None, facts=None, learned_facts=None, captured=None, behavior_note=None: ("Klar, gerne!", None),
+        lambda message, context=None, history=None, project_type=None, facts=None, learned_facts=None, captured=None, behavior_note=None, personality=None: ("Klar, gerne!", None),
     )
     monkeypatch.setattr(ai_assistant, "generate_title", lambda first_message: "Frage zu Punkten")
     register(client)
@@ -3296,7 +3296,7 @@ def test_learned_facts_persisted_after_general_chat(client, monkeypatch):
     import ai_assistant
 
     def fake_generate_reply(message, context=None, history=None, project_type=None, facts=None,
-                             learned_facts=None, captured=None, behavior_note=None):
+                             learned_facts=None, captured=None, behavior_note=None, personality=None):
         if captured is not None:
             captured["wikipedia_facts"] = ["Paris ist die Hauptstadt von Frankreich."]
             captured["user_facts"] = ["Der Nutzer heißt Timo."]
@@ -3590,7 +3590,7 @@ def test_non_admin_cannot_clear_error_log(client):
 def test_ai_job_failure_is_logged_to_error_log(client, monkeypatch):
     import ai_assistant
 
-    def failing_generate_reply(message, context=None, history=None, project_type=None, facts=None, learned_facts=None, captured=None, behavior_note=None):
+    def failing_generate_reply(message, context=None, history=None, project_type=None, facts=None, learned_facts=None, captured=None, behavior_note=None, personality=None):
         raise RuntimeError("Groq ist down")
 
     monkeypatch.setattr(ai_assistant, "generate_reply", failing_generate_reply)
