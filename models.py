@@ -37,6 +37,12 @@ class User(db.Model):
     coinflip_worker_count = db.Column(db.Integer, nullable=False, default=0)
     coinflip_rebirths = db.Column(db.Integer, nullable=False, default=0)
     terms_accepted_at = db.Column(db.DateTime, nullable=True)
+    # Rolling average of ms between keystrokes across this user's own past
+    # chat messages -- lets the AI notice when a single message was typed
+    # unusually fast/slow *for this specific person*, see api_ai_chat's
+    # typing_avg_interval_ms handling and AiLearnedFact's module docstring.
+    avg_typing_interval_ms = db.Column(db.Float, nullable=True)
+    typing_sample_count = db.Column(db.Integer, nullable=False, default=0)
     sounds_uploaded = db.relationship("Sound", backref="uploader", lazy=True, cascade="all, delete-orphan")
     subscriptions_made = db.relationship(
         "Subscription",
@@ -460,14 +466,24 @@ class AiLearnedFact(db.Model):
     """The honest version of "training" the assistant, given that Groq's
     API is hosted inference only -- there is no way to actually fine-tune
     the shared model from this app (see ai_assistant.py's module
-    docstring). Instead, in general (non-code) chats, two kinds of things
+    docstring). Instead, in general (non-code) chats, three kinds of things
     get remembered for future conversations: source="wikipedia" is the
     takeaway from a successful search_wikipedia lookup, shared with every
-    user since it's independently verifiable; source="user" is something a
-    user told the assistant about themselves (name, hobby, preference...),
-    scoped to user_id alone and always framed to the model as an
-    unverified, self-reported claim -- never treated as confirmed truth
-    the way an AiAdminFact is."""
+    user since it's independently verifiable; source="python_docs" is the
+    same for search_docs lookups of Python's official docs; source="user"
+    is a per-user row -- every small thing the assistant picks up about
+    this one person across all their chats (self-reported facts, but also
+    inferred patterns like "types very fast when stressed", see
+    api_ai_chat's typing_avg_interval_ms handling), scoped to user_id,
+    unbounded in count (see app.py's USER_FACTS_PROMPT_LIMIT), and always
+    framed to the model as an unverified, self-reported/inferred claim --
+    never treated as confirmed truth the way an AiAdminFact is. Together
+    a user's own source="user" rows form the private per-user profile
+    described in the Nutzungsbedingungen ("timeskip AI und Ihr
+    persönliches Nutzerprofil") -- read only by the AI system itself for
+    that same user's own future chats, never rendered in any admin or
+    user-facing view (the admin dashboard only ever shows an aggregate
+    count, see admin.html's "Von Nutzern gemerkte Angaben")."""
     id = db.Column(db.Integer, primary_key=True)
     source = db.Column(db.String(20), nullable=False)
     content = db.Column(db.Text, nullable=False)

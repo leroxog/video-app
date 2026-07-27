@@ -698,6 +698,8 @@ def ensure_sqlite_columns_exist():
             ("region_skipped", "BOOLEAN NOT NULL DEFAULT 0"),
             ("guardian_email", "VARCHAR(255)"),
             ("terms_accepted_at", "DATETIME"),
+            ("avg_typing_interval_ms", "FLOAT"),
+            ("typing_sample_count", "INTEGER NOT NULL DEFAULT 0"),
         ],
     }
     with db.engine.connect() as conn:
@@ -766,6 +768,8 @@ def ensure_columns_exist():
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS region VARCHAR(100)',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS region_skipped BOOLEAN NOT NULL DEFAULT FALSE',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS guardian_email VARCHAR(255)',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS avg_typing_interval_ms DOUBLE PRECISION',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS typing_sample_count INTEGER NOT NULL DEFAULT 0',
     ]
     with db.engine.connect() as conn:
         for statement in statements:
@@ -1674,6 +1678,56 @@ def api_ai_delete_chat(chat_id):
 ADMIN_FACT_MAX_LENGTH = 500
 ADMIN_FACTS_PROMPT_LIMIT = 20
 LEARNED_FACTS_PROMPT_LIMIT = 15
+# The private per-user profile (source="user") gets a much larger budget
+# than the shared wikipedia/python_docs knowledge above -- it's meant to
+# grow into a large, detailed record of one specific person over many
+# conversations, not stay capped at a handful of entries. Each row is
+# short (a sentence, see remember_user_fact's arg cap), so ~120 of them
+# comfortably fits Groq's context window alongside everything else.
+USER_FACTS_PROMPT_LIMIT = 120
+
+# Typing-speed baseline: how many samples before we trust a user's average
+# enough to flag a single message as unusually fast/slow *for them*, and
+# how far a message's interval has to deviate to count as an anomaly. The
+# baseline itself uses a capped rolling weight (TYPING_BASELINE_MAX_WEIGHT)
+# so it keeps adapting to a person's current typing habits rather than
+# being frozen in by their first hundred messages forever.
+TYPING_BASELINE_MIN_SAMPLES = 5
+TYPING_BASELINE_MAX_WEIGHT = 100
+TYPING_ANOMALY_FAST_RATIO = 0.6
+TYPING_ANOMALY_SLOW_RATIO = 1.7
+TYPING_INTERVAL_MIN_MS = 15
+TYPING_INTERVAL_MAX_MS = 5000
+
+
+def _update_typing_baseline_and_get_note(user, interval_ms):
+    """Updates `user`'s rolling average typing interval with this message's
+    value (mutates in place, caller still needs to commit) and returns a
+    private, system-prompt-only note if this message's typing speed was
+    unusually fast/slow *compared to this same person's own baseline* --
+    or None if there's no reliable baseline yet or nothing stands out. See
+    ai_assistant.py's behavior_note handling: this is a raw observation,
+    never treated as a fact by itself, only ever fed to the model as
+    context it may choose to act on."""
+    note = None
+    if user.typing_sample_count >= TYPING_BASELINE_MIN_SAMPLES and user.avg_typing_interval_ms:
+        if interval_ms <= user.avg_typing_interval_ms * TYPING_ANOMALY_FAST_RATIO:
+            note = (
+                "Diese Nachricht wurde auffällig schnell getippt im Vergleich zum sonstigen "
+                "Tippverhalten dieser Person. Das ist nur ein Indiz (z.B. für Eile, Aufregung "
+                "oder Stress), keine Tatsache."
+            )
+        elif interval_ms >= user.avg_typing_interval_ms * TYPING_ANOMALY_SLOW_RATIO:
+            note = (
+                "Diese Nachricht wurde auffällig langsam getippt im Vergleich zum sonstigen "
+                "Tippverhalten dieser Person. Das ist nur ein Indiz (z.B. für Nachdenklichkeit, "
+                "Unsicherheit oder Ablenkung), keine Tatsache."
+            )
+    weight = min(user.typing_sample_count, TYPING_BASELINE_MAX_WEIGHT)
+    previous_avg = user.avg_typing_interval_ms or interval_ms
+    user.avg_typing_interval_ms = (previous_avg * weight + interval_ms) / (weight + 1)
+    user.typing_sample_count += 1
+    return note
 
 
 @app.route("/api/ai/chat", methods=["POST"])
@@ -1694,6 +1748,15 @@ def api_ai_chat():
     chat_id = data.get("chat_id")
     if not message:
         return jsonify({"ok": False, "error": "empty_message"}), 400
+
+    # Optional real signal from the frontend: average ms between keystrokes
+    # while typing *this* message (see base.html's keydown tracking) --
+    # only used to compare against this same user's own rolling baseline,
+    # never against other users, see _update_typing_baseline_and_get_note.
+    behavior_note = None
+    typing_interval_raw = data.get("typing_avg_interval_ms")
+    if isinstance(typing_interval_raw, (int, float)) and TYPING_INTERVAL_MIN_MS <= typing_interval_raw <= TYPING_INTERVAL_MAX_MS:
+        behavior_note = _update_typing_baseline_and_get_note(user, float(typing_interval_raw))
 
     chat = None
     if chat_id:
@@ -1731,13 +1794,15 @@ def api_ai_chat():
             ],
             "user": [
                 f.content for f in AiLearnedFact.query.filter_by(source="user", user_id=user.id)
-                .order_by(AiLearnedFact.created_at.desc()).limit(LEARNED_FACTS_PROMPT_LIMIT).all()
+                .order_by(AiLearnedFact.created_at.desc()).limit(USER_FACTS_PROMPT_LIMIT).all()
             ],
             "docs": [
                 f.content for f in AiLearnedFact.query.filter_by(source="python_docs")
                 .order_by(AiLearnedFact.created_at.desc()).limit(LEARNED_FACTS_PROMPT_LIMIT).all()
             ],
         }
+    else:
+        behavior_note = None
 
     def on_done(reply, error, proposed_change, new_learned_facts):
         with app.app_context():
@@ -1765,7 +1830,7 @@ def api_ai_chat():
 
     job_id = ai_assistant.start_chat_job(
         message, context, history=history, project_type=project_type, facts=facts,
-        learned_facts=learned_facts, on_done=on_done,
+        learned_facts=learned_facts, on_done=on_done, behavior_note=behavior_note,
     )
     return jsonify({"ok": True, "job_id": job_id, "chat_id": chat.id})
 
@@ -2831,6 +2896,25 @@ def update_password():
     user.set_password(new_password)
     db.session.commit()
     flash("Passwort geändert.")
+    return redirect(url_for("account_settings"))
+
+
+@app.route("/account/ai-profile/delete", methods=["POST"])
+def delete_ai_profile():
+    """Erases this user's private AiLearnedFact(source="user") rows (see
+    models.py's AiLearnedFact docstring and the Nutzungsbedingungen's
+    "timeskip AI und Ihr persönliches Nutzerprofil" section) and resets
+    their typing-speed baseline. The assistant starts learning about this
+    person from scratch in future chats."""
+    user = current_user()
+    if user is None:
+        return redirect(url_for("login"))
+
+    deleted = AiLearnedFact.query.filter_by(source="user", user_id=user.id).delete()
+    user.avg_typing_interval_ms = None
+    user.typing_sample_count = 0
+    db.session.commit()
+    flash(f"Dein privates KI-Profil wurde gelöscht ({deleted} Einträge).")
     return redirect(url_for("account_settings"))
 
 

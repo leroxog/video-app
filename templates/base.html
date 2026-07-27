@@ -1046,14 +1046,50 @@
                     reader.readAsText(file);
                 });
 
+                // Typing-speed signal: average ms between keystrokes for the
+                // message about to be sent. Used server-side only to compare
+                // against this SAME user's own rolling baseline (see app.py's
+                // _update_typing_baseline_and_get_note) -- never against
+                // other users, and never shown anywhere in the UI. Skipped
+                // for pasted text (that reflects the source, not this
+                // person's typing) or when there simply aren't enough
+                // keystrokes to mean anything.
+                let keystrokeTimestamps = [];
+                let messageWasPasted = false;
+                input.addEventListener("keydown", (event) => {
+                    if ((event.key && event.key.length === 1) || event.key === "Backspace") {
+                        keystrokeTimestamps.push(performance.now());
+                    }
+                });
+                input.addEventListener("paste", () => { messageWasPasted = true; });
+
+                function consumeTypingIntervalMs() {
+                    let interval = null;
+                    if (!messageWasPasted && keystrokeTimestamps.length >= 5) {
+                        const gaps = [];
+                        for (let i = 1; i < keystrokeTimestamps.length; i++) {
+                            const gap = keystrokeTimestamps[i] - keystrokeTimestamps[i - 1];
+                            if (gap > 0 && gap < 2000) gaps.push(gap);
+                        }
+                        if (gaps.length >= 4) {
+                            interval = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+                        }
+                    }
+                    keystrokeTimestamps = [];
+                    messageWasPasted = false;
+                    return interval;
+                }
+
                 form.addEventListener("submit", (event) => {
                     event.preventDefault();
                     const text = input.value.trim();
                     if (!text) return;
+                    const typingIntervalMs = consumeTypingIntervalMs();
 
                     const includeContext = codeTextarea && currentChatMode === "code";
                     const body = { message: text };
                     if (currentChatId) body.chat_id = currentChatId;
+                    if (typingIntervalMs) body.typing_avg_interval_ms = typingIntervalMs;
                     const contextParts = [];
                     if (includeContext) {
                         body.project_type = projectType;

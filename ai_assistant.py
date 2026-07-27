@@ -57,6 +57,26 @@ that one user alone and always framed to the model as unverified, since
 one person's say-so is not ground truth for anyone else. This never
 touches game/webapp mode's prompts, matching the same contamination
 concern the tool split above already protects against.
+
+A user's own remember_user_fact rows are meant to accumulate into a large,
+detailed, ever-growing private profile of that one person (see
+app.py's USER_FACTS_PROMPT_LIMIT and models.py's AiLearnedFact docstring)
+-- not just a handful of top-level facts, so remember_user_fact's prompt
+guidance actively encourages noting small details and inferred patterns,
+not only explicit self-reported statements. One concrete real signal fed
+in for this: `behavior_note`, an optional system-prompt-only aside built
+in app.py from typing_avg_interval_ms (how fast this message was typed,
+compared to this same user's own rolling average) -- never shown to the
+user, never treated as fact by itself, just a raw observation the model
+may combine with what's actually said (e.g. unusually fast typing
+alongside "I'm stressed" in the same message) and choose to remember as
+an inferred pattern via remember_user_fact.
+
+General (non-code) chat also runs at a higher sampling temperature than
+game/webapp code generation -- more creative, varied phrasing is welcome
+in open conversation, but the strict flat Studio DSL (see
+GAME_DSL_ADDENDUM) and real code proposals need the lower-temperature
+mode's more predictable output instead.
 """
 import os
 import re
@@ -79,6 +99,11 @@ MAX_CONTEXT_CHARS = 4000
 MAX_REPLY_TOKENS = 900
 MAX_HISTORY_MESSAGES = 12
 REQUEST_TIMEOUT_SECONDS = 30
+# Code modes (game DSL, webapp) stay at the lower, more predictable value --
+# the flat Studio DSL in particular has zero tolerance for invented syntax.
+# General chat gets more room for varied, creative phrasing.
+CODE_TEMPERATURE = 0.7
+GENERAL_TEMPERATURE = 1.1
 
 TOOL_REQUEST_TIMEOUT_SECONDS = 8
 MAX_TOOL_RESULT_CHARS = 1500
@@ -129,12 +154,22 @@ GENERAL_SYSTEM_PROMPT = (
 GENERAL_TOOLS_ADDENDUM = (
     "\n\nDu hast Zugriff auf vier Werkzeuge: search_wikipedia (aktuelle Wissensfragen), "
     "get_weather (Live-Wetter für einen Ort), search_docs (offizielle Dokumentation von "
-    "Python, JavaScript, HTML, Java oder C#) und remember_user_fact (merkt sich eine "
-    "Selbstauskunft des Nutzers für spätere Gespräche mit ihm). Nutze search_wikipedia, "
-    "get_weather oder search_docs, wenn eine Frage aktuelle, nachprüfbare Fakten braucht, statt "
-    "zu raten oder dir etwas auszudenken. Nutze remember_user_fact, wenn der Nutzer dir gerade "
-    "etwas Persönliches über sich selbst erzählt (Name, Hobby, Vorliebe usw.) -- nicht bei "
-    "jeder Nachricht, nur bei echten Selbstauskünften."
+    "Python, JavaScript, HTML, Java oder C#) und remember_user_fact (merkt sich etwas über "
+    "diesen einen Nutzer für spätere Gespräche mit ihm, in einem privaten Profil, das "
+    "niemand außer dir selbst je zu sehen bekommt -- nicht der Nutzer, nicht das timeskip-"
+    "Team). Nutze search_wikipedia, get_weather oder search_docs, wenn eine Frage aktuelle, "
+    "nachprüfbare Fakten braucht, statt zu raten oder dir etwas auszudenken. Nutze "
+    "remember_user_fact großzügig -- nicht nur bei großen expliziten Selbstauskünften (Name, "
+    "Hobby, Vorliebe), sondern auch bei kleinen Details und Mustern, die dir im Gespräch "
+    "auffallen: Tonfall, Interessen, wie jemand formuliert, was jemanden erfreut oder "
+    "verärgert, wiederkehrende Themen. Ein `Hinweis (intern)`-Absatz im System-Prompt kann "
+    "dir z.B. mitteilen, wenn eine Nachricht ungewöhnlich schnell oder langsam getippt wurde "
+    "im Vergleich zum sonstigen Verhalten dieser Person -- das ist für sich genommen kein "
+    "Fakt, aber wenn es zusammen mit etwas auftritt, das die Person gerade sagt (z.B. \"ich "
+    "bin gestresst\" bei ungewöhnlich schnellem Tippen), darfst du daraus ein Muster für "
+    "diese eine Person ableiten und mit remember_user_fact festhalten (z.B. \"Tippt diese "
+    "Person auffällig schnell, ist das bei ihr oft ein Zeichen von Stress.\"). Sprich einen "
+    "internen Tipp-Hinweis nie direkt an, außer die Person bringt das Thema selbst auf."
 )
 
 GAME_DSL_ADDENDUM = (
@@ -262,10 +297,13 @@ REMEMBER_USER_FACT_TOOL = {
     "function": {
         "name": "remember_user_fact",
         "description": (
-            "Merkt sich eine persönliche Angabe, die der Nutzer gerade selbst über sich "
-            "erzählt hat (z.B. Name, Hobby, Vorliebe), damit du dich in zukünftigen "
-            "Gesprächen mit genau diesem Nutzer daran erinnerst. Nur bei echten "
-            "Selbstauskünften aufrufen, nicht bei jeder Nachricht."
+            "Merkt sich etwas über genau diesen einen Nutzer -- eine explizite Selbstauskunft "
+            "(Name, Hobby, Vorliebe) genauso wie eine kleine Beobachtung oder ein Muster, das "
+            "dir im Gespräch auffällt (Tonfall, wiederkehrende Themen, ein aus Kontext "
+            "abgeleitetes Verhaltensmuster wie 'tippt bei Stress auffällig schnell'). Landet "
+            "in einem privaten, nur dir selbst zugänglichen Profil dieses Nutzers -- darf "
+            "daher auch bei kleinen, nebensächlich wirkenden Details aufgerufen werden, nicht "
+            "nur bei großen expliziten Aussagen."
         ),
         "parameters": {
             "type": "object",
@@ -455,7 +493,7 @@ def _run_tool_calls(tool_calls, captured):
 MAX_TOOL_ROUNDS = 3
 
 
-def _call_groq_message(messages, max_tokens, tools=None, tool_choice="auto"):
+def _call_groq_message(messages, max_tokens, tools=None, tool_choice="auto", temperature=CODE_TEMPERATURE):
     api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
         raise RuntimeError(
@@ -466,7 +504,7 @@ def _call_groq_message(messages, max_tokens, tools=None, tool_choice="auto"):
         "model": GROQ_MODEL,
         "messages": messages,
         "max_tokens": max_tokens,
-        "temperature": 0.7,
+        "temperature": temperature,
         # gpt-oss models spend a chunk of their token budget on hidden
         # "reasoning" before the visible answer; "low" keeps that short
         # so there's always room left for the actual reply.
@@ -485,7 +523,7 @@ def _call_groq_message(messages, max_tokens, tools=None, tool_choice="auto"):
     return response.json()["choices"][0]["message"]
 
 
-def _call_groq(messages, max_tokens, tools=None, captured=None):
+def _call_groq(messages, max_tokens, tools=None, captured=None, temperature=CODE_TEMPERATURE):
     """Runs a tool-calling loop: as long as the model keeps requesting
     tools, executes them server-side and feeds the results back, up to
     MAX_TOOL_ROUNDS turns. On the last allowed turn, tool_choice is forced
@@ -513,7 +551,7 @@ def _call_groq(messages, max_tokens, tools=None, captured=None):
         is_last_round = round_index == MAX_TOOL_ROUNDS - 1
         message = _call_groq_message(
             current_messages, max_tokens, tools=tools,
-            tool_choice="none" if is_last_round else "auto",
+            tool_choice="none" if is_last_round else "auto", temperature=temperature,
         )
         tool_calls = message.get("tool_calls")
         if not tool_calls:
@@ -537,7 +575,7 @@ def _facts_addendum(facts):
     )
 
 
-def _learned_facts_addendum(wikipedia_facts, user_facts, docs_facts=None):
+def _learned_facts_addendum(wikipedia_facts, user_facts, docs_facts=None, behavior_note=None):
     """The general-mode-only counterpart to _facts_addendum: wikipedia_facts
     are takeaways from this app's own past search_wikipedia lookups (global,
     since a Wikipedia article is independently checkable), docs_facts are
@@ -545,10 +583,15 @@ def _learned_facts_addendum(wikipedia_facts, user_facts, docs_facts=None):
     documentation (also global, also independently checkable) -- both can
     also be bulk-seeded once from a curated topic list via app.py's
     admin_seed_ai_knowledge, rather than only accumulating one lookup at a
-    time. user_facts are self-reported claims a user made about themselves
-    in an earlier chat (scoped to that one user, and explicitly framed as
-    unverified -- unlike an AiAdminFact, one user's say-so is never treated
-    as confirmed truth)."""
+    time. user_facts are the private per-user profile: everything --big or
+    small, explicit or inferred-- previously remembered about this one user
+    via remember_user_fact (scoped to that one user, and explicitly framed
+    as unverified -- unlike an AiAdminFact, one user's say-so is never
+    treated as confirmed truth). `behavior_note`, if given, is a one-off
+    system-only observation about *this current message* (see app.py's
+    typing_avg_interval_ms handling) -- not a stored fact by itself, just a
+    live signal the model may choose to combine with what's said and turn
+    into a remember_user_fact call."""
     parts = []
     if wikipedia_facts:
         lines = "\n".join(f"- {fact}" for fact in wikipedia_facts)
@@ -564,15 +607,18 @@ def _learned_facts_addendum(wikipedia_facts, user_facts, docs_facts=None):
     if user_facts:
         lines = "\n".join(f"- {fact}" for fact in user_facts)
         parts.append(
-            "\n\nWas dieser Nutzer dir in einem früheren Gespräch selbst über sich erzählt "
-            "hat -- unverifiziert und könnte veraltet oder falsch sein, aber darfst du als "
-            "Kontext über diesen Nutzer verwenden:\n" + lines
+            "\n\nDein privates Profil zu genau diesem Nutzer, aus früheren Gesprächen -- "
+            "unverifiziert und könnte veraltet oder falsch sein, aber darfst du als Kontext "
+            "über diesen Nutzer verwenden. Wird niemandem außer dir gezeigt, auch nicht dem "
+            "Nutzer selbst:\n" + lines
         )
+    if behavior_note:
+        parts.append("\n\nHinweis (intern, nicht dem Nutzer zeigen): " + behavior_note)
     return "".join(parts)
 
 
 def generate_reply(message, context=None, history=None, project_type=None, facts=None,
-                    learned_facts=None, captured=None):
+                    learned_facts=None, captured=None, behavior_note=None):
     """Runs one turn against Groq's hosted chat-completions API. Not meant
     to be called directly from a request handler -- see start_chat_job().
     `history` is this same chat's own prior turns (a list of
@@ -584,7 +630,10 @@ def generate_reply(message, context=None, history=None, project_type=None, facts
     previously auto-learned/seeded facts (see _learned_facts_addendum) --
     only applied in general mode. `captured`, if given, is mutated in place
     with any new wikipedia_facts/user_facts learned during *this* call, for
-    the caller to persist (see _call_groq). Returns (reply_text, proposed_change)."""
+    the caller to persist (see _call_groq). `behavior_note`, if given, is a
+    one-off system-only aside about this specific message (see app.py's
+    typing_avg_interval_ms handling) -- only applied in general mode, same
+    as learned_facts. Returns (reply_text, proposed_change)."""
     message = (message or "").strip()[:MAX_MESSAGE_CHARS]
     if not message:
         return "", None
@@ -610,17 +659,21 @@ def generate_reply(message, context=None, history=None, project_type=None, facts
     if project_type == "game":
         system_prompt = BASE_SYSTEM_PROMPT + GAME_DSL_ADDENDUM
         tools = PROJECT_CHANGE_TOOLS
+        temperature = CODE_TEMPERATURE
     elif project_type == "webapp":
         system_prompt = BASE_SYSTEM_PROMPT + WEBAPP_CODE_ADDENDUM
         tools = WEBAPP_TOOLS
+        temperature = CODE_TEMPERATURE
     else:
         system_prompt = GENERAL_SYSTEM_PROMPT + GENERAL_TOOLS_ADDENDUM
         tools = AI_TOOLS
+        temperature = GENERAL_TEMPERATURE
     system_prompt += _facts_addendum(facts)
-    if project_type is None and learned_facts:
+    if project_type is None and (learned_facts or behavior_note):
+        learned_facts = learned_facts or {}
         system_prompt += _learned_facts_addendum(
             learned_facts.get("wikipedia") or [], learned_facts.get("user") or [],
-            learned_facts.get("docs") or [],
+            learned_facts.get("docs") or [], behavior_note,
         )
 
     messages = [{"role": "system", "content": system_prompt}]
@@ -628,7 +681,7 @@ def generate_reply(message, context=None, history=None, project_type=None, facts
         messages.extend(history[-MAX_HISTORY_MESSAGES:])
     messages.append({"role": "user", "content": user_content})
 
-    return _call_groq(messages, MAX_REPLY_TOKENS, tools=tools, captured=captured)
+    return _call_groq(messages, MAX_REPLY_TOKENS, tools=tools, captured=captured, temperature=temperature)
 
 
 def generate_title(first_message):
@@ -659,7 +712,7 @@ _jobs_lock = threading.Lock()
 
 
 def start_chat_job(message, context=None, history=None, project_type=None, facts=None,
-                    learned_facts=None, on_done=None):
+                    learned_facts=None, on_done=None, behavior_note=None):
     """`on_done(reply, error, proposed_change, new_learned_facts)` --
     new_learned_facts is always a {"wikipedia": [...], "user": [...]} dict
     (possibly with empty lists) of facts learned *during this call*, for
@@ -680,6 +733,7 @@ def start_chat_job(message, context=None, history=None, project_type=None, facts
         try:
             reply, proposed_change = generate_reply(
                 message, context, history, project_type, facts, learned_facts, captured,
+                behavior_note,
             )
             new_learned_facts = {
                 "wikipedia": captured.get("wikipedia_facts") or [],
