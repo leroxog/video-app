@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}timeskip{% endblock %}
+{% block content %}
+    <div class="guest-home">
+        <div class="guest-home-intro">
+            <h1>Frag die timeskip KI.</h1>
+            <p>
+                Schreib direkt los -- ohne Account kannst du {{ limit }} Nachrichten ausprobieren.
+                <a href="{{ url_for('games_page') }}">Spiele entdecken</a> geht auch ohne Account.
+            </p>
+        </div>
+
+        <div class="ai-chat-messages guest-chat-messages" id="guestChatMessages">
+            <div class="ai-chat-message ai-chat-message-bot">
+                Hallo! Frag mich etwas -- du hast {{ limit }} kostenlose Nachrichten, bevor du dich anmelden musst.
+            </div>
+        </div>
+
+        <p class="guest-chat-limit-note" id="guestChatLimitNote" style="display:none;">
+            Du hast deine {{ limit }} kostenlosen Nachrichten aufgebraucht.
+            <a href="{{ url_for('register') }}">Registrieren</a> oder
+            <a href="{{ url_for('login') }}">einloggen</a>, um weiterzuschreiben.
+        </p>
+
+        <form class="ai-chat-form" id="guestChatForm">
+            <input type="text" id="guestChatInput" placeholder="Frage stellen..." maxlength="2000" autocomplete="off">
+            <button type="submit">Senden</button>
+        </form>
+        <p class="ai-chat-disclaimer">Sie schreiben mit einer KI, nicht mit einem Menschen. Eine KI kann Fehler machen.</p>
+    </div>
+
+    <script>
+        (function () {
+            const LIMIT = {{ limit }};
+            let sentCount = 0;
+            let history = [];
+            const messagesEl = document.getElementById("guestChatMessages");
+            const form = document.getElementById("guestChatForm");
+            const input = document.getElementById("guestChatInput");
+            const limitNote = document.getElementById("guestChatLimitNote");
+
+            function addMessage(text, who) {
+                const bubble = document.createElement("div");
+                bubble.className = "ai-chat-message ai-chat-message-" + who;
+                bubble.textContent = text;
+                messagesEl.appendChild(bubble);
+                messagesEl.scrollTop = messagesEl.scrollHeight;
+                return bubble;
+            }
+
+            function revealLimitNote() {
+                input.disabled = true;
+                form.querySelector("button").disabled = true;
+                limitNote.style.display = "";
+            }
+
+            function pollJob(jobId, bubble) {
+                fetch(`/api/ai/chat/${jobId}`)
+                    .then((res) => res.json())
+                    .then((data) => {
+                        if (!data.ok) { bubble.textContent = "Fehler bei der Anfrage."; return; }
+                        if (data.status === "running") { setTimeout(() => pollJob(jobId, bubble), 1200); return; }
+                        if (data.status === "done") {
+                            const reply = data.reply || "(keine Antwort)";
+                            bubble.textContent = reply;
+                            history.push({ role: "assistant", content: reply });
+                        } else {
+                            bubble.textContent = "Die KI ist gerade nicht verfügbar.";
+                        }
+                        messagesEl.scrollTop = messagesEl.scrollHeight;
+                    })
+                    .catch(() => { bubble.textContent = "Fehler bei der Anfrage."; });
+            }
+
+            form.addEventListener("submit", (event) => {
+                event.preventDefault();
+                const text = input.value.trim();
+                if (!text || sentCount >= LIMIT) return;
+                addMessage(text, "user");
+                const sentHistory = history.slice();
+                history.push({ role: "user", content: text });
+                input.value = "";
+                sentCount += 1;
+
+                const thinkingBubble = addMessage("Denkt nach...", "bot");
+                fetch("/api/ai/guest-chat", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ message: text, history: sentHistory }),
+                })
+                    .then((res) => res.json())
+                    .then((data) => {
+                        if (!data.ok) {
+                            thinkingBubble.textContent = data.error === "limit_reached"
+                                ? "Du hast dein kostenloses Limit erreicht."
+                                : "Fehler bei der Anfrage.";
+                            revealLimitNote();
+                            return;
+                        }
+                        pollJob(data.job_id, thinkingBubble);
+                        if (data.remaining <= 0) revealLimitNote();
+                    })
+                    .catch(() => { thinkingBubble.textContent = "Fehler bei der Anfrage."; });
+            });
+        })();
+    </script>
+{% endblock %}

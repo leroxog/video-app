@@ -3,17 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#ffffff">
+    <meta name="theme-color" content="#0a0a0c">
     <script>
         // Applied before the stylesheet paints so there's no flash of the
-        // wrong theme. Light is the default for everyone; dark is opt-in
-        // and stored client-side, changed from account settings.
+        // wrong theme. Dark is the default for everyone now; light is
+        // opt-in and stored client-side, changed from account settings.
         (function () {
             try {
-                if (localStorage.getItem("timeskip_theme") === "dark") {
+                if (localStorage.getItem("timeskip_theme") !== "light") {
                     document.documentElement.setAttribute("data-theme", "dark");
                 }
-            } catch (e) {}
+            } catch (e) {
+                document.documentElement.setAttribute("data-theme", "dark");
+            }
         })();
     </script>
     <title>{% block title %}timeskip{% endblock %}</title>
@@ -90,7 +92,13 @@
     </main>
 
     <div class="bottom-nav">
-        <a class="bottom-nav-apps-btn" href="{{ url_for('index') }}" title="Startseite" data-nav-active="/">
+        <a class="bottom-nav-apps-btn" href="{{ url_for('index') }}" title="Startseite (KI)" data-nav-active="/">
+            <svg viewBox="0 0 24 24" width="20" height="20">
+                <path d="M4 5 H20 V16 H9 L5 20 V16 H4 Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+            </svg>
+        </a>
+
+        <a class="bottom-nav-games-btn" href="{{ url_for('games_page') }}" title="Spiele" data-nav-active="{{ url_for('games_page') }}">
             <svg viewBox="0 0 24 24" width="20" height="20">
                 <rect x="3" y="3" width="8" height="8" rx="2" fill="currentColor"/>
                 <rect x="13" y="3" width="8" height="8" rx="2" fill="currentColor"/>
@@ -100,7 +108,7 @@
         </a>
 
         <a class="bottom-nav-plus" href="{{ url_for('studio_projects_page') if user else url_for('login') }}" title="Spiel programmieren">
-            <svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 4 V20 M4 12 H20" stroke="#0f0f0f" stroke-width="3" stroke-linecap="round"/></svg>
+            <svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 4 V20 M4 12 H20" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg>
         </a>
 
         <a class="bottom-nav-library-btn" href="{{ url_for('library_page') }}" title="Bibliothek" data-nav-active="{{ url_for('library_page') }}">
@@ -219,7 +227,7 @@
             });
 
             const pressable = document.querySelectorAll(
-                ".bottom-nav-apps-btn, .bottom-nav-plus, .bottom-nav-library-btn"
+                ".bottom-nav-apps-btn, .bottom-nav-games-btn, .bottom-nav-plus, .bottom-nav-library-btn"
             );
             pressable.forEach((el) => {
                 const press = () => el.classList.add("bottom-nav-pressed");

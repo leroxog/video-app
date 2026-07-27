@@ -2,17 +2,23 @@
     box-sizing: border-box;
 }
 
-/* Light theme is the default (new visitors + guests always start here).
-   Dark is opt-in via the toggle in account settings, stored client-side
-   and applied as data-theme="dark" on <html>. The bottom nav, headers,
-   and immersive/game screens intentionally stay on their own fixed dark
-   palette either way -- retheming every inline SVG icon fill and every
-   game canvas was out of scope here, so this covers the main content
-   surface (backgrounds, text, panels, forms) rather than every pixel. */
+/* Dark theme is the default now (new visitors + guests always start here,
+   monochrome throughout -- no more colorful pink/purple/cyan brand
+   gradient, see --gradient-primary/--mono-accent-solid below). Light is
+   opt-in via the toggle in account settings, stored client-side and
+   applied by *removing* data-theme="dark" from <html> (see base.html's
+   theme-init script). The bottom nav, headers, and immersive/game screens
+   intentionally stay on their own fixed dark palette either way --
+   retheming every inline SVG icon fill and every game canvas was out of
+   scope here, so this covers the main content surface (backgrounds, text,
+   panels, forms) rather than every pixel. Functional status colors (red
+   for delete/danger, green for success, blue for "active"/live states)
+   are intentionally kept out of this monochrome pass -- removing color
+   from those would remove real meaning, not just decoration. */
 :root {
     --bg-primary: #ffffff;
-    --bg-body-tint-1: rgba(62, 166, 255, 0.10);
-    --bg-body-tint-2: rgba(62, 166, 255, 0.06);
+    --bg-body-tint-1: rgba(150, 150, 150, 0.06);
+    --bg-body-tint-2: rgba(150, 150, 150, 0.05);
     --text-primary: #17181a;
     --text-secondary: #5b5f66;
     --panel-bg-solid: #f3f4f6;
@@ -25,15 +31,26 @@
     --glass-border: 1px solid rgba(20, 30, 45, 0.1);
     --glass-blur: blur(20px) saturate(1.7);
     --glass-shadow: 0 8px 26px rgba(20, 30, 45, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.7);
-    --accent-blue: #2f8fe0;
-    --accent-blue-bright: #1f74c4;
-    --gradient-primary: linear-gradient(135deg, #22d1ee 0%, #6a5cff 48%, #ff3d81 100%);
+    --accent-blue: #404040;
+    --accent-blue-bright: #000000;
+    /* The former rainbow (cyan/purple/pink) --gradient-primary, now a
+       plain dark-to-black gradient -- used for every former "brand
+       color" button/badge/logo-text fill across the site (see the many
+       var(--gradient-primary) usages below, all mechanically converted
+       from the three old hardcoded gradients). --gradient-primary-text
+       is the paired label color, since a dark button needs light text
+       and (in dark mode, where this flips to a light button) a light
+       button needs dark text. --mono-accent-solid is the same idea for
+       plain (non-gradient) borders/text that used to be brand-colored. */
+    --gradient-primary: linear-gradient(135deg, #3a3a3a, #050505);
+    --gradient-primary-text: #ffffff;
+    --mono-accent-solid: #000000;
 }
 
 :root[data-theme="dark"] {
     --bg-primary: #0a0a0c;
-    --bg-body-tint-1: rgba(62, 166, 255, 0.16);
-    --bg-body-tint-2: rgba(62, 166, 255, 0.10);
+    --bg-body-tint-1: rgba(160, 160, 160, 0.10);
+    --bg-body-tint-2: rgba(150, 150, 150, 0.06);
     --text-primary: #f1f1f1;
     --text-secondary: #aaaaaa;
     --panel-bg-solid: #1c1c1c;
@@ -46,13 +63,15 @@
     --glass-border: 1px solid rgba(255, 255, 255, 0.14);
     --glass-blur: blur(20px) saturate(1.7);
     --glass-shadow: 0 8px 26px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.12);
-    --accent-blue: #3ea6ff;
-    --accent-blue-bright: #6fc0ff;
-    --gradient-primary: linear-gradient(135deg, #22d1ee 0%, #6a5cff 48%, #ff3d81 100%);
+    --accent-blue: #cfcfcf;
+    --accent-blue-bright: #ffffff;
+    --gradient-primary: linear-gradient(135deg, #f2f2f2, #ffffff);
+    --gradient-primary-text: #0f0f0f;
+    --mono-accent-solid: #ffffff;
 }
 
 * {
-    scrollbar-color: rgba(62, 166, 255, 0.4) transparent;
+    scrollbar-color: rgba(140, 140, 140, 0.45) transparent;
 }
 
 body {
@@ -214,8 +233,8 @@ a, button {
 }
 
 .badge-chip {
-    background: linear-gradient(135deg, #22d1ee, #3ea6ff);
-    color: #0f0f0f;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-weight: bold;
     border-radius: 999px;
     padding: 6px 14px;
@@ -283,7 +302,7 @@ header {
     font-family: Arial, "Segoe UI", sans-serif;
     font-weight: 800;
     font-size: 108px;
-    fill: #3ea6ff;
+    fill: var(--mono-accent-solid);
 }
 
 .brand-text {
@@ -336,13 +355,13 @@ header {
 }
 
 .loading-dots span:first-child {
-    background: linear-gradient(135deg, #22d1ee, #3ea6ff);
+    background: var(--gradient-primary);
     margin-left: 0;
     animation-delay: 0s;
 }
 
 .loading-dots span:last-child {
-    background: linear-gradient(135deg, #ff3d81, #c94fd6);
+    background: var(--gradient-primary);
     animation-delay: -0.45s;
 }
 
@@ -502,7 +521,7 @@ main {
     z-index: 200;
 }
 
-.bottom-nav-message-btn, .bottom-nav-heart-btn, .bottom-nav-apps-btn, .bottom-nav-camera-btn, .bottom-nav-library-btn {
+.bottom-nav-message-btn, .bottom-nav-heart-btn, .bottom-nav-apps-btn, .bottom-nav-camera-btn, .bottom-nav-library-btn, .bottom-nav-games-btn {
     width: 34px;
     height: 34px;
     border-radius: 50%;
@@ -555,8 +574,8 @@ main {
     align-items: center;
     gap: 0.35rem;
     padding: 0.4rem 0.7rem;
-    background: linear-gradient(135deg, #6a5cff, #5842d6);
-    color: #fff;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     border-radius: 999px;
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
     white-space: nowrap;
@@ -593,7 +612,7 @@ main {
     height: 0;
     border-left: 6px solid transparent;
     border-right: 6px solid transparent;
-    border-bottom: 7px solid #3ea6ff;
+    border-bottom: 7px solid var(--mono-accent-solid);
 }
 
 .bottom-nav-plus {
@@ -604,8 +623,8 @@ main {
     margin: 0;
     border: none;
     border-radius: 50%;
-    background: linear-gradient(135deg, #ff3d81, #c94fd6);
-    color: #0f0f0f;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -658,8 +677,8 @@ main {
     height: 52px;
     border-radius: 50%;
     border: none;
-    background: linear-gradient(135deg, #6a5cff, #5842d6);
-    color: #fff;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-size: 1.4rem;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
     cursor: pointer;
@@ -856,7 +875,7 @@ main {
 .ai-voice-line-user {
     align-self: flex-end;
     background: var(--gradient-primary);
-    color: #fff;
+    color: var(--gradient-primary-text);
 }
 
 .ai-voice-line-bot {
@@ -887,8 +906,8 @@ main {
     height: 64px;
     border-radius: 50%;
     border: none;
-    background: linear-gradient(135deg, #6a5cff, #5842d6);
-    color: #fff;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-size: 1.6rem;
     cursor: pointer;
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
@@ -950,8 +969,8 @@ main {
     border: none;
     border-radius: 999px;
     padding: 0.45rem 0.9rem;
-    background: linear-gradient(135deg, #ff3d81, #c94fd6);
-    color: #fff;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-weight: 600;
     cursor: pointer;
     font-size: 0.8rem;
@@ -1090,6 +1109,52 @@ main {
     min-height: 480px;
 }
 
+/* The anonymous trial chat on "/" for logged-out visitors (see
+   guest_home.html) -- a scaled-down standalone version of the full
+   .assistant-page chat, no sidebar, since there's no history to browse. */
+.guest-home {
+    display: flex;
+    flex-direction: column;
+    max-width: 640px;
+    margin: 0 auto;
+    height: calc(100vh - 220px);
+    min-height: 480px;
+    background: var(--panel-bg-solid);
+    border: 1px solid var(--panel-border-solid);
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+.guest-home-intro {
+    padding: 1.2rem 1.2rem 0.6rem;
+    text-align: center;
+    border-bottom: 1px solid var(--panel-border-solid);
+}
+
+.guest-home-intro h1 {
+    margin: 0 0 0.3rem;
+    font-size: 1.3rem;
+}
+
+.guest-home-intro p {
+    margin: 0 0 1rem;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+.guest-chat-messages {
+    flex: 1 1 auto;
+}
+
+.guest-chat-limit-note {
+    margin: 0;
+    padding: 0.6rem 0.9rem;
+    font-size: 0.85rem;
+    text-align: center;
+    background: rgba(127, 127, 127, 0.14);
+    border-top: 1px solid var(--panel-border-solid);
+}
+
 .ai-chat-panel-header {
     display: flex;
     align-items: center;
@@ -1133,7 +1198,7 @@ main {
 }
 
 .ai-chat-icon-btn-danger:hover {
-    color: #ff3d81;
+    color: var(--mono-accent-solid);
 }
 
 .ai-chat-conversation-view {
@@ -1210,8 +1275,8 @@ main {
 }
 
 .ai-chat-specialize-accept {
-    background: linear-gradient(135deg, #ff3d81, #c94fd6);
-    color: #0f0f0f;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
 }
 
 .ai-chat-specialize-decline {
@@ -1251,8 +1316,8 @@ main {
 }
 
 .ai-chat-change-accept {
-    background: linear-gradient(135deg, #6a5cff, #5842d6);
-    color: #fff;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
 }
 
 .ai-chat-change-accept:disabled {
@@ -1384,8 +1449,8 @@ body.studio-fullscreen .ai-chat-message-bot {
 
 .ai-chat-message-user {
     align-self: flex-end;
-    background: linear-gradient(135deg, #6a5cff, #5842d6);
-    color: #fff;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
 }
 
 .ai-chat-insert-btn {
@@ -1394,8 +1459,8 @@ body.studio-fullscreen .ai-chat-message-bot {
     padding: 0.35rem 0.7rem;
     border: none;
     border-radius: 8px;
-    background: linear-gradient(135deg, #ff3d81, #c94fd6);
-    color: #0f0f0f;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-size: 0.78rem;
     font-weight: 600;
     cursor: pointer;
@@ -1473,8 +1538,8 @@ body.studio-fullscreen .ai-chat-message-bot {
     padding: 0.5rem 1rem;
     border: none;
     border-radius: 8px;
-    background: linear-gradient(135deg, #ff3d81, #c94fd6);
-    color: #0f0f0f;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-weight: 600;
     cursor: pointer;
 }
@@ -1586,8 +1651,8 @@ h1 {
     padding: 0.6rem 1.2rem;
     border: none;
     border-radius: 999px;
-    background: linear-gradient(135deg, #22d1ee, #3ea6ff);
-    color: #0f0f0f;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-weight: 700;
     cursor: pointer;
 }
@@ -1701,8 +1766,8 @@ h1 {
     margin-top: 0.9rem;
     padding: 0.6rem 1.6rem;
     border-radius: 999px;
-    background: linear-gradient(135deg, #6a5cff, #5842d6);
-    color: #fff;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-weight: 700;
     text-decoration: none;
 }
@@ -1756,8 +1821,8 @@ h1 {
     padding: 0.6rem 1.2rem;
     border: none;
     border-radius: 999px;
-    background: linear-gradient(135deg, #ff3d81, #c94fd6);
-    color: #0f0f0f;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-weight: 600;
     cursor: pointer;
 }
@@ -1781,8 +1846,8 @@ h1 {
     padding: 0.6rem 0;
     border: none;
     border-radius: 999px;
-    background: linear-gradient(135deg, #22d1ee, #3ea6ff);
-    color: #0f0f0f;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-weight: 700;
     font-size: 1.1rem;
     cursor: pointer;
@@ -1830,7 +1895,7 @@ h1 {
 
 .create-code-preview {
     font-size: 0.85rem;
-    color: #3ea6ff;
+    color: var(--mono-accent-solid);
     margin-top: 0.4rem;
 }
 
@@ -1839,8 +1904,8 @@ h1 {
     padding: 0.6rem 1.2rem;
     border: none;
     border-radius: 999px;
-    background: linear-gradient(135deg, #6a5cff, #5842d6);
-    color: #fff;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-weight: 600;
     cursor: pointer;
 }
@@ -1912,8 +1977,8 @@ h1 {
     display: inline-block;
     padding: 0.7rem 2rem;
     border-radius: 6px;
-    background: linear-gradient(135deg, #ff3d81, #c94fd6);
-    color: #0f0f0f;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-weight: 800;
     text-decoration: none;
     letter-spacing: 0.05em;
@@ -1997,8 +2062,8 @@ h1 {
     display: inline-block;
     padding: 0.7rem 2rem;
     border-radius: 6px;
-    background: linear-gradient(135deg, #22d1ee, #3ea6ff);
-    color: #0f0f0f;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-weight: 800;
     text-decoration: none;
     letter-spacing: 0.05em;
@@ -2108,8 +2173,8 @@ h1 {
     border-radius: 4px;
     font-weight: 600;
     cursor: pointer;
-    background: linear-gradient(135deg, #6a5cff, #5842d6);
-    color: #fff;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
 }
 
 .guest-upsell-error {
@@ -2129,8 +2194,8 @@ h1 {
     padding: 0.7rem 1.4rem;
     border: none;
     border-radius: 6px;
-    background: linear-gradient(135deg, #ff3d81, #c94fd6);
-    color: #0f0f0f;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-weight: 700;
     cursor: pointer;
 }
@@ -2211,7 +2276,7 @@ h1 {
     height: 48px;
     border-radius: 6px;
     flex-shrink: 0;
-    background: linear-gradient(135deg, #ff3b30 25%, #3ea6ff 25% 50%, #4caf50 50% 75%, #ffcc00 75%);
+    background: linear-gradient(135deg, #ff3b30 25%, var(--mono-accent-solid) 25% 50%, #4caf50 50% 75%, #ffcc00 75%);
 }
 
 .place-label-title {
@@ -2254,7 +2319,7 @@ h1 {
 .gravityrun-icon {
     background:
         radial-gradient(circle at 14px 13px, #ff4d4d 0 5px, transparent 6px),
-        radial-gradient(circle at 34px 35px, #3ea6ff 0 5px, transparent 6px),
+        radial-gradient(circle at 34px 35px, var(--mono-accent-solid) 0 5px, transparent 6px),
         linear-gradient(#5a4a2e, #5a4a2e) 30px 4px / 7px 15px no-repeat,
         linear-gradient(#5a4a2e, #5a4a2e) 11px 29px / 7px 15px no-repeat,
         linear-gradient(#787468, #787468) 0 22px / 100% 4px no-repeat,
@@ -2278,7 +2343,7 @@ h1 {
 
 .blockbuster-icon {
     background:
-        linear-gradient(#3ea6ff, #3ea6ff) 12px 36px / 24px 6px no-repeat,
+        linear-gradient(var(--mono-accent-solid), var(--mono-accent-solid)) 12px 36px / 24px 6px no-repeat,
         radial-gradient(circle at 24px 28px, #fff 0 3px, transparent 4px),
         linear-gradient(#e74c3c, #e74c3c) 4px 8px / 10px 6px no-repeat,
         linear-gradient(#f2c230, #f2c230) 16px 8px / 10px 6px no-repeat,
@@ -2308,7 +2373,7 @@ h1 {
         radial-gradient(circle at 34% 40%, #1c1c1c 0 3px, transparent 4px),
         radial-gradient(circle at 66% 40%, #1c1c1c 0 3px, transparent 4px),
         radial-gradient(ellipse 12px 6px at 50% 66%, #1c1c1c 0 100%, transparent 100%),
-        linear-gradient(135deg, #ff3b30 25%, #3ea6ff 25% 50%, #4caf50 50% 75%, #ffcc00 75%);
+        linear-gradient(135deg, #ff3b30 25%, var(--mono-accent-solid) 25% 50%, #4caf50 50% 75%, #ffcc00 75%);
 }
 
 .studio-game-icon {
@@ -2339,7 +2404,7 @@ h1 {
     background: #1c1c1c;
     border: 1px solid #3c3c3c;
     border-radius: 6px;
-    color: #3ea6ff;
+    color: var(--mono-accent-solid);
     cursor: pointer;
 }
 
@@ -2355,8 +2420,8 @@ h1 {
     padding: 0.6rem 1.2rem;
     border: none;
     border-radius: 4px;
-    background: linear-gradient(135deg, #22d1ee, #3ea6ff);
-    color: #0f0f0f;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-weight: 600;
     cursor: pointer;
     margin-bottom: 1rem;
@@ -2436,7 +2501,7 @@ body.shorts-fullscreen main {
 
 .shorts-volume-slider {
     width: 90px;
-    accent-color: #3ea6ff;
+    accent-color: var(--mono-accent-solid);
     cursor: pointer;
 }
 
@@ -2540,8 +2605,8 @@ body.shorts-fullscreen main {
     padding: 0.4rem 0.8rem;
     border: none;
     border-radius: 20px;
-    background: linear-gradient(135deg, #22d1ee, #3ea6ff);
-    color: #0f0f0f;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     text-decoration: none;
     font-size: 0.85rem;
     font-weight: 600;
@@ -2656,7 +2721,7 @@ body.shorts-fullscreen main {
 }
 
 .sound-option.selected {
-    border-color: #3ea6ff;
+    border-color: var(--mono-accent-solid);
     background: #16324a;
 }
 
@@ -2681,8 +2746,8 @@ body.shorts-fullscreen main {
     padding: 0.35rem 0.7rem;
     border: none;
     border-radius: 6px;
-    background: linear-gradient(135deg, #6a5cff, #5842d6);
-    color: #fff;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-weight: 600;
     cursor: pointer;
     font-size: 0.8rem;
@@ -2780,8 +2845,8 @@ body.shorts-fullscreen main {
     padding: 0.6rem 1.2rem;
     border: none;
     border-radius: 999px;
-    background: linear-gradient(135deg, #ff3d81, #c94fd6);
-    color: #0f0f0f;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-weight: 600;
     cursor: pointer;
 }
@@ -2860,8 +2925,8 @@ body.shorts-fullscreen main {
     padding: 0.6rem 1.1rem;
     border: none;
     border-radius: 20px;
-    background: linear-gradient(135deg, #22d1ee, #3ea6ff);
-    color: #0f0f0f;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-weight: 600;
     cursor: pointer;
 }
@@ -2922,8 +2987,8 @@ body.shorts-fullscreen main {
     padding: 0.5rem 1.1rem;
     border: none;
     border-radius: 20px;
-    background: linear-gradient(135deg, #6a5cff, #5842d6);
-    color: #fff;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-weight: 600;
     cursor: pointer;
 }
@@ -2938,8 +3003,8 @@ body.shorts-fullscreen main {
     padding: 0.35rem 0.9rem;
     border: none;
     border-radius: 20px;
-    background: linear-gradient(135deg, #ff3d81, #c94fd6);
-    color: #0f0f0f;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-weight: 600;
     font-size: 0.85rem;
     cursor: pointer;
@@ -3007,8 +3072,8 @@ body.shorts-fullscreen main {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, #22d1ee, #3ea6ff);
-    color: #0f0f0f;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-size: 2.4rem;
     font-weight: 700;
 }
@@ -3028,8 +3093,8 @@ body.shorts-fullscreen main {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, #6a5cff, #5842d6);
-    color: #fff;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-size: 0.9rem;
     border: 2px solid var(--bg-primary);
     cursor: pointer;
@@ -3096,8 +3161,8 @@ body.shorts-fullscreen main {
 }
 
 .profile-action-btn-primary {
-    background: linear-gradient(135deg, #ff3d81, #c94fd6);
-    color: #0f0f0f;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
 }
 
 .profile-action-btn-outline {
@@ -3123,7 +3188,7 @@ body.shorts-fullscreen main {
 .profile-tab-active {
     color: var(--text-primary);
     border-bottom: 2px solid;
-    border-image: linear-gradient(135deg, #22d1ee, #3ea6ff) 1;
+    border-image: var(--gradient-primary) 1;
 }
 
 .profile-empty-note {
@@ -3148,9 +3213,9 @@ body.shorts-fullscreen main {
 }
 
 .theme-toggle-btn.active {
-    background: linear-gradient(135deg, #6a5cff, #5842d6);
+    background: var(--gradient-primary);
     border-color: transparent;
-    color: #fff;
+    color: var(--gradient-primary-text);
 }
 
 .settings-id-row {
@@ -3171,8 +3236,8 @@ body.shorts-fullscreen main {
     padding: 0.4rem 0.9rem;
     border: none;
     border-radius: 4px;
-    background: linear-gradient(135deg, #ff3d81, #c94fd6);
-    color: #0f0f0f;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-weight: 600;
     cursor: pointer;
 }
@@ -3226,8 +3291,8 @@ body.shorts-fullscreen main {
 .forgot-password-yes {
     padding: 0.6rem 1.4rem;
     border-radius: 999px;
-    background: linear-gradient(135deg, #6a5cff, #5842d6);
-    color: #fff;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-weight: 700;
     text-decoration: none;
 }
@@ -3261,8 +3326,8 @@ body.shorts-fullscreen main {
     margin-top: 0.7rem;
     padding: 0.8rem 1rem;
     border-radius: 10px;
-    background: linear-gradient(135deg, #ff3d81, #c94fd6);
-    color: #fff;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
 }
 
 .kids-account-bubble::before {
@@ -3272,7 +3337,7 @@ body.shorts-fullscreen main {
     left: 24px;
     border-left: 8px solid transparent;
     border-right: 8px solid transparent;
-    border-bottom: 8px solid #ff3d81;
+    border-bottom: 8px solid var(--mono-accent-solid);
 }
 
 .kids-account-bubble p {
@@ -3286,7 +3351,7 @@ body.shorts-fullscreen main {
     border: none;
     border-radius: 6px;
     background: #fff;
-    color: #c94fd6;
+    color: var(--mono-accent-solid);
     font-weight: 700;
     cursor: pointer;
 }
@@ -3296,8 +3361,8 @@ body.shorts-fullscreen main {
     padding: 0.6rem 0.8rem;
     border-radius: 8px;
     background: rgba(255, 61, 129, 0.12);
-    border: 1px solid #ff3d81;
-    color: #ff3d81;
+    border: 1px solid var(--mono-accent-solid);
+    color: var(--mono-accent-solid);
     font-size: 0.85rem;
 }
 
@@ -3383,7 +3448,7 @@ body.shorts-fullscreen main {
     z-index: 7;
     padding: 4px 8px;
     border-radius: 6px;
-    border: 1px solid #3ea6ff;
+    border: 1px solid var(--mono-accent-solid);
     background: rgba(0, 0, 0, 0.75);
     color: #fff;
     font-size: 1rem;
@@ -3395,8 +3460,8 @@ body.shorts-fullscreen main {
     padding: 0.7rem;
     border: none;
     border-radius: 4px;
-    background: linear-gradient(135deg, #6a5cff, #5842d6);
-    color: #fff;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-weight: 600;
     cursor: pointer;
 }
@@ -3477,7 +3542,7 @@ body.shorts-fullscreen main {
     gap: 0.2rem;
     padding: 0.5rem 0.4rem;
     width: 68px;
-    border: 1px solid #3ea6ff;
+    border: 1px solid var(--mono-accent-solid);
     border-radius: 8px;
     background: #16324a;
     color: #fff;
@@ -3494,9 +3559,9 @@ body.shorts-fullscreen main {
 }
 
 .fruitmerge-powerups button.active {
-    border-color: #3ea6ff;
-    background: linear-gradient(135deg, #ff3d81, #c94fd6);
-    color: #0f0f0f;
+    border-color: var(--mono-accent-solid);
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
 }
 
 .powerup-icon-badge {
@@ -3542,8 +3607,8 @@ body.shorts-fullscreen main {
     padding: 0.6rem 1.2rem;
     border: none;
     border-radius: 4px;
-    background: linear-gradient(135deg, #22d1ee, #3ea6ff);
-    color: #0f0f0f;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-weight: 600;
     cursor: pointer;
 }
@@ -3572,8 +3637,8 @@ body.shorts-fullscreen main {
     padding: 0.7rem 1.2rem;
     border: none;
     border-radius: 6px;
-    background: linear-gradient(135deg, #6a5cff, #5842d6);
-    color: #fff;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-weight: 600;
     cursor: pointer;
 }
@@ -3633,8 +3698,8 @@ body.shorts-fullscreen main {
     padding: 0.7rem 1.2rem;
     border: none;
     border-radius: 4px;
-    background: linear-gradient(135deg, #ff3d81, #c94fd6);
-    color: #0f0f0f;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-weight: 600;
     cursor: pointer;
 }
@@ -3661,7 +3726,7 @@ body.shorts-fullscreen main {
 }
 
 .admin-table a {
-    color: #3ea6ff;
+    color: var(--mono-accent-solid);
 }
 
 .admin-human-spotter-thumb {
@@ -3853,8 +3918,8 @@ body.shorts-fullscreen main {
     padding: 0.7rem 1.2rem;
     border: none;
     border-radius: 999px;
-    background: linear-gradient(135deg, #22d1ee, #3ea6ff);
-    color: #0f0f0f;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-weight: 700;
     cursor: pointer;
 }
@@ -3925,8 +3990,8 @@ body.shorts-fullscreen main {
     padding: 0.7rem;
     border-radius: 8px;
     border: none;
-    background: linear-gradient(135deg, #6a5cff, #5842d6);
-    color: #fff;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-weight: 600;
     cursor: pointer;
 }
@@ -4009,7 +4074,7 @@ body.shorts-fullscreen main {
 }
 
 .meme-result-item.mine {
-    border-color: #3ea6ff;
+    border-color: var(--mono-accent-solid);
 }
 
 .meme-result-item img {
@@ -4056,7 +4121,7 @@ body.shorts-fullscreen main {
 }
 
 .meme-rematch-toggle-btn.active {
-    background: #3ea6ff;
+    background: var(--mono-accent-solid);
     color: #0f0f0f;
     font-weight: 600;
 }
@@ -4072,8 +4137,8 @@ body.shorts-fullscreen main {
     padding: 0.7rem 1.4rem;
     border: none;
     border-radius: 999px;
-    background: linear-gradient(135deg, #ff3d81, #c94fd6);
-    color: #0f0f0f;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-weight: 700;
     cursor: pointer;
 }
@@ -4128,7 +4193,7 @@ body.shorts-fullscreen main {
 
 .conversation-group-tag {
     font-size: 0.75rem;
-    color: #3ea6ff;
+    color: var(--mono-accent-solid);
     font-weight: normal;
 }
 
@@ -4157,8 +4222,8 @@ body.shorts-fullscreen main {
     padding: 0.55rem 1.1rem;
     border-radius: 999px;
     border: none;
-    background: linear-gradient(135deg, #22d1ee, #3ea6ff);
-    color: #0f0f0f;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-weight: 700;
     font-size: 0.95rem;
     cursor: pointer;
@@ -4218,8 +4283,8 @@ body.shorts-fullscreen main {
     padding: 0.5rem 1.1rem;
     border: none;
     border-radius: 999px;
-    background: linear-gradient(135deg, #6a5cff, #5842d6);
-    color: #fff;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-weight: 600;
     cursor: pointer;
 }
@@ -4281,8 +4346,8 @@ body.shorts-fullscreen main {
 
 .conversation-message.mine {
     align-self: flex-end;
-    background: linear-gradient(135deg, #ff3d81, #c94fd6);
-    color: #0f0f0f;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
 }
 
 .conversation-message-sender {
@@ -4320,8 +4385,8 @@ body.shorts-fullscreen main {
     padding: 0.6rem 1.2rem;
     border: none;
     border-radius: 999px;
-    background: linear-gradient(135deg, #22d1ee, #3ea6ff);
-    color: #0f0f0f;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-weight: 600;
     cursor: pointer;
 }
@@ -4449,8 +4514,8 @@ body.shorts-fullscreen main {
     padding: 0.6rem 1.4rem;
     border: none;
     border-radius: 999px;
-    background: linear-gradient(135deg, #6a5cff, #5842d6);
-    color: #fff;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-weight: 600;
     cursor: pointer;
 }
@@ -4521,8 +4586,8 @@ body.shorts-fullscreen main {
     padding: 0.4rem 0.9rem;
     border: none;
     border-radius: 999px;
-    background: linear-gradient(135deg, #ff3d81, #c94fd6);
-    color: #0f0f0f;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-weight: 600;
     cursor: pointer;
     font-size: 0.85rem;
@@ -4605,8 +4670,8 @@ body.shorts-fullscreen main {
     padding: 0.35rem 0.8rem;
     border: none;
     border-radius: 999px;
-    background: linear-gradient(135deg, #22d1ee, #3ea6ff);
-    color: #0f0f0f;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-weight: 600;
     cursor: pointer;
     font-size: 0.8rem;
@@ -4710,8 +4775,8 @@ body.studio-fullscreen {
     padding: 0.6rem 1.2rem;
     border: none;
     border-radius: 8px;
-    background: linear-gradient(135deg, #ff3d81, #c94fd6);
-    color: #0f0f0f;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-weight: 600;
     cursor: pointer;
 }
@@ -4752,13 +4817,13 @@ body.studio-fullscreen {
 }
 
 .studio-help-tab.is-recommended {
-    border-color: #ff3d81;
+    border-color: var(--mono-accent-solid);
 }
 
 .studio-help-tab.is-active {
-    background: linear-gradient(135deg, #ff3d81, #c94fd6);
+    background: var(--gradient-primary);
     border-color: transparent;
-    color: #0f0f0f;
+    color: var(--gradient-primary-text);
 }
 
 .studio-help-reference {
@@ -4781,7 +4846,7 @@ body.studio-fullscreen {
 .studio-help-row code {
     flex: 0 0 auto;
     font-family: "Consolas", "Courier New", monospace;
-    color: #c94fd6;
+    color: var(--mono-accent-solid);
     font-weight: 600;
 }
 
@@ -4841,8 +4906,8 @@ body.studio-fullscreen {
 }
 
 .studio-project-status.is-published {
-    color: #0f0f0f;
-    background: linear-gradient(135deg, #22d1ee, #3ea6ff);
+    color: var(--gradient-primary-text);
+    background: var(--gradient-primary);
     border-color: transparent;
 }
 
@@ -4917,8 +4982,8 @@ body.studio-fullscreen {
     padding: 0.5rem 1rem;
     border-radius: 8px;
     border: none;
-    background: linear-gradient(135deg, #6a5cff, #5842d6);
-    color: #fff;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-weight: 600;
     cursor: pointer;
 }
@@ -5124,8 +5189,8 @@ body.studio-fullscreen {
     padding: 0.5rem 0.8rem;
     border-radius: 8px;
     border: none;
-    background: linear-gradient(135deg, #6a5cff, #5842d6);
-    color: #fff;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-weight: 600;
     cursor: pointer;
     flex-shrink: 0;
@@ -5173,8 +5238,8 @@ body.studio-fullscreen {
 .webapp-offline-yes {
     padding: 0.7rem 1.4rem;
     border-radius: 999px;
-    background: linear-gradient(135deg, #ff3d81, #c94fd6);
-    color: #0f0f0f;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-weight: 700;
     text-decoration: none;
 }
@@ -5330,8 +5395,8 @@ body.studio-fullscreen {
     height: 30px;
     border-radius: 50%;
     border: none;
-    background: linear-gradient(135deg, #ff3d81, #c94fd6);
-    color: #0f0f0f;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-size: 1.1rem;
     font-weight: 700;
     cursor: pointer;
@@ -5606,29 +5671,29 @@ body.studio-fullscreen {
 }
 
 .studio-palette-chip-wann {
-    background: linear-gradient(135deg, #22d1ee, #3ea6ff);
+    background: var(--gradient-primary);
 }
 
 .studio-palette-chip-aktion {
-    background: linear-gradient(135deg, #ff3d81, #c94fd6);
+    background: var(--gradient-primary);
 }
 
 .studio-palette-chip-dauer {
-    background: linear-gradient(135deg, #6a5cff, #5842d6);
-    color: #fff;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
 }
 
 .studio-palette-chip-ende {
-    background: linear-gradient(135deg, #22d1ee, #3ea6ff);
+    background: var(--gradient-primary);
 }
 
 .studio-palette-chip-condition {
-    background: linear-gradient(135deg, #6a5cff, #5842d6);
-    color: #fff;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
 }
 
 .studio-palette-chip-var {
-    background: linear-gradient(135deg, #ff3d81, #c94fd6);
+    background: var(--gradient-primary);
 }
 
 .studio-palette-blocks {
@@ -5797,7 +5862,7 @@ body.studio-fullscreen {
 }
 
 .studio-like-btn.is-liked .studio-like-icon {
-    color: #ff3d81;
+    color: var(--mono-accent-solid);
 }
 
 .studio-play-social button:disabled {
@@ -5865,8 +5930,8 @@ body.studio-fullscreen {
     padding: 0.5rem 1rem;
     border: none;
     border-radius: 8px;
-    background: linear-gradient(135deg, #ff3d81, #c94fd6);
-    color: #0f0f0f;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-weight: 600;
     cursor: pointer;
 }
@@ -5918,8 +5983,8 @@ body.studio-fullscreen {
 }
 
 .hero-cta-primary {
-    background: linear-gradient(135deg, #22d1ee, #3ea6ff);
-    color: #0f0f0f;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
 }
 
 .hero-cta-secondary {
@@ -5964,8 +6029,8 @@ body.studio-fullscreen {
     height: 36px;
     margin: 0 auto;
     border-radius: 50%;
-    background: linear-gradient(135deg, #6a5cff, #5842d6);
-    color: #fff;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-weight: 700;
     font-size: 1.1rem;
     display: flex;
@@ -6023,9 +6088,9 @@ body.studio-fullscreen {
 }
 
 .games-sort-tab.is-active {
-    background: linear-gradient(135deg, #ff3d81, #c94fd6);
+    background: var(--gradient-primary);
     border-color: transparent;
-    color: #0f0f0f;
+    color: var(--gradient-primary-text);
 }
 
 .gallery-page {
@@ -6137,8 +6202,8 @@ body.studio-fullscreen {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, #ff3d81, #c94fd6);
-    color: #0f0f0f;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-size: 0.7rem;
     font-weight: 700;
 }
@@ -6299,7 +6364,7 @@ body.studio-fullscreen {
 
 .terms-accept-btn {
     background: var(--gradient-primary);
-    color: #ffffff;
+    color: var(--gradient-primary-text);
 }
 
 .terms-decline-btn {
@@ -6349,7 +6414,7 @@ body.studio-fullscreen {
 }
 
 .humanspotter-disclaimer a {
-    color: #3ea6ff;
+    color: var(--mono-accent-solid);
 }
 
 .humanspotter-stage {
@@ -6453,8 +6518,8 @@ body.studio-fullscreen {
     border: none;
     border-radius: 999px;
     padding: 0.5rem 1rem;
-    background: linear-gradient(135deg, #6a5cff, #5842d6);
-    color: #fff;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
     font-weight: 600;
     cursor: pointer;
 }
@@ -6472,7 +6537,7 @@ body.studio-fullscreen {
     padding: 0.7rem 1.5rem;
     border-radius: 999px;
     background: var(--gradient-primary);
-    color: #ffffff;
+    color: var(--gradient-primary-text);
     font-weight: 700;
     text-decoration: none;
 }

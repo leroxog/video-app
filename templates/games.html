@@ -2,26 +2,72 @@
 {% block title %}Spiele - timeskip{% endblock %}
 {% block content %}
     <div class="gallery-page">
-        <h1>Spiele</h1>
-        {% if query %}
-            <p class="gallery-query-note">Ergebnisse f&uuml;r &bdquo;{{ query }}&ldquo; &mdash; <a href="{{ url_for('games_page') }}">Suche zur&uuml;cksetzen</a></p>
+        {% if not query %}
+            <section class="hero">
+                <h1 class="hero-title">Programmiere dein eigenes Spiel.</h1>
+                <p class="hero-subtitle">
+                    timeskip studio ist eine Lernplattform f&uuml;r Schulen und Kinder &mdash;
+                    baue Level, schreibe die Regeln daf&uuml;r und ver&ouml;ffentliche dein Spiel
+                    f&uuml;r alle.
+                </p>
+                <div class="hero-actions">
+                    {% if user %}
+                        <a class="hero-cta-primary" href="{{ url_for('studio_projects_page') }}">Jetzt programmieren</a>
+                    {% else %}
+                        <a class="hero-cta-primary" href="{{ url_for('register') }}">Kostenlos loslegen</a>
+                    {% endif %}
+                </div>
+            </section>
+
+            <section class="steps-row">
+                <div class="step-card">
+                    <div class="step-number">1</div>
+                    <h2>Programmieren</h2>
+                    <p>Baue dein Level aus Bl&ouml;cken und schreibe mit unserer einfachen Sprache, was passieren soll.</p>
+                </div>
+                <div class="step-arrow" aria-hidden="true">&rarr;</div>
+                <div class="step-card">
+                    <div class="step-number">2</div>
+                    <h2>Ver&ouml;ffentlichen</h2>
+                    <p>Ein Klick auf &bdquo;Ver&ouml;ffentlichen&ldquo; und dein Spiel ist online.</p>
+                </div>
+                <div class="step-arrow" aria-hidden="true">&rarr;</div>
+                <div class="step-card">
+                    <div class="step-number">3</div>
+                    <h2>Spielen</h2>
+                    <p>Dein Spiel erscheint in der Galerie &mdash; alle k&ouml;nnen es sofort ausprobieren.</p>
+                </div>
+            </section>
         {% endif %}
 
-        {% if studio_games %}
-            <div class="games-grid">
-                {% for project in studio_games %}
-                    {% include "partials/_game_card.html" %}
-                {% endfor %}
-            </div>
-        {% elif query %}
-            <p class="gallery-empty-note">Kein Spiel gefunden f&uuml;r &bdquo;{{ query }}&ldquo;.</p>
-        {% else %}
-            <div class="gallery-empty-state">
-                <p>Noch keine Spiele ver&ouml;ffentlicht.</p>
-                {% if user %}
-                    <a class="hero-cta-primary" href="{{ url_for('studio_projects_page') }}">Erstes Spiel programmieren</a>
+        <section class="recent-games-section">
+            <div class="recent-games-header">
+                <h2>{% if query %}Ergebnisse f&uuml;r &bdquo;{{ query }}&ldquo;{% else %}Nutzer generierte Inhalte{% endif %}</h2>
+                {% if not query %}
+                    <div class="games-sort-tabs">
+                        <a class="games-sort-tab {{ 'is-active' if sort == 'popular' else '' }}" href="{{ url_for('games_page', sort='popular') }}">Beliebteste</a>
+                        <a class="games-sort-tab {{ 'is-active' if sort == 'newest' else '' }}" href="{{ url_for('games_page', sort='newest') }}">Neueste</a>
+                    </div>
+                {% else %}
+                    <a href="{{ url_for('games_page') }}">Suche zur&uuml;cksetzen</a>
                 {% endif %}
             </div>
-        {% endif %}
+            {% if studio_games %}
+                <div class="games-grid">
+                    {% for project in studio_games %}
+                        {% include "partials/_game_card.html" %}
+                    {% endfor %}
+                </div>
+            {% elif query %}
+                <p class="gallery-empty-note">Kein Spiel gefunden f&uuml;r &bdquo;{{ query }}&ldquo;.</p>
+            {% else %}
+                <div class="gallery-empty-state">
+                    <p>Noch keine Spiele ver&ouml;ffentlicht.</p>
+                    {% if user %}
+                        <a class="hero-cta-primary" href="{{ url_for('studio_projects_page') }}">Erstes Spiel programmieren</a>
+                    {% endif %}
+                </div>
+            {% endif %}
+        </section>
     </div>
 {% endblock %}

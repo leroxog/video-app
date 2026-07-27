@@ -1076,19 +1076,16 @@ def offline_page():
 
 @app.route("/")
 def index():
+    """The homepage IS the AI assistant now -- logged-in visitors get the
+    exact same full chat (with sidebar/history) as /assistant; anonymous
+    visitors get a stripped-down trial chat (see guest_home.html and the
+    /api/ai/guest-chat routes below) capped at GUEST_CHAT_MESSAGE_LIMIT
+    messages, then a register/login prompt. The old game/webapp gallery
+    that used to live here moved to /games (see games_page)."""
     user = current_user()
-    sort = request.args.get("sort", "newest")
-    if sort not in ("newest", "popular"):
-        sort = "newest"
-    games = [
-        p for p in StudioProject.query.filter_by(published=True).all()
-        if p.project_type == "game" or p.web_slug
-    ]
-    if sort == "popular":
-        games.sort(key=lambda g: (len(g.likes), g.created_at), reverse=True)
-    else:
-        games.sort(key=lambda g: g.created_at, reverse=True)
-    return render_template("index.html", user=user, games=games, sort=sort)
+    if user is None:
+        return render_template("guest_home.html", limit=GUEST_CHAT_MESSAGE_LIMIT)
+    return render_template("assistant.html", user=user)
 
 
 def parse_onboarding_fields(form):
@@ -1428,15 +1425,28 @@ def leaderboard():
 
 @app.route("/games")
 def games_page():
+    """The game/webapp gallery -- lives here (not at "/") since the
+    homepage itself is now the AI assistant, see index(). Doubles as the
+    header search box's target (query param "q") and the general
+    "browse everything published" page (no query, with the
+    Beliebteste/Neueste sort toggle this absorbed from the old index.html)."""
     user = current_user()
     query = request.args.get("q", "").strip()
-    studio_query = StudioProject.query.filter_by(published=True, project_type="game")
+    sort = request.args.get("sort", "newest")
+    if sort not in ("newest", "popular"):
+        sort = "newest"
+
+    studio_query = StudioProject.query.filter_by(published=True)
     if query:
         studio_query = studio_query.join(User, StudioProject.owner_id == User.id).filter(
             db.or_(StudioProject.name.ilike(f"%{query}%"), User.username.ilike(f"%{query}%"))
         )
-    studio_games = studio_query.order_by(StudioProject.updated_at.desc()).all()
-    return render_template("games.html", user=user, studio_games=studio_games, query=query)
+    studio_games = [p for p in studio_query.all() if p.project_type == "game" or p.web_slug]
+    if sort == "popular":
+        studio_games.sort(key=lambda g: (len(g.likes), g.created_at), reverse=True)
+    else:
+        studio_games.sort(key=lambda g: g.created_at, reverse=True)
+    return render_template("games.html", user=user, studio_games=studio_games, query=query, sort=sort)
 
 
 @app.route("/library")
@@ -1699,6 +1709,20 @@ TYPING_ANOMALY_SLOW_RATIO = 1.7
 TYPING_INTERVAL_MIN_MS = 15
 TYPING_INTERVAL_MAX_MS = 5000
 
+# The homepage's anonymous trial chat (see index()/guest_home.html): a
+# short, unauthenticated taste of the AI before the register/login prompt
+# takes over. session["guest_chat_count"] is a signed cookie value, so it
+# can't be tampered with client-side the way a plain request body counter
+# could -- that's what actually enforces the limit, not the frontend's own
+# message counter (which only exists for a responsive UI, not security).
+# No AiChat/AiChatMessage rows are ever created for a guest conversation --
+# there's no user_id to scope them to -- so continuity across the 3
+# messages is carried by the client re-sending its own short history in
+# the request body instead (safe: worst case a tampered value just gives
+# the model wrong context for its own reply, nothing is persisted from it).
+GUEST_CHAT_MESSAGE_LIMIT = 3
+GUEST_CHAT_HISTORY_MAX_MESSAGES = 6
+
 
 def _update_typing_baseline_and_get_note(user, interval_ms):
     """Updates `user`'s rolling average typing interval with this message's
@@ -1837,14 +1861,55 @@ def api_ai_chat():
 
 @app.route("/api/ai/chat/<job_id>")
 def api_ai_chat_status(job_id):
-    user = current_user()
-    if user is None:
-        return jsonify({"ok": False, "error": "not_logged_in"}), 401
-
+    # No login check: job_id is a random uuid4, already an unguessable
+    # capability token on its own (this was true even before the guest
+    # chat existed -- get_job_status() never scoped by user either) -- so
+    # this same route can safely also serve /api/ai/guest-chat's polling.
     job = ai_assistant.get_job_status(job_id)
     if job is None:
         return jsonify({"ok": False, "error": "not_found"}), 404
     return jsonify({"ok": True, **job})
+
+
+@app.route("/api/ai/guest-chat", methods=["POST"])
+def api_ai_guest_chat():
+    """The homepage's anonymous trial chat -- see GUEST_CHAT_MESSAGE_LIMIT
+    above for the reasoning. Logged-in visitors use /api/ai/chat instead
+    (full history, per-user learned facts, chat persistence)."""
+    if current_user() is not None:
+        return jsonify({"ok": False, "error": "already_logged_in"}), 400
+
+    data = request.get_json(silent=True) or {}
+    message = (data.get("message") or "").strip()
+    if not message:
+        return jsonify({"ok": False, "error": "empty_message"}), 400
+
+    sent_count = session.get("guest_chat_count", 0)
+    if sent_count >= GUEST_CHAT_MESSAGE_LIMIT:
+        return jsonify({"ok": False, "error": "limit_reached"}), 403
+    session["guest_chat_count"] = sent_count + 1
+
+    raw_history = data.get("history") if isinstance(data.get("history"), list) else []
+    history = [
+        {"role": m.get("role"), "content": (m.get("content") or "")[:ai_assistant.MAX_MESSAGE_CHARS]}
+        for m in raw_history if m.get("role") in ("user", "assistant") and m.get("content")
+    ][-GUEST_CHAT_HISTORY_MAX_MESSAGES:]
+
+    facts = [
+        f.content for f in
+        AiAdminFact.query.order_by(AiAdminFact.created_at.desc()).limit(ADMIN_FACTS_PROMPT_LIMIT).all()
+    ]
+
+    def on_done(reply, error, proposed_change, new_learned_facts):
+        if error:
+            with app.app_context():
+                log_error(error, path="/api/ai/guest-chat", method="POST")
+
+    job_id = ai_assistant.start_chat_job(
+        message, None, history=history, project_type=None, facts=facts, on_done=on_done,
+    )
+    remaining = GUEST_CHAT_MESSAGE_LIMIT - session["guest_chat_count"]
+    return jsonify({"ok": True, "job_id": job_id, "remaining": remaining})
 
 
 @app.route("/api/ai/feedback", methods=["POST"])

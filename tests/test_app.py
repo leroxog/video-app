@@ -519,9 +519,25 @@ def test_share_app_available_again_after_cooldown_window(client):
 
 
 def test_homepage_shows_three_step_explainer(client):
-    response = client.get("/")
+    # The three-step explainer now lives on /games (the gallery moved off
+    # "/" since the homepage itself became the AI assistant, see index()).
+    response = client.get("/games")
     assert response.status_code == 200
     assert b"steps-row" in response.data
+
+
+def test_homepage_is_ai_chat_for_logged_in_user(client):
+    register(client)
+    response = client.get("/")
+    assert response.status_code == 200
+    assert b"aiChatPageEmbed" in response.data
+
+
+def test_homepage_is_guest_chat_for_anonymous_visitor(client):
+    response = client.get("/")
+    assert response.status_code == 200
+    assert b"guestChatForm" in response.data
+    assert b"steps-row" not in response.data
 
 
 def test_place_pixel_flow(client):
@@ -2688,25 +2704,27 @@ def test_studio_help_page_lists_commands_for_every_dialect(client):
 
 
 def test_homepage_shows_sort_tabs_and_published_games(client):
+    # See test_homepage_shows_three_step_explainer -- the gallery (with its
+    # Beliebteste/Neueste sort toggle) lives on /games now, not "/".
     register(client)
     publish_studio_project(client)
 
-    response = client.get("/")
+    response = client.get("/games")
     assert b"Beliebteste" in response.data
     assert b"Neueste" in response.data
     assert b"Testspiel" in response.data
 
-    popular_response = client.get("/?sort=popular")
+    popular_response = client.get("/games?sort=popular")
     assert b"Testspiel" in popular_response.data
 
 
-def test_homepage_includes_published_webapp_projects(client):
+def test_games_gallery_includes_published_webapp_projects(client):
     register(client)
     project = create_webapp_project(client, name="Meine Homepage Webapp")
     client.post(f"/api/studio/{project.id}/web-slug", json={"web_slug": "homepage-app"})
     client.post(f"/studio/{project.id}/publish", follow_redirects=True)
 
-    response = client.get("/")
+    response = client.get("/games")
     assert "Meine Homepage Webapp".encode() in response.data
     assert b'data-app-url="/w/homepage-app"' in response.data
     assert "Nutzer generierte Inhalte".encode() in response.data
@@ -2715,6 +2733,63 @@ def test_homepage_includes_published_webapp_projects(client):
 def test_ai_chat_requires_login(client):
     response = client.post("/api/ai/chat", json={"message": "Hallo"})
     assert response.status_code == 401
+
+
+def test_guest_chat_works_without_login_and_persists_nothing(client, monkeypatch):
+    import ai_assistant
+    import app as app_module
+    from models import AiChat, AiChatMessage
+
+    monkeypatch.setattr(
+        ai_assistant, "generate_reply",
+        lambda message, context=None, history=None, project_type=None, facts=None, learned_facts=None, captured=None, behavior_note=None: (f"Gast-Antwort auf: {message}", None),
+    )
+
+    start_res = client.post("/api/ai/guest-chat", json={"message": "Hallo KI"})
+    data = start_res.get_json()
+    assert data["ok"] is True
+    assert data["remaining"] == app_module.GUEST_CHAT_MESSAGE_LIMIT - 1
+    job_id = data["job_id"]
+
+    import time
+    status_data = None
+    for _ in range(20):
+        status_data = client.get(f"/api/ai/chat/{job_id}").get_json()
+        if status_data["status"] != "running":
+            break
+        time.sleep(0.05)
+    assert status_data["status"] == "done"
+    assert status_data["reply"] == "Gast-Antwort auf: Hallo KI"
+
+    # No AiChat/AiChatMessage rows exist for anonymous chats -- there's no
+    # user_id to scope them to.
+    with flask_app.app_context():
+        assert AiChat.query.count() == 0
+        assert AiChatMessage.query.count() == 0
+
+
+def test_guest_chat_enforces_message_limit(client, monkeypatch):
+    import ai_assistant
+    import app as app_module
+
+    monkeypatch.setattr(
+        ai_assistant, "generate_reply",
+        lambda message, context=None, history=None, project_type=None, facts=None, learned_facts=None, captured=None, behavior_note=None: ("Klar!", None),
+    )
+
+    for _ in range(app_module.GUEST_CHAT_MESSAGE_LIMIT):
+        res = client.post("/api/ai/guest-chat", json={"message": "Frage"})
+        assert res.get_json()["ok"] is True
+
+    blocked_res = client.post("/api/ai/guest-chat", json={"message": "Eine mehr"})
+    assert blocked_res.status_code == 403
+    assert blocked_res.get_json()["error"] == "limit_reached"
+
+
+def test_guest_chat_rejects_logged_in_users(client):
+    register(client)
+    response = client.post("/api/ai/guest-chat", json={"message": "Hallo"})
+    assert response.status_code == 400
 
 
 def test_ai_chat_rejects_empty_message(client):
@@ -2752,9 +2827,13 @@ def test_ai_chat_starts_job_and_reports_status(client, monkeypatch):
     assert status_data["reply"] == "Antwort auf: Wie geht KILL?"
 
 
-def test_ai_chat_status_requires_login(client):
+def test_ai_chat_status_works_without_login(client):
+    # job_id is a random uuid4, already an unguessable capability token on
+    # its own -- this route intentionally has no login check, so the
+    # homepage's anonymous guest chat (see /api/ai/guest-chat) can poll it
+    # too. See test_ai_chat_status_unknown_job_404s for the logged-in case.
     response = client.get("/api/ai/chat/doesnotexist")
-    assert response.status_code == 401
+    assert response.status_code == 404
 
 
 def test_ai_chat_status_unknown_job_404s(client):
@@ -3003,14 +3082,18 @@ def test_webapp_live_page_renders_sandboxed_code(client):
     assert "Nutzer-erstellt".encode() in response.data
 
 
-def test_webapp_projects_excluded_from_public_game_gallery(client):
+def test_games_search_query_still_finds_only_matching_games(client):
+    # /games absorbed the old homepage gallery (which does include webapps,
+    # see test_games_gallery_includes_published_webapp_projects) -- this
+    # just checks the search-by-name/owner query filter still narrows
+    # results correctly, not any type-based exclusion.
     register(client)
-    project = create_webapp_project(client)
-    client.post(f"/api/studio/{project.id}/web-slug", json={"web_slug": "hidden-app"})
+    project = create_webapp_project(client, name="Ganz Anderes")
+    client.post(f"/api/studio/{project.id}/web-slug", json={"web_slug": "unrelated-app"})
     client.post(f"/studio/{project.id}/publish", follow_redirects=True)
 
-    response = client.get("/games")
-    assert "Meine Webapp".encode() not in response.data
+    response = client.get("/games?q=NichtVorhanden123")
+    assert "Ganz Anderes".encode() not in response.data
 
 
 class _FakeResponse:
