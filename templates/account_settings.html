@@ -13,10 +13,6 @@
     <p><a href="{{ url_for('studio_projects_page') }}">+ Game &mdash; eigenes Spiel erstellen</a></p>
 
     <h2>Account</h2>
-    <div class="settings-id-row">
-        <span>ID: <code id="publicIdText">{{ user.public_id }}</code></span>
-        <button type="button" id="copyIdBtn">Kopieren</button>
-    </div>
 
     <form action="{{ url_for('logout') }}" method="post" class="settings-logout-form">
         <button type="submit" class="danger">Ausloggen</button>
@@ -82,14 +78,6 @@
     <p><a href="{{ url_for('profile', username=user.username) }}">&larr; Zurück zum Profil</a></p>
 
     <script>
-        document.getElementById("copyIdBtn").addEventListener("click", function () {
-            const text = document.getElementById("publicIdText").textContent;
-            navigator.clipboard.writeText(text).then(() => {
-                this.textContent = "Kopiert!";
-                setTimeout(() => { this.textContent = "Kopieren"; }, 1500);
-            });
-        });
-
         const themeLightBtn = document.getElementById("themeLightBtn");
         const themeDarkBtn = document.getElementById("themeDarkBtn");
 

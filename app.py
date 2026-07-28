@@ -701,6 +701,8 @@ def ensure_sqlite_columns_exist():
             ("avg_typing_interval_ms", "FLOAT"),
             ("typing_sample_count", "INTEGER NOT NULL DEFAULT 0"),
             ("terms_accepted_version", "INTEGER"),
+            ("ai_tokens", "INTEGER"),
+            ("ai_tokens_last_award_date", "DATE"),
         ],
         # ai_personality itself is created fresh by db.create_all() on any
         # brand-new database, but on one that already had the table from
@@ -778,6 +780,8 @@ def ensure_columns_exist():
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS avg_typing_interval_ms DOUBLE PRECISION',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS typing_sample_count INTEGER NOT NULL DEFAULT 0',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS terms_accepted_version INTEGER',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS ai_tokens INTEGER',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS ai_tokens_last_award_date DATE',
         # Root cause confirmed live (psycopg2.errors.UndefinedColumn):
         # ai_personality was created by db.create_all() back when the
         # AiPersonality model first shipped (no mimic_user_style yet) --
@@ -977,6 +981,47 @@ def purge_expired_messages(conversation):
 ONLINE_THRESHOLD_SECONDS = 5 * 60
 LAST_SEEN_UPDATE_THROTTLE_SECONDS = 60
 
+# AI tokens: a currency separate from total_score ("Punkte"), spent only on
+# AI actions (see TOKEN_COST_* below). STARTING_AI_TOKENS is the one-time
+# grant the very first time this system sees an account (a brand-new
+# registration, or an existing account visiting for the first time after
+# this shipped) -- every day after that, DAILY_AI_TOKENS is added on top of
+# whatever's left (unused tokens carry over, never reset to a cap).
+STARTING_AI_TOKENS = 1000
+DAILY_AI_TOKENS = 900
+
+
+def _grant_daily_tokens_if_due(user):
+    today = date.today()
+    if user.ai_tokens is None:
+        user.ai_tokens = STARTING_AI_TOKENS
+        user.ai_tokens_last_award_date = today
+    elif user.ai_tokens_last_award_date != today:
+        user.ai_tokens += DAILY_AI_TOKENS
+        user.ai_tokens_last_award_date = today
+
+
+# Per-message token costs. Voice costs more than text (speech synthesis is
+# the pricier path); both scale up for long messages; a Buddy-mode
+# (mimic_user_style) reply costs a bit more on top since it asks more of the
+# model. Image generation is priced separately, see ai_assistant.IMAGE_TOKEN_COST
+# -- that one's charged after the fact in on_done, only if an image was
+# actually generated, since it's the AI's own tool-call decision, not
+# something the user directly requests up front.
+TOKEN_COST_MESSAGE_BASE = 9
+TOKEN_COST_VOICE_BASE = 13
+TOKEN_COST_LARGE_MESSAGE_CHARS = 400
+TOKEN_COST_LARGE_MESSAGE_EXTRA = 6
+TOKEN_COST_BUDDY_SURCHARGE = 6
+
+
+def _compute_message_token_cost(message, via_voice, is_buddy):
+    cost = TOKEN_COST_VOICE_BASE if via_voice else TOKEN_COST_MESSAGE_BASE
+    cost += TOKEN_COST_LARGE_MESSAGE_EXTRA * (len(message) // TOKEN_COST_LARGE_MESSAGE_CHARS)
+    if is_buddy:
+        cost += TOKEN_COST_BUDDY_SURCHARGE
+    return cost
+
 
 @app.before_request
 def update_last_seen():
@@ -987,12 +1032,13 @@ def update_last_seen():
     user = db.session.get(User, user_id)
     if user is None:
         return
+    _grant_daily_tokens_if_due(user)
     last_seen = user.last_seen
     if last_seen is not None and last_seen.tzinfo is None:
         last_seen = last_seen.replace(tzinfo=timezone.utc)
     if last_seen is None or (now - last_seen).total_seconds() >= LAST_SEEN_UPDATE_THROTTLE_SECONDS:
         user.last_seen = now
-        db.session.commit()
+    db.session.commit()
 
 
 @app.before_request
@@ -1835,8 +1881,24 @@ def api_ai_chat():
     # what the request body claims.
     save_as_fact = bool(data.get("save_as_fact")) and user.is_admin
     chat_id = data.get("chat_id")
+    via_voice = bool(data.get("via_voice"))
     if not message:
         return jsonify({"ok": False, "error": "empty_message"}), 400
+
+    # Token check happens before anything is written to the DB, so a
+    # rejected message never gets persisted or shows up in chat history.
+    is_buddy = False
+    if project_type in (None, "general"):
+        personality_row_precheck = _get_or_create_personality_row(user.id)
+        is_buddy = bool(personality_row_precheck and personality_row_precheck.mimic_user_style)
+    token_cost = _compute_message_token_cost(message, via_voice, is_buddy)
+    tokens_available = user.ai_tokens if user.ai_tokens is not None else STARTING_AI_TOKENS
+    if tokens_available < token_cost:
+        return jsonify({
+            "ok": False, "error": "insufficient_tokens",
+            "tokens_needed": token_cost, "tokens_available": tokens_available,
+        }), 402
+    user.ai_tokens = tokens_available - token_cost
 
     # Optional real signal from the frontend: average ms between keystrokes
     # while typing *this* message (see base.html's keydown tracking) --
@@ -1891,7 +1953,7 @@ def api_ai_chat():
                 .order_by(AiLearnedFact.created_at.desc()).limit(LEARNED_FACTS_PROMPT_LIMIT).all()
             ],
         }
-        personality_row = _get_or_create_personality_row(user.id)
+        personality_row = personality_row_precheck
         if personality_row is not None:
             personality = {
                 "intelligence": personality_row.intelligence, "humor": personality_row.humor,
@@ -1917,6 +1979,17 @@ def api_ai_chat():
                             current = getattr(personality_row, trait)
                             setattr(personality_row, trait, max(0, min(100, current + step * 3)))
                         personality_row.updated_at = datetime.now(timezone.utc)
+                # Image generation is the AI's own tool-call decision made
+                # mid-reply, so its cost is only known/charged here, after
+                # the fact -- generate_image already refused if the balance
+                # (checked live via available_tokens) was too low, this is
+                # just applying the charge for one that actually ran.
+                if (new_learned_facts or {}).get("image_generated"):
+                    image_user_row = db.session.get(User, user_id_captured)
+                    if image_user_row is not None:
+                        image_user_row.ai_tokens = max(
+                            0, (image_user_row.ai_tokens or 0) - ai_assistant.IMAGE_TOKEN_COST,
+                        )
                 db.session.commit()
                 if is_first_message:
                     title = ai_assistant.generate_title(message)
@@ -1936,9 +2009,11 @@ def api_ai_chat():
     job_id = ai_assistant.start_chat_job(
         message, context, history=history, project_type=project_type, facts=facts,
         learned_facts=learned_facts, on_done=on_done, behavior_note=behavior_note,
-        personality=personality,
+        personality=personality, available_tokens=user.ai_tokens,
     )
-    return jsonify({"ok": True, "job_id": job_id, "chat_id": chat.id})
+    return jsonify({
+        "ok": True, "job_id": job_id, "chat_id": chat.id, "tokens_remaining": user.ai_tokens,
+    })
 
 
 @app.route("/api/ai/chat/<job_id>")

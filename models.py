@@ -49,6 +49,14 @@ class User(db.Model):
     # typing_avg_interval_ms handling and AiLearnedFact's module docstring.
     avg_typing_interval_ms = db.Column(db.Float, nullable=True)
     typing_sample_count = db.Column(db.Integer, nullable=False, default=0)
+    # AI tokens (see app.py's TOKEN_COST_* / _grant_daily_tokens) -- a
+    # completely separate currency from total_score ("Punkte"): spent on
+    # AI actions (chat, voice, image generation), topped up +900 for every
+    # day the account is used, nullable so an existing account's first
+    # visit after this shipped can be told apart from someone who's
+    # genuinely already spent down to 0.
+    ai_tokens = db.Column(db.Integer, nullable=True)
+    ai_tokens_last_award_date = db.Column(db.Date, nullable=True)
     sounds_uploaded = db.relationship("Sound", backref="uploader", lazy=True, cascade="all, delete-orphan")
     subscriptions_made = db.relationship(
         "Subscription",

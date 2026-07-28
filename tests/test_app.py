@@ -94,7 +94,10 @@ def test_register_and_login(client):
         follow_redirects=True,
     )
     assert response.status_code == 200
-    assert b"alice" in response.data
+    # "/" is the AI assistant for logged-in users now (see index()) -- it
+    # doesn't show the username anywhere, so check for the authenticated
+    # sidebar instead as proof the login actually landed logged in.
+    assert b"aiChatSidebarNewBtn" in response.data
 
 
 def test_register_stores_birthdate_and_gender(client):
@@ -424,8 +427,11 @@ def test_ai_sidebar_has_new_chat_and_code_chat_buttons(client):
 
 
 def test_header_shows_account_avatar_link_when_logged_in(client):
+    # The header itself is suppressed on "/" for logged-in users now (the
+    # AI page is full-bleed, see index()/assistant.html) -- /games still
+    # renders the normal header.
     register(client, username="headertest")
-    response = client.get("/")
+    response = client.get("/games")
     assert "header-account-avatar".encode() in response.data
     assert b'href="/user/headertest"' in response.data
 
@@ -842,9 +848,12 @@ def test_api_my_stats_reports_published_games_and_followers(client):
     assert data == {"ok": True, "games_published": 1, "followers": 1}
 
 
-def test_homepage_bottom_nav_has_stats_bubble_markup_for_user(client):
+def test_header_has_stats_bubble_markup_for_user(client):
+    # Was checking "/" back when that was the game gallery with a
+    # bottom-nav (both gone now, see index()) -- the stats bubble itself
+    # lives in the header, which /games still renders normally.
     register(client)
-    response = client.get("/")
+    response = client.get("/games")
     assert b"statsBubble" in response.data
     assert b"stats-bubble-tail" in response.data
 
@@ -890,13 +899,6 @@ def test_account_settings_requires_login(client):
     assert b"Login" in response.data
 
 
-def test_account_settings_shows_public_id(client):
-    register(client, username="alice")
-    user = User.query.filter_by(username="alice").first()
-    response = client.get("/account/settings")
-    assert user.public_id.encode() in response.data
-
-
 def test_username_change_blocked_without_email(client):
     register(client, username="alice")
     response = client.post("/account/username", data={"username": "newname"})
@@ -930,7 +932,10 @@ def test_add_email_unlocks_username_and_password_change(client):
     response = client.post(
         "/login", data={"username": "newalice", "password": "newpass123"}, follow_redirects=True
     )
-    assert b"newalice" in response.data
+    # See test_register_and_login -- "/" is the AI page for logged-in users
+    # now and doesn't show the username, so confirm login via the
+    # authenticated sidebar instead.
+    assert b"aiChatSidebarNewBtn" in response.data
 
 
 def test_password_change_rejects_wrong_current_password(client):
@@ -2759,7 +2764,7 @@ def test_guest_chat_works_without_login_and_persists_nothing(client, monkeypatch
 
     monkeypatch.setattr(
         ai_assistant, "generate_reply",
-        lambda message, context=None, history=None, project_type=None, facts=None, learned_facts=None, captured=None, behavior_note=None, personality=None: (f"Gast-Antwort auf: {message}", None),
+        lambda message, context=None, history=None, project_type=None, facts=None, learned_facts=None, captured=None, behavior_note=None, personality=None, available_tokens=None: (f"Gast-Antwort auf: {message}", None),
     )
 
     start_res = client.post("/api/ai/guest-chat", json={"message": "Hallo KI"})
@@ -2791,7 +2796,7 @@ def test_guest_chat_enforces_message_limit(client, monkeypatch):
 
     monkeypatch.setattr(
         ai_assistant, "generate_reply",
-        lambda message, context=None, history=None, project_type=None, facts=None, learned_facts=None, captured=None, behavior_note=None, personality=None: ("Klar!", None),
+        lambda message, context=None, history=None, project_type=None, facts=None, learned_facts=None, captured=None, behavior_note=None, personality=None, available_tokens=None: ("Klar!", None),
     )
 
     for _ in range(app_module.GUEST_CHAT_MESSAGE_LIMIT):
@@ -2841,7 +2846,7 @@ def test_ai_chat_starts_job_and_reports_status(client, monkeypatch):
 
     monkeypatch.setattr(
         ai_assistant, "generate_reply",
-        lambda message, context=None, history=None, project_type=None, facts=None, learned_facts=None, captured=None, behavior_note=None, personality=None: (f"Antwort auf: {message}", None),
+        lambda message, context=None, history=None, project_type=None, facts=None, learned_facts=None, captured=None, behavior_note=None, personality=None, available_tokens=None: (f"Antwort auf: {message}", None),
     )
     register(client)
 
@@ -2863,6 +2868,92 @@ def test_ai_chat_starts_job_and_reports_status(client, monkeypatch):
 
     assert status_data["status"] == "done"
     assert status_data["reply"] == "Antwort auf: Wie geht KILL?"
+
+
+def test_registration_grants_starting_ai_tokens(client):
+    import app as app_module
+
+    register(client)
+    user = User.query.filter_by(username="alice").first()
+    assert user.ai_tokens == app_module.STARTING_AI_TOKENS
+
+
+def test_ai_chat_deducts_base_token_cost(client, monkeypatch):
+    import ai_assistant
+    import app as app_module
+
+    monkeypatch.setattr(
+        ai_assistant, "generate_reply",
+        lambda message, context=None, history=None, project_type=None, facts=None, learned_facts=None, captured=None, behavior_note=None, personality=None, available_tokens=None: ("Antwort", None),
+    )
+    register(client)
+    user = User.query.filter_by(username="alice").first()
+    before = user.ai_tokens
+
+    start_res = client.post("/api/ai/chat", json={"message": "Hallo"})
+    data = start_res.get_json()
+    assert data["ok"] is True
+    assert data["tokens_remaining"] == before - app_module.TOKEN_COST_MESSAGE_BASE
+
+    user = User.query.filter_by(username="alice").first()
+    assert user.ai_tokens == before - app_module.TOKEN_COST_MESSAGE_BASE
+
+
+def test_ai_chat_via_voice_deducts_voice_token_cost(client, monkeypatch):
+    import ai_assistant
+    import app as app_module
+
+    monkeypatch.setattr(
+        ai_assistant, "generate_reply",
+        lambda message, context=None, history=None, project_type=None, facts=None, learned_facts=None, captured=None, behavior_note=None, personality=None, available_tokens=None: ("Antwort", None),
+    )
+    register(client)
+    user = User.query.filter_by(username="alice").first()
+    before = user.ai_tokens
+
+    start_res = client.post("/api/ai/chat", json={"message": "Hallo", "via_voice": True})
+    data = start_res.get_json()
+    assert data["tokens_remaining"] == before - app_module.TOKEN_COST_VOICE_BASE
+
+
+def test_ai_chat_rejects_when_tokens_insufficient(client):
+    import app as app_module
+
+    register(client)
+    user = User.query.filter_by(username="alice").first()
+    user.ai_tokens = app_module.TOKEN_COST_MESSAGE_BASE - 1
+    db.session.commit()
+
+    response = client.post("/api/ai/chat", json={"message": "Hallo"})
+    assert response.status_code == 402
+    data = response.get_json()
+    assert data["ok"] is False
+    assert data["error"] == "insufficient_tokens"
+
+    from models import AiChat
+    assert AiChat.query.count() == 0
+    user = User.query.filter_by(username="alice").first()
+    assert user.ai_tokens == app_module.TOKEN_COST_MESSAGE_BASE - 1
+
+
+def test_daily_ai_tokens_granted_once_per_day(client):
+    import app as app_module
+
+    register(client)
+    user = User.query.filter_by(username="alice").first()
+    user.ai_tokens = 50
+    user.ai_tokens_last_award_date = date(2000, 1, 1)
+    db.session.commit()
+
+    client.get("/")
+
+    user = User.query.filter_by(username="alice").first()
+    assert user.ai_tokens == 50 + app_module.DAILY_AI_TOKENS
+    assert user.ai_tokens_last_award_date == date.today()
+
+    client.get("/")
+    user = User.query.filter_by(username="alice").first()
+    assert user.ai_tokens == 50 + app_module.DAILY_AI_TOKENS
 
 
 def test_ai_chat_status_works_without_login(client):
@@ -2948,7 +3039,7 @@ def test_ai_chat_persists_messages_and_generates_title(client, monkeypatch):
 
     monkeypatch.setattr(
         ai_assistant, "generate_reply",
-        lambda message, context=None, history=None, project_type=None, facts=None, learned_facts=None, captured=None, behavior_note=None, personality=None: ("Klar, gerne!", None),
+        lambda message, context=None, history=None, project_type=None, facts=None, learned_facts=None, captured=None, behavior_note=None, personality=None, available_tokens=None: ("Klar, gerne!", None),
     )
     monkeypatch.setattr(ai_assistant, "generate_title", lambda first_message: "Frage zu Punkten")
     register(client)
@@ -3334,7 +3425,7 @@ def test_learned_facts_persisted_after_general_chat(client, monkeypatch):
     import ai_assistant
 
     def fake_generate_reply(message, context=None, history=None, project_type=None, facts=None,
-                             learned_facts=None, captured=None, behavior_note=None, personality=None):
+                             learned_facts=None, captured=None, behavior_note=None, personality=None, available_tokens=None):
         if captured is not None:
             captured["wikipedia_facts"] = ["Paris ist die Hauptstadt von Frankreich."]
             captured["user_facts"] = ["Der Nutzer heißt Timo."]
@@ -3628,7 +3719,7 @@ def test_non_admin_cannot_clear_error_log(client):
 def test_ai_job_failure_is_logged_to_error_log(client, monkeypatch):
     import ai_assistant
 
-    def failing_generate_reply(message, context=None, history=None, project_type=None, facts=None, learned_facts=None, captured=None, behavior_note=None, personality=None):
+    def failing_generate_reply(message, context=None, history=None, project_type=None, facts=None, learned_facts=None, captured=None, behavior_note=None, personality=None, available_tokens=None):
         raise RuntimeError("Groq ist down")
 
     monkeypatch.setattr(ai_assistant, "generate_reply", failing_generate_reply)

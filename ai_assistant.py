@@ -260,6 +260,32 @@ ADJUST_PERSONALITY_TOOL = {
     },
 }
 
+IMAGE_TOKEN_COST = 600
+
+GENERATE_IMAGE_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "generate_image",
+        "description": (
+            f"Erzeugt ein echtes Bild aus einer Beschreibung und zeigt es dem Nutzer an. Kostet "
+            f"{IMAGE_TOKEN_COST} Tokens vom Nutzer-Guthaben (siehe Kontostand im System-Prompt) -- "
+            "nur aufrufen, wenn der Nutzer wirklich ausdrücklich ein Bild möchte UND genug Tokens "
+            "übrig hat. Reicht das Guthaben nicht, erkläre das stattdessen ehrlich, statt es zu "
+            "versuchen."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "prompt": {
+                    "type": "string",
+                    "description": "Bildbeschreibung, auf Englisch, so konkret wie möglich.",
+                },
+            },
+            "required": ["prompt"],
+        },
+    },
+}
+
 PERSONALITY_TRAIT_KEYS = {
     "intelligenz": "intelligence",
     "humor": "humor",
@@ -463,7 +489,7 @@ PROJECT_CHANGE_TOOLS = [PROPOSE_PROJECT_CHANGE_TOOL]
 WEBAPP_TOOLS = [PROPOSE_PROJECT_CHANGE_TOOL, SEARCH_DOCS_TOOL]
 AI_TOOLS = [
     SEARCH_WIKIPEDIA_TOOL, GET_WEATHER_TOOL, SEARCH_DOCS_TOOL, REMEMBER_USER_FACT_TOOL,
-    ADJUST_PERSONALITY_TOOL,
+    ADJUST_PERSONALITY_TOOL, GENERATE_IMAGE_TOOL,
 ]
 
 
@@ -537,6 +563,20 @@ def _tool_get_weather(location):
         return "Die Wetterabfrage ist gerade nicht verfügbar."
 
 
+# Pollinations.ai: a genuinely free, no-API-key image generation service --
+# a GET request to this URL *is* the generation request, the image itself
+# is the response body, so the URL can be embedded directly (e.g. in a
+# markdown ![]() the frontend renders) without this app fetching/storing
+# the bytes itself. No account, no key, matches this app's existing "use a
+# real free service instead of faking the capability" pattern (Wikipedia,
+# Open-Meteo, browser speech synthesis).
+POLLINATIONS_IMAGE_URL = "https://image.pollinations.ai/prompt/{}"
+
+
+def _build_image_url(prompt):
+    return POLLINATIONS_IMAGE_URL.format(urllib.parse.quote(prompt)) + "?width=768&height=768&nologo=true"
+
+
 def _docs_allowed(url):
     """robots.txt check -- "vorausgesetzt die jeweilige Webseite erlaubt es"."""
     try:
@@ -594,7 +634,7 @@ _WIKIPEDIA_LOOKUP_FAILURES = (
 )
 
 
-def _run_tool_calls(tool_calls, captured):
+def _run_tool_calls(tool_calls, captured, available_tokens=None):
     """Executes each requested tool and returns the "tool" role messages
     to feed back to the model. `captured` is a single dict shared across
     the whole _call_groq() loop, so the caller can read results back out
@@ -605,6 +645,12 @@ def _run_tool_calls(tool_calls, captured):
       instead of fetching anything -- see AiLearnedFact in models.py.
     - adjust_personality_trait stashes a (trait, +1/-1) tuple into
       captured["personality_adjustments"] -- see AiPersonality in models.py.
+    - generate_image stashes {"url", "prompt"} into captured["image_generated"]
+      -- app.py's on_done actually deducts IMAGE_TOKEN_COST from the
+      database afterward; `available_tokens` (this user's current balance,
+      or None if the caller doesn't track tokens, e.g. the guest chat) is
+      only a server-side guard against generating when it's already clear
+      there's not enough, not the actual deduction.
     - a successful search_wikipedia result is also appended to
       captured["wikipedia_facts"], for the same reason."""
     outputs = []
@@ -635,6 +681,22 @@ def _run_tool_calls(tool_calls, captured):
                 result = "Angepasst."
             else:
                 result = "Ungültiger Charakterzug oder Richtung."
+        elif name == "generate_image":
+            prompt = (args.get("prompt") or "").strip()
+            if not prompt:
+                result = "Keine Bildbeschreibung angegeben."
+            elif available_tokens is not None and available_tokens < IMAGE_TOKEN_COST:
+                result = (
+                    f"Nicht genug Tokens ({available_tokens} übrig, {IMAGE_TOKEN_COST} nötig) -- "
+                    "kein Bild erzeugt. Erklär das dem Nutzer ehrlich."
+                )
+            else:
+                image_url = _build_image_url(prompt)
+                captured["image_generated"] = {"url": image_url, "prompt": prompt}
+                result = (
+                    f"Bild erzeugt. Füge es in deiner Antwort als Markdown-Bild ein: "
+                    f"![{prompt}]({image_url})"
+                )
         else:
             impl = TOOL_IMPLEMENTATIONS.get(name)
             result = impl(args) if impl else f"Unbekanntes Werkzeug: {name}"
@@ -677,7 +739,7 @@ def _call_groq_message(messages, max_tokens, tools=None, tool_choice="auto", tem
     return response.json()["choices"][0]["message"]
 
 
-def _call_groq(messages, max_tokens, tools=None, captured=None, temperature=CODE_TEMPERATURE):
+def _call_groq(messages, max_tokens, tools=None, captured=None, temperature=CODE_TEMPERATURE, available_tokens=None):
     """Runs a tool-calling loop: as long as the model keeps requesting
     tools, executes them server-side and feeds the results back, up to
     MAX_TOOL_ROUNDS turns. On the last allowed turn, tool_choice is forced
@@ -711,7 +773,9 @@ def _call_groq(messages, max_tokens, tools=None, captured=None, temperature=CODE
         tool_calls = message.get("tool_calls")
         if not tool_calls:
             return (message.get("content") or "").strip(), captured["proposed_change"]
-        current_messages = current_messages + [message] + _run_tool_calls(tool_calls, captured)
+        current_messages = current_messages + [message] + _run_tool_calls(
+            tool_calls, captured, available_tokens=available_tokens,
+        )
     return "", captured["proposed_change"]
 
 
@@ -773,7 +837,8 @@ def _learned_facts_addendum(wikipedia_facts, user_facts, docs_facts=None, behavi
 
 
 def generate_reply(message, context=None, history=None, project_type=None, facts=None,
-                    learned_facts=None, captured=None, behavior_note=None, personality=None):
+                    learned_facts=None, captured=None, behavior_note=None, personality=None,
+                    available_tokens=None):
     """Runs one turn against Groq's hosted chat-completions API. Not meant
     to be called directly from a request handler -- see start_chat_job().
     `history` is this same chat's own prior turns (a list of
@@ -835,13 +900,23 @@ def generate_reply(message, context=None, history=None, project_type=None, facts
         )
     if project_type is None:
         system_prompt += _personality_addendum(personality)
+        if available_tokens is not None:
+            system_prompt += (
+                f"\n\nDieser Nutzer hat aktuell {available_tokens} Tokens übrig (eine App-interne "
+                f"Währung, getrennt von Punkten). Ein Bild erzeugen kostet {IMAGE_TOKEN_COST} "
+                "Tokens -- ruf generate_image nur auf, wenn klar genug Tokens übrig sind und der "
+                "Nutzer wirklich ausdrücklich ein Bild möchte."
+            )
 
     messages = [{"role": "system", "content": system_prompt}]
     if history:
         messages.extend(history[-MAX_HISTORY_MESSAGES:])
     messages.append({"role": "user", "content": user_content})
 
-    return _call_groq(messages, MAX_REPLY_TOKENS, tools=tools, captured=captured, temperature=temperature)
+    return _call_groq(
+        messages, MAX_REPLY_TOKENS, tools=tools, captured=captured, temperature=temperature,
+        available_tokens=available_tokens if project_type is None else None,
+    )
 
 
 def generate_title(first_message):
@@ -872,12 +947,14 @@ _jobs_lock = threading.Lock()
 
 
 def start_chat_job(message, context=None, history=None, project_type=None, facts=None,
-                    learned_facts=None, on_done=None, behavior_note=None, personality=None):
+                    learned_facts=None, on_done=None, behavior_note=None, personality=None,
+                    available_tokens=None):
     """`on_done(reply, error, proposed_change, new_learned_facts)` --
     new_learned_facts is always a {"wikipedia": [...], "user": [...],
-    "personality_adjustments": [...]} dict (possibly with empty lists) of
-    facts/trait nudges from *this* call, for the caller to persist as
-    AiLearnedFact rows / AiPersonality updates."""
+    "personality_adjustments": [...], "image_generated": {...} or None}
+    dict (possibly with empty lists) of facts/trait nudges/image-tool-calls
+    from *this* call, for the caller to persist as AiLearnedFact rows /
+    AiPersonality updates / token deductions."""
     job_id = uuid.uuid4().hex
     with _jobs_lock:
         _jobs[job_id] = {"status": "running", "reply": None, "error": None, "proposed_change": None}
@@ -894,12 +971,13 @@ def start_chat_job(message, context=None, history=None, project_type=None, facts
         try:
             reply, proposed_change = generate_reply(
                 message, context, history, project_type, facts, learned_facts, captured,
-                behavior_note, personality,
+                behavior_note, personality, available_tokens,
             )
             new_learned_facts = {
                 "wikipedia": captured.get("wikipedia_facts") or [],
                 "user": captured.get("user_facts") or [],
                 "personality_adjustments": captured.get("personality_adjustments") or [],
+                "image_generated": captured.get("image_generated"),
             }
             if on_done:
                 on_done(reply, None, proposed_change, new_learned_facts)

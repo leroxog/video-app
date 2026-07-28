@@ -498,6 +498,22 @@ main {
     margin: 0 auto;
 }
 
+/* The logged-in AI page (assistant.html, {% block header %} suppressed
+   there) -- full-bleed, edge to edge, no header/margins/max-width at all,
+   matching a real ChatGPT-style layout instead of a boxed panel floating
+   in the middle of the page. */
+body.ai-fullscreen {
+    height: 100vh;
+    overflow: hidden;
+}
+
+body.ai-fullscreen main {
+    padding: 0;
+    max-width: none;
+    margin: 0;
+    height: 100vh;
+}
+
 .bottom-nav {
     position: fixed;
     bottom: 20px;
@@ -711,7 +727,11 @@ main {
 .ai-chat-panel-page {
     width: 100%;
     height: 100%;
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
+    /* Full-bleed like a real ChatGPT-style layout, not a bordered card
+       floating on the page -- the panel IS the page here. */
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
 }
 
 .ai-chat-panel-embedded {
@@ -766,34 +786,40 @@ main {
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
 }
 
-.ai-chat-sidebar-new-btn {
+/* ChatGPT-style sidebar rows: a small fixed-width icon glyph followed by
+   a left-aligned label, the whole row clickable and highlighted on
+   hover -- replaces the old centered pill-button look. */
+.ai-chat-sidebar-nav-item {
     display: flex;
     align-items: center;
-    justify-content: center;
-    border: 1px solid var(--panel-border-solid);
+    gap: 0.6rem;
+    width: 100%;
+    border: none;
     border-radius: 8px;
-    padding: 0.5rem;
+    padding: 0.5rem 0.55rem;
     background: none;
     color: var(--text-primary);
-    font-size: 0.8rem;
-    font-weight: 600;
+    font-size: 0.82rem;
+    font-weight: 500;
+    text-align: left;
     cursor: pointer;
+    text-decoration: none;
 }
 
-.ai-chat-sidebar-voice-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.4rem;
-    border: 1px solid var(--panel-border-solid);
-    border-radius: 8px;
-    padding: 0.5rem;
-    margin-top: 0.4rem;
-    background: none;
-    color: var(--text-primary);
-    font-size: 0.8rem;
-    font-weight: 600;
-    cursor: pointer;
+.ai-chat-sidebar-nav-item:hover {
+    background: rgba(127, 127, 127, 0.12);
+}
+
+.ai-chat-sidebar-nav-item.is-active {
+    color: var(--mono-accent-solid);
+}
+
+.ai-chat-sidebar-nav-icon {
+    flex: 0 0 auto;
+    width: 20px;
+    text-align: center;
+    font-size: 0.85rem;
+    line-height: 1;
 }
 
 .ai-chat-sidebar-label {
@@ -801,34 +827,27 @@ main {
     text-transform: uppercase;
     letter-spacing: 0.03em;
     color: var(--text-secondary);
-    padding: 0.2rem 0.3rem 0;
+    padding: 0.6rem 0.55rem 0;
 }
 
-.ai-chat-sidebar-more-row {
-    display: flex;
-    gap: 0.4rem;
-    margin-top: 0.6rem;
+.ai-chat-sidebar-more-wrap {
+    position: relative;
 }
 
-.ai-chat-sidebar-more-btn, .ai-chat-sidebar-buddy-btn {
-    flex: 1 1 auto;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+/* Deliberately escapes the sidebar's own bounding box (left: 100%) --
+   a real popover next to the trigger, not another row squeezed inside
+   the sidebar. */
+.ai-chat-more-flyout {
+    position: absolute;
+    top: 0;
+    left: calc(100% + 1rem);
+    z-index: 50;
+    min-width: 160px;
+    background: var(--panel-bg-solid);
     border: 1px solid var(--panel-border-solid);
-    border-radius: 8px;
-    padding: 0.45rem;
-    background: none;
-    color: var(--text-secondary);
-    font-size: 0.76rem;
-    font-weight: 600;
-    cursor: pointer;
-    text-decoration: none;
-}
-
-.ai-chat-sidebar-buddy-btn.is-active {
-    color: var(--text-primary);
-    border-color: var(--mono-accent-solid);
+    border-radius: 10px;
+    padding: 0.35rem;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
 }
 
 .ai-buddy-confirm-overlay {
@@ -1109,6 +1128,18 @@ main {
     cursor: pointer;
 }
 
+/* Rename/delete only show up on hover -- a permanently-visible pencil and
+   trash can next to every chat title is exactly the kind of always-on
+   clutter a real ChatGPT-style sidebar avoids. */
+.ai-chat-sidebar-row .ai-chat-icon-btn {
+    opacity: 0;
+    transition: opacity 0.1s ease;
+}
+.ai-chat-sidebar-row:hover .ai-chat-icon-btn,
+.ai-chat-sidebar-row .ai-chat-icon-btn:focus-visible {
+    opacity: 1;
+}
+
 .ai-chat-sidebar-row-empty {
     color: var(--text-secondary);
     font-size: 0.76rem;
@@ -1186,7 +1217,7 @@ main {
    the same way .studio-editor-page fills the viewport for the editor. */
 .assistant-page {
     display: flex;
-    height: calc(100vh - 150px);
+    height: 100vh;
     min-height: 480px;
 }
 
@@ -1244,6 +1275,18 @@ main {
     font-weight: 600;
     color: var(--text-primary);
     border-bottom: 1px solid var(--panel-border-solid);
+}
+
+/* Full-page layout drops the chat-title bar entirely -- see the sidebar's
+   own "Aktuelle" list for which chat is current instead, matching a real
+   ChatGPT-style layout instead of duplicating the title at the top. */
+.ai-chat-panel-page .ai-chat-panel-header {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+.ai-chat-panel-page #aiChatHeaderTitle,
+.ai-chat-panel-page .ai-chat-header-actions {
+    display: none;
 }
 
 .ai-chat-panel-header button {
@@ -1560,6 +1603,18 @@ body.studio-fullscreen .ai-chat-message-bot {
     border-top: 1px solid var(--panel-border-solid);
 }
 
+.ai-chat-token-balance {
+    margin: 0;
+    padding: 0.35rem 0.9rem 0;
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    text-align: right;
+}
+
+.ai-chat-token-balance:empty {
+    display: none;
+}
+
 .ai-chat-form {
     display: flex;
     gap: 0.5rem;
@@ -1623,6 +1678,13 @@ body.studio-fullscreen .ai-chat-message-bot {
     color: var(--gradient-primary-text);
     font-weight: 600;
     cursor: pointer;
+}
+
+.ai-chat-generated-image {
+    max-width: 100%;
+    border-radius: 10px;
+    display: block;
+    margin-top: 0.3rem;
 }
 
 .ai-chat-disclaimer {

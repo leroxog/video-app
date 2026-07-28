@@ -33,40 +33,42 @@
         </div>
     </div>
 
-    <header>
-        <a class="brand-logo" href="{{ url_for('index') }}">
-            {% include "partials/_logo.html" %}
-        </a>
+    {% block header %}
+        <header>
+            <a class="brand-logo" href="{{ url_for('index') }}">
+                {% include "partials/_logo.html" %}
+            </a>
 
-        {% if not user %}
-            <nav>
-                <a href="{{ url_for('login') }}">Login</a>
-                <a href="{{ url_for('register') }}">Registrieren</a>
-            </nav>
-        {% else %}
-            <div class="header-account-wrap">
-                <a class="header-account-avatar" href="{{ url_for('profile', username=user.username) }}" title="Profil">
-                    {% if user.profile_image %}
-                        <img src="{{ media_url('profile_pics', user.profile_image) }}" alt="">
-                    {% else %}
-                        <span class="header-account-avatar-placeholder">{{ user.username[0]|upper }}</span>
-                    {% endif %}
-                </a>
-                <div class="stats-bubble" id="statsBubble" style="display:none;">
-                    <span class="stats-bubble-item">
-                        <span class="stats-bubble-count" id="statsGamesCount">0</span>
-                        <span class="stats-bubble-word">Spiele</span>
-                    </span>
-                    <span class="stats-bubble-sep">&middot;</span>
-                    <span class="stats-bubble-item">
-                        <span class="stats-bubble-count" id="statsFollowersCount">0</span>
-                        <svg class="stats-bubble-icon" viewBox="0 0 16 16"><circle cx="8" cy="5" r="3" fill="currentColor"/><path d="M2 15 a6 6 0 0 1 12 0 Z" fill="currentColor"/></svg>
-                    </span>
-                    <div class="stats-bubble-tail"></div>
+            {% if not user %}
+                <nav>
+                    <a href="{{ url_for('login') }}">Login</a>
+                    <a href="{{ url_for('register') }}">Registrieren</a>
+                </nav>
+            {% else %}
+                <div class="header-account-wrap">
+                    <a class="header-account-avatar" href="{{ url_for('profile', username=user.username) }}" title="Profil">
+                        {% if user.profile_image %}
+                            <img src="{{ media_url('profile_pics', user.profile_image) }}" alt="">
+                        {% else %}
+                            <span class="header-account-avatar-placeholder">{{ user.username[0]|upper }}</span>
+                        {% endif %}
+                    </a>
+                    <div class="stats-bubble" id="statsBubble" style="display:none;">
+                        <span class="stats-bubble-item">
+                            <span class="stats-bubble-count" id="statsGamesCount">0</span>
+                            <span class="stats-bubble-word">Spiele</span>
+                        </span>
+                        <span class="stats-bubble-sep">&middot;</span>
+                        <span class="stats-bubble-item">
+                            <span class="stats-bubble-count" id="statsFollowersCount">0</span>
+                            <svg class="stats-bubble-icon" viewBox="0 0 16 16"><circle cx="8" cy="5" r="3" fill="currentColor"/><path d="M2 15 a6 6 0 0 1 12 0 Z" fill="currentColor"/></svg>
+                        </span>
+                        <div class="stats-bubble-tail"></div>
+                    </div>
                 </div>
-            </div>
-        {% endif %}
-    </header>
+            {% endif %}
+        </header>
+    {% endblock %}
 
     <main>
         {% with messages = get_flashed_messages() %}
@@ -83,16 +85,28 @@
     </main>
 
     {% if user %}
-        <div class="ai-chat-widget" id="aiChatWidget" data-user-gender="{{ user.gender or '' }}">
+        <div class="ai-chat-widget" id="aiChatWidget" data-user-gender="{{ user.gender or '' }}" data-ai-tokens="{{ user.ai_tokens if user.ai_tokens is not none else '' }}">
             <a class="ai-chat-toggle-btn" id="aiChatToggleBtn" href="{{ url_for('assistant_page') }}" title="KI-Assistent">🤖</a>
             <div class="ai-chat-panel" id="aiChatPanel" style="display:none;">
                 <div class="ai-chat-sidebar" id="aiChatSidebar">
-                    <button type="button" class="ai-chat-sidebar-new-btn" id="aiChatSidebarNewBtn">+ Neuer Chat</button>
-                    <button type="button" class="ai-chat-sidebar-new-btn" id="aiChatSidebarNewCodeBtn">{ } Neuesten Code-Chat erstellen</button>
-                    <button type="button" class="ai-chat-sidebar-voice-btn" id="aiChatSidebarVoiceBtn">🎤 Mit der KI reden</button>
-                    <div class="ai-chat-sidebar-more-row">
-                        <a class="ai-chat-sidebar-more-btn" href="{{ url_for('account_settings') if user else url_for('login') }}">&#8943; Mehr</a>
-                        <button type="button" class="ai-chat-sidebar-buddy-btn" id="aiChatBuddyBtn">Buddy</button>
+                    <button type="button" class="ai-chat-sidebar-nav-item" id="aiChatSidebarNewBtn">
+                        <span class="ai-chat-sidebar-nav-icon" aria-hidden="true">✏️</span><span>Neuer Chat</span>
+                    </button>
+                    <button type="button" class="ai-chat-sidebar-nav-item" id="aiChatSidebarNewCodeBtn">
+                        <span class="ai-chat-sidebar-nav-icon" aria-hidden="true">&lt;/&gt;</span><span>Neuesten Code-Chat erstellen</span>
+                    </button>
+                    <button type="button" class="ai-chat-sidebar-nav-item" id="aiChatSidebarVoiceBtn">
+                        <span class="ai-chat-sidebar-nav-icon" aria-hidden="true">🎤</span><span>Mit der KI reden</span>
+                    </button>
+                    <div class="ai-chat-sidebar-more-wrap">
+                        <button type="button" class="ai-chat-sidebar-nav-item" id="aiChatMoreBtn">
+                            <span class="ai-chat-sidebar-nav-icon" aria-hidden="true">&#8943;</span><span>Mehr</span>
+                        </button>
+                        <div class="ai-chat-more-flyout" id="aiChatMoreFlyout" style="display:none;">
+                            <button type="button" class="ai-chat-sidebar-nav-item" id="aiChatBuddyBtn">
+                                <span class="ai-chat-sidebar-nav-icon" aria-hidden="true">🤝</span><span>Buddy</span>
+                            </button>
+                        </div>
                     </div>
                     <div class="ai-chat-sidebar-label">Aktuelle</div>
                     <div class="ai-chat-sidebar-list" id="aiChatSidebarList"></div>
@@ -137,6 +151,7 @@
                             📎 <span id="aiChatAttachmentName"></span>
                             <button type="button" id="aiChatAttachmentRemove" title="Anhang entfernen">&times;</button>
                         </p>
+                        <p class="ai-chat-token-balance" id="aiChatTokenBalance"></p>
                         <form class="ai-chat-form" id="aiChatForm">
                             <input type="file" id="aiChatFileInput" accept=".txt,.md,.markdown,.py,.js,.jsx,.ts,.tsx,.json,.csv,.html,.htm,.css,.log,.yaml,.yml,.xml,.java,.c,.cpp,.cs,.sh" style="display:none;">
                             <button type="button" class="ai-chat-attach-btn" id="aiChatAttachBtn" title="Text-Datei anhängen">📎</button>
@@ -252,7 +267,19 @@
                 const attachmentChip = document.getElementById("aiChatAttachmentChip");
                 const attachmentName = document.getElementById("aiChatAttachmentName");
                 const attachmentRemove = document.getElementById("aiChatAttachmentRemove");
+                const tokenBalanceEl = document.getElementById("aiChatTokenBalance");
                 const GREETING = messagesEl.innerHTML;
+
+                // Tokens are an app-internal currency separate from points,
+                // spent per AI message/voice-turn/image (see account
+                // settings / the backend for the exact costs) -- shown here
+                // so the balance is always visible right where you type,
+                // and kept live via tokens_remaining on every chat response.
+                function updateTokenBalance(value) {
+                    if (value === undefined || value === null || !tokenBalanceEl) return;
+                    tokenBalanceEl.textContent = `⚡ ${value} Tokens`;
+                }
+                if (widget.dataset.aiTokens) updateTokenBalance(Number(widget.dataset.aiTokens));
 
                 // The sidebar (persistent "Aktuelle" chat list, last 3) shows
                 // on the dedicated /assistant page -- the Studio-editor-
@@ -264,6 +291,8 @@
                 const sidebarNewCodeBtn = document.getElementById("aiChatSidebarNewCodeBtn");
                 const sidebarList = document.getElementById("aiChatSidebarList");
                 const sidebarToggleBtn = document.getElementById("aiChatSidebarToggleBtn");
+                const moreBtn = document.getElementById("aiChatMoreBtn");
+                const moreFlyout = document.getElementById("aiChatMoreFlyout");
                 const buddyBtn = document.getElementById("aiChatBuddyBtn");
                 const buddyConfirmOverlay = document.getElementById("aiBuddyConfirmOverlay");
                 const buddyConfirmYes = document.getElementById("aiBuddyConfirmYes");
@@ -449,8 +478,29 @@
                     });
                 }
 
+                // "Mehr" is a plain toggle for the flyout beside it (not a
+                // settings link anymore) -- Buddy lives inside that flyout,
+                // positioned to spill outside the sidebar's own box, like a
+                // real popover menu rather than another permanent row.
+                if (moreBtn && moreFlyout) {
+                    moreBtn.addEventListener("click", (event) => {
+                        event.stopPropagation();
+                        const isOpen = moreFlyout.style.display !== "none";
+                        moreFlyout.style.display = isOpen ? "none" : "block";
+                    });
+                    document.addEventListener("click", (event) => {
+                        if (!moreFlyout.contains(event.target) && event.target !== moreBtn) {
+                            moreFlyout.style.display = "none";
+                        }
+                    });
+                }
+
                 if (buddyBtn && buddyConfirmOverlay) {
-                    buddyBtn.addEventListener("click", () => { buddyConfirmOverlay.style.display = "flex"; });
+                    const buddyLabel = buddyBtn.querySelector("span:last-child");
+                    buddyBtn.addEventListener("click", () => {
+                        moreFlyout.style.display = "none";
+                        buddyConfirmOverlay.style.display = "flex";
+                    });
                     buddyConfirmNo.addEventListener("click", () => { buddyConfirmOverlay.style.display = "none"; });
                     buddyConfirmYes.addEventListener("click", () => {
                         fetch("/api/ai/buddy-mode", { method: "POST" })
@@ -460,7 +510,7 @@
                                 buddyConfirmOverlay.style.display = "none";
                                 if (ok) {
                                     buddyBtn.classList.add("is-active");
-                                    buddyBtn.textContent = "Buddy ✓";
+                                    if (buddyLabel) buddyLabel.textContent = "Buddy ✓";
                                 } else {
                                     addMessage("Buddy-Modus konnte gerade nicht aktiviert werden. Versuch's gleich nochmal.", "bot");
                                 }
@@ -663,6 +713,15 @@
                     working = working.replace(/^## (.+)$/gm, "<h4>$1</h4>");
                     working = working.replace(/^# (.+)$/gm, "<h3>$1</h3>");
 
+                    // ![alt](url) -- currently only ever produced by the
+                    // generate_image tool's Pollinations.ai URL, restricted
+                    // to http(s) since `working` is already escapeHtml()'d
+                    // above so this is just belt-and-suspenders.
+                    working = working.replace(
+                        /!\[([^\]]*)\]\((https?:\/\/[^\s)]+)\)/g,
+                        (m, alt, url) => `<img class="ai-chat-generated-image" src="${url}" alt="${alt}" loading="lazy">`,
+                    );
+
                     const lines = working.split("\n");
                     const htmlLines = [];
                     let listType = null;
@@ -735,7 +794,15 @@
                 function addMessage(text, who) {
                     const bubble = document.createElement("div");
                     bubble.className = "ai-chat-message ai-chat-message-" + who;
-                    bubble.textContent = text;
+                    // Bot bubbles render markdown (so e.g. a generate_image
+                    // result still shows as an actual image when reopening a
+                    // saved chat, not just on the live reply) -- user bubbles
+                    // stay plain text, matching what was actually typed.
+                    if (who === "bot") {
+                        bubble.innerHTML = renderMarkdown(text);
+                    } else {
+                        bubble.textContent = text;
+                    }
                     messagesEl.appendChild(bubble);
                     messagesEl.scrollTop = messagesEl.scrollHeight;
                     return bubble;
@@ -1039,10 +1106,13 @@
                         .then((res) => res.json())
                         .then((data) => {
                             if (!data.ok) {
-                                thinkingBubble.textContent = "Fehler bei der Anfrage.";
+                                thinkingBubble.textContent = data.error === "insufficient_tokens"
+                                    ? `Nicht genug Tokens (noch ${data.tokens_available}, ${data.tokens_needed} nötig).`
+                                    : "Fehler bei der Anfrage.";
                                 return;
                             }
             currentChatId = data.chat_id;
+                            updateTokenBalance(data.tokens_remaining);
                             pollJob(data.job_id, thinkingBubble, text);
                         })
                         .catch(() => { thinkingBubble.textContent = "Fehler bei der Anfrage."; });
@@ -1275,7 +1345,7 @@
                     function sendVoiceMessage(text) {
                         addVoiceLine(text, "user");
                         voiceStatus.textContent = "Die KI denkt nach ...";
-                        const body = { message: text };
+                        const body = { message: text, via_voice: true };
                         if (voiceChatId) body.chat_id = voiceChatId;
                         fetch("/api/ai/chat", {
                             method: "POST",
@@ -1284,8 +1354,14 @@
                         })
                             .then((res) => res.json())
                             .then((data) => {
-                                if (!data.ok) { voiceStatus.textContent = "Fehler bei der Anfrage."; return; }
+                                if (!data.ok) {
+                                    voiceStatus.textContent = data.error === "insufficient_tokens"
+                                        ? `Nicht genug Tokens (noch ${data.tokens_available}, ${data.tokens_needed} nötig).`
+                                        : "Fehler bei der Anfrage.";
+                                    return;
+                                }
                                 voiceChatId = data.chat_id;
+                                updateTokenBalance(data.tokens_remaining);
                                 pollVoiceJob(data.job_id);
                             })
                             .catch(() => { voiceStatus.textContent = "Fehler bei der Anfrage."; });
