@@ -684,7 +684,7 @@ def ensure_sqlite_columns_exist():
         "studio_project": [
             ("script_code", "TEXT"),
             ("builtin_endpoint", "VARCHAR(50)"),
-            ("language", "VARCHAR(20) NOT NULL DEFAULT 'NexAIcode'"),
+            ("language", "VARCHAR(20) NOT NULL DEFAULT 'timeskipcode'"),
             ("project_type", "VARCHAR(20) NOT NULL DEFAULT 'game'"),
             ("web_code", "TEXT"),
             ("web_slug", "VARCHAR(50)"),
@@ -758,7 +758,7 @@ def ensure_columns_exist():
         'ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS script_code TEXT',
         "ALTER TABLE studio_block ADD COLUMN IF NOT EXISTS kind VARCHAR(20) NOT NULL DEFAULT 'normal'",
         'ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS builtin_endpoint VARCHAR(50)',
-        "ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS language VARCHAR(20) NOT NULL DEFAULT 'NexAIcode'",
+        "ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS language VARCHAR(20) NOT NULL DEFAULT 'timeskipcode'",
         "ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS project_type VARCHAR(20) NOT NULL DEFAULT 'game'",
         'ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS web_code TEXT',
         'ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS web_slug VARCHAR(50)',
@@ -772,6 +772,24 @@ def ensure_columns_exist():
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS avg_typing_interval_ms DOUBLE PRECISION',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS typing_sample_count INTEGER NOT NULL DEFAULT 0',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS terms_accepted_version INTEGER',
+        # Explicit safety net for AiPersonality: db.create_all() is supposed
+        # to create any genuinely new table on its own (and has for every
+        # other new model added this same way, this session) -- but at
+        # least one deploy showed api_ai_chat/api_ai_buddy_mode 500ing on
+        # "relation ai_personality does not exist" despite that, root cause
+        # never pinned down. This CREATE TABLE IF NOT EXISTS costs nothing
+        # if create_all() already did its job, and fixes the live site
+        # immediately either way.
+        """CREATE TABLE IF NOT EXISTS ai_personality (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL UNIQUE REFERENCES "user" (id),
+            intelligence INTEGER NOT NULL DEFAULT 89,
+            humor INTEGER NOT NULL DEFAULT 68,
+            caution INTEGER NOT NULL DEFAULT 89,
+            arrogance INTEGER NOT NULL DEFAULT 12,
+            mimic_user_style BOOLEAN NOT NULL DEFAULT FALSE,
+            updated_at TIMESTAMP
+        )""",
     ]
     with db.engine.connect() as conn:
         for statement in statements:
@@ -1479,7 +1497,7 @@ STUDIO_BLOCK_KINDS = {"normal", "checkpoint"}
 STUDIO_MAX_BLOCKS_PER_PROJECT = 40
 STUDIO_MAX_PROJECTS_PER_USER = 20
 # The dialect codes here must match the keys in static/js/studio-dialects.js.
-# NexAIcode (our own language) isn't offered for new projects anymore --
+# timeskipcode (our own language) isn't offered for new projects anymore --
 # it's still fully supported for playback/editing on any project that
 # already used it, just not selectable here.
 STUDIO_LANGUAGE_CHOICES = {
@@ -1769,6 +1787,31 @@ def _update_typing_baseline_and_get_note(user, interval_ms):
     return note
 
 
+def _get_or_create_personality_row(user_id):
+    """Looks up (or creates) this user's AiPersonality row. Wrapped
+    defensively: AiPersonality is a brand-new table, and on at least one
+    deploy it turned out to not actually exist yet on the live Postgres
+    database despite db.create_all() running at startup (still
+    unexplained -- every other table added this same way, this session,
+    came up fine) -- rather than let that 500 the entire chat endpoint
+    again, this degrades to "no personality info this turn" and logs the
+    real error for the admin dashboard instead. session.rollback() is
+    required after a failed query or the whole request's DB session stays
+    unusable for anything that runs afterward."""
+    try:
+        row = AiPersonality.query.filter_by(user_id=user_id).first()
+        if row is None:
+            row = AiPersonality(user_id=user_id)
+            db.session.add(row)
+            db.session.commit()
+        return row
+    except Exception as exc:
+        db.session.rollback()
+        logger.exception("AiPersonality nicht verfügbar für user_id=%s.", user_id)
+        log_error(str(exc), path=request.path, method=request.method, user_id=user_id)
+        return None
+
+
 @app.route("/api/ai/chat", methods=["POST"])
 def api_ai_chat():
     user = current_user()
@@ -1841,16 +1884,13 @@ def api_ai_chat():
                 .order_by(AiLearnedFact.created_at.desc()).limit(LEARNED_FACTS_PROMPT_LIMIT).all()
             ],
         }
-        personality_row = AiPersonality.query.filter_by(user_id=user.id).first()
-        if personality_row is None:
-            personality_row = AiPersonality(user_id=user.id)
-            db.session.add(personality_row)
-            db.session.commit()
-        personality = {
-            "intelligence": personality_row.intelligence, "humor": personality_row.humor,
-            "caution": personality_row.caution, "arrogance": personality_row.arrogance,
-            "mimic_user_style": personality_row.mimic_user_style,
-        }
+        personality_row = _get_or_create_personality_row(user.id)
+        if personality_row is not None:
+            personality = {
+                "intelligence": personality_row.intelligence, "humor": personality_row.humor,
+                "caution": personality_row.caution, "arrogance": personality_row.arrogance,
+                "mimic_user_style": personality_row.mimic_user_style,
+            }
     else:
         behavior_note = None
 
@@ -1864,7 +1904,7 @@ def api_ai_chat():
                     db.session.add(AiLearnedFact(source="user", content=fact, user_id=user_id_captured))
                 adjustments = (new_learned_facts or {}).get("personality_adjustments") or []
                 if adjustments:
-                    personality_row = AiPersonality.query.filter_by(user_id=user_id_captured).first()
+                    personality_row = _get_or_create_personality_row(user_id_captured)
                     if personality_row is not None:
                         for trait, step in adjustments:
                             current = getattr(personality_row, trait)
@@ -3029,10 +3069,9 @@ def api_ai_buddy_mode():
     if user is None:
         return jsonify({"ok": False, "error": "not_logged_in"}), 401
 
-    personality_row = AiPersonality.query.filter_by(user_id=user.id).first()
+    personality_row = _get_or_create_personality_row(user.id)
     if personality_row is None:
-        personality_row = AiPersonality(user_id=user.id)
-        db.session.add(personality_row)
+        return jsonify({"ok": False, "error": "unavailable"}), 500
     personality_row.mimic_user_style = True
     db.session.commit()
     return jsonify({"ok": True})

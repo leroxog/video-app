@@ -303,7 +303,7 @@ class StudioProject(db.Model):
     # App-store-style icon for a Web-in-Web-App -- shown on its card instead
     # of the generic globe placeholder, wherever project cards are listed.
     icon_image = db.Column(db.String(255), nullable=True)
-    # Which syntax dialect script_code is written in -- "NexAIcode" (our
+    # Which syntax dialect script_code is written in -- "timeskipcode" (our
     # own, recommended) or one of the HTML/Python/C#-flavored alternatives.
     # All dialects compile to the exact same rule engine, see studio-dialects.js.
     language = db.Column(db.String(20), nullable=False, default="python")

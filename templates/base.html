@@ -453,11 +453,18 @@
                     buddyBtn.addEventListener("click", () => { buddyConfirmOverlay.style.display = "flex"; });
                     buddyConfirmNo.addEventListener("click", () => { buddyConfirmOverlay.style.display = "none"; });
                     buddyConfirmYes.addEventListener("click", () => {
-                        fetch("/api/ai/buddy-mode", { method: "POST" }).finally(() => {
-                            buddyConfirmOverlay.style.display = "none";
-                            buddyBtn.classList.add("is-active");
-                            buddyBtn.textContent = "Buddy ✓";
-                        });
+                        fetch("/api/ai/buddy-mode", { method: "POST" })
+                            .then((res) => res.json().then((data) => ({ ok: res.ok && data.ok })))
+                            .catch(() => ({ ok: false }))
+                            .then(({ ok }) => {
+                                buddyConfirmOverlay.style.display = "none";
+                                if (ok) {
+                                    buddyBtn.classList.add("is-active");
+                                    buddyBtn.textContent = "Buddy ✓";
+                                } else {
+                                    addMessage("Buddy-Modus konnte gerade nicht aktiviert werden. Versuch's gleich nochmal.", "bot");
+                                }
+                            });
                     });
                 }
 

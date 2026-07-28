@@ -1,7 +1,7 @@
 // NexAI studio can be programmed in more than one syntax "dialect".
 // Every dialect compiles down to the exact same rule shape used by
 // studio-runtime.js: {infinite, target, trigger, condition, effect, canCollide}.
-// NexAIcode is our own language and the recommended default; HTML/Python/
+// timeskipcode is our own language and the recommended default; HTML/Python/
 // C# are alternative, flavoured syntaxes with identical capabilities -- not
 // real interpreters for those languages, just familiar-looking spellings of
 // the same block-game rules.
@@ -55,7 +55,7 @@
         figuresOff: "Schaltet die kleine Spielfigur überall aus.",
     };
 
-    // ---------- NexAIcode: our own language (recommended) ----------
+    // ---------- timeskipcode: our own language (recommended) ----------
     function quoted(line, key) {
         const m = line.match(new RegExp("\\b" + key + '\\s*"([^"]*)"', "i"));
         return m ? m[1] : null;
@@ -64,9 +64,9 @@
         return num(quoted(line, key), fallback);
     }
 
-    const NexAIcode = {
-        id: "NexAIcode",
-        label: "NexAIcode",
+    const timeskipcode = {
+        id: "timeskipcode",
+        label: "timeskipcode",
         // No longer offered when creating a new project (see
         // STUDIO_LANGUAGE_CHOICES in app.py) -- kept here only so any
         // project that already used it keeps parsing/playing correctly.
@@ -502,7 +502,7 @@
         extraActionChips: [{ insert: "Game.kill(true);", label: "Game.kill(true);", de: DESCRIPTIONS.kill }],
     };
 
-    const DIALECTS = { NexAIcode, html, python, csharp, javascript, java };
+    const DIALECTS = { timeskipcode, html, python, csharp, javascript, java };
 
     function get(id) {
         return DIALECTS[id] || DIALECTS.python;
@@ -510,10 +510,10 @@
 
     global.StudioDialects = {
         get,
-        // NexAIcode is deliberately left out here -- it's no longer
+        // timeskipcode is deliberately left out here -- it's no longer
         // offered anywhere a *new* choice is made (project creation, the
         // help page), only still parseable for projects that already used it.
-        list: Object.values(DIALECTS).filter((d) => d.id !== "NexAIcode"),
+        list: Object.values(DIALECTS).filter((d) => d.id !== "timeskipcode"),
         categoryLabels: {
             when: "Wann", condition: "Bedingung", action: "Aktion",
             variables: "Variablen", duration: "Dauer", end: "Ende",

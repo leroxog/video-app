@@ -1,6 +1,6 @@
 // NexAI studio's scripting engine. The actual keyword syntax is defined
 // per-language-dialect in studio-dialects.js (Python by default, plus
-// HTML/C#/JavaScript/Java-flavoured alternatives, and NexAIcode kept
+// HTML/C#/JavaScript/Java-flavoured alternatives, and timeskipcode kept
 // only for backward compatibility with projects that already used it) --
 // this file only knows the parts that are the same across every dialect:
 //
