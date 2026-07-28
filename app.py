@@ -702,6 +702,12 @@ def ensure_sqlite_columns_exist():
             ("typing_sample_count", "INTEGER NOT NULL DEFAULT 0"),
             ("terms_accepted_version", "INTEGER"),
         ],
+        # ai_personality itself is created fresh by db.create_all() on any
+        # brand-new database, but on one that already had the table from
+        # before mimic_user_style existed on the model, create_all() never
+        # goes back to add it -- same class of gap this whole function
+        # exists to self-heal for every other table.
+        "ai_personality": [("mimic_user_style", "BOOLEAN NOT NULL DEFAULT 0")],
     }
     with db.engine.connect() as conn:
         for table, columns in wanted.items():
@@ -772,14 +778,14 @@ def ensure_columns_exist():
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS avg_typing_interval_ms DOUBLE PRECISION',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS typing_sample_count INTEGER NOT NULL DEFAULT 0',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS terms_accepted_version INTEGER',
-        # Explicit safety net for AiPersonality: db.create_all() is supposed
-        # to create any genuinely new table on its own (and has for every
-        # other new model added this same way, this session) -- but at
-        # least one deploy showed api_ai_chat/api_ai_buddy_mode 500ing on
-        # "relation ai_personality does not exist" despite that, root cause
-        # never pinned down. This CREATE TABLE IF NOT EXISTS costs nothing
-        # if create_all() already did its job, and fixes the live site
-        # immediately either way.
+        # Root cause confirmed live (psycopg2.errors.UndefinedColumn):
+        # ai_personality was created by db.create_all() back when the
+        # AiPersonality model first shipped (no mimic_user_style yet) --
+        # create_all() only creates tables that don't exist yet, it never
+        # goes back to add a column to a table that's already there, so
+        # mimic_user_style silently never arrived on the live table when
+        # the model gained that field later. Same self-heal as every ALTER
+        # TABLE above, just for a table instead of "user".
         """CREATE TABLE IF NOT EXISTS ai_personality (
             id SERIAL PRIMARY KEY,
             user_id INTEGER NOT NULL UNIQUE REFERENCES "user" (id),
@@ -790,6 +796,7 @@ def ensure_columns_exist():
             mimic_user_style BOOLEAN NOT NULL DEFAULT FALSE,
             updated_at TIMESTAMP
         )""",
+        "ALTER TABLE ai_personality ADD COLUMN IF NOT EXISTS mimic_user_style BOOLEAN NOT NULL DEFAULT FALSE",
     ]
     with db.engine.connect() as conn:
         for statement in statements:
@@ -3071,14 +3078,7 @@ def api_ai_buddy_mode():
 
     personality_row = _get_or_create_personality_row(user.id)
     if personality_row is None:
-        # TEMP DIAGNOSTIC (see chat with Claude, remove once root cause is
-        # confirmed): surface the actual DB exception so it's visible
-        # without needing direct Postgres/Railway-log access.
-        last_error = ErrorLog.query.order_by(ErrorLog.created_at.desc()).first()
-        return jsonify({
-            "ok": False, "error": "unavailable",
-            "debug_last_error": last_error.message if last_error else None,
-        }), 500
+        return jsonify({"ok": False, "error": "unavailable"}), 500
     personality_row.mimic_user_style = True
     db.session.commit()
     return jsonify({"ok": True})
