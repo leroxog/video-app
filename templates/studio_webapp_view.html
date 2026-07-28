@@ -30,7 +30,7 @@
     <iframe id="webappFrame" sandbox="allow-scripts allow-forms allow-popups allow-modals"
             referrerpolicy="no-referrer" srcdoc="{{ project.web_code|e }}"></iframe>
     <div id="webappBadge">
-        <span>Nutzer-erstellt auf <a href="{{ url_for('index') }}" target="_blank">timeskip</a></span>
+        <span>Nutzer-erstellt auf <a href="{{ url_for('index') }}" target="_blank">NexAI</a></span>
         {% if user %}
             <span>&middot;</span>
             <a href="#" id="webappReportLink">{{ 'Gemeldet' if has_reported else 'Melden' }}</a>

@@ -1,4 +1,4 @@
-const CACHE_NAME = "timeskip-shell-v1";
+const CACHE_NAME = "NexAI-shell-v1";
 const APP_SHELL = [
     "/offline",
     "/static/css/style.css",

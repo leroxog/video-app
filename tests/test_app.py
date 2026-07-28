@@ -339,11 +339,16 @@ def test_fruitmerge_page_accessible_without_login(client):
     assert b"fruitCanvas" in response.data
 
 
-def test_header_search_bar_present_on_every_page(client):
+def test_brand_wordmark_present_on_every_page(client):
+    # The header search bar and bottom-nav were removed when the site
+    # became an AI-only product (see index()/games_page()) -- only the
+    # plain-text "NexAI" wordmark (no logo, see partials/_logo.html) is
+    # guaranteed on every page now.
     for path in ["/", "/login", "/register"]:
         response = client.get(path)
-        assert b"headerSearchInput" in response.data
-        assert b"bottom-nav-apps-btn" in response.data
+        assert b"NexAI" in response.data
+        assert b"headerSearchInput" not in response.data
+        assert b"bottom-nav" not in response.data
 
 
 def test_service_worker_served_from_root_for_full_scope(client):
@@ -408,11 +413,14 @@ def test_games_page_accessible_without_login_and_lists_published_studio_games(cl
     assert b"Testspiel" in response.data
 
 
-def test_bottom_nav_has_apps_plus_and_library_buttons(client):
+def test_ai_sidebar_has_new_chat_and_code_chat_buttons(client):
+    # The bottom-nav (apps/plus/library) is gone -- the whole site is the AI
+    # now (see index()); this checks the sidebar that replaced it instead.
+    register(client, username="sidebartest")
     response = client.get("/")
-    assert b"bottom-nav-apps-btn" in response.data
-    assert b"bottom-nav-plus" in response.data
-    assert b"bottom-nav-library-btn" in response.data
+    assert b"aiChatSidebarNewBtn" in response.data
+    assert b"aiChatSidebarNewCodeBtn" in response.data
+    assert b"aiChatBuddyBtn" in response.data
 
 
 def test_header_shows_account_avatar_link_when_logged_in(client):
@@ -696,8 +704,17 @@ def test_api_score_rejects_unknown_game(client):
 
 
 def test_leaderboard_shows_only_scored_users(client):
+    import app as app_module
+
     register(client, username="frank")
-    client.post("/api/score", json={"game": "knife.hit", "score": 15})
+    score_res = client.post("/api/score", json={"game": "knife.hit", "score": 15})
+    # GAME_SCORE_MULTIPLIER doubles every raw game score before it's
+    # credited (see adjust_points) -- this used to assert the literal "15"
+    # was on the page, which coincidentally always passed because the old
+    # SVG brand logo's path coordinates happened to contain "15" as a
+    # substring, not because the score itself was ever really 15.
+    expected_score = score_res.get_json()["total_score"]
+    assert expected_score == 15 * app_module.GAME_SCORE_MULTIPLIER
     client.post("/logout")
 
     register(client, username="gina")
@@ -706,7 +723,7 @@ def test_leaderboard_shows_only_scored_users(client):
     response = client.get("/leaderboard")
     assert response.status_code == 200
     assert b"frank" in response.data
-    assert b"15" in response.data
+    assert str(expected_score).encode() in response.data
     assert b"gina" not in response.data
 
 
@@ -1426,7 +1443,7 @@ def test_coinflip_page_loads(client):
     register(client, username="alice")
     response = client.get("/coinflip")
     assert response.status_code == 200
-    assert b"timeskip/coin.flip" in response.data
+    assert b"NexAI/coin.flip" in response.data
 
 
 def test_coinflip_win_chance_is_highest_for_zero_points(client):
@@ -2792,6 +2809,27 @@ def test_guest_chat_rejects_logged_in_users(client):
     assert response.status_code == 400
 
 
+def test_buddy_mode_sets_mimic_flag_for_current_user(client):
+    from models import AiPersonality
+
+    register(client, username="buddyuser")
+    user = User.query.filter_by(username="buddyuser").first()
+    assert AiPersonality.query.filter_by(user_id=user.id).first() is None
+
+    response = client.post("/api/ai/buddy-mode")
+    assert response.status_code == 200
+    assert response.get_json()["ok"] is True
+
+    personality = AiPersonality.query.filter_by(user_id=user.id).first()
+    assert personality is not None
+    assert personality.mimic_user_style is True
+
+
+def test_buddy_mode_requires_login(client):
+    response = client.post("/api/ai/buddy-mode")
+    assert response.status_code == 401
+
+
 def test_ai_chat_rejects_empty_message(client):
     register(client)
     response = client.post("/api/ai/chat", json={"message": "  "})
@@ -3064,7 +3102,7 @@ def test_webapp_offline_page_shown_when_unpublished(client):
     response = client.get("/w/does-not-exist")
     assert response.status_code == 200
     assert "Diese Webseite ist anscheinend offline".encode() in response.data
-    assert "Wollen Sie mehr über timeskip erfahren?".encode() in response.data
+    assert "Wollen Sie mehr über NexAI erfahren?".encode() in response.data
 
 
 def test_webapp_live_page_renders_sandboxed_code(client):
@@ -3244,8 +3282,8 @@ def test_facts_addendum_included_for_every_mode(monkeypatch):
 
     monkeypatch.setattr(ai_assistant, "_call_groq", fake_call_groq)
 
-    ai_assistant.generate_reply("Hallo!", facts=["timeskip wurde 2024 gegründet."])
-    assert "timeskip wurde 2024 gegründet." in captured["system"]
+    ai_assistant.generate_reply("Hallo!", facts=["NexAI wurde 2024 gegründet."])
+    assert "NexAI wurde 2024 gegründet." in captured["system"]
 
     ai_assistant.generate_reply("Ändere etwas.", context="Code: ...", project_type="webapp", facts=["Fakt X"])
     assert "Fakt X" in captured["system"]
@@ -3339,9 +3377,9 @@ def test_only_admin_can_save_a_fact(client, monkeypatch):
     client.post("/logout")
     register(client, username="admin1")
     make_admin("admin1")
-    client.post("/api/ai/chat", json={"message": "timeskip ist kostenlos.", "save_as_fact": True})
+    client.post("/api/ai/chat", json={"message": "NexAI ist kostenlos.", "save_as_fact": True})
     assert AiAdminFact.query.count() == 1
-    assert AiAdminFact.query.first().content == "timeskip ist kostenlos."
+    assert AiAdminFact.query.first().content == "NexAI ist kostenlos."
 
 
 def test_admin_can_delete_a_fact(client):
@@ -3688,6 +3726,27 @@ def test_existing_account_without_terms_accepted_is_gated_on_next_visit(client):
     assert "/terms" in response.headers["Location"]
 
     client.post("/terms/accept")
+    response2 = client.get("/games")
+    assert response2.status_code == 200
+
+
+def test_terms_version_bump_re_gates_already_accepted_account(client):
+    import app as app_module
+
+    register(client, username="oldversionuser")
+    user = User.query.filter_by(username="oldversionuser").first()
+    assert user.terms_accepted_version == app_module.TERMS_VERSION
+    # Simulate this account having accepted an older version of the terms.
+    user.terms_accepted_version = app_module.TERMS_VERSION - 1
+    db.session.commit()
+
+    response = client.get("/games", follow_redirects=False)
+    assert response.status_code == 302
+    assert "/terms" in response.headers["Location"]
+
+    client.post("/terms/accept")
+    user_after = User.query.filter_by(username="oldversionuser").first()
+    assert user_after.terms_accepted_version == app_module.TERMS_VERSION
     response2 = client.get("/games")
     assert response2.status_code == 200
 

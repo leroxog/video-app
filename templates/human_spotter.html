@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Erkenne den Menschen - timeskip{% endblock %}
+{% block title %}Erkenne den Menschen - NexAI{% endblock %}
 {% block brand_text %}games{% endblock %}
 {% block body_class %}game-fullscreen{% endblock %}
 {% block content %}
@@ -11,7 +11,7 @@
 
         <p class="humanspotter-disclaimer">
             Klick auf der Stelle im Bild, an der ein Mensch zu sehen ist. Deine Klicks werden zusammen mit dem
-            Bild gespeichert -- eine echte Bilderkennungs-KI, die live daraus lernt, gibt es auf timeskip nicht,
+            Bild gespeichert -- eine echte Bilderkennungs-KI, die live daraus lernt, gibt es auf NexAI nicht,
             aber die gesammelten Daten helfen dabei, später zu verstehen, wie Menschen "Mensch" in Bildern markieren.
             {% if not user %}<a href="{{ url_for('login') }}">Melde dich an</a>, um eigene Fotos hochzuladen.{% endif %}
         </p>

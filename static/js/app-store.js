@@ -3,8 +3,8 @@
     // its navigate handler falls back to caches.match(request) against this
     // same store when offline, so pre-warming it here from a "Laden" click
     // is what makes the app actually openable without a network afterwards.
-    const CACHE_NAME = "timeskip-shell-v1";
-    const STORAGE_KEY = "timeskip_installed_apps";
+    const CACHE_NAME = "NexAI-shell-v1";
+    const STORAGE_KEY = "NexAI_installed_apps";
 
     function getInstalled() {
         try {

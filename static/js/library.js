@@ -1,5 +1,5 @@
 (function () {
-    const STORAGE_KEY = "timeskip_installed_apps";
+    const STORAGE_KEY = "NexAI_installed_apps";
     const grid = document.getElementById("libraryGrid");
     const emptyState = document.getElementById("libraryEmptyState");
     if (!grid) return;

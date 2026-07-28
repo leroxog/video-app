@@ -10,7 +10,7 @@
         // opt-in and stored client-side, changed from account settings.
         (function () {
             try {
-                if (localStorage.getItem("timeskip_theme") !== "light") {
+                if (localStorage.getItem("NexAI_theme") !== "light") {
                     document.documentElement.setAttribute("data-theme", "dark");
                 }
             } catch (e) {
@@ -18,7 +18,7 @@
             }
         })();
     </script>
-    <title>{% block title %}timeskip{% endblock %}</title>
+    <title>{% block title %}NexAI{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
     <link rel="icon" href="{{ url_for('static', filename='img/logo.svg') }}" type="image/svg+xml">
@@ -36,16 +36,7 @@
     <header>
         <a class="brand-logo" href="{{ url_for('index') }}">
             {% include "partials/_logo.html" %}
-            {% set brand_caption %}{% block brand_text %}{% endblock %}{% endset %}{% if brand_caption.strip() %}<span class="brand-text">{{ brand_caption.strip() }}</span>{% endif %}
         </a>
-
-        <div class="header-search-wrapper">
-            <form class="header-search-form" action="{{ url_for('games_page') }}" method="get" id="headerSearchForm">
-                <input type="text" id="headerSearchInput" name="q" placeholder="Spiele suchen..." maxlength="200" autocomplete="off">
-                <button type="submit">Suchen</button>
-            </form>
-            <div class="search-history-dropdown" id="searchHistoryDropdown"></div>
-        </div>
 
         {% if not user %}
             <nav>
@@ -91,55 +82,37 @@
         {% block content %}{% endblock %}
     </main>
 
-    <div class="bottom-nav">
-        <a class="bottom-nav-apps-btn" href="{{ url_for('index') }}" title="Startseite (KI)" data-nav-active="/">
-            <svg viewBox="0 0 24 24" width="20" height="20">
-                <path d="M4 5 H20 V16 H9 L5 20 V16 H4 Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
-            </svg>
-        </a>
-
-        <a class="bottom-nav-games-btn" href="{{ url_for('games_page') }}" title="Spiele" data-nav-active="{{ url_for('games_page') }}">
-            <svg viewBox="0 0 24 24" width="20" height="20">
-                <rect x="3" y="3" width="8" height="8" rx="2" fill="currentColor"/>
-                <rect x="13" y="3" width="8" height="8" rx="2" fill="currentColor"/>
-                <rect x="3" y="13" width="8" height="8" rx="2" fill="currentColor"/>
-                <rect x="13" y="13" width="8" height="8" rx="2" fill="currentColor"/>
-            </svg>
-        </a>
-
-        <a class="bottom-nav-plus" href="{{ url_for('studio_projects_page') if user else url_for('login') }}" title="Spiel programmieren">
-            <svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 4 V20 M4 12 H20" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg>
-        </a>
-
-        <a class="bottom-nav-library-btn" href="{{ url_for('library_page') }}" title="Bibliothek" data-nav-active="{{ url_for('library_page') }}">
-            <svg viewBox="0 0 24 24" width="20" height="20">
-                <path d="M12 6.5 C10.5 5 8 4.3 4 4.3 V18 C8 18 10.5 18.7 12 20.2 C13.5 18.7 16 18 20 18 V4.3 C16 4.3 13.5 5 12 6.5 Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
-                <path d="M12 6.5 V20.2" stroke="currentColor" stroke-width="1.6"/>
-            </svg>
-        </a>
-    </div>
-
     {% if user %}
         <div class="ai-chat-widget" id="aiChatWidget" data-user-gender="{{ user.gender or '' }}">
             <a class="ai-chat-toggle-btn" id="aiChatToggleBtn" href="{{ url_for('assistant_page') }}" title="KI-Assistent">🤖</a>
             <div class="ai-chat-panel" id="aiChatPanel" style="display:none;">
                 <div class="ai-chat-sidebar" id="aiChatSidebar">
-                    <div class="ai-chat-sidebar-tabs">
-                        <button type="button" class="ai-chat-sidebar-tab is-active" id="aiChatTabGeneral" data-mode="general">Startseite</button>
-                        <button type="button" class="ai-chat-sidebar-tab" id="aiChatTabCode" data-mode="code">Code</button>
-                    </div>
                     <button type="button" class="ai-chat-sidebar-new-btn" id="aiChatSidebarNewBtn">+ Neuer Chat</button>
+                    <button type="button" class="ai-chat-sidebar-new-btn" id="aiChatSidebarNewCodeBtn">{ } Neuesten Code-Chat erstellen</button>
                     <button type="button" class="ai-chat-sidebar-voice-btn" id="aiChatSidebarVoiceBtn">🎤 Mit der KI reden</button>
-                    <div class="ai-chat-sidebar-label">Zuletzt verwendet</div>
+                    <div class="ai-chat-sidebar-more-row">
+                        <a class="ai-chat-sidebar-more-btn" href="{{ url_for('account_settings') if user else url_for('login') }}">&#8943; Mehr</a>
+                        <button type="button" class="ai-chat-sidebar-buddy-btn" id="aiChatBuddyBtn">Buddy</button>
+                    </div>
+                    <div class="ai-chat-sidebar-label">Aktuelle</div>
                     <div class="ai-chat-sidebar-list" id="aiChatSidebarList"></div>
-                    <button type="button" class="ai-chat-sidebar-manage-btn" id="aiChatSidebarManageBtn">&#9776; Anpassen</button>
+                </div>
+
+                <div class="ai-buddy-confirm-overlay" id="aiBuddyConfirmOverlay" style="display:none;">
+                    <div class="ai-buddy-confirm-box">
+                        <p>Soll die KI ab jetzt versuchen, mehr so zu reden/schreiben wie du selbst?</p>
+                        <div class="ai-buddy-confirm-actions">
+                            <button type="button" id="aiBuddyConfirmYes">Ja, aktivieren</button>
+                            <button type="button" id="aiBuddyConfirmNo">Abbrechen</button>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="ai-chat-main" id="aiChatMain">
                     <div class="ai-chat-panel-header">
                         <button type="button" class="ai-chat-icon-btn" id="aiChatSidebarToggleBtn" title="Chats">&#9776;</button>
                         <button type="button" class="ai-chat-icon-btn ai-chat-embedded-only-btn" id="aiChatManageBtn" title="Anpassen">&#9776;</button>
-                        <span id="aiChatHeaderTitle">Startseite</span>
+                        <span id="aiChatHeaderTitle">Neuer Chat</span>
                         <div class="ai-chat-header-actions">
                             <button type="button" class="ai-chat-icon-btn" id="aiChatNewBtn" title="Neuer Chat">+</button>
                             <button type="button" id="aiChatCloseBtn">&times;</button>
@@ -186,8 +159,10 @@
                         <button type="button" id="aiVoiceCloseBtn">&times;</button>
                     </div>
                     <div class="ai-voice-transcript" id="aiVoiceTranscript"></div>
-                    <button type="button" class="ai-voice-mic-btn" id="aiVoiceMicBtn" title="Sprechen">🎤</button>
-                    <p class="ai-voice-status" id="aiVoiceStatus">Tippe auf das Mikrofon und sprich.</p>
+                    <div class="ai-voice-orb-wrap" id="aiVoiceMicBtn" role="button" tabindex="0" title="Sprechen">
+                        <canvas class="ai-voice-orb-canvas" id="aiVoiceOrbCanvas" width="240" height="240"></canvas>
+                    </div>
+                    <p class="ai-voice-status" id="aiVoiceStatus">Tippe auf den Kreis und sprich.</p>
 
                     <div class="ai-voice-contribute">
                         <p class="ai-voice-contribute-label">Echte Stimme beisteuern (ersetzt die Stimme für alle):</p>
@@ -219,29 +194,6 @@
 
     <script>
         (function () {
-            const path = window.location.pathname;
-            document.querySelectorAll(".bottom-nav [data-nav-active]").forEach((el) => {
-                const target = el.dataset.navActive;
-                if (!target) return;
-                if (path === target) el.classList.add("bottom-nav-current");
-            });
-
-            const pressable = document.querySelectorAll(
-                ".bottom-nav-apps-btn, .bottom-nav-games-btn, .bottom-nav-plus, .bottom-nav-library-btn"
-            );
-            pressable.forEach((el) => {
-                const press = () => el.classList.add("bottom-nav-pressed");
-                const release = () => el.classList.remove("bottom-nav-pressed");
-                el.addEventListener("pointerdown", press);
-                el.addEventListener("pointerup", release);
-                el.addEventListener("pointercancel", release);
-                el.addEventListener("pointerleave", release);
-            });
-        })();
-    </script>
-
-    <script>
-        (function () {
             const splash = document.getElementById("splashScreen");
             window.addEventListener("load", () => {
                 setTimeout(() => {
@@ -268,67 +220,6 @@
             })();
         </script>
     {% endif %}
-
-    <script>
-        (function () {
-            const HISTORY_KEY = "timeskipSearchHistory";
-            const MAX_HISTORY = 7;
-            const input = document.getElementById("headerSearchInput");
-            const form = document.getElementById("headerSearchForm");
-            const dropdown = document.getElementById("searchHistoryDropdown");
-
-            const params = new URLSearchParams(window.location.search);
-            const currentQuery = params.get("q");
-            if (currentQuery) input.value = currentQuery;
-
-            function getHistory() {
-                try {
-                    return JSON.parse(localStorage.getItem(HISTORY_KEY)) || [];
-                } catch (e) {
-                    return [];
-                }
-            }
-
-            function saveToHistory(term) {
-                if (!term) return;
-                let history = getHistory().filter((t) => t.toLowerCase() !== term.toLowerCase());
-                history.unshift(term);
-                history = history.slice(0, MAX_HISTORY);
-                localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-            }
-
-            function renderDropdown() {
-                const history = getHistory();
-                dropdown.innerHTML = "";
-                if (!history.length) {
-                    dropdown.style.display = "none";
-                    return;
-                }
-                history.forEach((term) => {
-                    const item = document.createElement("div");
-                    item.className = "search-history-item";
-                    item.textContent = term;
-                    item.addEventListener("mousedown", (event) => {
-                        event.preventDefault();
-                        input.value = term;
-                        saveToHistory(term);
-                        form.submit();
-                    });
-                    dropdown.appendChild(item);
-                });
-                dropdown.style.display = "block";
-            }
-
-            input.addEventListener("focus", renderDropdown);
-            input.addEventListener("blur", () => {
-                setTimeout(() => { dropdown.style.display = "none"; }, 150);
-            });
-
-            form.addEventListener("submit", () => {
-                saveToHistory(input.value.trim());
-            });
-        })();
-    </script>
 
     <script>
         if ("serviceWorker" in navigator) {
@@ -363,23 +254,24 @@
                 const attachmentRemove = document.getElementById("aiChatAttachmentRemove");
                 const GREETING = messagesEl.innerHTML;
 
-                // The sidebar (persistent "Zuletzt verwendet" chat list with
-                // Startseite/Code tabs) shows on the dedicated /assistant page
-                // -- the Studio-editor-embedded chat stays in its older,
-                // narrower single-column layout without a sidebar (wired
-                // further down via the embedTarget/pageEmbedTarget branch).
+                // The sidebar (persistent "Aktuelle" chat list, last 3) shows
+                // on the dedicated /assistant page -- the Studio-editor-
+                // embedded chat stays in its older, narrower single-column
+                // layout without a sidebar (wired further down via the
+                // embedTarget/pageEmbedTarget branch).
                 const sidebar = document.getElementById("aiChatSidebar");
-                const tabGeneral = document.getElementById("aiChatTabGeneral");
-                const tabCode = document.getElementById("aiChatTabCode");
                 const sidebarNewBtn = document.getElementById("aiChatSidebarNewBtn");
+                const sidebarNewCodeBtn = document.getElementById("aiChatSidebarNewCodeBtn");
                 const sidebarList = document.getElementById("aiChatSidebarList");
-                const sidebarManageBtn = document.getElementById("aiChatSidebarManageBtn");
                 const sidebarToggleBtn = document.getElementById("aiChatSidebarToggleBtn");
-                let sidebarTabMode = "general";
-                let sidebarManageMode = false;
+                const buddyBtn = document.getElementById("aiChatBuddyBtn");
+                const buddyConfirmOverlay = document.getElementById("aiBuddyConfirmOverlay");
+                const buddyConfirmYes = document.getElementById("aiBuddyConfirmYes");
+                const buddyConfirmNo = document.getElementById("aiBuddyConfirmNo");
+                const SIDEBAR_RECENT_LIMIT = 3;
                 let allChatsCache = [];
 
-                // If the current page has timeskip studio's code editor open,
+                // If the current page has NexAI studio's code editor open,
                 // offer to send the user's current script along as context so
                 // the assistant can help with the actual code being written --
                 // studio-dialects.js is loaded earlier in the page by
@@ -479,12 +371,12 @@
                 function renderSidebarRows(chats) {
                     if (!sidebarList) return;
                     sidebarList.innerHTML = "";
-                    const filtered = chats.filter((c) => (c.mode || "general") === sidebarTabMode);
-                    if (!filtered.length) {
+                    const recent = chats.slice(0, SIDEBAR_RECENT_LIMIT);
+                    if (!recent.length) {
                         sidebarList.innerHTML = '<p class="ai-chat-sidebar-row-empty">Noch keine Chats.</p>';
                         return;
                     }
-                    filtered.forEach((chat) => {
+                    recent.forEach((chat) => {
                         const row = document.createElement("div");
                         row.className = "ai-chat-sidebar-row" + (chat.id === currentChatId ? " is-current" : "");
 
@@ -494,40 +386,38 @@
                         titleEl.addEventListener("click", () => { openChat(chat.id); closeMobileSidebar(); });
                         row.appendChild(titleEl);
 
-                        if (sidebarManageMode) {
-                            const renameBtn = document.createElement("button");
-                            renameBtn.type = "button";
-                            renameBtn.className = "ai-chat-icon-btn";
-                            renameBtn.title = "Umbenennen";
-                            renameBtn.textContent = "✎";
-                            renameBtn.addEventListener("click", (event) => {
-                                event.stopPropagation();
-                                const newTitle = window.prompt("Neuer Name für diesen Chat:", chat.title);
-                                if (!newTitle || !newTitle.trim()) return;
-                                fetch(`/api/ai/chats/${chat.id}`, {
-                                    method: "PATCH",
-                                    headers: { "Content-Type": "application/json" },
-                                    body: JSON.stringify({ title: newTitle.trim() }),
-                                }).then(() => loadSidebarList());
-                            });
+                        const renameBtn = document.createElement("button");
+                        renameBtn.type = "button";
+                        renameBtn.className = "ai-chat-icon-btn";
+                        renameBtn.title = "Umbenennen";
+                        renameBtn.textContent = "✎";
+                        renameBtn.addEventListener("click", (event) => {
+                            event.stopPropagation();
+                            const newTitle = window.prompt("Neuer Name für diesen Chat:", chat.title);
+                            if (!newTitle || !newTitle.trim()) return;
+                            fetch(`/api/ai/chats/${chat.id}`, {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ title: newTitle.trim() }),
+                            }).then(() => loadSidebarList());
+                        });
 
-                            const deleteBtn = document.createElement("button");
-                            deleteBtn.type = "button";
-                            deleteBtn.className = "ai-chat-icon-btn ai-chat-icon-btn-danger";
-                            deleteBtn.title = "Löschen";
-                            deleteBtn.textContent = "🗑";
-                            deleteBtn.addEventListener("click", (event) => {
-                                event.stopPropagation();
-                                if (!window.confirm(`Chat "${chat.title}" wirklich löschen?`)) return;
-                                fetch(`/api/ai/chats/${chat.id}/delete`, { method: "POST" }).then(() => {
-                                    if (currentChatId === chat.id) startNewChat();
-                                    loadSidebarList();
-                                });
+                        const deleteBtn = document.createElement("button");
+                        deleteBtn.type = "button";
+                        deleteBtn.className = "ai-chat-icon-btn ai-chat-icon-btn-danger";
+                        deleteBtn.title = "Löschen";
+                        deleteBtn.textContent = "🗑";
+                        deleteBtn.addEventListener("click", (event) => {
+                            event.stopPropagation();
+                            if (!window.confirm(`Chat "${chat.title}" wirklich löschen?`)) return;
+                            fetch(`/api/ai/chats/${chat.id}/delete`, { method: "POST" }).then(() => {
+                                if (currentChatId === chat.id) startNewChat();
+                                loadSidebarList();
                             });
+                        });
 
-                            row.appendChild(renameBtn);
-                            row.appendChild(deleteBtn);
-                        }
+                        row.appendChild(renameBtn);
+                        row.appendChild(deleteBtn);
 
                         sidebarList.appendChild(row);
                     });
@@ -543,27 +433,39 @@
                         });
                 }
 
-                function setSidebarTab(mode) {
-                    sidebarTabMode = mode;
-                    tabGeneral.classList.toggle("is-active", mode === "general");
-                    tabCode.classList.toggle("is-active", mode === "code");
-                    renderSidebarRows(allChatsCache);
-                }
-                tabGeneral.addEventListener("click", () => setSidebarTab("general"));
-                tabCode.addEventListener("click", () => setSidebarTab("code"));
-
                 sidebarNewBtn.addEventListener("click", () => { startNewChat(); closeMobileSidebar(); });
-                sidebarManageBtn.addEventListener("click", () => {
-                    sidebarManageMode = !sidebarManageMode;
-                    sidebarManageBtn.classList.toggle("is-active", sidebarManageMode);
-                    renderSidebarRows(allChatsCache);
-                });
+
+                // "Neuesten Code-Chat erstellen" -- same as "+ Neuer Chat" but
+                // pre-set to code mode (mirrors what embedding this widget in
+                // a Studio editor already defaults to, see currentChatMode's
+                // initial declaration above), so the very first message in
+                // it is already scoped correctly.
+                if (sidebarNewCodeBtn) {
+                    sidebarNewCodeBtn.addEventListener("click", () => {
+                        startNewChat();
+                        currentChatMode = "code";
+                        updateContextToggleVisibility();
+                        closeMobileSidebar();
+                    });
+                }
+
+                if (buddyBtn && buddyConfirmOverlay) {
+                    buddyBtn.addEventListener("click", () => { buddyConfirmOverlay.style.display = "flex"; });
+                    buddyConfirmNo.addEventListener("click", () => { buddyConfirmOverlay.style.display = "none"; });
+                    buddyConfirmYes.addEventListener("click", () => {
+                        fetch("/api/ai/buddy-mode", { method: "POST" }).finally(() => {
+                            buddyConfirmOverlay.style.display = "none";
+                            buddyBtn.classList.add("is-active");
+                            buddyBtn.textContent = "Buddy ✓";
+                        });
+                    });
+                }
 
                 function startNewChat() {
                     currentChatId = null;
                     currentChatMode = codeTextarea ? "code" : "general";
                     currentChatSpecializePrompted = false;
-                    headerTitle.textContent = "Startseite";
+                    headerTitle.textContent = "Neuer Chat";
                     messagesEl.innerHTML = GREETING;
                     updateContextToggleVisibility();
                     showConversationView();
@@ -1134,7 +1036,6 @@
                                 return;
                             }
             currentChatId = data.chat_id;
-                            if (headerTitle.textContent === "Startseite") headerTitle.textContent = "Neuer Chat";
                             pollJob(data.job_id, thinkingBubble, text);
                         })
                         .catch(() => { thinkingBubble.textContent = "Fehler bei der Anfrage."; });
@@ -1162,6 +1063,116 @@
                     let recognition = null;
                     let voices = [];
 
+                    // --- Voice orb: a white circle with purple "smoke" that
+                    // reacts to actual audio volume (mic while listening, the
+                    // reply audio while speaking) via the Web Audio API's
+                    // AnalyserNode, and drifts gently on its own otherwise.
+                    // Everything stays clipped inside the circle. When the
+                    // reply falls back to the browser's own speechSynthesis
+                    // (no cloned voice contributed yet), there's no audio
+                    // stream to analyse -- browsers don't expose one for
+                    // built-in TTS -- so that one case uses a smooth simulated
+                    // pulse instead of real amplitude, honestly just an
+                    // approximation, not a claim of real reactivity there.
+                    const orbCanvas = document.getElementById("aiVoiceOrbCanvas");
+                    const orbCtx = orbCanvas ? orbCanvas.getContext("2d") : null;
+                    let orbIntensity = 0;
+                    let orbTargetIntensity = 0;
+                    let orbTime = 0;
+                    let orbAnalyser = null;
+                    let orbAnalyserData = null;
+                    let orbAudioCtx = null;
+                    let orbSimulated = false;
+
+                    function drawOrb() {
+                        if (!orbCtx) return;
+                        const w = orbCanvas.width, h = orbCanvas.height;
+                        orbCtx.clearRect(0, 0, w, h);
+                        orbCtx.save();
+                        orbCtx.beginPath();
+                        orbCtx.arc(w / 2, h / 2, w / 2 - 2, 0, Math.PI * 2);
+                        orbCtx.clip();
+
+                        const base = orbCtx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
+                        base.addColorStop(0, "#ffffff");
+                        base.addColorStop(1, "#eae5f9");
+                        orbCtx.fillStyle = base;
+                        orbCtx.fillRect(0, 0, w, h);
+
+                        if (orbSimulated) {
+                            orbTargetIntensity = 0.35 + 0.25 * Math.sin(orbTime * 3);
+                        }
+                        orbIntensity += (orbTargetIntensity - orbIntensity) * 0.12;
+                        orbTime += 0.008 + orbIntensity * 0.03;
+
+                        const blobCount = 3 + Math.round(orbIntensity * 4);
+                        for (let i = 0; i < blobCount; i++) {
+                            const angle = orbTime * (0.6 + i * 0.17) + i * 2.1;
+                            const spread = (w / 2) * (0.55 + orbIntensity * 0.4);
+                            const x = w / 2 + Math.cos(angle) * spread * (0.3 + 0.3 * Math.sin(orbTime * 0.5 + i));
+                            const y = h / 2 + Math.sin(angle * 0.85) * spread * (0.3 + 0.3 * Math.cos(orbTime * 0.6 + i));
+                            const blobR = (w / 2) * (0.3 + orbIntensity * 0.3) * (0.7 + 0.3 * Math.sin(orbTime + i * 3));
+                            const grad = orbCtx.createRadialGradient(x, y, 0, x, y, blobR);
+                            grad.addColorStop(0, `rgba(139, 70, 224, ${0.3 + orbIntensity * 0.4})`);
+                            grad.addColorStop(1, "rgba(139, 70, 224, 0)");
+                            orbCtx.fillStyle = grad;
+                            orbCtx.beginPath();
+                            orbCtx.arc(x, y, Math.max(blobR, 1), 0, Math.PI * 2);
+                            orbCtx.fill();
+                        }
+                        orbCtx.restore();
+                        requestAnimationFrame(drawOrb);
+                    }
+                    if (orbCtx) drawOrb();
+
+                    function stopOrbAnalyser() {
+                        orbAnalyser = null;
+                        orbAnalyserData = null;
+                        orbSimulated = false;
+                        orbTargetIntensity = 0;
+                        if (orbAudioCtx) {
+                            orbAudioCtx.close().catch(() => {});
+                            orbAudioCtx = null;
+                        }
+                    }
+
+                    function pumpOrbAnalyser() {
+                        if (!orbAnalyser) return;
+                        orbAnalyser.getByteFrequencyData(orbAnalyserData);
+                        let sum = 0;
+                        for (let i = 0; i < orbAnalyserData.length; i++) sum += orbAnalyserData[i];
+                        const avg = sum / orbAnalyserData.length / 255;
+                        orbTargetIntensity = Math.min(1, avg * 2.4);
+                        requestAnimationFrame(pumpOrbAnalyser);
+                    }
+
+                    function connectOrbToStream(stream) {
+                        try {
+                            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                            orbAudioCtx = new AudioCtx();
+                            const source = orbAudioCtx.createMediaStreamSource(stream);
+                            orbAnalyser = orbAudioCtx.createAnalyser();
+                            orbAnalyser.fftSize = 256;
+                            source.connect(orbAnalyser);
+                            orbAnalyserData = new Uint8Array(orbAnalyser.frequencyBinCount);
+                            pumpOrbAnalyser();
+                        } catch (e) {}
+                    }
+
+                    function connectOrbToAudioElement(audioEl) {
+                        try {
+                            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                            orbAudioCtx = new AudioCtx();
+                            const source = orbAudioCtx.createMediaElementSource(audioEl);
+                            orbAnalyser = orbAudioCtx.createAnalyser();
+                            orbAnalyser.fftSize = 256;
+                            source.connect(orbAnalyser);
+                            orbAnalyser.connect(orbAudioCtx.destination);
+                            orbAnalyserData = new Uint8Array(orbAnalyser.frequencyBinCount);
+                            pumpOrbAnalyser();
+                        } catch (e) {}
+                    }
+
                     function loadVoices() {
                         voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
                     }
@@ -1188,6 +1199,10 @@
                         utterance.lang = "de-DE";
                         const voice = pickVoice(voiceGenderSelect.value);
                         if (voice) utterance.voice = voice;
+                        // No AnalyserNode access into browser TTS audio -- simulate
+                        // instead (see drawOrb's comment above).
+                        orbSimulated = true;
+                        utterance.onend = () => { orbSimulated = false; orbTargetIntensity = 0; };
                         window.speechSynthesis.speak(utterance);
                     }
 
@@ -1208,7 +1223,11 @@
                                 return res.blob();
                             })
                             .then((blob) => {
-                                new Audio(URL.createObjectURL(blob)).play();
+                                const audioEl = new Audio(URL.createObjectURL(blob));
+                                stopOrbAnalyser();
+                                connectOrbToAudioElement(audioEl);
+                                audioEl.addEventListener("ended", stopOrbAnalyser);
+                                audioEl.play();
                             })
                             .catch(() => speakWithBrowser(text));
                     }
@@ -1237,7 +1256,7 @@
                                 if (data.status === "done") {
                                     const reply = data.reply || "(keine Antwort)";
                                     addVoiceLine(reply, "bot");
-                                    voiceStatus.textContent = "Tippe auf das Mikrofon und sprich.";
+                                    voiceStatus.textContent = "Tippe auf den Kreis und sprich.";
                                     speak(reply);
                                 } else {
                                     voiceStatus.textContent = "Die KI ist gerade nicht verfügbar.";
@@ -1278,6 +1297,19 @@
                         recognition.maxAlternatives = 1;
                         voiceMicBtn.classList.add("is-listening");
                         voiceStatus.textContent = "Ich höre zu ...";
+                        // Separate getUserMedia call purely to drive the orb's
+                        // animation -- SpeechRecognition manages its own mic
+                        // access internally and never exposes a raw stream, so
+                        // this is the only way to get real amplitude for the
+                        // visual while listening. Never blocks actual speech
+                        // recognition if the permission/API is unavailable.
+                        stopOrbAnalyser();
+                        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                            navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
+                                orbListenStream = stream;
+                                connectOrbToStream(stream);
+                            }).catch(() => {});
+                        }
                         recognition.onresult = (event) => {
                             const text = event.results[0][0].transcript;
                             sendVoiceMessage(text);
@@ -1285,18 +1317,36 @@
                         recognition.onerror = () => {
                             voiceStatus.textContent = "Konnte dich nicht verstehen. Versuch es nochmal.";
                             voiceMicBtn.classList.remove("is-listening");
+                            stopOrbListening();
                         };
                         recognition.onend = () => {
                             voiceMicBtn.classList.remove("is-listening");
+                            stopOrbListening();
                         };
                         recognition.start();
                     }
 
-                    voiceMicBtn.addEventListener("click", () => {
+                    let orbListenStream = null;
+                    function stopOrbListening() {
+                        stopOrbAnalyser();
+                        if (orbListenStream) {
+                            orbListenStream.getTracks().forEach((t) => t.stop());
+                            orbListenStream = null;
+                        }
+                    }
+
+                    function toggleListening() {
                         if (recognition) {
                             try { recognition.stop(); } catch (e) {}
                         }
                         startListening();
+                    }
+                    voiceMicBtn.addEventListener("click", toggleListening);
+                    voiceMicBtn.addEventListener("keydown", (event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            toggleListening();
+                        }
                     });
 
                     sidebarVoiceBtn.addEventListener("click", () => {
@@ -1310,6 +1360,9 @@
                         if (recognition) {
                             try { recognition.stop(); } catch (e) {}
                         }
+                        stopOrbListening();
+                        orbSimulated = false;
+                        orbTargetIntensity = 0;
                     });
 
                     // "Echte Stimme beisteuern" -- records a short sample via

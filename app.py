@@ -51,81 +51,81 @@ PLACE_COOLDOWN_SECONDS = 5
 GAMES = [
     {
         "key": "place",
-        "search_term": "timeskip/place",
+        "search_term": "NexAI/place",
         "endpoint": "place",
-        "title": "timeskip/place",
+        "title": "NexAI/place",
         "subtitle": "Gemeinsame Pixel-Leinwand",
         "icon_class": "place-label-icon",
     },
     {
         "key": "tic.tac.toe",
-        "search_term": "timeskip/tic.tac.toe",
+        "search_term": "NexAI/tic.tac.toe",
         "endpoint": "tictactoe",
-        "title": "timeskip/tic.tac.toe",
+        "title": "NexAI/tic.tac.toe",
         "subtitle": "Tic Tac Toe gegen den Bot",
         "icon_class": "place-label-icon tictactoe-icon",
     },
     {
         "key": "fruit.merge",
-        "search_term": "timeskip/fruit.merge",
+        "search_term": "NexAI/fruit.merge",
         "endpoint": "fruitmerge",
-        "title": "timeskip/fruit.merge",
+        "title": "NexAI/fruit.merge",
         "subtitle": "Fruechte fallen lassen und verschmelzen",
         "icon_class": "place-label-icon fruitmerge-icon",
     },
     {
         "key": "gravity.run",
-        "search_term": "timeskip/gravity.run",
+        "search_term": "NexAI/gravity.run",
         "endpoint": "gravityrun",
-        "title": "timeskip/gravity.run",
+        "title": "NexAI/gravity.run",
         "subtitle": "Schwerkraft umkehren und Hindernissen ausweichen",
         "icon_class": "place-label-icon gravityrun-icon",
     },
     {
         "key": "knife.hit",
-        "search_term": "timeskip/knife.hit",
+        "search_term": "NexAI/knife.hit",
         "endpoint": "knifehit",
-        "title": "timeskip/knife.hit",
+        "title": "NexAI/knife.hit",
         "subtitle": "Messer in den rotierenden Block werfen",
         "icon_class": "place-label-icon knifehit-icon",
     },
     {
         "key": "flappy.bird",
-        "search_term": "timeskip/flappy.bird",
+        "search_term": "NexAI/flappy.bird",
         "endpoint": "flappybird",
-        "title": "timeskip/flappy.bird",
+        "title": "NexAI/flappy.bird",
         "subtitle": "Zwischen Rohren hindurchfliegen",
         "icon_class": "place-label-icon flappybird-icon",
     },
     {
         "key": "block.buster",
-        "search_term": "timeskip/block.buster",
+        "search_term": "NexAI/block.buster",
         "endpoint": "blockbuster",
-        "title": "timeskip/block.buster",
+        "title": "NexAI/block.buster",
         "subtitle": "Bloecke mit dem Paddle zerstoeren",
         "icon_class": "place-label-icon blockbuster-icon",
     },
     {
         "key": "coin.flip",
-        "search_term": "timeskip/coin.flip",
+        "search_term": "NexAI/coin.flip",
         "endpoint": "coinflip",
-        "title": "timeskip/coin.flip",
+        "title": "NexAI/coin.flip",
         "subtitle": "Muenze werfen und Punkte verdreifachen",
         "icon_class": "place-label-icon coinflip-icon",
     },
     {
         "key": "make.a.meme",
-        "search_term": "timeskip/make.a.meme",
+        "search_term": "NexAI/make.a.meme",
         "endpoint": "make_a_meme_page",
-        "title": "timeskip/make.a.meme",
+        "title": "NexAI/make.a.meme",
         "subtitle": "Meme-Party mit Freunden -- gemeinsam Memes bauen und abstimmen",
         "icon_class": "place-label-icon memeparty-icon",
     },
     {
         "key": "erkenne.den.menschen",
-        "search_term": "timeskip/erkenne.den.menschen",
+        "search_term": "NexAI/erkenne.den.menschen",
         "endpoint": "human_spotter_page",
-        "title": "timeskip/erkenne.den.menschen",
+        "title": "NexAI/erkenne.den.menschen",
         "subtitle": "Klick auf den Menschen im Bild",
         "icon_class": "place-label-icon humanspotter-icon",
     },
@@ -356,7 +356,7 @@ def find_best_game_match(query):
     for game in GAMES:
         candidates = [
             game["search_term"],
-            game["search_term"].replace("timeskip/", "").replace(".", " "),
+            game["search_term"].replace("NexAI/", "").replace(".", " "),
             game["key"].replace(".", " "),
         ]
         for candidate in candidates:
@@ -684,7 +684,7 @@ def ensure_sqlite_columns_exist():
         "studio_project": [
             ("script_code", "TEXT"),
             ("builtin_endpoint", "VARCHAR(50)"),
-            ("language", "VARCHAR(20) NOT NULL DEFAULT 'timeskipcode'"),
+            ("language", "VARCHAR(20) NOT NULL DEFAULT 'NexAIcode'"),
             ("project_type", "VARCHAR(20) NOT NULL DEFAULT 'game'"),
             ("web_code", "TEXT"),
             ("web_slug", "VARCHAR(50)"),
@@ -700,6 +700,7 @@ def ensure_sqlite_columns_exist():
             ("terms_accepted_at", "DATETIME"),
             ("avg_typing_interval_ms", "FLOAT"),
             ("typing_sample_count", "INTEGER NOT NULL DEFAULT 0"),
+            ("terms_accepted_version", "INTEGER"),
         ],
     }
     with db.engine.connect() as conn:
@@ -757,7 +758,7 @@ def ensure_columns_exist():
         'ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS script_code TEXT',
         "ALTER TABLE studio_block ADD COLUMN IF NOT EXISTS kind VARCHAR(20) NOT NULL DEFAULT 'normal'",
         'ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS builtin_endpoint VARCHAR(50)',
-        "ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS language VARCHAR(20) NOT NULL DEFAULT 'timeskipcode'",
+        "ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS language VARCHAR(20) NOT NULL DEFAULT 'NexAIcode'",
         "ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS project_type VARCHAR(20) NOT NULL DEFAULT 'game'",
         'ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS web_code TEXT',
         'ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS web_slug VARCHAR(50)',
@@ -770,6 +771,7 @@ def ensure_columns_exist():
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS guardian_email VARCHAR(255)',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS avg_typing_interval_ms DOUBLE PRECISION',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS typing_sample_count INTEGER NOT NULL DEFAULT 0',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS terms_accepted_version INTEGER',
     ]
     with db.engine.connect() as conn:
         for statement in statements:
@@ -984,21 +986,32 @@ TERMS_ALLOWED_ENDPOINTS = {
     "logout", "static", "service_worker", "offline_page",
 }
 
+# Bump this whenever terms.html's actual content changes -- it forces
+# EVERY registered account (not just new signups) back through the terms
+# gate on their next request, since User.terms_accepted_version no longer
+# matches. Anonymous visitors go through the session-based path below
+# regardless of this number (a fresh browser session always sees the
+# current terms once anyway).
+TERMS_VERSION = 2
+
 
 @app.before_request
 def require_terms_acceptance():
     """Shown before anything else on the site, for every visitor -- logged
-    in or not. Acceptance is tracked per-account (User.terms_accepted_at)
-    once logged in, or per-browser-session before that; declining logs a
-    logged-in user out too, since continuing a session while "not
-    agreeing" would be contradictory."""
+    in or not. Acceptance is tracked per-account (User.terms_accepted_at
+    plus terms_accepted_version, see TERMS_VERSION) once logged in, or
+    per-browser-session before that; declining logs a logged-in user out
+    too, since continuing a session while "not agreeing" would be
+    contradictory. Re-triggers for an already-accepted account whenever
+    TERMS_VERSION has moved past what that account last accepted -- an
+    old acceptance doesn't carry over to genuinely changed terms."""
     if request.endpoint is None or request.endpoint in TERMS_ALLOWED_ENDPOINTS:
         return
     if request.path.startswith("/api/"):
         return  # redirecting a JSON/fetch call to an HTML page makes no sense
     user = current_user()
     if user is not None:
-        if user.terms_accepted_at is None:
+        if user.terms_accepted_at is None or user.terms_accepted_version != TERMS_VERSION:
             return redirect(url_for("terms_page"))
     elif not session.get("terms_accepted"):
         return redirect(url_for("terms_page"))
@@ -1031,6 +1044,7 @@ def terms_accept():
     user = current_user()
     if user is not None:
         user.terms_accepted_at = datetime.now(timezone.utc)
+        user.terms_accepted_version = TERMS_VERSION
         db.session.commit()
     else:
         session["terms_accepted"] = True
@@ -1173,6 +1187,7 @@ def register():
         # terms gate would immediately re-trigger on the very next request
         # since a fresh User's terms_accepted_at is still None.
         user.terms_accepted_at = datetime.now(timezone.utc)
+        user.terms_accepted_version = TERMS_VERSION
         db.session.add(user)
         db.session.commit()
         # The only e-mail actually collected during registration itself is
@@ -1180,11 +1195,11 @@ def register():
         # account settings) -- so that's who gets the welcome notice here.
         if user.guardian_email:
             send_email_best_effort(
-                user.guardian_email, "Willkommen bei timeskip",
+                user.guardian_email, "Willkommen bei NexAI",
                 f"Hallo,\n\n"
-                f"für {user.username} wurde gerade ein timeskip-Konto erstellt. Diese E-Mail-Adresse "
+                f"für {user.username} wurde gerade ein NexAI-Konto erstellt. Diese E-Mail-Adresse "
                 "wurde bei der Registrierung als Kontakt eines Erziehungsberechtigten angegeben.\n\n"
-                "Das timeskip-Team",
+                "Das NexAI-Team",
             )
         session["user_id"] = user.id
         return redirect(url_for("index"))
@@ -1285,7 +1300,7 @@ def forgot_password_email():
             code = _issue_reset_code(user)
             try:
                 send_email(
-                    email, "Dein timeskip-Code",
+                    email, "Dein NexAI-Code",
                     f"Dein Code lautet: {code}\nEr ist {OTP_EXPIRY_MINUTES} Minuten gültig.",
                 )
             except Exception:
@@ -1313,7 +1328,7 @@ def forgot_password_verify():
                     code = _issue_reset_code(user)
                     try:
                         send_email(
-                            user.email, "Dein neuer timeskip-Code",
+                            user.email, "Dein neuer NexAI-Code",
                             f"Dein neuer Code lautet: {code}\nEr ist {OTP_EXPIRY_MINUTES} Minuten gültig.",
                         )
                     except Exception:
@@ -1464,7 +1479,7 @@ STUDIO_BLOCK_KINDS = {"normal", "checkpoint"}
 STUDIO_MAX_BLOCKS_PER_PROJECT = 40
 STUDIO_MAX_PROJECTS_PER_USER = 20
 # The dialect codes here must match the keys in static/js/studio-dialects.js.
-# timeskipcode (our own language) isn't offered for new projects anymore --
+# NexAIcode (our own language) isn't offered for new projects anymore --
 # it's still fully supported for playback/editing on any project that
 # already used it, just not selectable here.
 STUDIO_LANGUAGE_CHOICES = {
@@ -1834,6 +1849,7 @@ def api_ai_chat():
         personality = {
             "intelligence": personality_row.intelligence, "humor": personality_row.humor,
             "caution": personality_row.caution, "arrogance": personality_row.arrogance,
+            "mimic_user_style": personality_row.mimic_user_style,
         }
     else:
         behavior_note = None
@@ -2269,7 +2285,7 @@ def studio_play_page(project_id):
 def studio_webapp_view(slug):
     """Public view of a published Web-in-Web-App. The user's code runs
     inside a sandboxed iframe (no allow-same-origin, no top navigation) so
-    it can never read timeskip cookies/session, steal real login forms, or
+    it can never read NexAI cookies/session, steal real login forms, or
     navigate the visitor away to somewhere else while pretending to still
     be this page -- see studio_webapp_view.html for the sandbox attribute
     and the small persistent "Nutzer-erstellt" badge rendered outside it."""
@@ -2926,12 +2942,12 @@ def update_email():
     user.email = email
     db.session.commit()
     send_email_best_effort(
-        email, "E-Mail-Adresse bei timeskip hinterlegt",
+        email, "E-Mail-Adresse bei NexAI hinterlegt",
         f"Hallo {user.username},\n\n"
-        "diese E-Mail-Adresse wurde gerade bei deinem timeskip-Konto hinterlegt. Über sie "
+        "diese E-Mail-Adresse wurde gerade bei deinem NexAI-Konto hinterlegt. Über sie "
         "kannst du ab jetzt z. B. dein Passwort zurücksetzen, falls du es einmal vergisst.\n\n"
         "Wenn du das nicht warst, ändere bitte umgehend dein Passwort.\n\n"
-        "Das timeskip-Team",
+        "Das NexAI-Team",
     )
     flash("E-Mail-Adresse gespeichert.")
     return redirect(url_for("account_settings"))
@@ -2987,7 +3003,7 @@ def update_password():
 def delete_ai_profile():
     """Erases this user's private AiLearnedFact(source="user") rows (see
     models.py's AiLearnedFact docstring and the Nutzungsbedingungen's
-    "timeskip AI und Ihr persönliches Nutzerprofil" section) and resets
+    "NexAI AI und Ihr persönliches Nutzerprofil" section) and resets
     their typing-speed baseline. The assistant starts learning about this
     person from scratch in future chats."""
     user = current_user()
@@ -3001,6 +3017,25 @@ def delete_ai_profile():
     db.session.commit()
     flash(f"Dein privates KI-Profil wurde gelöscht ({deleted} Einträge).")
     return redirect(url_for("account_settings"))
+
+
+@app.route("/api/ai/buddy-mode", methods=["POST"])
+def api_ai_buddy_mode():
+    """"Buddy"-Umschalter aus der Sidebar (siehe base.html's Bestätigungs-
+    Dialog) -- setzt AiPersonality.mimic_user_style für diesen Nutzer, kein
+    zurück-Schalten aus der UI vorgesehen (kann über "Mein KI-Profil
+    löschen" zurückgesetzt werden)."""
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+
+    personality_row = AiPersonality.query.filter_by(user_id=user.id).first()
+    if personality_row is None:
+        personality_row = AiPersonality(user_id=user.id)
+        db.session.add(personality_row)
+    personality_row.mimic_user_style = True
+    db.session.commit()
+    return jsonify({"ok": True})
 
 
 def run_video_wipe():
@@ -3300,12 +3335,12 @@ def admin_delete_user(user_id):
 
     if target.email:
         send_email_best_effort(
-            target.email, "Dein timeskip-Konto wurde geschlossen",
+            target.email, "Dein NexAI-Konto wurde geschlossen",
             f"Hallo {target.username},\n\n"
-            "dein timeskip-Konto wurde von einem Administrator geschlossen.\n\n"
+            "dein NexAI-Konto wurde von einem Administrator geschlossen.\n\n"
             "Falls du glaubst, dass das zu Unrecht geschehen ist, kannst du uns unter "
             "timeskip_support@gmail.com kontaktieren.\n\n"
-            "Das timeskip-Team",
+            "Das NexAI-Team",
         )
 
     if target.profile_image:
@@ -4208,7 +4243,7 @@ def api_voice_profile_contribute(gender):
 
     try:
         new_voice_id = elevenlabs_clone_voice(
-            f"timeskip-{gender}-{user.username}", file.stream.read(), file.mimetype,
+            f"NexAI-{gender}-{user.username}", file.stream.read(), file.mimetype,
         )
     except Exception:
         logger.exception("ElevenLabs-Stimmenklon fehlgeschlagen.")

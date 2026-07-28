@@ -1,9 +1,9 @@
 {% extends "base.html" %}
-{% block title %}timeskip studio{% endblock %}
+{% block title %}NexAI studio{% endblock %}
 {% block body_class %}studio-fullscreen{% endblock %}
 {% block content %}
     <div class="studio-page">
-        <h1>timeskip studio</h1>
+        <h1>NexAI studio</h1>
 
         <form action="{{ url_for('studio_create_project') }}" method="post" class="studio-create-form" id="studioCreateForm">
             <input type="text" name="name" maxlength="100" placeholder="Projektname" required>

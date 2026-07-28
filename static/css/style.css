@@ -494,7 +494,6 @@ nav a:hover, nav button:hover {
 
 main {
     padding: 2rem;
-    padding-bottom: 6.5rem;
     max-width: 1200px;
     margin: 0 auto;
 }
@@ -805,6 +804,84 @@ main {
     padding: 0.2rem 0.3rem 0;
 }
 
+.ai-chat-sidebar-more-row {
+    display: flex;
+    gap: 0.4rem;
+    margin-top: 0.6rem;
+}
+
+.ai-chat-sidebar-more-btn, .ai-chat-sidebar-buddy-btn {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--panel-border-solid);
+    border-radius: 8px;
+    padding: 0.45rem;
+    background: none;
+    color: var(--text-secondary);
+    font-size: 0.76rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.ai-chat-sidebar-buddy-btn.is-active {
+    color: var(--text-primary);
+    border-color: var(--mono-accent-solid);
+}
+
+.ai-buddy-confirm-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 300;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ai-buddy-confirm-box {
+    background: var(--panel-bg-solid);
+    border: 1px solid var(--panel-border-solid);
+    border-radius: 12px;
+    padding: 1.2rem;
+    max-width: 340px;
+    text-align: center;
+}
+
+.ai-buddy-confirm-box p {
+    margin: 0 0 1rem;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+}
+
+.ai-buddy-confirm-actions {
+    display: flex;
+    gap: 0.6rem;
+    justify-content: center;
+}
+
+.ai-buddy-confirm-actions button {
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+#aiBuddyConfirmYes {
+    border: none;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
+}
+
+#aiBuddyConfirmNo {
+    border: 1px solid var(--panel-border-solid);
+    background: none;
+    color: var(--text-primary);
+}
+
 /* --- Voice chat overlay ("Mit der KI reden") --- */
 .ai-voice-overlay {
     position: fixed;
@@ -900,26 +977,30 @@ main {
     font-size: 0.9em;
 }
 
-.ai-voice-mic-btn {
+.ai-voice-orb-wrap {
     align-self: center;
-    width: 64px;
-    height: 64px;
+    width: 180px;
+    height: 180px;
     border-radius: 50%;
-    border: none;
-    background: var(--gradient-primary);
-    color: var(--gradient-primary-text);
-    font-size: 1.6rem;
     cursor: pointer;
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 8px 28px rgba(139, 70, 224, 0.35);
+    overflow: hidden;
+    outline: none;
 }
 
-.ai-voice-mic-btn.is-listening {
-    animation: ai-voice-pulse 1s ease-in-out infinite;
+.ai-voice-orb-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.ai-voice-orb-wrap.is-listening {
+    animation: ai-voice-pulse 1.2s ease-in-out infinite;
 }
 
 @keyframes ai-voice-pulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 61, 129, 0.5); }
-    50% { box-shadow: 0 0 0 14px rgba(255, 61, 129, 0); }
+    0%, 100% { box-shadow: 0 0 0 0 rgba(139, 70, 224, 0.5), 0 8px 28px rgba(139, 70, 224, 0.35); }
+    50% { box-shadow: 0 0 0 16px rgba(139, 70, 224, 0), 0 8px 28px rgba(139, 70, 224, 0.35); }
 }
 
 .ai-voice-status {
@@ -1105,7 +1186,7 @@ main {
    the same way .studio-editor-page fills the viewport for the editor. */
 .assistant-page {
     display: flex;
-    height: calc(100vh - 220px);
+    height: calc(100vh - 150px);
     min-height: 480px;
 }
 
@@ -1117,7 +1198,7 @@ main {
     flex-direction: column;
     max-width: 640px;
     margin: 0 auto;
-    height: calc(100vh - 220px);
+    height: calc(100vh - 150px);
     min-height: 480px;
     background: var(--panel-bg-solid);
     border: 1px solid var(--panel-border-solid);

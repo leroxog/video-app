@@ -1,6 +1,6 @@
 {% if user %}
     <div class="app-share-banner" id="appShareBanner">
-        <div class="app-share-banner-title">&#128241; timeskip teilen &mdash; <strong>+{{ APP_SHARE_POINTS }} Punkte</strong></div>
+        <div class="app-share-banner-title">&#128241; NexAI teilen &mdash; <strong>+{{ APP_SHARE_POINTS }} Punkte</strong></div>
         <div class="app-share-banner-sub">Teile den Link in WhatsApp, Teams o.&auml;. und kassiere Punkte</div>
         <button type="button" class="app-share-banner-btn" id="appShareBtn">Teilen &amp; Punkte holen</button>
         <p class="app-share-banner-status" id="appShareStatus"></p>
@@ -28,7 +28,7 @@
             }
 
             btn.addEventListener("click", async () => {
-                const shareData = { title: "timeskip", text: "Schau dir timeskip an!", url: window.location.origin };
+                const shareData = { title: "NexAI", text: "Schau dir NexAI an!", url: window.location.origin };
                 if (navigator.share) {
                     try {
                         await navigator.share(shareData);

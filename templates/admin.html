@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Admin - timeskip{% endblock %}
+{% block title %}Admin - NexAI{% endblock %}
 {% block content %}
     <h1>Admin</h1>
 
@@ -144,7 +144,7 @@
         </tbody>
     </table>
 
-    <h2>Meme-Vorlagen (timeskip/make.a.meme)</h2>
+    <h2>Meme-Vorlagen (NexAI/make.a.meme)</h2>
     <form action="{{ url_for('admin_upload_meme_template') }}" method="post" enctype="multipart/form-data" class="form admin-create-form">
         <label for="memeTemplates">Vorlagen hochladen (mehrere möglich)</label>
         <input type="file" id="memeTemplates" name="templates" accept="image/png,image/jpeg,image/gif,image/webp" multiple required>

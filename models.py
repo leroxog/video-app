@@ -37,6 +37,12 @@ class User(db.Model):
     coinflip_worker_count = db.Column(db.Integer, nullable=False, default=0)
     coinflip_rebirths = db.Column(db.Integer, nullable=False, default=0)
     terms_accepted_at = db.Column(db.DateTime, nullable=True)
+    # Which version of the terms (see app.py's TERMS_VERSION) this user last
+    # accepted -- the terms gate re-triggers for EVERY registered account,
+    # not just new ones, whenever TERMS_VERSION is bumped after a real
+    # content change, since accepting an old version isn't the same as
+    # accepting the current one.
+    terms_accepted_version = db.Column(db.Integer, nullable=True)
     # Rolling average of ms between keystrokes across this user's own past
     # chat messages -- lets the AI notice when a single message was typed
     # unusually fast/slow *for this specific person*, see api_ai_chat's
@@ -88,7 +94,7 @@ class AccountRecoveryRequest(db.Model):
     file (so the automated emailed-code flow isn't possible) -- shown in
     the admin dashboard for a human to approve or deny. Approving issues a
     PasswordResetCode the admin relays to the person themselves, through
-    whatever channel they used to verify who they are; timeskip's own
+    whatever channel they used to verify who they are; NexAI's own
     systems never contact anyone on the requester's behalf here."""
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
@@ -278,7 +284,7 @@ class Message(db.Model):
 
 
 class StudioProject(db.Model):
-    """A user-built project from timeskip studio -- either a 2D game
+    """A user-built project from NexAI studio -- either a 2D game
     (project_type "game", publishing makes it show up in the games list) or
     a Web-in-Web-App (project_type "webapp", publishing makes it reachable
     at /w/<web_slug>, sandboxed, see api_report_studio_project for its
@@ -297,7 +303,7 @@ class StudioProject(db.Model):
     # App-store-style icon for a Web-in-Web-App -- shown on its card instead
     # of the generic globe placeholder, wherever project cards are listed.
     icon_image = db.Column(db.String(255), nullable=True)
-    # Which syntax dialect script_code is written in -- "timeskipcode" (our
+    # Which syntax dialect script_code is written in -- "NexAIcode" (our
     # own, recommended) or one of the HTML/Python/C#-flavored alternatives.
     # All dialects compile to the exact same rule engine, see studio-dialects.js.
     language = db.Column(db.String(20), nullable=False, default="python")
@@ -351,7 +357,7 @@ class StudioProjectReport(db.Model):
 
 
 class HumanSpotterImage(db.Model):
-    """One photo in the timeskip/erkenne.den.menschen game's pool -- every
+    """One photo in the NexAI/erkenne.den.menschen game's pool -- every
     logged-in user can contribute one, shown at random to everyone else who
     plays. HumanSpotterClick rows are the actual crowdsourced "where is the
     human in this photo" answers; see that model's docstring for what
@@ -479,7 +485,7 @@ class AiLearnedFact(db.Model):
     framed to the model as an unverified, self-reported/inferred claim --
     never treated as confirmed truth the way an AiAdminFact is. Together
     a user's own source="user" rows form the private per-user profile
-    described in the Nutzungsbedingungen ("timeskip AI und Ihr
+    described in the Nutzungsbedingungen ("NexAI AI und Ihr
     persönliches Nutzerprofil") -- read only by the AI system itself for
     that same user's own future chats, never rendered in any admin or
     user-facing view (the admin dashboard only ever shows an aggregate
@@ -511,6 +517,12 @@ class AiPersonality(db.Model):
     humor = db.Column(db.Integer, nullable=False, default=68)
     caution = db.Column(db.Integer, nullable=False, default=89)
     arrogance = db.Column(db.Integer, nullable=False, default=12)
+    # "Buddy" mode (see base.html's sidebar button + confirm dialog): once a
+    # user explicitly opts in, general-mode replies are nudged to mirror
+    # this user's own writing style (word choice, sentence length, tone),
+    # inferred live from their own message history already sent with every
+    # request -- not a separate stored writing sample.
+    mimic_user_style = db.Column(db.Boolean, nullable=False, default=False)
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     user = db.relationship("User")
 

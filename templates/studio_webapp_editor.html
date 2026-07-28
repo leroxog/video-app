@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}{{ project.name }} - timeskip studio{% endblock %}
+{% block title %}{{ project.name }} - NexAI studio{% endblock %}
 {% block body_class %}studio-fullscreen{% endblock %}
 {% block content %}
     <div class="webapp-editor-page" id="webappEditorPage" data-project-id="{{ project.id }}">
         <div class="studio-editor-topbar">
-            <a class="studio-editor-back" href="{{ url_for('studio_projects_page') }}">&larr; timeskip studio</a>
+            <a class="studio-editor-back" href="{{ url_for('studio_projects_page') }}">&larr; NexAI studio</a>
             <span class="studio-editor-title">{{ project.name }}</span>
             <div class="studio-editor-topbar-actions">
                 <button type="button" id="webappSettingsBtn" class="studio-editor-help-btn" title="Einstellungen">&#9881;</button>
@@ -67,7 +67,7 @@
                 <button type="button" id="webappUrlCopyBtn">Kopieren</button>
             </div>
             <p class="webapp-settings-note">
-                Alle Rechte an deinem Projekt liegen bei timeskip, die Verantwortung für den Inhalt deiner
+                Alle Rechte an deinem Projekt liegen bei NexAI, die Verantwortung für den Inhalt deiner
                 Web-in-Web-App liegt bei dir. Details in den <a href="{{ url_for('agb_page') }}" target="_blank">AGB</a>.
             </p>
         </div>

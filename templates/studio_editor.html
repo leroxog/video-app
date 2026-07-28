@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}{{ project.name }} - timeskip studio{% endblock %}
+{% block title %}{{ project.name }} - NexAI studio{% endblock %}
 {% block body_class %}studio-fullscreen{% endblock %}
 {% block content %}
     <div class="studio-editor-page" id="studioEditorPage" data-project-id="{{ project.id }}" data-language="{{ project.language }}">
         <div class="studio-editor-topbar">
-            <a class="studio-editor-back" href="{{ url_for('studio_projects_page') }}">&larr; timeskip studio</a>
+            <a class="studio-editor-back" href="{{ url_for('studio_projects_page') }}">&larr; NexAI studio</a>
             <span class="studio-editor-title">{{ project.name }}</span>
             <div class="studio-editor-topbar-actions">
                 <a class="studio-editor-help-btn" href="{{ url_for('studio_help_page') }}" target="_blank" title="Hilfe zu den Programmiersprachen">?</a>
