@@ -3071,7 +3071,14 @@ def api_ai_buddy_mode():
 
     personality_row = _get_or_create_personality_row(user.id)
     if personality_row is None:
-        return jsonify({"ok": False, "error": "unavailable"}), 500
+        # TEMP DIAGNOSTIC (see chat with Claude, remove once root cause is
+        # confirmed): surface the actual DB exception so it's visible
+        # without needing direct Postgres/Railway-log access.
+        last_error = ErrorLog.query.order_by(ErrorLog.created_at.desc()).first()
+        return jsonify({
+            "ok": False, "error": "unavailable",
+            "debug_last_error": last_error.message if last_error else None,
+        }), 500
     personality_row.mimic_user_style = True
     db.session.commit()
     return jsonify({"ok": True})
