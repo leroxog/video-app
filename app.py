@@ -1874,7 +1874,7 @@ def api_ai_chat():
     data = request.get_json(silent=True) or {}
     message = (data.get("message") or "").strip()
     context = (data.get("context") or "").strip() or None
-    project_type = data.get("project_type") if data.get("project_type") in ("game", "webapp", "general") else None
+    project_type = data.get("project_type") if data.get("project_type") in ("game", "webapp", "general", "code") else None
     # Only messages sent through the admin dashboard's dedicated "KI-Wissen"
     # chat become a global fact -- an admin's ordinary chats elsewhere are
     # unaffected, and a non-admin can never set save_as_fact regardless of
@@ -1913,7 +1913,12 @@ def api_ai_chat():
     if chat_id:
         chat = AiChat.query.filter_by(id=chat_id, user_id=user.id).first()
     if chat is None:
-        chat = AiChat(user_id=user.id)
+        # A chat started via "Neuesten Code-Chat erstellen" (project_type
+        # "code", see api_ai_chat's project_type handling) is tagged
+        # mode="code" from creation, so reopening it later keeps sending
+        # project_type "code" on every message -- see openChat() in
+        # base.html, which reads chat.mode back into currentChatMode.
+        chat = AiChat(user_id=user.id, mode="code" if project_type == "code" else "general")
         db.session.add(chat)
         db.session.flush()
 

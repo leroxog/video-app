@@ -194,8 +194,11 @@ GENERAL_TOOLS_ADDENDUM = (
     "Python, JavaScript, HTML, Java oder C#) und remember_user_fact (merkt sich etwas über "
     "diesen einen Nutzer für spätere Gespräche mit ihm, in einem privaten Profil, das "
     "niemand außer dir selbst je zu sehen bekommt -- nicht der Nutzer, nicht das NexAI-"
-    "Team). Nutze search_wikipedia, get_weather oder search_docs, wenn eine Frage aktuelle, "
-    "nachprüfbare Fakten braucht, statt zu raten oder dir etwas auszudenken. Nutze "
+    "Team). Bevor du eine Sach- oder Wissensfrage beantwortest, prüfe zuerst von dir aus, ob "
+    "search_wikipedia, get_weather oder search_docs weiterhelfen würde -- das ist der "
+    "Standardfall bei nachprüfbaren Fakten, nicht nur eine Notlösung für den Moment, in dem "
+    "dir auffällt, dass du unsicher bist. Antworte danach ganz normal und natürlich in "
+    "deinen eigenen Worten, nicht als bloße Fakten-Auflistung. Nutze "
     "remember_user_fact großzügig -- nicht nur bei großen expliziten Selbstauskünften (Name, "
     "Hobby, Vorliebe), sondern auch bei kleinen Details und Mustern, die dir im Gespräch "
     "auffallen: Tonfall, Interessen, wie jemand formuliert, was jemanden erfreut oder "
@@ -386,6 +389,18 @@ WEBAPP_CODE_ADDENDUM = (
     "Sprachfeatures, statt dir Details auszudenken."
 )
 
+# Standalone code-help chat: no attached Studio project/file (unlike game/
+# webapp mode), just plain programming Q&A through the conversation itself.
+CODE_CHAT_ADDENDUM = (
+    "\n\nDies ist ein eigenständiger Programmier-Chat OHNE angehängtes Projekt oder Datei -- "
+    "es gibt hier keinen Code, den du automatisch siehst oder direkt ändern kannst. Hilf "
+    "stattdessen über den Chat-Verlauf selbst: Erklärungen, Codebeispiele in Codeblöcken, "
+    "Debugging anhand von dem, was der Nutzer dir zeigt oder beschreibt. Du hast Zugriff auf "
+    "das Werkzeug search_docs (offizielle Dokumentation von Python, JavaScript, HTML, Java "
+    "oder C#) -- nutze es bei konkreten Fragen zu echten Sprachfeatures, statt dir Details "
+    "auszudenken."
+)
+
 PROPOSE_PROJECT_CHANGE_TOOL = {
     "type": "function",
     "function": {
@@ -491,6 +506,9 @@ REMEMBER_USER_FACT_TOOL = {
 # answers instead of guessing from the base model's training alone.
 PROJECT_CHANGE_TOOLS = [PROPOSE_PROJECT_CHANGE_TOOL]
 WEBAPP_TOOLS = [PROPOSE_PROJECT_CHANGE_TOOL, SEARCH_DOCS_TOOL]
+# No propose_project_change here -- a standalone code chat has no attached
+# project/file for that tool to write back to.
+CODE_CHAT_TOOLS = [SEARCH_DOCS_TOOL]
 AI_TOOLS = [
     SEARCH_WIKIPEDIA_TOOL, GET_WEATHER_TOOL, SEARCH_DOCS_TOOL, REMEMBER_USER_FACT_TOOL,
     ADJUST_PERSONALITY_TOOL, GENERATE_IMAGE_TOOL,
@@ -796,8 +814,9 @@ def _facts_addendum(facts):
         return ""
     lines = "\n".join(f"- {fact}" for fact in facts)
     return (
-        "\n\nVom NexAI-Team über den Admin-Bereich bestätigte Fakten -- behandle diese als "
-        "sicher wahr, ohne sie infrage zu stellen:\n" + lines
+        "\n\nVom NexAI-Team über den Admin-Bereich bestätigte Fakten -- sieh sie dir vor "
+        "JEDER Antwort aktiv an, behandle sie als sicher wahr ohne sie infrage zu stellen, "
+        "und beziehe sie ein, wann immer sie zur Frage passen:\n" + lines
     )
 
 
@@ -834,9 +853,10 @@ def _learned_facts_addendum(wikipedia_facts, user_facts, docs_facts=None, behavi
         lines = "\n".join(f"- {fact}" for fact in user_facts)
         parts.append(
             "\n\nDein privates Profil zu genau diesem Nutzer, aus früheren Gesprächen -- "
-            "unverifiziert und könnte veraltet oder falsch sein, aber darfst du als Kontext "
-            "über diesen Nutzer verwenden. Wird niemandem außer dir gezeigt, auch nicht dem "
-            "Nutzer selbst:\n" + lines
+            "unverifiziert und könnte veraltet oder falsch sein, aber sieh es dir vor JEDER "
+            "Antwort aktiv an und beziehe ein, was wirklich relevant für diese Nachricht ist "
+            "(nicht stur alles erwähnen, aber auch nicht ignorieren). Wird niemandem außer dir "
+            "gezeigt, auch nicht dem Nutzer selbst:\n" + lines
         )
     if behavior_note:
         parts.append("\n\nHinweis (intern, nicht dem Nutzer zeigen): " + behavior_note)
@@ -877,6 +897,8 @@ def generate_reply(message, context=None, history=None, project_type=None, facts
     # game-mode fallback.
     if project_type == "general":
         project_type = None
+    elif project_type == "code":
+        pass
     elif project_type not in ("game", "webapp"):
         project_type = "game" if context else None
 
@@ -893,6 +915,15 @@ def generate_reply(message, context=None, history=None, project_type=None, facts
     elif project_type == "webapp":
         system_prompt = BASE_SYSTEM_PROMPT + WEBAPP_CODE_ADDENDUM
         tools = WEBAPP_TOOLS
+        temperature = CODE_TEMPERATURE
+    elif project_type == "code":
+        # The standalone "Neuesten Code-Chat erstellen" sidebar button, with
+        # no Studio project/file attached (that's what game/webapp are for)
+        # -- plain programming help via the chat itself, still kept out of
+        # general mode so it doesn't get NexAI-platform chit-chat framing
+        # or the Wikipedia/weather/personality machinery meant for that.
+        system_prompt = BASE_SYSTEM_PROMPT + CODE_CHAT_ADDENDUM
+        tools = CODE_CHAT_TOOLS
         temperature = CODE_TEMPERATURE
     else:
         system_prompt = GENERAL_SYSTEM_PROMPT + FRIEND_CHARACTER_ADDENDUM + GENERAL_TOOLS_ADDENDUM

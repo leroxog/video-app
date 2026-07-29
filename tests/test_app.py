@@ -2870,6 +2870,24 @@ def test_ai_chat_starts_job_and_reports_status(client, monkeypatch):
     assert status_data["reply"] == "Antwort auf: Wie geht KILL?"
 
 
+def test_ai_chat_code_project_type_persists_chat_mode(client, monkeypatch):
+    import ai_assistant
+
+    monkeypatch.setattr(
+        ai_assistant, "generate_reply",
+        lambda message, context=None, history=None, project_type=None, facts=None, learned_facts=None, captured=None, behavior_note=None, personality=None, available_tokens=None: ("Antwort", None),
+    )
+    register(client)
+
+    start_res = client.post("/api/ai/chat", json={"message": "Wie geht ein Dictionary?", "project_type": "code"})
+    data = start_res.get_json()
+    assert data["ok"] is True
+
+    from models import AiChat
+    chat = db.session.get(AiChat, data["chat_id"])
+    assert chat.mode == "code"
+
+
 def test_registration_grants_starting_ai_tokens(client):
     import app as app_module
 
@@ -3302,6 +3320,29 @@ def test_general_tools_vs_project_change_tools_by_mode(monkeypatch):
 
     ai_assistant.generate_reply("Wie alt ist die Erde?")
     assert captured["tools"] == ai_assistant.AI_TOOLS
+
+    # "Neuesten Code-Chat erstellen" (no attached Studio project/file, so no
+    # `context`) must route to the standalone code-help prompt, not fall
+    # back to general mode and not the game-mode DSL fallback either.
+    ai_assistant.generate_reply("Wie kehre ich eine Liste in Python um?", project_type="code")
+    assert captured["tools"] == ai_assistant.CODE_CHAT_TOOLS
+    assert ai_assistant.SEARCH_DOCS_TOOL in ai_assistant.CODE_CHAT_TOOLS
+    assert ai_assistant.PROPOSE_PROJECT_CHANGE_TOOL not in ai_assistant.CODE_CHAT_TOOLS
+
+
+def test_code_project_type_uses_base_system_prompt(monkeypatch):
+    import ai_assistant
+
+    captured = {}
+
+    def fake_call_groq(messages, max_tokens, tools=None, **kwargs):
+        captured["system_prompt"] = messages[0]["content"]
+        return "ok", None
+
+    monkeypatch.setattr(ai_assistant, "_call_groq", fake_call_groq)
+
+    ai_assistant.generate_reply("Erklär mir Rekursion.", project_type="code")
+    assert captured["system_prompt"] == ai_assistant.BASE_SYSTEM_PROMPT + ai_assistant.CODE_CHAT_ADDENDUM
 
 
 def test_call_groq_executes_tool_call_then_returns_final_reply(monkeypatch):

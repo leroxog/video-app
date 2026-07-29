@@ -1093,6 +1093,11 @@
                         } else {
                             contextParts.push("Aktueller Code:\n" + codeTextarea.value);
                         }
+                    } else if (currentChatMode === "code") {
+                        // Standalone "Neuesten Code-Chat erstellen" chat --
+                        // no Studio editor attached (that's the codeTextarea
+                        // case above), just a plain code-help chat.
+                        body.project_type = "code";
                     }
                     if (attachedFile) {
                         contextParts.push(`Angehängte Datei "${attachedFile.name}":\n${attachedFile.content}`);
@@ -1271,12 +1276,44 @@
                     const FEMALE_VOICE_HINTS = ["female", "frau", "weiblich", "hedda", "katja", "anna", "petra"];
                     const MALE_VOICE_HINTS = ["male", "mann", "männlich", "stefan", "yannick", "markus", "conrad"];
 
+                    // Cloud-backed voices (localService === false, e.g. Chrome's
+                    // "Google Deutsch") have real recorded prosody and sound far
+                    // less robotic/flat than the OS's local offline voices --
+                    // prefer those first when picking a gender match, since that's
+                    // the biggest real lever this app has over how the fallback
+                    // browser voice "sounds" (the cloned/ElevenLabs voice via
+                    // speak() above is tried first and is unaffected by any of
+                    // this; this only governs the free browser-TTS fallback).
                     function pickVoice(gender) {
                         const germanVoices = voices.filter((v) => v.lang && v.lang.toLowerCase().startsWith("de"));
                         const pool = germanVoices.length ? germanVoices : voices;
                         const hints = gender === "female" ? FEMALE_VOICE_HINTS : MALE_VOICE_HINTS;
-                        const matched = pool.find((v) => hints.some((h) => v.name.toLowerCase().includes(h)));
-                        return matched || pool[0] || null;
+                        const matchesHint = (v) => hints.some((h) => v.name.toLowerCase().includes(h));
+                        return (
+                            pool.find((v) => matchesHint(v) && v.localService === false) ||
+                            pool.find((v) => matchesHint(v)) ||
+                            pool.find((v) => v.localService === false) ||
+                            pool[0] || null
+                        );
+                    }
+
+                    // Emoji, markdown code/links and heading/emphasis markers read
+                    // out loud by name ("grinning face", "asterisk asterisk", ...)
+                    // rather than being silently skipped -- strip/unwrap them
+                    // before either speech path so only natural spoken text is
+                    // ever sent to be read aloud.
+                    function stripForSpeech(text) {
+                        return text
+                            .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
+                            .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+                            .replace(/```[\s\S]*?```/g, "")
+                            .replace(/`([^`]+)`/g, "$1")
+                            .replace(/\*\*([^*]+)\*\*/g, "$1")
+                            .replace(/\*([^*]+)\*/g, "$1")
+                            .replace(/^#{1,6}\s+/gm, "")
+                            .replace(/[\u{1F1E6}-\u{1FFFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{2190}-\u{21FF}️‍]/gu, "")
+                            .replace(/[ \t]{2,}/g, " ")
+                            .trim();
                     }
 
                     function speakWithBrowser(text) {
@@ -1284,6 +1321,11 @@
                         window.speechSynthesis.cancel();
                         const utterance = new SpeechSynthesisUtterance(text);
                         utterance.lang = "de-DE";
+                        // A touch slower than the 1.0 default reads noticeably
+                        // less rushed/flat on most local voices -- a real,
+                        // honest improvement, but browser TTS prosody still
+                        // can't fully match a real recorded voice.
+                        utterance.rate = 0.93;
                         const voice = pickVoice(voiceGenderSelect.value);
                         if (voice) utterance.voice = voice;
                         // No AnalyserNode access into browser TTS audio -- simulate
@@ -1344,7 +1386,7 @@
                                     const reply = data.reply || "(keine Antwort)";
                                     addVoiceLine(reply, "bot");
                                     voiceStatus.textContent = "Tippe auf den Kreis und sprich.";
-                                    speak(reply);
+                                    speak(stripForSpeech(reply));
                                 } else {
                                     voiceStatus.textContent = "Die KI ist gerade nicht verfügbar.";
                                 }

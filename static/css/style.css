@@ -950,11 +950,15 @@ body.ai-fullscreen main {
 }
 
 .ai-voice-transcript {
+    /* Voice mode is meant to stay a pure voice conversation, no visible
+       chat log -- the lines are still built up in the DOM (addVoiceLine in
+       base.html) so nothing else that reads them has to change, they're
+       just never shown. */
+    display: none;
     flex: 1 1 auto;
     min-height: 120px;
     max-height: 40vh;
     overflow-y: auto;
-    display: flex;
     flex-direction: column;
     gap: 0.5rem;
     margin-bottom: 1rem;
