@@ -401,6 +401,20 @@ CODE_CHAT_ADDENDUM = (
     "auszudenken."
 )
 
+# Applied to every mode's system prompt -- the frontend (base.html's
+# renderMarkdown) renders standard markdown plus one custom extra: ==word==
+# for colored emphasis, since normal markdown has no syntax for that.
+FORMATTING_ADDENDUM = (
+    "\n\nFormatierung: Nutze ganz normales Markdown -- **fett**, # / ## / ### Überschriften, "
+    "Listen und ```Codeblöcke``` wie gewohnt. Zusätzlich stehen dir zwei Extras zur "
+    "Verfügung, aber setz sie GEZIELT ein, nicht in jeder Antwort und nicht in jedem Absatz: "
+    "echte Markdown-Tabellen (| Spalte A | Spalte B |, gefolgt von einer |---|---|-Trennzeile) "
+    "wenn wirklich vergleichbare, strukturierte Daten in einer Tabelle übersichtlicher sind "
+    "als in Fließtext oder einer Liste; und ==wichtiges Wort== (doppeltes Gleichheitszeichen "
+    "davor und danach) um einzelne, wirklich wichtige Wörter oder ganz kurze Ausdrücke farblich "
+    "hervorzuheben -- sparsam und gezielt, für echte Betonung, nie für ganze Sätze."
+)
+
 PROPOSE_PROJECT_CHANGE_TOOL = {
     "type": "function",
     "function": {
@@ -929,6 +943,7 @@ def generate_reply(message, context=None, history=None, project_type=None, facts
         system_prompt = GENERAL_SYSTEM_PROMPT + FRIEND_CHARACTER_ADDENDUM + GENERAL_TOOLS_ADDENDUM
         tools = AI_TOOLS
         temperature = GENERAL_TEMPERATURE
+    system_prompt += FORMATTING_ADDENDUM
     system_prompt += _facts_addendum(facts)
     if project_type is None and (learned_facts or behavior_note):
         learned_facts = learned_facts or {}
@@ -943,7 +958,13 @@ def generate_reply(message, context=None, history=None, project_type=None, facts
                 f"\n\nDieser Nutzer hat aktuell {available_tokens} Tokens übrig (eine App-interne "
                 f"Währung, getrennt von Punkten). Ein Bild erzeugen kostet {IMAGE_TOKEN_COST} "
                 "Tokens -- ruf generate_image nur auf, wenn klar genug Tokens übrig sind und der "
-                "Nutzer wirklich ausdrücklich ein Bild möchte."
+                "Nutzer wirklich ausdrücklich ein Bild möchte. WICHTIG, falls jemand fragt, wie "
+                "man mehr Tokens bekommt: Es gibt AKTUELL KEINEN Store, keine kaufbaren "
+                "Token-Pakete und keine Möglichkeit, mit echtem Geld Tokens zu kaufen -- erfinde "
+                "so etwas niemals (kein Store, keine Preise, keine Zahlungsmethoden). Die einzigen "
+                "echten Wege sind: 1000 Tokens einmalig beim allerersten Start, danach jeden Tag, "
+                "an dem der Account aktiv ist, automatisch +900 Tokens dazu (nicht anfragbar, "
+                "läuft von selbst). Sag das ehrlich, statt dir Käufe oder Codes auszudenken."
             )
 
     messages = [{"role": "system", "content": system_prompt}]

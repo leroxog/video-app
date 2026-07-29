@@ -1225,6 +1225,16 @@ body.ai-fullscreen main {
     min-height: 480px;
 }
 
+/* Full-bleed AI page has no normal-flow header (see base.html's
+   floating_avatar block) -- the account avatar still floats top-right
+   over the chat itself, above the sidebar/panel/flyout stack. */
+.floating-account-avatar-wrap {
+    position: fixed;
+    top: 12px;
+    right: 14px;
+    z-index: 600;
+}
+
 /* The anonymous trial chat on "/" for logged-out visitors (see
    guest_home.html) -- a scaled-down standalone version of the full
    .assistant-page chat, no sidebar, since there's no history to browse. */
@@ -1516,6 +1526,42 @@ body.ai-fullscreen main {
 
 .ai-chat-message-bot li {
     margin: 0.15em 0;
+}
+
+.ai-chat-highlight {
+    background: none;
+    color: #f5a623;
+    font-weight: 600;
+}
+
+.ai-chat-table {
+    width: 100%;
+    margin: 0.6em 0;
+    border-collapse: collapse;
+    font-size: 0.92em;
+    overflow-x: auto;
+    display: block;
+}
+
+.ai-chat-table thead, .ai-chat-table tbody {
+    display: table;
+    width: 100%;
+    table-layout: fixed;
+}
+
+.ai-chat-table th, .ai-chat-table td {
+    text-align: left;
+    padding: 0.4em 0.6em;
+    border: 1px solid var(--panel-border-solid);
+}
+
+.ai-chat-table th {
+    background: rgba(127, 127, 127, 0.14);
+    font-weight: 600;
+}
+
+.ai-chat-table tbody tr:nth-child(even) {
+    background: rgba(127, 127, 127, 0.06);
 }
 
 .ai-chat-message-bot code {

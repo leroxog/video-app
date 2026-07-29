@@ -535,7 +535,19 @@ def elevenlabs_text_to_speech(voice_id, text):
     response = requests.post(
         f"{ELEVENLABS_API_URL}/text-to-speech/{voice_id}",
         headers={"xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json"},
-        json={"text": text, "model_id": "eleven_multilingual_v2"},
+        json={
+            "text": text,
+            "model_id": "eleven_multilingual_v2",
+            # Explicit settings (ElevenLabs' own defaults are more neutral/
+            # flat) -- lower stability + some style lets the model vary
+            # delivery more naturally instead of a flat monotone read,
+            # this is the actual "ultra realistic" lever for the cloned-
+            # voice path (the free browser-TTS fallback has no equivalent
+            # knob, its realism is capped by the OS/browser voice itself).
+            "voice_settings": {
+                "stability": 0.4, "similarity_boost": 0.8, "style": 0.35, "use_speaker_boost": True,
+            },
+        },
         timeout=30,
     )
     response.raise_for_status()
@@ -632,6 +644,26 @@ def media_url(kind, stored_filename):
     if kind == "human_spotter":
         return url_for("static", filename=f"human_spotter/{stored_filename}")
     return url_for("static", filename=f"profile_pics/{stored_filename}")
+
+
+# Deterministic per-username color for the initial-letter avatar fallback --
+# same username always gets the same color (not literally random on every
+# render), picked from a curated palette so it's never white/black/too dark
+# to read the white initial letter on top of. md5 (not Python's built-in
+# hash()) because str hashing is randomized per-process otherwise, which
+# would make the color change on every server restart.
+AVATAR_COLOR_PALETTE = [
+    "#e63946", "#f4a261", "#2a9d8f", "#457b9d", "#e76f51",
+    "#8e44ad", "#2980b9", "#16a085", "#c0392b", "#d35400",
+    "#27ae60", "#f39c12", "#9b59b6", "#1abc9c", "#3f51b5",
+]
+
+
+@app.template_filter("avatar_color")
+def avatar_color_filter(username):
+    digest = hashlib.md5((username or "").encode("utf-8")).hexdigest()
+    return AVATAR_COLOR_PALETTE[int(digest, 16) % len(AVATAR_COLOR_PALETTE)]
+
 
 db.init_app(app)
 

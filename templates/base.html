@@ -46,13 +46,7 @@
                 </nav>
             {% else %}
                 <div class="header-account-wrap">
-                    <a class="header-account-avatar" href="{{ url_for('profile', username=user.username) }}" title="Profil">
-                        {% if user.profile_image %}
-                            <img src="{{ media_url('profile_pics', user.profile_image) }}" alt="">
-                        {% else %}
-                            <span class="header-account-avatar-placeholder">{{ user.username[0]|upper }}</span>
-                        {% endif %}
-                    </a>
+                    {% include "partials/_account_avatar.html" %}
                     <div class="stats-bubble" id="statsBubble" style="display:none;">
                         <span class="stats-bubble-item">
                             <span class="stats-bubble-count" id="statsGamesCount">0</span>
@@ -69,6 +63,13 @@
             {% endif %}
         </header>
     {% endblock %}
+
+    {# Pages that blank out {% block header %} entirely (e.g. the full-bleed
+       AI assistant page) can still show just the account avatar, floated
+       top-right over the content instead of in a normal-flow header --
+       see assistant.html. Empty by default so every other page is
+       unaffected (they already get the avatar via the real header above). #}
+    {% block floating_avatar %}{% endblock %}
 
     <main>
         {% with messages = get_flashed_messages() %}
@@ -709,6 +710,10 @@
 
                     working = working.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
                     working = working.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>");
+                    // ==word== -- a highlight for genuinely important single
+                    // words/short phrases, not a heading/bold substitute (see
+                    // the system prompt: used sparingly, not per-paragraph).
+                    working = working.replace(/==([^=\n]+)==/g, '<mark class="ai-chat-highlight">$1</mark>');
                     working = working.replace(/^### (.+)$/gm, "<h5>$1</h5>");
                     working = working.replace(/^## (.+)$/gm, "<h4>$1</h4>");
                     working = working.replace(/^# (.+)$/gm, "<h3>$1</h3>");
@@ -738,7 +743,38 @@
                     function closeList() {
                         if (listType) { htmlLines.push(`</${listType}>`); listType = null; }
                     }
-                    lines.forEach((line) => {
+                    function parseTableRow(line) {
+                        let trimmed = line.trim();
+                        if (trimmed.startsWith("|")) trimmed = trimmed.slice(1);
+                        if (trimmed.endsWith("|")) trimmed = trimmed.slice(0, -1);
+                        return trimmed.split("|").map((cell) => cell.trim());
+                    }
+                    // GFM-style tables: a "| a | b |" header row immediately
+                    // followed by a "|---|---|" separator row, then any number
+                    // of "| ... |" body rows -- needs lookahead/consuming
+                    // several lines at once, unlike the single-line list
+                    // handling below, hence the manual index loop.
+                    const TABLE_SEPARATOR = /^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?$/;
+                    let i = 0;
+                    while (i < lines.length) {
+                        const line = lines[i];
+                        const next = lines[i + 1];
+                        if (line.trim().startsWith("|") && next !== undefined && TABLE_SEPARATOR.test(next.trim())) {
+                            closeList();
+                            const headerCells = parseTableRow(line);
+                            const bodyRows = [];
+                            i += 2;
+                            while (i < lines.length && lines[i].trim().startsWith("|")) {
+                                bodyRows.push(parseTableRow(lines[i]));
+                                i++;
+                            }
+                            const thead = "<tr>" + headerCells.map((c) => `<th>${c}</th>`).join("") + "</tr>";
+                            const tbody = bodyRows
+                                .map((row) => "<tr>" + row.map((c) => `<td>${c}</td>`).join("") + "</tr>")
+                                .join("");
+                            htmlLines.push(`<table class="ai-chat-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table>`);
+                            continue;
+                        }
                         const bulletMatch = line.match(/^[-*]\s+(.*)$/);
                         const numberMatch = line.match(/^\d+\.\s+(.*)$/);
                         if (bulletMatch) {
@@ -751,7 +787,8 @@
                             closeList();
                             htmlLines.push(line);
                         }
-                    });
+                        i++;
+                    }
                     closeList();
                     working = htmlLines.join("\n");
 
@@ -774,7 +811,7 @@
                         .map((chunk) => {
                             const trimmed = chunk.trim();
                             if (!trimmed) return "";
-                            if (/^<(h\d|ul|ol|li|div)/.test(trimmed)) return trimmed;
+                            if (/^<(h\d|ul|ol|li|div|table)/.test(trimmed)) return trimmed;
                             return `<p>${trimmed.replace(/\n/g, "<br>")}</p>`;
                         })
                         .join("\n");
@@ -1316,22 +1353,20 @@
                             .trim();
                     }
 
-                    function speakWithBrowser(text) {
-                        if (!window.speechSynthesis) return;
+                    function speakWithBrowser(text, onEnd) {
+                        if (!window.speechSynthesis) { if (onEnd) onEnd(); return; }
                         window.speechSynthesis.cancel();
                         const utterance = new SpeechSynthesisUtterance(text);
                         utterance.lang = "de-DE";
-                        // A touch slower than the 1.0 default reads noticeably
-                        // less rushed/flat on most local voices -- a real,
-                        // honest improvement, but browser TTS prosody still
-                        // can't fully match a real recorded voice.
-                        utterance.rate = 0.93;
+                        // A touch faster than the 1.0 default, per feedback that
+                        // 0.93 read too slow/dragging.
+                        utterance.rate = 1.08;
                         const voice = pickVoice(voiceGenderSelect.value);
                         if (voice) utterance.voice = voice;
                         // No AnalyserNode access into browser TTS audio -- simulate
                         // instead (see drawOrb's comment above).
                         orbSimulated = true;
-                        utterance.onend = () => { orbSimulated = false; orbTargetIntensity = 0; };
+                        utterance.onend = () => { orbSimulated = false; orbTargetIntensity = 0; if (onEnd) onEnd(); };
                         window.speechSynthesis.speak(utterance);
                     }
 
@@ -1341,7 +1376,7 @@
                     // other reason, falls back to the browser's own free,
                     // built-in text-to-speech -- so voice chat always works
                     // either way.
-                    function speak(text) {
+                    function speak(text, onEnd) {
                         fetch(`/api/voice-profile/${voiceGenderSelect.value}/speak`, {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
@@ -1355,10 +1390,10 @@
                                 const audioEl = new Audio(URL.createObjectURL(blob));
                                 stopOrbAnalyser();
                                 connectOrbToAudioElement(audioEl);
-                                audioEl.addEventListener("ended", stopOrbAnalyser);
+                                audioEl.addEventListener("ended", () => { stopOrbAnalyser(); if (onEnd) onEnd(); });
                                 audioEl.play();
                             })
-                            .catch(() => speakWithBrowser(text));
+                            .catch(() => speakWithBrowser(text, onEnd));
                     }
 
                     function addVoiceLine(text, role) {
@@ -1385,8 +1420,15 @@
                                 if (data.status === "done") {
                                     const reply = data.reply || "(keine Antwort)";
                                     addVoiceLine(reply, "bot");
-                                    voiceStatus.textContent = "Tippe auf den Kreis und sprich.";
-                                    speak(stripForSpeech(reply));
+                                    voiceStatus.textContent = "Nex spricht ...";
+                                    // Continuous conversation: go straight back to
+                                    // listening once the reply finishes playing,
+                                    // instead of waiting for another click -- only
+                                    // if the overlay is still open (closing it
+                                    // during playback must not restart listening).
+                                    speak(stripForSpeech(reply), () => {
+                                        if (voiceOverlay.style.display !== "none") startListening();
+                                    });
                                 } else {
                                     voiceStatus.textContent = "Die KI ist gerade nicht verfügbar.";
                                 }
@@ -1470,9 +1512,18 @@
                         }
                     }
 
+                    // Listening now auto-resumes after every reply (see
+                    // pollVoiceJob), so a click's only two jobs are: start
+                    // listening the very first time, or let the person cancel
+                    // an already-open listening turn early -- clicking never
+                    // needs to "restart" a turn anymore, so it's a plain
+                    // start/stop toggle instead of always stop-then-start.
                     function toggleListening() {
-                        if (recognition) {
-                            try { recognition.stop(); } catch (e) {}
+                        if (voiceMicBtn.classList.contains("is-listening")) {
+                            if (recognition) {
+                                try { recognition.stop(); } catch (e) {}
+                            }
+                            return;
                         }
                         startListening();
                     }

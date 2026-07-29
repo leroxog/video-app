@@ -3342,7 +3342,9 @@ def test_code_project_type_uses_base_system_prompt(monkeypatch):
     monkeypatch.setattr(ai_assistant, "_call_groq", fake_call_groq)
 
     ai_assistant.generate_reply("Erklär mir Rekursion.", project_type="code")
-    assert captured["system_prompt"] == ai_assistant.BASE_SYSTEM_PROMPT + ai_assistant.CODE_CHAT_ADDENDUM
+    assert captured["system_prompt"] == (
+        ai_assistant.BASE_SYSTEM_PROMPT + ai_assistant.CODE_CHAT_ADDENDUM + ai_assistant.FORMATTING_ADDENDUM
+    )
 
 
 def test_call_groq_executes_tool_call_then_returns_final_reply(monkeypatch):
