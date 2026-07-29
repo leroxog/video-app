@@ -722,6 +722,16 @@
                         (m, alt, url) => `<img class="ai-chat-generated-image" src="${url}" alt="${alt}" loading="lazy">`,
                     );
 
+                    // [label](url) -- plain markdown links, e.g. the
+                    // Pollinations.ai source-attribution link that comes
+                    // with every generated image. Runs after the image
+                    // regex above so it never touches already-converted
+                    // ![]() syntax.
+                    working = working.replace(
+                        /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
+                        (m, label, url) => `<a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`,
+                    );
+
                     const lines = working.split("\n");
                     const htmlLines = [];
                     let listType = null;

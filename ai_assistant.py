@@ -699,7 +699,10 @@ def _run_tool_calls(tool_calls, captured, available_tokens=None):
                 captured["image_generated"] = {"url": image_url, "prompt": prompt}
                 result = (
                     f"Bild erzeugt. Füge es in deiner Antwort als Markdown-Bild ein: "
-                    f"![{prompt}]({image_url})"
+                    f"![{prompt}]({image_url})\n\n"
+                    "Schreib direkt darunter außerdem transparent, dass das Bild über den "
+                    "externen Dienst Pollinations.ai erzeugt wurde, mit einem Link zur "
+                    "Webseite: [Pollinations.ai](https://pollinations.ai)"
                 )
         else:
             impl = TOOL_IMPLEMENTATIONS.get(name)
