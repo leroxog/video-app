@@ -76,6 +76,13 @@
                     <p class="webapp-icon-note" id="studioIconNote">Wird im App Store als dein App-Symbol angezeigt.</p>
                 </div>
             </div>
+            <label for="studioAgeRatingSelect">Altersfreigabe</label>
+            <select id="studioAgeRatingSelect">
+                {% for n in range(18) %}
+                    <option value="{{ n }}" {{ "selected" if project.age_rating == n else "" }}>+{{ n }}</option>
+                {% endfor %}
+            </select>
+            <p class="webapp-icon-note" id="studioAgeRatingNote">Deine eigene Einschätzung, wird auf der Karte im App Store gezeigt.</p>
         </div>
     </div>
 

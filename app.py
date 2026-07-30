@@ -539,13 +539,14 @@ def elevenlabs_text_to_speech(voice_id, text):
             "text": text,
             "model_id": "eleven_multilingual_v2",
             # Explicit settings (ElevenLabs' own defaults are more neutral/
-            # flat) -- lower stability + some style lets the model vary
-            # delivery more naturally instead of a flat monotone read,
-            # this is the actual "ultra realistic" lever for the cloned-
-            # voice path (the free browser-TTS fallback has no equivalent
-            # knob, its realism is capped by the OS/browser voice itself).
+            # flat) -- some style lets the model vary delivery more
+            # naturally instead of a flat monotone read. stability raised
+            # back up from an earlier lower value: that made delivery more
+            # expressive but introduced noticeably long pauses between
+            # words, so this trades a little of that expressiveness back
+            # for steadier, more continuous pacing.
             "voice_settings": {
-                "stability": 0.4, "similarity_boost": 0.8, "style": 0.35, "use_speaker_boost": True,
+                "stability": 0.68, "similarity_boost": 0.8, "style": 0.15, "use_speaker_boost": True,
             },
         },
         timeout=30,
@@ -721,6 +722,7 @@ def ensure_sqlite_columns_exist():
             ("web_code", "TEXT"),
             ("web_slug", "VARCHAR(50)"),
             ("icon_image", "VARCHAR(255)"),
+            ("age_rating", "INTEGER NOT NULL DEFAULT 0"),
         ],
         "studio_block": [("kind", "VARCHAR(20) NOT NULL DEFAULT 'normal'")],
         "user": [
@@ -814,6 +816,7 @@ def ensure_columns_exist():
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS terms_accepted_version INTEGER',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS ai_tokens INTEGER',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS ai_tokens_last_award_date DATE',
+        'ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS age_rating INTEGER NOT NULL DEFAULT 0',
         # Root cause confirmed live (psycopg2.errors.UndefinedColumn):
         # ai_personality was created by db.create_all() back when the
         # AiPersonality model first shipped (no mimic_user_style yet) --
@@ -2289,6 +2292,31 @@ def api_studio_upload_icon(project_id):
     project.icon_image = stored_filename
     db.session.commit()
     return jsonify({"ok": True, "icon_url": media_url("app_icons", stored_filename)})
+
+
+@app.route("/api/studio/<int:project_id>/age-rating", methods=["POST"])
+def api_studio_update_age_rating(project_id):
+    """A self-declared "+N" age estimate for the app-store-style card, like
+    a real app store's rating -- the creator's own honest guess, not
+    verified or moderated by anyone."""
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    project = db.get_or_404(StudioProject, project_id)
+    if project.owner_id != user.id:
+        return jsonify({"ok": False, "error": "forbidden"}), 403
+
+    data = request.get_json(silent=True) or {}
+    try:
+        age_rating = int(data.get("age_rating"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "invalid_rating"}), 400
+    if not 0 <= age_rating <= 17:
+        return jsonify({"ok": False, "error": "invalid_rating"}), 400
+
+    project.age_rating = age_rating
+    db.session.commit()
+    return jsonify({"ok": True, "age_rating": age_rating})
 
 
 @app.route("/studio/<int:project_id>")

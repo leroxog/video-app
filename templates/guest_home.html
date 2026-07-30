@@ -1,32 +1,40 @@
 {% extends "base.html" %}
+{% from "partials/_icons.html" import icon %}
 {% block title %}NexAI{% endblock %}
+{% block body_class %}ai-fullscreen{% endblock %}
+{% block header %}{% endblock %}
 {% block content %}
+    <div class="ai-ambient-light" aria-hidden="true"></div>
     <div class="guest-home">
-        <div class="guest-home-intro">
-            <h1>Frag die NexAI KI.</h1>
-            <p>
-                Schreib direkt los -- ohne Account kannst du {{ limit }} Nachrichten ausprobieren.
-                <a href="{{ url_for('games_page') }}">Spiele entdecken</a> geht auch ohne Account.
-            </p>
-        </div>
-
-        <div class="ai-chat-messages guest-chat-messages" id="guestChatMessages">
-            <div class="ai-chat-message ai-chat-message-bot">
-                Hallo! Frag mich etwas -- du hast {{ limit }} kostenlose Nachrichten, bevor du dich anmelden musst.
+        <div class="guest-home-main">
+            <div class="guest-home-intro">
+                <h1>Frag die NexAI KI.</h1>
+                <p>
+                    Schreib direkt los -- ohne Account kannst du {{ limit }} Nachrichten ausprobieren.
+                    <a href="{{ url_for('games_page') }}">Spiele entdecken</a> geht auch ohne Account.
+                </p>
             </div>
+
+            <div class="ai-chat-messages guest-chat-messages" id="guestChatMessages">
+                <div class="ai-chat-message ai-chat-message-bot">
+                    Willkommen, ich bin Nex, schön dass du hier bist! Du hast {{ limit }} kostenlose Nachrichten, bevor du dich anmelden musst.
+                </div>
+            </div>
+
+            <p class="guest-chat-limit-note" id="guestChatLimitNote" style="display:none;">
+                Du hast deine {{ limit }} kostenlosen Nachrichten aufgebraucht.
+                <a href="{{ url_for('register') }}">Registrieren</a> oder
+                <a href="{{ url_for('login') }}">einloggen</a>, um weiterzuschreiben.
+            </p>
+
+            <form class="ai-chat-form" id="guestChatForm">
+                <div class="ai-chat-input-pill">
+                    <input type="text" id="guestChatInput" placeholder='z.B. "Wie funktioniert eine Rakete?"' maxlength="2000" autocomplete="off">
+                </div>
+                <button type="submit" class="ai-chat-send-btn" id="guestChatSendBtn" title="Senden">{{ icon('send', 16) }}</button>
+            </form>
+            <p class="ai-chat-disclaimer">Sie schreiben mit einer KI, nicht mit einem Menschen. Eine KI kann Fehler machen.</p>
         </div>
-
-        <p class="guest-chat-limit-note" id="guestChatLimitNote" style="display:none;">
-            Du hast deine {{ limit }} kostenlosen Nachrichten aufgebraucht.
-            <a href="{{ url_for('register') }}">Registrieren</a> oder
-            <a href="{{ url_for('login') }}">einloggen</a>, um weiterzuschreiben.
-        </p>
-
-        <form class="ai-chat-form" id="guestChatForm">
-            <input type="text" id="guestChatInput" placeholder="Frage stellen..." maxlength="2000" autocomplete="off">
-            <button type="submit">Senden</button>
-        </form>
-        <p class="ai-chat-disclaimer">Sie schreiben mit einer KI, nicht mit einem Menschen. Eine KI kann Fehler machen.</p>
     </div>
 
     <script>
@@ -47,6 +55,14 @@
                 messagesEl.scrollTop = messagesEl.scrollHeight;
                 return bubble;
             }
+
+            // Double-click the empty input to drop in the placeholder's
+            // example question, matching the logged-in assistant's input.
+            input.addEventListener("dblclick", () => {
+                if (input.value) return;
+                input.value = "Wie funktioniert eine Rakete?";
+                input.focus();
+            });
 
             function revealLimitNote() {
                 input.disabled = true;

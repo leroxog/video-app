@@ -311,6 +311,10 @@ class StudioProject(db.Model):
     # App-store-style icon for a Web-in-Web-App -- shown on its card instead
     # of the generic globe placeholder, wherever project cards are listed.
     icon_image = db.Column(db.String(255), nullable=True)
+    # Creator-set age rating shown on the app-store-style card ("+N"),
+    # 0-17 -- an honest self-declared estimate like a real app store's,
+    # not moderated/verified by anyone.
+    age_rating = db.Column(db.Integer, nullable=False, default=0)
     # Which syntax dialect script_code is written in -- "timeskipcode" (our
     # own, recommended) or one of the HTML/Python/C#-flavored alternatives.
     # All dialects compile to the exact same rule engine, see studio-dialects.js.

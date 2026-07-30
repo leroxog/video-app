@@ -2386,6 +2386,43 @@ def test_studio_api_create_block_assigns_unique_name(client):
     assert res2.get_json()["block"]["name"] == "Block2"
 
 
+def test_studio_update_age_rating(client):
+    register(client)
+    create_studio_project(client)
+    project = StudioProject.query.filter_by(name="Testspiel").first()
+    assert project.age_rating == 0
+
+    response = client.post(f"/api/studio/{project.id}/age-rating", json={"age_rating": 12})
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["ok"] is True
+    assert data["age_rating"] == 12
+
+    project = db.session.get(StudioProject, project.id)
+    assert project.age_rating == 12
+
+
+def test_studio_update_age_rating_rejects_out_of_range(client):
+    register(client)
+    create_studio_project(client)
+    project = StudioProject.query.filter_by(name="Testspiel").first()
+
+    response = client.post(f"/api/studio/{project.id}/age-rating", json={"age_rating": 18})
+    assert response.status_code == 400
+    assert response.get_json()["ok"] is False
+
+
+def test_studio_update_age_rating_forbidden_for_non_owner(client):
+    register(client, username="alice")
+    create_studio_project(client)
+    project = StudioProject.query.filter_by(name="Testspiel").first()
+
+    client.post("/logout")
+    register(client, username="bob")
+    response = client.post(f"/api/studio/{project.id}/age-rating", json={"age_rating": 5})
+    assert response.status_code == 403
+
+
 def test_studio_default_block_cannot_be_renamed_or_deleted(client):
     register(client)
     create_studio_project(client)

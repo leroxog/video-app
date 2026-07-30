@@ -156,10 +156,13 @@
                         </p>
                         <p class="ai-chat-token-balance" id="aiChatTokenBalance"></p>
                         <form class="ai-chat-form" id="aiChatForm">
+                            <a class="ai-code-games-fab" id="aiCodeGamesFab" href="{{ url_for('games_page') }}" title="Spiele entdecken">
+                                <span>Spiele</span>{{ icon('rocket', 15) }}
+                            </a>
                             <input type="file" id="aiChatFileInput" accept=".txt,.md,.markdown,.py,.js,.jsx,.ts,.tsx,.json,.csv,.html,.htm,.css,.log,.yaml,.yml,.xml,.java,.c,.cpp,.cs,.sh" style="display:none;">
                             <button type="button" class="ai-chat-attach-btn" id="aiChatAttachBtn" title="Text-Datei anhängen">{{ icon('paperclip', 17) }}</button>
                             <div class="ai-chat-input-pill">
-                                <input type="text" id="aiChatInput" placeholder="Frage stellen..." maxlength="2000" autocomplete="off">
+                                <input type="text" id="aiChatInput" placeholder='z.B. "Wie funktioniert eine Rakete?"' maxlength="2000" autocomplete="off">
                                 <button type="button" class="ai-chat-input-mic-btn" id="aiChatInputMicBtn" title="Mit der KI sprechen">{{ icon('mic', 16) }}</button>
                             </div>
                             <button type="submit" class="ai-chat-send-btn" id="aiChatSendBtn" title="Senden">
@@ -261,7 +264,8 @@
                 const sendBtn = document.getElementById("aiChatSendBtn");
                 const sendIcon = document.getElementById("aiChatSendIcon");
                 const stopIcon = document.getElementById("aiChatStopIcon");
-                const GREETING = messagesEl.innerHTML;
+                const gamesFab = document.getElementById("aiCodeGamesFab");
+                let GREETING = messagesEl.innerHTML;
 
                 // Matches the icon() Jinja macro in partials/_icons.html --
                 // duplicated here since these particular icons only ever
@@ -336,6 +340,15 @@
                 // the chat (with its full sidebar) lives on its own page
                 // rather than in a floating modal on every page.
                 const pageEmbedTarget = document.getElementById("aiChatPageEmbed");
+                // The dedicated full-page assistant gets its own welcome
+                // message instead of the Studio-editor-embedded chat's
+                // code-help-flavored greeting, which wouldn't make sense
+                // outside the editor.
+                if (pageEmbedTarget) {
+                    GREETING = '<div class="ai-chat-message ai-chat-message-bot">'
+                        + 'Willkommen, ich bin Nex, schön dass du hier bist!</div>';
+                    messagesEl.innerHTML = GREETING;
+                }
 
                 let currentChatId = null;
                 // Embedded directly in a code editor, there's no ambiguity
@@ -350,6 +363,15 @@
 
                 function updateContextToggleVisibility() {
                     contextNote.style.display = (codeTextarea && currentChatMode === "code") ? "block" : "none";
+                    // The floating "Spiele" shortcut only makes sense on the
+                    // standalone full-page assistant's own code-chat mode
+                    // (pageEmbedTarget) -- inside the Studio editor's
+                    // embedded chat, the user is already busy building a
+                    // game, a "go look at other games" nudge would just be
+                    // noise there.
+                    if (gamesFab) {
+                        gamesFab.classList.toggle("is-visible", !!pageEmbedTarget && currentChatMode === "code");
+                    }
                 }
                 updateContextToggleVisibility();
 
@@ -1143,6 +1165,16 @@
                 input.addEventListener("input", updateInputMicVisibility);
                 updateInputMicVisibility();
 
+                // Double-click the empty input to drop in the placeholder's
+                // example question, ready to send -- only while the field
+                // is still empty, so it never clobbers something typed.
+                input.addEventListener("dblclick", () => {
+                    if (input.value) return;
+                    input.value = "Wie funktioniert eine Rakete?";
+                    updateInputMicVisibility();
+                    input.focus();
+                });
+
                 form.addEventListener("submit", (event) => {
                     event.preventDefault();
                     if (stopIcon.style.display !== "none") {
@@ -1401,6 +1433,11 @@
                             .replace(/\*([^*]+)\*/g, "$1")
                             .replace(/^#{1,6}\s+/gm, "")
                             .replace(/[\u{1F1E6}-\u{1FFFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{2190}-\u{21FF}️‍]/gu, "")
+                            // Line breaks (list items, paragraphs) read out
+                            // loud as long silences by both TTS paths --
+                            // collapsed into a normal space so speech flows
+                            // continuously instead of pausing at every line.
+                            .replace(/\s*\n+\s*/g, " ")
                             .replace(/[ \t]{2,}/g, " ")
                             .trim();
                     }

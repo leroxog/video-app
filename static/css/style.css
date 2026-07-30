@@ -1250,17 +1250,32 @@ body.ai-fullscreen main {
 /* The anonymous trial chat on "/" for logged-out visitors (see
    guest_home.html) -- a scaled-down standalone version of the full
    .assistant-page chat, no sidebar, since there's no history to browse. */
+/* Full-bleed like the logged-in assistant page (.assistant-page) -- same
+   ambient light + glass treatment, just without a sidebar since there's no
+   chat history to browse before you have an account. */
 .guest-home {
     display: flex;
-    flex-direction: column;
-    max-width: 640px;
-    margin: 0 auto;
-    height: calc(100vh - 150px);
+    justify-content: center;
+    height: 100vh;
     min-height: 480px;
-    background: var(--panel-bg-solid);
-    border: 1px solid var(--panel-border-solid);
-    border-radius: 16px;
+    padding: 10px;
+    box-sizing: border-box;
+    position: relative;
+    z-index: 1;
+}
+
+.guest-home-main {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 680px;
+    min-width: 0;
+    border-radius: 18px;
     overflow: hidden;
+    border: var(--glass-border);
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
 }
 
 .guest-home-intro {
@@ -1685,11 +1700,47 @@ body.studio-fullscreen .ai-chat-message-bot {
 }
 
 .ai-chat-form {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 0.4rem;
     padding: 0.5rem 0.7rem 0.8rem;
     border-top: none;
+}
+
+/* Only shown in code-chat mode (see base.html's updateGamesFabVisibility)
+   -- rises up from below the input row instead of just appearing, and
+   stays light/glassy even in dark mode since it's meant to stand out as
+   its own little floating action button. */
+.ai-code-games-fab {
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 8px);
+    transform: translateX(-50%) translateY(14px);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.45rem 1rem;
+    border-radius: 999px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    background: rgba(255, 255, 255, 0.82);
+    backdrop-filter: blur(14px) saturate(1.6);
+    -webkit-backdrop-filter: blur(14px) saturate(1.6);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+    color: #000;
+    font-weight: 700;
+    font-size: 0.82rem;
+    text-decoration: none;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.22s ease, transform 0.22s ease;
+    z-index: 2;
+}
+
+.ai-code-games-fab.is-visible {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(-50%) translateY(0);
 }
 
 .ai-chat-attach-btn {
@@ -2581,10 +2632,12 @@ h1 {
     font-size: 0.85rem;
 }
 
+/* Stacked rows, App-Store-search-results style, instead of a grid of big
+   cards -- see .game-card below. */
 .games-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
 }
 
 .games-grid-card {
@@ -6408,26 +6461,42 @@ body.studio-fullscreen {
     margin-top: 1rem;
 }
 
+/* Apple-App-Store-style compact row (icon, name+domain, Laden/Öffnen)
+   instead of a big grid card -- see .games-grid above for the stacked-list
+   container these sit in. */
 .game-card {
     display: flex;
-    flex-direction: column;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.45rem 0.6rem;
     border-radius: 12px;
-    overflow: hidden;
     background: var(--panel-bg-solid);
     border: 1px solid var(--panel-border-solid);
     text-decoration: none;
     color: var(--text-primary);
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    transition: background 0.15s ease;
 }
 
 .game-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+    background: rgba(127, 127, 127, 0.08);
+}
+
+.game-card-webapp-linkarea {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    flex: 1 1 auto;
+    min-width: 0;
+    color: inherit;
+    text-decoration: none;
 }
 
 .game-card-thumb {
-    aspect-ratio: 4 / 3;
-    width: 100%;
+    flex: 0 0 auto;
+    width: 46px;
+    height: 46px;
+    border-radius: 12px;
+    overflow: hidden;
     display: block;
     line-height: 0;
 }
@@ -6438,7 +6507,23 @@ body.studio-fullscreen {
     display: block;
 }
 
-.game-card-thumb-icon-wrap {
+/* .game-card-thumb-appicon is a modifier on the *outer* .game-card-thumb
+   box itself (see _game_card.html -- both classes always sit on the same
+   element); .game-card-thumb-icon-wrap/-webapp-icon-wrap are separate
+   *inner* divs only used for the builtin-icon/webapp-placeholder cases, so
+   they need their own 100%-fill rule instead of sharing one with the
+   outer box (that bug collapsed the outer box to 0 width previously). */
+.game-card-thumb-appicon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #1c1c1c;
+    padding: 10%;
+    box-sizing: border-box;
+}
+
+.game-card-thumb-icon-wrap,
+.game-card-thumb-webapp-icon-wrap {
     width: 100%;
     height: 100%;
     display: flex;
@@ -6448,73 +6533,55 @@ body.studio-fullscreen {
 }
 
 .game-card-thumb-webapp-icon-wrap {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #1c1c1c;
-    font-size: 2.4rem;
+    font-size: 1.4rem;
 }
 
 .game-card-thumb-icon-wrap .place-label-icon {
     flex-shrink: 0;
-    transform: scale(1.4);
+    transform: scale(0.85);
 }
 
 .game-card-info {
-    padding: 0.7rem 0.8rem;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.game-card-title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 0;
 }
 
 .game-card-title {
     font-weight: 600;
-    font-size: 0.95rem;
+    font-size: 0.86rem;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    min-width: 0;
 }
 
-.game-card-creator {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    margin-top: 0.35rem;
-    font-size: 0.82rem;
+/* The creator's own self-declared "+N" estimate -- styled like a small
+   pill/badge, deliberately not a real button (no hover/active state,
+   nothing happens on click) since it's just a label, not an action. */
+.game-card-age-badge {
+    flex: 0 0 auto;
+    padding: 0.05rem 0.4rem;
+    border-radius: 5px;
+    background: rgba(127, 127, 127, 0.22);
     color: var(--text-secondary);
-}
-
-.game-card-avatar {
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    object-fit: cover;
-    flex-shrink: 0;
-}
-
-.game-card-avatar-placeholder {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--gradient-primary);
-    color: var(--gradient-primary-text);
-    font-size: 0.7rem;
+    font-size: 0.66rem;
     font-weight: 700;
 }
 
-/* --- App-store-style card for Web-in-Web-Apps --- */
-.game-card-webapp-linkarea {
-    display: contents;
-    color: inherit;
-    text-decoration: none;
-}
-
-.game-card-thumb-appicon {
-    aspect-ratio: 1 / 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #1c1c1c;
-    padding: 13%;
+.game-card-domain {
+    margin-top: 0.1rem;
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .game-card-appicon-img {
@@ -6523,24 +6590,23 @@ body.studio-fullscreen {
     border-radius: 22%;
     object-fit: cover;
     display: block;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
 }
 
 .game-card-app-action {
-    display: block;
-    width: 100%;
+    flex: 0 0 auto;
     border: none;
-    padding: 0.6rem 0;
+    border-radius: 999px;
+    padding: 0.4rem 1rem;
     font-weight: 700;
-    font-size: 0.85rem;
+    font-size: 0.78rem;
     cursor: pointer;
-    background: var(--accent-blue);
+    background: #5a5a5a;
     color: #fff;
 }
 
 .game-card-app-action[data-state="open"] {
-    background: #1c1c1c;
-    color: #f1f1f1;
+    background: #fff;
+    color: #000;
 }
 
 .game-card-app-action[data-state="installing"] {
@@ -6555,19 +6621,18 @@ body.studio-fullscreen {
 
 .game-card-library-actions {
     display: flex;
-}
-
-.game-card-library-actions .game-card-app-action {
-    flex: 1 1 auto;
+    align-items: center;
+    gap: 0.4rem;
+    flex: 0 0 auto;
 }
 
 .game-card-library-remove {
     flex-shrink: 0;
     border: none;
-    background: var(--panel-bg-solid);
+    background: none;
     color: var(--text-secondary);
-    font-size: 0.78rem;
-    padding: 0.6rem 0.8rem;
+    font-size: 0.72rem;
+    padding: 0.3rem 0.5rem;
     cursor: pointer;
 }
 

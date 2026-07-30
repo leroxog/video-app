@@ -31,6 +31,8 @@
     const iconInput = document.getElementById("studioIconInput");
     const iconPreview = document.getElementById("studioIconPreview");
     const iconNote = document.getElementById("studioIconNote");
+    const ageRatingSelect = document.getElementById("studioAgeRatingSelect");
+    const ageRatingNote = document.getElementById("studioAgeRatingNote");
 
     let blocks = [];
     let selectedId = null;
@@ -616,6 +618,18 @@
             })
             .catch(() => { iconNote.textContent = "Fehler beim Hochladen."; });
     });
+
+    if (ageRatingSelect) {
+        const ageRatingNoteDefault = ageRatingNote.textContent;
+        ageRatingSelect.addEventListener("change", () => {
+            api(`/api/studio/${projectId}/age-rating`, "POST", { age_rating: Number(ageRatingSelect.value) })
+                .then((data) => {
+                    ageRatingNote.textContent = data.ok ? "Gespeichert!" : "Konnte nicht gespeichert werden.";
+                    setTimeout(() => { ageRatingNote.textContent = ageRatingNoteDefault; }, 2000);
+                })
+                .catch(() => { ageRatingNote.textContent = "Fehler beim Speichern."; });
+        });
+    }
 
     loadState();
 })();
