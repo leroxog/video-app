@@ -1022,6 +1022,17 @@ LAST_SEEN_UPDATE_THROTTLE_SECONDS = 60
 STARTING_AI_TOKENS = 1000
 DAILY_AI_TOKENS = 900
 
+# Accounts that never pay a token cost and never get an insufficient-tokens
+# block -- their ai_tokens balance still exists and still gets the daily
+# grant (see _grant_daily_tokens_if_due), it's just never checked or
+# deducted from in api_ai_chat, and never disclosed to the model (so it
+# doesn't nudge the AI's own image-generation behavior either).
+UNLIMITED_AI_TOKENS_USERNAMES = {"LEROX"}
+
+
+def user_has_unlimited_ai_tokens(user):
+    return user.username in UNLIMITED_AI_TOKENS_USERNAMES
+
 
 def _grant_daily_tokens_if_due(user):
     today = date.today()
@@ -1923,14 +1934,16 @@ def api_ai_chat():
     if project_type in (None, "general"):
         personality_row_precheck = _get_or_create_personality_row(user.id)
         is_buddy = bool(personality_row_precheck and personality_row_precheck.mimic_user_style)
+    is_unlimited_tokens = user_has_unlimited_ai_tokens(user)
     token_cost = _compute_message_token_cost(message, via_voice, is_buddy)
     tokens_available = user.ai_tokens if user.ai_tokens is not None else STARTING_AI_TOKENS
-    if tokens_available < token_cost:
+    if not is_unlimited_tokens and tokens_available < token_cost:
         return jsonify({
             "ok": False, "error": "insufficient_tokens",
             "tokens_needed": token_cost, "tokens_available": tokens_available,
         }), 402
-    user.ai_tokens = tokens_available - token_cost
+    if not is_unlimited_tokens:
+        user.ai_tokens = tokens_available - token_cost
 
     # Optional real signal from the frontend: average ms between keystrokes
     # while typing *this* message (see base.html's keydown tracking) --
@@ -2021,7 +2034,7 @@ def api_ai_chat():
                 # the fact -- generate_image already refused if the balance
                 # (checked live via available_tokens) was too low, this is
                 # just applying the charge for one that actually ran.
-                if (new_learned_facts or {}).get("image_generated"):
+                if (new_learned_facts or {}).get("image_generated") and not is_unlimited_tokens:
                     image_user_row = db.session.get(User, user_id_captured)
                     if image_user_row is not None:
                         image_user_row.ai_tokens = max(
@@ -2046,7 +2059,7 @@ def api_ai_chat():
     job_id = ai_assistant.start_chat_job(
         message, context, history=history, project_type=project_type, facts=facts,
         learned_facts=learned_facts, on_done=on_done, behavior_note=behavior_note,
-        personality=personality, available_tokens=user.ai_tokens,
+        personality=personality, available_tokens=None if is_unlimited_tokens else user.ai_tokens,
     )
     return jsonify({
         "ok": True, "job_id": job_id, "chat_id": chat.id, "tokens_remaining": user.ai_tokens,

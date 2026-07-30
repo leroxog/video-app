@@ -1,3 +1,4 @@
+{%- from "partials/_icons.html" import icon -%}
 <!DOCTYPE html>
 <html lang="de">
 <head>
@@ -87,17 +88,17 @@
 
     {% if user %}
         <div class="ai-chat-widget" id="aiChatWidget" data-user-gender="{{ user.gender or '' }}" data-ai-tokens="{{ user.ai_tokens if user.ai_tokens is not none else '' }}">
-            <a class="ai-chat-toggle-btn" id="aiChatToggleBtn" href="{{ url_for('assistant_page') }}" title="KI-Assistent">🤖</a>
+            <a class="ai-chat-toggle-btn" id="aiChatToggleBtn" href="{{ url_for('assistant_page') }}" title="KI-Assistent">{{ icon('chat-bubble', 22) }}</a>
             <div class="ai-chat-panel" id="aiChatPanel" style="display:none;">
                 <div class="ai-chat-sidebar" id="aiChatSidebar">
                     <button type="button" class="ai-chat-sidebar-nav-item" id="aiChatSidebarNewBtn">
-                        <span class="ai-chat-sidebar-nav-icon" aria-hidden="true">✏️</span><span>Neuer Chat</span>
+                        <span class="ai-chat-sidebar-nav-icon" aria-hidden="true">{{ icon('pencil') }}</span><span>Neuer Chat</span>
                     </button>
                     <button type="button" class="ai-chat-sidebar-nav-item" id="aiChatSidebarNewCodeBtn">
-                        <span class="ai-chat-sidebar-nav-icon" aria-hidden="true">&lt;/&gt;</span><span>Neuesten Code-Chat erstellen</span>
+                        <span class="ai-chat-sidebar-nav-icon" aria-hidden="true">{{ icon('code') }}</span><span>Neuesten Code-Chat erstellen</span>
                     </button>
                     <button type="button" class="ai-chat-sidebar-nav-item" id="aiChatSidebarVoiceBtn">
-                        <span class="ai-chat-sidebar-nav-icon" aria-hidden="true">🎤</span><span>Mit der KI reden</span>
+                        <span class="ai-chat-sidebar-nav-icon" aria-hidden="true">{{ icon('mic') }}</span><span>Mit der KI reden</span>
                     </button>
                     <div class="ai-chat-sidebar-more-wrap">
                         <button type="button" class="ai-chat-sidebar-nav-item" id="aiChatMoreBtn">
@@ -105,7 +106,7 @@
                         </button>
                         <div class="ai-chat-more-flyout" id="aiChatMoreFlyout" style="display:none;">
                             <button type="button" class="ai-chat-sidebar-nav-item" id="aiChatBuddyBtn">
-                                <span class="ai-chat-sidebar-nav-icon" aria-hidden="true">🤝</span><span>Buddy</span>
+                                <span class="ai-chat-sidebar-nav-icon" aria-hidden="true">{{ icon('handshake') }}</span><span>Buddy</span>
                             </button>
                         </div>
                     </div>
@@ -149,15 +150,22 @@
                             Dein aktueller Code und der bisherige Gesprächsverlauf werden bei jeder Nachricht mitgeschickt.
                         </p>
                         <p class="ai-chat-attachment-chip" id="aiChatAttachmentChip" style="display:none;">
-                            📎 <span id="aiChatAttachmentName"></span>
+                            <span class="ai-chat-attachment-chip-icon" aria-hidden="true">{{ icon('paperclip', 14) }}</span>
+                            <span id="aiChatAttachmentName"></span>
                             <button type="button" id="aiChatAttachmentRemove" title="Anhang entfernen">&times;</button>
                         </p>
                         <p class="ai-chat-token-balance" id="aiChatTokenBalance"></p>
                         <form class="ai-chat-form" id="aiChatForm">
                             <input type="file" id="aiChatFileInput" accept=".txt,.md,.markdown,.py,.js,.jsx,.ts,.tsx,.json,.csv,.html,.htm,.css,.log,.yaml,.yml,.xml,.java,.c,.cpp,.cs,.sh" style="display:none;">
-                            <button type="button" class="ai-chat-attach-btn" id="aiChatAttachBtn" title="Text-Datei anhängen">📎</button>
-                            <input type="text" id="aiChatInput" placeholder="Frage stellen..." maxlength="2000" autocomplete="off">
-                            <button type="submit">Senden</button>
+                            <button type="button" class="ai-chat-attach-btn" id="aiChatAttachBtn" title="Text-Datei anhängen">{{ icon('paperclip', 17) }}</button>
+                            <div class="ai-chat-input-pill">
+                                <input type="text" id="aiChatInput" placeholder="Frage stellen..." maxlength="2000" autocomplete="off">
+                                <button type="button" class="ai-chat-input-mic-btn" id="aiChatInputMicBtn" title="Mit der KI sprechen">{{ icon('mic', 16) }}</button>
+                            </div>
+                            <button type="submit" class="ai-chat-send-btn" id="aiChatSendBtn" title="Senden">
+                                <span class="ai-chat-send-icon" id="aiChatSendIcon">{{ icon('send', 16) }}</span>
+                                <span class="ai-chat-stop-icon" id="aiChatStopIcon" style="display:none;">{{ icon('stop', 14) }}</span>
+                            </button>
                         </form>
                         <p class="ai-chat-disclaimer">Sie schreiben mit einer KI, nicht mit einem Menschen. Eine KI kann Fehler machen.</p>
                     </div>
@@ -180,28 +188,8 @@
                     </div>
                     <p class="ai-voice-status" id="aiVoiceStatus">Tippe auf den Kreis und sprich.</p>
 
-                    <div class="ai-voice-contribute">
-                        <p class="ai-voice-contribute-label">Echte Stimme beisteuern (ersetzt die Stimme für alle):</p>
-                        <div class="ai-voice-contribute-row">
-                            <select id="aiVoiceContributeGender">
-                                <option value="male">Als männliche Stimme</option>
-                                <option value="female">Als weibliche Stimme</option>
-                            </select>
-                            <button type="button" id="aiVoiceRecordBtn">🔴 Aufnehmen</button>
-                        </div>
-                        <label class="ai-voice-consent">
-                            <input type="checkbox" id="aiVoiceConsentCheckbox">
-                            Das ist meine eigene Stimme, ich bin einverstanden, dass sie als KI-Stimme für alle genutzt wird.
-                        </label>
-                        <p class="ai-voice-contribute-status" id="aiVoiceContributeStatus"></p>
-                    </div>
-
                     <p class="ai-voice-disclaimer">
-                        Sprachausgabe nutzt eine geklonte Stimme, sobald jemand eine beigesteuert hat -- vorher (und
-                        bei der Spracheingabe immer) laufen die Sprachfunktionen einfach über deinen Browser,
-                        kostenlos. Ein echtes "Training" aus vielen Stimmen gleichzeitig gibt es nicht -- die
-                        zuletzt beigesteuerte Stimme ersetzt für alle die vorherige. Sie sprechen mit einer KI,
-                        nicht mit einem Menschen.
+                        Sie sprechen mit einer KI, nicht mit einem Menschen.
                     </p>
                 </div>
             </div>
@@ -269,7 +257,23 @@
                 const attachmentName = document.getElementById("aiChatAttachmentName");
                 const attachmentRemove = document.getElementById("aiChatAttachmentRemove");
                 const tokenBalanceEl = document.getElementById("aiChatTokenBalance");
+                const inputMicBtn = document.getElementById("aiChatInputMicBtn");
+                const sendBtn = document.getElementById("aiChatSendBtn");
+                const sendIcon = document.getElementById("aiChatSendIcon");
+                const stopIcon = document.getElementById("aiChatStopIcon");
                 const GREETING = messagesEl.innerHTML;
+
+                // Matches the icon() Jinja macro in partials/_icons.html --
+                // duplicated here since these particular icons only ever
+                // appear inside JS-generated markup (sidebar row actions,
+                // feedback buttons), not in the server-rendered template.
+                const JS_ICONS = {
+                    pencil: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+                    trash: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>',
+                    thumbUp: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 22V11"/><path d="M2 13v7a2 2 0 0 0 2 2h13.4a2 2 0 0 0 2-1.7l1.4-8A2 2 0 0 0 19 10H14l1-5.5A1.7 1.7 0 0 0 12 3.5L7 11H2Z"/></svg>',
+                    thumbDown: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 2v11"/><path d="M22 11V4a2 2 0 0 0-2-2H6.6a2 2 0 0 0-2 1.7l-1.4 8A2 2 0 0 0 5 14h5l-1 5.5A1.7 1.7 0 0 0 12 20.5L17 13h5Z"/></svg>',
+                    bolt: '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 3 14h7l-1 8 11-14h-7z"/></svg>',
+                };
 
                 // Tokens are an app-internal currency separate from points,
                 // spent per AI message/voice-turn/image (see account
@@ -278,7 +282,7 @@
                 // and kept live via tokens_remaining on every chat response.
                 function updateTokenBalance(value) {
                     if (value === undefined || value === null || !tokenBalanceEl) return;
-                    tokenBalanceEl.textContent = `⚡ ${value} Tokens`;
+                    tokenBalanceEl.innerHTML = `${JS_ICONS.bolt} ${value} Tokens`;
                 }
                 if (widget.dataset.aiTokens) updateTokenBalance(Number(widget.dataset.aiTokens));
 
@@ -420,7 +424,7 @@
                         renameBtn.type = "button";
                         renameBtn.className = "ai-chat-icon-btn";
                         renameBtn.title = "Umbenennen";
-                        renameBtn.textContent = "✎";
+                        renameBtn.innerHTML = JS_ICONS.pencil;
                         renameBtn.addEventListener("click", (event) => {
                             event.stopPropagation();
                             const newTitle = window.prompt("Neuer Name für diesen Chat:", chat.title);
@@ -436,7 +440,7 @@
                         deleteBtn.type = "button";
                         deleteBtn.className = "ai-chat-icon-btn ai-chat-icon-btn-danger";
                         deleteBtn.title = "Löschen";
-                        deleteBtn.textContent = "🗑";
+                        deleteBtn.innerHTML = JS_ICONS.trash;
                         deleteBtn.addEventListener("click", (event) => {
                             event.stopPropagation();
                             if (!window.confirm(`Chat "${chat.title}" wirklich löschen?`)) return;
@@ -576,7 +580,7 @@
                         renameBtn.type = "button";
                         renameBtn.className = "ai-chat-icon-btn";
                         renameBtn.title = "Umbenennen";
-                        renameBtn.textContent = "✎";
+                        renameBtn.innerHTML = JS_ICONS.pencil;
                         renameBtn.addEventListener("click", (event) => {
                             event.stopPropagation();
                             const newTitle = window.prompt("Neuer Name für diesen Chat:", chat.title);
@@ -592,7 +596,7 @@
                         deleteBtn.type = "button";
                         deleteBtn.className = "ai-chat-icon-btn ai-chat-icon-btn-danger";
                         deleteBtn.title = "Löschen";
-                        deleteBtn.textContent = "🗑";
+                        deleteBtn.innerHTML = JS_ICONS.trash;
                         deleteBtn.addEventListener("click", (event) => {
                             event.stopPropagation();
                             if (!window.confirm(`Chat "${chat.title}" wirklich löschen?`)) return;
@@ -862,12 +866,12 @@
                     up.type = "button";
                     up.className = "ai-chat-feedback-btn";
                     up.title = "Gute Antwort";
-                    up.textContent = "👍";
+                    up.innerHTML = JS_ICONS.thumbUp;
                     const down = document.createElement("button");
                     down.type = "button";
                     down.className = "ai-chat-feedback-btn";
                     down.title = "Schlechte Antwort";
-                    down.textContent = "👎";
+                    down.innerHTML = JS_ICONS.thumbDown;
                     function send(rating) {
                         up.disabled = true;
                         down.disabled = true;
@@ -1006,12 +1010,29 @@
                     if (pageEmbedTarget) loadSidebarList();
                 }
 
+                // The send button doubles as a stop button while a reply is
+                // being generated (see the form submit handler) -- clicking
+                // it then just stops the client from caring about the poll
+                // result, it can't actually interrupt the Groq call that's
+                // already running server-side, matching what's realistically
+                // possible here without a real cancellation API.
+                let currentPollJobId = null;
+                let activeThinkingBubble = null;
+
+                function setSendState(generating) {
+                    sendBtn.title = generating ? "Stoppen" : "Senden";
+                    sendIcon.style.display = generating ? "none" : "";
+                    stopIcon.style.display = generating ? "" : "none";
+                }
+
                 function pollJob(jobId, bubble, userMessage) {
                     fetch(`/api/ai/chat/${jobId}`)
                         .then((res) => res.json())
                         .then((data) => {
+                            if (jobId !== currentPollJobId) return;
                             if (!data.ok) {
                                 bubble.textContent = "Fehler bei der Anfrage.";
+                                setSendState(false);
                                 return;
                             }
                             if (data.status === "running") {
@@ -1024,8 +1045,13 @@
                                 bubble.textContent = "Die KI ist gerade nicht verfügbar.";
                             }
                             messagesEl.scrollTop = messagesEl.scrollHeight;
+                            setSendState(false);
                         })
-                        .catch(() => { bubble.textContent = "Fehler bei der Anfrage."; });
+                        .catch(() => {
+                            if (jobId !== currentPollJobId) return;
+                            bubble.textContent = "Fehler bei der Anfrage.";
+                            setSendState(false);
+                        });
                 }
 
                 // File upload: text-based files only -- there's no vision
@@ -1111,8 +1137,26 @@
                     return interval;
                 }
 
+                function updateInputMicVisibility() {
+                    if (inputMicBtn) inputMicBtn.style.display = input.value ? "none" : "";
+                }
+                input.addEventListener("input", updateInputMicVisibility);
+                updateInputMicVisibility();
+
                 form.addEventListener("submit", (event) => {
                     event.preventDefault();
+                    if (stopIcon.style.display !== "none") {
+                        // Currently generating -- the button is showing the
+                        // stop icon, so this submit came from clicking it as
+                        // a stop control instead of sending a new message.
+                        // This only stops the client from waiting on the
+                        // reply -- the Groq call already running server-side
+                        // can't actually be interrupted mid-generation.
+                        currentPollJobId = null;
+                        if (activeThinkingBubble) activeThinkingBubble.textContent = "Antwort abgebrochen.";
+                        setSendState(false);
+                        return;
+                    }
                     const text = input.value.trim();
                     if (!text) return;
                     const typingIntervalMs = consumeTypingIntervalMs();
@@ -1146,10 +1190,13 @@
                     }
                     addMessage(text, "user");
                     input.value = "";
+                    updateInputMicVisibility();
                     if (contextParts.length) body.context = contextParts.join("\n\n");
                     if (adminFactsTarget) body.save_as_fact = true;
 
+                    setSendState(true);
                     const thinkingBubble = addMessage("Denkt nach...", "bot");
+                    activeThinkingBubble = thinkingBubble;
                     fetch("/api/ai/chat", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
@@ -1161,13 +1208,18 @@
                                 thinkingBubble.textContent = data.error === "insufficient_tokens"
                                     ? `Nicht genug Tokens (noch ${data.tokens_available}, ${data.tokens_needed} nötig).`
                                     : "Fehler bei der Anfrage.";
+                                setSendState(false);
                                 return;
                             }
             currentChatId = data.chat_id;
                             updateTokenBalance(data.tokens_remaining);
+                            currentPollJobId = data.job_id;
                             pollJob(data.job_id, thinkingBubble, text);
                         })
-                        .catch(() => { thinkingBubble.textContent = "Fehler bei der Anfrage."; });
+                        .catch(() => {
+                            thinkingBubble.textContent = "Fehler bei der Anfrage.";
+                            setSendState(false);
+                        });
                 });
 
                 // --- Voice chat ("Mit der KI reden") -- free, browser-native
@@ -1540,6 +1592,13 @@
                         voiceOverlay.style.display = "flex";
                     });
 
+                    if (inputMicBtn) {
+                        inputMicBtn.addEventListener("click", () => {
+                            panel.style.display = "none";
+                            voiceOverlay.style.display = "flex";
+                        });
+                    }
+
                     voiceCloseBtn.addEventListener("click", () => {
                         voiceOverlay.style.display = "none";
                         if (window.speechSynthesis) window.speechSynthesis.cancel();
@@ -1551,78 +1610,6 @@
                         orbTargetIntensity = 0;
                     });
 
-                    // "Echte Stimme beisteuern" -- records a short sample via
-                    // the browser's own microphone and uploads it to be
-                    // cloned through ElevenLabs (see app.py's
-                    // elevenlabs_clone_voice/AiVoiceProfile). This replaces
-                    // whichever voice was cloned before for that gender --
-                    // there's no way to blend many people's samples into one
-                    // trained voice, so it's simply "most recent wins".
-                    const contributeGenderSelect = document.getElementById("aiVoiceContributeGender");
-                    const recordBtn = document.getElementById("aiVoiceRecordBtn");
-                    const consentCheckbox = document.getElementById("aiVoiceConsentCheckbox");
-                    const contributeStatus = document.getElementById("aiVoiceContributeStatus");
-                    let mediaRecorder = null;
-                    let recordedChunks = [];
-
-                    function uploadRecording() {
-                        recordBtn.textContent = "🔴 Aufnehmen";
-                        if (!recordedChunks.length) return;
-                        contributeStatus.textContent = "Wird hochgeladen und geklont ...";
-                        const blob = new Blob(recordedChunks, { type: "audio/webm" });
-                        const formData = new FormData();
-                        formData.append("sample", blob, "sample.webm");
-                        fetch(`/api/voice-profile/${contributeGenderSelect.value}/contribute`, {
-                            method: "POST", body: formData,
-                        })
-                            .then((res) => res.json())
-                            .then((data) => {
-                                if (!data.ok) {
-                                    contributeStatus.textContent = data.message || "Konnte die Stimme nicht klonen.";
-                                    return;
-                                }
-                                contributeStatus.textContent = "Danke! Die KI spricht jetzt mit dieser Stimme.";
-                            })
-                            .catch(() => { contributeStatus.textContent = "Fehler beim Hochladen."; });
-                    }
-
-                    function startRecording() {
-                        if (!consentCheckbox.checked) {
-                            contributeStatus.textContent = "Bitte bestätige zuerst, dass es deine eigene Stimme ist.";
-                            return;
-                        }
-                        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
-                            contributeStatus.textContent = "Dein Browser unterstützt keine Audioaufnahme.";
-                            return;
-                        }
-                        navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
-                            recordedChunks = [];
-                            mediaRecorder = new MediaRecorder(stream);
-                            mediaRecorder.ondataavailable = (e) => {
-                                if (e.data.size > 0) recordedChunks.push(e.data);
-                            };
-                            mediaRecorder.onstop = () => {
-                                stream.getTracks().forEach((t) => t.stop());
-                                uploadRecording();
-                            };
-                            mediaRecorder.start();
-                            recordBtn.textContent = "⏹ Stoppen";
-                            contributeStatus.textContent = "Nimmt auf -- sprich ein paar Sätze (max. 10s).";
-                            setTimeout(() => {
-                                if (mediaRecorder && mediaRecorder.state === "recording") mediaRecorder.stop();
-                            }, 10000);
-                        }).catch(() => {
-                            contributeStatus.textContent = "Mikrofonzugriff wurde verweigert.";
-                        });
-                    }
-
-                    recordBtn.addEventListener("click", () => {
-                        if (mediaRecorder && mediaRecorder.state === "recording") {
-                            mediaRecorder.stop();
-                            return;
-                        }
-                        startRecording();
-                    });
                 }
             })();
         </script>

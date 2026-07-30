@@ -2934,6 +2934,29 @@ def test_ai_chat_via_voice_deducts_voice_token_cost(client, monkeypatch):
     assert data["tokens_remaining"] == before - app_module.TOKEN_COST_VOICE_BASE
 
 
+def test_unlimited_tokens_account_never_blocked_or_deducted(client, monkeypatch):
+    import ai_assistant
+    import app as app_module
+
+    monkeypatch.setattr(
+        ai_assistant, "generate_reply",
+        lambda message, context=None, history=None, project_type=None, facts=None, learned_facts=None, captured=None, behavior_note=None, personality=None, available_tokens=None: ("Antwort", None),
+    )
+    register(client, username="LEROX")
+    user = User.query.filter_by(username="LEROX").first()
+    user.ai_tokens = 0
+    db.session.commit()
+
+    response = client.post("/api/ai/chat", json={"message": "Hallo", "via_voice": True})
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["ok"] is True
+    assert data["tokens_remaining"] == 0
+
+    user = User.query.filter_by(username="LEROX").first()
+    assert user.ai_tokens == 0
+
+
 def test_ai_chat_rejects_when_tokens_insufficient(client):
     import app as app_module
 

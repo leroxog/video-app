@@ -727,11 +727,39 @@ body.ai-fullscreen main {
 .ai-chat-panel-page {
     width: 100%;
     height: 100%;
-    /* Full-bleed like a real ChatGPT-style layout, not a bordered card
-       floating on the page -- the panel IS the page here. */
+    /* Full-bleed like a real ChatGPT-style layout -- the panel IS the
+       page here, but the sidebar/main below still float as separate
+       rounded glass cards with a gap between them, so the ambient light
+       layer behind (.ai-ambient-light) shows through the gap and through
+       each card's own backdrop-filter blur. */
     border: none;
     border-radius: 0;
     box-shadow: none;
+    padding: 10px;
+    gap: 10px;
+    box-sizing: border-box;
+    position: relative;
+    z-index: 1;
+}
+
+.ai-chat-panel-page .ai-chat-sidebar,
+.ai-chat-panel-page .ai-chat-main {
+    border-radius: 18px;
+    overflow: hidden;
+}
+
+.ai-chat-panel-page .ai-chat-sidebar {
+    border: var(--glass-border);
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+}
+
+.ai-chat-panel-page .ai-chat-main {
+    border: var(--glass-border);
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
 }
 
 .ai-chat-panel-embedded {
@@ -817,7 +845,9 @@ body.ai-fullscreen main {
 .ai-chat-sidebar-nav-icon {
     flex: 0 0 auto;
     width: 20px;
-    text-align: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     font-size: 0.85rem;
     line-height: 1;
 }
@@ -1040,63 +1070,6 @@ body.ai-fullscreen main {
     margin: 0.6rem 0 0;
 }
 
-.ai-voice-contribute {
-    margin-top: 1rem;
-    padding: 0.8rem;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid #2c2c2c;
-    border-radius: 10px;
-}
-
-.ai-voice-contribute-label {
-    font-size: 0.78rem;
-    color: #ccc;
-    margin: 0 0 0.5rem;
-}
-
-.ai-voice-contribute-row {
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-}
-
-.ai-voice-contribute-row select {
-    background: #141414;
-    color: #f1f1f1;
-    border: 1px solid #3c3c3c;
-    border-radius: 8px;
-    padding: 0.4rem 0.5rem;
-    font-size: 0.8rem;
-}
-
-.ai-voice-contribute-row button {
-    border: none;
-    border-radius: 999px;
-    padding: 0.45rem 0.9rem;
-    background: var(--gradient-primary);
-    color: var(--gradient-primary-text);
-    font-weight: 600;
-    cursor: pointer;
-    font-size: 0.8rem;
-}
-
-.ai-voice-consent {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.4rem;
-    font-size: 0.74rem;
-    color: #aaa;
-    margin-top: 0.6rem;
-    cursor: pointer;
-}
-
-.ai-voice-contribute-status {
-    font-size: 0.78rem;
-    color: #9fd3ff;
-    margin: 0.5rem 0 0;
-    min-height: 1.1em;
-}
-
 .ai-chat-sidebar-list {
     flex: 1 1 auto;
     overflow-y: auto;
@@ -1235,6 +1208,45 @@ body.ai-fullscreen main {
     z-index: 600;
 }
 
+/* A soft light "outside the screen" that slowly drifts across a wide arc --
+   sits behind the glass panels (low z-index) so their backdrop-filter
+   blur picks it up as a moving glow shining through, rather than an
+   overlay sitting on top of the UI. background-position (not a custom
+   property) is used for the animation since it interpolates natively and
+   reliably across browsers, unlike animating gradient stops directly. */
+.ai-ambient-light {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background-image: radial-gradient(700px circle, rgba(255, 255, 255, 0.16), transparent 65%);
+    background-repeat: no-repeat;
+    background-position: 15% 10%;
+    filter: blur(20px);
+    mix-blend-mode: screen;
+    animation: ambientLightDrift 34s ease-in-out infinite alternate;
+}
+
+/* Light theme has no data-theme attribute at all (only dark sets one, see
+   base.html's inline theme script) -- a warmer, dimmer glow reads better
+   against a light background than the white one used for dark mode. */
+:root:not([data-theme="dark"]) .ai-ambient-light {
+    background-image: radial-gradient(700px circle, rgba(255, 170, 80, 0.16), transparent 65%);
+    mix-blend-mode: multiply;
+}
+
+@keyframes ambientLightDrift {
+    0%   { background-position: 8%  6%; }
+    25%  { background-position: 92% 18%; }
+    50%  { background-position: 78% 88%; }
+    75%  { background-position: 12% 76%; }
+    100% { background-position: 30% 30%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ai-ambient-light { animation: none; }
+}
+
 /* The anonymous trial chat on "/" for logged-out visitors (see
    guest_home.html) -- a scaled-down standalone version of the full
    .assistant-page chat, no sidebar, since there's no history to browse. */
@@ -1327,6 +1339,9 @@ body.ai-fullscreen main {
 }
 
 .ai-chat-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     background: none;
     border: none;
     font-size: 1rem;
@@ -1665,22 +1680,36 @@ body.studio-fullscreen .ai-chat-message-bot {
     display: none;
 }
 
+.ai-chat-token-balance svg {
+    vertical-align: -2px;
+}
+
 .ai-chat-form {
     display: flex;
-    gap: 0.5rem;
-    padding: 0.6rem 0.7rem;
-    border-top: 1px solid var(--panel-border-solid);
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 0.7rem 0.8rem;
+    border-top: none;
 }
 
 .ai-chat-attach-btn {
     flex: 0 0 auto;
-    padding: 0.5rem 0.6rem;
-    border: 1px solid var(--panel-border-solid);
-    border-radius: 8px;
-    background: var(--panel-bg-solid);
-    color: var(--text-primary);
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: none;
+    color: var(--text-secondary);
     cursor: pointer;
-    font-size: 1rem;
+}
+
+.ai-chat-attach-btn:hover {
+    background: rgba(127, 127, 127, 0.14);
+    color: var(--text-primary);
 }
 
 .ai-chat-attachment-chip {
@@ -1694,7 +1723,12 @@ body.studio-fullscreen .ai-chat-message-bot {
     border-top: 1px solid var(--panel-border-solid);
 }
 
-.ai-chat-attachment-chip span {
+.ai-chat-attachment-chip-icon {
+    display: inline-flex;
+    flex: 0 0 auto;
+}
+
+.ai-chat-attachment-chip span:not(.ai-chat-attachment-chip-icon) {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1711,23 +1745,87 @@ body.studio-fullscreen .ai-chat-message-bot {
     padding: 0 0.2rem;
 }
 
-.ai-chat-form input {
+/* The rounded, glassy, "raised" composer pill -- input + mic placeholder
+   float together as one small floating capsule instead of a flat bordered
+   text field, similar to ChatGPT's composer. */
+.ai-chat-input-pill {
     flex: 1 1 auto;
-    padding: 0.5rem 0.7rem;
-    border-radius: 8px;
-    border: 1px solid var(--panel-border-solid);
-    background: var(--panel-bg-solid);
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    min-width: 0;
+    padding: 0.15rem 0.3rem 0.15rem 1rem;
+    border-radius: 999px;
+    border: var(--glass-border);
+    background: var(--glass-bg-strong);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.ai-chat-input-pill input {
+    flex: 1 1 auto;
+    min-width: 0;
+    border: none;
+    background: none;
+    padding: 0.5rem 0;
+    color: var(--text-primary);
+    font-size: 0.88rem;
+}
+
+.ai-chat-input-pill input:focus {
+    outline: none;
+}
+
+/* Shown only while the field is empty (see base.html's input handler) --
+   a quick shortcut into voice mode before you've started typing, mirroring
+   how ChatGPT's composer shows a mic in the same spot until there's text. */
+.ai-chat-input-mic-btn {
+    flex: 0 0 auto;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 50%;
+    background: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.ai-chat-input-mic-btn:hover {
+    background: rgba(127, 127, 127, 0.16);
     color: var(--text-primary);
 }
 
-.ai-chat-form button {
-    padding: 0.5rem 1rem;
+.ai-chat-input-mic-btn[hidden] {
+    display: none;
+}
+
+/* Doubles as the "stop" control while a reply is generating -- see
+   base.html's setSendState(), which swaps the icon and flips what a click
+   does without changing this button's shape/position. */
+.ai-chat-send-btn {
+    flex: 0 0 auto;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
     border: none;
-    border-radius: 8px;
+    border-radius: 50%;
     background: var(--gradient-primary);
     color: var(--gradient-primary-text);
-    font-weight: 600;
     cursor: pointer;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.22);
+}
+
+.ai-chat-send-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+    box-shadow: none;
 }
 
 .ai-chat-generated-image {
@@ -1757,12 +1855,14 @@ body.studio-fullscreen .ai-chat-message-bot {
 }
 
 .ai-chat-feedback-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     border: none;
     background: none;
     padding: 0.1rem 0.3rem;
-    font-size: 0.75rem;
+    color: var(--text-secondary);
     cursor: pointer;
-    filter: grayscale(1);
 }
 
 .ai-chat-feedback-btn:disabled {
