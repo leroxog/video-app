@@ -1,7 +1,6 @@
 {
   "$schema": "https://schema.railpack.com",
   "deploy": {
-    "aptPackages": ["ffmpeg"],
     "startCommand": "gunicorn app:app --timeout 300 --workers 2"
   }
 }
