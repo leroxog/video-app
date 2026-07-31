@@ -1,4 +1,5 @@
 import os
+import io
 import re
 import math
 import uuid
@@ -35,7 +36,7 @@ from models import (
     StudioProject, StudioBlock, StudioProjectLike, StudioProjectComment, StudioProjectReport,
     AiChatFeedback, AiChat, AiChatMessage, AiAdminFact, AiLearnedFact, PasswordResetCode,
     AccountRecoveryRequest, ErrorLog, HumanSpotterImage, HumanSpotterClick, HumanSpotterReport,
-    AiVoiceProfile, AiPersonality,
+    AiVoiceProfile, AiPersonality, AiGeneratedMedia,
 )
 import ai_assistant
 
@@ -418,6 +419,10 @@ HUMAN_SPOTTER_FOLDER = os.path.join(app.root_path, "static", "human_spotter")
 os.makedirs(HUMAN_SPOTTER_FOLDER, exist_ok=True)
 app.config["HUMAN_SPOTTER_FOLDER"] = HUMAN_SPOTTER_FOLDER
 
+GENERATED_AUDIO_FOLDER = os.path.join(app.root_path, "static", "generated_audio")
+os.makedirs(GENERATED_AUDIO_FOLDER, exist_ok=True)
+app.config["GENERATED_AUDIO_FOLDER"] = GENERATED_AUDIO_FOLDER
+
 R2_ACCOUNT_ID = os.environ.get("R2_ACCOUNT_ID")
 R2_ACCESS_KEY_ID = os.environ.get("R2_ACCESS_KEY_ID")
 R2_SECRET_ACCESS_KEY = os.environ.get("R2_SECRET_ACCESS_KEY")
@@ -555,6 +560,38 @@ def elevenlabs_text_to_speech(voice_id, text):
     return response.content
 
 
+def _synthesize_and_store_audio(text, gender=None):
+    """Real text-to-speech for the generate_audio AI tool (see
+    ai_assistant.py): tries the requested gender's cloned ElevenLabs voice
+    first, then any other gender that has one, and returns None -- never
+    fakes it -- if no cloned voice exists yet or the API call/storage
+    fails. Runs from the chat job's background thread (see
+    ai_assistant.start_chat_job), so it pushes its own app context for the
+    AiVoiceProfile query rather than relying on one already being active."""
+    with app.app_context():
+        genders_to_try = ([gender] if gender else []) + [g for g in VOICE_PROFILE_GENDERS if g != gender]
+        voice_id = None
+        for g in genders_to_try:
+            profile = AiVoiceProfile.query.filter_by(gender=g).first()
+            if profile is not None and profile.elevenlabs_voice_id:
+                voice_id = profile.elevenlabs_voice_id
+                break
+        if not voice_id:
+            return None
+        try:
+            audio_bytes = elevenlabs_text_to_speech(voice_id, text)
+        except Exception:
+            logger.exception("generate_audio: ElevenLabs-Synthese fehlgeschlagen.")
+            return None
+        stored_filename = f"{uuid.uuid4().hex}.mp3"
+        try:
+            save_media_bytes(audio_bytes, "generated_audio", stored_filename, "audio/mpeg")
+        except Exception:
+            logger.exception("generate_audio: Speichern fehlgeschlagen.")
+            return None
+        return media_url("generated_audio", stored_filename)
+
+
 LOCAL_MEDIA_FOLDERS = {
     "posts": "UPLOAD_FOLDER",
     "profile_pics": "PROFILE_PIC_FOLDER",
@@ -563,6 +600,7 @@ LOCAL_MEDIA_FOLDERS = {
     "meme_creations": "MEME_FOLDER",
     "app_icons": "APP_ICON_FOLDER",
     "human_spotter": "HUMAN_SPOTTER_FOLDER",
+    "generated_audio": "GENERATED_AUDIO_FOLDER",
 }
 
 
@@ -579,6 +617,23 @@ def save_media(file_storage, kind, stored_filename):
     else:
         folder = app.config[LOCAL_MEDIA_FOLDERS[kind]]
         file_storage.save(os.path.join(folder, stored_filename))
+
+
+def save_media_bytes(data, kind, stored_filename, content_type):
+    """Same as save_media, but for raw bytes that were never a request
+    upload (e.g. the AI's generate_audio tool -- see
+    _synthesize_and_store_audio)."""
+    if USE_R2:
+        r2_client.upload_fileobj(
+            io.BytesIO(data),
+            R2_BUCKET_NAME,
+            f"{kind}/{stored_filename}",
+            ExtraArgs={"ContentType": content_type},
+        )
+    else:
+        folder = app.config[LOCAL_MEDIA_FOLDERS[kind]]
+        with open(os.path.join(folder, stored_filename), "wb") as f:
+            f.write(data)
 
 
 def delete_media(kind, stored_filename):
@@ -644,6 +699,8 @@ def media_url(kind, stored_filename):
         return url_for("static", filename=f"app_icons/{stored_filename}")
     if kind == "human_spotter":
         return url_for("static", filename=f"human_spotter/{stored_filename}")
+    if kind == "generated_audio":
+        return url_for("static", filename=f"generated_audio/{stored_filename}")
     return url_for("static", filename=f"profile_pics/{stored_filename}")
 
 
@@ -1745,6 +1802,18 @@ def assistant_page():
     return render_template("assistant.html", user=user)
 
 
+@app.route("/galerie")
+def ai_gallery():
+    user = current_user()
+    if user is None:
+        return redirect(url_for("login"))
+    items = (
+        AiGeneratedMedia.query.filter_by(user_id=user.id)
+        .order_by(AiGeneratedMedia.created_at.desc()).limit(200).all()
+    )
+    return render_template("ai_gallery.html", user=user, items=items)
+
+
 def serialize_ai_chat(chat):
     return {
         "id": chat.id,
@@ -1824,9 +1893,12 @@ LEARNED_FACTS_PROMPT_LIMIT = 15
 # than the shared wikipedia/python_docs knowledge above -- it's meant to
 # grow into a large, detailed record of one specific person over many
 # conversations, not stay capped at a handful of entries. Each row is
-# short (a sentence, see remember_user_fact's arg cap), so ~120 of them
-# comfortably fits Groq's context window alongside everything else.
-USER_FACTS_PROMPT_LIMIT = 120
+# short (a sentence, see remember_user_fact's arg cap), so even a few
+# hundred of them still comfortably fits Groq's context window alongside
+# everything else. Raised from 120 -> 240 so the profile stays precise
+# for long-running users instead of quietly dropping older detail once
+# they cross the old cap.
+USER_FACTS_PROMPT_LIMIT = 240
 
 # Typing-speed baseline: how many samples before we trust a user's average
 # enough to flag a single message as unusually fast/slow *for them*, and
@@ -2048,12 +2120,33 @@ def api_ai_chat():
                 # the fact -- generate_image already refused if the balance
                 # (checked live via available_tokens) was too low, this is
                 # just applying the charge for one that actually ran.
-                if (new_learned_facts or {}).get("image_generated") and not is_unlimited_tokens:
+                image_generated = (new_learned_facts or {}).get("image_generated")
+                audio_generated = (new_learned_facts or {}).get("audio_generated")
+                if image_generated and not is_unlimited_tokens:
                     image_user_row = db.session.get(User, user_id_captured)
                     if image_user_row is not None:
                         image_user_row.ai_tokens = max(
                             0, (image_user_row.ai_tokens or 0) - ai_assistant.IMAGE_TOKEN_COST,
                         )
+                if audio_generated and not is_unlimited_tokens:
+                    audio_user_row = db.session.get(User, user_id_captured)
+                    if audio_user_row is not None:
+                        audio_user_row.ai_tokens = max(
+                            0, (audio_user_row.ai_tokens or 0) - ai_assistant.AUDIO_TOKEN_COST,
+                        )
+                # Kept as its own record (in addition to being embedded
+                # inline in the reply above) purely so the "Galerie" page
+                # can list everything generated without re-parsing chats.
+                if image_generated:
+                    db.session.add(AiGeneratedMedia(
+                        user_id=user_id_captured, kind="image",
+                        url=image_generated.get("url", ""), prompt=image_generated.get("prompt"),
+                    ))
+                if audio_generated:
+                    db.session.add(AiGeneratedMedia(
+                        user_id=user_id_captured, kind="audio",
+                        url=audio_generated.get("url", ""), prompt=audio_generated.get("text"),
+                    ))
                 db.session.commit()
                 if is_first_message:
                     title = ai_assistant.generate_title(message)
@@ -2074,6 +2167,7 @@ def api_ai_chat():
         message, context, history=history, project_type=project_type, facts=facts,
         learned_facts=learned_facts, on_done=on_done, behavior_note=behavior_note,
         personality=personality, available_tokens=None if is_unlimited_tokens else user.ai_tokens,
+        synthesize_audio_fn=_synthesize_and_store_audio,
     )
     return jsonify({
         "ok": True, "job_id": job_id, "chat_id": chat.id, "tokens_remaining": user.ai_tokens,

@@ -100,6 +100,9 @@
                     <button type="button" class="ai-chat-sidebar-nav-item" id="aiChatSidebarVoiceBtn">
                         <span class="ai-chat-sidebar-nav-icon" aria-hidden="true">{{ icon('mic') }}</span><span>Mit der KI reden</span>
                     </button>
+                    <a class="ai-chat-sidebar-nav-item" href="{{ url_for('ai_gallery') }}">
+                        <span class="ai-chat-sidebar-nav-icon" aria-hidden="true">{{ icon('image') }}</span><span>Galerie</span>
+                    </a>
                     <div class="ai-chat-sidebar-more-wrap">
                         <button type="button" class="ai-chat-sidebar-nav-item" id="aiChatMoreBtn">
                             <span class="ai-chat-sidebar-nav-icon" aria-hidden="true">&#8943;</span><span>Mehr</span>
@@ -173,13 +176,24 @@
                             <button type="button" class="ai-chat-attach-btn" id="aiChatAttachBtn" title="Text-Datei anhängen">{{ icon('paperclip', 17) }}</button>
                             <div class="ai-chat-input-pill">
                                 <input type="text" id="aiChatInput" placeholder="Wie funktioniert eine Rakete?" maxlength="2000" autocomplete="off">
-                                <button type="button" class="ai-chat-input-mic-btn" id="aiChatInputMicBtn" title="Mit der KI sprechen">{{ icon('mic', 16) }}</button>
+                                <button type="button" class="ai-chat-input-mic-btn" id="aiChatInputMicBtn" title="Diktieren">{{ icon('mic', 16) }}</button>
                             </div>
                             <button type="submit" class="ai-chat-send-btn" id="aiChatSendBtn" title="Senden">
                                 <span class="ai-chat-send-icon" id="aiChatSendIcon">{{ icon('send', 16) }}</span>
                                 <span class="ai-chat-stop-icon" id="aiChatStopIcon" style="display:none;">{{ icon('stop', 14) }}</span>
                             </button>
                         </form>
+                        <div class="ai-chat-suggestion-rows" id="aiChatSuggestionRows">
+                            <button type="button" class="ai-chat-suggestion-row" data-suggestion="Erstelle ein Bild!">
+                                <span class="ai-chat-suggestion-row-icon" aria-hidden="true">{{ icon('image', 15) }}</span><span>Erstelle ein Bild!</span>
+                            </button>
+                            <button type="button" class="ai-chat-suggestion-row" data-suggestion="Erstelle eine Sprachnachricht!">
+                                <span class="ai-chat-suggestion-row-icon" aria-hidden="true">{{ icon('mic', 15) }}</span><span>Erstelle eine Sprachnachricht!</span>
+                            </button>
+                            <button type="button" class="ai-chat-suggestion-row" data-suggestion="Suche im Internet!">
+                                <span class="ai-chat-suggestion-row-icon" aria-hidden="true">{{ icon('search', 15) }}</span><span>Suche im Internet!</span>
+                            </button>
+                        </div>
                         <p class="ai-chat-disclaimer">Sie schreiben mit einer KI, nicht mit einem Menschen. Eine KI kann Fehler machen.</p>
                         </div>
 
@@ -293,6 +307,8 @@
                     thumbUp: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 22V11"/><path d="M2 13v7a2 2 0 0 0 2 2h13.4a2 2 0 0 0 2-1.7l1.4-8A2 2 0 0 0 19 10H14l1-5.5A1.7 1.7 0 0 0 12 3.5L7 11H2Z"/></svg>',
                     thumbDown: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 2v11"/><path d="M22 11V4a2 2 0 0 0-2-2H6.6a2 2 0 0 0-2 1.7l-1.4 8A2 2 0 0 0 5 14h5l-1 5.5A1.7 1.7 0 0 0 12 20.5L17 13h5Z"/></svg>',
                     bolt: '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 3 14h7l-1 8 11-14h-7z"/></svg>',
+                    mic: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M12 19v3"/></svg>',
+                    micOff: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="2" y1="2" x2="22" y2="22"/><path d="M9 9v3a3 3 0 0 0 4.24 2.73"/><path d="M15 9.34V5a3 3 0 0 0-5.68-1.33"/><path d="M5 10a7 7 0 0 0 10.24 6.22"/><path d="M18.94 12A7 7 0 0 0 19 10"/><path d="M12 19v3"/></svg>',
                 };
 
                 // Tokens are an app-internal currency separate from points,
@@ -766,7 +782,23 @@
                     // above so this is just belt-and-suspenders.
                     working = working.replace(
                         /!\[([^\]]*)\]\((https?:\/\/[^\s)]+)\)/g,
-                        (m, alt, url) => `<img class="ai-chat-generated-image" src="${url}" alt="${alt}" loading="lazy">`,
+                        (m, alt, url) => `<span class="ai-chat-image-wrap">`
+                            + `<span class="ai-chat-image-loading">Bild wird erzeugt …</span>`
+                            + `<img class="ai-chat-generated-image" src="${url}" alt="${alt}" loading="lazy" `
+                            + `onload="this.previousElementSibling.remove()" `
+                            + `onerror="this.previousElementSibling.textContent='Bild konnte nicht geladen werden.';`
+                            + `this.previousElementSibling.classList.add('is-error');this.style.display='none';">`
+                            + `</span>`,
+                    );
+
+                    // !audio[label](url) -- produced by the generate_audio
+                    // tool, a real generated speech clip (see
+                    // _synthesize_and_store_audio in app.py). Distinct
+                    // marker from ![]() (images) since it needs a real
+                    // <audio> element, not an <img>.
+                    working = working.replace(
+                        /!audio\[([^\]]*)\]\((https?:\/\/[^\s)]+)\)/g,
+                        (m, label, url) => `<audio class="ai-chat-generated-audio" controls src="${url}"></audio>`,
                     );
 
                     // [label](url) -- plain markdown links, e.g. the
@@ -1175,38 +1207,90 @@
                     return interval;
                 }
 
+                // Declared here (not down by the dictation functions that
+                // use it) so it already exists by the time
+                // updateInputMicVisibility runs on this very first call --
+                // a `let` declared later in the same scope would still be
+                // in its temporal dead zone at this point and throw.
+                let inputDictationActive = false;
+
                 function updateInputMicVisibility() {
-                    if (inputMicBtn) inputMicBtn.style.display = input.value ? "none" : "";
+                    // Stays visible while actively dictating even once the
+                    // field fills with text, since it's the only way to
+                    // stop listening again.
+                    if (inputMicBtn) inputMicBtn.style.display = (input.value && !inputDictationActive) ? "none" : "";
                 }
                 input.addEventListener("input", updateInputMicVisibility);
                 updateInputMicVisibility();
 
                 // A rotating pool of example questions shown as the
                 // placeholder (never the same one twice in a row) -- one
-                // fixed rocket example got repetitive fast.
-                const EXAMPLE_PROMPTS = [
-                    "Wie funktioniert eine Rakete?",
-                    "Welche Firmen bauen Raketen?",
-                    "Erkläre mir Quantenphysik in einfachen Worten",
-                    "Wie entsteht ein Regenbogen?",
-                    "Was ist der Unterschied zwischen Python und JavaScript?",
-                    "Gib mir Tipps, wie ich besser lernen kann",
-                    "Wie funktioniert eine Blockchain?",
-                    "Was passiert, wenn ein Stern kollabiert?",
-                    "Erzähl mir einen interessanten Fakt über den Ozean",
-                    "Wie kann ich meine Konzentration verbessern?",
-                    "Was ist künstliche Intelligenz eigentlich genau?",
-                    "Wie baue ich mir eine gute Gewohnheit auf?",
-                    "Erkläre mir, wie das Internet funktioniert",
-                    "Was sind schwarze Löcher?",
-                    "Wie programmiere ich mein erstes eigenes Spiel?",
-                    "Was macht eine gesunde Ernährung eigentlich aus?",
-                    "Wie funktioniert unser Gedächtnis?",
-                    "Erzähl mir etwas Spannendes über das alte Ägypten",
+                // fixed rocket example got repetitive fast. Rather than
+                // hand-writing hundreds of literal sentences, this combines
+                // a broad topic list with a handful of sentence templates,
+                // all chosen so the topic can drop in as a bare subject
+                // (nominative) without needing German case-declension
+                // ("Was ist X?" / "Wie funktioniert X?" etc. all work
+                // regardless of X's grammatical gender) -- topics x
+                // templates gives several hundred distinct combinations.
+                const EXAMPLE_TOPICS = [
+                    "Schwarze Löcher", "die Evolution", "das Sonnensystem", "Vulkane", "Erdbeben",
+                    "das Wetter", "der Regenwald", "die Photosynthese", "DNA", "das menschliche Gehirn",
+                    "das Immunsystem", "Bakterien", "Viren", "der Klimawandel", "die Ozeane",
+                    "Gletscher", "die Schwerkraft", "Elektrizität", "Magnetismus", "Atome",
+                    "Quantenphysik", "die Relativitätstheorie", "das Universum", "Sterne", "Galaxien",
+                    "der Mond", "Sonnenflecken", "Polarlichter", "Naturkatastrophen", "Artenvielfalt",
+                    "künstliche Intelligenz", "Blockchain", "das Internet", "Computer", "Smartphones",
+                    "Roboter", "3D-Drucker", "Elektroautos", "Solarenergie", "Windkraft",
+                    "Raketen", "Satelliten", "das World Wide Web", "Programmiersprachen", "Verschlüsselung",
+                    "Cybersicherheit", "virtuelle Realität", "Drohnen", "Halbleiter", "Batterien",
+                    "GPS", "WLAN", "Bluetooth", "Cloud Computing", "Quantencomputer",
+                    "das alte Ägypten", "das Römische Reich", "das Mittelalter", "die Renaissance", "die Französische Revolution",
+                    "der Zweite Weltkrieg", "die Antike", "die Wikinger", "die Maya", "das antike Griechenland",
+                    "die Seidenstraße", "die industrielle Revolution", "der Kalte Krieg", "die Berliner Mauer", "die Titanic",
+                    "Napoleon", "Kolumbus", "die Pyramiden von Gizeh", "das Kolosseum", "die Chinesische Mauer",
+                    "die Entdeckung Amerikas", "Piraten", "Ritter", "das Osmanische Reich", "die Aufklärung",
+                    "das menschliche Herz", "unser Gedächtnis", "Schlaf", "Träume", "Emotionen",
+                    "Stress", "gesunde Ernährung", "Sport", "Muskeln", "das Skelett",
+                    "unsere Sinne", "Hormone", "die Verdauung", "Konzentration", "gute Gewohnheiten",
+                    "mentale Gesundheit", "Achtsamkeit", "Meditation", "Motivation", "Zeitmanagement",
+                    "Produktivität", "gesunde Gewohnheiten", "effektives Lernen", "Zielsetzung", "Minimalismus",
+                    "nachhaltiges Leben", "ein Startup", "öffentliches Reden", "eine Fremdsprache lernen", "ein Instrument lernen",
+                    "Fotografie", "Gartenarbeit", "Yoga", "Reisen", "Geld sparen",
+                    "Musik", "Malerei", "Filme", "Literatur", "Architektur",
+                    "Mode", "Tanz", "Theater", "klassische Musik", "Jazz",
+                    "Popkultur", "Mythologie", "Märchen", "Sprachen", "Kalligrafie",
+                    "Poesie", "Comics", "Videospiele", "Streetart", "Japan",
+                    "Island", "die Sahara", "der Amazonas", "die Alpen", "Australien",
+                    "die Antarktis", "Hawaii", "die Malediven", "Norwegen", "Griechenland",
+                    "Marokko", "Peru", "Neuseeland", "Vietnam", "die Karibik",
+                    "der Himalaya", "Kanada", "Brasilien", "Ägypten als Reiseziel", "Wale",
+                    "Delfine", "Löwen", "Elefanten", "Pinguine", "Bienen",
+                    "Ameisen", "Haie", "Adler", "Wölfe", "Pandas",
+                    "Oktopusse", "Zugvögel", "Dinosaurier", "Insekten", "Korallenriffe",
+                    "Raubtiere", "aussterbende Tierarten", "Fußball", "die Formel 1", "die Olympischen Spiele",
+                    "Schach", "Klettern", "Schwimmen", "Basketball", "Tennis",
+                    "Marathonlaufen", "Extremsport", "Kaffee", "Schokolade", "Sushi",
+                    "die italienische Küche", "vegane Ernährung", "Gewürze", "Wein", "Backen",
+                    "Street Food", "traditionelle Gerichte",
+                ];
+                const EXAMPLE_TEMPLATES = [
+                    (t) => `Was ist ${t}?`,
+                    (t) => `Wie funktioniert ${t}?`,
+                    (t) => `${t} -- was sollte ich darüber wissen?`,
+                    (t) => `${t}: erzähl mir etwas Interessantes`,
+                    (t) => `Warum ist ${t} eigentlich spannend?`,
                 ];
                 function pickExamplePrompt(excluding) {
-                    const pool = excluding ? EXAMPLE_PROMPTS.filter((p) => p !== excluding) : EXAMPLE_PROMPTS;
-                    return pool[Math.floor(Math.random() * pool.length)];
+                    let candidate;
+                    let attempts = 0;
+                    do {
+                        const topic = EXAMPLE_TOPICS[Math.floor(Math.random() * EXAMPLE_TOPICS.length)];
+                        const template = EXAMPLE_TEMPLATES[Math.floor(Math.random() * EXAMPLE_TEMPLATES.length)];
+                        candidate = template(topic);
+                        attempts++;
+                    } while (candidate === excluding && attempts < 10);
+                    return candidate;
                 }
                 let currentExamplePrompt = pickExamplePrompt();
                 input.placeholder = currentExamplePrompt;
@@ -1220,6 +1304,20 @@
                     updateInputMicVisibility();
                     input.focus();
                 });
+
+                // The three stacked suggestion rows below the composer --
+                // same "click to write" idea as the placeholder, just
+                // always visible instead of needing a double-click.
+                const suggestionRows = document.getElementById("aiChatSuggestionRows");
+                if (suggestionRows) {
+                    suggestionRows.addEventListener("click", (event) => {
+                        const row = event.target.closest(".ai-chat-suggestion-row");
+                        if (!row) return;
+                        input.value = row.dataset.suggestion || "";
+                        updateInputMicVisibility();
+                        input.focus();
+                    });
+                }
 
                 form.addEventListener("submit", (event) => {
                     event.preventDefault();
@@ -1618,13 +1716,29 @@
                         voiceTranscript.scrollTop = voiceTranscript.scrollHeight;
                     }
 
-                    function pollVoiceJob(jobId) {
+                    // Never a dead end: a network hiccup mid-conversation just
+                    // means a short retry (poll failures) or, once retries are
+                    // used up, a calm status line and going straight back to
+                    // listening -- same "keep going like a human would" idea
+                    // as the recognition-error handling below, no more scary
+                    // "Fehler bei der Anfrage." that just leaves the user stuck.
+                    function voiceRecoverAndKeepListening(message) {
+                        voiceStatus.textContent = message;
+                        if (voiceOverlay.style.display !== "none") startListening();
+                    }
+
+                    function pollVoiceJob(jobId, retriesLeft) {
+                        if (retriesLeft === undefined) retriesLeft = 5;
                         fetch(`/api/ai/chat/${jobId}`)
                             .then((res) => res.json())
                             .then((data) => {
-                                if (!data.ok) { voiceStatus.textContent = "Fehler bei der Anfrage."; return; }
+                                if (!data.ok) {
+                                    if (retriesLeft > 0) { setTimeout(() => pollVoiceJob(jobId, retriesLeft - 1), 1500); return; }
+                                    voiceRecoverAndKeepListening("Kurze Störung -- ich höre trotzdem weiter zu.");
+                                    return;
+                                }
                                 if (data.status === "running") {
-                                    setTimeout(() => pollVoiceJob(jobId), 1000);
+                                    setTimeout(() => pollVoiceJob(jobId, 5), 1000);
                                     return;
                                 }
                                 if (data.status === "done") {
@@ -1639,11 +1753,16 @@
                                     speak(stripForSpeech(reply), () => {
                                         if (voiceOverlay.style.display !== "none") startListening();
                                     });
+                                } else if (retriesLeft > 0) {
+                                    setTimeout(() => pollVoiceJob(jobId, retriesLeft - 1), 1500);
                                 } else {
-                                    voiceStatus.textContent = "Die KI ist gerade nicht verfügbar.";
+                                    voiceRecoverAndKeepListening("Kurzer Moment -- ich höre trotzdem weiter zu.");
                                 }
                             })
-                            .catch(() => { voiceStatus.textContent = "Fehler bei der Anfrage."; });
+                            .catch(() => {
+                                if (retriesLeft > 0) { setTimeout(() => pollVoiceJob(jobId, retriesLeft - 1), 1500); return; }
+                                voiceRecoverAndKeepListening("Kurze Störung -- ich höre trotzdem weiter zu.");
+                            });
                     }
 
                     function sendVoiceMessage(text) {
@@ -1663,16 +1782,18 @@
                             .then((res) => res.json())
                             .then((data) => {
                                 if (!data.ok) {
-                                    voiceStatus.textContent = data.error === "insufficient_tokens"
-                                        ? `Nicht genug Tokens (noch ${data.tokens_available}, ${data.tokens_needed} nötig).`
-                                        : "Fehler bei der Anfrage.";
+                                    if (data.error === "insufficient_tokens") {
+                                        voiceStatus.textContent = `Nicht genug Tokens (noch ${data.tokens_available}, ${data.tokens_needed} nötig).`;
+                                        return;
+                                    }
+                                    voiceRecoverAndKeepListening("Kurze Störung -- ich höre trotzdem weiter zu.");
                                     return;
                                 }
                                 voiceChatId = data.chat_id;
                                 updateTokenBalance(data.tokens_remaining);
                                 pollVoiceJob(data.job_id);
                             })
-                            .catch(() => { voiceStatus.textContent = "Fehler bei der Anfrage."; });
+                            .catch(() => voiceRecoverAndKeepListening("Kurze Störung -- ich höre trotzdem weiter zu."));
                     }
 
                     const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -1780,7 +1901,68 @@
                     }
 
                     sidebarVoiceBtn.addEventListener("click", openVoiceMode);
-                    if (inputMicBtn) inputMicBtn.addEventListener("click", openVoiceMode);
+
+                    // The composer's own mic button no longer opens full
+                    // voice mode -- it dictates straight into the text
+                    // field instead (a second click, on the now
+                    // strikethrough icon, stops listening). Kept entirely
+                    // separate from the voice-mode recognition above since
+                    // this one fills the input instead of sending anything.
+                    let inputRecognition = null;
+
+                    function stopInputDictation() {
+                        inputDictationActive = false;
+                        if (inputRecognition) {
+                            try { inputRecognition.stop(); } catch (e) {}
+                        }
+                        if (inputMicBtn) {
+                            inputMicBtn.innerHTML = JS_ICONS.mic;
+                            inputMicBtn.title = "Diktieren";
+                            inputMicBtn.classList.remove("is-listening");
+                        }
+                    }
+
+                    function startInputDictation() {
+                        if (!SpeechRecognitionCtor || !inputMicBtn) return;
+                        const baseValue = input.value ? input.value.trim() + " " : "";
+                        inputRecognition = new SpeechRecognitionCtor();
+                        inputRecognition.lang = "de-DE";
+                        inputRecognition.continuous = true;
+                        inputRecognition.interimResults = true;
+                        inputRecognition.onresult = (event) => {
+                            let transcript = "";
+                            for (let i = 0; i < event.results.length; i++) {
+                                transcript += event.results[i][0].transcript;
+                            }
+                            input.value = baseValue + transcript;
+                            updateInputMicVisibility();
+                        };
+                        inputRecognition.onerror = () => {
+                            // Same "never a dead end" idea as voice mode --
+                            // a hiccup just keeps listening until the user
+                            // explicitly stops it via the button.
+                            if (inputDictationActive) {
+                                try { inputRecognition.start(); } catch (e) {}
+                            }
+                        };
+                        inputRecognition.onend = () => {
+                            if (inputDictationActive) {
+                                try { inputRecognition.start(); } catch (e) {}
+                            }
+                        };
+                        inputDictationActive = true;
+                        inputMicBtn.innerHTML = JS_ICONS.micOff;
+                        inputMicBtn.title = "Diktieren stoppen";
+                        inputMicBtn.classList.add("is-listening");
+                        try { inputRecognition.start(); } catch (e) {}
+                    }
+
+                    if (inputMicBtn) {
+                        inputMicBtn.addEventListener("click", () => {
+                            if (inputDictationActive) stopInputDictation();
+                            else startInputDictation();
+                        });
+                    }
 
                     voiceCloseBtn.addEventListener("click", () => {
                         listeningStoppedByUser = true;

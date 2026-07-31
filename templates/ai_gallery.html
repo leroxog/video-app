@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Galerie - NexAI{% endblock %}
+{% block content %}
+    <div class="ai-gallery-page">
+        <h1>Galerie</h1>
+        <p class="ai-gallery-intro">Alle Bilder und Sprachnachrichten, die Nex f&uuml;r dich erstellt hat.</p>
+
+        {% if items %}
+            <div class="ai-gallery-grid">
+                {% for item in items %}
+                    <div class="ai-gallery-card">
+                        {% if item.kind == "image" %}
+                            <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer" class="ai-gallery-card-media">
+                                <img src="{{ item.url }}" alt="{{ item.prompt or '' }}" loading="lazy">
+                            </a>
+                        {% else %}
+                            <div class="ai-gallery-card-media ai-gallery-card-media-audio">
+                                <audio controls src="{{ item.url }}"></audio>
+                            </div>
+                        {% endif %}
+                        {% if item.prompt %}
+                            <p class="ai-gallery-card-prompt">{{ item.prompt }}</p>
+                        {% endif %}
+                        <p class="ai-gallery-card-date">{{ item.created_at.strftime("%d.%m.%Y %H:%M") }}</p>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="ai-gallery-empty">
+                Hier ist noch nichts -- bitte Nex im Chat um ein Bild oder eine Sprachnachricht,
+                dann taucht es hier auf.
+            </p>
+        {% endif %}
+    </div>
+{% endblock %}

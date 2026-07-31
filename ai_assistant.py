@@ -185,7 +185,14 @@ GENERAL_SYSTEM_PROMPT = (
     "Reaktion passend zum Thema (Ausrufe, Slang, Emotion), statt neutral abzuwägen oder "
     "auszuweichen. Frag außerdem gerne von dir aus auch mal etwas zurück -- nicht nach jeder "
     "Nachricht, aber oft genug, dass sich das Gespräch wie ein echter Austausch anfühlt und "
-    "nicht wie ein reines Frage-Antwort-Formular."
+    "nicht wie ein reines Frage-Antwort-Formular.\n\n"
+    "Schreib so, wie ein echter Mensch in einem Chat schreiben würde, nicht wie ein "
+    "Nachschlagewerk: wechsle bewusst zwischen kurzen und längeren Sätzen, greif nicht bei "
+    "jeder Antwort zu Aufzählungen oder Überschriften (die sind für wirklich strukturierte "
+    "Inhalte reserviert, nicht der Standardfall), und vermeide steife Textbausteine wie "
+    "\"Zusammenfassend lässt sich sagen\" oder \"Ich hoffe, das hilft dir weiter\". "
+    "Alltagssprache, gelegentliche Umgangsformulierungen und ein bisschen Persönlichkeit in "
+    "der Wortwahl sind ausdrücklich erwünscht."
 )
 
 GENERAL_TOOLS_ADDENDUM = (
@@ -268,6 +275,37 @@ ADJUST_PERSONALITY_TOOL = {
 }
 
 IMAGE_TOKEN_COST = 600
+AUDIO_TOKEN_COST = 400
+
+GENERATE_AUDIO_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "generate_audio",
+        "description": (
+            f"Erzeugt eine echte, hörbare Sprachnachricht aus Text und zeigt sie dem Nutzer als "
+            f"abspielbaren Player an. Kostet {AUDIO_TOKEN_COST} Tokens vom Nutzer-Guthaben -- nur "
+            "aufrufen, wenn der Nutzer wirklich ausdrücklich eine Sprachnachricht/Audio möchte UND "
+            "genug Tokens übrig hat. Funktioniert nur, wenn bereits eine echte KI-Stimme vorhanden "
+            "ist -- falls nicht, kommt ehrlich ein Fehler zurück, den du dem Nutzer erklären sollst, "
+            "statt es erneut zu versuchen oder etwas vorzutäuschen."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "text": {
+                    "type": "string",
+                    "description": "Der Text, der gesprochen werden soll, auf Deutsch.",
+                },
+                "gender": {
+                    "type": "string",
+                    "enum": ["male", "female"],
+                    "description": "Gewünschte Stimme, falls vom Nutzer erwähnt -- sonst weglassen.",
+                },
+            },
+            "required": ["text"],
+        },
+    },
+}
 
 GENERATE_IMAGE_TOOL = {
     "type": "function",
@@ -501,7 +539,10 @@ REMEMBER_USER_FACT_TOOL = {
             "abgeleitetes Verhaltensmuster wie 'tippt bei Stress auffällig schnell'). Landet "
             "in einem privaten, nur dir selbst zugänglichen Profil dieses Nutzers -- darf "
             "daher auch bei kleinen, nebensächlich wirkenden Details aufgerufen werden, nicht "
-            "nur bei großen expliziten Aussagen."
+            "nur bei großen expliziten Aussagen. Je genauer und konkreter der einzelne Fakt "
+            "formuliert ist, desto nützlicher ist er später -- lieber 'mag Science-Fiction, "
+            "besonders Weltraum-Themen, hat kürzlich nach schwarzen Löchern gefragt' als nur "
+            "'interessiert sich für Wissenschaft'."
         ),
         "parameters": {
             "type": "object",
@@ -525,7 +566,7 @@ WEBAPP_TOOLS = [PROPOSE_PROJECT_CHANGE_TOOL, SEARCH_DOCS_TOOL]
 CODE_CHAT_TOOLS = [SEARCH_DOCS_TOOL]
 AI_TOOLS = [
     SEARCH_WIKIPEDIA_TOOL, GET_WEATHER_TOOL, SEARCH_DOCS_TOOL, REMEMBER_USER_FACT_TOOL,
-    ADJUST_PERSONALITY_TOOL, GENERATE_IMAGE_TOOL,
+    ADJUST_PERSONALITY_TOOL, GENERATE_IMAGE_TOOL, GENERATE_AUDIO_TOOL,
 ]
 
 
@@ -670,7 +711,7 @@ _WIKIPEDIA_LOOKUP_FAILURES = (
 )
 
 
-def _run_tool_calls(tool_calls, captured, available_tokens=None):
+def _run_tool_calls(tool_calls, captured, available_tokens=None, synthesize_audio_fn=None):
     """Executes each requested tool and returns the "tool" role messages
     to feed back to the model. `captured` is a single dict shared across
     the whole _call_groq() loop, so the caller can read results back out
@@ -732,10 +773,42 @@ def _run_tool_calls(tool_calls, captured, available_tokens=None):
                 result = (
                     f"Bild erzeugt. Füge es in deiner Antwort als Markdown-Bild ein: "
                     f"![{prompt}]({image_url})\n\n"
-                    "Schreib direkt darunter außerdem transparent, dass das Bild über den "
-                    "externen Dienst Pollinations.ai erzeugt wurde, mit einem Link zur "
-                    "Webseite: [Pollinations.ai](https://pollinations.ai)"
+                    "Erwähne dabei NICHT von dir aus, womit oder wie das Bild erzeugt wurde -- "
+                    "schreib nur normal etwas Kurzes dazu. NUR falls der Nutzer (in dieser oder "
+                    "einer späteren Nachricht) ausdrücklich danach fragt, wie/womit/mit welchem "
+                    "Dienst das Bild erstellt wurde, antworte ehrlich: über den externen Dienst "
+                    "Pollinations.ai, mit einem Link zur Webseite: "
+                    "[Pollinations.ai](https://pollinations.ai)"
                 )
+        elif name == "generate_audio":
+            text = (args.get("text") or "").strip()[:2000]
+            gender = args.get("gender") if args.get("gender") in ("male", "female") else None
+            if not text:
+                result = "Kein Text angegeben."
+            elif synthesize_audio_fn is None:
+                result = (
+                    "Es gibt aktuell keine echte, geklonte KI-Stimme -- Sprachnachrichten können "
+                    "gerade nicht erzeugt werden. Erklär das dem Nutzer ehrlich, statt es zu "
+                    "versuchen oder etwas vorzutäuschen."
+                )
+            elif available_tokens is not None and available_tokens < AUDIO_TOKEN_COST:
+                result = (
+                    f"Nicht genug Tokens ({available_tokens} übrig, {AUDIO_TOKEN_COST} nötig) -- "
+                    "keine Sprachnachricht erzeugt. Erklär das dem Nutzer ehrlich."
+                )
+            else:
+                audio_url = synthesize_audio_fn(text, gender)
+                if not audio_url:
+                    result = (
+                        "Die Sprachausgabe ist gerade nicht verfügbar (technischer Fehler). "
+                        "Erklär das dem Nutzer ehrlich, statt es erneut zu versuchen."
+                    )
+                else:
+                    captured["audio_generated"] = {"url": audio_url, "text": text}
+                    result = (
+                        "Sprachnachricht erzeugt. Füge sie in deiner Antwort als Audio-Markdown ein: "
+                        f"!audio[Sprachnachricht]({audio_url})"
+                    )
         else:
             impl = TOOL_IMPLEMENTATIONS.get(name)
             result = impl(args) if impl else f"Unbekanntes Werkzeug: {name}"
@@ -778,7 +851,8 @@ def _call_groq_message(messages, max_tokens, tools=None, tool_choice="auto", tem
     return response.json()["choices"][0]["message"]
 
 
-def _call_groq(messages, max_tokens, tools=None, captured=None, temperature=CODE_TEMPERATURE, available_tokens=None):
+def _call_groq(messages, max_tokens, tools=None, captured=None, temperature=CODE_TEMPERATURE, available_tokens=None,
+                synthesize_audio_fn=None):
     """Runs a tool-calling loop: as long as the model keeps requesting
     tools, executes them server-side and feeds the results back, up to
     MAX_TOOL_ROUNDS turns. On the last allowed turn, tool_choice is forced
@@ -813,7 +887,7 @@ def _call_groq(messages, max_tokens, tools=None, captured=None, temperature=CODE
         if not tool_calls:
             return (message.get("content") or "").strip(), captured["proposed_change"]
         current_messages = current_messages + [message] + _run_tool_calls(
-            tool_calls, captured, available_tokens=available_tokens,
+            tool_calls, captured, available_tokens=available_tokens, synthesize_audio_fn=synthesize_audio_fn,
         )
     return "", captured["proposed_change"]
 
@@ -879,7 +953,7 @@ def _learned_facts_addendum(wikipedia_facts, user_facts, docs_facts=None, behavi
 
 def generate_reply(message, context=None, history=None, project_type=None, facts=None,
                     learned_facts=None, captured=None, behavior_note=None, personality=None,
-                    available_tokens=None):
+                    available_tokens=None, synthesize_audio_fn=None):
     """Runs one turn against Groq's hosted chat-completions API. Not meant
     to be called directly from a request handler -- see start_chat_job().
     `history` is this same chat's own prior turns (a list of
@@ -957,8 +1031,11 @@ def generate_reply(message, context=None, history=None, project_type=None, facts
             system_prompt += (
                 f"\n\nDieser Nutzer hat aktuell {available_tokens} Tokens übrig (eine App-interne "
                 f"Währung, getrennt von Punkten). Ein Bild erzeugen kostet {IMAGE_TOKEN_COST} "
-                "Tokens -- ruf generate_image nur auf, wenn klar genug Tokens übrig sind und der "
-                "Nutzer wirklich ausdrücklich ein Bild möchte. WICHTIG, falls jemand fragt, wie "
+                f"Tokens, eine Sprachnachricht erzeugen kostet {AUDIO_TOKEN_COST} Tokens -- ruf "
+                "generate_image/generate_audio nur auf, wenn klar genug Tokens übrig sind und der "
+                "Nutzer das wirklich ausdrücklich möchte. Echte Video-Erstellung gibt es aktuell "
+                "NICHT -- falls danach gefragt wird, erklär ehrlich, dass das (noch) nicht "
+                "unterstützt wird, statt es vorzutäuschen. WICHTIG, falls jemand fragt, wie "
                 "man mehr Tokens bekommt: Es gibt AKTUELL KEINEN Store, keine kaufbaren "
                 "Token-Pakete und keine Möglichkeit, mit echtem Geld Tokens zu kaufen -- erfinde "
                 "so etwas niemals (kein Store, keine Preise, keine Zahlungsmethoden). Die einzigen "
@@ -975,6 +1052,7 @@ def generate_reply(message, context=None, history=None, project_type=None, facts
     return _call_groq(
         messages, MAX_REPLY_TOKENS, tools=tools, captured=captured, temperature=temperature,
         available_tokens=available_tokens if project_type is None else None,
+        synthesize_audio_fn=synthesize_audio_fn if project_type is None else None,
     )
 
 
@@ -1007,13 +1085,17 @@ _jobs_lock = threading.Lock()
 
 def start_chat_job(message, context=None, history=None, project_type=None, facts=None,
                     learned_facts=None, on_done=None, behavior_note=None, personality=None,
-                    available_tokens=None):
+                    available_tokens=None, synthesize_audio_fn=None):
     """`on_done(reply, error, proposed_change, new_learned_facts)` --
     new_learned_facts is always a {"wikipedia": [...], "user": [...],
-    "personality_adjustments": [...], "image_generated": {...} or None}
-    dict (possibly with empty lists) of facts/trait nudges/image-tool-calls
-    from *this* call, for the caller to persist as AiLearnedFact rows /
-    AiPersonality updates / token deductions."""
+    "personality_adjustments": [...], "image_generated": {...} or None,
+    "audio_generated": {...} or None} dict (possibly with empty lists) of
+    facts/trait nudges/image-or-audio-tool-calls from *this* call, for the
+    caller to persist as AiLearnedFact rows / AiPersonality updates / token
+    deductions. `synthesize_audio_fn(text, gender)`, if given, is called
+    synchronously from inside the generate_audio tool handler and must
+    return a playable URL (already generated *and* stored) or None on
+    failure/unavailability -- see app.py's _synthesize_and_store_audio."""
     job_id = uuid.uuid4().hex
     with _jobs_lock:
         _jobs[job_id] = {"status": "running", "reply": None, "error": None, "proposed_change": None}
@@ -1031,12 +1113,14 @@ def start_chat_job(message, context=None, history=None, project_type=None, facts
             reply, proposed_change = generate_reply(
                 message, context, history, project_type, facts, learned_facts, captured,
                 behavior_note, personality, available_tokens,
+                synthesize_audio_fn=synthesize_audio_fn,
             )
             new_learned_facts = {
                 "wikipedia": captured.get("wikipedia_facts") or [],
                 "user": captured.get("user_facts") or [],
                 "personality_adjustments": captured.get("personality_adjustments") or [],
                 "image_generated": captured.get("image_generated"),
+                "audio_generated": captured.get("audio_generated"),
             }
             if on_done:
                 on_done(reply, None, proposed_change, new_learned_facts)

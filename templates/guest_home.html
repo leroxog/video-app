@@ -57,30 +57,66 @@
             }
 
             // Matches the logged-in assistant's rotating example pool (see
-            // base.html) -- never the same one twice in a row.
-            const EXAMPLE_PROMPTS = [
-                "Wie funktioniert eine Rakete?",
-                "Welche Firmen bauen Raketen?",
-                "Erkläre mir Quantenphysik in einfachen Worten",
-                "Wie entsteht ein Regenbogen?",
-                "Was ist der Unterschied zwischen Python und JavaScript?",
-                "Gib mir Tipps, wie ich besser lernen kann",
-                "Wie funktioniert eine Blockchain?",
-                "Was passiert, wenn ein Stern kollabiert?",
-                "Erzähl mir einen interessanten Fakt über den Ozean",
-                "Wie kann ich meine Konzentration verbessern?",
-                "Was ist künstliche Intelligenz eigentlich genau?",
-                "Wie baue ich mir eine gute Gewohnheit auf?",
-                "Erkläre mir, wie das Internet funktioniert",
-                "Was sind schwarze Löcher?",
-                "Wie programmiere ich mein erstes eigenes Spiel?",
-                "Was macht eine gesunde Ernährung eigentlich aus?",
-                "Wie funktioniert unser Gedächtnis?",
-                "Erzähl mir etwas Spannendes über das alte Ägypten",
+            // base.html) -- topics x templates, never the same one twice
+            // in a row.
+            const EXAMPLE_TOPICS = [
+                "Schwarze Löcher", "die Evolution", "das Sonnensystem", "Vulkane", "Erdbeben",
+                "das Wetter", "der Regenwald", "die Photosynthese", "DNA", "das menschliche Gehirn",
+                "das Immunsystem", "Bakterien", "Viren", "der Klimawandel", "die Ozeane",
+                "Gletscher", "die Schwerkraft", "Elektrizität", "Magnetismus", "Atome",
+                "Quantenphysik", "die Relativitätstheorie", "das Universum", "Sterne", "Galaxien",
+                "der Mond", "Sonnenflecken", "Polarlichter", "Naturkatastrophen", "Artenvielfalt",
+                "künstliche Intelligenz", "Blockchain", "das Internet", "Computer", "Smartphones",
+                "Roboter", "3D-Drucker", "Elektroautos", "Solarenergie", "Windkraft",
+                "Raketen", "Satelliten", "das World Wide Web", "Programmiersprachen", "Verschlüsselung",
+                "Cybersicherheit", "virtuelle Realität", "Drohnen", "Halbleiter", "Batterien",
+                "GPS", "WLAN", "Bluetooth", "Cloud Computing", "Quantencomputer",
+                "das alte Ägypten", "das Römische Reich", "das Mittelalter", "die Renaissance", "die Französische Revolution",
+                "der Zweite Weltkrieg", "die Antike", "die Wikinger", "die Maya", "das antike Griechenland",
+                "die Seidenstraße", "die industrielle Revolution", "der Kalte Krieg", "die Berliner Mauer", "die Titanic",
+                "Napoleon", "Kolumbus", "die Pyramiden von Gizeh", "das Kolosseum", "die Chinesische Mauer",
+                "die Entdeckung Amerikas", "Piraten", "Ritter", "das Osmanische Reich", "die Aufklärung",
+                "das menschliche Herz", "unser Gedächtnis", "Schlaf", "Träume", "Emotionen",
+                "Stress", "gesunde Ernährung", "Sport", "Muskeln", "das Skelett",
+                "unsere Sinne", "Hormone", "die Verdauung", "Konzentration", "gute Gewohnheiten",
+                "mentale Gesundheit", "Achtsamkeit", "Meditation", "Motivation", "Zeitmanagement",
+                "Produktivität", "gesunde Gewohnheiten", "effektives Lernen", "Zielsetzung", "Minimalismus",
+                "nachhaltiges Leben", "ein Startup", "öffentliches Reden", "eine Fremdsprache lernen", "ein Instrument lernen",
+                "Fotografie", "Gartenarbeit", "Yoga", "Reisen", "Geld sparen",
+                "Musik", "Malerei", "Filme", "Literatur", "Architektur",
+                "Mode", "Tanz", "Theater", "klassische Musik", "Jazz",
+                "Popkultur", "Mythologie", "Märchen", "Sprachen", "Kalligrafie",
+                "Poesie", "Comics", "Videospiele", "Streetart", "Japan",
+                "Island", "die Sahara", "der Amazonas", "die Alpen", "Australien",
+                "die Antarktis", "Hawaii", "die Malediven", "Norwegen", "Griechenland",
+                "Marokko", "Peru", "Neuseeland", "Vietnam", "die Karibik",
+                "der Himalaya", "Kanada", "Brasilien", "Ägypten als Reiseziel", "Wale",
+                "Delfine", "Löwen", "Elefanten", "Pinguine", "Bienen",
+                "Ameisen", "Haie", "Adler", "Wölfe", "Pandas",
+                "Oktopusse", "Zugvögel", "Dinosaurier", "Insekten", "Korallenriffe",
+                "Raubtiere", "aussterbende Tierarten", "Fußball", "die Formel 1", "die Olympischen Spiele",
+                "Schach", "Klettern", "Schwimmen", "Basketball", "Tennis",
+                "Marathonlaufen", "Extremsport", "Kaffee", "Schokolade", "Sushi",
+                "die italienische Küche", "vegane Ernährung", "Gewürze", "Wein", "Backen",
+                "Street Food", "traditionelle Gerichte",
+            ];
+            const EXAMPLE_TEMPLATES = [
+                (t) => `Was ist ${t}?`,
+                (t) => `Wie funktioniert ${t}?`,
+                (t) => `${t} -- was sollte ich darüber wissen?`,
+                (t) => `${t}: erzähl mir etwas Interessantes`,
+                (t) => `Warum ist ${t} eigentlich spannend?`,
             ];
             function pickExamplePrompt(excluding) {
-                const pool = excluding ? EXAMPLE_PROMPTS.filter((p) => p !== excluding) : EXAMPLE_PROMPTS;
-                return pool[Math.floor(Math.random() * pool.length)];
+                let candidate;
+                let attempts = 0;
+                do {
+                    const topic = EXAMPLE_TOPICS[Math.floor(Math.random() * EXAMPLE_TOPICS.length)];
+                    const template = EXAMPLE_TEMPLATES[Math.floor(Math.random() * EXAMPLE_TEMPLATES.length)];
+                    candidate = template(topic);
+                    attempts++;
+                } while (candidate === excluding && attempts < 10);
+                return candidate;
             }
             let currentExamplePrompt = pickExamplePrompt();
             input.placeholder = currentExamplePrompt;

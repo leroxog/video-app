@@ -465,6 +465,24 @@ class AiChatMessage(db.Model):
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
 
+class AiGeneratedMedia(db.Model):
+    """One image or audio clip the assistant generated for a user via the
+    generate_image / generate_audio tools (see ai_assistant.py) -- kept as
+    its own record (in addition to being embedded inline in the
+    AiChatMessage that produced it) purely so the "Galerie" page can list
+    everything a user has ever had the AI create, without having to scan
+    and re-parse every chat message. url is the same URL embedded in the
+    chat reply (a Pollinations.ai URL for images; a stored file URL via
+    media_url() for audio)."""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    kind = db.Column(db.String(10), nullable=False)  # "image" or "audio"
+    url = db.Column(db.String(500), nullable=False)
+    prompt = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    user = db.relationship("User")
+
+
 class AiAdminFact(db.Model):
     """A fact an admin has told the AI assistant through the admin
     dashboard's dedicated "KI-Wissen" chat -- unlike every other AI chat in
