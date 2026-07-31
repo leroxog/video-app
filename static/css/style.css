@@ -932,51 +932,42 @@ body.ai-fullscreen main {
 }
 
 /* --- Voice chat overlay ("Mit der KI reden") --- */
-.ai-voice-overlay {
-    position: fixed;
+/* Lives inline inside .ai-chat-conversation-view (see base.html) instead of
+   a separate fixed full-screen page -- it covers just that container's own
+   box (messages + composer area), so the header/sidebar/avatar around it
+   stay exactly where they are. .ai-chat-conversation-view itself needs
+   position:relative for this inset:0 to size against the right box. */
+.ai-voice-panel {
+    position: absolute;
     inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    align-items: center;
-    justify-content: center;
-    z-index: 500;
-}
-
-.ai-voice-box {
-    width: min(420px, calc(100vw - 32px));
-    max-height: calc(100vh - 64px);
     display: flex;
     flex-direction: column;
-    background: #1c1c1c;
-    border: 1px solid #2c2c2c;
-    border-radius: 14px;
-    padding: 1rem 1.2rem;
-    color: #f1f1f1;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 1.2rem;
+    color: var(--text-primary);
 }
 
 .ai-voice-header {
+    position: absolute;
+    top: 0.9rem;
+    left: 0;
+    right: 0;
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: center;
     gap: 0.6rem;
     font-weight: 600;
-    margin-bottom: 0.8rem;
 }
 
 .ai-voice-gender-select {
-    background: #141414;
-    color: #f1f1f1;
-    border: 1px solid #3c3c3c;
+    background: var(--glass-bg-strong);
+    color: var(--text-primary);
+    border: var(--glass-border);
     border-radius: 8px;
     padding: 0.3rem 0.5rem;
     font-size: 0.8rem;
-}
-
-.ai-voice-header button {
-    background: none;
-    border: none;
-    color: #ccc;
-    font-size: 1.2rem;
-    cursor: pointer;
 }
 
 .ai-voice-transcript {
@@ -1063,11 +1054,35 @@ body.ai-fullscreen main {
     margin: 0.7rem 0 0;
 }
 
+/* Sits right below the status line, under the orb -- the one way to leave
+   voice mode now that it's not a page with its own header/close button. */
+.ai-voice-close-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: var(--glass-border);
+    background: var(--glass-bg-strong);
+    color: var(--text-secondary);
+    cursor: pointer;
+    margin-top: 0.3rem;
+}
+
+.ai-voice-close-btn:hover {
+    color: var(--text-primary);
+}
+
 .ai-voice-disclaimer {
+    position: absolute;
+    bottom: 0.8rem;
+    left: 0;
+    right: 0;
     text-align: center;
     font-size: 0.72rem;
     color: #777;
-    margin: 0.6rem 0 0;
+    margin: 0;
 }
 
 .ai-chat-sidebar-list {
@@ -1370,6 +1385,17 @@ body.ai-fullscreen main {
 }
 
 .ai-chat-conversation-view {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+/* Wraps everything except the voice panel (see base.html) -- toggled with
+   a single display flip when voice mode opens/closes, instead of hiding
+   several separate siblings individually. */
+.ai-chat-normal-view {
     display: flex;
     flex-direction: column;
     flex: 1 1 auto;
@@ -1520,7 +1546,10 @@ body.ai-fullscreen main {
 
 .ai-chat-message-bot {
     align-self: flex-start;
-    background: rgba(127, 127, 127, 0.14);
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    backdrop-filter: blur(16px) saturate(1.6);
+    -webkit-backdrop-filter: blur(16px) saturate(1.6);
     color: var(--text-primary);
     /* Bot replies are rendered as real HTML (see renderMarkdown in
        base.html), unlike the plain-text user bubbles that still rely on
@@ -1653,8 +1682,11 @@ body.studio-fullscreen .ai-chat-message-bot {
 
 .ai-chat-message-user {
     align-self: flex-end;
-    background: var(--gradient-primary);
-    color: var(--gradient-primary-text);
+    background: rgba(147, 51, 234, 0.4);
+    border: 1px solid rgba(168, 85, 247, 0.5);
+    backdrop-filter: blur(16px) saturate(1.6);
+    -webkit-backdrop-filter: blur(16px) saturate(1.6);
+    color: #fff;
 }
 
 .ai-chat-insert-btn {

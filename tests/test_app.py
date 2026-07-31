@@ -2971,6 +2971,32 @@ def test_ai_chat_via_voice_deducts_voice_token_cost(client, monkeypatch):
     assert data["tokens_remaining"] == before - app_module.TOKEN_COST_VOICE_BASE
 
 
+def test_ai_chat_was_interrupted_passes_behavior_note(client, monkeypatch):
+    import ai_assistant
+
+    captured = {}
+
+    def fake_generate_reply(message, context=None, history=None, project_type=None, facts=None,
+                             learned_facts=None, captured_out=None, behavior_note=None, personality=None,
+                             available_tokens=None):
+        captured["behavior_note"] = behavior_note
+        return "Antwort", None
+
+    monkeypatch.setattr(ai_assistant, "generate_reply", fake_generate_reply)
+    register(client)
+
+    client.post("/api/ai/chat", json={"message": "Hallo", "via_voice": True, "was_interrupted": True})
+
+    import time
+    for _ in range(20):
+        if "behavior_note" in captured:
+            break
+        time.sleep(0.05)
+
+    assert captured["behavior_note"] is not None
+    assert "unterbrochen" in captured["behavior_note"]
+
+
 def test_unlimited_tokens_account_never_blocked_or_deducted(client, monkeypatch):
     import ai_assistant
     import app as app_module

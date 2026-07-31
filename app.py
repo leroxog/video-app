@@ -1956,6 +1956,17 @@ def api_ai_chat():
     typing_interval_raw = data.get("typing_avg_interval_ms")
     if isinstance(typing_interval_raw, (int, float)) and TYPING_INTERVAL_MIN_MS <= typing_interval_raw <= TYPING_INTERVAL_MAX_MS:
         behavior_note = _update_typing_baseline_and_get_note(user, float(typing_interval_raw))
+    # Set when the user clicked the orb to cut the AI's spoken reply short
+    # mid-sentence (see base.html's stopAiSpeaking) -- a one-off aside for
+    # this turn only, not a stored fact, so the model can react to actually
+    # being interrupted instead of just continuing as if nothing happened.
+    if data.get("was_interrupted"):
+        interrupted_note = (
+            "Der Nutzer hat deine letzte gesprochene Antwort unterbrochen, bevor sie fertig war -- "
+            "wie bei einem echten Gespräch: halt dich jetzt etwas kürzer, komm schneller auf den "
+            "Punkt, aber erwähne die Unterbrechung selbst nicht extra."
+        )
+        behavior_note = f"{behavior_note} {interrupted_note}" if behavior_note else interrupted_note
 
     chat = None
     if chat_id:

@@ -29,7 +29,7 @@
 
             <form class="ai-chat-form" id="guestChatForm">
                 <div class="ai-chat-input-pill">
-                    <input type="text" id="guestChatInput" placeholder='z.B. "Wie funktioniert eine Rakete?"' maxlength="2000" autocomplete="off">
+                    <input type="text" id="guestChatInput" placeholder="Wie funktioniert eine Rakete?" maxlength="2000" autocomplete="off">
                 </div>
                 <button type="submit" class="ai-chat-send-btn" id="guestChatSendBtn" title="Senden">{{ icon('send', 16) }}</button>
             </form>
@@ -56,11 +56,40 @@
                 return bubble;
             }
 
-            // Double-click the empty input to drop in the placeholder's
-            // example question, matching the logged-in assistant's input.
+            // Matches the logged-in assistant's rotating example pool (see
+            // base.html) -- never the same one twice in a row.
+            const EXAMPLE_PROMPTS = [
+                "Wie funktioniert eine Rakete?",
+                "Welche Firmen bauen Raketen?",
+                "Erkläre mir Quantenphysik in einfachen Worten",
+                "Wie entsteht ein Regenbogen?",
+                "Was ist der Unterschied zwischen Python und JavaScript?",
+                "Gib mir Tipps, wie ich besser lernen kann",
+                "Wie funktioniert eine Blockchain?",
+                "Was passiert, wenn ein Stern kollabiert?",
+                "Erzähl mir einen interessanten Fakt über den Ozean",
+                "Wie kann ich meine Konzentration verbessern?",
+                "Was ist künstliche Intelligenz eigentlich genau?",
+                "Wie baue ich mir eine gute Gewohnheit auf?",
+                "Erkläre mir, wie das Internet funktioniert",
+                "Was sind schwarze Löcher?",
+                "Wie programmiere ich mein erstes eigenes Spiel?",
+                "Was macht eine gesunde Ernährung eigentlich aus?",
+                "Wie funktioniert unser Gedächtnis?",
+                "Erzähl mir etwas Spannendes über das alte Ägypten",
+            ];
+            function pickExamplePrompt(excluding) {
+                const pool = excluding ? EXAMPLE_PROMPTS.filter((p) => p !== excluding) : EXAMPLE_PROMPTS;
+                return pool[Math.floor(Math.random() * pool.length)];
+            }
+            let currentExamplePrompt = pickExamplePrompt();
+            input.placeholder = currentExamplePrompt;
+
+            // Double-click the empty input to drop in the current
+            // placeholder example, matching the logged-in assistant's input.
             input.addEventListener("dblclick", () => {
                 if (input.value) return;
-                input.value = "Wie funktioniert eine Rakete?";
+                input.value = currentExamplePrompt;
                 input.focus();
             });
 
@@ -96,6 +125,8 @@
                 const sentHistory = history.slice();
                 history.push({ role: "user", content: text });
                 input.value = "";
+                currentExamplePrompt = pickExamplePrompt(currentExamplePrompt);
+                input.placeholder = currentExamplePrompt;
                 sentCount += 1;
 
                 const thinkingBubble = addMessage("Denkt nach...", "bot");

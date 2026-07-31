@@ -140,6 +140,7 @@
                     </div>
 
                     <div class="ai-chat-conversation-view" id="aiChatConversationView">
+                        <div class="ai-chat-normal-view" id="aiChatNormalView">
                         <div class="ai-chat-messages" id="aiChatMessages">
                             <div class="ai-chat-message ai-chat-message-bot">
                                 Hallo! Frag mich etwas, oder &mdash; wenn du gerade im Studio-Editor programmierst &mdash;
@@ -162,7 +163,7 @@
                             <input type="file" id="aiChatFileInput" accept=".txt,.md,.markdown,.py,.js,.jsx,.ts,.tsx,.json,.csv,.html,.htm,.css,.log,.yaml,.yml,.xml,.java,.c,.cpp,.cs,.sh" style="display:none;">
                             <button type="button" class="ai-chat-attach-btn" id="aiChatAttachBtn" title="Text-Datei anhängen">{{ icon('paperclip', 17) }}</button>
                             <div class="ai-chat-input-pill">
-                                <input type="text" id="aiChatInput" placeholder='z.B. "Wie funktioniert eine Rakete?"' maxlength="2000" autocomplete="off">
+                                <input type="text" id="aiChatInput" placeholder="Wie funktioniert eine Rakete?" maxlength="2000" autocomplete="off">
                                 <button type="button" class="ai-chat-input-mic-btn" id="aiChatInputMicBtn" title="Mit der KI sprechen">{{ icon('mic', 16) }}</button>
                             </div>
                             <button type="submit" class="ai-chat-send-btn" id="aiChatSendBtn" title="Senden">
@@ -171,29 +172,34 @@
                             </button>
                         </form>
                         <p class="ai-chat-disclaimer">Sie schreiben mit einer KI, nicht mit einem Menschen. Eine KI kann Fehler machen.</p>
-                    </div>
-                </div>
-            </div>
+                        </div>
 
-            <div class="ai-voice-overlay" id="aiVoiceOverlay" style="display:none;">
-                <div class="ai-voice-box">
-                    <div class="ai-voice-header">
-                        <span>Mit der KI reden</span>
-                        <select id="aiVoiceGenderSelect" class="ai-voice-gender-select" title="Stimme der KI">
-                            <option value="male">Männliche Stimme</option>
-                            <option value="female">Weibliche Stimme</option>
-                        </select>
-                        <button type="button" id="aiVoiceCloseBtn">&times;</button>
+                        <!-- Lives right inside the normal conversation area
+                             instead of a separate full-screen page/overlay --
+                             see updateInputMicVisibility's sibling toggling
+                             in the script below: opening voice mode hides
+                             the messages/form here and shows this instead,
+                             closing it does the reverse. The header/sidebar/
+                             avatar around this stay exactly as they are. -->
+                        <div class="ai-voice-panel" id="aiVoiceOverlay" style="display:none;">
+                            <div class="ai-voice-header">
+                                <span>Mit der KI reden</span>
+                                <select id="aiVoiceGenderSelect" class="ai-voice-gender-select" title="Stimme der KI">
+                                    <option value="male">Männliche Stimme</option>
+                                    <option value="female">Weibliche Stimme</option>
+                                </select>
+                            </div>
+                            <div class="ai-voice-transcript" id="aiVoiceTranscript"></div>
+                            <div class="ai-voice-orb-wrap" id="aiVoiceMicBtn" role="button" tabindex="0" title="Sprechen">
+                                <canvas class="ai-voice-orb-canvas" id="aiVoiceOrbCanvas" width="240" height="240"></canvas>
+                            </div>
+                            <p class="ai-voice-status" id="aiVoiceStatus">Ich höre zu ...</p>
+                            <button type="button" class="ai-voice-close-btn" id="aiVoiceCloseBtn" title="Sprachmodus verlassen">{{ icon('stop', 12) }}</button>
+                            <p class="ai-voice-disclaimer">
+                                Sie sprechen mit einer KI, nicht mit einem Menschen.
+                            </p>
+                        </div>
                     </div>
-                    <div class="ai-voice-transcript" id="aiVoiceTranscript"></div>
-                    <div class="ai-voice-orb-wrap" id="aiVoiceMicBtn" role="button" tabindex="0" title="Sprechen">
-                        <canvas class="ai-voice-orb-canvas" id="aiVoiceOrbCanvas" width="240" height="240"></canvas>
-                    </div>
-                    <p class="ai-voice-status" id="aiVoiceStatus">Tippe auf den Kreis und sprich.</p>
-
-                    <p class="ai-voice-disclaimer">
-                        Sie sprechen mit einer KI, nicht mit einem Menschen.
-                    </p>
                 </div>
             </div>
         </div>
@@ -250,6 +256,7 @@
                 const listView = document.getElementById("aiChatListView");
                 const listEl = document.getElementById("aiChatList");
                 const conversationView = document.getElementById("aiChatConversationView");
+                const normalView = document.getElementById("aiChatNormalView");
                 const messagesEl = document.getElementById("aiChatMessages");
                 const form = document.getElementById("aiChatForm");
                 const input = document.getElementById("aiChatInput");
@@ -1165,12 +1172,42 @@
                 input.addEventListener("input", updateInputMicVisibility);
                 updateInputMicVisibility();
 
-                // Double-click the empty input to drop in the placeholder's
-                // example question, ready to send -- only while the field
-                // is still empty, so it never clobbers something typed.
+                // A rotating pool of example questions shown as the
+                // placeholder (never the same one twice in a row) -- one
+                // fixed rocket example got repetitive fast.
+                const EXAMPLE_PROMPTS = [
+                    "Wie funktioniert eine Rakete?",
+                    "Welche Firmen bauen Raketen?",
+                    "Erkläre mir Quantenphysik in einfachen Worten",
+                    "Wie entsteht ein Regenbogen?",
+                    "Was ist der Unterschied zwischen Python und JavaScript?",
+                    "Gib mir Tipps, wie ich besser lernen kann",
+                    "Wie funktioniert eine Blockchain?",
+                    "Was passiert, wenn ein Stern kollabiert?",
+                    "Erzähl mir einen interessanten Fakt über den Ozean",
+                    "Wie kann ich meine Konzentration verbessern?",
+                    "Was ist künstliche Intelligenz eigentlich genau?",
+                    "Wie baue ich mir eine gute Gewohnheit auf?",
+                    "Erkläre mir, wie das Internet funktioniert",
+                    "Was sind schwarze Löcher?",
+                    "Wie programmiere ich mein erstes eigenes Spiel?",
+                    "Was macht eine gesunde Ernährung eigentlich aus?",
+                    "Wie funktioniert unser Gedächtnis?",
+                    "Erzähl mir etwas Spannendes über das alte Ägypten",
+                ];
+                function pickExamplePrompt(excluding) {
+                    const pool = excluding ? EXAMPLE_PROMPTS.filter((p) => p !== excluding) : EXAMPLE_PROMPTS;
+                    return pool[Math.floor(Math.random() * pool.length)];
+                }
+                let currentExamplePrompt = pickExamplePrompt();
+                input.placeholder = currentExamplePrompt;
+
+                // Double-click the empty input to drop in the current
+                // placeholder example, ready to send -- only while the
+                // field is still empty, so it never clobbers something typed.
                 input.addEventListener("dblclick", () => {
                     if (input.value) return;
-                    input.value = "Wie funktioniert eine Rakete?";
+                    input.value = currentExamplePrompt;
                     updateInputMicVisibility();
                     input.focus();
                 });
@@ -1223,6 +1260,8 @@
                     addMessage(text, "user");
                     input.value = "";
                     updateInputMicVisibility();
+                    currentExamplePrompt = pickExamplePrompt(currentExamplePrompt);
+                    input.placeholder = currentExamplePrompt;
                     if (contextParts.length) body.context = contextParts.join("\n\n");
                     if (adminFactsTarget) body.save_as_fact = true;
 
@@ -1273,6 +1312,19 @@
                     voiceGenderSelect.value = userGender === "weiblich" ? "female" : "male";
 
                     let voiceChatId = null;
+                    // Set when a click cut the AI's spoken reply short --
+                    // read once by sendVoiceMessage() to tell the backend,
+                    // then cleared. Separate from listeningStoppedByUser
+                    // below (that one governs auto-restart after a
+                    // recognition error, this one is about interrupting
+                    // *playback*).
+                    let voiceWasInterrupted = false;
+                    // Only true right after an explicit stop click -- lets
+                    // recognition.onerror tell a real "you clicked stop"
+                    // apart from a routine no-speech/network hiccup that
+                    // should just keep listening instead of showing an
+                    // error and giving up.
+                    let listeningStoppedByUser = false;
                     let recognition = null;
                     let voices = [];
 
@@ -1315,22 +1367,48 @@
                         if (orbSimulated) {
                             orbTargetIntensity = 0.35 + 0.25 * Math.sin(orbTime * 3);
                         }
+                        // A gentle idle floor -- previously the smoke nearly
+                        // vanished (3 faint blobs) whenever there was no
+                        // audio driving it at all, which read as "too little
+                        // smoke" rather than a calm idle state.
+                        const idleFloor = 0.22 + 0.1 * Math.sin(orbTime * 0.6);
+                        const effectiveIntensity = Math.max(orbIntensity, idleFloor);
                         orbIntensity += (orbTargetIntensity - orbIntensity) * 0.12;
                         orbTime += 0.008 + orbIntensity * 0.03;
 
-                        const blobCount = 3 + Math.round(orbIntensity * 4);
+                        // Two layers: bigger soft blobs for volume, plus a
+                        // second pass of smaller, faster wisps on top for a
+                        // more textured/realistic look instead of a few
+                        // flat, uniform circles.
+                        const blobCount = 6 + Math.round(effectiveIntensity * 7);
                         for (let i = 0; i < blobCount; i++) {
                             const angle = orbTime * (0.6 + i * 0.17) + i * 2.1;
-                            const spread = (w / 2) * (0.55 + orbIntensity * 0.4);
+                            const spread = (w / 2) * (0.55 + effectiveIntensity * 0.45);
                             const x = w / 2 + Math.cos(angle) * spread * (0.3 + 0.3 * Math.sin(orbTime * 0.5 + i));
                             const y = h / 2 + Math.sin(angle * 0.85) * spread * (0.3 + 0.3 * Math.cos(orbTime * 0.6 + i));
-                            const blobR = (w / 2) * (0.3 + orbIntensity * 0.3) * (0.7 + 0.3 * Math.sin(orbTime + i * 3));
+                            const blobR = (w / 2) * (0.32 + effectiveIntensity * 0.34) * (0.7 + 0.3 * Math.sin(orbTime + i * 3));
                             const grad = orbCtx.createRadialGradient(x, y, 0, x, y, blobR);
-                            grad.addColorStop(0, `rgba(139, 70, 224, ${0.3 + orbIntensity * 0.4})`);
+                            grad.addColorStop(0, `rgba(139, 70, 224, ${0.32 + effectiveIntensity * 0.45})`);
                             grad.addColorStop(1, "rgba(139, 70, 224, 0)");
                             orbCtx.fillStyle = grad;
                             orbCtx.beginPath();
                             orbCtx.arc(x, y, Math.max(blobR, 1), 0, Math.PI * 2);
+                            orbCtx.fill();
+                        }
+
+                        const wispCount = 4 + Math.round(effectiveIntensity * 5);
+                        for (let i = 0; i < wispCount; i++) {
+                            const angle = -orbTime * (1.3 + i * 0.23) - i * 1.7;
+                            const spread = (w / 2) * (0.4 + effectiveIntensity * 0.4);
+                            const x = w / 2 + Math.cos(angle * 1.4) * spread * (0.4 + 0.35 * Math.sin(orbTime * 0.9 + i * 2));
+                            const y = h / 2 + Math.sin(angle) * spread * (0.4 + 0.35 * Math.cos(orbTime * 1.1 + i * 2));
+                            const wispR = (w / 2) * (0.12 + effectiveIntensity * 0.14) * (0.6 + 0.4 * Math.sin(orbTime * 1.7 + i * 5));
+                            const grad = orbCtx.createRadialGradient(x, y, 0, x, y, wispR);
+                            grad.addColorStop(0, `rgba(168, 120, 235, ${0.28 + effectiveIntensity * 0.4})`);
+                            grad.addColorStop(1, "rgba(168, 120, 235, 0)");
+                            orbCtx.fillStyle = grad;
+                            orbCtx.beginPath();
+                            orbCtx.arc(x, y, Math.max(wispR, 1), 0, Math.PI * 2);
                             orbCtx.fill();
                         }
                         orbCtx.restore();
@@ -1465,6 +1543,11 @@
                     // other reason, falls back to the browser's own free,
                     // built-in text-to-speech -- so voice chat always works
                     // either way.
+                    // Tracked so a click on the orb mid-reply can actually
+                    // interrupt it (see stopAiSpeaking below) -- whichever
+                    // of the two speech paths is currently active.
+                    let currentAudioEl = null;
+
                     function speak(text, onEnd) {
                         fetch(`/api/voice-profile/${voiceGenderSelect.value}/speak`, {
                             method: "POST",
@@ -1477,12 +1560,41 @@
                             })
                             .then((blob) => {
                                 const audioEl = new Audio(URL.createObjectURL(blob));
+                                currentAudioEl = audioEl;
                                 stopOrbAnalyser();
                                 connectOrbToAudioElement(audioEl);
-                                audioEl.addEventListener("ended", () => { stopOrbAnalyser(); if (onEnd) onEnd(); });
+                                audioEl.addEventListener("ended", () => {
+                                    if (currentAudioEl === audioEl) currentAudioEl = null;
+                                    stopOrbAnalyser();
+                                    if (onEnd) onEnd();
+                                });
                                 audioEl.play();
                             })
                             .catch(() => speakWithBrowser(text, onEnd));
+                    }
+
+                    // Interrupting the AI like a human: stops whichever
+                    // speech path is currently playing and cuts the orb's
+                    // "speaking" animation short. Returns whether anything
+                    // was actually interrupted, so the caller only starts
+                    // listening / flags the interruption when it's real.
+                    function stopAiSpeaking() {
+                        let wasSpeaking = false;
+                        if (currentAudioEl && !currentAudioEl.paused) {
+                            currentAudioEl.pause();
+                            currentAudioEl = null;
+                            wasSpeaking = true;
+                        }
+                        if (window.speechSynthesis && window.speechSynthesis.speaking) {
+                            window.speechSynthesis.cancel();
+                            wasSpeaking = true;
+                        }
+                        if (wasSpeaking) {
+                            stopOrbAnalyser();
+                            orbSimulated = false;
+                            orbTargetIntensity = 0;
+                        }
+                        return wasSpeaking;
                     }
 
                     function addVoiceLine(text, role) {
@@ -1530,6 +1642,10 @@
                         voiceStatus.textContent = "Die KI denkt nach ...";
                         const body = { message: text, via_voice: true };
                         if (voiceChatId) body.chat_id = voiceChatId;
+                        if (voiceWasInterrupted) {
+                            body.was_interrupted = true;
+                            voiceWasInterrupted = false;
+                        }
                         fetch("/api/ai/chat", {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
@@ -1557,6 +1673,7 @@
                             voiceStatus.textContent = "Dein Browser unterstützt leider keine Spracheingabe.";
                             return;
                         }
+                        listeningStoppedByUser = false;
                         recognition = new SpeechRecognitionCtor();
                         recognition.lang = "de-DE";
                         recognition.interimResults = false;
@@ -1581,9 +1698,16 @@
                             sendVoiceMessage(text);
                         };
                         recognition.onerror = () => {
-                            voiceStatus.textContent = "Konnte dich nicht verstehen. Versuch es nochmal.";
                             voiceMicBtn.classList.remove("is-listening");
                             stopOrbListening();
+                            // No error shown, no dead end -- e.g. "no-speech"
+                            // just means nothing was said yet, not a real
+                            // failure, so just keep listening. Only actually
+                            // stops if the person explicitly clicked to stop
+                            // or closed voice mode in the meantime.
+                            if (!listeningStoppedByUser && voiceOverlay.style.display !== "none") {
+                                startListening();
+                            }
                         };
                         recognition.onend = () => {
                             voiceMicBtn.classList.remove("is-listening");
@@ -1608,7 +1732,18 @@
                     // needs to "restart" a turn anymore, so it's a plain
                     // start/stop toggle instead of always stop-then-start.
                     function toggleListening() {
+                        // Interrupting like a human comes first: if the AI
+                        // is mid-reply, clicking cuts it off and starts
+                        // listening right away, rather than toggling
+                        // listening on/off (there's nothing "listening" to
+                        // toggle while it's the AI's turn to talk).
+                        if (stopAiSpeaking()) {
+                            voiceWasInterrupted = true;
+                            startListening();
+                            return;
+                        }
                         if (voiceMicBtn.classList.contains("is-listening")) {
+                            listeningStoppedByUser = true;
                             if (recognition) {
                                 try { recognition.stop(); } catch (e) {}
                             }
@@ -1624,21 +1759,26 @@
                         }
                     });
 
-                    sidebarVoiceBtn.addEventListener("click", () => {
-                        panel.style.display = "none";
+                    // Opens right inside the current conversation view (see
+                    // .ai-voice-panel in the CSS) instead of a separate
+                    // full-screen page -- and starts listening immediately,
+                    // no extra tap on the orb needed for that first turn.
+                    function openVoiceMode() {
+                        showConversationView();
+                        if (normalView) normalView.style.display = "none";
                         voiceOverlay.style.display = "flex";
-                    });
-
-                    if (inputMicBtn) {
-                        inputMicBtn.addEventListener("click", () => {
-                            panel.style.display = "none";
-                            voiceOverlay.style.display = "flex";
-                        });
+                        startListening();
                     }
 
+                    sidebarVoiceBtn.addEventListener("click", openVoiceMode);
+                    if (inputMicBtn) inputMicBtn.addEventListener("click", openVoiceMode);
+
                     voiceCloseBtn.addEventListener("click", () => {
+                        listeningStoppedByUser = true;
                         voiceOverlay.style.display = "none";
+                        if (normalView) normalView.style.display = "flex";
                         if (window.speechSynthesis) window.speechSynthesis.cancel();
+                        if (currentAudioEl) { currentAudioEl.pause(); currentAudioEl = null; }
                         if (recognition) {
                             try { recognition.stop(); } catch (e) {}
                         }
