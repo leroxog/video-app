@@ -1216,11 +1216,39 @@ body.ai-fullscreen main {
 /* Full-bleed AI page has no normal-flow header (see base.html's
    floating_avatar block) -- the account avatar still floats top-right
    over the chat itself, above the sidebar/panel/flyout stack. */
-.floating-account-avatar-wrap {
-    position: fixed;
-    top: 12px;
-    right: 14px;
-    z-index: 600;
+/* Only on the full-bleed page (.ai-chat-panel-page, added by JS when
+   pageEmbedTarget exists) -- the popup widget and Studio-embedded chat on
+   every other page already show the account avatar in the normal header,
+   this would just duplicate it there. Pinned to the bottom of the sidebar
+   itself (flex:0 0 auto, last child) rather than floating over the page,
+   per feedback that a page-corner floating avatar felt disconnected. */
+.ai-chat-sidebar-avatar-footer {
+    display: none;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 0.55rem;
+    margin-top: 0.4rem;
+    padding: 0.55rem 0.4rem;
+    border-top: 1px solid var(--panel-border-solid);
+}
+
+.ai-chat-panel-page .ai-chat-sidebar-avatar-footer {
+    display: flex;
+}
+
+.ai-chat-sidebar-avatar-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    text-decoration: none;
+}
+
+.ai-chat-sidebar-avatar-name:hover {
+    text-decoration: underline;
 }
 
 /* A soft light "outside the screen" that slowly drifts across a wide arc --

@@ -2,13 +2,6 @@
 {% block title %}KI-Assistent - NexAI{% endblock %}
 {% block body_class %}ai-fullscreen{% endblock %}
 {% block header %}{% endblock %}
-{% block floating_avatar %}
-    {% if user %}
-        <div class="floating-account-avatar-wrap">
-            {% include "partials/_account_avatar.html" %}
-        </div>
-    {% endif %}
-{% endblock %}
 {% block content %}
     <div class="ai-ambient-light" aria-hidden="true"></div>
     <div class="assistant-page" id="aiChatPageEmbed"></div>

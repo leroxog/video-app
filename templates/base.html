@@ -112,6 +112,15 @@
                     </div>
                     <div class="ai-chat-sidebar-label">Aktuelle</div>
                     <div class="ai-chat-sidebar-list" id="aiChatSidebarList"></div>
+
+                    <!-- Only shown on the full-page assistant (see
+                         .ai-chat-panel-page in the CSS) -- on every other
+                         page the normal header already has the account
+                         avatar, this would just be a duplicate there. -->
+                    <div class="ai-chat-sidebar-avatar-footer">
+                        {% include "partials/_account_avatar.html" %}
+                        <a class="ai-chat-sidebar-avatar-name" href="{{ url_for('profile', username=user.username) }}">{{ user.username }}</a>
+                    </div>
                 </div>
 
                 <div class="ai-buddy-confirm-overlay" id="aiBuddyConfirmOverlay" style="display:none;">
