@@ -21,7 +21,12 @@
                         {% if item.prompt %}
                             <p class="ai-gallery-card-prompt">{{ item.prompt }}</p>
                         {% endif %}
-                        <p class="ai-gallery-card-date">{{ item.created_at.strftime("%d.%m.%Y %H:%M") }}</p>
+                        <div class="ai-gallery-card-footer">
+                            <p class="ai-gallery-card-date">{{ item.created_at.strftime("%d.%m.%Y %H:%M") }}</p>
+                            <button type="button" class="ai-gallery-like-btn {{ 'is-liked' if item.liked else '' }}" data-item-id="{{ item.id }}" title="Gefällt mir -- hilft der KI, deinen Stil zu lernen">
+                                <span aria-hidden="true">&hearts;</span>
+                            </button>
+                        </div>
                     </div>
                 {% endfor %}
             </div>
@@ -32,4 +37,17 @@
             </p>
         {% endif %}
     </div>
+    <script>
+        document.querySelectorAll(".ai-gallery-like-btn").forEach((btn) => {
+            btn.addEventListener("click", () => {
+                fetch(`/api/ai/gallery/${btn.dataset.itemId}/like`, { method: "POST" })
+                    .then((res) => res.json())
+                    .then((data) => {
+                        if (!data.ok) return;
+                        btn.classList.toggle("is-liked", data.liked);
+                    })
+                    .catch(() => {});
+            });
+        });
+    </script>
 {% endblock %}

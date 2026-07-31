@@ -1039,7 +1039,30 @@
                             : proposedChange.new_code;
                         codeTextarea.value = newCode;
                         codeTextarea.dispatchEvent(new Event("input", { bubbles: true }));
-                        saveProjectCode(newCode);
+                        saveProjectCode(newCode).then(() => {
+                            // The undo button only lights up once a change has
+                            // actually landed -- see studio-webapp-editor.js.
+                            if (projectType === "webapp" && window.__nexaiWebappCodeApplied) {
+                                window.__nexaiWebappCodeApplied();
+                            }
+                            // A real, working link the frontend builds itself
+                            // (not something the model has to get right) --
+                            // only shown once the wiwa actually has a live
+                            // address to try.
+                            const liveUrl = projectType === "webapp" && webappPage ? webappPage.dataset.webUrl : "";
+                            if (liveUrl) {
+                                const tryLine = document.createElement("p");
+                                tryLine.className = "ai-chat-try-live-line";
+                                const link = document.createElement("a");
+                                link.href = liveUrl;
+                                link.target = "_blank";
+                                link.rel = "noopener noreferrer";
+                                link.textContent = "Link zur wiwa";
+                                tryLine.append("Probiere es Live aus! ", link);
+                                bubble.appendChild(tryLine);
+                                messagesEl.scrollTop = messagesEl.scrollHeight;
+                            }
+                        });
                         acceptBtn.textContent = "Übernommen ✓";
                         acceptBtn.disabled = true;
                         declineBtn.disabled = true;

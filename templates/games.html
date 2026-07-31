@@ -4,11 +4,19 @@
     <div class="gallery-page">
         {% if not query %}
             <section class="hero">
-                <h1 class="hero-title">Programmiere dein eigenes Spiel.</h1>
+                <h1 class="hero-title">
+                    Programmiere deine eigene
+                    <button type="button" class="hero-wiwa-term" id="heroWiwaTerm" aria-expanded="false" aria-controls="heroWiwaExplainer">wiwa</button>
+                    mit KI!
+                </h1>
+                <p class="hero-subtitle" id="heroWiwaExplainer" hidden>
+                    "wiwa" steht f&uuml;r "Web in Web App": du besitzt dabei keine eigene, echte
+                    Webseite &mdash; die Domain geh&ouml;rt weiterhin NexAI &mdash; aber du bekommst
+                    trotzdem ein echtes Webseiten-Erlebnis, und das komplett kostenlos.
+                </p>
                 <p class="hero-subtitle">
-                    NexAI studio ist eine Lernplattform f&uuml;r Schulen und Kinder &mdash;
-                    baue Level, schreibe die Regeln daf&uuml;r und ver&ouml;ffentliche dein Spiel
-                    f&uuml;r alle.
+                    Erz&auml;hl der KI einfach, was deine wiwa k&ouml;nnen soll &mdash; sie
+                    schreibt den kompletten Code daf&uuml;r, du musst nichts selbst programmieren.
                 </p>
                 <div class="hero-actions">
                     {% if user %}
@@ -18,24 +26,36 @@
                     {% endif %}
                 </div>
             </section>
+            <script>
+                (function () {
+                    var term = document.getElementById("heroWiwaTerm");
+                    var explainer = document.getElementById("heroWiwaExplainer");
+                    if (!term || !explainer) return;
+                    term.addEventListener("click", function () {
+                        var expanded = term.getAttribute("aria-expanded") === "true";
+                        term.setAttribute("aria-expanded", String(!expanded));
+                        explainer.hidden = expanded;
+                    });
+                })();
+            </script>
 
             <section class="steps-row">
                 <div class="step-card">
                     <div class="step-number">1</div>
-                    <h2>Programmieren</h2>
-                    <p>Baue dein Level aus Bl&ouml;cken und schreibe mit unserer einfachen Sprache, was passieren soll.</p>
+                    <h2>Beschreiben</h2>
+                    <p>Erz&auml;hl der KI im Chat, was deine wiwa können soll &mdash; sie schreibt den Code daf&uuml;r.</p>
                 </div>
                 <div class="step-arrow" aria-hidden="true">&rarr;</div>
                 <div class="step-card">
                     <div class="step-number">2</div>
                     <h2>Ver&ouml;ffentlichen</h2>
-                    <p>Ein Klick auf &bdquo;Ver&ouml;ffentlichen&ldquo; und dein Spiel ist online.</p>
+                    <p>Ein Klick auf &bdquo;Ver&ouml;ffentlichen&ldquo; und deine wiwa ist online.</p>
                 </div>
                 <div class="step-arrow" aria-hidden="true">&rarr;</div>
                 <div class="step-card">
                     <div class="step-number">3</div>
-                    <h2>Spielen</h2>
-                    <p>Dein Spiel erscheint in der Galerie &mdash; alle k&ouml;nnen es sofort ausprobieren.</p>
+                    <h2>Erleben</h2>
+                    <p>Deine wiwa erscheint in der Galerie &mdash; alle k&ouml;nnen sie sofort live ausprobieren.</p>
                 </div>
             </section>
         {% endif %}
@@ -64,7 +84,7 @@
                 <div class="gallery-empty-state">
                     <p>Noch keine Spiele ver&ouml;ffentlicht.</p>
                     {% if user %}
-                        <a class="hero-cta-primary" href="{{ url_for('studio_projects_page') }}">Erstes Spiel programmieren</a>
+                        <a class="hero-cta-primary" href="{{ url_for('studio_projects_page') }}">Erste wiwa programmieren</a>
                     {% endif %}
                 </div>
             {% endif %}

@@ -308,6 +308,11 @@ class StudioProject(db.Model):
     script_code = db.Column(db.Text, nullable=True)
     web_code = db.Column(db.Text, nullable=True)
     web_slug = db.Column(db.String(50), nullable=True, unique=True)
+    # The web_code value right before the most recent AI-driven change was
+    # applied -- lets the editor's "letzten KI-Schritt zurücksetzen" button
+    # undo exactly one step, no matter what that step touched. Overwritten
+    # (not stacked) on every new AI change, so it only ever holds one level.
+    previous_web_code = db.Column(db.Text, nullable=True)
     # App-store-style icon for a Web-in-Web-App -- shown on its card instead
     # of the generic globe placeholder, wherever project cards are listed.
     icon_image = db.Column(db.String(255), nullable=True)
@@ -479,6 +484,10 @@ class AiGeneratedMedia(db.Model):
     kind = db.Column(db.String(10), nullable=False)  # "image" or "audio"
     url = db.Column(db.String(500), nullable=False)
     prompt = db.Column(db.Text, nullable=True)
+    # Liking an item here feeds a remember_user_fact-style row back into
+    # this same user's AI profile (see app.py's api_ai_gallery_like), so
+    # future generations can lean toward what they've actually liked.
+    liked = db.Column(db.Boolean, nullable=False, default=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     user = db.relationship("User")
 

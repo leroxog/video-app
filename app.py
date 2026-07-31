@@ -780,6 +780,7 @@ def ensure_sqlite_columns_exist():
             ("web_slug", "VARCHAR(50)"),
             ("icon_image", "VARCHAR(255)"),
             ("age_rating", "INTEGER NOT NULL DEFAULT 0"),
+            ("previous_web_code", "TEXT"),
         ],
         "studio_block": [("kind", "VARCHAR(20) NOT NULL DEFAULT 'normal'")],
         "user": [
@@ -801,6 +802,7 @@ def ensure_sqlite_columns_exist():
         # goes back to add it -- same class of gap this whole function
         # exists to self-heal for every other table.
         "ai_personality": [("mimic_user_style", "BOOLEAN NOT NULL DEFAULT 0")],
+        "ai_generated_media": [("liked", "BOOLEAN NOT NULL DEFAULT 0")],
     }
     with db.engine.connect() as conn:
         for table, columns in wanted.items():
@@ -874,6 +876,7 @@ def ensure_columns_exist():
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS ai_tokens INTEGER',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS ai_tokens_last_award_date DATE',
         'ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS age_rating INTEGER NOT NULL DEFAULT 0',
+        'ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS previous_web_code TEXT',
         # Root cause confirmed live (psycopg2.errors.UndefinedColumn):
         # ai_personality was created by db.create_all() back when the
         # AiPersonality model first shipped (no mimic_user_style yet) --
@@ -893,6 +896,19 @@ def ensure_columns_exist():
             updated_at TIMESTAMP
         )""",
         "ALTER TABLE ai_personality ADD COLUMN IF NOT EXISTS mimic_user_style BOOLEAN NOT NULL DEFAULT FALSE",
+        # Same self-heal as ai_personality above, for the newer
+        # AiGeneratedMedia table: covers a deploy that already ran
+        # db.create_all() before the "liked" column existed on the model.
+        """CREATE TABLE IF NOT EXISTS ai_generated_media (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES "user" (id),
+            kind VARCHAR(10) NOT NULL,
+            url VARCHAR(500) NOT NULL,
+            prompt TEXT,
+            liked BOOLEAN NOT NULL DEFAULT FALSE,
+            created_at TIMESTAMP
+        )""",
+        "ALTER TABLE ai_generated_media ADD COLUMN IF NOT EXISTS liked BOOLEAN NOT NULL DEFAULT FALSE",
     ]
     with db.engine.connect() as conn:
         for statement in statements:
@@ -1668,11 +1684,15 @@ app.jinja_env.globals["STUDIO_LANGUAGE_CHOICES"] = STUDIO_LANGUAGE_CHOICES
 app.jinja_env.globals["STUDIO_DEFAULT_LANGUAGE"] = STUDIO_DEFAULT_LANGUAGE
 STUDIO_MAX_SCRIPT_LENGTH = 40000
 
+# "game" was removed as a creatable option -- new projects can only ever be
+# a wiwa now (see the Studio pivot: AI-only programming, no more manual
+# block/DSL game editor for new projects). Existing game projects created
+# before this change keep working exactly as before (still playable,
+# editable, listed) -- this dict only governs what NEW projects can be.
 STUDIO_PROJECT_TYPES = {
-    "game": "Spiel",
-    "webapp": "Etwas anderes",
+    "webapp": "wiwa (Web-in-Web-App)",
 }
-STUDIO_DEFAULT_PROJECT_TYPE = "game"
+STUDIO_DEFAULT_PROJECT_TYPE = "webapp"
 app.jinja_env.globals["STUDIO_PROJECT_TYPES"] = STUDIO_PROJECT_TYPES
 STUDIO_MAX_WEB_CODE_LENGTH = 100000
 STUDIO_WEB_SLUG_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$")
@@ -1812,6 +1832,30 @@ def ai_gallery():
         .order_by(AiGeneratedMedia.created_at.desc()).limit(200).all()
     )
     return render_template("ai_gallery.html", user=user, items=items)
+
+
+@app.route("/api/ai/gallery/<int:item_id>/like", methods=["POST"])
+def api_ai_gallery_like(item_id):
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    item = db.session.get(AiGeneratedMedia, item_id)
+    if item is None or item.user_id != user.id:
+        abort(404)
+    item.liked = not item.liked
+    # Feeds straight into the same private per-user profile remember_user_fact
+    # writes to (see AiLearnedFact/_learned_facts_addendum in ai_assistant.py)
+    # -- a like becomes a concrete style preference the AI actually sees
+    # before its next reply, not just a silent counter nobody reads.
+    if item.liked:
+        kind_label = "Bild" if item.kind == "image" else "Sprachnachricht"
+        note = f"Mag das KI-generierte {kind_label} in der Galerie"
+        if item.prompt:
+            note += f" mit der Beschreibung: \"{item.prompt[:300]}\""
+        note += " -- beim nächsten Erzeugen von Ähnlichem gerne an diesem Stil orientieren."
+        db.session.add(AiLearnedFact(source="user", content=note, user_id=user.id))
+    db.session.commit()
+    return jsonify({"ok": True, "liked": item.liked})
 
 
 def serialize_ai_chat(chat):
@@ -2330,10 +2374,33 @@ def api_studio_update_web_code(project_id):
     if len(code) > STUDIO_MAX_WEB_CODE_LENGTH:
         return jsonify({"ok": False, "error": "code_too_long"}), 400
 
+    # Single-level undo: remembers the code exactly as it was before this
+    # write, so the editor's undo button can always step back one change --
+    # overwritten (not stacked) each time, so it never grows past one level.
+    project.previous_web_code = project.web_code
     project.web_code = code
     project.updated_at = datetime.now(timezone.utc)
     db.session.commit()
     return jsonify({"ok": True})
+
+
+@app.route("/api/studio/<int:project_id>/undo-web-code", methods=["POST"])
+def api_studio_undo_web_code(project_id):
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    project = db.get_or_404(StudioProject, project_id)
+    if project.owner_id != user.id:
+        return jsonify({"ok": False, "error": "forbidden"}), 403
+    if project.project_type != "webapp":
+        return jsonify({"ok": False, "error": "wrong_project_type"}), 400
+    if project.previous_web_code is None:
+        return jsonify({"ok": False, "error": "nothing_to_undo"}), 400
+
+    project.web_code, project.previous_web_code = project.previous_web_code, None
+    project.updated_at = datetime.now(timezone.utc)
+    db.session.commit()
+    return jsonify({"ok": True, "web_code": project.web_code})
 
 
 @app.route("/api/studio/<int:project_id>/web-slug", methods=["POST"])
@@ -2435,7 +2502,12 @@ def studio_editor_page(project_id):
     if project.project_type == "webapp":
         web_url = studio_web_url(project.web_slug) if project.web_slug else None
         return render_template("studio_webapp_editor.html", user=user, project=project, web_url=web_url)
-    return render_template("studio_editor.html", user=user, project=project)
+    # Manual game-code editing was removed -- new projects can only be a
+    # wiwa (see STUDIO_PROJECT_TYPES), and existing game projects created
+    # before this change stay playable but their code is no longer directly
+    # accessible, even to their own owner.
+    flash("Der Code von Spiel-Projekten ist nicht mehr zugänglich -- neue Projekte werden als wiwa mit der KI programmiert.")
+    return redirect(url_for("studio_projects_page"))
 
 
 @app.route("/api/studio/<int:project_id>/state")

@@ -406,8 +406,7 @@ def test_place_requires_login(client):
 
 def test_games_page_accessible_without_login_and_lists_published_studio_games(client):
     register(client)
-    client.post("/studio/create", data={"name": "Testspiel"}, follow_redirects=True)
-    project = StudioProject.query.filter_by(name="Testspiel").first()
+    project = create_game_project()
     client.post(f"/studio/{project.id}/publish")
     client.post("/logout")
 
@@ -585,8 +584,7 @@ def test_place_pixel_rejects_bad_color(client):
 
 def test_profile_page_shows_username_and_published_games(client):
     register(client, username="bob")
-    client.post("/studio/create", data={"name": "Bobs Spiel"}, follow_redirects=True)
-    project = StudioProject.query.filter_by(name="Bobs Spiel").first()
+    project = create_game_project(username="bob", name="Bobs Spiel")
     client.post(f"/studio/{project.id}/publish")
 
     response = client.get("/user/bob")
@@ -832,8 +830,7 @@ def test_api_my_stats_requires_login(client):
 
 def test_api_my_stats_reports_published_games_and_followers(client):
     register(client, username="alice")
-    create_studio_project(client)
-    project = StudioProject.query.filter_by(name="Testspiel").first()
+    project = create_game_project()
     client.post(f"/studio/{project.id}/publish")
     client.post("/logout")
 
@@ -2345,17 +2342,54 @@ def create_studio_project(client, name="Testspiel"):
     return client.post("/studio/create", data={"name": name}, follow_redirects=True)
 
 
+def create_game_project(username="alice", name="Testspiel"):
+    """The public /studio/create route no longer accepts project_type=game
+    (see STUDIO_PROJECT_TYPES -- new projects can only be a wiwa now), but
+    the block-CRUD API endpoints it exercised still exist for games created
+    before that change, so these tests build one directly instead of going
+    through the now-webapp-only creation route."""
+    user = User.query.filter_by(username=username).first()
+    project = StudioProject(owner_id=user.id, name=name, project_type="game", language="python")
+    db.session.add(project)
+    db.session.flush()
+    db.session.add(StudioBlock(
+        project_id=project.id, name="Part1", is_default=True, kind="normal",
+        x=80, y=200, width=160, height=40, color="#3ea6ff",
+    ))
+    db.session.add(StudioBlock(
+        project_id=project.id, name="SpawnPart", is_default=True, kind="spawn",
+        x=80, y=100, width=40, height=40, color="#3ea6ff",
+    ))
+    db.session.commit()
+    return project
+
+
 def test_studio_requires_login(client):
     response = client.get("/studio", follow_redirects=False)
     assert response.status_code == 302
     assert "/login" in response.headers["Location"]
 
 
-def test_studio_create_project_adds_default_blocks(client):
+def test_studio_create_project_defaults_to_webapp_with_starter_code(client):
+    # /studio/create no longer accepts project_type=game -- new projects
+    # are always a wiwa now, with starter HTML/CSS/JS and no blocks at all
+    # (see test_studio_game_project_created_directly_gets_default_blocks
+    # for the still-supported, already-existing game-project shape).
     register(client)
     create_studio_project(client)
 
     project = StudioProject.query.filter_by(name="Testspiel").first()
+    assert project is not None
+    assert project.project_type == "webapp"
+    assert project.published is False
+    assert len(project.blocks) == 0
+    assert project.web_code
+
+
+def test_studio_game_project_created_directly_gets_default_blocks(client):
+    register(client)
+    project = create_game_project()
+
     assert project is not None
     assert project.published is False
     assert len(project.blocks) == 2
@@ -2425,8 +2459,7 @@ def test_studio_update_age_rating_forbidden_for_non_owner(client):
 
 def test_studio_default_block_cannot_be_renamed_or_deleted(client):
     register(client)
-    create_studio_project(client)
-    project = StudioProject.query.filter_by(name="Testspiel").first()
+    project = create_game_project()
     default_block = project.blocks[0]
 
     rename_res = client.post(
@@ -2442,8 +2475,7 @@ def test_studio_default_block_cannot_be_renamed_or_deleted(client):
 
 def test_studio_block_name_collision_rejected(client):
     register(client)
-    create_studio_project(client)
-    project = StudioProject.query.filter_by(name="Testspiel").first()
+    project = create_game_project()
     new_block = client.post(f"/api/studio/{project.id}/block", json={"name": "Extra"}).get_json()["block"]
 
     res = client.post(f"/api/studio/{project.id}/block/{new_block['id']}", json={"name": "Part1"})
@@ -2453,8 +2485,7 @@ def test_studio_block_name_collision_rejected(client):
 
 def test_studio_play_page_hidden_until_published(client):
     register(client, username="alice")
-    create_studio_project(client)
-    project = StudioProject.query.filter_by(name="Testspiel").first()
+    project = create_game_project()
 
     client.post("/logout")
     register(client, username="bob")
@@ -2473,8 +2504,7 @@ def test_studio_play_page_hidden_until_published(client):
 
 def test_studio_published_game_listed_on_games_page(client):
     register(client)
-    create_studio_project(client)
-    project = StudioProject.query.filter_by(name="Testspiel").first()
+    project = create_game_project()
     client.post(f"/studio/{project.id}/publish")
 
     response = client.get("/games")
@@ -2493,8 +2523,7 @@ def test_studio_award_requires_login(client):
 
 def test_studio_award_credits_points_on_published_game(client):
     register(client, username="alice")
-    create_studio_project(client)
-    project = StudioProject.query.filter_by(name="Testspiel").first()
+    project = create_game_project()
     client.post(f"/studio/{project.id}/publish")
 
     client.post("/logout")
@@ -2533,8 +2562,7 @@ def test_studio_create_block_accepts_checkpoint_kind(client):
 
 def test_studio_spawn_block_cannot_be_deleted(client):
     register(client)
-    create_studio_project(client)
-    project = StudioProject.query.filter_by(name="Testspiel").first()
+    project = create_game_project()
     spawn_block = next(b for b in project.blocks if b.kind == "spawn")
 
     res = client.post(f"/api/studio/{project.id}/block/{spawn_block.id}/delete")
@@ -2544,8 +2572,7 @@ def test_studio_spawn_block_cannot_be_deleted(client):
 
 def test_studio_script_is_project_wide_not_per_block(client):
     register(client)
-    create_studio_project(client)
-    project = StudioProject.query.filter_by(name="Testspiel").first()
+    project = create_game_project()
 
     script = "⇒ Part1\n⇒ touch\n⇒ give .Player \"Bonus\",\"+5\",\"coins\"\n⇒ canColide(.true)\n⇓"
     save_res = client.post(f"/api/studio/{project.id}/script", json={"script_code": script})
@@ -2629,7 +2656,8 @@ def test_legacy_game_card_is_installable_like_an_app(client):
 
 def test_studio_game_card_is_installable_like_an_app(client):
     register(client)
-    project = publish_studio_project(client)
+    project = create_game_project()
+    client.post(f"/studio/{project.id}/publish")
 
     response = client.get("/games")
     assert f'data-app-url="/studio/play/{project.id}"'.encode() in response.data
@@ -2649,6 +2677,11 @@ def test_app_card_has_no_direct_link_only_the_button_can_open_it(client):
 def publish_studio_project(client):
     create_studio_project(client)
     project = StudioProject.query.filter_by(name="Testspiel").first()
+    if project.project_type == "webapp" and not project.web_slug:
+        client.post(
+            f"/api/studio/{project.id}/web-slug",
+            json={"web_slug": f"testspiel-{project.id}"},
+        )
     client.post(f"/studio/{project.id}/publish")
     return project
 

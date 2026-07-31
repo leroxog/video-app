@@ -1,14 +1,17 @@
 {% extends "base.html" %}
+{% from "partials/_icons.html" import icon %}
 {% block title %}{{ project.name }} - NexAI studio{% endblock %}
 {% block body_class %}studio-fullscreen{% endblock %}
 {% block content %}
-    <div class="webapp-editor-page" id="webappEditorPage" data-project-id="{{ project.id }}">
+    <div class="webapp-editor-page" id="webappEditorPage" data-project-id="{{ project.id }}"
+         data-has-previous="{{ 'true' if project.previous_web_code else 'false' }}"
+         data-web-url="{{ web_url or '' }}">
         <div class="studio-editor-topbar">
             <a class="studio-editor-back" href="{{ url_for('studio_projects_page') }}">&larr; NexAI studio</a>
             <span class="studio-editor-title">{{ project.name }}</span>
             <div class="studio-editor-topbar-actions">
+                <button type="button" id="webappUndoBtn" class="studio-editor-undo-btn" title="Letzten KI-Schritt zurücksetzen" disabled>{{ icon('undo', 16) }}</button>
                 <button type="button" id="webappSettingsBtn" class="studio-editor-help-btn" title="Einstellungen">&#9881;</button>
-                <button type="button" id="webappSaveBtn" class="studio-editor-code-toggle-btn">Speichern</button>
                 <form action="{{ url_for('studio_publish_project', project_id=project.id) }}" method="post">
                     <button type="submit" class="studio-editor-publish-btn {{ 'is-published' if project.published else '' }}">
                         {{ 'Veröffentlicht ✓' if project.published else 'Als Web-App hochladen' }}
@@ -18,8 +21,8 @@
         </div>
 
         <div class="webapp-editor-body">
-            <textarea id="webappCodeTextarea" class="webapp-code-textarea" spellcheck="false">{{ project.web_code or "" }}</textarea>
-            <div class="webapp-preview-wrap">
+            <textarea id="webappCodeTextarea" class="webapp-code-textarea" spellcheck="false" hidden>{{ project.web_code or "" }}</textarea>
+            <div class="webapp-preview-wrap webapp-preview-wrap-solo">
                 <div class="webapp-preview-header">
                     <span>Vorschau</span>
                     <button type="button" id="webappRefreshPreviewBtn">Aktualisieren</button>
@@ -31,7 +34,7 @@
             <div class="webapp-code-palette" id="webappCodePalette"></div>
         </div>
         <p class="webapp-editor-hint">
-            Schreib hier deine eigene Webseite komplett selbst mit HTML, CSS und JavaScript &mdash; hier ist nichts vorgegeben.
+            Beschreib der KI im Chat, was deine wiwa können soll &mdash; du siehst hier nur die Live-Vorschau, nie den Code selbst.
         </p>
     </div>
 

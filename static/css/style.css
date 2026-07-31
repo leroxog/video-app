@@ -2072,12 +2072,38 @@ body.studio-fullscreen .ai-chat-message-bot {
     overflow: hidden;
 }
 
+.ai-gallery-card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.3rem 0.5rem 0.6rem 0.7rem;
+}
+
 .ai-gallery-card-date {
     font-size: 0.68rem;
     color: var(--text-secondary);
     opacity: 0.7;
-    padding: 0.3rem 0.7rem 0.7rem;
     margin: 0;
+}
+
+.ai-gallery-like-btn {
+    flex: 0 0 auto;
+    border: none;
+    background: none;
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0.3rem;
+    border-radius: 50%;
+}
+
+.ai-gallery-like-btn:hover {
+    background: rgba(127, 127, 127, 0.14);
+}
+
+.ai-gallery-like-btn.is-liked {
+    color: #e0245e;
 }
 
 .ai-chat-image-wrap {
@@ -5633,6 +5659,40 @@ body.studio-fullscreen {
     background: #1c1c1c;
 }
 
+/* The code textarea is hidden now (see studio_webapp_editor.html) -- the
+   preview is the only visible surface, so it gets the space the split view
+   used to give the code panel. */
+.webapp-preview-wrap-solo {
+    flex: 1 1 100%;
+}
+
+.studio-editor-undo-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    border: 1px solid #3c3c3c;
+    background: none;
+    color: #f1f1f1;
+    cursor: pointer;
+}
+
+.studio-editor-undo-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.studio-editor-undo-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.ai-chat-try-live-line {
+    margin: 0.5rem 0 0;
+    font-weight: 600;
+}
+
 .webapp-code-palette {
     width: 300px;
     flex-shrink: 0;
@@ -6561,6 +6621,21 @@ body.studio-fullscreen {
     color: var(--text-secondary);
     margin: 0 0 1.6rem;
     line-height: 1.5;
+}
+
+.hero-wiwa-term {
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    border: none;
+    padding: 0;
+    font: inherit;
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-decoration-color: var(--mono-accent-solid);
+    text-underline-offset: 4px;
 }
 
 .hero-actions {

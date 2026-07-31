@@ -4,9 +4,9 @@
     const projectId = page.dataset.projectId;
 
     const textarea = document.getElementById("webappCodeTextarea");
-    const saveBtn = document.getElementById("webappSaveBtn");
     const previewFrame = document.getElementById("webappPreviewFrame");
     const refreshPreviewBtn = document.getElementById("webappRefreshPreviewBtn");
+    const undoBtn = document.getElementById("webappUndoBtn");
 
     const settingsBtn = document.getElementById("webappSettingsBtn");
     const settingsPanel = document.getElementById("webappSettingsPanel");
@@ -25,29 +25,45 @@
     // the exact same sandbox restrictions the real published page uses (no
     // allow-same-origin, no top navigation) -- so what you see here already
     // reflects what a visitor's browser will and won't let the page do.
+    // The textarea itself is hidden (see the "hidden" attribute in the
+    // template) -- it's still what holds the current code and gets the
+    // preview refreshed from, but there's no way to type into it anymore:
+    // every change now comes from the AI accepting a propose_project_change
+    // (see base.html's addChangeProposal, which sets .value, dispatches
+    // "input" here, and separately POSTs the save itself -- no debounced
+    // auto-save needed here anymore since nothing else writes to it).
     function refreshPreview() {
         previewFrame.srcdoc = textarea.value;
     }
     refreshPreviewBtn.addEventListener("click", refreshPreview);
     refreshPreview();
+    textarea.addEventListener("input", refreshPreview);
 
-    let saveTimer = null;
-    function saveCode() {
-        fetch(`/api/studio/${projectId}/web-code`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ web_code: textarea.value }),
+    // Exposed so base.html's AI-change-accept handler can refresh both the
+    // preview and this button's enabled state right after a change lands,
+    // without this file needing to know anything about the chat UI.
+    window.__nexaiWebappCodeApplied = function () {
+        refreshPreview();
+        if (undoBtn) undoBtn.disabled = false;
+    };
+
+    if (undoBtn) {
+        undoBtn.disabled = page.dataset.hasPrevious !== "true";
+        undoBtn.addEventListener("click", () => {
+            undoBtn.disabled = true;
+            fetch(`/api/studio/${projectId}/undo-web-code`, { method: "POST" })
+                .then((res) => res.json())
+                .then((data) => {
+                    if (!data.ok) { undoBtn.disabled = false; return; }
+                    textarea.value = data.web_code || "";
+                    refreshPreview();
+                    // Single-level undo -- once used, there's nothing further
+                    // back to step to until the AI makes a new change.
+                    undoBtn.disabled = true;
+                })
+                .catch(() => { undoBtn.disabled = false; });
         });
     }
-    textarea.addEventListener("input", () => {
-        clearTimeout(saveTimer);
-        saveTimer = setTimeout(saveCode, 1500);
-    });
-    saveBtn.addEventListener("click", () => {
-        clearTimeout(saveTimer);
-        saveCode();
-        refreshPreview();
-    });
 
     settingsBtn.addEventListener("click", () => { settingsPanel.style.display = "flex"; });
     settingsCloseBtn.addEventListener("click", () => { settingsPanel.style.display = "none"; });
