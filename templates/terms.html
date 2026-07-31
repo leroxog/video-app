@@ -374,6 +374,33 @@
         <p>Auszahlung durch Erstellung und Benutzung Ihres Projektes.</p>
         <p>Wir sind rechtlich nicht verpflichtet, jeglichen Betrag Ihnen und Ihren Besuchern auszuzahlen.</p>
         <p>Sie sind rechtlich dazu verpflichtet, bei Absprache Ihren Besuchern den jeweiligen Betrag auszuzahlen.</p>
+        <p>
+            Punkte lassen sich außerdem in mehreren eingebauten Mini-Spielen gewinnen und einsetzen (z. B.
+            "NexAI/coin.flip", "NexAI/fruit.merge" und weitere unter "Spiele"). Diese Punkte sind eine rein
+            interne, virtuelle Zählgröße innerhalb von NexAI -- zu keinem Zeitpunkt lässt sich damit echtes Geld
+            kaufen, einzahlen oder auszahlen, und es gibt keinen Weg, Punkte mit echtem Geld zu erwerben. Auch
+            "NexAI/coin.flip" ist trotz seiner Aufmachung als Münzwurf-Spiel kein Glücksspiel um echtes Geld,
+            sondern ausschließlich um diese virtuellen Punkte.
+        </p>
+        <p>
+            Tägliche Streaks (aufeinanderfolgende aktive Tage) und Profil-Abzeichen sind ebenfalls Teil dieses
+            Punktesystems -- sie werden automatisch anhand Ihrer Aktivität berechnet und sind, wie die Punkte
+            selbst, jederzeit änder- oder rücksetzbar und begründen keinen eigenen Anspruch.
+        </p>
+
+        <h2>NexAI Tokens (KI-Nutzung)</h2>
+        <p>
+            Gespräche mit dem KI-Assistenten Nex, Sprachnachrichten, das Erzeugen von Bildern und das Erzeugen
+            von KI-Sprachnachrichten kosten jeweils eine bestimmte Anzahl "Tokens" -- eine von den NexAI-Punkten
+            komplett getrennte, ebenfalls rein interne und virtuelle Zählgröße. Jedes Konto erhält einmalig
+            Start-Tokens sowie danach an jedem Tag, an dem es aktiv genutzt wird, automatisch eine feste Menge
+            neuer Tokens dazu.
+        </p>
+        <p>
+            Es gibt aktuell keinen Store, keine kaufbaren Token-Pakete und keine Möglichkeit, mit echtem Geld
+            Tokens zu erwerben. Reichen Ihre Tokens für eine Anfrage nicht aus, wird diese Anfrage abgelehnt,
+            bis wieder genug Tokens verfügbar sind.
+        </p>
 
         <h2>NexAI AI und Ihr persönliches Nutzerprofil</h2>
         <p>
@@ -384,7 +411,14 @@
             (deutlich schneller oder langsamer), kann die KI das als Hinweis werten -- etwa in Kombination mit
             dem, was Sie zu diesem Zeitpunkt schreiben (z. B. auffällig schnelles Tippen zusammen mit der
             Aussage, gestresst zu sein) -- und sich ein entsprechendes Muster für spätere Gespräche mit Ihnen
-            merken.
+            merken. Auch wenn Sie in Ihrer "Galerie" ein von der KI erzeugtes Bild oder eine Sprachnachricht mit
+            "Gefällt mir" markieren, wird das als Stilvorliebe in diesem Profil vermerkt, damit die KI sich
+            künftig eher daran orientiert.
+        </p>
+        <p>
+            Optional können Sie außerdem den "Buddy-Modus" aktivieren -- dabei versucht die KI, sich in Wortwahl
+            und Schreibstil stärker an Ihren eigenen anzupassen. Diese Einstellung gilt ebenfalls nur für Ihre
+            eigenen Gespräche und lässt sich jederzeit wieder deaktivieren.
         </p>
         <p>
             Dieses Profil wird ausschließlich vom KI-System selbst verwendet, um Sie in späteren Gesprächen
@@ -401,13 +435,82 @@
             löschen".
         </p>
 
+        <h3>Von der KI erzeugte Bilder und Sprachnachrichten</h3>
+        <p>
+            Auf ausdrücklichen Wunsch kann die KI ein Bild oder eine Sprachnachricht für Sie erzeugen; beides
+            kostet Tokens (siehe oben) und erscheint danach zusätzlich in Ihrer persönlichen "Galerie". Bilder
+            werden über den externen, unabhängigen Dienst Pollinations.ai erzeugt; Sprachnachrichten werden mit
+            der zuletzt beigetragenen, geklonten NexAI-Stimme erzeugt (siehe "Sprachprofil" unten) -- ist noch
+            keine solche Stimme vorhanden, kann keine Sprachnachricht erzeugt werden. Beide Inhalte werden nur
+            für Sie erzeugt und sind Teil Ihres eigenen Kontos, nicht öffentlich sichtbar für andere Nutzer.
+        </p>
+
+        <h2>Sprachprofil (KI-Stimme)</h2>
+        <p>
+            Nutzer können freiwillig eine eigene Sprachaufnahme beitragen, aus der über den externen Dienst
+            ElevenLabs eine geklonte Stimme erzeugt wird. Diese geklonte Stimme wird anschließend als die
+            gesprochene Stimme des KI-Assistenten Nex für ALLE Nutzer verwendet (getrennt nach den beiden
+            wählbaren Stimm-Kategorien) -- nicht nur für die Person, die die Aufnahme beigetragen hat. Ein neuer
+            Beitrag ersetzt dabei jeweils die vorherige geklonte Stimme derselben Kategorie vollständig.
+        </p>
+        <p>
+            Da eine Stimme ein besonders persönliches Merkmal ist, tragen Sie eine eigene Aufnahme ausschließlich
+            freiwillig und auf eigene Verantwortung bei; reichen Sie keine Aufnahme einer anderen Person ohne
+            deren ausdrückliche Zustimmung ein. Ist noch keine Stimme beigetragen worden, verwendet der
+            Sprachmodus stattdessen ersatzweise die eingebaute, nicht personenbezogene Sprachausgabe des
+            jeweiligen Browsers.
+        </p>
+
+        <h2>NexAI studio (wiwa-Erstellung mit KI)</h2>
+        <p>
+            In NexAI studio programmieren Sie eine eigene "wiwa" (Web-in-Web-App) -- Sie beschreiben der KI im
+            Chat, was Ihre wiwa können soll, und die KI schreibt und ändert den gesamten Code dafür. Sie sehen
+            dabei ausschließlich eine Live-Vorschau Ihrer wiwa, nicht den zugrunde liegenden Code selbst. Jede
+            Änderung wird Ihnen vor der Übernahme kurz zusammengefasst und muss von Ihnen bestätigt werden; die
+            zuletzt von der KI vorgenommene Änderung lässt sich über einen eigenen Rückgängig-Button einmalig
+            rückgängig machen.
+        </p>
+        <p>
+            Das eigenständige, manuelle Programmieren neuer Spiele (ohne KI, per Baukasten-Editor) steht für neue
+            Projekte nicht mehr zur Verfügung -- neue Projekte lassen sich nur noch als wiwa mit der KI erstellen.
+            Bereits vor dieser Umstellung erstellte und veröffentlichte Spiele bleiben spielbar, ihr Code ist
+            jedoch nicht mehr einsehbar oder bearbeitbar, auch nicht für die ursprünglichen Ersteller.
+        </p>
+
         <h2>Web-in-Web-App</h2>
         <p>
-            Als Web-in-Web-App-Ersteller haben Sie, sofern es Ihr geistiges Eigentum ist oder Sie die Erlaubnis vom
-            Eigentümer bekommen haben, das Recht, verschiedenste Ideen umzusetzen und diese für sich zu
-            beanspruchen.
+            Eine "wiwa" ist eine echte, funktionierende Webseiten-Erfahrung, die Sie kostenlos über NexAI
+            betreiben -- sie läuft aber unter einer Adresse, die weiterhin NexAI gehört (Sie erhalten also keine
+            eigene, unabhängige Internet-Domain). Als wiwa-Ersteller haben Sie, sofern es Ihr geistiges Eigentum
+            ist oder Sie die Erlaubnis vom Eigentümer bekommen haben, das Recht, verschiedenste Ideen umzusetzen
+            und diese für sich zu beanspruchen -- auch wenn der Code technisch von der KI geschrieben wurde.
         </p>
         <p>Wir haben das Recht, alle Programmiercodes, die Sie in Ihrem Projekt verwenden, zu veröffentlichen.</p>
+
+        <h2>Nachrichten</h2>
+        <p>
+            Über den Nachrichten-Bereich können Sie mit anderen Nutzern, mit denen Sie sich gegenseitig folgen,
+            direkt chatten sowie Gruppen erstellen und Inhalte (z. B. Studio-Projekte) teilen. Für den Inhalt
+            Ihrer eigenen Nachrichten sind Sie selbst verantwortlich -- die "Sie respektieren andere Nutzer" und
+            "Sie missbrauchen unsere Dienste nicht" genannten Regeln gelten hier genauso wie überall sonst im
+            Dienst.
+        </p>
+
+        <h2>Human Spotter</h2>
+        <p>
+            "erkenne.den.menschen" ist ein Mini-Spiel, bei dem Nutzer Bilder hochladen können und andere Nutzer
+            raten, welches der gezeigten Bilder einen echten Menschen zeigt. Hochgeladene Bilder können von
+            anderen Nutzern gemeldet werden und werden im Fall eines begründeten Verstoßes von uns entfernt
+            (siehe "Entfernen Ihrer Inhalte" oben).
+        </p>
+
+        <h2>Meme-Ersteller</h2>
+        <p>
+            "make.a.meme" ist ein Mehrspieler-Mini-Spiel, bei dem Nutzer in einer gemeinsamen Lobby zu
+            vorgegebenen Bild-Vorlagen eigene Meme-Texte einreichen und über die Einreichungen anderer abstimmen.
+            Eingereichte Texte und Meme-Bilder unterliegen denselben Verhaltensregeln wie alle anderen Inhalte in
+            diesem Dienst.
+        </p>
     </div>
 
     <div class="terms-actions-bar">
