@@ -9,7 +9,8 @@
         </div>
 
         <div class="nail-editor-page" id="nailEditorPage" data-project-id="{{ project.id }}"
-             data-project-json="{{ project.project_json|e }}" data-read-only="true">
+             data-project-json="{{ project.project_json|e }}" data-read-only="true"
+             data-username="{{ user.username if user else '' }}">
             <div class="nail-stage-col nail-stage-col-solo">
                 <div class="nail-stage-header">
                     <button type="button" id="nailGreenFlag" class="nail-flag-btn" title="Starten">⚑</button>

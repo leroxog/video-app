@@ -24,11 +24,15 @@
     const nameInput = document.getElementById("nailProjectName");
     const newVarBtn = document.getElementById("nailNewVariableBtn");
     const variableListEl = document.getElementById("nailVariableList");
+    const newListBtn = document.getElementById("nailNewListBtn");
+    const listListEl = document.getElementById("nailListList");
+    const username = page.dataset.username || "";
 
-    let state = { variables: {}, sprite: { x: 0, y: 0, direction: 90, size: 100, visible: true }, scripts: [] };
+    let state = { variables: {}, lists: {}, sprite: { x: 0, y: 0, direction: 90, size: 100, visible: true }, scripts: [] };
     try {
         const initial = JSON.parse(page.dataset.projectJson || "{}");
         state.variables = initial.variables || {};
+        state.lists = initial.lists || {};
         state.sprite = Object.assign(state.sprite, initial.sprite || {});
         state.scripts = initial.scripts || [];
     } catch (e) { /* starts from the empty default above */ }
@@ -43,6 +47,12 @@
             blocks.push({
                 type: `var_get:${name}`, category: "variables", shape: "reporter",
                 label: [name], _variableName: name,
+            });
+        });
+        Object.keys(state.lists).forEach((name) => {
+            blocks.push({
+                type: `list_get:${name}`, category: "variables", shape: "reporter",
+                label: [name], _listName: name,
             });
         });
         return blocks;
@@ -95,10 +105,11 @@
 
     function instantiateBlock(type) {
         let def = NailBlocks.BLOCKS_BY_TYPE[type];
-        let variableName = null;
         if (!def && type.indexOf("var_get:") === 0) {
-            variableName = type.slice(8);
-            def = { type, category: "variables", shape: "reporter", label: [variableName] };
+            def = { type, category: "variables", shape: "reporter", label: [type.slice(8)] };
+        }
+        if (!def && type.indexOf("list_get:") === 0) {
+            def = { type, category: "variables", shape: "reporter", label: [type.slice(9)] };
         }
         const block = { id: newId(), type: def.type, inputs: {}, next: null };
         (def.label || []).forEach((part) => {
@@ -107,6 +118,9 @@
                 block.inputs[part.input] = part.default !== undefined ? part.default : "";
                 if (part.type === "variable") {
                     block.inputs[part.input] = Object.keys(state.variables)[0] || "";
+                }
+                if (part.type === "list") {
+                    block.inputs[part.input] = Object.keys(state.lists)[0] || "";
                 }
             }
         });
@@ -164,7 +178,7 @@
         const value = inputValues[part.input];
         if (value && typeof value === "object" && value.blockRef) {
             const nestedDef = NailBlocks.BLOCKS_BY_TYPE[value.blockRef.type] ||
-                { type: value.blockRef.type, category: "variables", shape: "reporter", label: [(value.blockRef.type || "").slice(8)] };
+                { type: value.blockRef.type, category: "variables", shape: "reporter", label: [nestedRefLabel(value.blockRef.type)] };
             const nestedColor = NailBlocks.CATEGORIES.find((c) => c.key === nestedDef.category).color;
             const nestedEl = renderBlockShape(nestedDef, value.blockRef.inputs || {}, nestedColor, opts);
             nestedEl.classList.add("nail-nested-block");
@@ -201,6 +215,16 @@
             });
             if (!isReadOnly) select.addEventListener("change", () => { inputValues[part.input] = select.value; saveDirty(); });
             slot.appendChild(select);
+        } else if (part.type === "list") {
+            const select = document.createElement("select");
+            Object.keys(state.lists).forEach((name) => {
+                const o = document.createElement("option");
+                o.value = name; o.textContent = name;
+                if (name === value) o.selected = true;
+                select.appendChild(o);
+            });
+            if (!isReadOnly) select.addEventListener("change", () => { inputValues[part.input] = select.value; saveDirty(); });
+            slot.appendChild(select);
         } else if (part.type === "boolean") {
             slot.classList.add("nail-input-slot-empty-boolean");
         } else {
@@ -222,6 +246,12 @@
         return slot;
     }
     function toNum(v) { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; }
+    function nestedRefLabel(type) {
+        if (!type) return "";
+        if (type.indexOf("var_get:") === 0) return type.slice(8);
+        if (type.indexOf("list_get:") === 0) return type.slice(9);
+        return type;
+    }
 
     // ---------- Rendering the live canvas (real block tree, with drag handles) ----------
     function colorFor(type) {
@@ -230,7 +260,7 @@
     }
     function defFor(block) {
         return NailBlocks.BLOCKS_BY_TYPE[block.type] ||
-            { type: block.type, category: "variables", shape: "reporter", label: [(block.type || "").replace("var_get:", "")] };
+            { type: block.type, category: "variables", shape: "reporter", label: [nestedRefLabel(block.type)] };
     }
 
     function renderCanvasBlock(block) {
@@ -288,7 +318,7 @@
     function scheduleRerender() {
         if (rerenderQueued) return;
         rerenderQueued = true;
-        requestAnimationFrame(() => { rerenderQueued = false; renderCanvas(); renderVariableList(); renderPalette(); });
+        requestAnimationFrame(() => { rerenderQueued = false; renderCanvas(); renderVariableList(); renderListList(); renderPalette(); });
     }
 
     // ---------- Detach / find helpers on the block tree ----------
@@ -491,13 +521,50 @@
         });
     }
 
+    // ---------- Lists ----------
+    function renderListList() {
+        if (!listListEl) return;
+        listListEl.innerHTML = "";
+        Object.keys(state.lists).forEach((name) => {
+            const chip = document.createElement("span");
+            chip.className = "nail-variable-chip";
+            chip.textContent = name;
+            listListEl.appendChild(chip);
+        });
+    }
+    if (newListBtn && !isReadOnly) {
+        newListBtn.addEventListener("click", () => {
+            const name = window.prompt("Name der neuen Liste:");
+            if (!name || !name.trim()) return;
+            const clean = name.trim();
+            if (!(clean in state.lists)) state.lists[clean] = [];
+            scheduleRerender();
+            saveDirty();
+        });
+    }
+
     // ---------- Stage rendering ----------
+    const BACKDROP_COLORS = { "Weiß": "#ffffff", "Himmel": "#8ecdf0", "Wiese": "#8bc34a", "Nacht": "#151a33" };
+    const COSTUME_HUES = [0, 130, 250];
     let engine = null;
-    function paintSprite(sprite) {
+    let cloneEls = new Map();
+    let watchersEl = null;
+
+    function spriteFilter(sprite) {
+        const hue = (COSTUME_HUES[sprite.costumeIndex || 0] || 0) + (sprite.colorEffect || 0);
+        const opacity = Math.max(0, 1 - (sprite.ghostEffect || 0) / 100);
+        return `hue-rotate(${hue}deg) opacity(${opacity})`;
+    }
+    function transformFor(sprite) {
         const scale = (sprite.size || 100) / 100;
-        spriteEl.style.transform =
-            `translate(-50%, -50%) translate(${sprite.x}px, ${-sprite.y}px) rotate(${sprite.direction - 90}deg) scale(${scale})`;
+        return `translate(-50%, -50%) translate(${sprite.x}px, ${-sprite.y}px) rotate(${sprite.direction - 90}deg) scale(${scale})`;
+    }
+
+    function paintSprite(sprite) {
+        spriteEl.style.transform = transformFor(sprite);
         spriteEl.style.visibility = sprite.visible ? "visible" : "hidden";
+        spriteEl.style.filter = spriteFilter(sprite);
+        spriteEl.classList.toggle("nail-sprite-draggable", !!sprite.draggable);
         if (sprite.say || sprite.think) {
             speechEl.textContent = sprite.say || sprite.think;
             speechEl.className = "nail-speech-bubble " + (sprite.think ? "nail-speech-think" : "nail-speech-say");
@@ -509,11 +576,83 @@
         }
     }
 
+    function paintBackdrop(backdropIndex) {
+        if (!stageEl) return;
+        const name = (NailRuntime.BACKDROPS || [])[backdropIndex] || "Weiß";
+        stageEl.style.background = BACKDROP_COLORS[name] || "#ffffff";
+    }
+
+    function paintClones(clones) {
+        if (!stageEl) return;
+        const seen = new Set();
+        clones.forEach((clone) => {
+            seen.add(clone.id);
+            let el = cloneEls.get(clone.id);
+            if (!el) {
+                el = spriteEl.cloneNode(true);
+                el.removeAttribute("id");
+                el.classList.add("nail-clone-sprite");
+                stageEl.appendChild(el);
+                cloneEls.set(clone.id, el);
+            }
+            el.style.transform = transformFor(clone.sprite);
+            el.style.visibility = clone.sprite.visible ? "visible" : "hidden";
+            el.style.filter = spriteFilter(clone.sprite);
+        });
+        cloneEls.forEach((el, id) => {
+            if (!seen.has(id)) { el.remove(); cloneEls.delete(id); }
+        });
+    }
+
+    function ensureWatchersEl() {
+        if (watchersEl || !stageEl) return watchersEl;
+        watchersEl = document.createElement("div");
+        watchersEl.className = "nail-watchers";
+        stageEl.appendChild(watchersEl);
+        return watchersEl;
+    }
+    function paintWatchers(variables, extras) {
+        const el = ensureWatchersEl();
+        if (!el) return;
+        el.innerHTML = "";
+        (extras.shownVariables || []).forEach((name) => {
+            const row = document.createElement("div");
+            row.className = "nail-watcher-row";
+            row.innerHTML = `<span class="nail-watcher-name">${name}</span><span class="nail-watcher-value">${variables[name]}</span>`;
+            el.appendChild(row);
+        });
+        (extras.shownLists || []).forEach((name) => {
+            const box = document.createElement("div");
+            box.className = "nail-watcher-list";
+            const title = document.createElement("div");
+            title.className = "nail-watcher-name";
+            title.textContent = name;
+            box.appendChild(title);
+            (extras.lists[name] || []).forEach((item, i) => {
+                const row = document.createElement("div");
+                row.className = "nail-watcher-list-item";
+                row.textContent = `${i + 1}. ${item}`;
+                box.appendChild(row);
+            });
+            el.appendChild(box);
+        });
+    }
+
     function ensureEngine() {
         if (engine) return engine;
         engine = NailRuntime.createEngine({
             stageWidth: 480, stageHeight: 360,
-            onStateChange: (sprite) => paintSprite(sprite),
+            username,
+            onStateChange: (sprite, variables, extras) => {
+                paintSprite(sprite);
+                paintBackdrop(extras.backdropIndex);
+                paintClones(extras.clones || []);
+                paintWatchers(variables, {
+                    shownVariables: Array.from(extras.shownVariables || []),
+                    shownLists: Array.from(extras.shownLists || []),
+                    lists: extras.lists || {},
+                });
+            },
             onStop: () => { flagBtn.classList.remove("is-running"); },
             onAsk: (question) => new Promise((resolve) => {
                 const answer = window.prompt(question) || "";
@@ -537,17 +676,39 @@
             flagBtn.classList.remove("is-running");
         });
     }
+    let draggingSprite = false;
+    let dragSpriteOffset = { x: 0, y: 0 };
     if (stageEl) {
         stageEl.addEventListener("mousemove", (event) => {
             if (!engine) return;
             const r = stageEl.getBoundingClientRect();
-            engine.setMouseState(event.clientX - r.left - r.width / 2, r.height / 2 - (event.clientY - r.top), engine.getSprite ? undefined : false);
+            engine.setMouseState(event.clientX - r.left - r.width / 2, r.height / 2 - (event.clientY - r.top));
+            if (draggingSprite) {
+                engine.setSpritePosition(event.clientX - r.left - r.width / 2 - dragSpriteOffset.x, r.height / 2 - (event.clientY - r.top) - dragSpriteOffset.y);
+            }
         });
-        stageEl.addEventListener("mousedown", () => { if (engine) engine.setMouseState(undefined, undefined, true); });
-        stageEl.addEventListener("mouseup", () => { if (engine) engine.setMouseState(undefined, undefined, false); });
+        stageEl.addEventListener("mousedown", (event) => {
+            if (engine) engine.setMouseState(undefined, undefined, true);
+            const onSprite = spriteEl.contains(event.target) || event.target === spriteEl;
+            if (engine && onSprite) {
+                const sprite = engine.getSprite();
+                if (sprite && sprite.draggable) {
+                    draggingSprite = true;
+                    const r = stageEl.getBoundingClientRect();
+                    dragSpriteOffset = {
+                        x: event.clientX - r.left - r.width / 2 - sprite.x,
+                        y: r.height / 2 - (event.clientY - r.top) - sprite.y,
+                    };
+                }
+            }
+        });
+        stageEl.addEventListener("mouseup", () => {
+            if (engine) engine.setMouseState(undefined, undefined, false);
+            draggingSprite = false;
+        });
     }
     if (spriteEl) {
-        spriteEl.addEventListener("click", () => { if (engine) engine.spriteClicked(); });
+        spriteEl.addEventListener("click", () => { if (engine && !draggingSprite) engine.spriteClicked(); });
     }
     document.addEventListener("keydown", (event) => {
         if (!engine) return;
@@ -586,6 +747,8 @@
     // ---------- Init ----------
     renderPalette();
     renderVariableList();
+    renderListList();
     renderCanvas();
     paintSprite(state.sprite);
+    paintBackdrop(0);
 })();

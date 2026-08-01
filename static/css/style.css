@@ -7709,6 +7709,33 @@ body.studio-fullscreen {
     transition: none;
 }
 .nail-sprite svg { display: block; cursor: pointer; }
+.nail-sprite-draggable svg { cursor: grab; }
+.nail-clone-sprite { pointer-events: none; }
+
+.nail-watchers {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    z-index: 3;
+    pointer-events: none;
+}
+.nail-watcher-row, .nail-watcher-list {
+    background: rgba(255, 255, 255, 0.85);
+    color: #222;
+    border-radius: 6px;
+    padding: 0.2rem 0.5rem;
+    font-size: 0.72rem;
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+}
+.nail-watcher-list { flex-direction: column; align-items: flex-start; max-width: 140px; }
+.nail-watcher-name { font-weight: 600; }
+.nail-watcher-value { color: #d65cd6; }
+.nail-watcher-list-item { font-size: 0.7rem; }
 
 .nail-speech-bubble {
     position: absolute;

@@ -4,7 +4,8 @@
 {% block body_class %}studio-fullscreen{% endblock %}
 {% block content %}
     <div class="nail-editor-page" id="nailEditorPage" data-project-id="{{ project.id }}"
-         data-project-json="{{ project.project_json|e }}" data-read-only="false">
+         data-project-json="{{ project.project_json|e }}" data-read-only="false"
+         data-username="{{ user.username if user else '' }}">
         <div class="nail-editor-topbar">
             <a class="nail-editor-back" href="{{ url_for('nail_page') }}">&larr; NAIL</a>
             <input type="text" id="nailProjectName" class="nail-editor-name-input" value="{{ project.name }}" maxlength="100">
@@ -41,6 +42,11 @@
                         <button type="button" id="nailNewVariableBtn">Neue Variable</button>
                     </div>
                     <div class="nail-variable-list" id="nailVariableList"></div>
+                    <div class="nail-variables-header">
+                        <span>Listen</span>
+                        <button type="button" id="nailNewListBtn">Neue Liste</button>
+                    </div>
+                    <div class="nail-variable-list" id="nailListList"></div>
                 </div>
             </div>
         </div>
