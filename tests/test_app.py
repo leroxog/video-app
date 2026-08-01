@@ -3064,10 +3064,14 @@ def test_ai_chat_status_unknown_job_404s(client):
     assert response.status_code == 404
 
 
-def test_ai_chat_reports_error_when_groq_api_key_missing(client, monkeypatch):
+def test_ai_chat_reports_error_when_local_model_fails_to_load(client, monkeypatch):
     import ai_assistant
+    import local_ai
 
-    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    def boom(*args, **kwargs):
+        raise RuntimeError("Modell konnte nicht geladen werden.")
+
+    monkeypatch.setattr(local_ai, "generate_chat", boom)
     register(client)
 
     start_res = client.post("/api/ai/chat", json={"message": "Hallo"})
@@ -3082,7 +3086,7 @@ def test_ai_chat_reports_error_when_groq_api_key_missing(client, monkeypatch):
         time.sleep(0.05)
 
     assert status_data["status"] == "error"
-    assert "GROQ_API_KEY" in status_data["error"]
+    assert "Modell konnte nicht geladen werden." in status_data["error"]
 
 
 def test_ai_chats_requires_login(client):
@@ -3383,11 +3387,16 @@ def test_general_tools_vs_project_change_tools_by_mode(monkeypatch):
 
     captured = {}
 
-    def fake_call_groq(messages, max_tokens, tools=None, **kwargs):
+    def fake_call_model(messages, max_tokens, tools=None, **kwargs):
         captured["tools"] = tools
         return "ok", None
 
-    monkeypatch.setattr(ai_assistant, "_call_groq", fake_call_groq)
+    def fake_call_model_with_router(messages, user_message, max_tokens, tools, *args, **kwargs):
+        captured["tools"] = tools
+        return "ok", None
+
+    monkeypatch.setattr(ai_assistant, "_call_model", fake_call_model)
+    monkeypatch.setattr(ai_assistant, "_call_model_with_router", fake_call_model_with_router)
 
     # Code context without an explicit project_type defaults to "game" --
     # it must never fall through to general mode (that would enable
@@ -3420,36 +3429,37 @@ def test_code_project_type_uses_base_system_prompt(monkeypatch):
 
     captured = {}
 
-    def fake_call_groq(messages, max_tokens, tools=None, **kwargs):
+    def fake_call_model(messages, max_tokens, tools=None, **kwargs):
         captured["system_prompt"] = messages[0]["content"]
         return "ok", None
 
-    monkeypatch.setattr(ai_assistant, "_call_groq", fake_call_groq)
+    monkeypatch.setattr(ai_assistant, "_call_model", fake_call_model)
 
     ai_assistant.generate_reply("Erklär mir Rekursion.", project_type="code")
     assert captured["system_prompt"] == (
         ai_assistant.BASE_SYSTEM_PROMPT + ai_assistant.CODE_CHAT_ADDENDUM + ai_assistant.FORMATTING_ADDENDUM
+        + ai_assistant._tools_instructions(ai_assistant.CODE_CHAT_TOOLS)
     )
 
 
-def test_call_groq_executes_tool_call_then_returns_final_reply(monkeypatch):
+def test_call_model_executes_tool_call_then_returns_final_reply(monkeypatch):
     import ai_assistant
 
     calls = []
 
-    def fake_call_groq_message(messages, max_tokens, tools=None, tool_choice="auto", temperature=None):
+    def fake_call_local_model_message(messages, max_tokens, tools=None, tool_choice="auto", temperature=None):
         calls.append(messages)
         if len(calls) == 1:
             return {
-                "role": "assistant", "content": None,
+                "content": "",
                 "tool_calls": [{"id": "call1", "function": {"name": "get_weather", "arguments": '{"location": "Berlin"}'}}],
             }
-        return {"role": "assistant", "content": "In Berlin sind es 21.5°C."}
+        return {"content": "In Berlin sind es 21.5°C."}
 
-    monkeypatch.setattr(ai_assistant, "_call_groq_message", fake_call_groq_message)
+    monkeypatch.setattr(ai_assistant, "_call_local_model_message", fake_call_local_model_message)
     monkeypatch.setattr(ai_assistant, "_tool_get_weather", lambda location: "Aktuelles Wetter in Berlin: 21.5°C.")
 
-    reply, proposed_change = ai_assistant._call_groq(
+    reply, proposed_change = ai_assistant._call_model(
         [{"role": "user", "content": "Wie ist das Wetter in Berlin?"}], 200, tools=ai_assistant.AI_TOOLS,
     )
     assert reply == "In Berlin sind es 21.5°C."
@@ -3457,16 +3467,16 @@ def test_call_groq_executes_tool_call_then_returns_final_reply(monkeypatch):
     assert len(calls) == 2
 
 
-def test_call_groq_returns_proposed_change_from_propose_project_change(monkeypatch):
+def test_call_model_returns_proposed_change_from_propose_project_change(monkeypatch):
     import ai_assistant
 
     calls = []
 
-    def fake_call_groq_message(messages, max_tokens, tools=None, tool_choice="auto", temperature=None):
+    def fake_call_local_model_message(messages, max_tokens, tools=None, tool_choice="auto", temperature=None):
         calls.append(messages)
         if len(calls) == 1:
             return {
-                "role": "assistant", "content": None,
+                "content": "",
                 "tool_calls": [{
                     "id": "call1",
                     "function": {
@@ -3475,11 +3485,11 @@ def test_call_groq_returns_proposed_change_from_propose_project_change(monkeypat
                     },
                 }],
             }
-        return {"role": "assistant", "content": "Ich habe eine Änderung vorgeschlagen!"}
+        return {"content": "Ich habe eine Änderung vorgeschlagen!"}
 
-    monkeypatch.setattr(ai_assistant, "_call_groq_message", fake_call_groq_message)
+    monkeypatch.setattr(ai_assistant, "_call_local_model_message", fake_call_local_model_message)
 
-    reply, proposed_change = ai_assistant._call_groq(
+    reply, proposed_change = ai_assistant._call_model(
         [{"role": "user", "content": "Lass den Block verschwinden, wenn man ihn berührt."}],
         200, tools=ai_assistant.PROJECT_CHANGE_TOOLS,
     )
@@ -3495,11 +3505,16 @@ def test_facts_addendum_included_for_every_mode(monkeypatch):
 
     captured = {}
 
-    def fake_call_groq(messages, max_tokens, tools=None, **kwargs):
+    def fake_call_model(messages, max_tokens, tools=None, **kwargs):
         captured["system"] = messages[0]["content"]
         return "ok", None
 
-    monkeypatch.setattr(ai_assistant, "_call_groq", fake_call_groq)
+    def fake_call_model_with_router(messages, user_message, max_tokens, tools, *args, **kwargs):
+        captured["system"] = messages[0]["content"]
+        return "ok", None
+
+    monkeypatch.setattr(ai_assistant, "_call_model", fake_call_model)
+    monkeypatch.setattr(ai_assistant, "_call_model_with_router", fake_call_model_with_router)
 
     ai_assistant.generate_reply("Hallo!", facts=["NexAI wurde 2024 gegründet."])
     assert "NexAI wurde 2024 gegründet." in captured["system"]
@@ -3513,11 +3528,16 @@ def test_learned_facts_addendum_only_applied_in_general_mode(monkeypatch):
 
     captured = {}
 
-    def fake_call_groq(messages, max_tokens, tools=None, **kwargs):
+    def fake_call_model(messages, max_tokens, tools=None, **kwargs):
         captured["system"] = messages[0]["content"]
         return "ok", None
 
-    monkeypatch.setattr(ai_assistant, "_call_groq", fake_call_groq)
+    def fake_call_model_with_router(messages, user_message, max_tokens, tools, *args, **kwargs):
+        captured["system"] = messages[0]["content"]
+        return "ok", None
+
+    monkeypatch.setattr(ai_assistant, "_call_model", fake_call_model)
+    monkeypatch.setattr(ai_assistant, "_call_model_with_router", fake_call_model_with_router)
     learned = {"wikipedia": ["Paris ist die Hauptstadt von Frankreich."], "user": ["Der Nutzer heißt Timo."]}
 
     ai_assistant.generate_reply("Hallo!", learned_facts=learned)
@@ -4400,11 +4420,11 @@ def test_seeded_knowledge_reaches_general_chat_prompt(monkeypatch):
 
     captured = {}
 
-    def fake_call_groq(messages, max_tokens, tools=None, **kwargs):
+    def fake_call_model_with_router(messages, user_message, max_tokens, tools, *args, **kwargs):
         captured["system"] = messages[0]["content"]
         return "ok", None
 
-    monkeypatch.setattr(ai_assistant, "_call_groq", fake_call_groq)
+    monkeypatch.setattr(ai_assistant, "_call_model_with_router", fake_call_model_with_router)
     ai_assistant.generate_reply(
         "Hallo!",
         learned_facts={"wikipedia": ["Wiki-Fakt X"], "docs": ["Python-Doku-Fakt Y"], "user": ["Nutzer-Fakt Z"]},

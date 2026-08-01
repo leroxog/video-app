@@ -1,6 +1,7 @@
 import os
 import io
 import re
+import sys
 import json
 import math
 import uuid
@@ -40,6 +41,7 @@ from models import (
     AiVoiceProfile, AiPersonality, AiGeneratedMedia, NailProject, NailProjectLike,
 )
 import ai_assistant
+import local_ai
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -978,6 +980,26 @@ with app.app_context():
     ensure_columns_exist()
     ensure_r2_cors_configured()
     ensure_lerox_builtin_games()
+
+    # Pre-warms the local AI model (download + load, ~1 GB, see
+    # local_ai.py) in the background at startup instead of leaving it to
+    # happen lazily on whichever user's chat request is first -- that
+    # request would otherwise eat the full download+load time itself and
+    # risk the gunicorn worker's own request timeout. Runs in a daemon
+    # thread so a slow/failed download never blocks the app from starting;
+    # get_llama() is called again (and just returns the cached instance)
+    # on the first real chat request either way. Skipped under pytest --
+    # loading a real ~1.5 GB model would eat CPU throughout the whole test
+    # run and race with tests that assume a mocked generate_reply()
+    # completes near-instantly.
+    if "pytest" not in sys.modules:
+        def _prewarm_local_ai():
+            try:
+                local_ai.get_llama()
+            except Exception:
+                logger.exception("Lokales KI-Modell konnte beim Start nicht vorgeladen werden.")
+
+        threading.Thread(target=_prewarm_local_ai, daemon=True).start()
 
     admin_username = os.environ.get("ADMIN_USERNAME")
     admin_password = os.environ.get("ADMIN_PASSWORD")
@@ -2342,12 +2364,29 @@ def api_ai_chat():
                     ))
                 db.session.commit()
                 if is_first_message:
-                    title = ai_assistant.generate_title(message)
-                    if title:
-                        chat_row = db.session.get(AiChat, chat_id_captured)
-                        if chat_row is not None:
-                            chat_row.title = title
-                            db.session.commit()
+                    # Fired off as its own background thread rather than
+                    # awaited here -- generate_title() is a whole separate
+                    # model call, and with the local model (see
+                    # ai_assistant.py) that alone can take several seconds.
+                    # Blocking on it here would delay the job's "done"
+                    # status -- and therefore the reply the user is
+                    # actually waiting for -- by that same amount, even
+                    # though the reply itself was ready already. The title
+                    # just applies a moment later instead; nothing reads it
+                    # synchronously off this same request.
+                    def _apply_title():
+                        try:
+                            title = ai_assistant.generate_title(message)
+                            if title:
+                                with app.app_context():
+                                    chat_row = db.session.get(AiChat, chat_id_captured)
+                                    if chat_row is not None:
+                                        chat_row.title = title
+                                        db.session.commit()
+                        except Exception:
+                            logger.exception("Chat-Titel konnte im Hintergrund nicht gesetzt werden.")
+
+                    threading.Thread(target=_apply_title, daemon=True).start()
             elif error:
                 # A Groq outage/rate limit/bad key fails silently from the
                 # user's perspective (they just see "KI gerade nicht

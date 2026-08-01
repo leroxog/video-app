@@ -2,21 +2,31 @@
 floating widget in base.html) and as programming help inside NexAI
 studio (where the user's current script is sent along as context).
 
-Runs an open-source model (openai/gpt-oss-120b by default, Apache 2.0 --
-OpenAI's own open-weight release, the same company behind ChatGPT, just
-not their closed flagship model) hosted on Groq's free inference API,
-since running even a small LLM directly on the server's CPU turned out to
-take 1-6 minutes per reply in testing -- Groq's hosted inference answers
-in well under a second. This means GROQ_API_KEY must be set (locally in a
-.env file, on Railway as a project environment variable); without it,
-requests fail with a clear error instead of hanging. GROQ_MODEL env var
-overrides the default, e.g. back to the smaller/faster openai/gpt-oss-20b.
+Text generation runs entirely on NexAI's own infrastructure: a small,
+heavily quantized open-weight model (see local_ai.py), loaded directly
+into this process and run on the server's own CPU via llama-cpp-python --
+no external chat API, no per-token cost, nothing to configure. This
+replaced an earlier version of this module that called Groq's hosted
+inference API instead; that gave much larger-model quality/speed for
+free, but at the cost of depending on a third party for the app's core
+feature. The tradeoff was made deliberately and is expected to show:
+noticeably weaker and slower replies than before, and no native
+structured tool-calling (see _tools_instructions/_parse_tool_call below
+for the prompt-based scheme that replaces it) -- an accepted quality
+regression in exchange for genuinely owning the whole pipeline, not a bug
+to "fix" back to bigger/faster.
+
+Image generation (generate_image, via Pollinations.ai) and cloned-voice
+audio (generate_audio, via ElevenLabs/browser TTS) are unaffected by any
+of this -- those were always separate external services and still are;
+only the actual chat/voice-chat TEXT reply is now self-hosted.
 
 Requests still run through a background-thread job queue and are polled by
-the client (see start_chat_job()/get_job_status()) even though Groq itself
-is fast, since that keeps the API contract the same regardless of which
-backend answers it and matches the run_video_wipe()-style pattern already
-used elsewhere in this app for other async jobs.
+the client (see start_chat_job()/get_job_status()) even though local
+inference is comparatively fast, since that keeps the API contract the
+same regardless of which backend answers it and matches the
+run_video_wipe()-style pattern already used elsewhere in this app for
+other async jobs.
 
 This module knows nothing about the database -- chat history persistence
 lives in app.py (AiChat/AiChatMessage), which passes prior turns in as
@@ -24,11 +34,16 @@ lives in app.py (AiChat/AiChatMessage), which passes prior turns in as
 history is always scoped to the same user's own past chats; it is never
 shared with or used to influence another user's replies.
 
-Also gives the assistant tool-calling abilities (Groq/OpenAI-style
-function calling, not model fine-tuning -- see the module docstring
-discussion this was chosen over: Groq's API is inference-only, there is
-no way to retrain/fine-tune the shared hosted model from this app), split
-by which of three modes generate_reply() runs in (`project_type`):
+Also gives the assistant tool-calling abilities -- OpenAI/Groq-style
+structured function calling isn't available from a small local model run
+through llama-cpp-python, so this is instead taught entirely through the
+system prompt (see _tools_instructions) as a convention the model
+follows by imitation: to call a tool, respond with nothing but a fenced
+```tool_call``` block containing {"name", "arguments"} JSON, which
+_parse_tool_call then reads back out. Not model fine-tuning either way --
+there's still no way to retrain this model from within the app, tool use
+is purely a per-request prompting technique. Split by which of three
+modes generate_reply() runs in (`project_type`):
   - None (general chat): search_wikipedia, get_weather, search_docs --
     live lookups for factual questions, not available in the other two
     modes since pulling in real Python/JS/Java/C# documentation there
@@ -90,11 +105,9 @@ is still a fresh, stateless call (see above) -- it's prompt-level
 roleplay/personalization, read only by the AI itself, same privacy
 framing as the rest of a user's private profile.
 """
-import os
 import re
 import json
 import html
-import time
 import logging
 import threading
 import uuid
@@ -103,20 +116,23 @@ import urllib.robotparser
 
 import requests
 
+import local_ai
+
 logger = logging.getLogger(__name__)
 
-GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
-GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
 MAX_MESSAGE_CHARS = 2000
 MAX_CONTEXT_CHARS = 4000
 MAX_REPLY_TOKENS = 900
 MAX_HISTORY_MESSAGES = 12
-REQUEST_TIMEOUT_SECONDS = 30
 # Code modes (game DSL, webapp) stay at the lower, more predictable value --
 # the flat Studio DSL in particular has zero tolerance for invented syntax.
-# General chat gets more room for varied, creative phrasing.
+# General chat gets more room for varied, creative phrasing, but not as
+# much as the old Groq-hosted model got (1.1) -- this local model's
+# prompt-based tool-calling (see _tools_instructions) is far more prone to
+# going off the rails at high sampling temperature than Groq's native,
+# separately-constrained tool selection ever was.
 CODE_TEMPERATURE = 0.7
-GENERAL_TEMPERATURE = 1.1
+GENERAL_TEMPERATURE = 0.85
 
 TOOL_REQUEST_TIMEOUT_SECONDS = 8
 MAX_TOOL_RESULT_CHARS = 1500
@@ -714,7 +730,7 @@ _WIKIPEDIA_LOOKUP_FAILURES = (
 def _run_tool_calls(tool_calls, captured, available_tokens=None, synthesize_audio_fn=None):
     """Executes each requested tool and returns the "tool" role messages
     to feed back to the model. `captured` is a single dict shared across
-    the whole _call_groq() loop, so the caller can read results back out
+    the whole _call_model() loop, so the caller can read results back out
     after it returns:
     - propose_project_change stashes its arguments into captured["proposed_change"]
       instead of fetching anything.
@@ -838,68 +854,130 @@ def _execute_one_tool_call(name, args, captured, available_tokens=None, synthesi
 
 MAX_TOOL_ROUNDS = 3
 
+# The local model's entire "tool-calling API" is this one convention,
+# taught via _tools_instructions and read back out by _parse_tool_call: a
+# fenced code block, language-tagged "tool_call", containing nothing but
+# {"name": ..., "arguments": {...}} JSON. Chosen over e.g. a custom XML tag
+# because fenced code blocks are exactly the kind of structured-looking
+# output small instruct models already imitate reliably from their own
+# training data.
+_TOOL_CALL_PATTERN = re.compile(r"```tool_call\s*\n(.*?)```", re.DOTALL)
+# propose_project_change's new_code argument is often too long, and too
+# easy to mangle via JSON string-escaping, for a small model to embed
+# reliably inline -- instead it's taught (see _tools_instructions) to
+# leave arguments.new_code empty and put the raw, unescaped code in its
+# own fenced ```new_code``` block right after the tool_call block, which
+# this pattern then reads back out and splices into the parsed arguments.
+_NEW_CODE_BLOCK_PATTERN = re.compile(r"```new_code\s*\n(.*?)\n```", re.DOTALL)
 
-def _call_groq_message(messages, max_tokens, tools=None, tool_choice="auto", temperature=CODE_TEMPERATURE):
-    api_key = os.environ.get("GROQ_API_KEY")
-    if not api_key:
-        raise RuntimeError(
-            "GROQ_API_KEY ist nicht gesetzt. Auf groq.com einen kostenlosen API-Key erstellen "
-            "und als Umgebungsvariable GROQ_API_KEY hinterlegen."
-        )
-    payload = {
-        "model": GROQ_MODEL,
-        "messages": messages,
-        "max_tokens": max_tokens,
-        "temperature": temperature,
-        # gpt-oss models spend a chunk of their token budget on hidden
-        # "reasoning" before the visible answer; "low" keeps that short
-        # so there's always room left for the actual reply.
-        "reasoning_effort": "low",
-    }
-    if tools:
-        payload["tools"] = tools
-        payload["tool_choice"] = tool_choice
-    # Groq occasionally times out, drops the connection, or answers with a
-    # transient 429/5xx under load -- previously any single one of those
-    # failed the whole reply outright (the user just sees "Die KI ist
-    # gerade nicht verfügbar."), which reads as the assistant randomly
-    # crashing far more often than the model itself actually misbehaves.
-    # Retrying a couple of times with a short backoff absorbs exactly that
-    # class of blip before giving up for real.
-    last_exc = None
-    for attempt in range(3):
-        try:
-            response = requests.post(
-                GROQ_API_URL,
-                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-                json=payload,
-                timeout=REQUEST_TIMEOUT_SECONDS,
+
+def _parse_tool_call(raw):
+    """Parses the local model's raw text reply for _TOOL_CALL_PATTERN.
+    Returns (remaining_text, tool_calls_or_None) -- remaining_text always
+    has any matched tool_call/new_code block stripped out (so a
+    malformed/unwanted one never leaks into what the user sees), even if
+    the JSON inside it didn't parse or named an unknown tool, in which
+    case tool_calls is None and the caller falls back to treating this as
+    a normal text reply."""
+    match = _TOOL_CALL_PATTERN.search(raw)
+    if not match:
+        return raw, None
+    remaining = (raw[:match.start()] + raw[match.end():]).strip()
+    try:
+        parsed = json.loads(match.group(1).strip())
+    except (json.JSONDecodeError, TypeError):
+        return remaining, None
+    name = parsed.get("name") if isinstance(parsed, dict) else None
+    if not name:
+        return remaining, None
+    arguments = parsed.get("arguments")
+    arguments = dict(arguments) if isinstance(arguments, dict) else {}
+    if name == "propose_project_change":
+        code_match = _NEW_CODE_BLOCK_PATTERN.search(raw)
+        if code_match:
+            arguments["new_code"] = code_match.group(1)
+            remaining = _NEW_CODE_BLOCK_PATTERN.sub("", remaining).strip()
+    tool_calls = [{
+        "id": f"call_{uuid.uuid4().hex[:12]}",
+        "function": {"name": name, "arguments": json.dumps(arguments)},
+    }]
+    return remaining, tool_calls
+
+
+def _tools_instructions(tools):
+    """System-prompt addendum that teaches the local model NexAI's own
+    prompt-based tool-calling convention (the matching parser is
+    _parse_tool_call) -- entirely through worked examples, since a small
+    model follows a concrete example far more reliably than an abstract
+    instruction alone. Only ever appended when `tools` is non-empty."""
+    lines = [
+        "\n\nDu hast Zugriff auf Werkzeuge, brauchst sie aber nur SEHR SELTEN -- die meisten "
+        "Nachrichten (Fragen, Small Talk, Erklärungen, Programmierhilfe) beantwortest du ganz "
+        "normal mit Text, OHNE irgendein Werkzeug. Nur wenn ein Werkzeug für die Antwort "
+        "wirklich gebraucht wird, antwortest du NUR mit diesem Codeblock, ohne Erklärung davor "
+        "oder danach:\n```tool_call\n{\"name\": \"WERKZEUGNAME\", \"arguments\": {...}}\n```",
+        "\nBeispiel -- KEIN Werkzeug nötig:\n"
+        "Nutzer: \"Wie schreibe ich eine for-Schleife in Python?\"\n"
+        "Deine Antwort: \"Eine for-Schleife in Python sieht so aus:\n"
+        "```python\nfor i in range(10):\n    print(i)\n```\"\n"
+        "(ganz normaler Text, KEIN tool_call, weil kein Werkzeug gebraucht wurde)",
+        "\nVerfügbare Werkzeuge:",
+    ]
+    for tool in tools:
+        fn = tool.get("function", {})
+        name = fn.get("name", "")
+        desc = fn.get("description", "")
+        props = (fn.get("parameters", {}) or {}).get("properties", {}) or {}
+        arg_bits = [f"{arg_name} ({schema.get('type', 'string')})" for arg_name, schema in props.items()]
+        args_str = ", ".join(arg_bits) if arg_bits else "keine"
+        lines.append(f"- {name}: {desc} Argumente: {args_str}.")
+        if name == "propose_project_change":
+            lines.append(
+                "  WICHTIG bei propose_project_change: lass \"new_code\" in den arguments "
+                "leer (nur \"summary\" angeben) und häng danach den kompletten neuen Code "
+                "UNVERÄNDERT, ohne JSON-Escaping, in einem eigenen Codeblock an:\n"
+                "  ```new_code\n  <hier der komplette neue Code>\n  ```"
             )
-        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as exc:
-            last_exc = exc
-            if attempt < 2:
-                time.sleep(1.5 * (attempt + 1))
-                continue
-            raise
-        if response.status_code in (429, 500, 502, 503, 504) and attempt < 2:
-            last_exc = requests.exceptions.HTTPError(f"Groq status {response.status_code}", response=response)
-            time.sleep(1.5 * (attempt + 1))
-            continue
-        response.raise_for_status()
-        return response.json()["choices"][0]["message"]
-    raise last_exc
+    lines.append(
+        "\nBeispiel -- Werkzeug wirklich nötig (Nutzer verlangt ausdrücklich ein Bild):\n"
+        "Nutzer: \"Erstelle mir ein Bild von einer Katze\"\n"
+        "Deine Antwort:\n```tool_call\n{\"name\": \"generate_image\", \"arguments\": "
+        "{\"prompt\": \"a cat\"}}\n```"
+    )
+    return "\n".join(lines)
 
 
-def _call_groq(messages, max_tokens, tools=None, captured=None, temperature=CODE_TEMPERATURE, available_tokens=None,
-                synthesize_audio_fn=None):
+def _call_local_model_message(messages, max_tokens, tools=None, tool_choice="auto", temperature=CODE_TEMPERATURE):
+    call_messages = messages
+    if tool_choice == "none" and tools:
+        # Unlike Groq's native tool_choice="none", this prompt-based
+        # scheme has no hard constraint forcing a plain answer -- only
+        # this one extra nudge, appended just for this call.
+        call_messages = messages + [{
+            "role": "system",
+            "content": (
+                "Antworte JETZT ausschließlich in normalem Text, OHNE tool_call-Codeblock, "
+                "auch wenn du vorher eins gebraucht hast."
+            ),
+        }]
+    raw = local_ai.generate_chat(call_messages, max_tokens, temperature=temperature)
+    remaining, tool_calls = _parse_tool_call(raw) if tools else (raw, None)
+    if tool_choice == "none":
+        tool_calls = None
+    message = {"content": remaining}
+    if tool_calls:
+        message["tool_calls"] = tool_calls
+    return message
+
+
+def _call_model(messages, max_tokens, tools=None, captured=None, temperature=CODE_TEMPERATURE, available_tokens=None,
+                 synthesize_audio_fn=None):
     """Runs a tool-calling loop: as long as the model keeps requesting
-    tools, executes them server-side and feeds the results back, up to
-    MAX_TOOL_ROUNDS turns. On the last allowed turn, tool_choice is forced
-    to "none" -- Groq errors ("tool choice is none, but model called a
-    tool") if tools are omitted entirely from a follow-up call after the
-    model has already started a tool-calling turn, so the schema stays
-    attached and only the choice is what forces a final text answer.
-    Returns (content, proposed_change) -- proposed_change is a
+    tools (see _parse_tool_call), executes them server-side and feeds the
+    results back, up to MAX_TOOL_ROUNDS turns. On the last allowed turn,
+    tool_choice is forced to "none" so the loop always ends in a real
+    text answer rather than potentially looping forever. Returns
+    (content, proposed_change) -- proposed_change is a
     {"new_code", "summary"} dict if propose_project_change was called
     during the loop, else None.
 
@@ -918,7 +996,7 @@ def _call_groq(messages, max_tokens, tools=None, captured=None, temperature=CODE
     captured.setdefault("personality_adjustments", [])
     for round_index in range(MAX_TOOL_ROUNDS):
         is_last_round = round_index == MAX_TOOL_ROUNDS - 1
-        message = _call_groq_message(
+        message = _call_local_model_message(
             current_messages, max_tokens, tools=tools,
             tool_choice="none" if is_last_round else "auto", temperature=temperature,
         )
@@ -929,6 +1007,132 @@ def _call_groq(messages, max_tokens, tools=None, captured=None, temperature=CODE
             tool_calls, captured, available_tokens=available_tokens, synthesize_audio_fn=synthesize_audio_fn,
         )
     return "", captured["proposed_change"]
+
+
+def _classify_tool(user_message, tools):
+    """A short, single-purpose classification pass, deliberately kept
+    separate from the main reply generation -- see _call_model_with_router
+    for why. Returns (tool_name_or_None, arguments_dict)."""
+    lines = [
+        "Du bist ein Klassifizierer. Deine EINZIGE Aufgabe: entscheiden, ob die Nachricht "
+        "eines Nutzers eines der folgenden Werkzeuge braucht.\n\nWerkzeuge:",
+    ]
+    for tool in tools:
+        fn = tool.get("function", {})
+        name = fn.get("name", "")
+        desc = fn.get("description", "")
+        props = (fn.get("parameters", {}) or {}).get("properties", {}) or {}
+        arg_bits = [f"{arg_name} ({schema.get('type', 'string')})" for arg_name, schema in props.items()]
+        lines.append(f"- {name}: {desc} Argumente: {', '.join(arg_bits) if arg_bits else 'keine'}.")
+    lines.append(
+        "- none: keines der obigen Werkzeuge wird für diese Nachricht gebraucht (Small Talk, "
+        "Meinungsfragen, Programmierhilfe, alles, wofür oben kein passendes Werkzeug steht).\n\n"
+        "Antworte AUSSCHLIESSLICH mit einem einzeiligen JSON-Objekt, sonst absolut nichts:\n"
+        '{"tool": "WERKZEUGNAME oder none", "arguments": {...}}'
+    )
+    messages = [
+        {"role": "system", "content": "\n".join(lines)},
+        {"role": "user", "content": user_message[:MAX_MESSAGE_CHARS]},
+    ]
+    try:
+        raw = local_ai.generate_chat(messages, max_tokens=150, temperature=0.1)
+    except Exception:
+        logger.exception("Werkzeug-Klassifizierung fehlgeschlagen.")
+        return None, {}
+    match = re.search(r"\{.*\}", raw, re.DOTALL)
+    if not match:
+        return None, {}
+    try:
+        parsed = json.loads(match.group(0))
+    except (json.JSONDecodeError, TypeError):
+        return None, {}
+    tool_name = parsed.get("tool") if isinstance(parsed, dict) else None
+    if not tool_name or tool_name == "none":
+        return None, {}
+    arguments = parsed.get("arguments")
+    return tool_name, dict(arguments) if isinstance(arguments, dict) else {}
+
+
+def _call_model_with_router(messages, user_message, max_tokens, tools, captured, temperature,
+                             available_tokens=None, synthesize_audio_fn=None):
+    """General-mode counterpart to _call_model: tool selection runs as its
+    own dedicated classification pass (_classify_tool) instead of being
+    embedded in the same call as the actual reply. This local model
+    follows a short, single-purpose prompt (just the tool list and the
+    latest message) far more reliably than the same tool-calling
+    convention competing for attention inside NexAI's much longer,
+    already-elaborate character/personality system prompt (see this
+    module's docstring) -- verified empirically: the combined-prompt
+    approach _call_model uses missed or hallucinated tool calls in
+    testing once the full character prompt was included, while this
+    split version chose correctly across image/Wikipedia/none cases.
+    Game/webapp/code modes don't use this -- their one real "tool",
+    propose_project_change, IS the generative task (produce the whole new
+    code), not a lookup a classifier could route to, so they keep
+    _call_model's embedded-tool_call approach, and their system prompts
+    are far shorter/more focused to begin with.
+
+    `messages` is the full prompt (system + history + this turn) for the
+    actual reply; `user_message` is just this turn's raw text, used only
+    for classification (kept short and history-free on purpose, for the
+    same reliability reason)."""
+    if captured is None:
+        captured = {}
+    captured.setdefault("proposed_change", None)
+    captured.setdefault("wikipedia_facts", [])
+    captured.setdefault("user_facts", [])
+    captured.setdefault("personality_adjustments", [])
+
+    final_messages = messages
+    # generate_image/generate_audio have a strict output-format requirement
+    # (the frontend only renders an image/audio player if the reply
+    # contains the exact ![]()/!audio[]() markdown) -- rather than hoping
+    # the follow-up call reliably reproduces that syntax verbatim (it
+    # often didn't, in testing: the model would talk about the image
+    # instead of embedding it), the markdown is appended in code below,
+    # guaranteed, and the model is only asked for a short natural comment
+    # around it.
+    forced_markdown = None
+    if tools:
+        tool_name, arguments = _classify_tool(user_message, tools)
+        if tool_name:
+            try:
+                result = _execute_one_tool_call(
+                    tool_name, arguments, captured,
+                    available_tokens=available_tokens, synthesize_audio_fn=synthesize_audio_fn,
+                )
+            except Exception:
+                logger.exception("Werkzeugaufruf '%s' fehlgeschlagen.", tool_name)
+                result = (
+                    f"Das Werkzeug '{tool_name}' ist gerade an einem technischen Fehler "
+                    "gescheitert. Erklär das dem Nutzer ehrlich, statt es als Erfolg "
+                    "darzustellen."
+                )
+            image_generated = captured.get("image_generated")
+            audio_generated = captured.get("audio_generated")
+            if tool_name == "generate_image" and image_generated:
+                forced_markdown = f"![{image_generated['prompt']}]({image_generated['url']})"
+            elif tool_name == "generate_audio" and audio_generated:
+                forced_markdown = f"!audio[Sprachnachricht]({audio_generated['url']})"
+            follow_up = (
+                f"Du hast gerade automatisch das Werkzeug '{tool_name}' benutzt. Ergebnis:\n{result}\n\n"
+            )
+            if forced_markdown:
+                follow_up += (
+                    "Schreib dazu nur einen KURZEN, natürlichen Kommentar (ein bis zwei Sätze) -- "
+                    "das Bild/die Sprachnachricht selbst wird automatisch angehängt, du musst "
+                    "KEIN Markdown dafür selbst einbinden."
+                )
+            else:
+                follow_up += (
+                    "Schreib jetzt deine eigentliche Antwort an den Nutzer, die dieses Ergebnis "
+                    "einbezieht."
+                )
+            final_messages = messages + [{"role": "system", "content": follow_up}]
+    content = local_ai.generate_chat(final_messages, max_tokens, temperature=temperature).strip()
+    if forced_markdown and forced_markdown not in content:
+        content = f"{content}\n\n{forced_markdown}" if content else forced_markdown
+    return content, captured["proposed_change"]
 
 
 def _facts_addendum(facts):
@@ -993,7 +1197,7 @@ def _learned_facts_addendum(wikipedia_facts, user_facts, docs_facts=None, behavi
 def generate_reply(message, context=None, history=None, project_type=None, facts=None,
                     learned_facts=None, captured=None, behavior_note=None, personality=None,
                     available_tokens=None, synthesize_audio_fn=None):
-    """Runs one turn against Groq's hosted chat-completions API. Not meant
+    """Runs one turn against the local model (see local_ai.py). Not meant
     to be called directly from a request handler -- see start_chat_job().
     `history` is this same chat's own prior turns (a list of
     {"role": "user"|"assistant", "content": str} dicts, oldest first).
@@ -1004,7 +1208,7 @@ def generate_reply(message, context=None, history=None, project_type=None, facts
     previously auto-learned/seeded facts (see _learned_facts_addendum) --
     only applied in general mode. `captured`, if given, is mutated in place
     with any new wikipedia_facts/user_facts learned during *this* call, for
-    the caller to persist (see _call_groq). `behavior_note`, if given, is a
+    the caller to persist (see _call_model). `behavior_note`, if given, is a
     one-off system-only aside about this specific message (see app.py's
     typing_avg_interval_ms handling) -- only applied in general mode, same
     as learned_facts. `personality`, if given, is a {"intelligence",
@@ -1082,24 +1286,32 @@ def generate_reply(message, context=None, history=None, project_type=None, facts
                 "an dem der Account aktiv ist, automatisch +900 Tokens dazu (nicht anfragbar, "
                 "läuft von selbst). Sag das ehrlich, statt dir Käufe oder Codes auszudenken."
             )
+    # General mode's tools are handled by _call_model_with_router's separate
+    # classification pass instead (see there for why) -- the embedded
+    # ```tool_call``` convention below is only taught to game/webapp/code
+    # mode's prompt, where the one real "tool" (propose_project_change) is
+    # inherently generative and doesn't fit a classify-then-look-up router.
+    if tools and project_type is not None:
+        system_prompt += _tools_instructions(tools)
 
     messages = [{"role": "system", "content": system_prompt}]
     if history:
         messages.extend(history[-MAX_HISTORY_MESSAGES:])
     messages.append({"role": "user", "content": user_content})
 
-    return _call_groq(
-        messages, MAX_REPLY_TOKENS, tools=tools, captured=captured, temperature=temperature,
-        available_tokens=available_tokens if project_type is None else None,
-        synthesize_audio_fn=synthesize_audio_fn if project_type is None else None,
-    )
+    if project_type is None:
+        return _call_model_with_router(
+            messages, message, MAX_REPLY_TOKENS, tools, captured, temperature,
+            available_tokens=available_tokens, synthesize_audio_fn=synthesize_audio_fn,
+        )
+    return _call_model(messages, MAX_REPLY_TOKENS, tools=tools, captured=captured, temperature=temperature)
 
 
 def generate_title(first_message):
     """One extra, cheap request that turns a chat's opening message into a
     short 2-4 word label for the chat list."""
     try:
-        title, _ = _call_groq(
+        title, _ = _call_model(
             [
                 {"role": "system", "content": (
                     "Fasse die folgende Nachricht in genau 2 bis 4 Wörtern auf Deutsch zusammen, als "
