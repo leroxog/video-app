@@ -48,15 +48,19 @@
 }
 
 :root[data-theme="dark"] {
-    --bg-primary: #0a0a0c;
+    /* True black, not the medium-gray "dark mode" this used to be (#0a0a0c
+       background, #0a0a0a panels read as gray on an OLED/true-black
+       screen) -- per direct feedback, panels/inputs now sit only barely
+       above pure black instead of a full step up into gray. */
+    --bg-primary: #000000;
     --bg-body-tint-1: rgba(160, 160, 160, 0.10);
     --bg-body-tint-2: rgba(150, 150, 150, 0.06);
     --text-primary: #f1f1f1;
     --text-secondary: #aaaaaa;
-    --panel-bg-solid: #1c1c1c;
-    --panel-border-solid: #2c2c2c;
-    --input-bg: #1c1c1c;
-    --input-border: #3c3c3c;
+    --panel-bg-solid: #0c0c0c;
+    --panel-border-solid: #232323;
+    --input-bg: #0c0c0c;
+    --input-border: #2a2a2a;
     --input-text: #ffffff;
     --glass-bg: rgba(255, 255, 255, 0.07);
     --glass-bg-strong: rgba(255, 255, 255, 0.1);
@@ -66,12 +70,33 @@
     --accent-blue: #cfcfcf;
     --accent-blue-bright: #ffffff;
     --gradient-primary: linear-gradient(135deg, #f2f2f2, #ffffff);
-    --gradient-primary-text: #0f0f0f;
+    --gradient-primary-text: #000000;
     --mono-accent-solid: #ffffff;
 }
 
 * {
     scrollbar-color: rgba(140, 140, 140, 0.45) transparent;
+}
+
+/* Site-wide hover "grow" feedback -- every clickable control (and its
+   label text, since links/nav rows are text) scales up slightly on
+   hover. transform doesn't affect layout, so this never shifts
+   surrounding content. Excludes disabled controls and plain text inputs
+   (typing into a field isn't "pressing" it). */
+a, button, [role="button"], label, summary,
+input[type="submit"], input[type="button"], input[type="checkbox"], input[type="radio"], select {
+    transition: transform 0.12s ease;
+}
+
+a:hover, button:not(:disabled):hover, [role="button"]:hover,
+input[type="submit"]:not(:disabled):hover, input[type="button"]:not(:disabled):hover,
+input[type="checkbox"]:not(:disabled):hover, input[type="radio"]:not(:disabled):hover,
+select:not(:disabled):hover {
+    transform: scale(1.045);
+}
+
+label:has(input[type="checkbox"]):hover, label:has(input[type="radio"]):hover, summary:hover {
+    transform: scale(1.03);
 }
 
 body {
@@ -207,7 +232,7 @@ a, button {
     background: var(--glass-bg);
     backdrop-filter: var(--glass-blur);
     -webkit-backdrop-filter: var(--glass-blur);
-    border: 1px solid #2c2c2c;
+    border: 1px solid #1a1a1a;
     border-radius: 10px;
     padding: 1.5rem;
     max-width: 400px;
@@ -259,7 +284,7 @@ a, button {
     background: var(--glass-bg);
     backdrop-filter: var(--glass-blur);
     -webkit-backdrop-filter: var(--glass-blur);
-    border: 1px solid #2c2c2c;
+    border: 1px solid #1a1a1a;
     border-radius: 6px;
     padding: 0.6rem 0.9rem;
     margin-bottom: 1rem;
@@ -298,6 +323,13 @@ header {
     display: block;
 }
 
+.brand-logo-mark {
+    height: 100%;
+    width: auto;
+    display: block;
+    color: var(--text-primary);
+}
+
 .timeskip-logo-text {
     font-family: Arial, "Segoe UI", sans-serif;
     font-weight: 800;
@@ -328,6 +360,23 @@ header {
 .splash-screen.hide {
     opacity: 0;
     pointer-events: none;
+}
+
+/* A chrome/metallic look for the loading-screen wordmark specifically --
+   several light/dark gray bands in the gradient read as a reflective
+   metal surface once clipped to the text. Distinct from the flat white
+   .brand-logo-mark used everywhere else the logo appears. */
+.splash-chrome-wordmark {
+    font-family: Arial, "Segoe UI", sans-serif;
+    font-weight: 800;
+    font-size: 4.5rem;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    background: linear-gradient(180deg, #ffffff 0%, #cfcfcf 24%, #6a6a6a 46%, #f7f7f7 52%, #a2a2a2 74%, #ffffff 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.45));
 }
 
 .splash-logo {
@@ -431,7 +480,7 @@ header {
     border: none;
     border-radius: 999px;
     background: rgba(62, 166, 255, 0.85);
-    color: #0f0f0f;
+    color: #000000;
     font-weight: 600;
     cursor: pointer;
     backdrop-filter: blur(8px);
@@ -460,7 +509,7 @@ header {
 }
 
 .search-history-item:hover {
-    background: #2c2c2c;
+    background: #1a1a1a;
 }
 
 nav {
@@ -474,7 +523,7 @@ nav a, nav button {
     color: #f1f1f1;
     text-decoration: none;
     background: none;
-    border: 1px solid #3c3c3c;
+    border: 1px solid #262626;
     padding: 0.4rem 0.8rem;
     border-radius: 4px;
     cursor: pointer;
@@ -482,7 +531,7 @@ nav a, nav button {
 }
 
 nav a:hover, nav button:hover {
-    background: #2c2c2c;
+    background: #1a1a1a;
 }
 
 .nav-avatar {
@@ -555,6 +604,29 @@ body.ai-fullscreen main {
     display: flex;
     align-items: center;
     flex-shrink: 0;
+}
+
+/* Fills the top-right corner on full-bleed pages that blank out the
+   normal header (see base.html's floating_avatar block) -- that spot
+   used to hold a floating account avatar before it moved to the
+   sidebar footer, and was left empty since; now shows the brand mark
+   there instead, centered in its own small area. */
+.floating-brand-logo-wrap {
+    position: fixed;
+    top: 18px;
+    right: 22px;
+    z-index: 5;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+}
+
+.floating-brand-logo-wrap .brand-logo-mark {
+    height: 26px;
+    width: auto;
 }
 
 .header-account-avatar {
@@ -1001,7 +1073,7 @@ body.ai-fullscreen main {
 
 .ai-voice-line-bot {
     align-self: flex-start;
-    background: #2c2c2c;
+    background: #1a1a1a;
     color: #f1f1f1;
 }
 
@@ -1174,6 +1246,13 @@ body.ai-fullscreen main {
    the Studio-editor-embedded layout, which has no sidebar at all. */
 #aiChatSidebarToggleBtn {
     display: none;
+    /* Once open, the sidebar overlay below is position:absolute; inset:0;
+       width:100% -- i.e. it covers the *entire* panel, this button's own
+       normal spot included. Without sitting above it in stacking order,
+       a second tap to close lands on the overlay instead of the button,
+       so the sidebar can open but never close again the same way. */
+    position: relative;
+    z-index: 3;
 }
 
 .ai-chat-embedded-only-btn {
@@ -1663,8 +1742,8 @@ body.ai-fullscreen main {
     margin: 0.6em 0;
     border-radius: 8px;
     overflow: hidden;
-    background: #1c1c1c;
-    border: 1px solid #2c2c2c;
+    background: #0a0a0a;
+    border: 1px solid #1a1a1a;
 }
 
 .ai-chat-codeblock-header {
@@ -1672,7 +1751,7 @@ body.ai-fullscreen main {
     align-items: center;
     justify-content: space-between;
     padding: 0.3rem 0.6rem;
-    background: #141414;
+    background: #000000;
     color: #999;
     font-size: 0.75rem;
 }
@@ -2319,7 +2398,7 @@ h1 {
     gap: 0.5rem;
     width: 92px;
     padding: 0.7rem 0.5rem;
-    border: 2px solid #2c2c2c;
+    border: 2px solid #1a1a1a;
     border-radius: 10px;
     background: var(--glass-bg);
     backdrop-filter: var(--glass-blur);
@@ -2441,8 +2520,8 @@ h1 {
     flex: 1;
     padding: 0.6rem 0.9rem;
     border-radius: 999px;
-    border: 1px solid #3c3c3c;
-    background: #1c1c1c;
+    border: 1px solid #262626;
+    background: #0a0a0a;
     color: #fff;
 }
 
@@ -2488,7 +2567,7 @@ h1 {
     background: var(--glass-bg);
     backdrop-filter: var(--glass-blur);
     -webkit-backdrop-filter: var(--glass-blur);
-    border: 1px solid #2c2c2c;
+    border: 1px solid #1a1a1a;
     border-radius: 10px;
     padding: 1rem 1.2rem;
     text-align: left;
@@ -2505,8 +2584,8 @@ h1 {
     width: 100%;
     padding: 0.5rem 0.7rem;
     border-radius: 6px;
-    border: 1px solid #3c3c3c;
-    background: #1c1c1c;
+    border: 1px solid #262626;
+    background: #0a0a0a;
     color: #fff;
     margin-top: 0.2rem;
 }
@@ -2728,7 +2807,7 @@ h1 {
     background: var(--glass-bg);
     backdrop-filter: var(--glass-blur);
     -webkit-backdrop-filter: var(--glass-blur);
-    border: 1px solid #3c3c3c;
+    border: 1px solid #262626;
     border-radius: 10px;
     padding: 2rem;
     max-width: 340px;
@@ -2757,7 +2836,7 @@ h1 {
 
 .guest-upsell-yes {
     background: #4caf50;
-    color: #0f0f0f;
+    color: #000000;
     border: none;
     border-radius: 6px;
     padding: 0.8rem;
@@ -2785,8 +2864,8 @@ h1 {
 .guest-upsell-auth input {
     padding: 0.6rem;
     border-radius: 4px;
-    border: 1px solid #3c3c3c;
-    background: #1c1c1c;
+    border: 1px solid #262626;
+    background: #0a0a0a;
     color: #fff;
 }
 
@@ -2840,16 +2919,16 @@ h1 {
     display: inline-block;
     position: relative;
     padding: 0.5rem 0.9rem;
-    border: 1px solid #3c3c3c;
+    border: 1px solid #262626;
     border-radius: 14px;
-    background: #1c1c1c;
+    background: #0a0a0a;
     color: #f1f1f1;
     font-size: 0.85rem;
     cursor: pointer;
 }
 
 .search-hint:hover {
-    background: #2c2c2c;
+    background: #1a1a1a;
 }
 
 .search-hint::before {
@@ -2859,9 +2938,9 @@ h1 {
     left: 20px;
     width: 10px;
     height: 10px;
-    background: #1c1c1c;
-    border-left: 1px solid #3c3c3c;
-    border-top: 1px solid #3c3c3c;
+    background: #0a0a0a;
+    border-left: 1px solid #262626;
+    border-top: 1px solid #262626;
     transform: rotate(45deg);
 }
 
@@ -2869,16 +2948,16 @@ h1 {
     width: 34px;
     height: 34px;
     flex-shrink: 0;
-    border: 1px solid #3c3c3c;
+    border: 1px solid #262626;
     border-radius: 50%;
-    background: #1c1c1c;
+    background: #0a0a0a;
     color: #f1f1f1;
     cursor: pointer;
     font-size: 0.95rem;
 }
 
 .search-hint-reroll:hover {
-    background: #2c2c2c;
+    background: #1a1a1a;
 }
 
 .place-label {
@@ -2886,7 +2965,7 @@ h1 {
     align-items: center;
     gap: 1rem;
     padding: 1rem;
-    border: 1px solid #3c3c3c;
+    border: 1px solid #262626;
     border-radius: 8px;
     background: var(--glass-bg);
     backdrop-filter: var(--glass-blur);
@@ -2931,9 +3010,9 @@ h1 {
 
 .tictactoe-icon {
     background:
-        linear-gradient(#3c3c3c, #3c3c3c) center / 100% 2px no-repeat,
-        linear-gradient(#3c3c3c, #3c3c3c) center / 2px 100% no-repeat,
-        #1c1c1c;
+        linear-gradient(#262626, #262626) center / 100% 2px no-repeat,
+        linear-gradient(#262626, #262626) center / 2px 100% no-repeat,
+        #0a0a0a;
 }
 
 .fruitmerge-icon {
@@ -2944,7 +3023,7 @@ h1 {
         radial-gradient(circle at 68% 60%, #f4d03f 0 22%, transparent 23%),
         radial-gradient(circle at 71% 20%, rgba(255, 255, 255, 0.5) 0 2px, transparent 3px),
         radial-gradient(circle at 75% 25%, #7dcb5f 0 16%, transparent 17%),
-        #1c1c1c;
+        #0a0a0a;
 }
 
 .gravityrun-icon {
@@ -2960,8 +3039,8 @@ h1 {
 .knifehit-icon {
     background:
         radial-gradient(circle at center, #8b5a2b 0 60%, transparent 61%),
-        conic-gradient(#3c3c3c 0 4deg, transparent 4deg 90deg, #3c3c3c 90deg 94deg, transparent 94deg),
-        #1c1c1c;
+        conic-gradient(#262626 0 4deg, transparent 4deg 90deg, #262626 90deg 94deg, transparent 94deg),
+        #0a0a0a;
 }
 
 .flappybird-icon {
@@ -2981,14 +3060,14 @@ h1 {
         linear-gradient(#4caf50, #4caf50) 28px 8px / 10px 6px no-repeat,
         linear-gradient(#e74c3c, #e74c3c) 10px 16px / 10px 6px no-repeat,
         linear-gradient(#f2c230, #f2c230) 22px 16px / 10px 6px no-repeat,
-        #1c1c1c;
+        #0a0a0a;
 }
 
 .coinflip-icon {
     background:
         radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.5) 0 3px, transparent 4px),
         radial-gradient(circle at center, #e8b923 0 60%, #b8890f 60% 63%, transparent 64%),
-        #1c1c1c;
+        #0a0a0a;
 }
 
 .humanspotter-icon {
@@ -2996,22 +3075,22 @@ h1 {
         radial-gradient(circle at 50% 32%, transparent 0 11px, #ff3b30 11px 13px, transparent 14px),
         radial-gradient(circle at 50% 32%, #cfd8dc 0 9px, transparent 10px),
         radial-gradient(ellipse 20px 15px at 50% 78%, #cfd8dc 0 100%, transparent 100%),
-        #1c1c1c;
+        #0a0a0a;
 }
 
 .memeparty-icon {
     background:
-        radial-gradient(circle at 34% 40%, #1c1c1c 0 3px, transparent 4px),
-        radial-gradient(circle at 66% 40%, #1c1c1c 0 3px, transparent 4px),
-        radial-gradient(ellipse 12px 6px at 50% 66%, #1c1c1c 0 100%, transparent 100%),
+        radial-gradient(circle at 34% 40%, #0a0a0a 0 3px, transparent 4px),
+        radial-gradient(circle at 66% 40%, #0a0a0a 0 3px, transparent 4px),
+        radial-gradient(ellipse 12px 6px at 50% 66%, #0a0a0a 0 100%, transparent 100%),
         linear-gradient(135deg, #ff3b30 25%, var(--mono-accent-solid) 25% 50%, #4caf50 50% 75%, #ffcc00 75%);
 }
 
 .studio-game-icon {
     background:
-        radial-gradient(circle at 24px 16px, #0f0f0f 0 4px, transparent 5px),
-        linear-gradient(#0f0f0f, #0f0f0f) 22px 20px / 4px 12px no-repeat,
-        linear-gradient(#0f0f0f, #0f0f0f) 10px 36px / 28px 6px no-repeat,
+        radial-gradient(circle at 24px 16px, #000000 0 4px, transparent 5px),
+        linear-gradient(#000000, #000000) 22px 20px / 4px 12px no-repeat,
+        linear-gradient(#000000, #000000) 10px 36px / 28px 6px no-repeat,
         var(--gradient-primary);
 }
 
@@ -3032,8 +3111,8 @@ h1 {
     height: 90px;
     font-size: 2.4rem;
     font-weight: 700;
-    background: #1c1c1c;
-    border: 1px solid #3c3c3c;
+    background: #0a0a0a;
+    border: 1px solid #262626;
     border-radius: 6px;
     color: var(--mono-accent-solid);
     cursor: pointer;
@@ -3044,7 +3123,7 @@ h1 {
 }
 
 .tictactoe-cell:not(:disabled):hover {
-    background: #2c2c2c;
+    background: #1a1a1a;
 }
 
 #restartBtn {
@@ -3196,7 +3275,7 @@ body.shorts-fullscreen main {
     background: var(--glass-bg);
     backdrop-filter: var(--glass-blur);
     -webkit-backdrop-filter: var(--glass-blur);
-    border-bottom: 1px solid #2c2c2c;
+    border-bottom: 1px solid #1a1a1a;
     position: sticky;
     top: 0;
     z-index: 10;
@@ -3206,7 +3285,7 @@ body.shorts-fullscreen main {
     width: 44px;
     height: 32px;
     padding: 0;
-    border: 1px solid #3c3c3c;
+    border: 1px solid #262626;
     border-radius: 4px;
     background: none;
     cursor: pointer;
@@ -3286,7 +3365,7 @@ body.shorts-fullscreen main {
 
 .game-record-badge {
     background: #4caf50;
-    color: #0f0f0f;
+    color: #000000;
     font-size: 0.6rem;
     font-weight: 700;
     padding: 0.1rem 0.4rem;
@@ -3301,9 +3380,9 @@ body.shorts-fullscreen main {
 .upload-recording-preview {
     margin: 0.6rem 0;
     padding: 0.6rem;
-    border: 1px solid #3c3c3c;
+    border: 1px solid #262626;
     border-radius: 8px;
-    background: #1c1c1c;
+    background: #0a0a0a;
 }
 
 .upload-recording-preview video {
@@ -3316,16 +3395,16 @@ body.shorts-fullscreen main {
 .form .sound-toggle {
     margin: 0.8rem 0 0.4rem;
     padding: 0.5rem 0.9rem;
-    border: 1px solid #3c3c3c;
+    border: 1px solid #262626;
     border-radius: 8px;
-    background: #1c1c1c;
+    background: #0a0a0a;
     color: #fff;
     cursor: pointer;
     font-size: 0.9rem;
 }
 
 .form .sound-toggle:hover {
-    background: #2c2c2c;
+    background: #1a1a1a;
 }
 
 .sound-picker {
@@ -3344,7 +3423,7 @@ body.shorts-fullscreen main {
     align-items: center;
     gap: 0.6rem;
     padding: 0.5rem 0.7rem;
-    border: 1px solid #3c3c3c;
+    border: 1px solid #262626;
     border-radius: 8px;
     background: var(--glass-bg);
     backdrop-filter: var(--glass-blur);
@@ -3364,7 +3443,7 @@ body.shorts-fullscreen main {
 .form .sound-preview-btn {
     margin-top: 0;
     padding: 0.35rem 0.7rem;
-    border: 1px solid #3c3c3c;
+    border: 1px solid #262626;
     border-radius: 6px;
     background: #262626;
     color: #fff;
@@ -3395,9 +3474,9 @@ body.shorts-fullscreen main {
 
 .sound-own-upload {
     padding: 0.7rem;
-    border: 1px dashed #3c3c3c;
+    border: 1px dashed #262626;
     border-radius: 8px;
-    background: #141414;
+    background: #000000;
 }
 
 .sound-own-upload-label {
@@ -3454,7 +3533,7 @@ body.shorts-fullscreen main {
 .comments-section {
     margin-top: 2rem;
     padding-top: 1.5rem;
-    border-top: 1px solid #2c2c2c;
+    border-top: 1px solid #1a1a1a;
 }
 
 .comment-form {
@@ -3467,8 +3546,8 @@ body.shorts-fullscreen main {
     flex: 1;
     padding: 0.6rem 0.9rem;
     border-radius: 999px;
-    border: 1px solid #3c3c3c;
-    background: #1c1c1c;
+    border: 1px solid #262626;
+    background: #0a0a0a;
     color: #fff;
 }
 
@@ -3579,16 +3658,16 @@ body.shorts-fullscreen main {
 
 .download-link {
     padding: 0.6rem 1.1rem;
-    border: 1px solid #3c3c3c;
+    border: 1px solid #262626;
     border-radius: 20px;
-    background: #1c1c1c;
+    background: #0a0a0a;
     color: #f1f1f1;
     text-decoration: none;
     font-weight: 600;
 }
 
 .download-link:hover {
-    background: #2c2c2c;
+    background: #1a1a1a;
 }
 
 .channel-row {
@@ -3625,9 +3704,9 @@ body.shorts-fullscreen main {
 }
 
 .channel-row button.subscribed, .profile-subscribe-form button.subscribed {
-    background: #2c2c2c;
+    background: #1a1a1a;
     color: #f1f1f1;
-    border: 1px solid #3c3c3c;
+    border: 1px solid #262626;
 }
 
 .leaderboard-follow-form button {
@@ -3642,9 +3721,9 @@ body.shorts-fullscreen main {
 }
 
 .leaderboard-follow-form button.subscribed {
-    background: #2c2c2c;
+    background: #1a1a1a;
     color: #f1f1f1;
-    border: 1px solid #3c3c3c;
+    border: 1px solid #262626;
 }
 
 /* TikTok-style profile: centered avatar/name, a Following/Follower/Likes
@@ -3857,8 +3936,8 @@ body.shorts-fullscreen main {
 }
 
 .settings-id-row code {
-    background: #1c1c1c;
-    border: 1px solid #3c3c3c;
+    background: #0a0a0a;
+    border: 1px solid #262626;
     padding: 0.4rem 0.7rem;
     border-radius: 4px;
 }
@@ -4129,7 +4208,7 @@ body.shorts-fullscreen main {
 #fruitCanvas, #flappyCanvas, #blockCanvas {
     display: block;
     background: #101820;
-    border: 1px solid #3c3c3c;
+    border: 1px solid #262626;
     border-radius: 6px;
     cursor: pointer;
     max-width: 100%;
@@ -4146,9 +4225,9 @@ body.shorts-fullscreen main {
 
 .powerup-balance {
     padding: 0.5rem 0.7rem;
-    border: 1px solid #3c3c3c;
+    border: 1px solid #262626;
     border-radius: 8px;
-    background: #1c1c1c;
+    background: #0a0a0a;
     font-size: 0.8rem;
     color: #ccc;
     text-align: center;
@@ -4252,7 +4331,7 @@ body.shorts-fullscreen main {
     display: block;
     max-width: 100%;
     height: auto;
-    border: 1px solid #3c3c3c;
+    border: 1px solid #262626;
     border-radius: 6px;
     background: #101820;
 }
@@ -4302,7 +4381,7 @@ body.shorts-fullscreen main {
     background: var(--glass-bg);
     backdrop-filter: var(--glass-blur);
     -webkit-backdrop-filter: var(--glass-blur);
-    border: 1px solid #3c3c3c;
+    border: 1px solid #262626;
     margin-bottom: 0.5rem;
 }
 
@@ -4318,7 +4397,7 @@ body.shorts-fullscreen main {
 .mp-leaderboard th, .mp-leaderboard td {
     text-align: left;
     padding: 0.5rem 0.6rem;
-    border-bottom: 1px solid #2c2c2c;
+    border-bottom: 1px solid #1a1a1a;
 }
 
 .mp-leaderboard tr.winner {
@@ -4353,7 +4432,7 @@ body.shorts-fullscreen main {
 .admin-table th, .admin-table td {
     text-align: left;
     padding: 0.5rem 0.7rem;
-    border-bottom: 1px solid #2c2c2c;
+    border-bottom: 1px solid #1a1a1a;
 }
 
 .admin-table a {
@@ -4470,14 +4549,14 @@ body.shorts-fullscreen main {
     aspect-ratio: 1;
     object-fit: cover;
     border-radius: 8px;
-    border: 1px solid #3c3c3c;
+    border: 1px solid #262626;
 }
 
 .meme-start-section {
     max-width: 420px;
     margin-bottom: 2rem;
     padding: 1.2rem;
-    border: 1px solid #2c2c2c;
+    border: 1px solid #1a1a1a;
     border-radius: 12px;
     background: var(--glass-bg);
     backdrop-filter: var(--glass-blur);
@@ -4522,8 +4601,8 @@ body.shorts-fullscreen main {
 .meme-copy-code-btn {
     padding: 0.4rem 0.9rem;
     border-radius: 999px;
-    border: 1px solid #3c3c3c;
-    background: #1c1c1c;
+    border: 1px solid #262626;
+    background: #0a0a0a;
     color: #fff;
     cursor: pointer;
     margin-bottom: 1rem;
@@ -4542,7 +4621,7 @@ body.shorts-fullscreen main {
     padding: 0.5rem 0.8rem;
     border-radius: 8px;
     background: var(--glass-bg);
-    border: 1px solid #2c2c2c;
+    border: 1px solid #1a1a1a;
 }
 
 .meme-start-btn {
@@ -4579,7 +4658,7 @@ body.shorts-fullscreen main {
 .meme-practice-iframe {
     width: 100%;
     height: 480px;
-    border: 1px solid #2c2c2c;
+    border: 1px solid #1a1a1a;
     border-radius: 10px;
     margin-top: 0.5rem;
 }
@@ -4658,8 +4737,8 @@ body.shorts-fullscreen main {
     width: 64px;
     height: 64px;
     border-radius: 50%;
-    border: 2px solid #3c3c3c;
-    background: #1c1c1c;
+    border: 2px solid #262626;
+    background: #0a0a0a;
     font-size: 1.8rem;
     cursor: pointer;
 }
@@ -4701,7 +4780,7 @@ body.shorts-fullscreen main {
     padding: 0.6rem;
     border-radius: 10px;
     background: var(--glass-bg);
-    border: 1px solid #2c2c2c;
+    border: 1px solid #1a1a1a;
 }
 
 .meme-result-item.mine {
@@ -4734,8 +4813,8 @@ body.shorts-fullscreen main {
     font-size: 0.75rem;
     padding: 0.3rem 0.6rem;
     border-radius: 6px;
-    border: 1px solid #3c3c3c;
-    background: #1c1c1c;
+    border: 1px solid #262626;
+    background: #0a0a0a;
     color: #fff;
     cursor: pointer;
     text-align: center;
@@ -4745,15 +4824,15 @@ body.shorts-fullscreen main {
 .meme-rematch-toggle-btn {
     padding: 0.6rem 1.2rem;
     border-radius: 999px;
-    border: 1px solid #3c3c3c;
-    background: #1c1c1c;
+    border: 1px solid #262626;
+    background: #0a0a0a;
     color: #fff;
     cursor: pointer;
 }
 
 .meme-rematch-toggle-btn.active {
     background: var(--mono-accent-solid);
-    color: #0f0f0f;
+    color: #000000;
     font-weight: 600;
 }
 
@@ -4793,8 +4872,8 @@ body.shorts-fullscreen main {
     width: 80px;
     padding: 0.3rem 0.5rem;
     border-radius: 6px;
-    border: 1px solid #3c3c3c;
-    background: #1c1c1c;
+    border: 1px solid #262626;
+    background: #0a0a0a;
     color: #fff;
 }
 
@@ -4811,7 +4890,7 @@ body.shorts-fullscreen main {
     background: var(--glass-bg);
     backdrop-filter: var(--glass-blur);
     -webkit-backdrop-filter: var(--glass-blur);
-    border: 1px solid #2c2c2c;
+    border: 1px solid #1a1a1a;
     border-radius: 8px;
     padding: 0.7rem 1rem;
     text-decoration: none;
@@ -4874,7 +4953,7 @@ body.shorts-fullscreen main {
     background: var(--glass-bg);
     backdrop-filter: var(--glass-blur);
     -webkit-backdrop-filter: var(--glass-blur);
-    border: 1px solid #2c2c2c;
+    border: 1px solid #1a1a1a;
     border-radius: 10px;
     padding: 1rem 1.2rem;
     max-width: 400px;
@@ -4892,8 +4971,8 @@ body.shorts-fullscreen main {
     width: 100%;
     padding: 0.5rem 0.7rem;
     border-radius: 6px;
-    border: 1px solid #3c3c3c;
-    background: #1c1c1c;
+    border: 1px solid #262626;
+    background: #0a0a0a;
     color: #fff;
     margin-top: 0.2rem;
 }
@@ -4941,7 +5020,7 @@ body.shorts-fullscreen main {
 }
 
 .contact-list-item:hover {
-    background: #1c1c1c;
+    background: #0a0a0a;
 }
 
 .contact-avatar {
@@ -4964,7 +5043,7 @@ body.shorts-fullscreen main {
     overflow-y: auto;
     margin: 1rem 0;
     padding: 0.5rem;
-    background: #141414;
+    background: #000000;
     border-radius: 10px;
 }
 
@@ -5007,8 +5086,8 @@ body.shorts-fullscreen main {
     flex: 1;
     padding: 0.6rem 0.9rem;
     border-radius: 999px;
-    border: 1px solid #3c3c3c;
-    background: #1c1c1c;
+    border: 1px solid #262626;
+    background: #0a0a0a;
     color: #fff;
 }
 
@@ -5024,7 +5103,7 @@ body.shorts-fullscreen main {
 
 .share-video-btn {
     background: #232323;
-    border: 1px solid #3c3c3c;
+    border: 1px solid #262626;
     color: #fff;
     border-radius: 999px;
     padding: 0.5rem 1rem;
@@ -5044,7 +5123,7 @@ body.shorts-fullscreen main {
 
 .share-target-btn {
     background: #232323;
-    border: 1px solid #3c3c3c;
+    border: 1px solid #262626;
     color: #fff;
     border-radius: 8px;
     padding: 0.6rem 0.9rem;
@@ -5136,8 +5215,8 @@ body.shorts-fullscreen main {
     width: 90px;
     padding: 0.5rem 0.7rem;
     border-radius: 6px;
-    border: 1px solid #3c3c3c;
-    background: #1c1c1c;
+    border: 1px solid #262626;
+    background: #0a0a0a;
     color: #fff;
 }
 
@@ -5179,7 +5258,7 @@ body.shorts-fullscreen main {
     background: var(--glass-bg);
     backdrop-filter: var(--glass-blur);
     -webkit-backdrop-filter: var(--glass-blur);
-    border: 1px solid #2c2c2c;
+    border: 1px solid #1a1a1a;
     border-radius: 10px;
     padding: 0.8rem;
 }
@@ -5267,8 +5346,8 @@ body.shorts-fullscreen main {
 .coinflip-deposit-form input {
     padding: 0.4rem 0.6rem;
     border-radius: 6px;
-    border: 1px solid #3c3c3c;
-    background: #1c1c1c;
+    border: 1px solid #262626;
+    background: #0a0a0a;
     color: #fff;
     width: 100%;
     max-width: 160px;
@@ -5316,7 +5395,7 @@ body.shorts-fullscreen main {
 }
 
 .share-target-btn:hover {
-    background: #2c2c2c;
+    background: #1a1a1a;
 }
 
 /* Global polish pass: glassy hover-lift on cards, buttons, and panels */
@@ -5389,16 +5468,16 @@ body.studio-fullscreen {
     flex: 1 1 auto;
     padding: 0.6rem 0.8rem;
     border-radius: 8px;
-    border: 1px solid #3c3c3c;
-    background: #1c1c1c;
+    border: 1px solid #262626;
+    background: #0a0a0a;
     color: #fff;
 }
 
 .studio-create-form select {
     padding: 0.6rem 0.8rem;
     border-radius: 8px;
-    border: 1px solid #3c3c3c;
-    background: #1c1c1c;
+    border: 1px solid #262626;
+    background: #0a0a0a;
     color: #fff;
 }
 
@@ -5439,7 +5518,7 @@ body.studio-fullscreen {
 .studio-help-tab {
     padding: 0.4rem 0.9rem;
     border-radius: 999px;
-    border: 1px solid #3c3c3c;
+    border: 1px solid #262626;
     background: none;
     color: var(--text-secondary, #999);
     font-size: 0.85rem;
@@ -5508,8 +5587,8 @@ body.studio-fullscreen {
     gap: 0.8rem;
     padding: 0.8rem 1rem;
     border-radius: 10px;
-    background: #1c1c1c;
-    border: 1px solid #2c2c2c;
+    background: #0a0a0a;
+    border: 1px solid #1a1a1a;
     flex-wrap: wrap;
 }
 
@@ -5533,7 +5612,7 @@ body.studio-fullscreen {
     color: #aaa;
     padding: 0.2rem 0.6rem;
     border-radius: 999px;
-    border: 1px solid #3c3c3c;
+    border: 1px solid #262626;
 }
 
 .studio-project-status.is-published {
@@ -5578,8 +5657,8 @@ body.studio-fullscreen {
     align-items: center;
     gap: 1rem;
     padding: 0.7rem 1rem;
-    background: #1c1c1c;
-    border-bottom: 1px solid #2c2c2c;
+    background: #0a0a0a;
+    border-bottom: 1px solid #1a1a1a;
     flex-wrap: wrap;
 }
 
@@ -5603,7 +5682,7 @@ body.studio-fullscreen {
 .studio-editor-play-btn {
     padding: 0.5rem 1rem;
     border-radius: 8px;
-    border: 1px solid #3c3c3c;
+    border: 1px solid #262626;
     color: #f1f1f1;
     text-decoration: none;
     font-size: 0.9rem;
@@ -5620,7 +5699,7 @@ body.studio-fullscreen {
 }
 
 .studio-editor-publish-btn.is-published {
-    background: #2c2c2c;
+    background: #1a1a1a;
     color: #f1f1f1;
 }
 
@@ -5647,8 +5726,8 @@ body.studio-fullscreen {
     flex: 1 1 40%;
     min-width: 0;
     border: none;
-    border-right: 1px solid #2c2c2c;
-    background: #141414;
+    border-right: 1px solid #1a1a1a;
+    background: #000000;
     color: #f1f1f1;
     font-family: "Consolas", "Courier New", monospace;
     font-size: 0.85rem;
@@ -5662,7 +5741,7 @@ body.studio-fullscreen {
     min-width: 0;
     display: flex;
     flex-direction: column;
-    background: #1c1c1c;
+    background: #0a0a0a;
 }
 
 /* The code textarea is hidden now (see studio_webapp_editor.html) -- the
@@ -5679,7 +5758,7 @@ body.studio-fullscreen {
     width: 34px;
     height: 34px;
     border-radius: 8px;
-    border: 1px solid #3c3c3c;
+    border: 1px solid #262626;
     background: none;
     color: #f1f1f1;
     cursor: pointer;
@@ -5708,7 +5787,7 @@ body.studio-fullscreen {
        gestures aimed at the chat's message history. */
     overflow: hidden;
     background: #131315;
-    border-left: 1px solid #2c2c2c;
+    border-left: 1px solid #1a1a1a;
     display: flex;
     flex-direction: column;
 }
@@ -5720,12 +5799,12 @@ body.studio-fullscreen {
     padding: 0.5rem 0.8rem;
     font-size: 0.85rem;
     color: #ccc;
-    border-bottom: 1px solid #2c2c2c;
+    border-bottom: 1px solid #1a1a1a;
 }
 
 .webapp-preview-header button {
     background: none;
-    border: 1px solid #3c3c3c;
+    border: 1px solid #262626;
     color: #f1f1f1;
     border-radius: 6px;
     padding: 0.25rem 0.6rem;
@@ -5744,8 +5823,8 @@ body.studio-fullscreen {
     margin: 0;
     font-size: 0.8rem;
     color: #999;
-    background: #1c1c1c;
-    border-top: 1px solid #2c2c2c;
+    background: #0a0a0a;
+    border-top: 1px solid #1a1a1a;
 }
 
 .webapp-settings-panel {
@@ -5759,8 +5838,8 @@ body.studio-fullscreen {
 
 .webapp-settings-box {
     width: min(420px, calc(100vw - 32px));
-    background: #1c1c1c;
-    border: 1px solid #2c2c2c;
+    background: #0a0a0a;
+    border: 1px solid #1a1a1a;
     border-radius: 12px;
     padding: 1rem 1.2rem;
     color: #f1f1f1;
@@ -5801,8 +5880,8 @@ body.studio-fullscreen {
     height: 56px;
     flex-shrink: 0;
     border-radius: 14px;
-    background: #141414;
-    border: 1px solid #3c3c3c;
+    background: #000000;
+    border: 1px solid #262626;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -5845,8 +5924,8 @@ body.studio-fullscreen {
     min-width: 0;
     padding: 0.5rem 0.6rem;
     border-radius: 8px;
-    border: 1px solid #3c3c3c;
-    background: #141414;
+    border: 1px solid #262626;
+    background: #000000;
     color: #f1f1f1;
 }
 
@@ -5924,7 +6003,7 @@ body.studio-fullscreen {
     flex-shrink: 0;
     padding: 1rem;
     background: #141416;
-    border-right: 1px solid #2c2c2c;
+    border-right: 1px solid #1a1a1a;
     overflow-y: auto;
 }
 
@@ -5954,17 +6033,17 @@ body.studio-fullscreen {
 .studio-props-form input[type="text"] {
     padding: 0.5rem;
     border-radius: 6px;
-    border: 1px solid #3c3c3c;
-    background: #1c1c1c;
+    border: 1px solid #262626;
+    background: #0a0a0a;
     color: #fff;
 }
 
 .studio-props-form input[type="color"] {
     width: 100%;
     height: 36px;
-    border: 1px solid #3c3c3c;
+    border: 1px solid #262626;
     border-radius: 6px;
-    background: #1c1c1c;
+    background: #0a0a0a;
     padding: 2px;
 }
 
@@ -6008,7 +6087,7 @@ body.studio-fullscreen {
 .studio-block-label {
     font-size: 0.72rem;
     font-weight: 600;
-    color: #0f0f0f;
+    color: #000000;
     background: rgba(255, 255, 255, 0.55);
     padding: 1px 5px;
     border-radius: 4px;
@@ -6034,7 +6113,7 @@ body.studio-fullscreen {
     flex-shrink: 0;
     padding: 1rem;
     background: #141416;
-    border-left: 1px solid #2c2c2c;
+    border-left: 1px solid #1a1a1a;
     overflow-y: auto;
 }
 
@@ -6074,8 +6153,8 @@ body.studio-fullscreen {
     right: 0;
     z-index: 50;
     flex-direction: column;
-    background: #1c1c1c;
-    border: 1px solid #3c3c3c;
+    background: #0a0a0a;
+    border: 1px solid #262626;
     border-radius: 8px;
     overflow: hidden;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
@@ -6093,7 +6172,7 @@ body.studio-fullscreen {
 }
 
 .studio-new-block-menu button:hover {
-    background: #2c2c2c;
+    background: #1a1a1a;
 }
 
 .studio-block-list {
@@ -6117,11 +6196,11 @@ body.studio-fullscreen {
 }
 
 .studio-block-list-item:hover {
-    background: #1c1c1c;
+    background: #0a0a0a;
 }
 
 .studio-block-list-item.is-selected {
-    background: #2c2c2c;
+    background: #1a1a1a;
     color: #fff;
 }
 
@@ -6136,8 +6215,8 @@ body.studio-fullscreen {
     position: fixed;
     z-index: 500;
     flex-direction: column;
-    background: #1c1c1c;
-    border: 1px solid #3c3c3c;
+    background: #0a0a0a;
+    border: 1px solid #262626;
     border-radius: 8px;
     overflow: hidden;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
@@ -6155,7 +6234,7 @@ body.studio-fullscreen {
 }
 
 .studio-context-menu button:hover {
-    background: #2c2c2c;
+    background: #1a1a1a;
 }
 
 #studioContextDeleteBtn {
@@ -6174,7 +6253,7 @@ body.studio-fullscreen {
     display: flex;
     flex-direction: column;
     background: #161618;
-    border: 1px solid #3c3c3c;
+    border: 1px solid #262626;
     border-radius: 10px;
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
     overflow: hidden;
@@ -6191,8 +6270,8 @@ body.studio-fullscreen {
     align-items: center;
     justify-content: space-between;
     padding: 0.5rem 0.8rem;
-    background: #1c1c1c;
-    border-bottom: 1px solid #2c2c2c;
+    background: #0a0a0a;
+    border-bottom: 1px solid #1a1a1a;
     cursor: move;
     font-size: 0.85rem;
     font-weight: 600;
@@ -6212,7 +6291,7 @@ body.studio-fullscreen {
     font-size: 0.72rem !important;
     font-weight: 600;
     padding: 0.25rem 0.6rem;
-    border: 1px solid #3c3c3c !important;
+    border: 1px solid #262626 !important;
     border-radius: 6px;
     color: var(--text-secondary, #aaa) !important;
     line-height: 1.4 !important;
@@ -6226,7 +6305,7 @@ body.studio-fullscreen {
     overflow-y: auto;
     padding: 0.6rem 0.8rem;
     background: #16161a;
-    border-bottom: 1px solid #2c2c2c;
+    border-bottom: 1px solid #1a1a1a;
 }
 
 .studio-translation-row {
@@ -6292,7 +6371,7 @@ body.studio-fullscreen {
     padding: 0.35rem 0.7rem;
     font-size: 0.72rem;
     color: #666;
-    border-top: 1px solid #2c2c2c;
+    border-top: 1px solid #1a1a1a;
 }
 
 .studio-code-palette {
@@ -6304,7 +6383,7 @@ body.studio-fullscreen {
        gestures aimed at the chat's message history. */
     overflow: hidden;
     background: #131315;
-    border-left: 1px solid #2c2c2c;
+    border-left: 1px solid #1a1a1a;
     display: flex;
     flex-direction: column;
 }
@@ -6329,7 +6408,7 @@ body.studio-fullscreen {
     padding: 0.4rem 0.55rem;
     font-size: 0.78rem;
     font-weight: 600;
-    color: #0f0f0f;
+    color: #000000;
     cursor: pointer;
     text-align: left;
     font-family: "Consolas", "Courier New", monospace;
@@ -6373,7 +6452,7 @@ body.studio-fullscreen {
     padding: 0.4rem 0.55rem;
     font-size: 0.78rem;
     font-weight: 600;
-    color: #0f0f0f;
+    color: #000000;
     cursor: pointer;
     text-align: left;
     font-family: "Consolas", "Courier New", monospace;
@@ -6385,7 +6464,7 @@ body.studio-fullscreen {
 .studio-editor-code-toggle-btn {
     padding: 0.5rem 1rem;
     border-radius: 8px;
-    border: 1px solid #3c3c3c;
+    border: 1px solid #262626;
     background: none;
     color: #f1f1f1;
     font-size: 0.9rem;
@@ -6396,7 +6475,7 @@ body.studio-fullscreen {
     width: 34px;
     height: 34px;
     border-radius: 50%;
-    border: 1px solid #3c3c3c;
+    border: 1px solid #262626;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -6413,7 +6492,7 @@ body.studio-fullscreen {
     width: 16px;
     height: 16px;
     cursor: nwse-resize;
-    background: linear-gradient(135deg, transparent 50%, #3c3c3c 50%);
+    background: linear-gradient(135deg, transparent 50%, #262626 50%);
 }
 
 /* --- Play (runtime) --- */
@@ -6430,8 +6509,8 @@ body.studio-fullscreen {
     align-items: center;
     gap: 0.8rem;
     padding: 0.6rem 1rem;
-    background: #1c1c1c;
-    border-bottom: 1px solid #2c2c2c;
+    background: #0a0a0a;
+    border-bottom: 1px solid #1a1a1a;
     flex-shrink: 0;
 }
 
@@ -6542,7 +6621,7 @@ body.studio-fullscreen {
     bottom: 0;
     max-height: 55vh;
     background: #16161a;
-    border-top: 1px solid #2c2c2c;
+    border-top: 1px solid #1a1a1a;
     border-radius: 16px 16px 0 0;
     display: flex;
     flex-direction: column;
@@ -6579,15 +6658,15 @@ body.studio-fullscreen {
     display: flex;
     gap: 0.5rem;
     padding: 0.6rem 0.8rem;
-    border-top: 1px solid #2c2c2c;
+    border-top: 1px solid #1a1a1a;
 }
 
 .studio-comment-form input {
     flex: 1 1 auto;
     padding: 0.5rem 0.7rem;
     border-radius: 8px;
-    border: 1px solid #3c3c3c;
-    background: #1c1c1c;
+    border: 1px solid #262626;
+    background: #0a0a0a;
     color: #fff;
 }
 
@@ -6760,7 +6839,7 @@ body.studio-fullscreen {
 .games-sort-tab {
     padding: 0.35rem 0.8rem;
     border-radius: 999px;
-    border: 1px solid #3c3c3c;
+    border: 1px solid #262626;
     color: var(--text-secondary, #999);
     text-decoration: none;
     font-size: 0.85rem;
@@ -6851,7 +6930,7 @@ body.studio-fullscreen {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #1c1c1c;
+    background: #0a0a0a;
     padding: 10%;
     box-sizing: border-box;
 }
@@ -6863,7 +6942,7 @@ body.studio-fullscreen {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #1c1c1c;
+    background: #0a0a0a;
 }
 
 .game-card-thumb-webapp-icon-wrap {
@@ -7099,7 +7178,7 @@ body.studio-fullscreen {
     font-size: 0.85rem;
     color: #aaa;
     background: rgba(255, 255, 255, 0.06);
-    border: 1px solid #2c2c2c;
+    border: 1px solid #1a1a1a;
     border-radius: 10px;
     padding: 0.8rem 1rem;
     margin-bottom: 1rem;
@@ -7113,7 +7192,7 @@ body.studio-fullscreen {
     position: relative;
     width: 100%;
     aspect-ratio: 4 / 3;
-    background: #1c1c1c;
+    background: #0a0a0a;
     border-radius: 14px;
     overflow: hidden;
     display: flex;
@@ -7175,7 +7254,7 @@ body.studio-fullscreen {
 }
 
 .humanspotter-report-btn {
-    background: #2c2c2c;
+    background: #1a1a1a;
     color: #ccc;
 }
 
@@ -7183,7 +7262,7 @@ body.studio-fullscreen {
     margin-top: 1.5rem;
     padding: 1rem;
     background: rgba(255, 255, 255, 0.05);
-    border: 1px solid #2c2c2c;
+    border: 1px solid #1a1a1a;
     border-radius: 10px;
 }
 

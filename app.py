@@ -3396,6 +3396,32 @@ def delete_ai_profile():
     return redirect(url_for("account_settings"))
 
 
+@app.route("/account/ai-chats/delete-all", methods=["POST"])
+def delete_all_ai_chats():
+    """Deletes every saved AiChat (and, via cascade, their AiChatMessage
+    rows) for this user. Deliberately does NOT touch AiLearnedFact --
+    the private per-user profile the AI learned across those chats (see
+    delete_ai_profile above, a separate, explicit action) survives this
+    exactly like it already survives deleting a single chat."""
+    user = current_user()
+    if user is None:
+        return redirect(url_for("login"))
+
+    # A bulk Query.delete() would bypass the ORM session entirely and skip
+    # AiChat.messages' cascade="all, delete-orphan" (that cascade only
+    # fires for individually-deleted objects), leaving every AiChatMessage
+    # row orphaned instead of actually removed -- deleting each chat
+    # through the session, like the single-chat route already does, is
+    # what actually cascades correctly.
+    chats = AiChat.query.filter_by(user_id=user.id).all()
+    deleted = len(chats)
+    for chat in chats:
+        db.session.delete(chat)
+    db.session.commit()
+    flash(f"Alle deine Chats wurden gelöscht ({deleted}). Dein privates KI-Profil bleibt erhalten.")
+    return redirect(url_for("account_settings"))
+
+
 @app.route("/api/ai/buddy-mode", methods=["POST"])
 def api_ai_buddy_mode():
     """"Buddy"-Umschalter aus der Sidebar (siehe base.html's Bestätigungs-

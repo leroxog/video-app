@@ -22,12 +22,12 @@
     <title>{% block title %}NexAI{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
-    <link rel="icon" href="{{ url_for('static', filename='img/logo.svg') }}" type="image/svg+xml">
+    <link rel="icon" href="{{ url_for('static', filename='img/logo-mark.svg') }}" type="image/svg+xml">
 </head>
 <body class="{% block body_class %}{% endblock %}">
     <div class="splash-screen" id="splashScreen">
         <div class="splash-logo">
-            {% include "partials/_logo.html" %}
+            <span class="splash-chrome-wordmark">Nex</span>
         </div>
         <div class="splash-loading-dots">
             <div class="loading-dots"><span></span><span></span></div>
@@ -136,6 +136,20 @@
                     </div>
                 </div>
 
+                <!-- Generic replacement for window.confirm() (e.g. deleting a
+                     chat) -- same look as the buddy-mode dialog above, just
+                     with dynamic text/button labels set by showConfirmDialog()
+                     in the script below. -->
+                <div class="ai-buddy-confirm-overlay" id="aiChatConfirmOverlay" style="display:none;">
+                    <div class="ai-buddy-confirm-box">
+                        <p id="aiChatConfirmMessage"></p>
+                        <div class="ai-buddy-confirm-actions">
+                            <button type="button" id="aiChatConfirmYes">Löschen</button>
+                            <button type="button" id="aiChatConfirmNo">Abbrechen</button>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="ai-chat-main" id="aiChatMain">
                     <div class="ai-chat-panel-header">
                         <button type="button" class="ai-chat-icon-btn" id="aiChatSidebarToggleBtn" title="Chats">&#9776;</button>
@@ -179,7 +193,8 @@
                                 <button type="button" class="ai-chat-input-mic-btn" id="aiChatInputMicBtn" title="Diktieren">{{ icon('mic', 16) }}</button>
                             </div>
                             <button type="submit" class="ai-chat-send-btn" id="aiChatSendBtn" title="Senden">
-                                <span class="ai-chat-send-icon" id="aiChatSendIcon">{{ icon('send', 16) }}</span>
+                                <span class="ai-chat-send-icon" id="aiChatSendIcon" style="display:none;">{{ icon('send', 16) }}</span>
+                                <span class="ai-chat-talk-icon" id="aiChatTalkIcon">{{ icon('talk-wave', 16) }}</span>
                                 <span class="ai-chat-stop-icon" id="aiChatStopIcon" style="display:none;">{{ icon('stop', 14) }}</span>
                             </button>
                         </form>
@@ -294,6 +309,7 @@
                 const inputMicBtn = document.getElementById("aiChatInputMicBtn");
                 const sendBtn = document.getElementById("aiChatSendBtn");
                 const sendIcon = document.getElementById("aiChatSendIcon");
+                const talkIcon = document.getElementById("aiChatTalkIcon");
                 const stopIcon = document.getElementById("aiChatStopIcon");
                 const gamesFab = document.getElementById("aiCodeGamesFab");
                 let GREETING = messagesEl.innerHTML;
@@ -322,6 +338,37 @@
                     tokenBalanceEl.innerHTML = `${JS_ICONS.bolt} ${value} Tokens`;
                 }
                 if (widget.dataset.aiTokens) updateTokenBalance(Number(widget.dataset.aiTokens));
+
+                // A styled stand-in for window.confirm() (the browser's own
+                // popup looked out of place next to the rest of the UI) --
+                // resolves true/false the same way confirm() would, so call
+                // sites just swap `if (!window.confirm(x))` for
+                // `if (!(await showConfirmDialog(x))) `.
+                const chatConfirmOverlay = document.getElementById("aiChatConfirmOverlay");
+                const chatConfirmMessage = document.getElementById("aiChatConfirmMessage");
+                const chatConfirmYes = document.getElementById("aiChatConfirmYes");
+                const chatConfirmNo = document.getElementById("aiChatConfirmNo");
+                function showConfirmDialog(message, confirmLabel) {
+                    return new Promise((resolve) => {
+                        chatConfirmMessage.textContent = message;
+                        chatConfirmYes.textContent = confirmLabel || "Löschen";
+                        chatConfirmOverlay.style.display = "flex";
+                        function cleanup(result) {
+                            chatConfirmOverlay.style.display = "none";
+                            chatConfirmYes.removeEventListener("click", onYes);
+                            chatConfirmNo.removeEventListener("click", onNo);
+                            resolve(result);
+                        }
+                        function onYes() { cleanup(true); }
+                        function onNo() { cleanup(false); }
+                        chatConfirmYes.addEventListener("click", onYes);
+                        chatConfirmNo.addEventListener("click", onNo);
+                    });
+                }
+                // Exposed so other pages' own <script> blocks (e.g. account
+                // settings' "alle Chats löschen") can reuse the same styled
+                // dialog instead of window.confirm() too.
+                window.__nexaiShowConfirmDialog = showConfirmDialog;
 
                 // The sidebar (persistent "Aktuelle" chat list, last 3) shows
                 // on the dedicated /assistant page -- the Studio-editor-
@@ -496,9 +543,9 @@
                         deleteBtn.className = "ai-chat-icon-btn ai-chat-icon-btn-danger";
                         deleteBtn.title = "Löschen";
                         deleteBtn.innerHTML = JS_ICONS.trash;
-                        deleteBtn.addEventListener("click", (event) => {
+                        deleteBtn.addEventListener("click", async (event) => {
                             event.stopPropagation();
-                            if (!window.confirm(`Chat "${chat.title}" wirklich löschen?`)) return;
+                            if (!(await showConfirmDialog(`Chat "${chat.title}" wirklich löschen?`))) return;
                             fetch(`/api/ai/chats/${chat.id}/delete`, { method: "POST" }).then(() => {
                                 if (currentChatId === chat.id) startNewChat();
                                 loadSidebarList();
@@ -652,9 +699,9 @@
                         deleteBtn.className = "ai-chat-icon-btn ai-chat-icon-btn-danger";
                         deleteBtn.title = "Löschen";
                         deleteBtn.innerHTML = JS_ICONS.trash;
-                        deleteBtn.addEventListener("click", (event) => {
+                        deleteBtn.addEventListener("click", async (event) => {
                             event.stopPropagation();
-                            if (!window.confirm(`Chat "${chat.title}" wirklich löschen?`)) return;
+                            if (!(await showConfirmDialog(`Chat "${chat.title}" wirklich löschen?`))) return;
                             fetch(`/api/ai/chats/${chat.id}/delete`, { method: "POST" }).then(() => {
                                 if (currentChatId === chat.id) startNewChat();
                                 loadChatList();
@@ -1113,10 +1160,27 @@
                 let currentPollJobId = null;
                 let activeThinkingBubble = null;
 
+                // While idle, the button shows a send arrow once there's
+                // text to send, or a "talk to the AI" icon while the field
+                // is still empty (clicking it then opens voice mode instead
+                // of submitting nothing) -- see the form submit handler.
+                function updateSendIconForInput() {
+                    const hasText = !!input.value.trim();
+                    sendIcon.style.display = hasText ? "" : "none";
+                    talkIcon.style.display = hasText ? "none" : "";
+                    sendBtn.title = hasText ? "Senden" : "Mit der KI reden";
+                }
+                input.addEventListener("input", updateSendIconForInput);
+
                 function setSendState(generating) {
-                    sendBtn.title = generating ? "Stoppen" : "Senden";
-                    sendIcon.style.display = generating ? "none" : "";
                     stopIcon.style.display = generating ? "" : "none";
+                    if (generating) {
+                        sendBtn.title = "Stoppen";
+                        sendIcon.style.display = "none";
+                        talkIcon.style.display = "none";
+                    } else {
+                        updateSendIconForInput();
+                    }
                 }
 
                 function pollJob(jobId, bubble, userMessage) {
@@ -1358,7 +1422,14 @@
                         return;
                     }
                     const text = input.value.trim();
-                    if (!text) return;
+                    if (!text) {
+                        // Empty field -- the button is showing the "talk to
+                        // the AI" icon here (see updateSendIconForInput), so
+                        // submitting (click or Enter) starts voice mode
+                        // instead of silently doing nothing.
+                        if (typeof openVoiceMode === "function") openVoiceMode();
+                        return;
+                    }
                     const typingIntervalMs = consumeTypingIntervalMs();
 
                     const includeContext = codeTextarea && currentChatMode === "code";

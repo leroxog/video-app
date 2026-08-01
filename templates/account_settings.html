@@ -75,6 +75,14 @@
         <button type="submit" class="danger">Mein KI-Profil löschen</button>
     </form>
 
+    <p class="video-meta">
+        Löscht nur deinen Gesprächsverlauf -- dein privates KI-Profil (oben) bleibt davon unberührt
+        und läuft unabhängig weiter.
+    </p>
+    <form action="{{ url_for('delete_all_ai_chats') }}" method="post" class="settings-logout-form" id="deleteAllChatsForm">
+        <button type="submit" class="danger">Alle Chats löschen</button>
+    </form>
+
     <p><a href="{{ url_for('profile', username=user.username) }}">&larr; Zurück zum Profil</a></p>
 
     <script>
@@ -100,5 +108,16 @@
         themeLightBtn.addEventListener("click", () => setTheme("light"));
         themeDarkBtn.addEventListener("click", () => setTheme("dark"));
         updateThemeButtons();
+
+        const deleteAllChatsForm = document.getElementById("deleteAllChatsForm");
+        if (deleteAllChatsForm) {
+            deleteAllChatsForm.addEventListener("submit", async (event) => {
+                event.preventDefault();
+                const confirmFn = window.__nexaiShowConfirmDialog || ((msg) => Promise.resolve(window.confirm(msg)));
+                if (await confirmFn("Wirklich ALLE deine Chats löschen? Das kann nicht rückgängig gemacht werden.")) {
+                    deleteAllChatsForm.submit();
+                }
+            });
+        }
     </script>
 {% endblock %}

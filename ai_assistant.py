@@ -94,6 +94,7 @@ import os
 import re
 import json
 import html
+import time
 import logging
 import threading
 import uuid
@@ -840,14 +841,35 @@ def _call_groq_message(messages, max_tokens, tools=None, tool_choice="auto", tem
     if tools:
         payload["tools"] = tools
         payload["tool_choice"] = tool_choice
-    response = requests.post(
-        GROQ_API_URL,
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        json=payload,
-        timeout=REQUEST_TIMEOUT_SECONDS,
-    )
-    response.raise_for_status()
-    return response.json()["choices"][0]["message"]
+    # Groq occasionally times out, drops the connection, or answers with a
+    # transient 429/5xx under load -- previously any single one of those
+    # failed the whole reply outright (the user just sees "Die KI ist
+    # gerade nicht verfügbar."), which reads as the assistant randomly
+    # crashing far more often than the model itself actually misbehaves.
+    # Retrying a couple of times with a short backoff absorbs exactly that
+    # class of blip before giving up for real.
+    last_exc = None
+    for attempt in range(3):
+        try:
+            response = requests.post(
+                GROQ_API_URL,
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json=payload,
+                timeout=REQUEST_TIMEOUT_SECONDS,
+            )
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as exc:
+            last_exc = exc
+            if attempt < 2:
+                time.sleep(1.5 * (attempt + 1))
+                continue
+            raise
+        if response.status_code in (429, 500, 502, 503, 504) and attempt < 2:
+            last_exc = requests.exceptions.HTTPError(f"Groq status {response.status_code}", response=response)
+            time.sleep(1.5 * (attempt + 1))
+            continue
+        response.raise_for_status()
+        return response.json()["choices"][0]["message"]
+    raise last_exc
 
 
 def _call_groq(messages, max_tokens, tools=None, captured=None, temperature=CODE_TEMPERATURE, available_tokens=None,
