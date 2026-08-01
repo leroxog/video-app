@@ -95,9 +95,9 @@
         if (!isReadOnly) {
             el.addEventListener("mousedown", (event) => {
                 event.preventDefault();
-                const rect = canvasEl.getBoundingClientRect();
+                const blockRect = el.getBoundingClientRect();
                 const block = instantiateBlock(def.type);
-                startDrag(block, event.clientX, event.clientY, { x: event.clientX - rect.left, y: event.clientY - rect.top });
+                startDrag(block, event.clientX, event.clientY, { x: event.clientX - blockRect.left, y: event.clientY - blockRect.top });
             });
         }
         return el;
@@ -186,10 +186,14 @@
                 nestedEl.addEventListener("mousedown", (event) => {
                     event.preventDefault();
                     event.stopPropagation();
+                    const nestedRect = nestedEl.getBoundingClientRect();
                     const detached = value.blockRef;
                     delete inputValues[part.input];
                     scheduleRerender();
-                    startDrag(detached, event.clientX, event.clientY, { x: 20, y: 10 });
+                    startDrag(detached, event.clientX, event.clientY, {
+                        x: event.clientX - nestedRect.left,
+                        y: event.clientY - nestedRect.top,
+                    });
                 });
             }
             slot.appendChild(nestedEl);
@@ -272,12 +276,12 @@
                 if (event.target.closest("input, select")) return;
                 event.preventDefault();
                 event.stopPropagation();
+                const blockRect = el.getBoundingClientRect();
                 const detached = detachBlock(block.id);
                 if (!detached) return;
-                const rect = canvasEl.getBoundingClientRect();
                 startDrag(detached.block, event.clientX, event.clientY, {
-                    x: event.clientX - rect.left - detached.origin.x,
-                    y: event.clientY - rect.top - detached.origin.y,
+                    x: event.clientX - blockRect.left,
+                    y: event.clientY - blockRect.top,
                 });
             });
         }
@@ -350,18 +354,17 @@
     }
 
     function detachBlock(id) {
-        let originApprox = { x: 20, y: 20 };
         for (let i = 0; i < state.scripts.length; i++) {
             const script = state.scripts[i];
             if (script.block.id === id) {
                 state.scripts.splice(i, 1);
                 scheduleRerender();
-                return { block: script.block, origin: { x: script.x, y: script.y } };
+                return { block: script.block };
             }
             const found = findAndUnlink(script.block, id, () => {});
             if (found) {
                 scheduleRerender();
-                return { block: found, origin: originApprox };
+                return { block: found };
             }
         }
         return null;
