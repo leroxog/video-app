@@ -404,15 +404,12 @@ def test_place_requires_login(client):
     assert b"Login" in response.data
 
 
-def test_games_page_accessible_without_login_and_lists_published_studio_games(client):
-    register(client)
-    project = create_game_project()
-    client.post(f"/studio/{project.id}/publish")
-    client.post("/logout")
-
+def test_games_page_accessible_without_login(client):
+    # User-made game/wiwa projects no longer appear here at all (NexAI
+    # studio was retired, see games_page) -- this now only checks the
+    # page itself still loads for a logged-out visitor.
     response = client.get("/games")
     assert response.status_code == 200
-    assert b"Testspiel" in response.data
 
 
 def test_ai_sidebar_has_new_chat_and_code_chat_buttons(client):
@@ -2370,20 +2367,14 @@ def test_studio_requires_login(client):
     assert "/login" in response.headers["Location"]
 
 
-def test_studio_create_project_defaults_to_webapp_with_starter_code(client):
-    # /studio/create no longer accepts project_type=game -- new projects
-    # are always a wiwa now, with starter HTML/CSS/JS and no blocks at all
-    # (see test_studio_game_project_created_directly_gets_default_blocks
-    # for the still-supported, already-existing game-project shape).
+def test_studio_create_project_route_redirects_to_nail(client):
+    # NexAI studio (including /studio/create) was retired entirely in
+    # favor of NAIL -- see studio_create_project.
     register(client)
-    create_studio_project(client)
-
-    project = StudioProject.query.filter_by(name="Testspiel").first()
-    assert project is not None
-    assert project.project_type == "webapp"
-    assert project.published is False
-    assert len(project.blocks) == 0
-    assert project.web_code
+    response = create_studio_project(client)
+    assert response.status_code == 200
+    assert response.request.path == "/nail"
+    assert StudioProject.query.filter_by(name="Testspiel").first() is None
 
 
 def test_studio_game_project_created_directly_gets_default_blocks(client):
@@ -2398,21 +2389,24 @@ def test_studio_game_project_created_directly_gets_default_blocks(client):
     assert all(b.is_default for b in project.blocks)
 
 
-def test_studio_editor_forbidden_for_non_owner(client):
+def test_studio_editor_page_redirects_to_nail(client):
+    # The editor page itself was retired along with the rest of NexAI
+    # studio -- it now just redirects every logged-in visitor to NAIL,
+    # regardless of project ownership (there's nothing sensitive left to
+    # gate access to).
     register(client, username="alice")
-    create_studio_project(client)
-    project = StudioProject.query.filter_by(name="Testspiel").first()
+    project = create_game_project(username="alice")
 
     client.post("/logout")
     register(client, username="bob")
-    response = client.get(f"/studio/{project.id}")
-    assert response.status_code == 403
+    response = client.get(f"/studio/{project.id}", follow_redirects=True)
+    assert response.status_code == 200
+    assert response.request.path == "/nail"
 
 
 def test_studio_api_create_block_assigns_unique_name(client):
     register(client)
-    create_studio_project(client)
-    project = StudioProject.query.filter_by(name="Testspiel").first()
+    project = create_game_project()
 
     res1 = client.post(f"/api/studio/{project.id}/block", json={"name": "Block"})
     res2 = client.post(f"/api/studio/{project.id}/block", json={"name": "Block"})
@@ -2422,8 +2416,7 @@ def test_studio_api_create_block_assigns_unique_name(client):
 
 def test_studio_update_age_rating(client):
     register(client)
-    create_studio_project(client)
-    project = StudioProject.query.filter_by(name="Testspiel").first()
+    project = create_game_project()
     assert project.age_rating == 0
 
     response = client.post(f"/api/studio/{project.id}/age-rating", json={"age_rating": 12})
@@ -2438,8 +2431,7 @@ def test_studio_update_age_rating(client):
 
 def test_studio_update_age_rating_rejects_out_of_range(client):
     register(client)
-    create_studio_project(client)
-    project = StudioProject.query.filter_by(name="Testspiel").first()
+    project = create_game_project()
 
     response = client.post(f"/api/studio/{project.id}/age-rating", json={"age_rating": 18})
     assert response.status_code == 400
@@ -2448,8 +2440,7 @@ def test_studio_update_age_rating_rejects_out_of_range(client):
 
 def test_studio_update_age_rating_forbidden_for_non_owner(client):
     register(client, username="alice")
-    create_studio_project(client)
-    project = StudioProject.query.filter_by(name="Testspiel").first()
+    project = create_game_project(username="alice")
 
     client.post("/logout")
     register(client, username="bob")
@@ -2483,38 +2474,24 @@ def test_studio_block_name_collision_rejected(client):
     assert res.get_json()["error"] == "name_taken"
 
 
-def test_studio_play_page_hidden_until_published(client):
+def test_studio_play_page_always_redirects_to_nail(client):
+    # /studio/play/<id> is retired along with the rest of NexAI studio (see
+    # studio_play_page) -- no user-made game is playable anymore, published
+    # or not, owner or not.
     register(client, username="alice")
     project = create_game_project()
-
+    client.post(f"/studio/{project.id}/publish")
     client.post("/logout")
+
     register(client, username="bob")
-    response = client.get(f"/studio/play/{project.id}")
-    assert response.status_code == 404
-
-    client.post("/logout")
-    client.post("/login", data={"username": "alice", "password": "secret123"})
-    client.post(f"/studio/{project.id}/publish")
-
-    client.post("/logout")
-    register(client, username="carol")
-    response = client.get(f"/studio/play/{project.id}")
+    response = client.get(f"/studio/play/{project.id}", follow_redirects=True)
     assert response.status_code == 200
-
-
-def test_studio_published_game_listed_on_games_page(client):
-    register(client)
-    project = create_game_project()
-    client.post(f"/studio/{project.id}/publish")
-
-    response = client.get("/games")
-    assert b"Testspiel" in response.data
+    assert response.request.path == "/nail"
 
 
 def test_studio_award_requires_login(client):
     register(client)
-    create_studio_project(client)
-    project = StudioProject.query.filter_by(name="Testspiel").first()
+    project = create_game_project()
     client.post("/logout")
 
     response = client.post(f"/api/studio/{project.id}/award", json={"amount": 5})
@@ -2538,8 +2515,7 @@ def test_studio_award_credits_points_on_published_game(client):
 
 def test_studio_award_rejects_absurd_amount(client):
     register(client)
-    create_studio_project(client)
-    project = StudioProject.query.filter_by(name="Testspiel").first()
+    project = create_game_project()
     client.post(f"/studio/{project.id}/publish")
 
     response = client.post(f"/api/studio/{project.id}/award", json={"amount": 999999})
@@ -2548,8 +2524,7 @@ def test_studio_award_rejects_absurd_amount(client):
 
 def test_studio_create_block_accepts_checkpoint_kind(client):
     register(client)
-    create_studio_project(client)
-    project = StudioProject.query.filter_by(name="Testspiel").first()
+    project = create_game_project()
 
     res = client.post(f"/api/studio/{project.id}/block", json={"kind": "checkpoint"})
     data = res.get_json()
@@ -2586,8 +2561,7 @@ def test_studio_script_is_project_wide_not_per_block(client):
 
 def test_studio_script_endpoint_requires_ownership(client):
     register(client, username="alice")
-    create_studio_project(client)
-    project = StudioProject.query.filter_by(name="Testspiel").first()
+    project = create_game_project(username="alice")
 
     client.post("/logout")
     register(client, username="bob")
@@ -2654,41 +2628,37 @@ def test_legacy_game_card_is_installable_like_an_app(client):
     assert "Laden".encode() in response.data
 
 
-def test_studio_game_card_is_installable_like_an_app(client):
-    register(client)
-    project = create_game_project()
-    client.post(f"/studio/{project.id}/publish")
-
-    response = client.get("/games")
-    assert f'data-app-url="/studio/play/{project.id}"'.encode() in response.data
-
-
-def test_app_card_has_no_direct_link_only_the_button_can_open_it(client):
-    # Entry into a game/WiWA must only be possible via the "Öffnen" button
+def test_builtin_game_card_has_no_direct_link_only_the_button_can_open_it(client):
+    # Entry into a game must only be possible via the "Öffnen" button
     # (client-side JS), never by clicking the card's icon/title directly.
-    register(client)
-    project = publish_studio_project(client)
+    # User-made game/wiwa cards no longer appear in the gallery at all
+    # (see games_page) -- this now exercises the same card component via
+    # one of the app's own built-in games instead.
+    import app as app_module
+    with flask_app.app_context():
+        app_module.ensure_lerox_builtin_games()
+    project = StudioProject.query.filter_by(builtin_endpoint="fruitmerge").first()
+    assert project is not None
 
     response = client.get("/games")
     assert f'href="/studio/play/{project.id}"'.encode() not in response.data
     assert b'<div class="game-card-webapp-linkarea">' in response.data
 
 
-def publish_studio_project(client):
-    create_studio_project(client)
-    project = StudioProject.query.filter_by(name="Testspiel").first()
-    if project.project_type == "webapp" and not project.web_slug:
-        client.post(
-            f"/api/studio/{project.id}/web-slug",
-            json={"web_slug": f"testspiel-{project.id}"},
-        )
+def publish_studio_project(client, username="alice"):
+    # /studio/create was retired along with the rest of NexAI studio (see
+    # studio_create_project) -- these tests only care about a published
+    # game existing and being reachable via the still-live /api/studio/*
+    # endpoints and /studio/play/<id>, so build one directly like
+    # create_game_project() does instead of going through that dead route.
+    project = create_game_project(username=username)
     client.post(f"/studio/{project.id}/publish")
     return project
 
 
 def test_studio_like_toggle_awards_no_points(client):
     register(client, username="owner")
-    project = publish_studio_project(client)
+    project = publish_studio_project(client, username="owner")
     client.post("/logout")
 
     register(client, username="liker")
@@ -2741,7 +2711,7 @@ def test_studio_comment_requires_login(client):
 
 def test_studio_report_success_and_twice_fails(client):
     register(client, username="owner")
-    project = publish_studio_project(client)
+    project = publish_studio_project(client, username="owner")
     client.post("/logout")
 
     register(client, username="reporter")
@@ -2758,7 +2728,7 @@ def test_studio_report_success_and_twice_fails(client):
 
 def test_admin_sees_reported_games_and_can_dismiss(client):
     register(client, username="owner")
-    project = publish_studio_project(client)
+    project = publish_studio_project(client, username="owner")
     client.post("/logout")
 
     register(client, username="reporter")
@@ -2777,7 +2747,7 @@ def test_admin_sees_reported_games_and_can_dismiss(client):
 
 def test_admin_can_delete_any_studio_project(client):
     register(client, username="owner")
-    project = publish_studio_project(client)
+    project = publish_studio_project(client, username="owner")
     project_id = project.id
     client.post("/logout")
 
@@ -2795,31 +2765,17 @@ def test_studio_help_page_lists_commands_for_every_dialect(client):
     assert b"studio-dialects.js" in response.data
 
 
-def test_homepage_shows_sort_tabs_and_published_games(client):
+def test_homepage_shows_sort_tabs(client):
     # See test_homepage_shows_three_step_explainer -- the gallery (with its
-    # Beliebteste/Neueste sort toggle) lives on /games now, not "/".
-    register(client)
-    publish_studio_project(client)
-
+    # Beliebteste/Neueste sort toggle) lives on /games now, not "/". User
+    # game/wiwa projects no longer appear here (see games_page), so this
+    # only checks the sort tabs themselves render.
     response = client.get("/games")
     assert b"Beliebteste" in response.data
     assert b"Neueste" in response.data
-    assert b"Testspiel" in response.data
 
     popular_response = client.get("/games?sort=popular")
-    assert b"Testspiel" in popular_response.data
-
-
-def test_games_gallery_includes_published_webapp_projects(client):
-    register(client)
-    project = create_webapp_project(client, name="Meine Homepage Webapp")
-    client.post(f"/api/studio/{project.id}/web-slug", json={"web_slug": "homepage-app"})
-    client.post(f"/studio/{project.id}/publish", follow_redirects=True)
-
-    response = client.get("/games")
-    assert "Meine Homepage Webapp".encode() in response.data
-    assert b'data-app-url="/w/homepage-app"' in response.data
-    assert "Nutzer generierte Inhalte".encode() in response.data
+    assert popular_response.status_code == 200
 
 
 def test_ai_chat_requires_login(client):
@@ -3223,9 +3179,20 @@ def test_ai_feedback_stores_rating_and_shows_in_admin(client):
     assert "👍".encode() in admin_response.data
 
 
-def create_webapp_project(client, name="Meine Webapp"):
-    client.post("/studio/create", data={"name": name, "project_type": "webapp"}, follow_redirects=True)
-    return StudioProject.query.filter_by(name=name).first()
+def create_webapp_project(client, name="Meine Webapp", username="alice"):
+    # /studio/create was retired along with the rest of NexAI studio (see
+    # studio_create_project) -- these tests only care about the still-live
+    # /api/studio/* endpoints a webapp project exercises, so build one
+    # directly instead of going through that dead route.
+    import app as app_module
+    user = User.query.filter_by(username=username).first()
+    project = StudioProject(
+        owner_id=user.id, name=name, project_type="webapp", language="python",
+        web_code=app_module.STUDIO_WEB_STARTER_CODE,
+    )
+    db.session.add(project)
+    db.session.commit()
+    return project
 
 
 def test_webapp_project_created_without_blocks(client):
@@ -3268,7 +3235,7 @@ def test_webapp_icon_upload_rejects_bad_format(client):
 
 def test_webapp_icon_upload_requires_ownership(client):
     register(client, username="owner")
-    project = create_webapp_project(client)
+    project = create_webapp_project(client, username="owner")
     client.post("/logout")
 
     register(client, username="intruder")
@@ -3283,8 +3250,7 @@ def test_game_project_can_also_upload_icon(client):
     # Games and Web-in-Web-Apps get the same app-store treatment -- both
     # can have an icon, both render as installable cards.
     register(client)
-    create_studio_project(client)
-    project = StudioProject.query.filter_by(name="Testspiel").first()
+    project = create_game_project()
 
     data = {"icon": (io.BytesIO(b"fake icon bytes"), "icon.png")}
     response = client.post(
@@ -3309,7 +3275,7 @@ def test_webapp_slug_must_be_valid_and_unique(client):
 
     client.post("/logout")
     register(client, username="bob")
-    other = create_webapp_project(client, name="Bobs App")
+    other = create_webapp_project(client, name="Bobs App", username="bob")
     taken = client.post(f"/api/studio/{other.id}/web-slug", json={"web_slug": "alice-site"})
     assert taken.status_code == 400
     assert taken.get_json()["error"] == "slug_taken"
@@ -3333,7 +3299,10 @@ def test_webapp_offline_page_shown_when_unpublished(client):
     assert "Wollen Sie mehr über NexAI erfahren?".encode() in response.data
 
 
-def test_webapp_live_page_renders_sandboxed_code(client):
+def test_webapp_live_page_always_shows_retired_offline_page(client):
+    # /w/<slug> is retired along with the rest of NexAI studio (see
+    # studio_webapp_view) -- no wiwa is viewable anymore, published or
+    # not, even ones set up before this change.
     register(client)
     project = create_webapp_project(client)
     client.post(f"/api/studio/{project.id}/web-code", json={"web_code": "<h1>Hallo von mir</h1>"})
@@ -3342,10 +3311,7 @@ def test_webapp_live_page_renders_sandboxed_code(client):
 
     response = client.get("/w/meine-seite")
     assert response.status_code == 200
-    assert b"Hallo von mir" in response.data
-    assert b'sandbox="allow-scripts allow-forms allow-popups allow-modals"' in response.data
-    assert b"allow-same-origin" not in response.data
-    assert "Nutzer-erstellt".encode() in response.data
+    assert b"Hallo von mir" not in response.data
 
 
 def test_games_search_query_still_finds_only_matching_games(client):

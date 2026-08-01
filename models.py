@@ -373,6 +373,33 @@ class StudioProjectReport(db.Model):
     __table_args__ = (db.UniqueConstraint("project_id", "reporter_id", name="uq_studioprojectreport_project_reporter"),)
 
 
+class NailProject(db.Model):
+    """A Scratch-style, block-programmed project in NAIL (Nex AI Learning)
+    -- the replacement for NexAI studio's old manual/AI code editors.
+    project_json holds the whole program as one JSON blob: sprite state
+    (position/costume/etc.), custom variables, and a list of scripts, each
+    a chain of block nodes (nested "body" arrays for C-shaped blocks like
+    repeat/if) -- executed client-side by static/js/nail-runtime.js, the
+    same shape a real Scratch .sb3's block tree takes conceptually, just
+    JSON instead of Scratch's own format."""
+    id = db.Column(db.Integer, primary_key=True)
+    owner_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    name = db.Column(db.String(100), nullable=False)
+    published = db.Column(db.Boolean, nullable=False, default=False)
+    project_json = db.Column(db.Text, nullable=False, default="{}")
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    owner = db.relationship("User")
+    likes = db.relationship("NailProjectLike", backref="project", lazy=True, cascade="all, delete-orphan")
+
+
+class NailProjectLike(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    project_id = db.Column(db.Integer, db.ForeignKey("nail_project.id"), nullable=False)
+    __table_args__ = (db.UniqueConstraint("user_id", "project_id", name="uq_nailprojectlike_user_project"),)
+
+
 class HumanSpotterImage(db.Model):
     """One photo in the NexAI/erkenne.den.menschen game's pool -- every
     logged-in user can contribute one, shown at random to everyone else who

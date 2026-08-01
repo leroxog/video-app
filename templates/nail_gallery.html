@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% from "partials/_icons.html" import icon %}
+{% block title %}NAIL - NexAI{% endblock %}
+{% block content %}
+    <div class="nail-gallery-page">
+        <div class="nail-gallery-topbar">
+            {% if user %}
+                <a class="nail-gallery-account" href="{{ url_for('profile', username=user.username) }}">
+                    {% if user.profile_image %}
+                        <img src="{{ media_url('profile_pics', user.profile_image) }}" alt="">
+                    {% else %}
+                        <span class="nail-gallery-account-placeholder" style="background:{{ user.username|avatar_color }}">{{ user.username[0]|upper }}</span>
+                    {% endif %}
+                    <span class="nail-gallery-account-name">{{ user.username }}</span>
+                </a>
+            {% else %}
+                <a class="nail-gallery-account" href="{{ url_for('login') }}">
+                    <span class="nail-gallery-account-name">Anmelden</span>
+                </a>
+            {% endif %}
+            <form class="nail-gallery-search" method="get" action="{{ url_for('nail_page') }}">
+                <input type="text" name="q" value="{{ query }}" placeholder="NAILs durchsuchen ...">
+                <button type="submit" aria-label="Suchen">{{ icon('search', 16) }}</button>
+            </form>
+            {% if user %}
+                <form action="{{ url_for('nail_create_project') }}" method="post">
+                    <button type="submit" class="nail-gallery-create-btn">NAIL selber programmieren</button>
+                </form>
+            {% else %}
+                <a class="nail-gallery-create-btn" href="{{ url_for('register') }}">NAIL selber programmieren</a>
+            {% endif %}
+        </div>
+
+        <h1>NAIL <span class="nail-badge-neu">NEU</span></h1>
+        <p class="nail-gallery-intro">Nex AI Learning &mdash; programmiere eigene Projekte mit Blöcken, ganz wie bei Scratch.</p>
+
+        {% if projects %}
+            <div class="nail-gallery-grid">
+                {% for project in projects %}
+                    <a class="nail-project-card" href="{{ url_for('nail_play_page', project_id=project.id) }}">
+                        <div class="nail-project-card-thumb">{{ icon('talk-wave', 32) }}</div>
+                        <div class="nail-project-card-name">{{ project.name }}</div>
+                        <div class="nail-project-card-author">{{ project.owner.username }}</div>
+                    </a>
+                {% endfor %}
+            </div>
+        {% elif query %}
+            <p class="gallery-empty-note">Kein NAIL-Projekt gefunden für &bdquo;{{ query }}&ldquo;.</p>
+        {% else %}
+            <p class="gallery-empty-note">Noch keine NAIL-Projekte veröffentlicht -- sei die/der Erste!</p>
+        {% endif %}
+    </div>
+{% endblock %}

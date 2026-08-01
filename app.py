@@ -1,6 +1,7 @@
 import os
 import io
 import re
+import json
 import math
 import uuid
 import random
@@ -36,7 +37,7 @@ from models import (
     StudioProject, StudioBlock, StudioProjectLike, StudioProjectComment, StudioProjectReport,
     AiChatFeedback, AiChat, AiChatMessage, AiAdminFact, AiLearnedFact, PasswordResetCode,
     AccountRecoveryRequest, ErrorLog, HumanSpotterImage, HumanSpotterClick, HumanSpotterReport,
-    AiVoiceProfile, AiPersonality, AiGeneratedMedia,
+    AiVoiceProfile, AiPersonality, AiGeneratedMedia, NailProject, NailProjectLike,
 )
 import ai_assistant
 
@@ -1628,6 +1629,149 @@ def leaderboard():
     return render_template("leaderboard.html", users=users, user=user, followed_ids=followed_ids)
 
 
+NAIL_MAX_PROJECTS_PER_USER = 20
+NAIL_MAX_PROJECT_JSON_LENGTH = 300000
+# What a brand-new NAIL project starts with -- one sprite (rendered as the
+# simple robot, see nail_editor.html), centered, no scripts yet.
+NAIL_STARTER_PROJECT_JSON = json.dumps({
+    "variables": {},
+    "sprite": {"x": 0, "y": 0, "direction": 90, "size": 100, "visible": True, "say": None, "think": None},
+    "scripts": [],
+})
+
+
+@app.route("/nail")
+def nail_page():
+    """NAIL (Nex AI Learning) -- the Scratch-style block editor that
+    replaced NexAI studio. Lists every published NailProject, with the
+    same name/creator search the old games gallery had."""
+    user = current_user()
+    query = request.args.get("q", "").strip()
+    nail_query = NailProject.query.filter_by(published=True)
+    if query:
+        nail_query = nail_query.join(User, NailProject.owner_id == User.id).filter(
+            db.or_(NailProject.name.ilike(f"%{query}%"), User.username.ilike(f"%{query}%"))
+        )
+    projects = nail_query.order_by(NailProject.created_at.desc()).all()
+    return render_template("nail_gallery.html", user=user, projects=projects, query=query)
+
+
+@app.route("/nail/create", methods=["POST"])
+def nail_create_project():
+    user = current_user()
+    if user is None:
+        return redirect(url_for("login"))
+    existing_count = NailProject.query.filter_by(owner_id=user.id).count()
+    if existing_count >= NAIL_MAX_PROJECTS_PER_USER:
+        flash("Maximale Anzahl an NAIL-Projekten erreicht.")
+        return redirect(url_for("nail_page"))
+    project = NailProject(
+        owner_id=user.id, name=f"Mein NAIL-Projekt {existing_count + 1}",
+        project_json=NAIL_STARTER_PROJECT_JSON,
+    )
+    db.session.add(project)
+    db.session.commit()
+    return redirect(url_for("nail_editor_page", project_id=project.id))
+
+
+@app.route("/nail/<int:project_id>")
+def nail_editor_page(project_id):
+    user = current_user()
+    if user is None:
+        return redirect(url_for("login"))
+    project = db.get_or_404(NailProject, project_id)
+    if project.owner_id != user.id:
+        abort(403)
+    return render_template("nail_editor.html", user=user, project=project)
+
+
+@app.route("/nail/play/<int:project_id>")
+def nail_play_page(project_id):
+    user = current_user()
+    project = db.get_or_404(NailProject, project_id)
+    is_owner = user is not None and user.id == project.owner_id
+    if not project.published and not is_owner:
+        abort(404)
+    has_liked = user is not None and NailProjectLike.query.filter_by(
+        user_id=user.id, project_id=project.id
+    ).first() is not None
+    return render_template(
+        "nail_play.html", user=user, project=project,
+        like_count=len(project.likes), has_liked=has_liked,
+    )
+
+
+@app.route("/api/nail/<int:project_id>/save", methods=["POST"])
+def api_nail_save(project_id):
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    project = db.get_or_404(NailProject, project_id)
+    if project.owner_id != user.id:
+        return jsonify({"ok": False, "error": "forbidden"}), 403
+
+    data = request.get_json(silent=True) or {}
+    project_json = data.get("project_json")
+    if not isinstance(project_json, str) or not project_json or len(project_json) > NAIL_MAX_PROJECT_JSON_LENGTH:
+        return jsonify({"ok": False, "error": "invalid_project"}), 400
+    try:
+        json.loads(project_json)
+    except (json.JSONDecodeError, TypeError):
+        return jsonify({"ok": False, "error": "invalid_json"}), 400
+
+    project.project_json = project_json
+    if "name" in data:
+        new_name = (data.get("name") or "").strip()[:100]
+        if new_name:
+            project.name = new_name
+    project.updated_at = datetime.now(timezone.utc)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/nail/<int:project_id>/publish", methods=["POST"])
+def api_nail_publish(project_id):
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    project = db.get_or_404(NailProject, project_id)
+    if project.owner_id != user.id:
+        return jsonify({"ok": False, "error": "forbidden"}), 403
+    project.published = not project.published
+    db.session.commit()
+    return jsonify({"ok": True, "published": project.published})
+
+
+@app.route("/api/nail/<int:project_id>/delete", methods=["POST"])
+def api_nail_delete(project_id):
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    project = db.get_or_404(NailProject, project_id)
+    if project.owner_id != user.id:
+        return jsonify({"ok": False, "error": "forbidden"}), 403
+    db.session.delete(project)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/nail/<int:project_id>/like", methods=["POST"])
+def api_nail_like(project_id):
+    user = current_user()
+    if user is None:
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    project = db.get_or_404(NailProject, project_id)
+    existing = NailProjectLike.query.filter_by(user_id=user.id, project_id=project.id).first()
+    if existing:
+        db.session.delete(existing)
+        liked = False
+    else:
+        db.session.add(NailProjectLike(user_id=user.id, project_id=project.id))
+        liked = True
+    db.session.commit()
+    return jsonify({"ok": True, "liked": liked, "like_count": len(project.likes)})
+
+
 @app.route("/games")
 def games_page():
     """The game/webapp gallery -- lives here (not at "/") since the
@@ -1646,7 +1790,11 @@ def games_page():
         studio_query = studio_query.join(User, StudioProject.owner_id == User.id).filter(
             db.or_(StudioProject.name.ilike(f"%{query}%"), User.username.ilike(f"%{query}%"))
         )
-    studio_games = [p for p in studio_query.all() if p.project_type == "game" or p.web_slug]
+    # NexAI studio itself was retired (see studio_editor_page) -- only the
+    # app's own built-in games (builtin_endpoint set, played through their
+    # own dedicated routes) still show up here. User-made game/wiwa
+    # projects stay in the database untouched, just no longer listed.
+    studio_games = [p for p in studio_query.all() if p.builtin_endpoint]
     if sort == "popular":
         studio_games.sort(key=lambda g: (len(g.likes), g.created_at), reverse=True)
     else:
@@ -1802,11 +1950,12 @@ app.template_global()(builtin_game_meta)
 
 @app.route("/studio")
 def studio_projects_page():
+    # See studio_editor_page -- NexAI studio itself was retired, replaced
+    # by NAIL. Old project rows are kept, just no longer listed/reachable.
     user = current_user()
     if user is None:
         return redirect(url_for("login"))
-    projects = StudioProject.query.filter_by(owner_id=user.id).order_by(StudioProject.updated_at.desc()).all()
-    return render_template("studio_projects.html", user=user, projects=projects)
+    return redirect(url_for("nail_page"))
 
 
 @app.route("/studio/help")
@@ -2291,9 +2440,14 @@ def api_ai_feedback():
 
 @app.route("/studio/create", methods=["POST"])
 def studio_create_project():
+    # See studio_editor_page -- retired in favor of NAIL.
     user = current_user()
     if user is None:
         return redirect(url_for("login"))
+    return redirect(url_for("nail_page"))
+    # Unreachable: kept only so the rest of this function (still exercised
+    # indirectly by tests that build game projects via create_game_project,
+    # not through this route) stays syntactically intact below.
 
     name = (request.form.get("name") or "").strip()[:100]
     language = request.form.get("language") or STUDIO_DEFAULT_LANGUAGE
@@ -2493,21 +2647,14 @@ def api_studio_update_age_rating(project_id):
 
 @app.route("/studio/<int:project_id>")
 def studio_editor_page(project_id):
+    # NexAI studio (both the game block/DSL editor and the wiwa/AI editor)
+    # was retired entirely in favor of NAIL -- projects created here stay
+    # in the database untouched, just no longer reachable through the app.
     user = current_user()
     if user is None:
         return redirect(url_for("login"))
-    project = db.get_or_404(StudioProject, project_id)
-    if project.owner_id != user.id:
-        abort(403)
-    if project.project_type == "webapp":
-        web_url = studio_web_url(project.web_slug) if project.web_slug else None
-        return render_template("studio_webapp_editor.html", user=user, project=project, web_url=web_url)
-    # Manual game-code editing was removed -- new projects can only be a
-    # wiwa (see STUDIO_PROJECT_TYPES), and existing game projects created
-    # before this change stay playable but their code is no longer directly
-    # accessible, even to their own owner.
-    flash("Der Code von Spiel-Projekten ist nicht mehr zugänglich -- neue Projekte werden als wiwa mit der KI programmiert.")
-    return redirect(url_for("studio_projects_page"))
+    flash("NexAI studio gibt es nicht mehr -- probier stattdessen NAIL aus.")
+    return redirect(url_for("nail_page"))
 
 
 @app.route("/api/studio/<int:project_id>/state")
@@ -2641,6 +2788,14 @@ def api_studio_delete_block(project_id, block_id):
 def studio_play_page(project_id):
     user = current_user()
     project = db.get_or_404(StudioProject, project_id)
+    # NexAI studio was retired in favor of NAIL -- user-made game/wiwa
+    # projects stay in the database (nothing is deleted) but are no longer
+    # viewable or playable through the app, even by their own owner. Only
+    # the app's own built-in games (builtin_endpoint set, played through
+    # their own dedicated routes anyway) are unaffected by this.
+    if not project.builtin_endpoint:
+        flash("NexAI studio gibt es nicht mehr -- probier stattdessen NAIL aus.")
+        return redirect(url_for("nail_page"))
     is_owner = user is not None and user.id == project.owner_id
     if not project.published and not is_owner:
         abort(404)
@@ -2666,20 +2821,10 @@ def studio_webapp_view(slug):
     navigate the visitor away to somewhere else while pretending to still
     be this page -- see studio_webapp_view.html for the sandbox attribute
     and the small persistent "Nutzer-erstellt" badge rendered outside it."""
-    user = current_user()
-    project = StudioProject.query.filter_by(web_slug=slug.lower(), project_type="webapp").first()
-    if project is None or not project.published:
-        return render_template("studio_webapp_offline.html", user=user, slug=slug)
-
-    has_reported = user is not None and StudioProjectReport.query.filter_by(
-        reporter_id=user.id, project_id=project.id
-    ).first() is not None
-    response = Response(render_template(
-        "studio_webapp_view.html", user=user, project=project, has_reported=has_reported,
-    ))
-    response.headers["Content-Security-Policy"] = "frame-ancestors 'none'"
-    response.headers["X-Frame-Options"] = "DENY"
-    return response
+    # wiwas were part of NexAI studio, retired in favor of NAIL -- no
+    # Web-in-Web-App is viewable anymore regardless of slug, even ones
+    # that used to be published (the project row itself isn't deleted).
+    return render_template("studio_webapp_offline.html", user=current_user(), slug=slug)
 
 
 @app.route("/api/studio/<int:project_id>/award", methods=["POST"])

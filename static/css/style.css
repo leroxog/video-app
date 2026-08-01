@@ -7312,3 +7312,471 @@ body.studio-fullscreen {
     font-weight: 700;
     text-decoration: none;
 }
+
+/* ============================================================
+   NAIL (Nex AI Learning) -- the Scratch-style block editor that
+   replaced NexAI studio.
+   ============================================================ */
+
+.nail-badge-neu {
+    display: inline-block;
+    background: #ffbf00;
+    color: #1a1a1a;
+    font-size: 0.6rem;
+    font-weight: 800;
+    padding: 0.15rem 0.4rem;
+    border-radius: 999px;
+    vertical-align: middle;
+    margin-left: 0.4rem;
+    letter-spacing: 0.03em;
+}
+
+.nail-gallery-page {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 1.2rem 1.2rem 4rem;
+}
+
+.nail-gallery-topbar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    padding-bottom: 1rem;
+    margin-bottom: 1rem;
+    border-bottom: var(--glass-border);
+}
+
+.nail-gallery-account {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    text-decoration: none;
+    color: var(--text-primary);
+    flex: 0 0 auto;
+}
+
+.nail-gallery-account img, .nail-gallery-account-placeholder {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    object-fit: cover;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-weight: 700;
+}
+
+.nail-gallery-account-name {
+    font-weight: 600;
+    font-size: 0.88rem;
+}
+
+.nail-gallery-search {
+    flex: 1 1 240px;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    border-radius: 999px;
+    padding: 0.4rem 0.9rem;
+}
+
+.nail-gallery-search input {
+    flex: 1 1 auto;
+    border: none;
+    background: none;
+    color: var(--input-text);
+    font-size: 0.85rem;
+}
+.nail-gallery-search input:focus { outline: none; }
+.nail-gallery-search button {
+    border: none;
+    background: none;
+    color: var(--text-secondary);
+    display: flex;
+    cursor: pointer;
+}
+
+.nail-gallery-create-btn {
+    flex: 0 0 auto;
+    border: none;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
+    font-weight: 700;
+    font-size: 0.82rem;
+    padding: 0.55rem 1.1rem;
+    border-radius: 999px;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+}
+
+.nail-gallery-intro {
+    color: var(--text-secondary);
+    margin: 0.2rem 0 1.4rem;
+}
+
+.nail-gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 1rem;
+}
+
+.nail-project-card {
+    background: var(--glass-bg);
+    border: var(--glass-border);
+    border-radius: 14px;
+    padding: 0.9rem;
+    text-decoration: none;
+    color: var(--text-primary);
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.nail-project-card-thumb {
+    aspect-ratio: 4 / 3;
+    background: rgba(255, 191, 0, 0.14);
+    color: #ffbf00;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.nail-project-card-name { font-weight: 700; font-size: 0.9rem; }
+.nail-project-card-author { font-size: 0.72rem; color: var(--text-secondary); }
+
+.nail-editor-page {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 60px);
+    background: #1e1f22;
+    color: #f1f1f1;
+}
+
+.nail-editor-topbar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.6rem 1rem;
+    background: #111214;
+    border-bottom: 1px solid #2c2c2c;
+    flex-wrap: wrap;
+}
+
+.nail-editor-back {
+    color: #9fd3ff;
+    text-decoration: none;
+    flex-shrink: 0;
+}
+
+.nail-editor-name-input {
+    flex: 1 1 auto;
+    background: none;
+    border: 1px solid transparent;
+    color: #fff;
+    font-weight: 600;
+    font-size: 0.95rem;
+    padding: 0.3rem 0.5rem;
+    border-radius: 6px;
+    min-width: 120px;
+}
+.nail-editor-name-input:focus { outline: none; border-color: #3c3c3c; }
+
+.nail-editor-topbar-actions { display: flex; align-items: center; gap: 0.6rem; }
+
+.nail-editor-save-btn, .nail-editor-publish-btn {
+    padding: 0.45rem 0.9rem;
+    border-radius: 8px;
+    border: 1px solid #3c3c3c;
+    background: #26272b;
+    color: #fff;
+    font-size: 0.82rem;
+    cursor: pointer;
+}
+.nail-editor-publish-btn.is-published { background: #2c6e3f; border-color: #2c6e3f; }
+.nail-editor-play-link { color: #9fd3ff; text-decoration: none; font-size: 0.85rem; }
+
+.nail-editor-body {
+    flex: 1 1 auto;
+    display: flex;
+    min-height: 0;
+}
+
+.nail-category-rail {
+    width: 70px;
+    flex: 0 0 auto;
+    background: #17181a;
+    border-right: 1px solid #2c2c2c;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0.6rem 0;
+    gap: 0.3rem;
+}
+
+.nail-category-btn {
+    border: none;
+    background: none;
+    color: #cfcfcf;
+    font-size: 0.6rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.4rem;
+    cursor: pointer;
+    width: 100%;
+}
+.nail-category-btn:hover { background: rgba(255, 255, 255, 0.06); }
+.nail-category-dot {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--nail-cat-color);
+    display: block;
+}
+
+.nail-palette {
+    width: 260px;
+    flex: 0 0 auto;
+    background: #202124;
+    border-right: 1px solid #2c2c2c;
+    overflow-y: auto;
+    padding: 0.6rem;
+}
+
+.nail-palette-section h3 {
+    font-size: 0.8rem;
+    margin: 1rem 0 0.5rem;
+}
+.nail-palette-section:first-child h3 { margin-top: 0; }
+
+.nail-canvas {
+    flex: 1 1 auto;
+    position: relative;
+    background: #2b2c30;
+    background-image: radial-gradient(circle, #3a3b3f 1px, transparent 1px);
+    background-size: 18px 18px;
+    overflow: auto;
+    min-width: 200px;
+}
+
+.nail-script {
+    position: absolute;
+}
+
+.nail-block {
+    display: inline-block;
+    border-radius: 6px;
+    background: var(--nail-block-color, #888);
+    box-shadow: 0 2px 0 rgba(0, 0, 0, 0.25);
+    color: #fff;
+    font-size: 0.78rem;
+    margin-bottom: 2px;
+    max-width: 100%;
+}
+.nail-block-hat { border-radius: 10px 10px 6px 6px; }
+.nail-block-cap { border-radius: 6px 6px 12px 12px; }
+.nail-block-reporter, .nail-block-boolean {
+    border-radius: 999px;
+    display: inline-flex;
+}
+.nail-block-boolean { border-radius: 4px; clip-path: polygon(6px 0, calc(100% - 6px) 0, 100% 50%, calc(100% - 6px) 100%, 6px 100%, 0 50%); }
+
+.nail-block-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    padding: 0.35rem 0.55rem;
+    cursor: grab;
+}
+
+.nail-block-text { white-space: nowrap; }
+
+.nail-block-body {
+    margin-left: 1.1rem;
+    min-height: 22px;
+    border-left: 3px solid rgba(255, 255, 255, 0.35);
+    padding: 2px 0 2px 4px;
+}
+.nail-block-foot { height: 8px; }
+.nail-block-else-label {
+    padding: 0.2rem 0.55rem;
+    font-size: 0.75rem;
+    opacity: 0.9;
+}
+
+.nail-input-slot {
+    display: inline-flex;
+    align-items: center;
+}
+
+.nail-input-field, .nail-input-slot select {
+    border: none;
+    border-radius: 999px;
+    padding: 0.15rem 0.5rem;
+    font-size: 0.76rem;
+    color: #222;
+    background: #fff;
+    width: 3.4rem;
+    min-width: 0;
+}
+.nail-input-field[type="text"], .nail-input-slot select { width: auto; max-width: 8rem; }
+
+.nail-input-slot-empty-boolean {
+    display: inline-block;
+    width: 34px;
+    height: 18px;
+    background: rgba(255, 255, 255, 0.25);
+    clip-path: polygon(5px 0, calc(100% - 5px) 0, 100% 50%, calc(100% - 5px) 100%, 5px 100%, 0 50%);
+}
+
+.nail-nested-block { cursor: grab; }
+
+.nail-palette-block {
+    margin: 0.25rem 0;
+    cursor: grab;
+}
+
+.nail-dragging-block {
+    position: fixed;
+    z-index: 500;
+    pointer-events: none;
+    opacity: 0.9;
+}
+
+.nail-drop-highlight {
+    outline: 2px dashed #fff;
+    outline-offset: 2px;
+}
+
+.nail-stage-col {
+    width: 300px;
+    flex: 0 0 auto;
+    background: #111214;
+    border-left: 1px solid #2c2c2c;
+    display: flex;
+    flex-direction: column;
+}
+.nail-stage-col-solo { width: 100%; border-left: none; }
+
+.nail-stage-header {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.5rem 0.7rem;
+}
+
+.nail-flag-btn, .nail-stop-btn-stage {
+    border: none;
+    background: #26272b;
+    color: #3ecf6e;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    font-size: 1rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.nail-flag-btn.is-running { box-shadow: 0 0 0 3px rgba(62, 207, 110, 0.4); }
+.nail-stop-btn-stage { color: #e94b4b; }
+
+.nail-stage {
+    position: relative;
+    width: 480px;
+    max-width: 100%;
+    aspect-ratio: 4 / 3;
+    margin: 0 auto;
+    background: #fff;
+    overflow: hidden;
+}
+
+.nail-sprite {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    transition: none;
+}
+.nail-sprite svg { display: block; cursor: pointer; }
+
+.nail-speech-bubble {
+    position: absolute;
+    transform: translate(-50%, 0);
+    background: #fff;
+    color: #222;
+    border: 2px solid #222;
+    border-radius: 12px;
+    padding: 0.4rem 0.7rem;
+    font-size: 0.78rem;
+    max-width: 160px;
+    z-index: 2;
+}
+
+.nail-variables-panel {
+    padding: 0.7rem;
+    border-top: 1px solid #2c2c2c;
+}
+.nail-variables-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    margin-bottom: 0.5rem;
+}
+.nail-variables-header button {
+    border: 1px solid #3c3c3c;
+    background: #26272b;
+    color: #fff;
+    border-radius: 6px;
+    padding: 0.3rem 0.6rem;
+    font-size: 0.72rem;
+    cursor: pointer;
+}
+.nail-variable-list { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.nail-variable-chip {
+    background: #ff8c1a;
+    color: #fff;
+    border-radius: 999px;
+    padding: 0.2rem 0.6rem;
+    font-size: 0.72rem;
+}
+
+.nail-play-page {
+    max-width: 560px;
+    margin: 0 auto;
+    padding: 1.2rem 1.2rem 3rem;
+}
+.nail-play-header {
+    display: flex;
+    align-items: baseline;
+    gap: 0.8rem;
+    margin-bottom: 0.8rem;
+}
+.nail-play-header a { color: var(--mono-accent-solid); text-decoration: none; }
+.nail-play-header h1 { font-size: 1.2rem; margin: 0; }
+.nail-play-author { color: var(--text-secondary); font-size: 0.8rem; }
+.nail-play-page .nail-editor-page { height: auto; background: none; }
+.nail-play-page .nail-stage-col { border: none; background: none; }
+
+.nail-like-btn {
+    margin-top: 1rem;
+    border: var(--glass-border);
+    background: var(--glass-bg);
+    color: var(--text-primary);
+    border-radius: 999px;
+    padding: 0.5rem 1.1rem;
+    cursor: pointer;
+    font-size: 0.85rem;
+}
+.nail-like-btn.is-liked { color: #e0245e; }

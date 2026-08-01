@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% from "partials/_icons.html" import icon %}
+{% block title %}{{ project.name }} - NAIL{% endblock %}
+{% block body_class %}studio-fullscreen{% endblock %}
+{% block content %}
+    <div class="nail-editor-page" id="nailEditorPage" data-project-id="{{ project.id }}"
+         data-project-json="{{ project.project_json|e }}" data-read-only="false">
+        <div class="nail-editor-topbar">
+            <a class="nail-editor-back" href="{{ url_for('nail_page') }}">&larr; NAIL</a>
+            <input type="text" id="nailProjectName" class="nail-editor-name-input" value="{{ project.name }}" maxlength="100">
+            <div class="nail-editor-topbar-actions">
+                <button type="button" id="nailSaveBtn" class="nail-editor-save-btn">Speichern</button>
+                <form action="{{ url_for('api_nail_publish', project_id=project.id) }}" method="post" class="nail-editor-publish-form">
+                    <button type="submit" class="nail-editor-publish-btn {{ 'is-published' if project.published else '' }}">
+                        {{ 'Veröffentlicht ✓' if project.published else 'Veröffentlichen' }}
+                    </button>
+                </form>
+                {% if project.published %}
+                    <a class="nail-editor-play-link" href="{{ url_for('nail_play_page', project_id=project.id) }}" target="_blank">Spielen &rarr;</a>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="nail-editor-body">
+            <div class="nail-category-rail" id="nailCategoryList"></div>
+            <div class="nail-palette" id="nailPalette"></div>
+            <div class="nail-canvas" id="nailCanvas"></div>
+
+            <div class="nail-stage-col">
+                <div class="nail-stage-header">
+                    <button type="button" id="nailGreenFlag" class="nail-flag-btn" title="Starten">⚑</button>
+                    <button type="button" id="nailStopBtn" class="nail-stop-btn-stage" title="Stoppen">⬤</button>
+                </div>
+                <div class="nail-stage" id="nailStage">
+                    <div class="nail-speech-bubble" id="nailSpeechBubble" style="display:none;"></div>
+                    <div class="nail-sprite" id="nailSprite">{% include "partials/_nail_robot_sprite.html" %}</div>
+                </div>
+                <div class="nail-variables-panel">
+                    <div class="nail-variables-header">
+                        <span>Variablen</span>
+                        <button type="button" id="nailNewVariableBtn">Neue Variable</button>
+                    </div>
+                    <div class="nail-variable-list" id="nailVariableList"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/nail-blocks.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/nail-runtime.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/nail-editor.js') }}"></script>
+{% endblock %}
