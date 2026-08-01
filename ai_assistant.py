@@ -737,85 +737,103 @@ def _run_tool_calls(tool_calls, captured, available_tokens=None, synthesize_audi
             args = json.loads(call.get("function", {}).get("arguments") or "{}")
         except (json.JSONDecodeError, TypeError):
             args = {}
-        if name == "propose_project_change":
-            captured["proposed_change"] = {
-                "new_code": args.get("new_code") or "",
-                "summary": (args.get("summary") or "").strip() or "Änderung vorgeschlagen",
-            }
-            result = "Der Änderungsvorschlag wurde dem Nutzer zur Bestätigung angezeigt."
-        elif name == "remember_user_fact":
-            fact = (args.get("fact") or "").strip()[:500]
-            if fact:
-                captured.setdefault("user_facts", []).append(fact)
-            result = "Notiert."
-        elif name == "adjust_personality_trait":
-            trait = PERSONALITY_TRAIT_KEYS.get(args.get("trait"))
-            direction = args.get("richtung")
-            if trait and direction in ("hoch", "runter"):
-                captured.setdefault("personality_adjustments", []).append(
-                    (trait, 1 if direction == "hoch" else -1)
-                )
-                result = "Angepasst."
-            else:
-                result = "Ungültiger Charakterzug oder Richtung."
-        elif name == "generate_image":
-            prompt = (args.get("prompt") or "").strip()
-            if not prompt:
-                result = "Keine Bildbeschreibung angegeben."
-            elif available_tokens is not None and available_tokens < IMAGE_TOKEN_COST:
-                result = (
-                    f"Nicht genug Tokens ({available_tokens} übrig, {IMAGE_TOKEN_COST} nötig) -- "
-                    "kein Bild erzeugt. Erklär das dem Nutzer ehrlich."
-                )
-            else:
-                image_url = _build_image_url(prompt)
-                captured["image_generated"] = {"url": image_url, "prompt": prompt}
-                result = (
-                    f"Bild erzeugt. Füge es in deiner Antwort als Markdown-Bild ein: "
-                    f"![{prompt}]({image_url})\n\n"
-                    "Erwähne dabei NICHT von dir aus, womit oder wie das Bild erzeugt wurde -- "
-                    "schreib nur normal etwas Kurzes dazu. NUR falls der Nutzer (in dieser oder "
-                    "einer späteren Nachricht) ausdrücklich danach fragt, wie/womit/mit welchem "
-                    "Dienst das Bild erstellt wurde, antworte ehrlich: über den externen Dienst "
-                    "Pollinations.ai, mit einem Link zur Webseite: "
-                    "[Pollinations.ai](https://pollinations.ai)"
-                )
-        elif name == "generate_audio":
-            text = (args.get("text") or "").strip()[:2000]
-            gender = args.get("gender") if args.get("gender") in ("male", "female") else None
-            if not text:
-                result = "Kein Text angegeben."
-            elif synthesize_audio_fn is None:
-                result = (
-                    "Es gibt aktuell keine echte, geklonte KI-Stimme -- Sprachnachrichten können "
-                    "gerade nicht erzeugt werden. Erklär das dem Nutzer ehrlich, statt es zu "
-                    "versuchen oder etwas vorzutäuschen."
-                )
-            elif available_tokens is not None and available_tokens < AUDIO_TOKEN_COST:
-                result = (
-                    f"Nicht genug Tokens ({available_tokens} übrig, {AUDIO_TOKEN_COST} nötig) -- "
-                    "keine Sprachnachricht erzeugt. Erklär das dem Nutzer ehrlich."
-                )
-            else:
-                audio_url = synthesize_audio_fn(text, gender)
-                if not audio_url:
-                    result = (
-                        "Die Sprachausgabe ist gerade nicht verfügbar (technischer Fehler). "
-                        "Erklär das dem Nutzer ehrlich, statt es erneut zu versuchen."
-                    )
-                else:
-                    captured["audio_generated"] = {"url": audio_url, "text": text}
-                    result = (
-                        "Sprachnachricht erzeugt. Füge sie in deiner Antwort als Audio-Markdown ein: "
-                        f"!audio[Sprachnachricht]({audio_url})"
-                    )
-        else:
-            impl = TOOL_IMPLEMENTATIONS.get(name)
-            result = impl(args) if impl else f"Unbekanntes Werkzeug: {name}"
-            if name == "search_wikipedia" and result and not result.startswith(_WIKIPEDIA_LOOKUP_FAILURES):
-                captured.setdefault("wikipedia_facts", []).append(result[:800])
+        try:
+            result = _execute_one_tool_call(
+                name, args, captured, available_tokens=available_tokens, synthesize_audio_fn=synthesize_audio_fn,
+            )
+        except Exception:
+            # One tool call blowing up (e.g. a transient network error deep
+            # inside generate_audio's synthesize_audio_fn) must never take
+            # the whole reply down with it -- that's what previously turned
+            # into a hard "Die KI ist gerade nicht verfügbar." for the user
+            # even though the model's own text response would otherwise have
+            # gone through fine. Feed the model an honest failure instead,
+            # so it can tell the user rather than silently pretending nothing
+            # happened.
+            logger.exception("Werkzeugaufruf '%s' fehlgeschlagen.", name)
+            result = (
+                f"Das Werkzeug '{name}' ist gerade an einem technischen Fehler gescheitert. "
+                "Erklär das dem Nutzer ehrlich, statt es als Erfolg darzustellen oder "
+                "stillschweigend erneut zu versuchen."
+            )
         outputs.append({"role": "tool", "tool_call_id": call.get("id"), "content": result})
     return outputs
+
+
+def _execute_one_tool_call(name, args, captured, available_tokens=None, synthesize_audio_fn=None):
+    if name == "propose_project_change":
+        captured["proposed_change"] = {
+            "new_code": args.get("new_code") or "",
+            "summary": (args.get("summary") or "").strip() or "Änderung vorgeschlagen",
+        }
+        return "Der Änderungsvorschlag wurde dem Nutzer zur Bestätigung angezeigt."
+    if name == "remember_user_fact":
+        fact = (args.get("fact") or "").strip()[:500]
+        if fact:
+            captured.setdefault("user_facts", []).append(fact)
+        return "Notiert."
+    if name == "adjust_personality_trait":
+        trait = PERSONALITY_TRAIT_KEYS.get(args.get("trait"))
+        direction = args.get("richtung")
+        if trait and direction in ("hoch", "runter"):
+            captured.setdefault("personality_adjustments", []).append(
+                (trait, 1 if direction == "hoch" else -1)
+            )
+            return "Angepasst."
+        return "Ungültiger Charakterzug oder Richtung."
+    if name == "generate_image":
+        prompt = (args.get("prompt") or "").strip()
+        if not prompt:
+            return "Keine Bildbeschreibung angegeben."
+        if available_tokens is not None and available_tokens < IMAGE_TOKEN_COST:
+            return (
+                f"Nicht genug Tokens ({available_tokens} übrig, {IMAGE_TOKEN_COST} nötig) -- "
+                "kein Bild erzeugt. Erklär das dem Nutzer ehrlich."
+            )
+        image_url = _build_image_url(prompt)
+        captured["image_generated"] = {"url": image_url, "prompt": prompt}
+        return (
+            f"Bild erzeugt. Füge es in deiner Antwort als Markdown-Bild ein: "
+            f"![{prompt}]({image_url})\n\n"
+            "Erwähne dabei NICHT von dir aus, womit oder wie das Bild erzeugt wurde -- "
+            "schreib nur normal etwas Kurzes dazu. NUR falls der Nutzer (in dieser oder "
+            "einer späteren Nachricht) ausdrücklich danach fragt, wie/womit/mit welchem "
+            "Dienst das Bild erstellt wurde, antworte ehrlich: über den externen Dienst "
+            "Pollinations.ai, mit einem Link zur Webseite: "
+            "[Pollinations.ai](https://pollinations.ai)"
+        )
+    if name == "generate_audio":
+        text = (args.get("text") or "").strip()[:2000]
+        gender = args.get("gender") if args.get("gender") in ("male", "female") else None
+        if not text:
+            return "Kein Text angegeben."
+        if synthesize_audio_fn is None:
+            return (
+                "Es gibt aktuell keine echte, geklonte KI-Stimme -- Sprachnachrichten können "
+                "gerade nicht erzeugt werden. Erklär das dem Nutzer ehrlich, statt es zu "
+                "versuchen oder etwas vorzutäuschen."
+            )
+        if available_tokens is not None and available_tokens < AUDIO_TOKEN_COST:
+            return (
+                f"Nicht genug Tokens ({available_tokens} übrig, {AUDIO_TOKEN_COST} nötig) -- "
+                "keine Sprachnachricht erzeugt. Erklär das dem Nutzer ehrlich."
+            )
+        audio_url = synthesize_audio_fn(text, gender)
+        if not audio_url:
+            return (
+                "Die Sprachausgabe ist gerade nicht verfügbar (technischer Fehler). "
+                "Erklär das dem Nutzer ehrlich, statt es erneut zu versuchen."
+            )
+        captured["audio_generated"] = {"url": audio_url, "text": text}
+        return (
+            "Sprachnachricht erzeugt. Füge sie in deiner Antwort als Audio-Markdown ein: "
+            f"!audio[Sprachnachricht]({audio_url})"
+        )
+    impl = TOOL_IMPLEMENTATIONS.get(name)
+    result = impl(args) if impl else f"Unbekanntes Werkzeug: {name}"
+    if name == "search_wikipedia" and result and not result.startswith(_WIKIPEDIA_LOOKUP_FAILURES):
+        captured.setdefault("wikipedia_facts", []).append(result[:800])
+    return result
 
 
 MAX_TOOL_ROUNDS = 3
