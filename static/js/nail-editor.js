@@ -392,51 +392,79 @@
         if (!dragEl) return;
         positionDragEl(event.clientX, event.clientY);
         clearDropHighlight();
-        const target = findDropTarget(event.clientX, event.clientY);
+        const target = findDropTarget();
         if (target) target.el.classList.add("nail-drop-highlight");
     }
     function clearDropHighlight() {
         canvasEl.querySelectorAll(".nail-drop-highlight").forEach((el) => el.classList.remove("nail-drop-highlight"));
     }
 
-    function findDropTarget(clientX, clientY) {
+    // How close the dragged block has to be to a compatible connection
+    // point before it magnetically snaps -- generous on purpose, so
+    // "hold it roughly there" is enough, matching how Scratch itself
+    // snaps blocks together well before their edges actually touch.
+    const SNAP_DISTANCE = 46;
+
+    function findDropTarget() {
+        // Hit-testing is based on the DRAGGED BLOCK's own rendered
+        // position (dragEl's rect), not the raw cursor coordinates --
+        // the block can be grabbed anywhere within itself, so its
+        // connector (top-left corner for stack blocks) is very rarely
+        // under the cursor and using the cursor directly would make
+        // snapping feel disconnected from where the block visually is.
+        const dragRect = dragEl.getBoundingClientRect();
         const def = defFor(dragBlock);
         const isValue = def.shape === "reporter" || def.shape === "boolean";
+        const dragCenter = { x: dragRect.left + dragRect.width / 2, y: dragRect.top + dragRect.height / 2 };
+
+        let best = null, bestDist = Infinity;
+        const consider = (dist, candidate) => {
+            if (dist <= SNAP_DISTANCE && dist < bestDist) { bestDist = dist; best = candidate; }
+        };
+
         if (isValue) {
+            const wantsBoolean = def.shape === "boolean";
             const slots = canvasEl.querySelectorAll(".nail-input-slot");
             for (const slot of slots) {
+                const slotIsBoolean = slot.dataset.slotType === "boolean";
+                if (wantsBoolean !== slotIsBoolean) continue;
+                if (slot.closest(`[data-block-id="${dragBlock.id}"]`)) continue;
                 const r = slot.getBoundingClientRect();
-                if (clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom) {
-                    const wantsBoolean = def.shape === "boolean";
-                    const slotIsBoolean = slot.dataset.slotType === "boolean";
-                    if (wantsBoolean !== slotIsBoolean) continue;
-                    if (slot.closest(`[data-block-id="${dragBlock.id}"]`)) continue;
-                    return { kind: "input", el: slot, slotName: slot.dataset.slotName, blockId: slot.closest("[data-block-id]") ? slot.closest("[data-block-id]").dataset.blockId : null };
-                }
+                const dx = Math.max(r.left - dragCenter.x, dragCenter.x - r.right, 0);
+                const dy = Math.max(r.top - dragCenter.y, dragCenter.y - r.bottom, 0);
+                consider(Math.hypot(dx, dy), {
+                    kind: "input", el: slot, slotName: slot.dataset.slotName,
+                    blockId: slot.closest("[data-block-id]") ? slot.closest("[data-block-id]").dataset.blockId : null,
+                });
             }
-            return null;
+            return best;
         }
-        // Stack blocks: look for the bottom edge of another stack block, or
-        // an empty C-body slot, to snap onto/into.
+
+        // Stack blocks: snap onto the bottom of another stack block --
+        // distance from the dragged block's top-left to the target's
+        // bottom-left, its own connection point.
         const rows = canvasEl.querySelectorAll(".nail-block-row");
         for (const row of rows) {
             const blockEl = row.closest(".nail-block");
             if (blockEl.dataset.blockId === undefined) continue;
             if (blockEl.closest(`[data-block-id="${dragBlock.id}"]`)) continue;
             const r = row.getBoundingClientRect();
-            if (clientX >= r.left - 10 && clientX <= r.right + 10 && clientY >= r.bottom - 10 && clientY <= r.bottom + 14) {
-                return { kind: "after", blockId: blockEl.dataset.blockId };
-            }
+            const dist = Math.hypot(dragRect.left - r.left, dragRect.top - r.bottom);
+            consider(dist, { kind: "after", el: blockEl, blockId: blockEl.dataset.blockId });
         }
+
+        // ...or into an empty C-block body slot -- distance from the
+        // dragged block's top-left to the slot's own top-left/inside.
         const bodySlots = canvasEl.querySelectorAll("[data-slot-body]");
         for (const slot of bodySlots) {
             if (slot.closest(`[data-block-id="${dragBlock.id}"]`)) continue;
             const r = slot.getBoundingClientRect();
-            if (clientX >= r.left && clientX <= r.right && clientY >= r.top - 4 && clientY <= r.bottom + 4) {
-                return { kind: "body", el: slot, slotKey: slot.dataset.slotBody, blockId: slot.closest("[data-block-id]").dataset.blockId };
-            }
+            const dx = Math.max(r.left - dragRect.left, dragRect.left - r.right, 0);
+            const dy = Math.max(r.top - dragRect.top, dragRect.top - r.bottom, 0);
+            consider(Math.hypot(dx, dy), { kind: "body", el: slot, slotKey: slot.dataset.slotBody, blockId: slot.closest("[data-block-id]").dataset.blockId });
         }
-        return null;
+
+        return best;
     }
 
     function findBlockById(id) {
@@ -462,8 +490,11 @@
         document.removeEventListener("mousemove", onDragMove);
         document.removeEventListener("mouseup", onDragEnd);
         clearDropHighlight();
+        // Read the drop target while dragEl is still in the DOM (and thus
+        // still has a real bounding rect) -- findDropTarget reads dragEl's
+        // own rendered position, which collapses to a zero rect once removed.
+        const target = findDropTarget();
         if (dragEl) dragEl.remove();
-        const target = findDropTarget(event.clientX, event.clientY);
         const rect = canvasEl.getBoundingClientRect();
         if (!target) {
             const withinCanvas = event.clientX >= rect.left && event.clientX <= rect.right &&
