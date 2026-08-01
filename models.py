@@ -535,11 +535,11 @@ class AiAdminFact(db.Model):
 
 
 class AiLearnedFact(db.Model):
-    """The honest version of "training" the assistant, given that Groq's
-    API is hosted inference only -- there is no way to actually fine-tune
-    the shared model from this app (see ai_assistant.py's module
-    docstring). Instead, in general (non-code) chats, three kinds of things
-    get remembered for future conversations: source="wikipedia" is the
+    """A lightweight, no-retraining way of "teaching" the assistant new
+    things -- distinct from AiTrainingExample/AiTrainingRun below, which
+    are real fine-tuning (actually changes the model's weights). In
+    general (non-code) chats, three kinds of things get remembered for
+    future conversations: source="wikipedia" is the
     takeaway from a successful search_wikipedia lookup, shared with every
     user since it's independently verifiable; source="python_docs" is the
     same for search_docs lookups of Python's official docs; source="user"
@@ -562,6 +562,39 @@ class AiLearnedFact(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     admin = db.relationship("User")
+
+
+class AiTrainingExample(db.Model):
+    """One instruction/response pair an admin has curated as real
+    fine-tuning data for the local chat model (see fine_tune.py) --
+    unlike AiLearnedFact, these actually change the model's weights when
+    a training run (AiTrainingRun) uses them, rather than just being
+    read back into the prompt. Admin-only, not shown to or writable by
+    regular users."""
+    id = db.Column(db.Integer, primary_key=True)
+    instruction = db.Column(db.Text, nullable=False)
+    response = db.Column(db.Text, nullable=False)
+    created_by_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    created_by = db.relationship("User")
+
+
+class AiTrainingRun(db.Model):
+    """One real fine-tuning run of the local chat model (see
+    fine_tune.py's run_training_job) -- status/status_message are polled
+    by the admin training page while it's running. Only one run is ever
+    allowed to be "running" at a time (enforced in app.py before starting
+    a new one), since training saturates the same CPU the live app runs
+    on."""
+    id = db.Column(db.Integer, primary_key=True)
+    status = db.Column(db.String(20), nullable=False, default="running")  # running, done, error
+    status_message = db.Column(db.String(300), nullable=True)
+    example_count = db.Column(db.Integer, nullable=False, default=0)
+    error = db.Column(db.Text, nullable=True)
+    started_by_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    started_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    finished_at = db.Column(db.DateTime, nullable=True)
+    started_by = db.relationship("User")
 
 
 class AiPersonality(db.Model):

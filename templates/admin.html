@@ -257,6 +257,13 @@
         Kann gefahrlos mehrfach geklickt werden, bereits geladene Themen werden übersprungen.
     </p>
 
+    <h2>KI-Training (echtes Fine-Tuning)</h2>
+    <p>
+        Verändert wirklich die Gewichte des lokalen Chat-Modells anhand eigener Beispiele --
+        anders als das KI-Wissen/Grundwissen oben, das nur den Prompt anreichert.
+    </p>
+    <a href="{{ url_for('admin_ai_training') }}" class="admin-page-link-btn">Zum KI-Training</a>
+
     <h2>KI-Sprachchat: geklonte Stimmen</h2>
     {% if not use_elevenlabs %}
         <p>Kein ELEVENLABS_API_KEY gesetzt -- der Sprachchat nutzt nur die eingebaute Text-zu-Sprache-Funktion des Browsers.</p>

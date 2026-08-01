@@ -99,6 +99,18 @@ def get_llama():
     return _llama
 
 
+def reload_model():
+    """Drops the cached model instance so the next get_llama() call loads
+    fresh from MODEL_PATH -- called after fine_tune.py's run_training_job
+    has replaced that file with a newly fine-tuned version, so subsequent
+    chats actually use it without needing a full process/server restart.
+    Safe to call even if nothing was ever loaded."""
+    global _llama, _load_error
+    with _load_lock:
+        _llama = None
+        _load_error = None
+
+
 def generate_chat(messages, max_tokens, temperature=0.7):
     """messages: the same [{"role", "content"}, ...] shape used throughout
     ai_assistant.py. Returns the model's raw text reply (may still

@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}KI-Training - NexAI{% endblock %}
+{% block content %}
+    <h1><a href="{{ url_for('admin_dashboard') }}">&larr; Admin</a> / KI-Training</h1>
+    <p class="ai-chat-context-note">
+        Trainiert das lokale Chat-Modell (siehe <code>local_ai.py</code>) auf den Beispielen unten neu --
+        ein echtes Fine-Tuning, das die Modell-Gewichte verändert, nicht nur eine Prompt-Anreicherung wie
+        das KI-Wissen im Haupt-Dashboard. Läuft komplett auf dem eigenen Server (CPU, kein extra Dienst),
+        dauert aber je nach Anzahl der Beispiele mehrere Minuten bis Stunden und macht den Chat
+        währenddessen spürbar langsamer, da beides dieselbe Rechenleistung teilt.
+    </p>
+
+    {% if active_run %}
+        <div class="admin-training-status" id="trainingStatusBox" data-active="true">
+            <strong>Training läuft...</strong>
+            <p id="trainingStatusMessage">{{ active_run.status_message or "Wird gestartet..." }}</p>
+        </div>
+    {% else %}
+        <div class="admin-training-status" id="trainingStatusBox" data-active="false" style="display:none;">
+            <strong>Training läuft...</strong>
+            <p id="trainingStatusMessage"></p>
+        </div>
+    {% endif %}
+
+    <h2>Trainings-Beispiele ({{ examples|length }})</h2>
+    <p>Mindestens {{ min_examples }} Beispiele nötig, bevor trainiert werden kann.</p>
+
+    <form action="{{ url_for('admin_ai_training_add_example') }}" method="post" class="admin-training-add-form">
+        <label for="instruction">Frage / Anweisung</label>
+        <textarea name="instruction" id="instruction" rows="2" maxlength="2000" required></textarea>
+        <label for="response">Gewünschte Antwort</label>
+        <textarea name="response" id="response" rows="3" maxlength="4000" required></textarea>
+        <button type="submit" class="admin-inline-btn">Beispiel hinzufügen</button>
+    </form>
+
+    {% if examples %}
+        <table class="admin-table">
+            <thead><tr><th>Frage</th><th>Antwort</th><th>Von</th><th></th></tr></thead>
+            <tbody>
+                {% for example in examples %}
+                    <tr>
+                        <td>{{ example.instruction }}</td>
+                        <td>{{ example.response }}</td>
+                        <td>{{ example.created_by.username if example.created_by else '—' }}</td>
+                        <td>
+                            <form action="{{ url_for('admin_ai_training_delete_example', example_id=example.id) }}"
+                                  method="post" class="admin-inline-form">
+                                <button type="submit" class="danger admin-inline-btn">Löschen</button>
+                            </form>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>Noch keine Trainings-Beispiele.</p>
+    {% endif %}
+
+    <form action="{{ url_for('admin_ai_training_start') }}" method="post" class="admin-inline-form"
+          onsubmit="return confirm('Training jetzt starten? Das kann lange dauern und macht den Chat währenddessen langsamer.');">
+        <button type="submit" class="admin-inline-btn" {{ 'disabled' if active_run or examples|length < min_examples else '' }}>
+            Training starten
+        </button>
+    </form>
+
+    <h2>Bisherige Trainingsläufe</h2>
+    {% if runs %}
+        <table class="admin-table">
+            <thead><tr><th>Gestartet</th><th>Status</th><th>Beispiele</th><th>Von</th><th>Details</th></tr></thead>
+            <tbody>
+                {% for run in runs %}
+                    <tr>
+                        <td>{{ run.started_at.strftime("%d.%m.%Y %H:%M") }}</td>
+                        <td>{{ {"running": "Läuft", "done": "Fertig", "error": "Fehler"}[run.status] }}</td>
+                        <td>{{ run.example_count }}</td>
+                        <td>{{ run.started_by.username if run.started_by else '—' }}</td>
+                        <td>
+                            {% if run.error %}
+                                <details><summary>Fehler anzeigen</summary><pre class="admin-error-traceback">{{ run.error }}</pre></details>
+                            {% else %}
+                                {{ run.status_message or '—' }}
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>Noch keine Trainingsläufe.</p>
+    {% endif %}
+
+    <script>
+        (function () {
+            const box = document.getElementById("trainingStatusBox");
+            const messageEl = document.getElementById("trainingStatusMessage");
+            if (!box || box.dataset.active !== "true") return;
+            box.style.display = "block";
+
+            function poll() {
+                fetch("{{ url_for('admin_ai_training_status') }}")
+                    .then((res) => res.json())
+                    .then((data) => {
+                        if (!data.ok || !data.run) return;
+                        if (data.run.status === "running") {
+                            messageEl.textContent = data.run.status_message || "Läuft...";
+                            setTimeout(poll, 2000);
+                        } else {
+                            // Training finished (done or error) -- reload to show
+                            // the updated history table and re-enable the start button.
+                            window.location.reload();
+                        }
+                    })
+                    .catch(() => setTimeout(poll, 4000));
+            }
+            poll();
+        })();
+    </script>
+{% endblock %}

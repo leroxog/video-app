@@ -4858,6 +4858,43 @@ body.shorts-fullscreen main {
     font-size: 0.85rem;
 }
 
+.admin-page-link-btn {
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    background: var(--gradient-primary);
+    color: var(--gradient-primary-text);
+    font-weight: 700;
+    text-decoration: none;
+    margin-bottom: 1rem;
+}
+
+.admin-training-status {
+    background: #141414;
+    border: 1px solid #262626;
+    border-radius: 8px;
+    padding: 0.8rem 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.admin-training-add-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-width: 500px;
+    margin-bottom: 1.5rem;
+}
+
+.admin-training-add-form textarea {
+    padding: 0.5rem;
+    border-radius: 6px;
+    border: 1px solid #262626;
+    background: #0a0a0a;
+    color: #fff;
+    font-family: inherit;
+    resize: vertical;
+}
+
 .admin-inline-form {
     display: inline-block;
     margin-right: 4px;

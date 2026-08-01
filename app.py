@@ -5,12 +5,14 @@ import sys
 import json
 import math
 import uuid
+import shutil
 import random
 import secrets
 import hashlib
 import difflib
 import logging
 import smtplib
+import tempfile
 import threading
 import traceback
 import requests
@@ -20,8 +22,8 @@ from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 
 # Reads a local .env file (if present) into the process environment before
-# anything below reads os.environ -- lets secrets like GROQ_API_KEY be set
-# locally without exporting them in the shell every time. Railway itself
+# anything below reads os.environ -- lets secrets like ELEVENLABS_API_KEY be
+# set locally without exporting them in the shell every time. Railway itself
 # doesn't need this: its dashboard sets real environment variables directly.
 load_dotenv()
 from flask import (
@@ -39,6 +41,7 @@ from models import (
     AiChatFeedback, AiChat, AiChatMessage, AiAdminFact, AiLearnedFact, PasswordResetCode,
     AccountRecoveryRequest, ErrorLog, HumanSpotterImage, HumanSpotterClick, HumanSpotterReport,
     AiVoiceProfile, AiPersonality, AiGeneratedMedia, NailProject, NailProjectLike,
+    AiTrainingExample, AiTrainingRun,
 )
 import ai_assistant
 import local_ai
@@ -3882,6 +3885,131 @@ def admin_seed_ai_knowledge():
     db.session.commit()
     flash(f"{added} neue Wissens-Einträge geladen.")
     return redirect(url_for("admin_dashboard"))
+
+
+MIN_TRAINING_EXAMPLES = 3
+
+
+@app.route("/admin/ai-training")
+def admin_ai_training():
+    """Real fine-tuning of the local chat model (see fine_tune.py) --
+    admin-only. Distinct from the "KI-Wissen" facts chat and
+    seed-knowledge button above, which only ever feed the prompt
+    (AiLearnedFact/AiAdminFact); this actually retrains the model's
+    weights on curated instruction/response pairs."""
+    admin_user = require_admin()
+    examples = AiTrainingExample.query.order_by(AiTrainingExample.created_at.desc()).all()
+    runs = AiTrainingRun.query.order_by(AiTrainingRun.started_at.desc()).limit(20).all()
+    active_run = AiTrainingRun.query.filter_by(status="running").first()
+    return render_template(
+        "admin_ai_training.html", user=admin_user, examples=examples, runs=runs,
+        active_run=active_run, min_examples=MIN_TRAINING_EXAMPLES,
+    )
+
+
+@app.route("/admin/ai-training/examples", methods=["POST"])
+def admin_ai_training_add_example():
+    admin_user = require_admin()
+    instruction = (request.form.get("instruction") or "").strip()
+    response = (request.form.get("response") or "").strip()
+    if not instruction or not response:
+        flash("Frage und Antwort dürfen nicht leer sein.")
+        return redirect(url_for("admin_ai_training"))
+    db.session.add(AiTrainingExample(
+        instruction=instruction[:2000], response=response[:4000], created_by_id=admin_user.id,
+    ))
+    db.session.commit()
+    return redirect(url_for("admin_ai_training"))
+
+
+@app.route("/admin/ai-training/examples/<int:example_id>/delete", methods=["POST"])
+def admin_ai_training_delete_example(example_id):
+    require_admin()
+    example = db.get_or_404(AiTrainingExample, example_id)
+    db.session.delete(example)
+    db.session.commit()
+    return redirect(url_for("admin_ai_training"))
+
+
+@app.route("/admin/ai-training/start", methods=["POST"])
+def admin_ai_training_start():
+    """Kicks off a real fine-tuning run in the background -- see
+    fine_tune.run_training_job. Only one run at a time: training
+    saturates the same CPU the live chat feature runs on, so a second
+    concurrent run would just make both slower without any benefit."""
+    admin_user = require_admin()
+    if AiTrainingRun.query.filter_by(status="running").first() is not None:
+        flash("Es läuft bereits ein Training.")
+        return redirect(url_for("admin_ai_training"))
+
+    examples = AiTrainingExample.query.order_by(AiTrainingExample.created_at.asc()).all()
+    if len(examples) < MIN_TRAINING_EXAMPLES:
+        flash(f"Mindestens {MIN_TRAINING_EXAMPLES} Beispiele nötig, bevor trainiert werden kann.")
+        return redirect(url_for("admin_ai_training"))
+
+    example_pairs = [(e.instruction, e.response) for e in examples]
+    run = AiTrainingRun(status="running", example_count=len(examples), started_by_id=admin_user.id)
+    db.session.add(run)
+    db.session.commit()
+    run_id = run.id
+
+    def do_training():
+        import fine_tune
+        import local_ai
+        work_dir = tempfile.mkdtemp(prefix="nexai_training_")
+
+        def on_status(message):
+            with app.app_context():
+                run_row = db.session.get(AiTrainingRun, run_id)
+                if run_row is not None:
+                    run_row.status_message = message[:300]
+                    db.session.commit()
+
+        try:
+            gguf_path = fine_tune.run_training_job(example_pairs, work_dir, on_status=on_status)
+            # Written to a temp path first, then renamed into place --
+            # os.replace is atomic on both Windows and POSIX for a
+            # same-volume move, so a request loading the model mid-copy
+            # can never observe a half-written file.
+            staged_path = local_ai.MODEL_PATH + ".new"
+            shutil.copy2(gguf_path, staged_path)
+            os.replace(staged_path, local_ai.MODEL_PATH)
+            local_ai.reload_model()
+            with app.app_context():
+                run_row = db.session.get(AiTrainingRun, run_id)
+                if run_row is not None:
+                    run_row.status = "done"
+                    run_row.status_message = "Training abgeschlossen."
+                    run_row.finished_at = datetime.now(timezone.utc)
+                    db.session.commit()
+        except Exception as exc:
+            logger.exception("KI-Training fehlgeschlagen.")
+            with app.app_context():
+                run_row = db.session.get(AiTrainingRun, run_id)
+                if run_row is not None:
+                    run_row.status = "error"
+                    run_row.error = str(exc)[:2000]
+                    run_row.finished_at = datetime.now(timezone.utc)
+                    db.session.commit()
+        finally:
+            shutil.rmtree(work_dir, ignore_errors=True)
+
+    threading.Thread(target=do_training, daemon=True).start()
+    flash("Training gestartet -- das kann eine Weile dauern, der Chat antwortet währenddessen langsamer.")
+    return redirect(url_for("admin_ai_training"))
+
+
+@app.route("/admin/ai-training/status")
+def admin_ai_training_status():
+    """Polled by the admin training page while a run is active."""
+    require_admin()
+    run = AiTrainingRun.query.order_by(AiTrainingRun.started_at.desc()).first()
+    if run is None:
+        return jsonify({"ok": True, "run": None})
+    return jsonify({"ok": True, "run": {
+        "status": run.status, "status_message": run.status_message,
+        "example_count": run.example_count, "error": run.error,
+    }})
 
 
 @app.route("/admin/errors/clear", methods=["POST"])

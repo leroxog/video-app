@@ -8,3 +8,13 @@ tzdata==2025.2
 requests==2.32.3
 python-dotenv==1.0.1
 llama-cpp-python==0.3.34
+
+# Real fine-tuning of the local chat model (see fine_tune.py) -- only
+# ever imported lazily when an admin actually starts a training run
+# (see app.py's admin_ai_training_start), never loaded into a normal
+# request-handling process otherwise.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.13.0
+transformers==5.14.1
+peft==0.20.0
+sentencepiece==0.2.2
