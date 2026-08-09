@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}App herunterladen - NexAI{% endblock %}
+{% block content %}
+    <div class="download-page">
+        <h1 class="download-title">NexAI 3D</h1>
+        <p class="download-subtitle">
+            Eine echte Desktop-App zum 3D-Modellieren -- läuft eigenständig auf deinem Rechner,
+            keine Webseite.
+        </p>
+
+        {% if download_url %}
+            <a class="download-cta" href="{{ download_url }}">Für Windows herunterladen</a>
+            <p class="download-hint">{{ download_filename }} &middot; nach dem Herunterladen einfach ausführen.</p>
+        {% else %}
+            <div class="download-coming-soon">
+                <p>Die App wird gerade noch gebaut -- schau bald wieder vorbei.</p>
+            </div>
+        {% endif %}
+
+        <form action="{{ url_for('logout') }}" method="post" class="download-logout-form">
+            <button type="submit" class="download-logout-btn">Abmelden</button>
+        </form>
+    </div>
+{% endblock %}

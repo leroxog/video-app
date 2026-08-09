@@ -34,10 +34,6 @@
 
         <div class="profile-stats-row">
             <div class="profile-stat">
-                <span class="profile-stat-count">{{ games|length }}</span>
-                <span class="profile-stat-label">Spiele</span>
-            </div>
-            <div class="profile-stat">
                 <span class="profile-stat-count">{{ following_count }}</span>
                 <span class="profile-stat-label">Folge ich</span>
             </div>
@@ -48,10 +44,7 @@
         </div>
 
         <div class="profile-action-row">
-            {% if is_own_profile %}
-                <a class="profile-action-btn profile-action-btn-primary" href="{{ url_for('nail_page') }}">NAIL</a>
-                <span class="nail-badge-neu" aria-hidden="true">NEU</span>
-            {% elif user %}
+            {% if not is_own_profile and user %}
                 <form action="{{ url_for('subscribe', username=profile_user.username) }}" method="post">
                     <button type="submit" class="profile-action-btn {{ 'profile-action-btn-outline' if is_subscribed else 'profile-action-btn-primary' }}">
                         {{ 'Gefolgt' if is_subscribed else 'Folgen' }}
@@ -70,22 +63,6 @@
             </div>
         {% endif %}
     </div>
-
-    <div class="profile-tabs-row">
-        <span class="profile-tab profile-tab-active">Spiele</span>
-    </div>
-
-    {% if games %}
-        <div class="games-grid">
-            {% for project in games %}
-                {% include "partials/_game_card.html" %}
-            {% endfor %}
-        </div>
-    {% else %}
-        <p class="profile-empty-note">
-            {{ 'Noch keine Spiele veröffentlicht.' if not is_own_profile else 'Du hast noch keine Spiele veröffentlicht.' }}
-        </p>
-    {% endif %}
 
     {% if is_own_profile and badges %}
         <div class="badge-modal-backdrop" id="badgeModalBackdrop">

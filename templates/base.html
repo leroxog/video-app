@@ -45,22 +45,6 @@
                     <a href="{{ url_for('login') }}">Login</a>
                     <a href="{{ url_for('register') }}">Registrieren</a>
                 </nav>
-            {% else %}
-                <div class="header-account-wrap">
-                    {% include "partials/_account_avatar.html" %}
-                    <div class="stats-bubble" id="statsBubble" style="display:none;">
-                        <span class="stats-bubble-item">
-                            <span class="stats-bubble-count" id="statsGamesCount">0</span>
-                            <span class="stats-bubble-word">Spiele</span>
-                        </span>
-                        <span class="stats-bubble-sep">&middot;</span>
-                        <span class="stats-bubble-item">
-                            <span class="stats-bubble-count" id="statsFollowersCount">0</span>
-                            <svg class="stats-bubble-icon" viewBox="0 0 16 16"><circle cx="8" cy="5" r="3" fill="currentColor"/><path d="M2 15 a6 6 0 0 1 12 0 Z" fill="currentColor"/></svg>
-                        </span>
-                        <div class="stats-bubble-tail"></div>
-                    </div>
-                </div>
             {% endif %}
         </header>
     {% endblock %}
@@ -86,7 +70,11 @@
         {% block content %}{% endblock %}
     </main>
 
-    {% if user %}
+    {# The AI chat is no longer shown anywhere in the app -- its markup/JS
+       below is kept as-is (not deleted) so the feature and its data stay
+       intact underneath, just permanently gated off from rendering. See
+       app.py's index()/require_login_everywhere docstrings. #}
+    {% if false %}
         <div class="ai-chat-widget" id="aiChatWidget" data-user-gender="{{ user.gender or '' }}" data-ai-tokens="{{ user.ai_tokens if user.ai_tokens is not none else '' }}">
             <a class="ai-chat-toggle-btn" id="aiChatToggleBtn" href="{{ url_for('assistant_page') }}" title="KI-Assistent">{{ icon('chat-bubble', 22) }}</a>
             <div class="ai-chat-panel" id="aiChatPanel" style="display:none;">
@@ -254,23 +242,6 @@
             });
         })();
     </script>
-
-    {% if user %}
-        <script>
-            (function () {
-                fetch("{{ url_for('api_my_stats') }}")
-                    .then((res) => res.json())
-                    .then((data) => {
-                        if (!data.ok) return;
-                        if (data.games_published === 0 && data.followers === 0) return;
-                        document.getElementById("statsGamesCount").textContent = data.games_published;
-                        document.getElementById("statsFollowersCount").textContent = data.followers;
-                        document.getElementById("statsBubble").style.display = "flex";
-                    })
-                    .catch(() => {});
-            })();
-        </script>
-    {% endif %}
 
     <script>
         if ("serviceWorker" in navigator) {
