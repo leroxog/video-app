@@ -92,10 +92,10 @@ def test_register_and_login(client):
         follow_redirects=True,
     )
     assert response.status_code == 200
-    # "/" is the AI assistant for logged-in users now (see index()) -- it
-    # doesn't show the username anywhere, so check for the authenticated
-    # sidebar instead as proof the login actually landed logged in.
-    assert b"aiChatSidebarNewBtn" in response.data
+    # "/" is the download page for logged-in users now (see index()) --
+    # anonymous visitors get redirected to /login instead of ever reaching
+    # it, so its logout form is proof the login actually landed logged in.
+    assert b"download-logout-btn" in response.data
 
 
 def test_register_stores_birthdate_and_gender(client):
@@ -306,21 +306,6 @@ def test_manifest_and_service_worker_referenced_in_every_page(client):
     assert b"/service-worker.js" in response.data
 
 
-def test_ai_sidebar_has_new_chat_and_code_chat_buttons(client):
-    # The bottom-nav (apps/plus/library) is gone -- the whole site is the AI
-    # now (see index()); this checks the sidebar that replaced it instead.
-    register(client, username="sidebartest")
-    response = client.get("/")
-    assert b"aiChatSidebarNewBtn" in response.data
-    assert b"aiChatSidebarNewCodeBtn" in response.data
-    assert b"aiChatBuddyBtn" in response.data
-
-
-def test_homepage_is_ai_chat_for_logged_in_user(client):
-    register(client)
-    response = client.get("/")
-    assert response.status_code == 200
-    assert b"aiChatPageEmbed" in response.data
 
 
 def test_profile_page_shows_username(client):
@@ -546,10 +531,10 @@ def test_add_email_unlocks_username_and_password_change(client):
     response = client.post(
         "/login", data={"username": "newalice", "password": "newpass123"}, follow_redirects=True
     )
-    # See test_register_and_login -- "/" is the AI page for logged-in users
-    # now and doesn't show the username, so confirm login via the
-    # authenticated sidebar instead.
-    assert b"aiChatSidebarNewBtn" in response.data
+    # See test_register_and_login -- "/" is the download page for logged-in
+    # users now and doesn't show the username, so confirm login via its
+    # logout form instead.
+    assert b"download-logout-btn" in response.data
 
 
 def test_password_change_rejects_wrong_current_password(client):

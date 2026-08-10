@@ -971,7 +971,7 @@ TERMS_ALLOWED_ENDPOINTS = {
 # matches. Anonymous visitors go through the session-based path below
 # regardless of this number (a fresh browser session always sees the
 # current terms once anyway).
-TERMS_VERSION = 2
+TERMS_VERSION = 3
 
 
 @app.before_request

@@ -253,7 +253,11 @@
     <script src="{{ url_for('static', filename='js/app-store.js') }}"></script>
     <script src="{{ url_for('static', filename='js/ui-sounds.js') }}"></script>
 
-    {% if user %}
+    {# This whole script only wires up the AI chat widget markup above,
+       which is permanently disabled via {% if false %} -- gated the same
+       way here so it doesn't run against a widget that was never
+       rendered (every element lookup below would be null). #}
+    {% if false %}
         <script>
             (function () {
                 const widget = document.getElementById("aiChatWidget");
