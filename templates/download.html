@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% block title %}App herunterladen - NexAI{% endblock %}
+{% block title %}App herunterladen - 3D π{% endblock %}
 {% block content %}
     <div class="download-page">
-        <h1 class="download-title">NexAI 3D</h1>
+        <h1 class="download-title">3D π</h1>
         <p class="download-subtitle">
             Eine echte Desktop-App zum 3D-Modellieren -- läuft eigenständig auf deinem Rechner,
             keine Webseite.
@@ -16,6 +16,8 @@
                 <p>Die App wird gerade noch gebaut -- schau bald wieder vorbei.</p>
             </div>
         {% endif %}
+
+        <p class="download-footnote">3D π ist ab jetzt eine 3D-Modellier- und Animations-App.</p>
 
         <form action="{{ url_for('logout') }}" method="post" class="download-logout-form">
             <button type="submit" class="download-logout-btn">Abmelden</button>

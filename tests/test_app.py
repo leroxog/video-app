@@ -281,7 +281,7 @@ def test_brand_wordmark_present_on_every_page(client):
     # reachable without an account.
     for path in ["/login", "/register"]:
         response = client.get(path)
-        assert b"NexAI" in response.data
+        assert "3D π".encode() in response.data
         assert b"headerSearchInput" not in response.data
         assert b"bottom-nav" not in response.data
 

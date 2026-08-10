@@ -1092,14 +1092,14 @@ def offline_page():
     return render_template("offline.html")
 
 
-DOWNLOAD_FILENAME = "NexAI3D-Setup.exe"
+DOWNLOAD_FILENAME = "3DPi-Setup.exe"
 
 
 @app.route("/")
 def index():
     """The entire site is now just this one page for a logged-in visitor
     (require_login_everywhere below already redirected anyone else to
-    /login before this ever runs) -- a download link for the NexAI 3D
+    /login before this ever runs) -- a download link for the 3D π
     desktop app. Games and the AI chat are deliberately not linked from
     here or anywhere else anymore; see require_login_everywhere's
     docstring and this app's own module-level notes for why the AI's
