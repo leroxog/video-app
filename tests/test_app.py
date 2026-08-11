@@ -92,10 +92,11 @@ def test_register_and_login(client):
         follow_redirects=True,
     )
     assert response.status_code == 200
-    # "/" is the download page for logged-in users now (see index()) --
+    # "/" redirects logged-in visitors on to /messages (see index()) --
     # anonymous visitors get redirected to /login instead of ever reaching
-    # it, so its logout form is proof the login actually landed logged in.
-    assert b"download-logout-btn" in response.data
+    # it, so landing on the messages page is proof the login actually
+    # landed logged in.
+    assert "messages-page".encode() in response.data
 
 
 def test_register_stores_birthdate_and_gender(client):
@@ -238,7 +239,7 @@ def test_existing_account_gated_until_onboarding_completed(client):
     )
     assert complete_res.status_code == 200
 
-    response2 = client.get("/")
+    response2 = client.get("/", follow_redirects=True)
     assert response2.status_code == 200
 
 
@@ -301,7 +302,7 @@ def test_offline_page_accessible(client):
 
 def test_manifest_and_service_worker_referenced_in_every_page(client):
     register(client)
-    response = client.get("/")
+    response = client.get("/", follow_redirects=True)
     assert b'rel="manifest"' in response.data
     assert b"/service-worker.js" in response.data
 
@@ -531,10 +532,9 @@ def test_add_email_unlocks_username_and_password_change(client):
     response = client.post(
         "/login", data={"username": "newalice", "password": "newpass123"}, follow_redirects=True
     )
-    # See test_register_and_login -- "/" is the download page for logged-in
-    # users now and doesn't show the username, so confirm login via its
-    # logout form instead.
-    assert b"download-logout-btn" in response.data
+    # See test_register_and_login -- "/" redirects to /messages and
+    # doesn't show the username, so confirm login via landing there.
+    assert "messages-page".encode() in response.data
 
 
 def test_password_change_rejects_wrong_current_password(client):
@@ -1948,7 +1948,8 @@ def test_fresh_registration_does_not_immediately_re_gate_on_terms(raw_client):
     assert "/terms" not in register_res.headers["Location"]
 
     response = raw_client.get("/", follow_redirects=False)
-    assert response.status_code == 200
+    assert response.status_code == 302
+    assert "/terms" not in response.headers["Location"]
 
 
 def test_terms_decline_logs_out_and_redirects_to_declined_page(client):
@@ -1977,7 +1978,7 @@ def test_existing_account_without_terms_accepted_is_gated_on_next_visit(client):
     assert "/terms" in response.headers["Location"]
 
     client.post("/terms/accept")
-    response2 = client.get("/")
+    response2 = client.get("/", follow_redirects=True)
     assert response2.status_code == 200
 
 
@@ -1998,7 +1999,7 @@ def test_terms_version_bump_re_gates_already_accepted_account(client):
     client.post("/terms/accept")
     user_after = User.query.filter_by(username="oldversionuser").first()
     assert user_after.terms_accepted_version == app_module.TERMS_VERSION
-    response2 = client.get("/")
+    response2 = client.get("/", follow_redirects=True)
     assert response2.status_code == 200
 
 

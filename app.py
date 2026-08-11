@@ -1092,24 +1092,15 @@ def offline_page():
     return render_template("offline.html")
 
 
-DOWNLOAD_FILENAME = "3DPi-Setup.exe"
-
-
 @app.route("/")
 def index():
-    """The entire site is now just this one page for a logged-in visitor
-    (require_login_everywhere below already redirected anyone else to
-    /login before this ever runs) -- a download link for the 3D π
-    desktop app. Games and the AI chat are deliberately not linked from
-    here or anywhere else anymore; see require_login_everywhere's
+    """The 3D π desktop app (and its download page) was removed -- this
+    just sends a logged-in visitor on to the most substantial feature
+    still standing. Games and the AI chat are deliberately not linked
+    from here or anywhere else; see require_login_everywhere's
     docstring and this app's own module-level notes for why the AI's
     code/data is kept rather than deleted."""
-    user = current_user()
-    download_path = os.path.join(app.static_folder, "downloads", DOWNLOAD_FILENAME)
-    download_url = url_for("static", filename=f"downloads/{DOWNLOAD_FILENAME}") if os.path.exists(download_path) else None
-    return render_template(
-        "download.html", user=user, download_url=download_url, download_filename=DOWNLOAD_FILENAME,
-    )
+    return redirect(url_for("messages_page"))
 
 
 def parse_onboarding_fields(form):
