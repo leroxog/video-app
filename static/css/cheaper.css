@@ -215,16 +215,110 @@ main.cheaper-main {
   color: var(--text);
 }
 
-.cheaper-category-select {
+/* ---------- Filter icon + popover (category multi-select + sort) ---------- */
+.cheaper-filter-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.cheaper-filter-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
   border: 1px solid var(--border);
-  background: var(--bg-soft);
+  background: var(--bg-card);
+  color: var(--text-dim);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.cheaper-filter-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+.cheaper-filter-btn[aria-expanded="true"] {
+  background: var(--text);
+  border-color: var(--text);
+  color: #fff;
+}
+
+.cheaper-filter-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  min-width: 16px;
+  height: 16px;
   border-radius: 999px;
-  padding: 0 18px;
-  font-size: 14px;
-  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+}
+
+.cheaper-filter-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 240px;
+  max-width: calc(100vw - 40px);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 28px rgba(20, 20, 20, 0.14);
+  padding: 14px;
+  z-index: 60;
+  animation: cheaperFilterPanelIn 0.14s ease;
+}
+
+@keyframes cheaperFilterPanelIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.cheaper-filter-group-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+  margin: 12px 0 6px;
+}
+
+.cheaper-filter-group-title:first-child {
+  margin-top: 0;
+}
+
+.cheaper-filter-option {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 2px;
+  font-size: 13.5px;
   color: var(--text);
   cursor: pointer;
-  min-width: 160px;
+}
+
+.cheaper-filter-option input {
+  accent-color: var(--accent);
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+
+.cheaper-filter-apply {
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px;
+  font-size: 13.5px;
 }
 
 /* ---------- "Für dich" chip row ---------- */
@@ -906,6 +1000,46 @@ main.cheaper-main {
   padding: 9px 14px;
   font-size: 13px;
   width: fit-content;
+}
+
+.cheaper-coupon-brand-link {
+  display: block;
+}
+
+/* ---------- Brand/company detail page ---------- */
+.cheaper-brand-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.cheaper-brand-header-logo {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  border-radius: var(--radius-md);
+  background: var(--bg-soft);
+  padding: 8px;
+  border: 1px solid var(--border);
+}
+
+.cheaper-brand-header-logo-fallback {
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 30px;
+}
+
+.cheaper-brand-header-title {
+  font-size: 26px;
+  font-weight: 800;
+  margin: 0;
 }
 
 @media (max-width: 640px) {

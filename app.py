@@ -1180,10 +1180,13 @@ def _metro_key(name):
     return n
 
 
-def offers_query(category=None, q=None):
+def offers_query(categories=None, q=None):
+    """categories is a list -- an offer matches if its category is any one
+    of them (OR filter), so the homepage filter panel can multi-select
+    (e.g. "Essen" + "Sport" together)."""
     query = Offer.query.filter_by(is_active=True)
-    if category:
-        query = query.filter_by(category=category)
+    if categories:
+        query = query.filter(Offer.category.in_(categories))
     if q:
         like = f"%{q}%"
         query = query.filter(db.or_(
@@ -1244,15 +1247,13 @@ def index():
     Rabattcode tabs (see matching_discount_code_brands)."""
     user = current_user()
     q = (request.args.get("q") or "").strip()
-    category = (request.args.get("category") or "").strip()
-    if category not in OFFER_CATEGORIES:
-        category = ""
+    selected_categories = [c for c in request.args.getlist("category") if c in OFFER_CATEGORIES]
     resolved_city = (request.args.get("city") or "").strip() or (user.city if user else "")
     sort_mode = (request.args.get("sort") or "nahe").strip()
     if sort_mode not in SORT_MODES:
         sort_mode = "nahe"
 
-    offers = offers_query(category or None, q or None).order_by(Offer.created_at.desc()).all()
+    offers = offers_query(selected_categories or None, q or None).order_by(Offer.created_at.desc()).all()
     if sort_mode == "beliebt":
         offers = sorted(offers, key=lambda o: o.click_count, reverse=True)
     elif sort_mode == "nahe":
@@ -1279,7 +1280,8 @@ def index():
         offer_cards.sort(key=lambda c: c["price"])
 
     return render_template(
-        "home.html", user=user, offer_cards=offer_cards, q=q, category=category,
+        "home.html", user=user, offer_cards=offer_cards, q=q,
+        selected_categories=selected_categories,
         categories=OFFER_CATEGORIES, category_labels=OFFER_CATEGORY_LABELS,
         chips=CHEAPER_SUGGESTION_CHIPS, resolved_city=resolved_city,
         sort_mode=sort_mode, sort_modes=SORT_MODES, sort_mode_labels=SORT_MODE_LABELS,
@@ -1349,6 +1351,32 @@ def discount_code_go(code_id):
     code.click_count += 1
     db.session.commit()
     return redirect(code.link_url)
+
+
+@app.route("/marke/<brand>")
+def brand_detail(brand):
+    """Everything Cheaper has on one company: its Rabattcodes and its
+    Offers, listed as plain facts (normal price, discount price, and
+    whatever age/other condition applies) regardless of whether they apply
+    to this particular viewer -- e.g. a 17-year-old still sees a "nur unter
+    16" discount listed here, it's just not the price shown/applied
+    anywhere else for them. Clicking a company anywhere (homepage brand
+    chip, a search match, a Rabattcode card) lands here first instead of
+    jumping straight to the external site."""
+    user = current_user()
+    codes = DiscountCode.query.filter_by(is_active=True, brand_name=brand).all()
+    offers = Offer.query.filter_by(is_active=True, provider_name=brand).order_by(Offer.created_at.desc()).all()
+    if not codes and not offers:
+        abort(404)
+    offer_cards = [{
+        "offer": offer,
+        "normal_price": offer.normal_price_cents / 100,
+        "discount_price": offer.discount_price_cents / 100 if offer.discount_price_cents is not None else None,
+    } for offer in offers]
+    return render_template(
+        "brand_detail.html", user=user, brand=brand, codes=codes, offer_cards=offer_cards,
+        category_labels=OFFER_CATEGORY_LABELS,
+    )
 
 
 def parse_onboarding_fields(form):

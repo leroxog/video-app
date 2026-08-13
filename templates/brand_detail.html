@@ -1,0 +1,102 @@
+{% extends "cheaper_base.html" %}
+{% block title %}{{ brand }} -- Cheaper{% endblock %}
+{% block content %}
+
+<a class="cheaper-detail-back" href="{{ url_for('index') }}">&larr; Zurück</a>
+
+<div class="cheaper-brand-header">
+    {% set logo = (codes[0].image_url if codes else None) %}
+    {% if logo %}
+        <img class="cheaper-brand-header-logo" src="{{ logo }}" alt="{{ brand }}">
+    {% else %}
+        <div class="cheaper-brand-header-logo-fallback">🏷️</div>
+    {% endif %}
+    <h1 class="cheaper-brand-header-title">{{ brand }}</h1>
+</div>
+
+{% if codes %}
+    <p class="cheaper-section-label">Rabattcodes</p>
+    <div class="cheaper-coupon-grid">
+        {% for code in codes %}
+            <div class="cheaper-coupon">
+                {% if code.image_url %}
+                    <img class="cheaper-coupon-logo" src="{{ code.image_url }}" alt="{{ code.brand_name }}" loading="lazy">
+                {% else %}
+                    <div class="cheaper-coupon-logo-fallback">🏷️</div>
+                {% endif %}
+                <div class="cheaper-coupon-body">
+                    <p class="cheaper-coupon-brand">{{ code.brand_name }}</p>
+                    <p class="cheaper-coupon-description">{{ code.description }}</p>
+                    {% if code.code %}
+                        <button type="button" class="cheaper-coupon-code" data-code="{{ code.code }}">
+                            <span class="cheaper-coupon-code-text">{{ code.code }}</span>
+                            <span class="cheaper-coupon-code-copy">Kopieren</span>
+                        </button>
+                    {% endif %}
+                    <a class="cheaper-btn secondary cheaper-coupon-cta" href="{{ url_for('discount_code_go', code_id=code.id) }}">Zum Shop</a>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+{% endif %}
+
+{% if offer_cards %}
+    <p class="cheaper-section-label" style="margin-top: 30px;">Angebote</p>
+    <div class="cheaper-card-grid">
+        {% for c in offer_cards %}
+            <a class="cheaper-card" href="{{ url_for('offer_detail', offer_id=c.offer.id) }}">
+                {% if c.offer.image_url %}
+                    <img class="cheaper-card-image" src="{{ c.offer.image_url }}" alt="{{ c.offer.title }}" loading="lazy">
+                {% else %}
+                    <div class="cheaper-card-image-fallback">🎟️</div>
+                {% endif %}
+                <div class="cheaper-card-body">
+                    <span class="cheaper-card-category">{{ category_labels[c.offer.category] }}</span>
+                    <p class="cheaper-card-title">{{ c.offer.title }}</p>
+                    <p class="cheaper-card-provider">{{ c.offer.provider_name }}{% if c.offer.district %} &middot; {{ c.offer.district }}{% elif c.offer.city %} &middot; {{ c.offer.city }}{% endif %}</p>
+                    <div class="cheaper-card-price-row">
+                        {% if c.discount_price is not none %}
+                            <span class="cheaper-card-price-old">{{ "%.2f"|format(c.normal_price) }} €</span>
+                            <span class="cheaper-card-price is-discounted">{{ "%.2f"|format(c.discount_price) }} €</span>
+                        {% else %}
+                            <span class="cheaper-card-price">{{ "%.2f"|format(c.normal_price) }} €</span>
+                        {% endif %}
+                    </div>
+                    {% if c.discount_price is not none %}
+                        <span class="cheaper-card-savings">
+                            Rabatt{% if c.offer.discount_label %} &middot; {{ c.offer.discount_label }}{% elif c.offer.discount_max_age %} &middot; bis {{ c.offer.discount_max_age }} Jahre{% endif %}
+                            -- gilt evtl. nicht für dich, siehe Detailseite
+                        </span>
+                    {% endif %}
+                </div>
+            </a>
+        {% endfor %}
+    </div>
+{% endif %}
+
+{% if not codes and not offer_cards %}
+    <p class="cheaper-empty-state">Nichts gefunden für "{{ brand }}".</p>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.querySelectorAll(".cheaper-coupon-code").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+            var code = btn.dataset.code;
+            var label = btn.querySelector(".cheaper-coupon-code-copy");
+            var restore = label.textContent;
+            var done = function () {
+                label.textContent = "Kopiert!";
+                setTimeout(function () { label.textContent = restore; }, 1500);
+            };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(code).then(done).catch(done);
+            } else {
+                done();
+            }
+        });
+    });
+</script>
+{% endblock %}

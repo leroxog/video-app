@@ -16,13 +16,17 @@
     <div class="cheaper-coupon-grid">
         {% for code in codes %}
             <div class="cheaper-coupon">
-                {% if code.image_url %}
-                    <img class="cheaper-coupon-logo" src="{{ code.image_url }}" alt="{{ code.brand_name }}" loading="lazy">
-                {% else %}
-                    <div class="cheaper-coupon-logo-fallback">🏷️</div>
-                {% endif %}
+                <a href="{{ url_for('brand_detail', brand=code.brand_name) }}">
+                    {% if code.image_url %}
+                        <img class="cheaper-coupon-logo" src="{{ code.image_url }}" alt="{{ code.brand_name }}" loading="lazy">
+                    {% else %}
+                        <div class="cheaper-coupon-logo-fallback">🏷️</div>
+                    {% endif %}
+                </a>
                 <div class="cheaper-coupon-body">
-                    <p class="cheaper-coupon-brand">{{ code.brand_name }}</p>
+                    <a class="cheaper-coupon-brand-link" href="{{ url_for('brand_detail', brand=code.brand_name) }}">
+                        <p class="cheaper-coupon-brand">{{ code.brand_name }}</p>
+                    </a>
                     <p class="cheaper-coupon-description">{{ code.description }}</p>
                     {% if code.code %}
                         <button type="button" class="cheaper-coupon-code" data-code="{{ code.code }}">

@@ -25,7 +25,6 @@
             </a>
             <nav class="cheaper-header-nav">
                 {% if user %}
-                    <a href="{{ url_for('discount_codes_page') }}">Rabattcodes</a>
                     {% if user.is_company %}
                         <a href="{{ url_for('company_dashboard') }}">Meine Angebote</a>
                     {% endif %}

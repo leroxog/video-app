@@ -6,18 +6,38 @@
     <div class="cheaper-search-box">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
         <input type="text" name="q" value="{{ q }}" placeholder="Wonach suchst du? Z.B. Kino, Schwimmbad, Bowling, Marke ...">
+
+        <div class="cheaper-filter-wrap">
+            <button type="button" class="cheaper-filter-btn" id="cheaperFilterBtn" aria-haspopup="true" aria-expanded="false" title="Filter">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2" fill="currentColor" stroke="none"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2" fill="currentColor" stroke="none"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="11" cy="18" r="2" fill="currentColor" stroke="none"/></svg>
+                {% if selected_categories %}<span class="cheaper-filter-badge">{{ selected_categories|length }}</span>{% endif %}
+            </button>
+
+            <div class="cheaper-filter-panel" id="cheaperFilterPanel" hidden>
+                <p class="cheaper-filter-group-title">Kategorie</p>
+                <label class="cheaper-filter-option">
+                    <input type="checkbox" id="cheaperCategoryAll" {% if not selected_categories %}checked{% endif %}>
+                    Alle
+                </label>
+                {% for cat in categories %}
+                    <label class="cheaper-filter-option">
+                        <input type="checkbox" name="category" value="{{ cat }}" class="cheaper-category-checkbox" {% if cat in selected_categories %}checked{% endif %}>
+                        {{ category_labels[cat] }}
+                    </label>
+                {% endfor %}
+
+                <p class="cheaper-filter-group-title">Sortierung</p>
+                {% for mode in sort_modes %}
+                    <label class="cheaper-filter-option">
+                        <input type="radio" name="sort" value="{{ mode }}" {% if mode == sort_mode %}checked{% endif %}>
+                        {{ sort_mode_labels[mode] }}
+                    </label>
+                {% endfor %}
+
+                <button type="submit" class="cheaper-btn cheaper-filter-apply">Anwenden</button>
+            </div>
+        </div>
     </div>
-    <select class="cheaper-category-select" name="category">
-        <option value="">Alle Kategorien</option>
-        {% for cat in categories %}
-            <option value="{{ cat }}" {% if cat == category %}selected{% endif %}>{{ category_labels[cat] }}</option>
-        {% endfor %}
-    </select>
-    <select class="cheaper-category-select" name="sort">
-        {% for mode in sort_modes %}
-            <option value="{{ mode }}" {% if mode == sort_mode %}selected{% endif %}>{{ sort_mode_labels[mode] }}</option>
-        {% endfor %}
-    </select>
     <input type="hidden" name="city" id="cheaperCityInput" value="{{ resolved_city }}">
 </form>
 
@@ -31,7 +51,7 @@
 {% if brand_codes %}
     <div class="cheaper-brand-tab-strip">
         {% for brand, codes in brand_codes.items() %}
-            <a class="cheaper-brand-tab" href="{{ url_for('discount_codes_page', q=brand) }}">
+            <a class="cheaper-brand-tab" href="{{ url_for('brand_detail', brand=brand) }}">
                 🏷️ {{ brand }} &middot; {{ codes|length }} Rabattcode{{ "s" if codes|length != 1 else "" }}
             </a>
         {% endfor %}
@@ -40,12 +60,12 @@
 
 {% if discount_codes %}
     <div class="cheaper-section-heading-row">
-        <p class="cheaper-section-label">Rabattcodes</p>
+        <p class="cheaper-section-label">Marken</p>
         <a class="cheaper-section-more-link" href="{{ url_for('discount_codes_page') }}">Alle ansehen</a>
     </div>
     <div class="cheaper-coupon-chip-row">
         {% for code in discount_codes %}
-            <a class="cheaper-coupon-chip" href="{{ url_for('discount_codes_page', q=code.brand_name) }}">
+            <a class="cheaper-coupon-chip" href="{{ url_for('brand_detail', brand=code.brand_name) }}">
                 {% if code.image_url %}
                     <img src="{{ code.image_url }}" alt="{{ code.brand_name }}" loading="lazy">
                 {% else %}
@@ -102,13 +122,44 @@
 <script>
     (function () {
         var form = document.getElementById("cheaperSearchForm");
-        form.querySelector("select[name='category']").addEventListener("change", function () { form.submit(); });
-        form.querySelector("select[name='sort']").addEventListener("change", function () { form.submit(); });
 
         document.querySelectorAll(".cheaper-chip").forEach(function (chip) {
             chip.addEventListener("click", function () {
                 form.querySelector("input[name='q']").value = chip.dataset.chip;
                 form.submit();
+            });
+        });
+
+        // Filter-Icon-Popover: Kategorie (Mehrfachauswahl) + Sortierung
+        // (Einfachauswahl), alles innerhalb der Suchzeile per Icon erreichbar.
+        var filterBtn = document.getElementById("cheaperFilterBtn");
+        var filterPanel = document.getElementById("cheaperFilterPanel");
+        var allCheckbox = document.getElementById("cheaperCategoryAll");
+        var categoryCheckboxes = form.querySelectorAll(".cheaper-category-checkbox");
+
+        filterBtn.addEventListener("click", function (e) {
+            e.stopPropagation();
+            var willOpen = filterPanel.hidden;
+            filterPanel.hidden = !willOpen;
+            filterBtn.setAttribute("aria-expanded", String(willOpen));
+        });
+        document.addEventListener("click", function (e) {
+            if (!filterPanel.hidden && !filterPanel.contains(e.target) && e.target !== filterBtn) {
+                filterPanel.hidden = true;
+                filterBtn.setAttribute("aria-expanded", "false");
+            }
+        });
+
+        allCheckbox.addEventListener("change", function () {
+            if (allCheckbox.checked) {
+                categoryCheckboxes.forEach(function (cb) { cb.checked = false; });
+            }
+        });
+        categoryCheckboxes.forEach(function (cb) {
+            cb.addEventListener("change", function () {
+                if (cb.checked) allCheckbox.checked = false;
+                var anyChecked = Array.prototype.some.call(categoryCheckboxes, function (c) { return c.checked; });
+                if (!anyChecked) allCheckbox.checked = true;
             });
         });
 
