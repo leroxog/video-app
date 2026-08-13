@@ -34,7 +34,7 @@ from models import (
     AccountRecoveryRequest, ErrorLog,
     AiVoiceProfile, AiPersonality, AiGeneratedMedia,
     AiTrainingExample, AiTrainingRun,
-    Offer, OFFER_CATEGORIES, OFFER_CATEGORY_LABELS,
+    Offer, OFFER_CATEGORIES, OFFER_CATEGORY_LABELS, DiscountCode,
 )
 import ai_assistant
 import local_ai
@@ -633,6 +633,10 @@ def ensure_sqlite_columns_exist():
         # exists to self-heal for every other table.
         "ai_personality": [("mimic_user_style", "BOOLEAN NOT NULL DEFAULT 0")],
         "ai_generated_media": [("liked", "BOOLEAN NOT NULL DEFAULT 0")],
+        "offer": [
+            ("district", "VARCHAR(100)"),
+            ("click_count", "INTEGER NOT NULL DEFAULT 0"),
+        ],
     }
     with db.engine.connect() as conn:
         for table, columns in wanted.items():
@@ -743,6 +747,8 @@ def ensure_columns_exist():
             created_at TIMESTAMP
         )""",
         "ALTER TABLE ai_generated_media ADD COLUMN IF NOT EXISTS liked BOOLEAN NOT NULL DEFAULT FALSE",
+        "ALTER TABLE offer ADD COLUMN IF NOT EXISTS district VARCHAR(100)",
+        "ALTER TABLE offer ADD COLUMN IF NOT EXISTS click_count INTEGER NOT NULL DEFAULT 0",
     ]
     with db.engine.connect() as conn:
         for statement in statements:
@@ -1139,6 +1145,34 @@ CHEAPER_SUGGESTION_CHIPS = [
     "Kino in der Nähe", "Schwimmbad", "Fast Food", "Freizeitpark", "Bowling", "Escape Room",
 ]
 
+SORT_MODES = ("nahe", "beliebt", "alle")
+SORT_MODE_LABELS = {"nahe": "In der Nähe", "beliebt": "Beliebteste", "alle": "Alle"}
+
+# Munich districts/suburbs that should count as "in der Nähe" of each other
+# and of plain "München" -- widens the nearby-radius beyond an exact
+# city-string match (see _metro_key below) without pretending to do real
+# distance math (no paid geocoding API, same honesty stance as before).
+MUNICH_METRO_AREAS = {
+    "münchen", "munich", "pasing", "nymphenburg", "schwabing", "moosach",
+    "sendling", "giesing", "haidhausen", "neuhausen", "bogenhausen", "laim",
+    "trudering", "perlach", "milbertshofen", "aubing", "allach",
+    "obermenzing", "untermenzing", "freimann", "riem", "ramersdorf",
+    "harlaching", "solln", "thalkirchen", "berg am laim",
+}
+
+
+def _metro_key(name):
+    """Normalizes a city/district name to a metro-area bucket -- e.g.
+    "Pasing" and "Nymphenburg" both fold to "münchen", so a visitor in
+    either one sees offers from the whole area as nearby, not just their
+    exact district."""
+    n = (name or "").strip().lower()
+    if not n:
+        return ""
+    if n in MUNICH_METRO_AREAS:
+        return "münchen"
+    return n
+
 
 def offers_query(category=None, q=None):
     query = Offer.query.filter_by(is_active=True)
@@ -1146,23 +1180,31 @@ def offers_query(category=None, q=None):
         query = query.filter_by(category=category)
     if q:
         like = f"%{q}%"
-        query = query.filter(db.or_(Offer.provider_name.ilike(like), Offer.title.ilike(like)))
+        query = query.filter(db.or_(
+            Offer.provider_name.ilike(like), Offer.title.ilike(like), Offer.city.ilike(like),
+        ))
     return query
 
 
 def sort_offers_by_city(offers, city):
-    """Offers in the visitor's own city (from their profile, or from live
-    browser geolocation reverse-geocoded client-side, see the JS in
+    """Offers in the visitor's own metro area (from their profile, or from
+    live browser geolocation reverse-geocoded client-side, see the JS in
     home.html) are shown first -- everything else keeps its normal order
     after that. No distance math: without a paid geocoding API this is a
-    plain, honest city-name match, not real proximity sorting."""
+    plain, honest city/district match (widened to a metro-area group, see
+    _metro_key), not real proximity sorting."""
     city_lower = (city or "").strip().lower()
+    city_key = _metro_key(city)
     if not city_lower:
         return offers
 
     def matches(offer):
         offer_city = (offer.city or "").strip().lower()
-        return bool(offer_city) and (offer_city in city_lower or city_lower in offer_city)
+        if not offer_city:
+            return False
+        if city_key and _metro_key(offer.city) == city_key:
+            return True
+        return offer_city in city_lower or city_lower in offer_city
 
     matching = [o for o in offers if matches(o)]
     matching_ids = {o.id for o in matching}
@@ -1170,22 +1212,46 @@ def sort_offers_by_city(offers, city):
     return matching + rest
 
 
+def matching_discount_code_brands(q):
+    """Returns {brand_name: [codes]} for every distinct brand whose name
+    matches the search term -- surfaced as extra tabs above the offer
+    results (see index() / home.html)."""
+    if not q:
+        return {}
+    like = f"%{q}%"
+    codes = DiscountCode.query.filter(
+        DiscountCode.is_active.is_(True), DiscountCode.brand_name.ilike(like),
+    ).order_by(DiscountCode.brand_name).all()
+    grouped = {}
+    for code in codes:
+        grouped.setdefault(code.brand_name, []).append(code)
+    return grouped
+
+
 @app.route("/")
 def index():
     """Cheaper's homepage: search + category filter + offer cards, sorted
-    to favor the visitor's own city (profile city, or a live browser
+    to favor the visitor's own metro area (profile city, or a live browser
     geolocation lookup, see resolved_city below) when known. Prices shown
     already reflect this visitor's own age-based discount, see
-    Offer.price_for()."""
+    Offer.price_for(). A brand-name search additionally surfaces matching
+    Rabattcode tabs (see matching_discount_code_brands)."""
     user = current_user()
     q = (request.args.get("q") or "").strip()
     category = (request.args.get("category") or "").strip()
     if category not in OFFER_CATEGORIES:
         category = ""
     resolved_city = (request.args.get("city") or "").strip() or (user.city if user else "")
+    sort_mode = (request.args.get("sort") or "nahe").strip()
+    if sort_mode not in SORT_MODES:
+        sort_mode = "nahe"
 
     offers = offers_query(category or None, q or None).order_by(Offer.created_at.desc()).all()
-    offers = sort_offers_by_city(offers, resolved_city)
+    if sort_mode == "beliebt":
+        offers = sorted(offers, key=lambda o: o.click_count, reverse=True)
+    elif sort_mode == "nahe":
+        offers = sort_offers_by_city(offers, resolved_city)
+    # sort_mode == "alle": keep the plain newest-first order as-is.
 
     user_age = compute_age(user.birthdate) if user and user.birthdate else None
     offer_cards = []
@@ -1203,7 +1269,72 @@ def index():
         "home.html", user=user, offer_cards=offer_cards, q=q, category=category,
         categories=OFFER_CATEGORIES, category_labels=OFFER_CATEGORY_LABELS,
         chips=CHEAPER_SUGGESTION_CHIPS, resolved_city=resolved_city,
+        sort_mode=sort_mode, sort_modes=SORT_MODES, sort_mode_labels=SORT_MODE_LABELS,
+        brand_codes=matching_discount_code_brands(q),
     )
+
+
+@app.route("/angebot/<int:offer_id>")
+def offer_detail(offer_id):
+    """Full-screen preview shown before leaving to the real external site --
+    replaces linking straight out from the homepage card. Shows the same
+    price/savings breakdown as the card, plus the offer's description, so a
+    visitor knows exactly what they're about to get before clicking
+    through. The actual click-out (and click_count bump used by the
+    "Beliebteste" sort tab) only happens on offer_go, once they confirm."""
+    user = current_user()
+    offer = Offer.query.filter_by(id=offer_id, is_active=True).first_or_404()
+    user_age = compute_age(user.birthdate) if user and user.birthdate else None
+    price_cents, is_discounted = offer.price_for(user_age)
+    card = {
+        "offer": offer,
+        "price": price_cents / 100,
+        "normal_price": offer.normal_price_cents / 100,
+        "is_discounted": is_discounted,
+        "savings": (offer.normal_price_cents - price_cents) / 100 if is_discounted else 0,
+    }
+    return render_template(
+        "offer_detail.html", user=user, c=card, category_labels=OFFER_CATEGORY_LABELS,
+    )
+
+
+@app.route("/angebot/<int:offer_id>/gehe")
+def offer_go(offer_id):
+    """The actual click-out to the provider's own site -- counted here
+    (not on offer_detail's page view) so click_count reflects genuine
+    interest, not just curiosity about the preview."""
+    offer = Offer.query.filter_by(id=offer_id, is_active=True).first_or_404()
+    offer.click_count += 1
+    db.session.commit()
+    return redirect(offer.link_url)
+
+
+@app.route("/rabattcodes")
+def discount_codes_page():
+    """Standalone browse page for every active Rabattcode, independent of
+    a homepage search -- the general "es soll auch Rabattcode geben"
+    feature, not just the search-triggered brand tabs on the homepage."""
+    user = current_user()
+    q = (request.args.get("q") or "").strip()
+    query = DiscountCode.query.filter_by(is_active=True)
+    if q:
+        like = f"%{q}%"
+        query = query.filter(db.or_(
+            DiscountCode.brand_name.ilike(like), DiscountCode.description.ilike(like),
+        ))
+    codes = query.order_by(DiscountCode.brand_name).all()
+    return render_template(
+        "discount_codes.html", user=user, codes=codes, q=q,
+        category_labels=OFFER_CATEGORY_LABELS,
+    )
+
+
+@app.route("/rabattcode/<int:code_id>/gehe")
+def discount_code_go(code_id):
+    code = DiscountCode.query.filter_by(id=code_id, is_active=True).first_or_404()
+    code.click_count += 1
+    db.session.commit()
+    return redirect(code.link_url)
 
 
 def parse_onboarding_fields(form):
@@ -1378,6 +1509,7 @@ def _apply_offer_form(offer, form):
     offer.image_url = (form.get("image_url") or "").strip() or None
     offer.link_url = (form.get("link_url") or "").strip()
     offer.city = (form.get("city") or "").strip() or None
+    offer.district = (form.get("district") or "").strip() or None
     offer.discount_label = (form.get("discount_label") or "").strip() or None
 
     def to_cents(value):

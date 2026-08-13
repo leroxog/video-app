@@ -29,6 +29,9 @@
         <label for="city">Stadt
             <input type="text" id="city" name="city" maxlength="100" value="{{ (form_values.city if form_values else offer.city) or '' }}">
         </label>
+        <label for="district">Stadtteil (optional, z.B. "Pasing")
+            <input type="text" id="district" name="district" maxlength="100" value="{{ (form_values.district if form_values else offer.district) or '' }}">
+        </label>
         <div class="cheaper-form-grid">
             <label for="normal_price">Normalpreis (€)
                 <input type="text" id="normal_price" name="normal_price" required value="{{ (form_values.normal_price if form_values else (offer.normal_price_cents / 100) if offer else '') }}">

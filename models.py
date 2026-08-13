@@ -687,7 +687,16 @@ class Offer(db.Model):
     discount_max_age = db.Column(db.Integer, nullable=True)
     discount_label = db.Column(db.String(100), nullable=True)
     city = db.Column(db.String(100), nullable=True)
+    # Optional finer-grained area within city, e.g. "Pasing" or
+    # "Nymphenburg" for a München offer -- shown alongside city on the card,
+    # and used by sort_offers_by_city's metro-area grouping (see app.py) so
+    # a visitor in one district also sees nearby districts as "in der Nähe".
+    district = db.Column(db.String(100), nullable=True)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
+    # Counts visits to the real external link (see app.py's offer_go route)
+    # -- not page views of the offer's own preview page -- so it reflects
+    # actual interest, driving the homepage's "Beliebteste" sort tab.
+    click_count = db.Column(db.Integer, nullable=False, default=0)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     company = db.relationship("User")
 
@@ -697,3 +706,25 @@ class Offer(db.Model):
         if age is not None and self.discount_price_cents is not None and self.discount_max_age is not None and age <= self.discount_max_age:
             return self.discount_price_cents, True
         return self.normal_price_cents, False
+
+
+class DiscountCode(db.Model):
+    """A real, manually-sourced brand discount/voucher code -- e.g. "10%
+    off your first order" -- shown as its own "Rabattcodes" tab when a
+    search matches brand_name (see app.py's index()). Not scraped/live
+    (same honesty stance as Offer, see that model's docstring): entered by
+    hand from each brand's own official page, with source_url pointing at
+    where it was found so it's checkable. click_count counts visits to the
+    brand's own site via the code's "Zum Shop" link, same pattern as
+    Offer.click_count."""
+    id = db.Column(db.Integer, primary_key=True)
+    brand_name = db.Column(db.String(150), nullable=False)
+    code = db.Column(db.String(50), nullable=True)
+    description = db.Column(db.String(300), nullable=False)
+    image_url = db.Column(db.String(500), nullable=True)
+    link_url = db.Column(db.String(500), nullable=False)
+    source_url = db.Column(db.String(500), nullable=True)
+    category = db.Column(db.String(20), nullable=False, default="sonstiges")
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    click_count = db.Column(db.Integer, nullable=False, default=0)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))

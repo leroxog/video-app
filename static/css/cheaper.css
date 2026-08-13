@@ -264,6 +264,57 @@ main.cheaper-main {
   color: var(--accent-strong);
 }
 
+/* ---------- Sort / brand tabs ---------- */
+.cheaper-tab-strip {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 22px;
+  border-bottom: 1px solid var(--border);
+}
+
+.cheaper-tab {
+  padding: 10px 16px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-dim);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  white-space: nowrap;
+}
+
+.cheaper-tab:hover {
+  color: var(--text);
+}
+
+.cheaper-tab.active {
+  color: var(--accent-strong);
+  border-bottom-color: var(--accent);
+}
+
+.cheaper-brand-tab-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.cheaper-brand-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 9px 16px;
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.cheaper-brand-tab:hover {
+  filter: brightness(0.97);
+}
+
 /* ---------- Offer cards ---------- */
 .cheaper-card-grid {
   display: grid;
@@ -279,12 +330,28 @@ main.cheaper-main {
   box-shadow: var(--shadow-card);
   display: flex;
   flex-direction: column;
-  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  position: relative;
+  transition: transform 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease;
 }
 
 .cheaper-card:hover {
-  transform: translateY(-2px);
+  transform: translateY(-3px);
   box-shadow: 0 4px 8px rgba(20, 20, 20, 0.06), 0 16px 32px rgba(20, 20, 20, 0.09);
+  border-color: var(--accent);
+}
+
+.cheaper-card-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: var(--accent-strong);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 4px 9px;
+  border-radius: 999px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+  z-index: 1;
 }
 
 .cheaper-card-image {
@@ -595,7 +662,224 @@ main.cheaper-main {
   margin-top: 28px;
 }
 
+/* ---------- Offer detail (full-screen click-through page) ---------- */
+.cheaper-detail-back {
+  display: inline-block;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-dim);
+  margin-bottom: 18px;
+}
+
+.cheaper-detail-back:hover {
+  color: var(--text);
+}
+
+.cheaper-detail {
+  max-width: 720px;
+  margin: 0 auto;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+
+.cheaper-detail-image {
+  width: 100%;
+  height: 320px;
+  object-fit: cover;
+  background: var(--bg-soft);
+}
+
+.cheaper-detail-image-fallback {
+  width: 100%;
+  height: 320px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 64px;
+}
+
+.cheaper-detail-body {
+  padding: 26px 28px 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cheaper-detail-title {
+  font-size: 24px;
+  font-weight: 800;
+  margin: 4px 0 0;
+}
+
+.cheaper-detail-provider {
+  font-size: 14.5px;
+  color: var(--text-dim);
+  margin: 0 0 10px;
+}
+
+.cheaper-detail-price-block {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.cheaper-detail-price {
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.cheaper-detail-price.is-discounted {
+  color: var(--accent-strong);
+}
+
+.cheaper-detail-price-old {
+  font-size: 17px;
+  color: var(--text-faint);
+  text-decoration: line-through;
+}
+
+.cheaper-detail-description {
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--text-dim);
+  margin: 18px 0 4px;
+}
+
+.cheaper-detail-cta {
+  margin-top: 22px;
+  width: 100%;
+  padding: 15px 20px;
+  font-size: 15.5px;
+}
+
+/* ---------- Rabattcodes (coupon grid) ---------- */
+.cheaper-page-title {
+  font-size: 26px;
+  font-weight: 800;
+  margin: 0 0 4px;
+}
+
+.cheaper-page-subtitle {
+  font-size: 14px;
+  color: var(--text-dim);
+  margin: 0 0 22px;
+}
+
+.cheaper-coupon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 18px;
+  margin-top: 22px;
+}
+
+.cheaper-coupon {
+  display: flex;
+  gap: 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  box-shadow: var(--shadow-card);
+}
+
+.cheaper-coupon-logo {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+  background: var(--bg-soft);
+  flex-shrink: 0;
+  padding: 6px;
+}
+
+.cheaper-coupon-logo-fallback {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  border-radius: var(--radius-sm);
+  font-size: 24px;
+}
+
+.cheaper-coupon-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.cheaper-coupon-brand {
+  font-size: 15px;
+  font-weight: 800;
+  margin: 0;
+}
+
+.cheaper-coupon-description {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin: 0 0 4px;
+}
+
+.cheaper-coupon-code {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1.5px dashed var(--accent);
+  background: var(--accent-soft);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  cursor: pointer;
+  width: 100%;
+}
+
+.cheaper-coupon-code-text {
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-weight: 800;
+  font-size: 13.5px;
+  color: var(--accent-strong);
+  letter-spacing: 0.03em;
+}
+
+.cheaper-coupon-code-copy {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--accent-strong);
+  flex-shrink: 0;
+}
+
+.cheaper-coupon-cta {
+  margin-top: 2px;
+  padding: 9px 14px;
+  font-size: 13px;
+  width: fit-content;
+}
+
 @media (max-width: 640px) {
+  .cheaper-detail-image, .cheaper-detail-image-fallback {
+    height: 220px;
+  }
+  .cheaper-detail-body {
+    padding: 20px 18px 26px;
+  }
+  .cheaper-detail-price {
+    font-size: 26px;
+  }
+  .cheaper-coupon {
+    flex-direction: column;
+  }
   .cheaper-search-row {
     flex-direction: column;
   }

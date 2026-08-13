@@ -1,0 +1,63 @@
+{% extends "cheaper_base.html" %}
+{% block title %}Rabattcodes -- Cheaper{% endblock %}
+{% block content %}
+
+<h1 class="cheaper-page-title">Rabattcodes</h1>
+<p class="cheaper-page-subtitle">Echte, von Hand geprüfte Gutscheincodes großer Marken und Supermärkte.</p>
+
+<form class="cheaper-search-row" method="get" action="{{ url_for('discount_codes_page') }}">
+    <div class="cheaper-search-box">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        <input type="text" name="q" value="{{ q }}" placeholder="Marke suchen, z.B. Holy, IKEA, Zalando ...">
+    </div>
+</form>
+
+{% if codes %}
+    <div class="cheaper-coupon-grid">
+        {% for code in codes %}
+            <div class="cheaper-coupon">
+                {% if code.image_url %}
+                    <img class="cheaper-coupon-logo" src="{{ code.image_url }}" alt="{{ code.brand_name }}" loading="lazy">
+                {% else %}
+                    <div class="cheaper-coupon-logo-fallback">🏷️</div>
+                {% endif %}
+                <div class="cheaper-coupon-body">
+                    <p class="cheaper-coupon-brand">{{ code.brand_name }}</p>
+                    <p class="cheaper-coupon-description">{{ code.description }}</p>
+                    {% if code.code %}
+                        <button type="button" class="cheaper-coupon-code" data-code="{{ code.code }}">
+                            <span class="cheaper-coupon-code-text">{{ code.code }}</span>
+                            <span class="cheaper-coupon-code-copy">Kopieren</span>
+                        </button>
+                    {% endif %}
+                    <a class="cheaper-btn secondary cheaper-coupon-cta" href="{{ url_for('discount_code_go', code_id=code.id) }}">Zum Shop</a>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <p class="cheaper-empty-state">Keine Rabattcodes gefunden{% if q %} für "{{ q }}"{% endif %}.</p>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.querySelectorAll(".cheaper-coupon-code").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+            var code = btn.dataset.code;
+            var label = btn.querySelector(".cheaper-coupon-code-copy");
+            var restore = label.textContent;
+            var done = function () {
+                label.textContent = "Kopiert!";
+                setTimeout(function () { label.textContent = restore; }, 1500);
+            };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(code).then(done).catch(done);
+            } else {
+                done();
+            }
+        });
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,42 @@
+{% extends "cheaper_base.html" %}
+{% block title %}{{ c.offer.title }} -- {{ c.offer.provider_name }} -- Cheaper{% endblock %}
+{% block content %}
+
+<a class="cheaper-detail-back" href="{{ url_for('index') }}">&larr; Zurück</a>
+
+<div class="cheaper-detail">
+    {% if c.offer.image_url %}
+        <img class="cheaper-detail-image" src="{{ c.offer.image_url }}" alt="{{ c.offer.title }}">
+    {% else %}
+        <div class="cheaper-detail-image-fallback">🎟️</div>
+    {% endif %}
+
+    <div class="cheaper-detail-body">
+        <span class="cheaper-card-category">{{ category_labels[c.offer.category] }}</span>
+        <h1 class="cheaper-detail-title">{{ c.offer.title }}</h1>
+        <p class="cheaper-detail-provider">{{ c.offer.provider_name }}{% if c.offer.district %} &middot; {{ c.offer.district }}{% endif %}{% if c.offer.city %} &middot; {{ c.offer.city }}{% endif %}</p>
+
+        <div class="cheaper-detail-price-block">
+            {% if c.is_discounted %}
+                <span class="cheaper-detail-price-old">{{ "%.2f"|format(c.normal_price) }} €</span>
+            {% endif %}
+            <span class="cheaper-detail-price {% if c.is_discounted %}is-discounted{% endif %}">{{ "%.2f"|format(c.price) }} €</span>
+        </div>
+        {% if c.is_discounted %}
+            <span class="cheaper-card-savings">Du sparst {{ "%.2f"|format(c.savings) }} €{% if c.offer.discount_label %} &middot; {{ c.offer.discount_label }}{% endif %}</span>
+        {% elif c.offer.discount_max_age %}
+            <span class="cheaper-card-savings">Rabatt {% if c.offer.discount_label %}{{ c.offer.discount_label }}{% else %}bis {{ c.offer.discount_max_age }} Jahre{% endif %}</span>
+        {% endif %}
+
+        {% if c.offer.description %}
+            <p class="cheaper-detail-description">{{ c.offer.description }}</p>
+        {% endif %}
+
+        <a class="cheaper-btn cheaper-detail-cta" href="{{ url_for('offer_go', offer_id=c.offer.id) }}">
+            Weiter zu {{ c.offer.provider_name }}
+        </a>
+        <p class="cheaper-form-hint">Du verlässt Cheaper und wirst zur Seite von {{ c.offer.provider_name }} weitergeleitet.</p>
+    </div>
+</div>
+
+{% endblock %}

@@ -10,7 +10,7 @@ without a separate manual seeding step per deploy.
 
 Can still be run standalone for local dev: .venv/Scripts/python.exe seed_data.py
 """
-from models import db, User, Offer
+from models import db, User, Offer, DiscountCode
 
 # Only Mathäser has an actual company account (created via the real UI
 # flow); every other entry below is admin-seeded (company_id=None), matching
@@ -116,6 +116,78 @@ MUNICH_OFFERS = [
 ]
 
 
+# provider_name, title, category, district, link_url, normal€, discount€ or None, max_age or None, label
+# -- real businesses/attractions specifically in the München-Nymphenburg
+# and München-Pasing districts (city is always "München"; district is the
+# finer-grained area shown on the card and used for the metro-area nearby
+# matching in app.py's _metro_key).
+DISTRICT_OFFERS = [
+    ("Schloss Nymphenburg", "Schloss Tageskarte", "bildung", "Nymphenburg",
+     "https://www.schloss-nymphenburg.de/deutsch/tourist/eintritt.htm",
+     10.00, 0.00, 17, "Kinder & Jugendliche bis 18 Jahre frei"),
+    ("Marstallmuseum & Porzellanmuseum Nymphenburg", "Tageskarte", "bildung", "Nymphenburg",
+     "https://www.schloss-nymphenburg.de/deutsch/tourist/eintritt.htm",
+     8.00, None, None, None),
+    ("Botanischer Garten München-Nymphenburg", "Tageskarte", "bildung", "Nymphenburg",
+     "https://botmuc-snsb.ticketfritz.de/",
+     5.50, 0.00, 17, "Kinder & Jugendliche unter 18 Jahre frei"),
+    ("L'Osteria München-Pasing", "Pizza (Ø 40cm, zum Teilen)", "essen", "Pasing",
+     "https://losteria.net/de/restaurants/restaurant/muenchen-pasing/", 11.90, None, None, None),
+    ("Westbad München", "Tageskarte Bad", "sport", "Pasing-Obermenzing",
+     "https://www.swm.de/baeder/westbad-hallenbad",
+     13.60, 8.70, 14, "Kinder & Jugendliche 6-14 Jahre"),
+    ("Pasinger Fabrik", "Kinovorstellung", "unterhaltung", "Pasing",
+     "https://pasinger-fabrik.de/film/",
+     10.00, None, None, "Beispielpreis, variiert je Vorstellung"),
+]
+
+# brand_name, code (None if the real mechanism is "sign up and a code is
+# emailed to you" rather than a fixed public code -- see seed_data.py's
+# module docstring on why a fabricated code string is never used), description,
+# image_url (real logo, sourced from Wikimedia Commons), link_url (the
+# brand's own official page), category.
+DISCOUNT_CODES = [
+    ("Nike", None, "Rabattaktionen für Nike Member, u.a. Studierendenrabatt",
+     "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a6/Logo_NIKE.svg/330px-Logo_NIKE.svg.png",
+     "https://www.nike.com/de/aktions-code"),
+    ("adidas", None, "Rabattgutscheine und Angebote für adiClub-Mitglieder",
+     "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/Adidas_2022_logo.svg/330px-Adidas_2022_logo.svg.png",
+     "https://www.adidas.de/adiclub"),
+    ("H&M", None, "H&M Newsletter: exklusive Angebote, u.a. Studierendenrabatt über Student Beans",
+     "https://upload.wikimedia.org/wikipedia/commons/thumb/5/53/H%26M-Logo.svg/330px-H%26M-Logo.svg.png",
+     "https://www2.hm.com/de_de/customer-service/newsletter.html"),
+    ("Deichmann", None, "10% Rabatt ab 30€ Bestellwert (30 Tage gültig) bei Newsletter-Anmeldung",
+     "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c4/Deichmann_logo.svg/330px-Deichmann_logo.svg.png",
+     "https://www.deichmann.com"),
+    ("Rossmann", None, "10%-Rabattcoupons in der ROSSMANN-App (digitale Wallet)",
+     "https://upload.wikimedia.org/wikipedia/commons/8/8e/Rossmann_Logo.svg",
+     "https://www.rossmann.de/de/service-und-hilfe/rossmann-app.html"),
+    ("dm", None, "Rabattcode per E-Mail nach Newsletter-Anmeldung",
+     "https://upload.wikimedia.org/wikipedia/commons/thumb/5/51/Dm-drogerie_markt_logo.svg/330px-Dm-drogerie_markt_logo.svg.png",
+     "https://www.dm.de"),
+    ("IKEA", None, "IKEA Family Mitgliedschaft: Sonderpreise, Newsletter-Rabatte, Geburtstagsgutschein",
+     "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/Ikea_logo.svg/330px-Ikea_logo.svg.png",
+     "https://www.ikea.com/de/de/ikea-family/"),
+    ("Zalando", None, "Ca. 10% Rabatt auf die erste Bestellung nach Newsletter-Anmeldung",
+     "https://upload.wikimedia.org/wikipedia/commons/0/0b/Zalando_logo.svg",
+     "https://www.zalando.de"),
+    ("Douglas", None, "Douglas Beauty Card: Rabattaktionen und Bonuspunkte für Mitglieder",
+     "https://upload.wikimedia.org/wikipedia/commons/f/f4/Douglas_Logo_06.2018.svg",
+     "https://www.douglas.de"),
+    ("C&A", None, "Rabattaktionen für Newsletter-Abonnenten",
+     "https://upload.wikimedia.org/wikipedia/commons/thumb/a/af/C%26A_logo.svg/330px-C%26A_logo.svg.png",
+     "https://www.c-and-a.com/de/de/shop/"),
+    ("Saturn", None, "mySaturn Vorteilsprogramm: Punkte sammeln, 10€-Coupon ab 10.000 Punkten",
+     "https://upload.wikimedia.org/wikipedia/commons/c/c3/Saturn-Logo.svg",
+     "https://www.saturn.de"),
+    ("Puma", None, "Rabattaktionen für Newsletter-Abonnenten und PUMA-Mitglieder",
+     "https://upload.wikimedia.org/wikipedia/en/thumb/d/da/Puma_complete_logo.svg/330px-Puma_complete_logo.svg.png",
+     "https://de.puma.com"),
+    ("Holy", None, "Ca. 5€ Rabatt auf die erste Bestellung nach Newsletter-Anmeldung",
+     None, "https://de.weareholy.com"),
+]
+
+
 def _cents(euro):
     return round(euro * 100) if euro is not None else None
 
@@ -164,11 +236,33 @@ def seed_offers():
         ))
     db.session.commit()
 
+    for provider, title, category, district, link, normal, discount, max_age, label in DISTRICT_OFFERS:
+        if Offer.query.filter_by(provider_name=provider, title=title, city=munich).first():
+            continue
+        db.session.add(Offer(
+            company_id=None, provider_name=provider, title=title, category=category,
+            city=munich, district=district,
+            link_url=link, normal_price_cents=_cents(normal), discount_price_cents=_cents(discount),
+            discount_max_age=max_age, discount_label=label,
+            description=f"Recherchierter Realpreis, Quelle: {link}",
+        ))
+    db.session.commit()
+
+    for brand, code, description, image_url, link in DISCOUNT_CODES:
+        if DiscountCode.query.filter_by(brand_name=brand, description=description).first():
+            continue
+        db.session.add(DiscountCode(
+            brand_name=brand, code=code, description=description,
+            image_url=image_url, link_url=link, source_url=link,
+        ))
+    db.session.commit()
+
 
 if __name__ == "__main__":
     from app import app
     with app.app_context():
-        before = Offer.query.count()
+        offers_before = Offer.query.count()
+        codes_before = DiscountCode.query.count()
         seed_offers()
-        after = Offer.query.count()
-        print(f"Offers: {before} -> {after}")
+        print(f"Offers: {offers_before} -> {Offer.query.count()}")
+        print(f"Rabattcodes: {codes_before} -> {DiscountCode.query.count()}")
