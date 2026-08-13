@@ -264,33 +264,74 @@ main.cheaper-main {
   color: var(--accent-strong);
 }
 
-/* ---------- Sort / brand tabs ---------- */
-.cheaper-tab-strip {
+/* ---------- Homepage Rabattcode chip row ---------- */
+.cheaper-section-heading-row {
   display: flex;
-  gap: 6px;
-  margin-bottom: 22px;
-  border-bottom: 1px solid var(--border);
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 12px;
 }
 
-.cheaper-tab {
-  padding: 10px 16px;
-  font-size: 13.5px;
+.cheaper-section-heading-row .cheaper-section-label {
+  margin: 0;
+}
+
+.cheaper-section-more-link {
+  font-size: 12.5px;
   font-weight: 700;
-  color: var(--text-dim);
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  white-space: nowrap;
-}
-
-.cheaper-tab:hover {
-  color: var(--text);
-}
-
-.cheaper-tab.active {
   color: var(--accent-strong);
-  border-bottom-color: var(--accent);
 }
 
+.cheaper-coupon-chip-row {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  margin-bottom: 30px;
+}
+
+.cheaper-coupon-chip {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  border-radius: 999px;
+  padding: 6px 14px 6px 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  box-shadow: var(--shadow-card);
+}
+
+.cheaper-coupon-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+.cheaper-coupon-chip img {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+  border-radius: 50%;
+  background: var(--bg-soft);
+  padding: 3px;
+}
+
+.cheaper-coupon-chip-fallback {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  font-size: 14px;
+}
+
+/* ---------- Brand tabs (search matches a Rabattcode brand) ---------- */
 .cheaper-brand-tab-strip {
   display: flex;
   flex-wrap: wrap;

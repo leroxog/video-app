@@ -13,7 +13,11 @@
             <option value="{{ cat }}" {% if cat == category %}selected{% endif %}>{{ category_labels[cat] }}</option>
         {% endfor %}
     </select>
-    <input type="hidden" name="sort" id="cheaperSortInput" value="{{ sort_mode }}">
+    <select class="cheaper-category-select" name="sort">
+        {% for mode in sort_modes %}
+            <option value="{{ mode }}" {% if mode == sort_mode %}selected{% endif %}>{{ sort_mode_labels[mode] }}</option>
+        {% endfor %}
+    </select>
     <input type="hidden" name="city" id="cheaperCityInput" value="{{ resolved_city }}">
 </form>
 
@@ -34,16 +38,28 @@
     </div>
 {% endif %}
 
-<div class="cheaper-tab-strip">
-    {% for mode in sort_modes %}
-        <a class="cheaper-tab {% if mode == sort_mode %}active{% endif %}"
-           href="{{ url_for('index', q=q, category=category, sort=mode, city=resolved_city) }}"
-           data-sort="{{ mode }}">
-            {% if mode == "nahe" %}📍{% elif mode == "beliebt" %}🔥{% else %}🗂️{% endif %}
-            {{ sort_mode_labels[mode] }}{% if mode == "nahe" and resolved_city %} &middot; {{ resolved_city }}{% endif %}
-        </a>
-    {% endfor %}
-</div>
+{% if discount_codes %}
+    <div class="cheaper-section-heading-row">
+        <p class="cheaper-section-label">Rabattcodes</p>
+        <a class="cheaper-section-more-link" href="{{ url_for('discount_codes_page') }}">Alle ansehen</a>
+    </div>
+    <div class="cheaper-coupon-chip-row">
+        {% for code in discount_codes %}
+            <a class="cheaper-coupon-chip" href="{{ url_for('discount_codes_page', q=code.brand_name) }}">
+                {% if code.image_url %}
+                    <img src="{{ code.image_url }}" alt="{{ code.brand_name }}" loading="lazy">
+                {% else %}
+                    <span class="cheaper-coupon-chip-fallback">🏷️</span>
+                {% endif %}
+                <span class="cheaper-coupon-chip-label">{{ code.brand_name }}</span>
+            </a>
+        {% endfor %}
+    </div>
+{% endif %}
+
+<p class="cheaper-section-label">
+    {{ sort_mode_labels[sort_mode] }}{% if sort_mode == "nahe" and resolved_city %} &middot; {{ resolved_city }}{% endif %}
+</p>
 
 {% if offer_cards %}
     <div class="cheaper-card-grid">
@@ -86,8 +102,8 @@
 <script>
     (function () {
         var form = document.getElementById("cheaperSearchForm");
-        var categorySelect = form.querySelector("select[name='category']");
-        categorySelect.addEventListener("change", function () { form.submit(); });
+        form.querySelector("select[name='category']").addEventListener("change", function () { form.submit(); });
+        form.querySelector("select[name='sort']").addEventListener("change", function () { form.submit(); });
 
         document.querySelectorAll(".cheaper-chip").forEach(function (chip) {
             chip.addEventListener("click", function () {

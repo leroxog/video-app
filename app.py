@@ -1145,8 +1145,14 @@ CHEAPER_SUGGESTION_CHIPS = [
     "Kino in der Nähe", "Schwimmbad", "Fast Food", "Freizeitpark", "Bowling", "Escape Room",
 ]
 
-SORT_MODES = ("nahe", "beliebt", "alle")
-SORT_MODE_LABELS = {"nahe": "In der Nähe", "beliebt": "Beliebteste", "alle": "Alle"}
+SORT_MODES = ("nahe", "beliebt", "ersparnis", "guenstig", "alle")
+SORT_MODE_LABELS = {
+    "nahe": "In der Nähe",
+    "beliebt": "Beliebteste",
+    "ersparnis": "Größte Ersparnis",
+    "guenstig": "Günstigste zuerst",
+    "alle": "Alle",
+}
 
 # Munich districts/suburbs that should count as "in der Nähe" of each other
 # and of plain "München" -- widens the nearby-radius beyond an exact
@@ -1251,7 +1257,9 @@ def index():
         offers = sorted(offers, key=lambda o: o.click_count, reverse=True)
     elif sort_mode == "nahe":
         offers = sort_offers_by_city(offers, resolved_city)
-    # sort_mode == "alle": keep the plain newest-first order as-is.
+    # "ersparnis"/"guenstig" depend on this viewer's own price (below), so
+    # they're applied after offer_cards is built; "alle" keeps the plain
+    # newest-first order as-is.
 
     user_age = compute_age(user.birthdate) if user and user.birthdate else None
     offer_cards = []
@@ -1265,12 +1273,18 @@ def index():
             "savings": (offer.normal_price_cents - price_cents) / 100 if is_discounted else 0,
         })
 
+    if sort_mode == "ersparnis":
+        offer_cards.sort(key=lambda c: c["savings"], reverse=True)
+    elif sort_mode == "guenstig":
+        offer_cards.sort(key=lambda c: c["price"])
+
     return render_template(
         "home.html", user=user, offer_cards=offer_cards, q=q, category=category,
         categories=OFFER_CATEGORIES, category_labels=OFFER_CATEGORY_LABELS,
         chips=CHEAPER_SUGGESTION_CHIPS, resolved_city=resolved_city,
         sort_mode=sort_mode, sort_modes=SORT_MODES, sort_mode_labels=SORT_MODE_LABELS,
         brand_codes=matching_discount_code_brands(q),
+        discount_codes=DiscountCode.query.filter_by(is_active=True).order_by(DiscountCode.brand_name).all(),
     )
 
 

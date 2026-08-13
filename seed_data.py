@@ -188,6 +188,34 @@ DISCOUNT_CODES = [
 ]
 
 
+# Real photos/logos for well-known providers, sourced from Wikimedia Commons
+# -- used as the offer card's start image instead of the generic ticket
+# emoji fallback. Applied via a backfill pass in seed_offers() (not baked
+# into the tuples above) so it also fixes up offers that were already
+# seeded before this existed, on every startup. Not every provider has a
+# widely available real image (small local businesses usually don't have a
+# Commons entry) -- those simply keep the emoji fallback rather than get a
+# fabricated logo.
+PROVIDER_IMAGES = {
+    "Deutsches Museum": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/14/Deutsches_Museum_Portrait_4.jpg/330px-Deutsches_Museum_Portrait_4.jpg",
+    "Tierpark Hellabrunn": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/fc/L%C3%B6wenstatue_Hellabrunn_M%C3%BCnchen.jpg/330px-L%C3%B6wenstatue_Hellabrunn_M%C3%BCnchen.jpg",
+    "Zoo Berlin": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/62/Lentr%C3%A9e_du_Zoo_de_Berlin_%286081063158%29.jpg/330px-Lentr%C3%A9e_du_Zoo_de_Berlin_%286081063158%29.jpg",
+    "Miniatur Wunderland": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/fc/Miniatur_wunderland.jpg/330px-Miniatur_wunderland.jpg",
+    "Kölner Zoo": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/K%C3%B6lner_Zoo_%28Flight_over_Cologne%29.jpg/330px-K%C3%B6lner_Zoo_%28Flight_over_Cologne%29.jpg",
+    "Zoo Frankfurt": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Zoo-Frankfurt-Gesellschaftshaus-a.jpg/330px-Zoo-Frankfurt-Gesellschaftshaus-a.jpg",
+    "Wilhelma": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/41/Wilhelma_Bauten-pjt1.jpg/330px-Wilhelma_Bauten-pjt1.jpg",
+    "Zoo Leipzig": "https://upload.wikimedia.org/wikipedia/de/thumb/2/2c/Zoo_Leipzig.svg/langde-330px-Zoo_Leipzig.svg.png",
+    "LEGOLAND Deutschland": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/07/Legoland_de_Entrance.jpg/330px-Legoland_de_Entrance.jpg",
+    "Phantasialand": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Phantasialand_Logo.svg/langde-330px-Phantasialand_Logo.svg.png",
+    "Hofbräuhaus München": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/60/Hofbrauhaus.JPG/330px-Hofbrauhaus.JPG",
+    "Schloss Nymphenburg": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/37/Exterior_del_Palacio_de_Nymphenburg%2C_M%C3%BAnich%2C_Alemania61.JPG/330px-Exterior_del_Palacio_de_Nymphenburg%2C_M%C3%BAnich%2C_Alemania61.JPG",
+    "Marstallmuseum & Porzellanmuseum Nymphenburg": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/37/Exterior_del_Palacio_de_Nymphenburg%2C_M%C3%BAnich%2C_Alemania61.JPG/330px-Exterior_del_Palacio_de_Nymphenburg%2C_M%C3%BAnich%2C_Alemania61.JPG",
+    "Pasinger Fabrik": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c6/M%C3%BCnchen%2C_Eingang_Pasinger_Fabrik%2C_2.jpeg/330px-M%C3%BCnchen%2C_Eingang_Pasinger_Fabrik%2C_2.jpeg",
+    "Mathäser Filmpalast": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/21/Math%C3%A4serfilmpalast.jpg/330px-Math%C3%A4serfilmpalast.jpg",
+    "Planetarium Hamburg": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/41/Hamburg_Planetarium.jpg/330px-Hamburg_Planetarium.jpg",
+}
+
+
 def _cents(euro):
     return round(euro * 100) if euro is not None else None
 
@@ -256,6 +284,14 @@ def seed_offers():
             image_url=image_url, link_url=link, source_url=link,
         ))
     db.session.commit()
+
+    dirty = False
+    for provider, image_url in PROVIDER_IMAGES.items():
+        for offer in Offer.query.filter_by(provider_name=provider, image_url=None).all():
+            offer.image_url = image_url
+            dirty = True
+    if dirty:
+        db.session.commit()
 
 
 if __name__ == "__main__":
