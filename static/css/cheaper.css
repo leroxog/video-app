@@ -1,0 +1,611 @@
+:root {
+  --bg: #ffffff;
+  --bg-soft: #f6f7f8;
+  --bg-card: #ffffff;
+  --border: #e7e8eb;
+  --text: #16181c;
+  --text-dim: #6b7280;
+  --text-faint: #9aa0a8;
+  --accent: #0a8754;
+  --accent-soft: #e6f6ee;
+  --accent-strong: #086b43;
+  --danger: #d1373f;
+  --primary-btn: #16181c;
+  --primary-btn-text: #ffffff;
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --shadow-card: 0 1px 2px rgba(20, 20, 20, 0.04), 0 8px 24px rgba(20, 20, 20, 0.06);
+  --shadow-sticky: 0 2px 10px rgba(20, 20, 20, 0.06);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+button, input, select, textarea {
+  font-family: inherit;
+}
+
+.cheaper-app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- App-download banner ---------- */
+.download-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: var(--text);
+  color: #fff;
+  padding: 9px 40px 9px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  position: relative;
+  text-align: center;
+}
+
+.download-banner a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.download-banner-close {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 8px;
+  opacity: 0.8;
+}
+
+.download-banner-close:hover {
+  opacity: 1;
+}
+
+/* ---------- Header ---------- */
+.cheaper-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.cheaper-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+  font-size: 20px;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.cheaper-brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 800;
+  font-size: 16px;
+}
+
+.cheaper-header-nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.cheaper-header-nav a, .cheaper-header-nav button {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 8px 16px;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.cheaper-header-nav a.primary, .cheaper-header-nav button.primary {
+  background: var(--primary-btn);
+  color: var(--primary-btn-text);
+  border-color: var(--primary-btn);
+}
+
+.cheaper-header-nav .cheaper-username {
+  color: var(--text-dim);
+  padding: 8px 4px;
+  border: none;
+}
+
+main.cheaper-main {
+  flex: 1;
+  max-width: 1080px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 24px 20px 60px;
+}
+
+/* ---------- Flash messages ---------- */
+.cheaper-flashes {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cheaper-flashes li {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+/* ---------- Search row ---------- */
+.cheaper-search-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 22px;
+}
+
+.cheaper-search-box {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 12px 18px;
+}
+
+.cheaper-search-box svg {
+  flex-shrink: 0;
+  color: var(--text-faint);
+}
+
+.cheaper-search-box input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 15px;
+  color: var(--text);
+}
+
+.cheaper-category-select {
+  border: 1px solid var(--border);
+  background: var(--bg-soft);
+  border-radius: 999px;
+  padding: 0 18px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  min-width: 160px;
+}
+
+/* ---------- "Für dich" chip row ---------- */
+.cheaper-section-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 12px;
+}
+
+.cheaper-chip-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  margin-bottom: 30px;
+}
+
+.cheaper-chip {
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  background: var(--bg-soft);
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.cheaper-chip:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+/* ---------- Offer cards ---------- */
+.cheaper-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 18px;
+}
+
+.cheaper-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.cheaper-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(20, 20, 20, 0.06), 0 16px 32px rgba(20, 20, 20, 0.09);
+}
+
+.cheaper-card-image {
+  width: 100%;
+  height: 140px;
+  object-fit: cover;
+  background: var(--bg-soft);
+}
+
+.cheaper-card-image-fallback {
+  width: 100%;
+  height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 34px;
+}
+
+.cheaper-card-body {
+  padding: 14px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.cheaper-card-category {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+}
+
+.cheaper-card-title {
+  font-size: 15.5px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+
+.cheaper-card-provider {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin: 0 0 4px;
+}
+
+.cheaper-card-price-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 8px;
+}
+
+.cheaper-card-price {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.cheaper-card-price.is-discounted {
+  color: var(--accent-strong);
+}
+
+.cheaper-card-price-old {
+  font-size: 13px;
+  color: var(--text-faint);
+  text-decoration: line-through;
+}
+
+.cheaper-card-savings {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  border-radius: 999px;
+  padding: 3px 9px;
+  display: inline-block;
+  margin-top: 6px;
+  width: fit-content;
+}
+
+.cheaper-card-city {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  margin-top: 2px;
+}
+
+.cheaper-empty-state {
+  text-align: center;
+  color: var(--text-dim);
+  padding: 60px 20px;
+  font-size: 14.5px;
+}
+
+/* ---------- Auth / form pages ---------- */
+.cheaper-auth-page {
+  max-width: 420px;
+  margin: 20px auto;
+}
+
+.cheaper-auth-page h1 {
+  font-size: 24px;
+  font-weight: 800;
+  margin: 0 0 22px;
+}
+
+.cheaper-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.cheaper-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+
+.cheaper-form input[type="text"],
+.cheaper-form input[type="password"],
+.cheaper-form input[type="email"],
+.cheaper-form input[type="date"],
+.cheaper-form input[type="number"],
+.cheaper-form select,
+.cheaper-form textarea {
+  border: 1px solid var(--border);
+  background: var(--bg-soft);
+  border-radius: var(--radius-sm);
+  padding: 11px 13px;
+  font-size: 14.5px;
+  color: var(--text);
+}
+
+.cheaper-form input:focus,
+.cheaper-form select:focus,
+.cheaper-form textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.cheaper-form-checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.cheaper-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--primary-btn);
+  color: var(--primary-btn-text);
+  border: none;
+  border-radius: 999px;
+  padding: 13px 20px;
+  font-size: 14.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cheaper-btn:hover {
+  filter: brightness(1.15);
+}
+
+.cheaper-btn.secondary {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.cheaper-btn.danger {
+  background: var(--danger);
+}
+
+.cheaper-form-hint {
+  font-size: 12.5px;
+  color: var(--text-faint);
+  font-weight: 400;
+}
+
+.cheaper-auth-footer {
+  margin-top: 18px;
+  font-size: 13.5px;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+.cheaper-auth-footer a {
+  color: var(--accent-strong);
+  font-weight: 700;
+}
+
+.kids-account-bubble {
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13.5px;
+  color: var(--accent-strong);
+}
+
+.kids-account-bubble button {
+  align-self: flex-start;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.age-error {
+  color: var(--danger);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* ---------- Company dashboard ---------- */
+.cheaper-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.cheaper-table th, .cheaper-table td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.cheaper-table th {
+  color: var(--text-dim);
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.cheaper-table-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.cheaper-table-actions button {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.cheaper-panel {
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.cheaper-panel h2 {
+  font-size: 16px;
+  margin: 0 0 16px;
+}
+
+.cheaper-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+/* ---------- Terms / long-text pages ---------- */
+.cheaper-doc-page {
+  max-width: 720px;
+  margin: 0 auto;
+  font-size: 14.5px;
+  line-height: 1.65;
+  color: var(--text);
+}
+
+.cheaper-doc-page h1 {
+  font-size: 24px;
+  margin-bottom: 6px;
+}
+
+.cheaper-doc-page h2 {
+  font-size: 17px;
+  margin-top: 28px;
+}
+
+.cheaper-doc-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 28px;
+}
+
+@media (max-width: 640px) {
+  .cheaper-search-row {
+    flex-direction: column;
+  }
+  .cheaper-category-select {
+    width: 100%;
+  }
+  .cheaper-header {
+    padding: 12px 14px;
+  }
+  main.cheaper-main {
+    padding: 18px 14px 40px;
+  }
+}

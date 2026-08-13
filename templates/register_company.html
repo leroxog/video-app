@@ -1,0 +1,31 @@
+{% extends "cheaper_base.html" %}
+{% block title %}Firmenkonto erstellen - Cheaper{% endblock %}
+{% block content %}
+<div class="cheaper-auth-page">
+    <h1>Firmenkonto erstellen</h1>
+    <p class="cheaper-form-hint" style="margin-bottom:16px;">Damit könnt ihr eure eigenen Angebote (Preise, Altersrabatte) selbst auf Cheaper eintragen.</p>
+    <form action="{{ url_for('register_company') }}" method="post" class="cheaper-form">
+        <label for="username">Benutzername
+            <input type="text" id="username" name="username" required maxlength="50" value="{{ form_values.username if form_values else '' }}">
+        </label>
+        <label for="password">Passwort
+            <input type="password" id="password" name="password" required>
+        </label>
+        <label for="password2">Passwort wiederholen
+            <input type="password" id="password2" name="password2" required>
+        </label>
+        <label for="company_name">Firmenname
+            <input type="text" id="company_name" name="company_name" required maxlength="200" value="{{ form_values.company_name if form_values else '' }}">
+        </label>
+        <label for="company_address">Genauer Firmensitz (Pflicht)
+            <input type="text" id="company_address" name="company_address" required maxlength="300" placeholder="Straße, Hausnummer, PLZ, Ort" value="{{ form_values.company_address if form_values else '' }}">
+        </label>
+        <label for="email">E-Mail (optional)
+            <input type="email" id="email" name="email" maxlength="255" value="{{ form_values.email if form_values else '' }}">
+        </label>
+        <button type="submit" class="cheaper-btn">Firmenkonto erstellen</button>
+    </form>
+    <p class="cheaper-auth-footer">Bereits registriert? <a href="{{ url_for('login') }}">Login</a></p>
+    <p class="cheaper-auth-footer"><a href="{{ url_for('register') }}">Ich bin ein Kunde &rarr;</a></p>
+</div>
+{% endblock %}

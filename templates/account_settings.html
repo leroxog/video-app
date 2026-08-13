@@ -1,120 +1,70 @@
-{% extends "base.html" %}
-{% block title %}Einstellungen - 3D π{% endblock %}
+{% extends "cheaper_base.html" %}
+{% block title %}Einstellungen - Cheaper{% endblock %}
 {% block content %}
+<div class="cheaper-auth-page">
     <h1>Einstellungen</h1>
 
-    <h2>Design</h2>
-    <div class="theme-toggle-row">
-        <button type="button" id="themeLightBtn" class="theme-toggle-btn">&#9728; Hell</button>
-        <button type="button" id="themeDarkBtn" class="theme-toggle-btn">&#9790; Dunkel</button>
-    </div>
-
-    <h2>Account</h2>
-
-    <form action="{{ url_for('logout') }}" method="post" class="settings-logout-form">
-        <button type="submit" class="danger">Ausloggen</button>
+    <p class="cheaper-section-label">Account</p>
+    <form action="{{ url_for('logout') }}" method="post" style="margin-bottom:20px;">
+        <button type="submit" class="cheaper-btn danger">Ausloggen</button>
     </form>
 
     {% if user.is_admin %}
-        <p><a href="{{ url_for('admin_dashboard') }}">&#9881; Admin-Bereich</a></p>
+        <p class="cheaper-auth-footer" style="text-align:left;margin-bottom:20px;"><a href="{{ url_for('admin_dashboard') }}">⚙ Admin-Bereich</a></p>
     {% endif %}
 
-    <h2>E-Mail</h2>
+    {% if user.is_company %}
+        <p class="cheaper-auth-footer" style="text-align:left;margin-bottom:20px;"><a href="{{ url_for('company_dashboard') }}">→ Meine Angebote verwalten</a></p>
+    {% endif %}
+
+    <p class="cheaper-section-label">E-Mail</p>
     {% if user.email %}
-        <p>Hinterlegte E-Mail: {{ user.email }} <span class="video-meta">(wird nicht öffentlich angezeigt)</span></p>
-        <form action="{{ url_for('update_email') }}" method="post" class="form settings-form">
-            <label for="email">E-Mail ändern</label>
-            <input type="email" id="email" name="email" value="{{ user.email }}" required>
-            <button type="submit">Speichern</button>
+        <p class="cheaper-form-hint" style="margin-bottom:10px;">Hinterlegt: {{ user.email }} (wird nicht öffentlich angezeigt)</p>
+        <form action="{{ url_for('update_email') }}" method="post" class="cheaper-form" style="margin-bottom:24px;">
+            <label for="email">E-Mail ändern
+                <input type="email" id="email" name="email" value="{{ user.email }}" required>
+            </label>
+            <button type="submit" class="cheaper-btn secondary">Speichern</button>
         </form>
     {% else %}
-        <p>Um deinen Benutzernamen oder dein Passwort zu ändern, musst du zuerst eine E-Mail-Adresse hinzufügen. Sie wird nicht öffentlich angezeigt.</p>
-        <form action="{{ url_for('update_email') }}" method="post" class="form settings-form">
-            <label for="email">E-Mail-Adresse hinzufügen</label>
-            <input type="email" id="email" name="email" required>
-            <button type="submit">Speichern</button>
+        <p class="cheaper-form-hint" style="margin-bottom:10px;">Um deinen Benutzernamen oder dein Passwort zu ändern, musst du zuerst eine E-Mail-Adresse hinzufügen. Sie wird nicht öffentlich angezeigt.</p>
+        <form action="{{ url_for('update_email') }}" method="post" class="cheaper-form" style="margin-bottom:24px;">
+            <label for="email">E-Mail-Adresse hinzufügen
+                <input type="email" id="email" name="email" required>
+            </label>
+            <button type="submit" class="cheaper-btn secondary">Speichern</button>
         </form>
     {% endif %}
 
-    <h2>Benutzername ändern</h2>
-    {% if user.email %}
-        <form action="{{ url_for('update_username') }}" method="post" class="form settings-form">
-            <label for="username">Neuer Benutzername</label>
-            <input type="text" id="username" name="username" value="{{ user.username }}" required maxlength="50">
-            <button type="submit">Ändern</button>
-        </form>
-    {% else %}
-        <p class="video-meta">Erst verfügbar, sobald eine E-Mail-Adresse hinterlegt ist.</p>
-    {% endif %}
-
-    <h2>Passwort ändern</h2>
-    {% if user.email %}
-        <form action="{{ url_for('update_password') }}" method="post" class="form settings-form">
-            <label for="current_password">Aktuelles Passwort</label>
-            <input type="password" id="current_password" name="current_password" required>
-
-            <label for="new_password">Neues Passwort</label>
-            <input type="password" id="new_password" name="new_password" required>
-
-            <button type="submit">Ändern</button>
-        </form>
-    {% else %}
-        <p class="video-meta">Erst verfügbar, sobald eine E-Mail-Adresse hinterlegt ist.</p>
-    {% endif %}
-
-    <h2>NexAI AI</h2>
-    <p class="video-meta">
-        Die KI führt für dich ein privates Profil mit allem, was sie über dich in Gesprächen erfährt --
-        nur sie selbst hat Zugriff darauf, siehe die
-        <a href="{{ url_for('terms_page') }}">Nutzungsbedingungen</a>.
-    </p>
-    <form action="{{ url_for('delete_ai_profile') }}" method="post" class="settings-logout-form">
-        <button type="submit" class="danger">Mein KI-Profil löschen</button>
+    <p class="cheaper-section-label">Stadt</p>
+    <form action="{{ url_for('update_city') }}" method="post" class="cheaper-form" style="margin-bottom:24px;">
+        <label for="city">Deine Stadt (für Angebote in der Nähe)
+            <input type="text" id="city" name="city" value="{{ user.city or '' }}" maxlength="100">
+        </label>
+        <button type="submit" class="cheaper-btn secondary">Speichern</button>
     </form>
 
-    <p class="video-meta">
-        Löscht nur deinen Gesprächsverlauf -- dein privates KI-Profil (oben) bleibt davon unberührt
-        und läuft unabhängig weiter.
-    </p>
-    <form action="{{ url_for('delete_all_ai_chats') }}" method="post" class="settings-logout-form" id="deleteAllChatsForm">
-        <button type="submit" class="danger">Alle Chats löschen</button>
-    </form>
+    {% if user.email %}
+        <p class="cheaper-section-label">Benutzername ändern</p>
+        <form action="{{ url_for('update_username') }}" method="post" class="cheaper-form" style="margin-bottom:24px;">
+            <label for="username">Neuer Benutzername
+                <input type="text" id="username" name="username" value="{{ user.username }}" required maxlength="50">
+            </label>
+            <button type="submit" class="cheaper-btn secondary">Ändern</button>
+        </form>
 
-    <p><a href="{{ url_for('profile', username=user.username) }}">&larr; Zurück zum Profil</a></p>
+        <p class="cheaper-section-label">Passwort ändern</p>
+        <form action="{{ url_for('update_password') }}" method="post" class="cheaper-form" style="margin-bottom:24px;">
+            <label for="current_password">Aktuelles Passwort
+                <input type="password" id="current_password" name="current_password" required>
+            </label>
+            <label for="new_password">Neues Passwort
+                <input type="password" id="new_password" name="new_password" required>
+            </label>
+            <button type="submit" class="cheaper-btn secondary">Ändern</button>
+        </form>
+    {% endif %}
 
-    <script>
-        const themeLightBtn = document.getElementById("themeLightBtn");
-        const themeDarkBtn = document.getElementById("themeDarkBtn");
-
-        function updateThemeButtons() {
-            const isDark = document.documentElement.getAttribute("data-theme") === "dark";
-            themeLightBtn.classList.toggle("active", !isDark);
-            themeDarkBtn.classList.toggle("active", isDark);
-        }
-
-        function setTheme(theme) {
-            if (theme === "dark") {
-                document.documentElement.setAttribute("data-theme", "dark");
-            } else {
-                document.documentElement.removeAttribute("data-theme");
-            }
-            try { localStorage.setItem("NexAI_theme", theme); } catch (e) {}
-            updateThemeButtons();
-        }
-
-        themeLightBtn.addEventListener("click", () => setTheme("light"));
-        themeDarkBtn.addEventListener("click", () => setTheme("dark"));
-        updateThemeButtons();
-
-        const deleteAllChatsForm = document.getElementById("deleteAllChatsForm");
-        if (deleteAllChatsForm) {
-            deleteAllChatsForm.addEventListener("submit", async (event) => {
-                event.preventDefault();
-                const confirmFn = window.__nexaiShowConfirmDialog || ((msg) => Promise.resolve(window.confirm(msg)));
-                if (await confirmFn("Wirklich ALLE deine Chats löschen? Das kann nicht rückgängig gemacht werden.")) {
-                    deleteAllChatsForm.submit();
-                }
-            });
-        }
-    </script>
+    <p class="cheaper-auth-footer"><a href="{{ url_for('index') }}">&larr; Zurück zu Cheaper</a></p>
+</div>
 {% endblock %}

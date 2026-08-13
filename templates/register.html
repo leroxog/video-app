@@ -1,19 +1,25 @@
-{% extends "base.html" %}
-{% block title %}Registrieren - 3D π{% endblock %}
+{% extends "cheaper_base.html" %}
+{% block title %}Registrieren - Cheaper{% endblock %}
 {% block content %}
-    <h1>Registrieren</h1>
-    <form action="{{ url_for('register') }}" method="post" class="form" id="registerForm">
-        <label for="username">Benutzername</label>
-        <input type="text" id="username" name="username" required maxlength="50" value="{{ form_values.username if form_values else '' }}">
+<div class="cheaper-auth-page">
+    <h1>Konto erstellen</h1>
+    <form action="{{ url_for('register') }}" method="post" class="cheaper-form" id="registerForm">
+        <label for="username">Benutzername
+            <input type="text" id="username" name="username" required maxlength="50" value="{{ form_values.username if form_values else '' }}">
+        </label>
 
-        <label for="password">Passwort</label>
-        <input type="password" id="password" name="password" required>
+        <label for="password">Passwort
+            <input type="password" id="password" name="password" required>
+        </label>
 
-        <label for="password2">Passwort wiederholen</label>
-        <input type="password" id="password2" name="password2" required>
+        <label for="password2">Passwort wiederholen
+            <input type="password" id="password2" name="password2" required>
+        </label>
 
-        <label for="birthdate">Geburtsdatum</label>
-        <input type="date" id="birthdate" name="birthdate" required value="{{ form_values.birthdate if form_values else '' }}">
+        <label for="birthdate">Geburtsdatum
+            <input type="date" id="birthdate" name="birthdate" required value="{{ form_values.birthdate if form_values else '' }}">
+        </label>
+        <p class="cheaper-form-hint">Damit wir dir Alters-Rabatte automatisch anzeigen können.</p>
 
         <div class="kids-account-bubble" id="kidsAccountBubble" style="display:none;">
             <p>Mit dem angegebenen Alter benutzt du einen <strong>KIDS ACCOUNT</strong>!</p>
@@ -21,46 +27,57 @@
         </div>
         <p class="age-error" id="ageErrorNote" style="display:none;"></p>
 
-        <label for="gender">Geschlecht</label>
-        <select id="gender" name="gender" required>
-            <option value="" disabled {{ '' if form_values else 'selected' }}>Bitte auswählen</option>
-            {% for value, label in GENDER_CHOICES.items() %}
-                <option value="{{ value }}" {{ 'selected' if form_values and form_values.gender == value else '' }}>{{ label }}</option>
-            {% endfor %}
-        </select>
+        <label for="gender">Geschlecht
+            <select id="gender" name="gender" required>
+                <option value="" disabled {{ '' if form_values else 'selected' }}>Bitte auswählen</option>
+                {% for value, label in GENDER_CHOICES.items() %}
+                    <option value="{{ value }}" {{ 'selected' if form_values and form_values.gender == value else '' }}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </label>
 
-        <label for="purpose_of_use">Wofür nutzt du den Account?</label>
-        <select id="purpose_of_use" name="purpose_of_use" required>
-            <option value="" disabled {{ '' if form_values else 'selected' }}>Bitte auswählen</option>
-            {% for value, label in PURPOSE_CHOICES.items() %}
-                <option value="{{ value }}" {{ 'selected' if form_values and form_values.purpose_of_use == value else '' }}>{{ label }}</option>
-            {% endfor %}
-        </select>
+        <label for="purpose_of_use">Wofür nutzt du den Account?
+            <select id="purpose_of_use" name="purpose_of_use" required>
+                <option value="" disabled {{ '' if form_values else 'selected' }}>Bitte auswählen</option>
+                {% for value, label in PURPOSE_CHOICES.items() %}
+                    <option value="{{ value }}" {{ 'selected' if form_values and form_values.purpose_of_use == value else '' }}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </label>
 
-        <label for="country">Land</label>
-        <input type="text" id="country" name="country" maxlength="100" value="{{ form_values.country if form_values else '' }}">
+        <label for="city">Stadt
+            <input type="text" id="city" name="city" maxlength="100" placeholder="z.B. München-Pasing" value="{{ form_values.city if form_values else '' }}">
+        </label>
+        <p class="cheaper-form-hint">Damit wir dir Angebote in deiner Nähe zuerst zeigen.</p>
 
-        <label for="region">Bundesland</label>
-        <select id="region" name="region">
-            <option value="" {{ '' if form_values and form_values.region else 'selected' }}>Bitte auswählen</option>
-            {% for state in REGION_CHOICES %}
-                <option value="{{ state }}" {{ 'selected' if form_values and form_values.region == state else '' }}>{{ state }}</option>
-            {% endfor %}
-        </select>
+        <label for="country">Land
+            <input type="text" id="country" name="country" maxlength="100" value="{{ form_values.country if form_values else '' }}">
+        </label>
 
-        <label for="guardian_email" id="guardianEmailLabel">E-Mail eines Erziehungsberechtigten</label>
-        <input type="email" id="guardian_email" name="guardian_email" maxlength="255" value="{{ form_values.guardian_email if form_values else '' }}">
-        <p class="field-hint">Empfohlen, aber nicht verpflichtend.</p>
+        <label for="region">Bundesland
+            <select id="region" name="region">
+                <option value="" {{ '' if form_values and form_values.region else 'selected' }}>Bitte auswählen</option>
+                {% for state in REGION_CHOICES %}
+                    <option value="{{ state }}" {{ 'selected' if form_values and form_values.region == state else '' }}>{{ state }}</option>
+                {% endfor %}
+            </select>
+        </label>
 
-        <label class="checkbox-label" id="skipLastTwoWrap">
+        <label for="guardian_email" id="guardianEmailLabel">E-Mail eines Erziehungsberechtigten
+            <input type="email" id="guardian_email" name="guardian_email" maxlength="255" value="{{ form_values.guardian_email if form_values else '' }}">
+        </label>
+        <p class="cheaper-form-hint">Empfohlen, aber nicht verpflichtend.</p>
+
+        <label class="cheaper-form-checkbox" id="skipLastTwoWrap">
             <input type="checkbox" id="regionSkipped" name="region_skipped" value="1" {{ 'checked' if form_values and form_values.region_skipped == '1' else '' }}>
             <span>Diese letzten beiden Fragen (Land, Bundesland) möchte ich nicht beantworten</span>
         </label>
 
-        <button type="submit">Konto erstellen</button>
-        <p class="privacy-note">Alle Angaben werden gespeichert.</p>
+        <button type="submit" class="cheaper-btn">Konto erstellen</button>
+        <p class="cheaper-form-hint">Alle Angaben werden gespeichert.</p>
     </form>
-    <p>Bereits registriert? <a href="{{ url_for('login') }}">Login</a></p>
+    <p class="cheaper-auth-footer">Bereits registriert? <a href="{{ url_for('login') }}">Login</a></p>
+    <p class="cheaper-auth-footer"><a href="{{ url_for('register_company') }}">Ich bin ein Unternehmen &rarr;</a></p>
 
     <script>
         (function () {
@@ -75,10 +92,6 @@
             const form = document.getElementById("registerForm");
             let acknowledged = false;
 
-            // The e-mail field (guardian's for a minor, the user's own for
-            // an adult) is always optional-but-recommended -- never
-            // mandatory. The skip checkbox always covers country + region
-            // together, for every age.
             function updateSkipUI() {
                 countryInput.disabled = skipLastTwo.checked;
                 if (skipLastTwo.checked) countryInput.value = "";
@@ -103,7 +116,7 @@
                 ageError.style.display = "none";
                 if (a === null) {
                     bubble.style.display = "none";
-                    guardianLabel.textContent = "E-Mail eines Erziehungsberechtigten (optional)";
+                    guardianLabel.childNodes[0].textContent = "E-Mail eines Erziehungsberechtigten (optional) ";
                     return;
                 }
                 if (a < 10) {
@@ -112,10 +125,10 @@
                     ageError.style.display = "block";
                 } else if (a < 18) {
                     bubble.style.display = acknowledged ? "none" : "flex";
-                    guardianLabel.textContent = "E-Mail eines Erziehungsberechtigten (optional)";
+                    guardianLabel.childNodes[0].textContent = "E-Mail eines Erziehungsberechtigten (optional) ";
                 } else {
                     bubble.style.display = "none";
-                    guardianLabel.textContent = "E-Mail (optional)";
+                    guardianLabel.childNodes[0].textContent = "E-Mail (optional) ";
                 }
                 updateSkipUI();
             }
@@ -146,4 +159,5 @@
             refresh();
         })();
     </script>
+</div>
 {% endblock %}

@@ -34,6 +34,7 @@ from models import (
     AccountRecoveryRequest, ErrorLog,
     AiVoiceProfile, AiPersonality, AiGeneratedMedia,
     AiTrainingExample, AiTrainingRun,
+    Offer, OFFER_CATEGORIES, OFFER_CATEGORY_LABELS,
 )
 import ai_assistant
 import local_ai
@@ -74,7 +75,13 @@ def is_kids_account(birthdate):
 
 def user_needs_onboarding(user):
     """Existing accounts created before the purpose/country/region/guardian
-    questions existed must answer them once before using the site again."""
+    questions existed must answer them once before using the site again.
+    Company accounts never go through this -- register_company collects
+    everything they actually need (name, address), and these
+    customer-only questions (birthdate, gender, purpose) don't apply to
+    a business."""
+    if user.is_company:
+        return False
     return user.purpose_of_use is None
 APP_SHARE_POINTS = 9999999
 APP_SHARE_COOLDOWN_HOURS = 24
@@ -614,6 +621,10 @@ def ensure_sqlite_columns_exist():
             ("terms_accepted_version", "INTEGER"),
             ("ai_tokens", "INTEGER"),
             ("ai_tokens_last_award_date", "DATE"),
+            ("city", "VARCHAR(100)"),
+            ("is_company", "BOOLEAN NOT NULL DEFAULT 0"),
+            ("company_name", "VARCHAR(200)"),
+            ("company_address", "VARCHAR(300)"),
         ],
         # ai_personality itself is created fresh by db.create_all() on any
         # brand-new database, but on one that already had the table from
@@ -694,6 +705,10 @@ def ensure_columns_exist():
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS terms_accepted_version INTEGER',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS ai_tokens INTEGER',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS ai_tokens_last_award_date DATE',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS city VARCHAR(100)',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS is_company BOOLEAN NOT NULL DEFAULT FALSE',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS company_name VARCHAR(200)',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS company_address VARCHAR(300)',
         'ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS age_rating INTEGER NOT NULL DEFAULT 0',
         'ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS previous_web_code TEXT',
         # Root cause confirmed live (psycopg2.errors.UndefinedColumn):
@@ -795,6 +810,20 @@ def current_user():
     if user_id is None:
         return None
     return db.session.get(User, user_id)
+
+
+@app.context_processor
+def inject_cheaper_globals():
+    """A safety net for cheaper_base.html's templates, most of which also
+    get `user` passed explicitly per-route like the rest of the app --
+    this just means a template never hard-crashes with an undefined `user`
+    if a route forgets to. is_app_context flags a request coming from the
+    Electron desktop wrapper (see cheaper-desktop/), which sends this
+    header so the page can skip the "download the app" banner."""
+    return {
+        "user": current_user(),
+        "is_app_context": request.headers.get("X-Cheaper-App") == "1",
+    }
 
 
 def require_admin():
@@ -971,7 +1000,7 @@ TERMS_ALLOWED_ENDPOINTS = {
 # matches. Anonymous visitors go through the session-based path below
 # regardless of this number (a fresh browser session always sees the
 # current terms once anyway).
-TERMS_VERSION = 3
+TERMS_VERSION = 4
 
 
 @app.before_request
@@ -997,7 +1026,7 @@ def require_terms_acceptance():
 
 
 LOGIN_GATE_ALLOWED_ENDPOINTS = {
-    "login", "register", "agb_page",
+    "login", "register", "register_company", "agb_page",
     "logout", "static", "service_worker", "offline_page",
     "forgot_password", "forgot_password_email", "forgot_password_verify",
     "forgot_password_help",
@@ -1092,15 +1121,75 @@ def offline_page():
     return render_template("offline.html")
 
 
+CHEAPER_SUGGESTION_CHIPS = [
+    "Kino in der Nähe", "Schwimmbad", "Fast Food", "Freizeitpark", "Bowling", "Escape Room",
+]
+
+
+def offers_query(category=None, q=None):
+    query = Offer.query.filter_by(is_active=True)
+    if category:
+        query = query.filter_by(category=category)
+    if q:
+        like = f"%{q}%"
+        query = query.filter(db.or_(Offer.provider_name.ilike(like), Offer.title.ilike(like)))
+    return query
+
+
+def sort_offers_by_city(offers, city):
+    """Offers in the visitor's own city (from their profile, or from live
+    browser geolocation reverse-geocoded client-side, see the JS in
+    home.html) are shown first -- everything else keeps its normal order
+    after that. No distance math: without a paid geocoding API this is a
+    plain, honest city-name match, not real proximity sorting."""
+    city_lower = (city or "").strip().lower()
+    if not city_lower:
+        return offers
+
+    def matches(offer):
+        offer_city = (offer.city or "").strip().lower()
+        return bool(offer_city) and (offer_city in city_lower or city_lower in offer_city)
+
+    matching = [o for o in offers if matches(o)]
+    matching_ids = {o.id for o in matching}
+    rest = [o for o in offers if o.id not in matching_ids]
+    return matching + rest
+
+
 @app.route("/")
 def index():
-    """The 3D π desktop app (and its download page) was removed -- this
-    just sends a logged-in visitor on to the most substantial feature
-    still standing. Games and the AI chat are deliberately not linked
-    from here or anywhere else; see require_login_everywhere's
-    docstring and this app's own module-level notes for why the AI's
-    code/data is kept rather than deleted."""
-    return redirect(url_for("messages_page"))
+    """Cheaper's homepage: search + category filter + offer cards, sorted
+    to favor the visitor's own city (profile city, or a live browser
+    geolocation lookup, see resolved_city below) when known. Prices shown
+    already reflect this visitor's own age-based discount, see
+    Offer.price_for()."""
+    user = current_user()
+    q = (request.args.get("q") or "").strip()
+    category = (request.args.get("category") or "").strip()
+    if category not in OFFER_CATEGORIES:
+        category = ""
+    resolved_city = (request.args.get("city") or "").strip() or (user.city if user else "")
+
+    offers = offers_query(category or None, q or None).order_by(Offer.created_at.desc()).all()
+    offers = sort_offers_by_city(offers, resolved_city)
+
+    user_age = compute_age(user.birthdate) if user and user.birthdate else None
+    offer_cards = []
+    for offer in offers:
+        price_cents, is_discounted = offer.price_for(user_age)
+        offer_cards.append({
+            "offer": offer,
+            "price": price_cents / 100,
+            "normal_price": offer.normal_price_cents / 100,
+            "is_discounted": is_discounted,
+            "savings": (offer.normal_price_cents - price_cents) / 100 if is_discounted else 0,
+        })
+
+    return render_template(
+        "home.html", user=user, offer_cards=offer_cards, q=q, category=category,
+        categories=OFFER_CATEGORIES, category_labels=OFFER_CATEGORY_LABELS,
+        chips=CHEAPER_SUGGESTION_CHIPS, resolved_city=resolved_city,
+    )
 
 
 def parse_onboarding_fields(form):
@@ -1180,6 +1269,7 @@ def register():
             return rerender("Dieser Benutzername ist bereits vergeben.")
 
         user = User(username=username, birthdate=birthdate, gender=gender)
+        user.city = (request.form.get("city") or "").strip()
         user.set_password(password)
         apply_onboarding_fields(user, onboarding)
         # Reaching this form at all already required accepting the terms
@@ -1196,15 +1286,153 @@ def register():
         # account settings) -- so that's who gets the welcome notice here.
         if user.guardian_email:
             send_email_best_effort(
-                user.guardian_email, "Willkommen bei NexAI",
+                user.guardian_email, "Willkommen bei Cheaper",
                 f"Hallo,\n\n"
-                f"für {user.username} wurde gerade ein NexAI-Konto erstellt. Diese E-Mail-Adresse "
+                f"für {user.username} wurde gerade ein Cheaper-Konto erstellt. Diese E-Mail-Adresse "
                 "wurde bei der Registrierung als Kontakt eines Erziehungsberechtigten angegeben.\n\n"
-                "Das NexAI-Team",
+                "Das Cheaper-Team",
             )
         session["user_id"] = user.id
         return redirect(url_for("index"))
     return render_template("register.html")
+
+
+@app.route("/register-firma", methods=["GET", "POST"])
+def register_company():
+    """A business account: no birthdate/gender/onboarding (those only make
+    sense for a customer whose age drives discounts) -- just credentials
+    plus the two fields the offers table actually needs, company_address
+    mandatory per the product's own requirement that every listed offer be
+    traceable to a real, named business."""
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        password2 = request.form.get("password2", "")
+        company_name = request.form.get("company_name", "").strip()
+        company_address = request.form.get("company_address", "").strip()
+        email = request.form.get("email", "").strip()
+
+        def rerender(error):
+            flash(error)
+            return render_template("register_company.html", form_values=request.form)
+
+        if not username or not password or not password2 or not company_name or not company_address:
+            return rerender("Bitte alle Pflichtfelder ausfüllen (Firmensitz ist Pflicht).")
+        if password != password2:
+            return rerender("Die Passwörter stimmen nicht überein.")
+        if User.query.filter_by(username=username).first():
+            return rerender("Dieser Benutzername ist bereits vergeben.")
+        if email and User.query.filter_by(email=email).first():
+            return rerender("Diese E-Mail-Adresse wird bereits verwendet.")
+
+        user = User(
+            username=username, is_company=True, company_name=company_name,
+            company_address=company_address, email=email or None,
+        )
+        user.set_password(password)
+        user.terms_accepted_at = datetime.now(timezone.utc)
+        user.terms_accepted_version = TERMS_VERSION
+        db.session.add(user)
+        db.session.commit()
+        session["user_id"] = user.id
+        return redirect(url_for("company_dashboard"))
+    return render_template("register_company.html")
+
+
+def require_company():
+    user = current_user()
+    if user is None or not user.is_company:
+        abort(403)
+    return user
+
+
+@app.route("/firma/angebote")
+def company_dashboard():
+    user = require_company()
+    offers = Offer.query.filter_by(company_id=user.id).order_by(Offer.created_at.desc()).all()
+    return render_template(
+        "company_dashboard.html", user=user, offers=offers,
+        categories=OFFER_CATEGORIES, category_labels=OFFER_CATEGORY_LABELS,
+    )
+
+
+def _apply_offer_form(offer, form):
+    offer.provider_name = (form.get("provider_name") or "").strip()
+    offer.title = (form.get("title") or "").strip()
+    offer.category = form.get("category") if form.get("category") in OFFER_CATEGORIES else "sonstiges"
+    offer.description = (form.get("description") or "").strip() or None
+    offer.image_url = (form.get("image_url") or "").strip() or None
+    offer.link_url = (form.get("link_url") or "").strip()
+    offer.city = (form.get("city") or "").strip() or None
+    offer.discount_label = (form.get("discount_label") or "").strip() or None
+
+    def to_cents(value):
+        try:
+            return round(float(str(value).replace(",", ".")) * 100)
+        except (TypeError, ValueError):
+            return None
+
+    offer.normal_price_cents = to_cents(form.get("normal_price")) or 0
+    discount_price = to_cents(form.get("discount_price"))
+    offer.discount_price_cents = discount_price
+    max_age_raw = (form.get("discount_max_age") or "").strip()
+    offer.discount_max_age = int(max_age_raw) if max_age_raw.isdigit() else None
+
+
+@app.route("/firma/angebote/neu", methods=["GET", "POST"])
+def company_offer_new():
+    user = require_company()
+    if request.method == "POST":
+        offer = Offer(company_id=user.id)
+        _apply_offer_form(offer, request.form)
+        if not offer.provider_name or not offer.title or not offer.link_url or not offer.normal_price_cents:
+            flash("Bitte Anbieter, Titel, Link und Normalpreis ausfüllen.")
+            return render_template("company_offer_form.html", user=user, offer=None, form_values=request.form, categories=OFFER_CATEGORIES, category_labels=OFFER_CATEGORY_LABELS)
+        db.session.add(offer)
+        db.session.commit()
+        flash("Angebot erstellt.")
+        return redirect(url_for("company_dashboard"))
+    return render_template("company_offer_form.html", user=user, offer=None, form_values=None, categories=OFFER_CATEGORIES, category_labels=OFFER_CATEGORY_LABELS)
+
+
+@app.route("/firma/angebote/<int:offer_id>/bearbeiten", methods=["GET", "POST"])
+def company_offer_edit(offer_id):
+    user = require_company()
+    offer = Offer.query.get_or_404(offer_id)
+    if offer.company_id != user.id:
+        abort(403)
+    if request.method == "POST":
+        _apply_offer_form(offer, request.form)
+        if not offer.provider_name or not offer.title or not offer.link_url or not offer.normal_price_cents:
+            flash("Bitte Anbieter, Titel, Link und Normalpreis ausfüllen.")
+            return render_template("company_offer_form.html", user=user, offer=offer, form_values=request.form, categories=OFFER_CATEGORIES, category_labels=OFFER_CATEGORY_LABELS)
+        db.session.commit()
+        flash("Angebot aktualisiert.")
+        return redirect(url_for("company_dashboard"))
+    return render_template("company_offer_form.html", user=user, offer=offer, form_values=None, categories=OFFER_CATEGORIES, category_labels=OFFER_CATEGORY_LABELS)
+
+
+@app.route("/firma/angebote/<int:offer_id>/loeschen", methods=["POST"])
+def company_offer_delete(offer_id):
+    user = require_company()
+    offer = Offer.query.get_or_404(offer_id)
+    if offer.company_id != user.id:
+        abort(403)
+    db.session.delete(offer)
+    db.session.commit()
+    flash("Angebot gelöscht.")
+    return redirect(url_for("company_dashboard"))
+
+
+@app.route("/firma/angebote/<int:offer_id>/toggle", methods=["POST"])
+def company_offer_toggle(offer_id):
+    user = require_company()
+    offer = Offer.query.get_or_404(offer_id)
+    if offer.company_id != user.id:
+        abort(403)
+    offer.is_active = not offer.is_active
+    db.session.commit()
+    return redirect(url_for("company_dashboard"))
 
 
 @app.route("/complete-profile", methods=["GET", "POST"])
@@ -1951,256 +2179,6 @@ def conversation_display_name(conversation, viewer):
     return other.username if other else "Unbekannt"
 
 
-@app.route("/messages")
-def messages_page():
-    user = current_user()
-    if user is None:
-        return redirect(url_for("login"))
-
-    memberships = ConversationMember.query.filter_by(user_id=user.id).all()
-    conversations = []
-    for membership in memberships:
-        conv = membership.conversation
-        last_message = conv.messages[-1] if conv.messages else None
-        conversations.append({
-            "id": conv.id,
-            "name": conversation_display_name(conv, user),
-            "is_group": conv.is_group,
-            "last_message": last_message.text if last_message and last_message.text else "",
-        })
-    conversations.sort(key=lambda c: c["id"], reverse=True)
-
-    contacts = [
-        db.session.get(User, uid) for uid in mutual_follow_ids(user)
-    ]
-    return render_template("messages.html", user=user, conversations=conversations, contacts=contacts)
-
-
-@app.route("/messages/<int:conversation_id>")
-def conversation_page(conversation_id):
-    user = current_user()
-    if user is None:
-        return redirect(url_for("login"))
-    conversation = db.get_or_404(Conversation, conversation_id)
-    if not is_conversation_member(user, conversation):
-        abort(403)
-    return render_template(
-        "conversation.html",
-        user=user,
-        conversation=conversation,
-        conversation_name=conversation_display_name(conversation, user),
-    )
-
-
-@app.route("/api/conversations")
-def api_conversations():
-    user = current_user()
-    if user is None:
-        return jsonify({"ok": False, "error": "not_logged_in"}), 401
-    memberships = ConversationMember.query.filter_by(user_id=user.id).all()
-    conversations = [
-        {"id": m.conversation.id, "name": conversation_display_name(m.conversation, user), "is_group": m.conversation.is_group}
-        for m in memberships
-    ]
-    return jsonify({"ok": True, "conversations": conversations})
-
-
-@app.route("/api/contacts")
-def api_contacts():
-    user = current_user()
-    if user is None:
-        return jsonify({"ok": False, "error": "not_logged_in"}), 401
-    contacts = [db.session.get(User, uid) for uid in mutual_follow_ids(user)]
-    return jsonify({
-        "ok": True,
-        "contacts": [
-            {"username": c.username, "profile_image": media_url("profile_pics", c.profile_image)}
-            for c in contacts if c is not None
-        ],
-    })
-
-
-@app.route("/api/messages/start-dm", methods=["POST"])
-def api_start_dm():
-    user = current_user()
-    if user is None:
-        return jsonify({"ok": False, "error": "not_logged_in"}), 401
-
-    data = request.get_json(silent=True) or {}
-    username = (data.get("username") or "").strip()
-    target = User.query.filter_by(username=username).first()
-    if target is None or target.id == user.id:
-        return jsonify({"ok": False, "error": "invalid_user"}), 400
-    if target.id not in mutual_follow_ids(user):
-        return jsonify({"ok": False, "error": "not_mutual_follow"}), 400
-
-    my_conv_ids = {
-        m.conversation_id for m in ConversationMember.query.filter_by(user_id=user.id).all()
-    }
-    for conv_id in my_conv_ids:
-        conv = db.session.get(Conversation, conv_id)
-        if conv.is_group:
-            continue
-        member_ids = {m.user_id for m in conv.members}
-        if member_ids == {user.id, target.id}:
-            return jsonify({"ok": True, "conversation_id": conv.id})
-
-    conversation = Conversation(is_group=False, created_by=user.id)
-    db.session.add(conversation)
-    db.session.flush()
-    db.session.add(ConversationMember(conversation_id=conversation.id, user_id=user.id))
-    db.session.add(ConversationMember(conversation_id=conversation.id, user_id=target.id))
-    db.session.commit()
-    return jsonify({"ok": True, "conversation_id": conversation.id})
-
-
-@app.route("/api/messages/create-group", methods=["POST"])
-def api_create_group():
-    user = current_user()
-    if user is None:
-        return jsonify({"ok": False, "error": "not_logged_in"}), 401
-
-    data = request.get_json(silent=True) or {}
-    name = (data.get("name") or "").strip()[:100]
-    usernames = data.get("usernames") or []
-    if not isinstance(usernames, list):
-        return jsonify({"ok": False, "error": "invalid_data"}), 400
-
-    allowed_ids = mutual_follow_ids(user)
-    member_ids = {user.id}
-    for uname in usernames:
-        target = User.query.filter_by(username=uname).first()
-        if target is None or target.id not in allowed_ids:
-            return jsonify({"ok": False, "error": "invalid_member", "username": uname}), 400
-        member_ids.add(target.id)
-
-    if not (MIN_GROUP_MEMBERS <= len(member_ids) <= MAX_GROUP_MEMBERS):
-        return jsonify({"ok": False, "error": "invalid_group_size"}), 400
-    if not name:
-        name = "Gruppe"
-
-    conversation = Conversation(is_group=True, group_name=name, created_by=user.id)
-    db.session.add(conversation)
-    db.session.flush()
-    for uid in member_ids:
-        db.session.add(ConversationMember(conversation_id=conversation.id, user_id=uid))
-    db.session.commit()
-    return jsonify({"ok": True, "conversation_id": conversation.id})
-
-
-@app.route("/api/messages/<int:conversation_id>")
-def api_get_messages(conversation_id):
-    user = current_user()
-    if user is None:
-        return jsonify({"ok": False, "error": "not_logged_in"}), 401
-    conversation = db.get_or_404(Conversation, conversation_id)
-    if not is_conversation_member(user, conversation):
-        return jsonify({"ok": False, "error": "forbidden"}), 403
-
-    now = datetime.now(timezone.utc)
-    for message in conversation.messages:
-        if message.viewed_at is None and message.sender_id != user.id:
-            message.viewed_at = now
-    db.session.commit()
-
-    purge_expired_messages(conversation)
-
-    return jsonify({
-        "ok": True,
-        "messages": [serialize_message(m, user.id) for m in conversation.messages],
-    })
-
-
-@app.route("/api/messages/<int:conversation_id>/send", methods=["POST"])
-def api_send_message(conversation_id):
-    user = current_user()
-    if user is None:
-        return jsonify({"ok": False, "error": "not_logged_in"}), 401
-    conversation = db.get_or_404(Conversation, conversation_id)
-    if not is_conversation_member(user, conversation):
-        return jsonify({"ok": False, "error": "forbidden"}), 403
-
-    data = request.get_json(silent=True) or {}
-    text = (data.get("text") or "").strip()[:2000]
-
-    if not text:
-        return jsonify({"ok": False, "error": "empty_message"}), 400
-
-    message = Message(conversation_id=conversation.id, sender_id=user.id, text=text)
-    db.session.add(message)
-    db.session.commit()
-    return jsonify({"ok": True, "message": serialize_message(message, user.id)})
-
-
-@app.route("/user/<username>")
-def profile(username):
-    profile_user = User.query.filter_by(username=username).first_or_404()
-    user = current_user()
-
-    is_own_profile = user is not None and user.id == profile_user.id
-    is_subscribed = False
-    if user is not None and not is_own_profile:
-        is_subscribed = Subscription.query.filter_by(
-            subscriber_id=user.id, channel_id=profile_user.id
-        ).first() is not None
-
-    return render_template(
-        "profile.html",
-        profile_user=profile_user,
-        user=user,
-        is_own_profile=is_own_profile,
-        is_subscribed=is_subscribed,
-        subscriber_count=len(profile_user.subscribers),
-        following_count=len(profile_user.subscriptions_made),
-    )
-
-
-@app.route("/user/<username>/subscribe", methods=["POST"])
-def subscribe(username):
-    user = current_user()
-    if user is None:
-        return redirect(url_for("login"))
-
-    target = User.query.filter_by(username=username).first_or_404()
-    if target.id == user.id:
-        abort(400)
-
-    existing = Subscription.query.filter_by(subscriber_id=user.id, channel_id=target.id).first()
-    if existing:
-        db.session.delete(existing)
-    else:
-        db.session.add(Subscription(subscriber_id=user.id, channel_id=target.id))
-    db.session.commit()
-
-    next_url = request.form.get("next") or url_for("profile", username=username)
-    return redirect(next_url)
-
-
-@app.route("/profile/picture", methods=["POST"])
-def upload_profile_picture():
-    user = current_user()
-    if user is None:
-        return redirect(url_for("login"))
-
-    file = request.files.get("profile_image")
-    if not file or file.filename == "":
-        flash("Bitte ein Bild auswählen.")
-        return redirect(url_for("profile", username=user.username))
-    if not allowed_image_file(file.filename):
-        flash("Nur folgende Bildformate sind erlaubt: " + ", ".join(sorted(ALLOWED_IMAGE_EXTENSIONS)))
-        return redirect(url_for("profile", username=user.username))
-
-    extension = secure_filename(file.filename).rsplit(".", 1)[1].lower()
-    stored_filename = f"{uuid.uuid4().hex}.{extension}"
-    save_media(file, "profile_pics", stored_filename)
-
-    if user.profile_image:
-        delete_media("profile_pics", user.profile_image)
-
-    user.profile_image = stored_filename
-    db.session.commit()
-    return redirect(url_for("profile", username=user.username))
-
 
 @app.route("/account/settings")
 def account_settings():
@@ -2236,6 +2214,17 @@ def update_email():
         "Das NexAI-Team",
     )
     flash("E-Mail-Adresse gespeichert.")
+    return redirect(url_for("account_settings"))
+
+
+@app.route("/account/city", methods=["POST"])
+def update_city():
+    user = current_user()
+    if user is None:
+        return redirect(url_for("login"))
+    user.city = (request.form.get("city") or "").strip()
+    db.session.commit()
+    flash("Stadt gespeichert.")
     return redirect(url_for("account_settings"))
 
 

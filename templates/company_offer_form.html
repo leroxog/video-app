@@ -1,0 +1,50 @@
+{% extends "cheaper_base.html" %}
+{% block title %}{{ "Angebot bearbeiten" if offer else "Neues Angebot" }} - Cheaper{% endblock %}
+{% block content %}
+<div class="cheaper-auth-page" style="max-width:520px;">
+    <h1>{{ "Angebot bearbeiten" if offer else "Neues Angebot" }}</h1>
+    <form method="post" class="cheaper-form">
+        <label for="provider_name">Anbieter/Name
+            <input type="text" id="provider_name" name="provider_name" required maxlength="150" value="{{ (form_values.provider_name if form_values else offer.provider_name) or '' }}">
+        </label>
+        <label for="title">Titel des Angebots
+            <input type="text" id="title" name="title" required maxlength="200" placeholder="z.B. Komfort-Sessel" value="{{ (form_values.title if form_values else offer.title) or '' }}">
+        </label>
+        <label for="category">Kategorie
+            <select id="category" name="category">
+                {% for cat in categories %}
+                    <option value="{{ cat }}" {% if (form_values.category if form_values else offer.category if offer else '') == cat %}selected{% endif %}>{{ category_labels[cat] }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label for="description">Beschreibung (optional)
+            <textarea id="description" name="description" rows="3">{{ (form_values.description if form_values else offer.description) or '' }}</textarea>
+        </label>
+        <label for="image_url">Bild-URL (optional)
+            <input type="text" id="image_url" name="image_url" maxlength="500" value="{{ (form_values.image_url if form_values else offer.image_url) or '' }}">
+        </label>
+        <label for="link_url">Link zur Buchung/Auswahl (Pflicht)
+            <input type="text" id="link_url" name="link_url" required maxlength="500" placeholder="https://..." value="{{ (form_values.link_url if form_values else offer.link_url) or '' }}">
+        </label>
+        <label for="city">Stadt
+            <input type="text" id="city" name="city" maxlength="100" value="{{ (form_values.city if form_values else offer.city) or '' }}">
+        </label>
+        <div class="cheaper-form-grid">
+            <label for="normal_price">Normalpreis (€)
+                <input type="text" id="normal_price" name="normal_price" required value="{{ (form_values.normal_price if form_values else (offer.normal_price_cents / 100) if offer else '') }}">
+            </label>
+            <label for="discount_price">Rabattpreis (€, optional)
+                <input type="text" id="discount_price" name="discount_price" value="{{ (form_values.discount_price if form_values else (offer.discount_price_cents / 100 if offer and offer.discount_price_cents else '')) }}">
+            </label>
+            <label for="discount_max_age">Rabatt bis Alter (Jahre)
+                <input type="number" id="discount_max_age" name="discount_max_age" min="0" max="120" value="{{ (form_values.discount_max_age if form_values else offer.discount_max_age) or '' }}">
+            </label>
+        </div>
+        <label for="discount_label">Rabatt-Text (optional, z.B. "unter 14 Jahre")
+            <input type="text" id="discount_label" name="discount_label" maxlength="100" value="{{ (form_values.discount_label if form_values else offer.discount_label) or '' }}">
+        </label>
+        <button type="submit" class="cheaper-btn">{{ "Speichern" if offer else "Angebot erstellen" }}</button>
+    </form>
+    <p class="cheaper-auth-footer"><a href="{{ url_for('company_dashboard') }}">&larr; Zurück zur Übersicht</a></p>
+</div>
+{% endblock %}

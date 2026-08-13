@@ -1,19 +1,21 @@
-{% extends "base.html" %}
-{% block title %}Bitte ergänzen - 3D π{% endblock %}
+{% extends "cheaper_base.html" %}
+{% block title %}Bitte ergänzen - Cheaper{% endblock %}
 {% block content %}
+<div class="cheaper-auth-page">
     <h1>Bevor es weitergeht...</h1>
-    <p>Bitte beantworte diese Fragen einmalig, dann kannst du NexAI wie gewohnt weiter nutzen.</p>
+    <p class="cheaper-form-hint" style="margin-bottom:16px;">Bitte beantworte diese Fragen einmalig, dann kannst du Cheaper wie gewohnt weiter nutzen.</p>
 
-    <form action="{{ url_for('complete_profile') }}" method="post" class="form" id="completeProfileForm">
+    <form action="{{ url_for('complete_profile') }}" method="post" class="cheaper-form" id="completeProfileForm">
         <label>Benutzername</label>
-        <p class="onboarding-label-value">{{ user.username }}</p>
+        <p class="cheaper-form-hint">{{ user.username }}</p>
 
         {% if user.birthdate %}
             <label>Geburtsdatum</label>
-            <p class="onboarding-label-value">{{ user.birthdate.strftime("%d.%m.%Y") }}</p>
+            <p class="cheaper-form-hint">{{ user.birthdate.strftime("%d.%m.%Y") }}</p>
         {% else %}
-            <label for="birthdate">Geburtsdatum</label>
-            <input type="date" id="birthdate" name="birthdate" required value="{{ form_values.birthdate if form_values else '' }}">
+            <label for="birthdate">Geburtsdatum
+                <input type="date" id="birthdate" name="birthdate" required value="{{ form_values.birthdate if form_values else '' }}">
+            </label>
         {% endif %}
 
         <div class="kids-account-bubble" id="kidsAccountBubble" style="display:none;">
@@ -24,51 +26,56 @@
 
         {% if user.gender %}
             <label>Geschlecht</label>
-            <p class="onboarding-label-value">{{ GENDER_CHOICES.get(user.gender, user.gender) }}</p>
+            <p class="cheaper-form-hint">{{ GENDER_CHOICES.get(user.gender, user.gender) }}</p>
         {% else %}
-            <label for="gender">Geschlecht</label>
-            <select id="gender" name="gender" required>
+            <label for="gender">Geschlecht
+                <select id="gender" name="gender" required>
+                    <option value="" disabled selected>Bitte auswählen</option>
+                    {% for value, label in GENDER_CHOICES.items() %}
+                        <option value="{{ value }}">{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+        {% endif %}
+
+        <label for="purpose_of_use">Wofür nutzt du den Account?
+            <select id="purpose_of_use" name="purpose_of_use" required>
                 <option value="" disabled selected>Bitte auswählen</option>
-                {% for value, label in GENDER_CHOICES.items() %}
+                {% for value, label in PURPOSE_CHOICES.items() %}
                     <option value="{{ value }}">{{ label }}</option>
                 {% endfor %}
             </select>
-        {% endif %}
+        </label>
 
-        <label for="purpose_of_use">Wofür nutzt du den Account?</label>
-        <select id="purpose_of_use" name="purpose_of_use" required>
-            <option value="" disabled selected>Bitte auswählen</option>
-            {% for value, label in PURPOSE_CHOICES.items() %}
-                <option value="{{ value }}">{{ label }}</option>
-            {% endfor %}
-        </select>
+        <label for="country">Land
+            <input type="text" id="country" name="country" maxlength="100">
+        </label>
 
-        <label for="country">Land</label>
-        <input type="text" id="country" name="country" maxlength="100">
+        <label for="region">Bundesland
+            <select id="region" name="region">
+                <option value="" selected>Bitte auswählen</option>
+                {% for state in REGION_CHOICES %}
+                    <option value="{{ state }}">{{ state }}</option>
+                {% endfor %}
+            </select>
+        </label>
 
-        <label for="region">Bundesland</label>
-        <select id="region" name="region">
-            <option value="" selected>Bitte auswählen</option>
-            {% for state in REGION_CHOICES %}
-                <option value="{{ state }}">{{ state }}</option>
-            {% endfor %}
-        </select>
+        <label for="guardian_email" id="guardianEmailLabel">E-Mail eines Erziehungsberechtigten
+            <input type="email" id="guardian_email" name="guardian_email" maxlength="255">
+        </label>
+        <p class="cheaper-form-hint">Empfohlen, aber nicht verpflichtend.</p>
 
-        <label for="guardian_email" id="guardianEmailLabel">E-Mail eines Erziehungsberechtigten</label>
-        <input type="email" id="guardian_email" name="guardian_email" maxlength="255">
-        <p class="field-hint">Empfohlen, aber nicht verpflichtend.</p>
-
-        <label class="checkbox-label" id="skipLastTwoWrap">
+        <label class="cheaper-form-checkbox" id="skipLastTwoWrap">
             <input type="checkbox" id="regionSkipped" name="region_skipped" value="1">
             <span>Diese letzten beiden Fragen (Land, Bundesland) möchte ich nicht beantworten</span>
         </label>
 
-        <button type="submit">Weiter</button>
-        <p class="privacy-note">Alle Angaben werden gespeichert.</p>
+        <button type="submit" class="cheaper-btn">Weiter</button>
+        <p class="cheaper-form-hint">Alle Angaben werden gespeichert.</p>
     </form>
 
-    <form action="{{ url_for('logout') }}" method="post" class="settings-logout-form">
-        <button type="submit" class="danger">Stattdessen ausloggen</button>
+    <form action="{{ url_for('logout') }}" method="post" style="margin-top:14px;">
+        <button type="submit" class="cheaper-btn danger">Stattdessen ausloggen</button>
     </form>
 
     <script>
@@ -85,10 +92,6 @@
             const form = document.getElementById("completeProfileForm");
             let acknowledged = false;
 
-            // The e-mail field (guardian's for a minor, the user's own for
-            // an adult) is always optional-but-recommended -- never
-            // mandatory. The skip checkbox always covers country + region
-            // together, for every age.
             function updateSkipUI() {
                 countryInput.disabled = skipLastTwo.checked;
                 if (skipLastTwo.checked) countryInput.value = "";
@@ -127,10 +130,8 @@
                     ageError.style.display = "block";
                 } else if (a < 18) {
                     bubble.style.display = acknowledged ? "none" : "flex";
-                    guardianLabel.textContent = "E-Mail eines Erziehungsberechtigten (optional)";
                 } else {
                     bubble.style.display = "none";
-                    guardianLabel.textContent = "E-Mail (optional)";
                 }
                 updateSkipUI();
             }
@@ -163,4 +164,5 @@
             refresh();
         })();
     </script>
+</div>
 {% endblock %}

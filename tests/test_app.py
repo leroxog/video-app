@@ -92,11 +92,11 @@ def test_register_and_login(client):
         follow_redirects=True,
     )
     assert response.status_code == 200
-    # "/" redirects logged-in visitors on to /messages (see index()) --
+    # "/" is Cheaper's homepage for logged-in visitors (see index()) --
     # anonymous visitors get redirected to /login instead of ever reaching
-    # it, so landing on the messages page is proof the login actually
-    # landed logged in.
-    assert "messages-page".encode() in response.data
+    # it, so landing on the search form is proof the login actually landed
+    # logged in.
+    assert b"cheaperSearchForm" in response.data
 
 
 def test_register_stores_birthdate_and_gender(client):
@@ -282,7 +282,7 @@ def test_brand_wordmark_present_on_every_page(client):
     # reachable without an account.
     for path in ["/login", "/register"]:
         response = client.get(path)
-        assert "3D π".encode() in response.data
+        assert b"Cheaper" in response.data
         assert b"headerSearchInput" not in response.data
         assert b"bottom-nav" not in response.data
 
@@ -309,11 +309,6 @@ def test_manifest_and_service_worker_referenced_in_every_page(client):
 
 
 
-def test_profile_page_shows_username(client):
-    register(client, username="bob")
-    response = client.get("/user/bob")
-    assert response.status_code == 200
-    assert b"bob" in response.data
 
 
 def test_profile_page_404_for_unknown_user(client):
@@ -322,44 +317,12 @@ def test_profile_page_404_for_unknown_user(client):
     assert response.status_code == 404
 
 
-def test_subscribe_toggle(client):
-    register(client, username="alice", password="secret123")
-    client.post("/logout")
-    register(client, username="bob", password="secret123")
-    client.post("/logout")
-    client.post("/login", data={"username": "alice", "password": "secret123"})
-
-    response = client.post("/user/bob/subscribe", follow_redirects=True)
-    assert response.status_code == 200
-    assert b"Gefolgt" in response.data
-
-    response = client.post("/user/bob/subscribe", follow_redirects=True)
-    assert b"Folgen" in response.data
 
 
-def test_subscribe_to_self_is_rejected(client):
-    register(client, username="alice")
-    response = client.post("/user/alice/subscribe")
-    assert response.status_code == 400
 
 
-def test_profile_picture_upload(client):
-    register(client, username="alice")
-    data = {"profile_image": (io.BytesIO(b"fake image bytes"), "avatar.png")}
-    response = client.post(
-        "/profile/picture", data=data, content_type="multipart/form-data", follow_redirects=True
-    )
-    assert response.status_code == 200
-    assert b"profile_pics/" in response.data
 
 
-def test_profile_picture_upload_rejects_bad_extension(client):
-    register(client, username="alice")
-    data = {"profile_image": (io.BytesIO(b"not an image"), "avatar.exe")}
-    response = client.post(
-        "/profile/picture", data=data, content_type="multipart/form-data", follow_redirects=True
-    )
-    assert "erlaubt".encode() in response.data
 
 
 def test_admin_dashboard_requires_admin(client):
@@ -398,8 +361,8 @@ def test_admin_can_create_fake_account(client):
         "purpose_of_use": "private", "country": "Deutschland", "region_skipped": "1",
         "birthdate": "1990-01-01", "gender": "keine_angabe",
     })
-    profile_response = client.get("/user/fakeuser")
-    assert b"fakeuser" in profile_response.data
+    home_response = client.get("/")
+    assert b"cheaperSearchForm" in home_response.data
 
 
 def test_non_admin_cannot_create_account_via_admin_route(client):
@@ -532,9 +495,9 @@ def test_add_email_unlocks_username_and_password_change(client):
     response = client.post(
         "/login", data={"username": "newalice", "password": "newpass123"}, follow_redirects=True
     )
-    # See test_register_and_login -- "/" redirects to /messages and
-    # doesn't show the username, so confirm login via landing there.
-    assert "messages-page".encode() in response.data
+    # See test_register_and_login -- "/" is the homepage and doesn't show
+    # the username, so confirm login via landing there.
+    assert b"cheaperSearchForm" in response.data
 
 
 def test_password_change_rejects_wrong_current_password(client):
@@ -717,19 +680,6 @@ def test_badges_include_streak_milestones_and_rank_one(client):
     assert badges == ["1", "2", "3", "Platz 1"]
 
 
-def test_profile_shows_streak_and_badge_for_owner(client):
-    import app as app_module
-
-    register(client, username="alice")
-    user = User.query.filter_by(username="alice").first()
-    user.current_streak = 2
-    user.best_streak = 2
-    user.last_streak_date = app_module.streak_today()
-    db.session.commit()
-
-    response = client.get("/user/alice")
-    assert b"Tage Streak" in response.data
-    assert b"badgeModalOpenBtn" in response.data
 
 
 def test_streak_day_rolls_over_at_11am_berlin(client, monkeypatch):
@@ -757,30 +707,6 @@ def test_streak_day_rolls_over_at_11am_berlin(client, monkeypatch):
     assert day_after == day_before + timedelta(days=1)
 
 
-def test_streak_display_hidden_until_secured_today(client):
-    import app as app_module
-    from datetime import timedelta
-
-    register(client, username="alice")
-    user = User.query.filter_by(username="alice").first()
-    user.current_streak = 3
-    user.best_streak = 3
-    # streak is still alive (yesterday), but not yet secured for today
-    user.last_streak_date = app_module.streak_today() - timedelta(days=1)
-    db.session.commit()
-
-    assert app_module.effective_streak(user) == 3  # still counts for the multiplier
-    assert app_module.is_streak_secured_today(user) is False  # but not shown yet
-
-    response = client.get("/user/alice")
-    assert b"Tage Streak" not in response.data
-
-    user.last_streak_date = app_module.streak_today()
-    db.session.commit()
-    assert app_module.is_streak_secured_today(user) is True
-
-    response = client.get("/user/alice")
-    assert b"Tage Streak" in response.data
 
 
 def make_eligible_for_code_creation(username, total_score=1000):
@@ -803,137 +729,20 @@ def mutual_follow(client, user_a, user_b):
     client.post("/logout")
 
 
-def test_cannot_start_dm_without_mutual_follow(client):
-    register(client, username="alice")
-    client.post("/logout")
-    register(client, username="bob")
-
-    response = client.post("/api/messages/start-dm", json={"username": "alice"})
-    data = response.get_json()
-    assert data["ok"] is False
-    assert data["error"] == "not_mutual_follow"
 
 
-def test_start_dm_with_mutual_follow_and_reuses_existing_conversation(client):
-    register(client, username="alice")
-    client.post("/logout")
-    register(client, username="bob")
-    client.post("/logout")
-
-    mutual_follow(client, "alice", "bob")
-
-    client.post("/login", data={"username": "alice", "password": "secret123"})
-    response = client.post("/api/messages/start-dm", json={"username": "bob"})
-    data = response.get_json()
-    assert data["ok"] is True
-    conv_id = data["conversation_id"]
-
-    # Calling again returns the same conversation, doesn't create a second one
-    response2 = client.post("/api/messages/start-dm", json={"username": "bob"})
-    assert response2.get_json()["conversation_id"] == conv_id
 
 
-def test_send_and_receive_message_in_dm(client):
-    register(client, username="alice")
-    client.post("/logout")
-    register(client, username="bob")
-    client.post("/logout")
-    mutual_follow(client, "alice", "bob")
-
-    client.post("/login", data={"username": "alice", "password": "secret123"})
-    conv_id = client.post("/api/messages/start-dm", json={"username": "bob"}).get_json()["conversation_id"]
-    client.post(f"/api/messages/{conv_id}/send", json={"text": "Hallo Bob!"})
-    client.post("/logout")
-
-    client.post("/login", data={"username": "bob", "password": "secret123"})
-    response = client.get(f"/api/messages/{conv_id}")
-    data = response.get_json()
-    assert data["ok"] is True
-    assert len(data["messages"]) == 1
-    assert data["messages"][0]["text"] == "Hallo Bob!"
-    assert data["messages"][0]["is_mine"] is False
 
 
-def test_non_member_cannot_access_conversation(client):
-    register(client, username="alice")
-    client.post("/logout")
-    register(client, username="bob")
-    client.post("/logout")
-    mutual_follow(client, "alice", "bob")
-
-    client.post("/login", data={"username": "alice", "password": "secret123"})
-    conv_id = client.post("/api/messages/start-dm", json={"username": "bob"}).get_json()["conversation_id"]
-    client.post("/logout")
-
-    register(client, username="carol")
-    response = client.get(f"/api/messages/{conv_id}")
-    assert response.get_json()["ok"] is False
 
 
-def test_message_self_deletes_15_seconds_after_being_viewed(client):
-    from datetime import datetime, timedelta, timezone
-
-    register(client, username="alice")
-    client.post("/logout")
-    register(client, username="bob")
-    client.post("/logout")
-    mutual_follow(client, "alice", "bob")
-
-    client.post("/login", data={"username": "alice", "password": "secret123"})
-    conv_id = client.post("/api/messages/start-dm", json={"username": "bob"}).get_json()["conversation_id"]
-    client.post(f"/api/messages/{conv_id}/send", json={"text": "Hallo Bob!"})
-    client.post("/logout")
-
-    client.post("/login", data={"username": "bob", "password": "secret123"})
-    client.get(f"/api/messages/{conv_id}")  # marks it viewed
-    message = Message.query.filter_by(conversation_id=conv_id).first()
-    assert message is not None
-    assert message.viewed_at is not None
-
-    # Simulate 16 seconds having passed since it was viewed
-    message.viewed_at = datetime.now(timezone.utc) - timedelta(seconds=16)
-    db.session.commit()
-
-    response = client.get(f"/api/messages/{conv_id}")
-    assert response.get_json()["messages"] == []
-    assert Message.query.filter_by(conversation_id=conv_id).first() is None
 
 
-def test_messages_page_shows_prominent_group_button_once(client):
-    register(client, username="alice")
-    response = client.get("/messages")
-    assert response.data.count(b'id="createGroupToggleBtn"') == 1
-    assert b"Gruppe" in response.data
 
 
-def test_create_group_requires_2_to_99_mutual_follow_members(client):
-    register(client, username="alice")
-    client.post("/logout")
-    register(client, username="bob")
-    client.post("/logout")
-    mutual_follow(client, "alice", "bob")
-
-    client.post("/login", data={"username": "alice", "password": "secret123"})
-    response = client.post("/api/messages/create-group", json={"name": "Team", "usernames": ["bob"]})
-    data = response.get_json()
-    assert data["ok"] is True
-
-    conv = db.session.get(Conversation, data["conversation_id"])
-    assert conv.is_group is True
-    assert len(conv.members) == 2
 
 
-def test_create_group_rejects_non_mutual_follow_member(client):
-    register(client, username="alice")
-    client.post("/logout")
-    register(client, username="bob")
-    client.post("/logout")
-    register(client, username="carol")  # not mutually followed by alice
-    client.post("/logout")
-
-    client.post("/login", data={"username": "alice", "password": "secret123"})
-    response = client.post("/api/messages/create-group", json={"name": "Team", "usernames": ["carol"]})
-    assert response.get_json()["ok"] is False
 
 
 def test_r2_cors_left_alone_when_already_configured(client, monkeypatch):
@@ -1649,7 +1458,7 @@ def set_email(username, email):
 
 def test_login_page_shows_forgot_password_link(client):
     response = client.get("/login")
-    assert "Ich habe mein Passwort oder Benutzername vergessen.".encode() in response.data
+    assert "Passwort oder Benutzername vergessen?".encode() in response.data
 
 
 def test_forgot_password_choice_page(client):
@@ -1948,8 +1757,7 @@ def test_fresh_registration_does_not_immediately_re_gate_on_terms(raw_client):
     assert "/terms" not in register_res.headers["Location"]
 
     response = raw_client.get("/", follow_redirects=False)
-    assert response.status_code == 302
-    assert "/terms" not in response.headers["Location"]
+    assert response.status_code == 200
 
 
 def test_terms_decline_logs_out_and_redirects_to_declined_page(client):
@@ -2272,3 +2080,138 @@ def test_seeded_knowledge_reaches_general_chat_prompt(monkeypatch):
     assert "Nutzer-Fakt Z" in captured["system"]
 
 
+
+
+def register_company(client, username="firma1", password="secret123", extra=None):
+    client.post("/terms/accept")
+    data = {
+        "username": username,
+        "password": password,
+        "password2": password,
+        "company_name": "Testfirma GmbH",
+        "company_address": "Teststraße 1, 12345 Teststadt",
+    }
+    if extra:
+        data.update(extra)
+    response = client.post("/register-firma", data=data)
+    if response.status_code in (301, 302, 303, 307, 308):
+        response = client.get(response.headers["Location"], follow_redirects=True)
+    return response
+
+
+def test_register_company_creates_company_account(client):
+    response = register_company(client)
+    assert response.status_code == 200
+    user = User.query.filter_by(username="firma1").first()
+    assert user is not None
+    assert user.is_company is True
+    assert user.company_address == "Teststraße 1, 12345 Teststadt"
+
+
+def test_register_company_requires_address(client):
+    client.post("/terms/accept")
+    response = client.post("/register-firma", data={
+        "username": "firma2", "password": "secret123", "password2": "secret123",
+        "company_name": "Ohne Adresse GmbH", "company_address": "",
+    })
+    assert User.query.filter_by(username="firma2").first() is None
+    assert b"Firmensitz" in response.data
+
+
+def test_company_never_gets_customer_onboarding_gate(client):
+    register_company(client)
+    response = client.get("/", follow_redirects=False)
+    assert response.status_code == 200
+
+
+def test_company_can_create_offer_and_it_appears_on_homepage(client):
+    register_company(client)
+    create_response = client.post("/firma/angebote/neu", data={
+        "provider_name": "Testkino", "title": "Normaler Sitz", "category": "unterhaltung",
+        "link_url": "https://example.com/kino", "city": "Teststadt",
+        "normal_price": "10.00",
+    }, follow_redirects=True)
+    assert b"Angebot erstellt" in create_response.data
+
+    from models import Offer
+    offer = Offer.query.filter_by(provider_name="Testkino").first()
+    assert offer is not None
+    assert offer.company_id is not None
+    assert offer.normal_price_cents == 1000
+
+    client.post("/logout")
+    register(client, username="customer1")
+    home_response = client.get("/")
+    assert b"Testkino" in home_response.data
+    assert b"Normaler Sitz" in home_response.data
+
+
+def test_customer_cannot_access_company_dashboard(client):
+    register(client, username="bob")
+    response = client.get("/firma/angebote")
+    assert response.status_code == 403
+
+
+def test_company_cannot_edit_another_companys_offer(client):
+    register_company(client, username="firma_a")
+    client.post("/firma/angebote/neu", data={
+        "provider_name": "A-Kino", "title": "Sitz", "category": "unterhaltung",
+        "link_url": "https://example.com/a", "normal_price": "5.00",
+    })
+    from models import Offer
+    offer = Offer.query.filter_by(provider_name="A-Kino").first()
+
+    client.post("/logout")
+    register_company(client, username="firma_b", extra={"company_name": "Firma B"})
+    response = client.get(f"/firma/angebote/{offer.id}/bearbeiten")
+    assert response.status_code == 403
+
+
+def test_homepage_shows_age_discount_for_young_customer(client):
+    register_company(client)
+    client.post("/firma/angebote/neu", data={
+        "provider_name": "Rabattkino", "title": "Kindersitz", "category": "unterhaltung",
+        "link_url": "https://example.com/kids", "city": "Teststadt",
+        "normal_price": "20.00", "discount_price": "9.00", "discount_max_age": "14",
+        "discount_label": "unter 14 Jahre",
+    })
+
+    client.post("/logout")
+    young_birthdate = date(date.today().year - 11, 1, 1).isoformat()
+    register(client, username="kid1", birthdate=young_birthdate)
+    response = client.get("/")
+    assert "9.00 €".encode() in response.data
+    assert "Du sparst 11.00 €".encode() in response.data
+
+
+def test_homepage_shows_normal_price_for_adult_customer(client):
+    register_company(client)
+    client.post("/firma/angebote/neu", data={
+        "provider_name": "Erwachsenenkino", "title": "Sitz", "category": "unterhaltung",
+        "link_url": "https://example.com/adult", "city": "Teststadt",
+        "normal_price": "20.00", "discount_price": "9.00", "discount_max_age": "14",
+    })
+
+    client.post("/logout")
+    register(client, username="adult1", birthdate="1990-01-01")
+    response = client.get("/")
+    assert "20.00 €".encode() in response.data
+    assert b"Du sparst" not in response.data
+
+
+def test_homepage_search_filters_by_query(client):
+    register_company(client)
+    client.post("/firma/angebote/neu", data={
+        "provider_name": "Findbares Kino", "title": "Sitz", "category": "unterhaltung",
+        "link_url": "https://example.com/find", "normal_price": "5.00",
+    })
+    client.post("/firma/angebote/neu", data={
+        "provider_name": "Anderes Schwimmbad", "title": "Eintritt", "category": "sport",
+        "link_url": "https://example.com/other", "normal_price": "5.00",
+    })
+
+    client.post("/logout")
+    register(client, username="searcher1")
+    response = client.get("/?q=Findbares")
+    assert b"Findbares Kino" in response.data
+    assert b"Anderes Schwimmbad" not in response.data

@@ -1,16 +1,19 @@
-{% extends "base.html" %}
-{% block title %}Login - 3D π{% endblock %}
+{% extends "cheaper_base.html" %}
+{% block title %}Login - Cheaper{% endblock %}
 {% block content %}
-    <h1>Login</h1>
-    <form action="{{ url_for('login') }}" method="post" class="form">
-        <label for="username">Benutzername</label>
-        <input type="text" id="username" name="username" required maxlength="50">
-
-        <label for="password">Passwort</label>
-        <input type="password" id="password" name="password" required>
-
-        <button type="submit">Einloggen</button>
+<div class="cheaper-auth-page">
+    <h1>Willkommen zurück</h1>
+    <form action="{{ url_for('login') }}" method="post" class="cheaper-form">
+        <label for="username">Benutzername
+            <input type="text" id="username" name="username" required maxlength="50">
+        </label>
+        <label for="password">Passwort
+            <input type="password" id="password" name="password" required>
+        </label>
+        <button type="submit" class="cheaper-btn">Einloggen</button>
     </form>
-    <p class="login-forgot-link"><a href="{{ url_for('forgot_password') }}">Ich habe mein Passwort oder Benutzername vergessen.</a></p>
-    <p>Noch kein Konto? <a href="{{ url_for('register') }}">Registrieren</a></p>
+    <p class="cheaper-auth-footer"><a href="{{ url_for('forgot_password') }}">Passwort oder Benutzername vergessen?</a></p>
+    <p class="cheaper-auth-footer">Noch kein Konto? <a href="{{ url_for('register') }}">Registrieren</a></p>
+    <p class="cheaper-auth-footer"><a href="{{ url_for('register_company') }}">Firmenkonto erstellen &rarr;</a></p>
+</div>
 {% endblock %}

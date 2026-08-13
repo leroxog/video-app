@@ -57,6 +57,16 @@ class User(db.Model):
     # genuinely already spent down to 0.
     ai_tokens = db.Column(db.Integer, nullable=True)
     ai_tokens_last_award_date = db.Column(db.Date, nullable=True)
+    # "Cheaper" fields -- city is free-text (e.g. "München-Pasing"), used to
+    # bias which offers a user sees first (see home_page's sort_offers)
+    # before/without live browser geolocation. is_company marks a business
+    # account, which manages its own Offer rows from /firma/angebote
+    # instead of browsing as a customer; company_address is required for
+    # such accounts (see register_company), everyone else leaves it empty.
+    city = db.Column(db.String(100), nullable=True)
+    is_company = db.Column(db.Boolean, nullable=False, default=False)
+    company_name = db.Column(db.String(200), nullable=True)
+    company_address = db.Column(db.String(300), nullable=True)
     sounds_uploaded = db.relationship("Sound", backref="uploader", lazy=True, cascade="all, delete-orphan")
     subscriptions_made = db.relationship(
         "Subscription",
@@ -643,3 +653,47 @@ class StudioBlock(db.Model):
     height = db.Column(db.Integer, nullable=False, default=40)
     color = db.Column(db.String(20), nullable=False, default="#3ea6ff")
     __table_args__ = (db.UniqueConstraint("project_id", "name", name="uq_studioblock_project_name"),)
+
+
+OFFER_CATEGORIES = ["essen", "unterhaltung", "freizeit", "sport", "bildung", "sonstiges"]
+OFFER_CATEGORY_LABELS = {
+    "essen": "Essen",
+    "unterhaltung": "Unterhaltung",
+    "freizeit": "Freizeit",
+    "sport": "Sport",
+    "bildung": "Bildung",
+    "sonstiges": "Sonstiges",
+}
+
+
+class Offer(db.Model):
+    """One buyable thing shown on the Cheaper homepage/search -- prices are
+    entered by hand (by an admin seeding examples, or by a company account
+    from its own dashboard), never scraped live, see the app's own
+    module-level notes on why. discount_max_age nullable means "no age
+    discount"; when set, a logged-in user whose age (from birthdate) is at
+    or under it sees discount_price_cents instead of normal_price_cents.
+    company_id is null for admin-seeded example offers."""
+    id = db.Column(db.Integer, primary_key=True)
+    company_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    provider_name = db.Column(db.String(150), nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    category = db.Column(db.String(20), nullable=False, default="sonstiges")
+    description = db.Column(db.Text, nullable=True)
+    image_url = db.Column(db.String(500), nullable=True)
+    link_url = db.Column(db.String(500), nullable=False)
+    normal_price_cents = db.Column(db.Integer, nullable=False)
+    discount_price_cents = db.Column(db.Integer, nullable=True)
+    discount_max_age = db.Column(db.Integer, nullable=True)
+    discount_label = db.Column(db.String(100), nullable=True)
+    city = db.Column(db.String(100), nullable=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    company = db.relationship("User")
+
+    def price_for(self, age):
+        """Returns (price_cents, is_discounted) for a viewer of the given
+        age (None if unknown/logged out -- always the normal price)."""
+        if age is not None and self.discount_price_cents is not None and self.discount_max_age is not None and age <= self.discount_max_age:
+            return self.discount_price_cents, True
+        return self.normal_price_cents, False

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#ffffff">
+    <title>{% block title %}Cheaper{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/cheaper.css') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='cheaper-manifest.json') }}">
+    <link rel="icon" href="{{ url_for('static', filename='img/cheaper-mark.svg') }}" type="image/svg+xml">
+</head>
+<body>
+    <div class="cheaper-app">
+        {% if not is_app_context %}
+            <div class="download-banner" id="downloadBanner" hidden>
+                📲 Hol dir Cheaper als App für deinen Rechner &ndash;
+                <a href="{{ url_for('static', filename='downloads/Cheaper-Setup.exe') }}">jetzt herunterladen</a>
+                <button type="button" class="download-banner-close" id="downloadBannerClose" title="Schließen" aria-label="Schließen">&times;</button>
+            </div>
+        {% endif %}
+
+        <header class="cheaper-header">
+            <a class="cheaper-brand" href="{{ url_for('index') }}">
+                <span class="cheaper-brand-mark">C</span>Cheaper
+            </a>
+            <nav class="cheaper-header-nav">
+                {% if user %}
+                    {% if user.is_company %}
+                        <a href="{{ url_for('company_dashboard') }}">Meine Angebote</a>
+                    {% endif %}
+                    <span class="cheaper-username">{{ user.username }}</span>
+                    <a href="{{ url_for('account_settings') }}">Konto</a>
+                    <form action="{{ url_for('logout') }}" method="post" style="display:contents;">
+                        <button type="submit">Abmelden</button>
+                    </form>
+                {% else %}
+                    <a href="{{ url_for('login') }}">Login</a>
+                    <a class="primary" href="{{ url_for('register') }}">Registrieren</a>
+                {% endif %}
+            </nav>
+        </header>
+
+        <main class="cheaper-main">
+            {% with messages = get_flashed_messages() %}
+                {% if messages %}
+                    <ul class="cheaper-flashes">
+                        {% for message in messages %}
+                            <li>{{ message }}</li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+            {% endwith %}
+
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    {% if not is_app_context %}
+        <script>
+            // Dismissible "get the app" banner -- shown once per browser
+            // unless closed (localStorage, not a cookie: purely a client-
+            // side UI preference, no reason to send it back to the server).
+            (function () {
+                var banner = document.getElementById("downloadBanner");
+                var closeBtn = document.getElementById("downloadBannerClose");
+                if (!banner || !closeBtn) return;
+                try {
+                    if (localStorage.getItem("cheaper_hide_app_banner") !== "1") {
+                        banner.hidden = false;
+                    }
+                } catch (e) {
+                    banner.hidden = false;
+                }
+                closeBtn.addEventListener("click", function () {
+                    banner.hidden = true;
+                    try { localStorage.setItem("cheaper_hide_app_banner", "1"); } catch (e) {}
+                });
+            })();
+        </script>
+    {% endif %}
+
+    <script>
+        if ("serviceWorker" in navigator) {
+            window.addEventListener("load", () => {
+                navigator.serviceWorker.register("/service-worker.js").catch(() => {});
+            });
+        }
+    </script>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

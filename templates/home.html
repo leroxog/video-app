@@ -1,0 +1,108 @@
+{% extends "cheaper_base.html" %}
+{% block title %}Cheaper -- reduzierte Preise in deiner Nähe{% endblock %}
+{% block content %}
+
+<form class="cheaper-search-row" method="get" action="{{ url_for('index') }}" id="cheaperSearchForm">
+    <div class="cheaper-search-box">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        <input type="text" name="q" value="{{ q }}" placeholder="Wonach suchst du? Z.B. Kino, Schwimmbad, Bowling ...">
+    </div>
+    <select class="cheaper-category-select" name="category">
+        <option value="">Alle Kategorien</option>
+        {% for cat in categories %}
+            <option value="{{ cat }}" {% if cat == category %}selected{% endif %}>{{ category_labels[cat] }}</option>
+        {% endfor %}
+    </select>
+    <input type="hidden" name="city" id="cheaperCityInput" value="{{ resolved_city }}">
+</form>
+
+<p class="cheaper-section-label">Vorschläge für dich</p>
+<div class="cheaper-chip-row">
+    {% for chip in chips %}
+        <button type="button" class="cheaper-chip" data-chip="{{ chip }}">{{ chip }}</button>
+    {% endfor %}
+</div>
+
+{% if resolved_city %}
+    <p class="cheaper-section-label">In deiner Nähe -- {{ resolved_city }}</p>
+{% elif q or category %}
+    <p class="cheaper-section-label">Ergebnisse</p>
+{% else %}
+    <p class="cheaper-section-label">Angebote</p>
+{% endif %}
+
+{% if offer_cards %}
+    <div class="cheaper-card-grid">
+        {% for c in offer_cards %}
+            <a class="cheaper-card" href="{{ c.offer.link_url }}" target="_blank" rel="noopener noreferrer">
+                {% if c.offer.image_url %}
+                    <img class="cheaper-card-image" src="{{ c.offer.image_url }}" alt="{{ c.offer.title }}" loading="lazy">
+                {% else %}
+                    <div class="cheaper-card-image-fallback">🎟️</div>
+                {% endif %}
+                <div class="cheaper-card-body">
+                    <span class="cheaper-card-category">{{ category_labels[c.offer.category] }}</span>
+                    <p class="cheaper-card-title">{{ c.offer.title }}</p>
+                    <p class="cheaper-card-provider">{{ c.offer.provider_name }}{% if c.offer.city %} &middot; {{ c.offer.city }}{% endif %}</p>
+                    <div class="cheaper-card-price-row">
+                        <span class="cheaper-card-price {% if c.is_discounted %}is-discounted{% endif %}">{{ "%.2f"|format(c.price) }} €</span>
+                        {% if c.is_discounted %}
+                            <span class="cheaper-card-price-old">{{ "%.2f"|format(c.normal_price) }} €</span>
+                        {% endif %}
+                    </div>
+                    {% if c.is_discounted %}
+                        <span class="cheaper-card-savings">Du sparst {{ "%.2f"|format(c.savings) }} €{% if c.offer.discount_label %} &middot; {{ c.offer.discount_label }}{% endif %}</span>
+                    {% elif c.offer.discount_max_age %}
+                        <span class="cheaper-card-savings">Rabatt {% if c.offer.discount_label %}{{ c.offer.discount_label }}{% else %}bis {{ c.offer.discount_max_age }} Jahre{% endif %}</span>
+                    {% endif %}
+                </div>
+            </a>
+        {% endfor %}
+    </div>
+{% else %}
+    <p class="cheaper-empty-state">Keine Angebote gefunden{% if q %} für "{{ q }}"{% endif %}. Schau später nochmal vorbei.</p>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    (function () {
+        var form = document.getElementById("cheaperSearchForm");
+        var categorySelect = form.querySelector("select[name='category']");
+        categorySelect.addEventListener("change", function () { form.submit(); });
+
+        document.querySelectorAll(".cheaper-chip").forEach(function (chip) {
+            chip.addEventListener("click", function () {
+                form.querySelector("input[name='q']").value = chip.dataset.chip;
+                form.submit();
+            });
+        });
+
+        // Live standort: nur wenn der Nutzer die Berechtigung erteilt (kein
+        // automatischer Prompt-Spam) -- einmal pro Tab-Sitzung versucht,
+        // dann per Nominatim (kostenlos, kein API-Key) auf einen Stadtnamen
+        // reduziert und die Seite mit dem aufgelösten Ort neu geladen.
+        var cityInput = document.getElementById("cheaperCityInput");
+        if (!sessionStorage.getItem("cheaper_geo_tried") && navigator.geolocation) {
+            sessionStorage.setItem("cheaper_geo_tried", "1");
+            navigator.geolocation.getCurrentPosition(function (pos) {
+                var url = "https://nominatim.openstreetmap.org/reverse?format=json&lat="
+                    + pos.coords.latitude + "&lon=" + pos.coords.longitude + "&zoom=10";
+                fetch(url, { headers: { "Accept": "application/json" } })
+                    .then(function (res) { return res.json(); })
+                    .then(function (data) {
+                        var addr = data && data.address ? data.address : {};
+                        var city = addr.city || addr.town || addr.village || addr.suburb || addr.county;
+                        if (city && city !== cityInput.value) {
+                            var params = new URLSearchParams(window.location.search);
+                            params.set("city", city);
+                            window.location.search = params.toString();
+                        }
+                    })
+                    .catch(function () {});
+            }, function () { /* Berechtigung verweigert -- einfach nichts tun */ }, { timeout: 8000 });
+        }
+    })();
+</script>
+{% endblock %}
