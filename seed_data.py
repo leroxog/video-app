@@ -183,8 +183,8 @@ DISCOUNT_CODES = [
     ("Puma", None, "Rabattaktionen für Newsletter-Abonnenten und PUMA-Mitglieder",
      "https://upload.wikimedia.org/wikipedia/en/thumb/d/da/Puma_complete_logo.svg/330px-Puma_complete_logo.svg.png",
      "https://de.puma.com"),
-    ("Holy", None, "Ca. 5€ Rabatt auf die erste Bestellung nach Newsletter-Anmeldung",
-     None, "https://de.weareholy.com"),
+    ("Holy", None, "Rabatt wird automatisch an der Kasse aktiviert (kein Code nötig)",
+     None, "https://de.holy.com"),
 ]
 
 
@@ -276,13 +276,22 @@ def seed_offers():
         ))
     db.session.commit()
 
+    # Upsert by brand_name (not insert-if-new-description) -- so refining a
+    # brand's description/code here later updates its existing row instead
+    # of silently leaving a stale duplicate behind.
     for brand, code, description, image_url, link in DISCOUNT_CODES:
-        if DiscountCode.query.filter_by(brand_name=brand, description=description).first():
-            continue
-        db.session.add(DiscountCode(
-            brand_name=brand, code=code, description=description,
-            image_url=image_url, link_url=link, source_url=link,
-        ))
+        existing = DiscountCode.query.filter_by(brand_name=brand).first()
+        if existing:
+            existing.code = code
+            existing.description = description
+            existing.image_url = image_url
+            existing.link_url = link
+            existing.source_url = link
+        else:
+            db.session.add(DiscountCode(
+                brand_name=brand, code=code, description=description,
+                image_url=image_url, link_url=link, source_url=link,
+            ))
     db.session.commit()
 
     dirty = False
