@@ -7,6 +7,21 @@ from datetime import date
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+# Must happen BEFORE importing app.py: app.py reads DATABASE_URL at module
+# import time and immediately runs db.create_all() against it (see its own
+# `with app.app_context(): db.create_all()` near the bottom of the file).
+# Without this, that import-time call binds SQLAlchemy's engine to the
+# real dev database (sqlite:///videos.db) *before* the client fixture
+# below ever gets a chance to override SQLALCHEMY_DATABASE_URI -- and once
+# that engine is bound, changing the config afterwards has no effect, so
+# every test run's db.drop_all() was silently wiping the real dev
+# database's actual data instead of an isolated in-memory one.
+# A distinct throwaway *file* path, not literally ":memory:" -- using the
+# exact same ":memory:" URI here and in the client fixture below made
+# SQLAlchemy's engine cache treat both as the same database, which
+# crashed the whole test process outright instead of just failing a test.
+os.environ["DATABASE_URL"] = f"sqlite:///{tempfile.gettempdir()}/video_app_test_import_throwaway.db"
+
 import pytest
 from app import app as flask_app, db
 from models import (
