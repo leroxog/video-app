@@ -766,6 +766,20 @@ with app.app_context():
     ensure_columns_exist()
     ensure_r2_cors_configured()
 
+    # Re-applies the curated offer list (seed_data.py) on every startup, so
+    # every deploy -- i.e. every git push, which Railway rebuilds and
+    # restarts -- keeps the live database (and therefore both the web app
+    # and the desktop app, which just displays that same live site) in sync
+    # with whatever offers are defined there. Each insert there is guarded
+    # by its own existence check, so this is safe to re-run every time.
+    # Skipped under pytest so test runs don't pollute the throwaway test DB.
+    if "pytest" not in sys.modules:
+        try:
+            import seed_data
+            seed_data.seed_offers()
+        except Exception:
+            logger.exception("Angebote konnten beim Start nicht automatisch geladen werden.")
+
     # Pre-warms the local AI model (download + load, ~1 GB, see
     # local_ai.py) in the background at startup instead of leaving it to
     # happen lazily on whichever user's chat request is first -- that
