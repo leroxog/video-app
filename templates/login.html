@@ -3,6 +3,7 @@
 {% block content %}
 <div class="cheaper-auth-page">
     <h1>Willkommen zurück</h1>
+    <p class="cheaper-form-hint" style="margin-bottom:16px;">Dein LEROX-Konto -- gilt für alle Projekte auf <a href="{{ url_for('studio_home') }}">LEROX STUDIO</a>.</p>
     <form action="{{ url_for('login') }}" method="post" class="cheaper-form">
         <label for="username">Benutzername
             <input type="text" id="username" name="username" required maxlength="50">

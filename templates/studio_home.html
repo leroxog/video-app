@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#ffffff">
+    <title>LEROX STUDIO</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/cheaper.css') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='cheaper-manifest.json') }}">
+    <link rel="icon" href="{{ url_for('static', filename='img/cheaper-mark.svg') }}" type="image/svg+xml">
+</head>
+<body>
+<div class="cheaper-app">
+    <header class="cheaper-header">
+        <a class="cheaper-brand" href="{{ url_for('studio_home') }}">
+            <span class="cheaper-brand-mark" style="background:#16181c;">L</span>LEROX STUDIO
+        </a>
+        <nav class="cheaper-header-nav">
+            {% if user %}
+                <span class="cheaper-username">{{ user.username }}</span>
+                <a href="{{ url_for('account_settings') }}">Konto</a>
+                <form action="{{ url_for('logout') }}" method="post" style="display:contents;">
+                    <button type="submit">Abmelden</button>
+                </form>
+            {% else %}
+                <a href="{{ url_for('login') }}">Login</a>
+                <a class="primary" href="{{ url_for('register') }}">Registrieren</a>
+            {% endif %}
+        </nav>
+    </header>
+
+    <main class="cheaper-main">
+        <div class="studio-hero">
+            <h1 class="studio-hero-title">LEROX STUDIO</h1>
+            <p class="studio-hero-subtitle">Alle Projekte von LEROX an einem Ort -- als App zum Herunterladen oder direkt im Browser.</p>
+            {% if not user %}
+                <p class="cheaper-form-hint">Ein LEROX-Konto funktioniert für alle Projekte hier -- einmal registrieren, überall einloggen.</p>
+            {% endif %}
+        </div>
+
+        <div class="studio-grid">
+            {% for project in projects %}
+                <div class="studio-card">
+                    <div class="studio-card-icon">{{ project.icon }}</div>
+                    <h2 class="studio-card-name">{{ project.name }}</h2>
+                    <p class="studio-card-tagline">{{ project.tagline }}</p>
+                    <div class="studio-card-actions">
+                        <a class="cheaper-btn" href="{{ project.website_url }}">Website öffnen</a>
+                        {% if project.download_url %}
+                            <a class="cheaper-btn secondary" href="{{ project.download_url }}">App herunterladen</a>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    </main>
+</div>
+<script>
+    if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+            navigator.serviceWorker.register("/service-worker.js").catch(() => {});
+        });
+    }
+</script>
+</body>
+</html>

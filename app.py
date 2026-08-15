@@ -1020,7 +1020,7 @@ def _make_session_permanent():
 
 TERMS_ALLOWED_ENDPOINTS = {
     "terms_page", "terms_accept", "terms_decline", "terms_declined_page",
-    "logout", "static", "service_worker", "offline_page",
+    "logout", "static", "service_worker", "offline_page", "studio_home",
 }
 
 # Bump this whenever terms.html's actual content changes -- it forces
@@ -1058,7 +1058,7 @@ LOGIN_GATE_ALLOWED_ENDPOINTS = {
     "login", "register", "register_company", "agb_page",
     "logout", "static", "service_worker", "offline_page",
     "forgot_password", "forgot_password_email", "forgot_password_verify",
-    "forgot_password_help",
+    "forgot_password_help", "studio_home",
 } | TERMS_ALLOWED_ENDPOINTS
 
 
@@ -1081,7 +1081,7 @@ def require_login_everywhere():
 
 PROFILE_COMPLETION_ALLOWED_ENDPOINTS = {
     "complete_profile", "logout", "login", "register", "static",
-    "service_worker", "offline_page",
+    "service_worker", "offline_page", "studio_home",
 } | TERMS_ALLOWED_ENDPOINTS
 
 
@@ -1246,9 +1246,55 @@ def matching_discount_code_brands(q):
     return grouped
 
 
+# Every product listed on the LEROX STUDIO hub -- deliberately a plain
+# curated list here (not a database table): new entries only ever get
+# added when explicitly asked for in conversation, same spirit as
+# CHEAPER_SUGGESTION_CHIPS above. website_endpoint is a Flask endpoint name
+# resolved fresh per-request (so it survives future route renames);
+# download_url is a static installer path, or None if that product has no
+# desktop app yet.
+LEROX_STUDIO_PROJECTS = [
+    {
+        "key": "nex",
+        "name": "NexAI",
+        "tagline": "Dein persönlicher KI-Assistent -- Chat, Bilder und Sprache.",
+        "icon": "🤖",
+        "website_endpoint": "assistant_page",
+        "download_url": "/static/downloads/NexAI-Setup.exe",
+    },
+    {
+        "key": "cheaper",
+        "name": "Cheaper",
+        "tagline": "Reduzierte Preise, Rabattcodes und Vergünstigungen in deiner Nähe.",
+        "icon": "🏷️",
+        "website_endpoint": "index",
+        "download_url": "/static/downloads/Cheaper-Setup.exe",
+    },
+]
+
+
 @app.route("/")
+def studio_home():
+    """The public LEROX STUDIO storefront -- deliberately reachable without
+    logging in or accepting Cheaper's own terms (see TERMS_ALLOWED_ENDPOINTS
+    / LOGIN_GATE_ALLOWED_ENDPOINTS), same as browsing a real app store
+    before installing anything. Clicking into an actual product still goes
+    through that product's own login/terms gate as before."""
+    user = current_user()
+    projects = []
+    for project in LEROX_STUDIO_PROJECTS:
+        entry = dict(project)
+        entry["website_url"] = url_for(project["website_endpoint"])
+        projects.append(entry)
+    return render_template("studio_home.html", user=user, projects=projects)
+
+
+@app.route("/cheaper")
 def index():
-    """Cheaper's homepage: search + category filter + offer cards, sorted
+    """Cheaper's homepage (its own endpoint is still named "index" so every
+    existing url_for('index') across Cheaper's own templates keeps working
+    unchanged, now resolving to /cheaper instead of /) -- search + category
+    filter + offer cards, sorted
     to favor the visitor's own metro area (profile city, or a live browser
     geolocation lookup, see resolved_city below) when known. Prices shown
     already reflect this visitor's own age-based discount, see
@@ -1996,16 +2042,14 @@ def admin_deny_recovery(request_id):
 
 @app.route("/assistant")
 def assistant_page():
-    # The AI chat is no longer shown anywhere in the UI (see index()'s
-    # docstring) -- its own code, routes, and data are all still fully
-    # intact underneath, this page just isn't linked from or reachable
-    # through normal navigation anymore.
-    return redirect(url_for("index"))
+    return render_template("assistant.html", user=current_user())
 
 
 @app.route("/galerie")
 def ai_gallery():
-    return redirect(url_for("index"))
+    user = current_user()
+    items = AiGeneratedMedia.query.filter_by(user_id=user.id).order_by(AiGeneratedMedia.created_at.desc()).all()
+    return render_template("ai_gallery.html", user=user, items=items)
 
 
 @app.route("/api/ai/gallery/<int:item_id>/like", methods=["POST"])

@@ -24,6 +24,7 @@
                 <span class="cheaper-brand-mark">C</span>Cheaper
             </a>
             <nav class="cheaper-header-nav">
+                <a href="{{ url_for('studio_home') }}" title="Alle LEROX STUDIO Projekte">LEROX STUDIO</a>
                 {% if user %}
                     {% if user.is_company %}
                         <a href="{{ url_for('company_dashboard') }}">Meine Angebote</a>

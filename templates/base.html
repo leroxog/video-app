@@ -36,7 +36,7 @@
 
     {% block header %}
         <header>
-            <a class="brand-logo" href="{{ url_for('index') }}">
+            <a class="brand-logo" href="{{ url_for('studio_home') }}">
                 {% include "partials/_logo.html" %}
             </a>
 
@@ -70,11 +70,9 @@
         {% block content %}{% endblock %}
     </main>
 
-    {# The AI chat is no longer shown anywhere in the app -- its markup/JS
-       below is kept as-is (not deleted) so the feature and its data stay
-       intact underneath, just permanently gated off from rendering. See
-       app.py's index()/require_login_everywhere docstrings. #}
-    {% if false %}
+    {# NexAI chat widget -- reactivated as part of LEROX STUDIO (was
+       previously gated off entirely via {% if false %} while unlinked from
+       navigation; see app.py's assistant_page). #}
         <div class="ai-chat-widget" id="aiChatWidget" data-user-gender="{{ user.gender or '' }}" data-ai-tokens="{{ user.ai_tokens if user.ai_tokens is not none else '' }}">
             <a class="ai-chat-toggle-btn" id="aiChatToggleBtn" href="{{ url_for('assistant_page') }}" title="KI-Assistent">{{ icon('chat-bubble', 22) }}</a>
             <div class="ai-chat-panel" id="aiChatPanel" style="display:none;">
@@ -110,7 +108,7 @@
                          avatar, this would just be a duplicate there. -->
                     <div class="ai-chat-sidebar-avatar-footer">
                         {% include "partials/_account_avatar.html" %}
-                        <a class="ai-chat-sidebar-avatar-name" href="{{ url_for('profile', username=user.username) }}">{{ user.username }}</a>
+                        <a class="ai-chat-sidebar-avatar-name" href="{{ url_for('account_settings') }}">{{ user.username }}</a>
                     </div>
                 </div>
 
@@ -171,9 +169,6 @@
                         </p>
                         <p class="ai-chat-token-balance" id="aiChatTokenBalance"></p>
                         <form class="ai-chat-form" id="aiChatForm">
-                            <a class="ai-code-games-fab" id="aiCodeGamesFab" href="{{ url_for('games_page') }}" title="Spiele entdecken">
-                                <span>Spiele</span>{{ icon('rocket', 15) }}
-                            </a>
                             <input type="file" id="aiChatFileInput" accept=".txt,.md,.markdown,.py,.js,.jsx,.ts,.tsx,.json,.csv,.html,.htm,.css,.log,.yaml,.yml,.xml,.java,.c,.cpp,.cs,.sh" style="display:none;">
                             <button type="button" class="ai-chat-attach-btn" id="aiChatAttachBtn" title="Text-Datei anhängen">{{ icon('paperclip', 17) }}</button>
                             <div class="ai-chat-input-pill">
@@ -229,7 +224,6 @@
                 </div>
             </div>
         </div>
-    {% endif %}
 
     <script>
         (function () {
@@ -253,11 +247,8 @@
     <script src="{{ url_for('static', filename='js/app-store.js') }}"></script>
     <script src="{{ url_for('static', filename='js/ui-sounds.js') }}"></script>
 
-    {# This whole script only wires up the AI chat widget markup above,
-       which is permanently disabled via {% if false %} -- gated the same
-       way here so it doesn't run against a widget that was never
-       rendered (every element lookup below would be null). #}
-    {% if false %}
+    {# Wires up the AI chat widget markup above (reactivated, see that
+       block's own comment). #}
         <script>
             (function () {
                 const widget = document.getElementById("aiChatWidget");
@@ -2051,6 +2042,5 @@
                 }
             })();
         </script>
-    {% endif %}
 </body>
 </html>

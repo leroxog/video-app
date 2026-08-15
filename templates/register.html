@@ -3,6 +3,7 @@
 {% block content %}
 <div class="cheaper-auth-page">
     <h1>Konto erstellen</h1>
+    <p class="cheaper-form-hint" style="margin-bottom:16px;">Du erstellst ein LEROX-Konto -- damit kannst du dich bei allen <a href="{{ url_for('studio_home') }}">LEROX STUDIO</a> Projekten einloggen.</p>
     <form action="{{ url_for('register') }}" method="post" class="cheaper-form" id="registerForm">
         <label for="username">Benutzername
             <input type="text" id="username" name="username" required maxlength="50" value="{{ form_values.username if form_values else '' }}">

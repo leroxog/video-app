@@ -243,7 +243,7 @@ def test_existing_account_gated_until_onboarding_completed(client):
     user.country = None
     db.session.commit()
 
-    response = client.get("/", follow_redirects=False)
+    response = client.get("/cheaper", follow_redirects=False)
     assert response.status_code == 302
     assert "/complete-profile" in response.headers["Location"]
 
@@ -254,7 +254,7 @@ def test_existing_account_gated_until_onboarding_completed(client):
     )
     assert complete_res.status_code == 200
 
-    response2 = client.get("/", follow_redirects=True)
+    response2 = client.get("/cheaper", follow_redirects=True)
     assert response2.status_code == 200
 
 
@@ -376,7 +376,7 @@ def test_admin_can_create_fake_account(client):
         "purpose_of_use": "private", "country": "Deutschland", "region_skipped": "1",
         "birthdate": "1990-01-01", "gender": "keine_angabe",
     })
-    home_response = client.get("/")
+    home_response = client.get("/cheaper")
     assert b"cheaperSearchForm" in home_response.data
 
 
@@ -1722,7 +1722,10 @@ def test_ai_job_failure_is_logged_to_error_log(client, monkeypatch):
 
 
 def test_anonymous_visitor_is_gated_by_terms_before_anything_else(raw_client):
-    response = raw_client.get("/", follow_redirects=False)
+    # "/" itself is the public LEROX STUDIO storefront (deliberately exempt,
+    # like browsing a real app store before installing anything) --
+    # /cheaper is the actual gated Cheaper entry point.
+    response = raw_client.get("/cheaper", follow_redirects=False)
     assert response.status_code == 302
     assert "/terms" in response.headers["Location"]
 
@@ -1742,9 +1745,9 @@ def test_terms_accept_unblocks_anonymous_session(raw_client):
     assert accept_res.status_code == 200
 
     # Terms are cleared, but the site-wide login gate still applies to an
-    # anonymous visitor (see require_login_everywhere) -- "/" now redirects
-    # to /login instead of /terms.
-    response = raw_client.get("/", follow_redirects=False)
+    # anonymous visitor (see require_login_everywhere) -- /cheaper now
+    # redirects to /login instead of /terms.
+    response = raw_client.get("/cheaper", follow_redirects=False)
     assert response.status_code == 302
     assert "/login" in response.headers["Location"]
 
@@ -1771,7 +1774,7 @@ def test_fresh_registration_does_not_immediately_re_gate_on_terms(raw_client):
     assert register_res.status_code == 302
     assert "/terms" not in register_res.headers["Location"]
 
-    response = raw_client.get("/", follow_redirects=False)
+    response = raw_client.get("/cheaper", follow_redirects=False)
     assert response.status_code == 200
 
 
@@ -1796,12 +1799,12 @@ def test_existing_account_without_terms_accepted_is_gated_on_next_visit(client):
     user.terms_accepted_at = None
     db.session.commit()
 
-    response = client.get("/", follow_redirects=False)
+    response = client.get("/cheaper", follow_redirects=False)
     assert response.status_code == 302
     assert "/terms" in response.headers["Location"]
 
     client.post("/terms/accept")
-    response2 = client.get("/", follow_redirects=True)
+    response2 = client.get("/cheaper", follow_redirects=True)
     assert response2.status_code == 200
 
 
@@ -1815,7 +1818,7 @@ def test_terms_version_bump_re_gates_already_accepted_account(client):
     user.terms_accepted_version = app_module.TERMS_VERSION - 1
     db.session.commit()
 
-    response = client.get("/", follow_redirects=False)
+    response = client.get("/cheaper", follow_redirects=False)
     assert response.status_code == 302
     assert "/terms" in response.headers["Location"]
 
@@ -2156,7 +2159,7 @@ def test_company_can_create_offer_and_it_appears_on_homepage(client):
 
     client.post("/logout")
     register(client, username="customer1")
-    home_response = client.get("/")
+    home_response = client.get("/cheaper")
     assert b"Testkino" in home_response.data
     assert b"Normaler Sitz" in home_response.data
 
@@ -2194,7 +2197,7 @@ def test_homepage_shows_age_discount_for_young_customer(client):
     client.post("/logout")
     young_birthdate = date(date.today().year - 11, 1, 1).isoformat()
     register(client, username="kid1", birthdate=young_birthdate)
-    response = client.get("/")
+    response = client.get("/cheaper")
     assert "9.00 €".encode() in response.data
     assert "Du sparst 11.00 €".encode() in response.data
 
@@ -2209,7 +2212,7 @@ def test_homepage_shows_normal_price_for_adult_customer(client):
 
     client.post("/logout")
     register(client, username="adult1", birthdate="1990-01-01")
-    response = client.get("/")
+    response = client.get("/cheaper")
     assert "20.00 €".encode() in response.data
     assert b"Du sparst" not in response.data
 
@@ -2227,6 +2230,6 @@ def test_homepage_search_filters_by_query(client):
 
     client.post("/logout")
     register(client, username="searcher1")
-    response = client.get("/?q=Findbares")
+    response = client.get("/cheaper?q=Findbares")
     assert b"Findbares Kino" in response.data
     assert b"Anderes Schwimmbad" not in response.data

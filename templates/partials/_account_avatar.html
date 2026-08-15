@@ -1,4 +1,4 @@
-<a class="header-account-avatar" href="{{ url_for('profile', username=user.username) }}" title="Profil"
+<a class="header-account-avatar" href="{{ url_for('account_settings') }}" title="Konto"
    {% if not user.profile_image %}style="background:{{ user.username|avatar_color }}"{% endif %}>
     {% if user.profile_image %}
         <img src="{{ media_url('profile_pics', user.profile_image) }}" alt="">
