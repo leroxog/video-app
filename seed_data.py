@@ -11,6 +11,7 @@ without a separate manual seeding step per deploy.
 Can still be run standalone for local dev: .venv/Scripts/python.exe seed_data.py
 """
 from models import db, User, Offer, DiscountCode
+import push_notify
 
 # Only Mathäser has an actual company account (created via the real UI
 # flow); every other entry below is admin-seeded (company_id=None), matching
@@ -278,10 +279,16 @@ def seed_offers():
 
     # Upsert by brand_name (not insert-if-new-description) -- so refining a
     # brand's description/code here later updates its existing row instead
-    # of silently leaving a stale duplicate behind.
+    # of silently leaving a stale duplicate behind. brand_name is unique
+    # (one DiscountCode row per brand), so "a brand gets a new code" is
+    # realistically an update to that row's code/description, not a fresh
+    # insert -- that's the case notify_followers() below is for.
+    changed_brands = []
     for brand, code, description, image_url, link in DISCOUNT_CODES:
         existing = DiscountCode.query.filter_by(brand_name=brand).first()
         if existing:
+            if existing.code != code or existing.description != description:
+                changed_brands.append(brand)
             existing.code = code
             existing.description = description
             existing.image_url = image_url
@@ -293,6 +300,15 @@ def seed_offers():
                 image_url=image_url, link_url=link, source_url=link,
             ))
     db.session.commit()
+
+    for brand in changed_brands:
+        code = DiscountCode.query.filter_by(brand_name=brand).first()
+        push_notify.notify_followers(
+            brand, "code",
+            title=f"{brand}: neuer Rabattcode",
+            body=code.description,
+            url=f"/marke/{brand}",
+        )
 
     dirty = False
     for provider, image_url in PROVIDER_IMAGES.items():

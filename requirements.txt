@@ -7,6 +7,7 @@ boto3==1.35.99
 tzdata==2025.2
 requests==2.32.3
 python-dotenv==1.0.1
+pywebpush==2.4.0
 
 # Both extra indexes below serve prebuilt CPU-only wheels -- without them,
 # pip falls back to plain PyPI, which only has an sdist for

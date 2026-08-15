@@ -331,34 +331,63 @@ main.cheaper-main {
   margin: 0 0 12px;
 }
 
-.cheaper-chip-row {
+/* ---------- "Für dich" story-style icon bubbles ---------- */
+.cheaper-bubble-row {
   display: flex;
-  gap: 8px;
+  gap: 16px;
   overflow-x: auto;
   padding-bottom: 4px;
   margin-bottom: 30px;
 }
 
-.cheaper-chip {
+.cheaper-bubble {
   flex-shrink: 0;
-  border: 1px solid var(--border);
-  background: var(--bg-soft);
-  border-radius: 999px;
-  padding: 8px 16px;
-  font-size: 13.5px;
-  font-weight: 600;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
   cursor: pointer;
-  white-space: nowrap;
-  color: var(--text);
+  width: 68px;
 }
 
-.cheaper-chip:hover {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-  color: var(--accent-strong);
+.cheaper-bubble-circle {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 3px 10px rgba(20, 20, 20, 0.16);
 }
 
-/* ---------- Homepage Rabattcode chip row ---------- */
+.cheaper-bubble-circle svg {
+  width: 30px;
+  height: 30px;
+}
+
+.cheaper-bubble-0 { background: linear-gradient(135deg, #f0653a, #d1373f); }
+.cheaper-bubble-1 { background: linear-gradient(135deg, #2f9bda, #1c6fb0); }
+.cheaper-bubble-2 { background: linear-gradient(135deg, #f0653a, #e0a020); }
+.cheaper-bubble-3 { background: linear-gradient(135deg, #a259e0, #6b3fb5); }
+.cheaper-bubble-4 { background: linear-gradient(135deg, #14b886, #0a8754); }
+.cheaper-bubble-5 { background: linear-gradient(135deg, #4b5563, #1f2430); }
+
+.cheaper-bubble:hover .cheaper-bubble-circle {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(20, 20, 20, 0.22);
+}
+
+.cheaper-bubble-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-align: center;
+  line-height: 1.2;
+}
+
+/* ---------- Homepage Marken grid ---------- */
 .cheaper-section-heading-row {
   display: flex;
   align-items: baseline;
@@ -376,53 +405,74 @@ main.cheaper-main {
   color: var(--accent-strong);
 }
 
-.cheaper-coupon-chip-row {
-  display: flex;
-  gap: 10px;
-  overflow-x: auto;
-  padding-bottom: 4px;
+.cheaper-brand-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 14px;
   margin-bottom: 30px;
 }
 
-.cheaper-coupon-chip {
-  flex-shrink: 0;
+.cheaper-brand-tile {
   display: flex;
+  flex-direction: column;
   align-items: center;
   gap: 8px;
   border: 1px solid var(--border);
   background: var(--bg-card);
-  border-radius: 999px;
-  padding: 6px 14px 6px 6px;
-  font-size: 13px;
+  border-radius: var(--radius-md);
+  padding: 16px 8px;
+  font-size: 12.5px;
   font-weight: 700;
   color: var(--text);
-  white-space: nowrap;
   box-shadow: var(--shadow-card);
+  cursor: pointer;
 }
 
-.cheaper-coupon-chip:hover {
+.cheaper-brand-tile:hover {
   border-color: var(--accent);
   color: var(--accent-strong);
+  transform: translateY(-2px);
 }
 
-.cheaper-coupon-chip img {
-  width: 26px;
-  height: 26px;
+.cheaper-brand-tile img {
+  width: 44px;
+  height: 44px;
   object-fit: contain;
   border-radius: 50%;
   background: var(--bg-soft);
-  padding: 3px;
+  padding: 5px;
 }
 
-.cheaper-coupon-chip-fallback {
-  width: 26px;
-  height: 26px;
+.cheaper-brand-tile-fallback {
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
   background: var(--accent-soft);
-  font-size: 14px;
+  font-size: 20px;
+}
+
+.cheaper-brand-tile-label {
+  text-align: center;
+  line-height: 1.2;
+}
+
+.cheaper-brand-tile-more {
+  background: var(--bg-soft);
+}
+
+.cheaper-brand-tile-arrow {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--text);
+  color: #fff;
+  font-size: 20px;
 }
 
 /* ---------- Brand tabs (search matches a Rabattcode brand) ---------- */
@@ -1006,40 +1056,258 @@ main.cheaper-main {
   display: block;
 }
 
-/* ---------- Brand/company detail page ---------- */
-.cheaper-brand-header {
+/* ---------- Brand/company profile page (X-style) ---------- */
+.cheaper-xprofile {
+  margin-bottom: 10px;
+}
+
+.cheaper-xprofile-banner {
+  height: 160px;
+  border-radius: var(--radius-lg);
+  background-color: var(--bg-soft);
+  background-size: cover;
+  background-position: center;
+  filter: saturate(1.3) blur(1px) brightness(0.94);
+  position: relative;
+  overflow: hidden;
+}
+
+.cheaper-xprofile-banner-fade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0) 40%, var(--bg) 100%);
+}
+
+.cheaper-xprofile-row {
   display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 28px;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-top: -46px;
+  padding: 0 4px;
 }
 
-.cheaper-brand-header-logo {
-  width: 64px;
-  height: 64px;
-  object-fit: contain;
-  border-radius: var(--radius-md);
-  background: var(--bg-soft);
-  padding: 8px;
-  border: 1px solid var(--border);
+.cheaper-xprofile-avatar {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--bg-card);
+  border: 4px solid var(--bg);
+  box-shadow: var(--shadow-card);
 }
 
-.cheaper-brand-header-logo-fallback {
-  width: 64px;
-  height: 64px;
+.cheaper-xprofile-avatar-fallback {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--radius-md);
-  background: var(--accent-soft);
+  font-size: 36px;
   color: var(--accent-strong);
-  font-size: 30px;
+  background: var(--accent-soft);
 }
 
-.cheaper-brand-header-title {
-  font-size: 26px;
+.cheaper-xprofile-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 10px;
+}
+
+.cheaper-xprofile-info {
+  padding: 12px 4px 0;
+}
+
+.cheaper-xprofile-name {
+  font-size: 21px;
   font-weight: 800;
-  margin: 0;
+  margin: 0 0 2px;
+}
+
+.cheaper-xprofile-bio {
+  font-size: 14.5px;
+  color: var(--text);
+  margin: 6px 0;
+  white-space: pre-line;
+}
+
+.cheaper-xprofile-website {
+  display: inline-block;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--accent-strong);
+  margin: 4px 0;
+}
+
+.cheaper-xprofile-followers {
+  font-size: 13.5px;
+  color: var(--text-dim);
+  margin: 6px 0 0;
+}
+
+.cheaper-xprofile-followers strong {
+  color: var(--text);
+}
+
+/* Follow button + notification-mode menu */
+.cheaper-follow-wrap, .cheaper-xprofile-menu-wrap {
+  position: relative;
+}
+
+.cheaper-follow-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--text);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 9px 18px;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cheaper-follow-btn.is-following {
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.cheaper-follow-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 28px rgba(20, 20, 20, 0.16);
+  padding: 6px;
+  width: 190px;
+  z-index: 60;
+  animation: cheaperFilterPanelIn 0.14s ease;
+}
+
+.cheaper-follow-option-form {
+  display: block;
+}
+
+.cheaper-follow-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 9px 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.cheaper-follow-option:hover {
+  background: var(--bg-soft);
+}
+
+.cheaper-follow-option.is-active {
+  color: var(--accent-strong);
+  font-weight: 800;
+}
+
+.cheaper-follow-unfollow {
+  color: var(--danger);
+  text-decoration: line-through;
+}
+
+.cheaper-notify-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 16px;
+  padding: 0 3px;
+  border: 1.5px solid currentColor;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.cheaper-xprofile-menu-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-dim);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.cheaper-xprofile-menu-btn:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.cheaper-xprofile-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 28px rgba(20, 20, 20, 0.16);
+  padding: 6px;
+  width: 180px;
+  z-index: 60;
+  animation: cheaperFilterPanelIn 0.14s ease;
+}
+
+.cheaper-xprofile-menu-report {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 9px 10px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--danger);
+  cursor: pointer;
+  text-align: left;
+}
+
+.cheaper-xprofile-menu-report:hover {
+  background: var(--bg-soft);
+}
+
+/* Eligible (green) vs. ineligible (grey, unclickable) offer cards on a
+   brand page -- see app.py's offer_eligible_for(). */
+.cheaper-card-eligible {
+  border: 1.5px solid var(--accent);
+}
+
+.cheaper-card-ineligible {
+  opacity: 0.55;
+  filter: grayscale(1);
+  cursor: not-allowed;
+}
+
+.cheaper-card-ineligible:hover {
+  transform: none;
+  box-shadow: var(--shadow-card);
+  border-color: var(--border);
+}
+
+.cheaper-coupon.is-used {
+  opacity: 0.55;
+  filter: grayscale(1);
+}
+
+.cheaper-coupon-used-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-faint);
 }
 
 @media (max-width: 640px) {

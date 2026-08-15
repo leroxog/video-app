@@ -4,6 +4,28 @@
 <h1 style="font-size:22px;margin-bottom:4px;">Meine Angebote</h1>
 <p class="cheaper-form-hint" style="margin-bottom:20px;">{{ user.company_name }} &middot; {{ user.company_address }}</p>
 
+<a href="{{ url_for('brand_detail', brand=user.company_name) }}" class="cheaper-auth-footer" style="text-align:left;display:block;margin-bottom:20px;">&rarr; Meine Marken-Seite ansehen</a>
+
+<div class="cheaper-panel">
+    <h2>Marken-Profil</h2>
+    <p class="cheaper-form-hint" style="margin-bottom:14px;">Logo, Banner, Beschreibung und Website, wie sie auf deiner /marke/{{ user.company_name }}-Seite erscheinen.</p>
+    <form method="post" action="{{ url_for('company_profile_update') }}" class="cheaper-form-grid">
+        <label for="profile_image">Logo-URL
+            <input type="text" id="profile_image" name="profile_image" maxlength="255" value="{{ user.profile_image or '' }}">
+        </label>
+        <label for="banner_image">Banner-URL (optional -- sonst wird das Logo groß als Hintergrund genutzt)
+            <input type="text" id="banner_image" name="banner_image" maxlength="255" value="{{ user.banner_image or '' }}">
+        </label>
+        <label for="website_url">Website
+            <input type="text" id="website_url" name="website_url" maxlength="300" value="{{ user.website_url or '' }}">
+        </label>
+        <label for="bio" style="grid-column:1/-1;">Beschreibung / Slogan
+            <textarea id="bio" name="bio" rows="2">{{ user.bio or '' }}</textarea>
+        </label>
+        <button type="submit" class="cheaper-btn secondary" style="grid-column:1/-1;width:fit-content;">Profil speichern</button>
+    </form>
+</div>
+
 <a href="{{ url_for('company_offer_new') }}" class="cheaper-btn" style="margin-bottom:20px;display:inline-flex;">+ Neues Angebot</a>
 
 {% if offers %}

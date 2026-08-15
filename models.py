@@ -67,6 +67,15 @@ class User(db.Model):
     is_company = db.Column(db.Boolean, nullable=False, default=False)
     company_name = db.Column(db.String(200), nullable=True)
     company_address = db.Column(db.String(300), nullable=True)
+    # Brand/profile-page fields (see app.py's /marke/<brand>) -- profile_image
+    # doubles as the brand's own logo for a company account. bio is the
+    # editable slogan/description shown where a social profile's bio would
+    # go; website_url and banner_image only make sense for company accounts
+    # but aren't hard-restricted at the column level, same as other
+    # company-only fields above.
+    bio = db.Column(db.Text, nullable=True)
+    banner_image = db.Column(db.String(255), nullable=True)
+    website_url = db.Column(db.String(300), nullable=True)
     sounds_uploaded = db.relationship("Sound", backref="uploader", lazy=True, cascade="all, delete-orphan")
     subscriptions_made = db.relationship(
         "Subscription",
@@ -728,3 +737,64 @@ class DiscountCode(db.Model):
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     click_count = db.Column(db.Integer, nullable=False, default=0)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class BrandFollow(db.Model):
+    """A user following a brand's page (see app.py's /marke/<brand> route).
+    brand_name is free text, not a foreign key to User -- most tracked
+    brands (Nike, adidas, ...) aren't real Cheaper accounts, just
+    admin-seeded Offer/DiscountCode rows; a real company account (like
+    Mathäser) uses its own company_name as that same string, so following
+    works identically either way. notify_mode controls which Web Push
+    notifications (see push_notify.py) this follow generates when the
+    brand gets a new Offer or DiscountCode: "all", "none" (follow without
+    notifications), "codes" (only new Rabattcodes), "offers" (only new
+    Angebote)."""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    brand_name = db.Column(db.String(150), nullable=False)
+    notify_mode = db.Column(db.String(10), nullable=False, default="all")
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    user = db.relationship("User")
+    __table_args__ = (db.UniqueConstraint("user_id", "brand_name", name="uq_brandfollow_user_brand"),)
+
+
+class PushSubscription(db.Model):
+    """One browser's Web Push subscription for a user -- created
+    client-side via PushManager.subscribe() (see home.html's notification
+    permission flow) and used by push_notify.py to actually deliver a
+    notification when a followed brand posts something new. endpoint is
+    unique because the browser itself generates a fresh one per
+    subscription; a user can have several rows (one per device/browser)."""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    endpoint = db.Column(db.Text, nullable=False, unique=True)
+    p256dh = db.Column(db.String(255), nullable=False)
+    auth = db.Column(db.String(255), nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    user = db.relationship("User")
+
+
+class DiscountCodeUse(db.Model):
+    """Marks that this user has clicked through a specific Rabattcode's
+    "Zum Shop" link at least once -- shown grayed-out/already-used on
+    their own view of that brand's page after that (see app.py's
+    brand_detail). Purely a personal "I've already grabbed this" marker,
+    not a real redemption-verification signal -- nothing here confirms
+    the code was actually applied at checkout."""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    code_id = db.Column(db.Integer, db.ForeignKey("discount_code.id"), nullable=False)
+    used_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    __table_args__ = (db.UniqueConstraint("user_id", "code_id", name="uq_discountcodeuse_user_code"),)
+
+
+class BrandReport(db.Model):
+    """A "Problem melden" report against a brand page (see app.py's
+    /marke/<brand>/melden) -- purely a record for human review, same
+    "stored, not auto-actioned" pattern as StudioProjectReport."""
+    id = db.Column(db.Integer, primary_key=True)
+    brand_name = db.Column(db.String(150), nullable=False)
+    reporter_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    reporter = db.relationship("User")

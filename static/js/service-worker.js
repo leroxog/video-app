@@ -62,3 +62,34 @@ self.addEventListener("fetch", (event) => {
         );
     }
 });
+
+// Real Web Push delivery (see push_notify.py) -- payload is
+// {title, body, url} JSON, set by notify_followers() on the server.
+self.addEventListener("push", (event) => {
+    let payload = { title: "Cheaper", body: "Neuigkeiten von einer gefolgten Marke.", url: "/" };
+    try {
+        if (event.data) payload = Object.assign(payload, event.data.json());
+    } catch (e) {
+        /* non-JSON payload -- keep the fallback text above */
+    }
+    event.waitUntil(
+        self.registration.showNotification(payload.title, {
+            body: payload.body,
+            icon: "/static/img/cheaper-mark.svg",
+            data: { url: payload.url },
+        })
+    );
+});
+
+self.addEventListener("notificationclick", (event) => {
+    event.notification.close();
+    const url = (event.notification.data && event.notification.data.url) || "/";
+    event.waitUntil(
+        self.clients.matchAll({ type: "window" }).then((clients) => {
+            for (const client of clients) {
+                if (client.url.endsWith(url) && "focus" in client) return client.focus();
+            }
+            if (self.clients.openWindow) return self.clients.openWindow(url);
+        })
+    );
+});

@@ -35,9 +35,11 @@ from models import (
     AiVoiceProfile, AiPersonality, AiGeneratedMedia,
     AiTrainingExample, AiTrainingRun,
     Offer, OFFER_CATEGORIES, OFFER_CATEGORY_LABELS, DiscountCode,
+    BrandFollow, PushSubscription, DiscountCodeUse, BrandReport,
 )
 import ai_assistant
 import local_ai
+import push_notify
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -625,6 +627,9 @@ def ensure_sqlite_columns_exist():
             ("is_company", "BOOLEAN NOT NULL DEFAULT 0"),
             ("company_name", "VARCHAR(200)"),
             ("company_address", "VARCHAR(300)"),
+            ("bio", "TEXT"),
+            ("banner_image", "VARCHAR(255)"),
+            ("website_url", "VARCHAR(300)"),
         ],
         # ai_personality itself is created fresh by db.create_all() on any
         # brand-new database, but on one that already had the table from
@@ -749,6 +754,9 @@ def ensure_columns_exist():
         "ALTER TABLE ai_generated_media ADD COLUMN IF NOT EXISTS liked BOOLEAN NOT NULL DEFAULT FALSE",
         "ALTER TABLE offer ADD COLUMN IF NOT EXISTS district VARCHAR(100)",
         "ALTER TABLE offer ADD COLUMN IF NOT EXISTS click_count INTEGER NOT NULL DEFAULT 0",
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS bio TEXT',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS banner_image VARCHAR(255)',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS website_url VARCHAR(300)',
     ]
     with db.engine.connect() as conn:
         for statement in statements:
@@ -843,6 +851,7 @@ def inject_cheaper_globals():
     return {
         "user": current_user(),
         "is_app_context": request.headers.get("X-Cheaper-App") == "1",
+        "vapid_public_key": push_notify.VAPID_PUBLIC_KEY,
     }
 
 
@@ -1147,7 +1156,7 @@ CHEAPER_SUGGESTION_CHIPS = [
 
 SORT_MODES = ("nahe", "beliebt", "ersparnis", "guenstig", "alle")
 SORT_MODE_LABELS = {
-    "nahe": "In der Nähe",
+    "nahe": "For you!",
     "beliebt": "Beliebteste",
     "ersparnis": "Größte Ersparnis",
     "guenstig": "Günstigste zuerst",
@@ -1349,34 +1358,148 @@ def discount_codes_page():
 def discount_code_go(code_id):
     code = DiscountCode.query.filter_by(id=code_id, is_active=True).first_or_404()
     code.click_count += 1
+    user = current_user()
+    if user and not DiscountCodeUse.query.filter_by(user_id=user.id, code_id=code.id).first():
+        db.session.add(DiscountCodeUse(user_id=user.id, code_id=code.id))
     db.session.commit()
     return redirect(code.link_url)
+
+
+NOTIFY_MODES = ("all", "none", "codes", "offers")
+
+
+def offer_eligible_for(offer, age):
+    """True if this offer has no age-gated discount at all (always usable
+    by anyone), or the viewer's age qualifies for the one it has. None age
+    with an age-gated discount counts as "not confirmed eligible" -- shown
+    greyed-out on the brand page rather than assumed to apply."""
+    if offer.discount_max_age is None:
+        return True
+    return age is not None and age <= offer.discount_max_age
 
 
 @app.route("/marke/<brand>")
 def brand_detail(brand):
     """Everything Cheaper has on one company: its Rabattcodes and its
     Offers, listed as plain facts (normal price, discount price, and
-    whatever age/other condition applies) regardless of whether they apply
-    to this particular viewer -- e.g. a 17-year-old still sees a "nur unter
-    16" discount listed here, it's just not the price shown/applied
-    anywhere else for them. Clicking a company anywhere (homepage brand
-    chip, a search match, a Rabattcode card) lands here first instead of
-    jumping straight to the external site."""
+    whatever age condition applies) regardless of whether they apply to
+    this particular viewer -- e.g. a 17-year-old still sees a "nur unter
+    16" discount listed here (greyed out, not clickable), it's just not
+    the price shown/applied anywhere else for them. Clicking a company
+    anywhere (homepage brand chip, a search match, a Rabattcode card)
+    lands here first instead of jumping straight to the external site.
+    A real company account (is_company, company_name == brand) supplies
+    the logo/banner/bio/website shown here if one exists; otherwise the
+    logo falls back to a Rabattcode's own image."""
     user = current_user()
     codes = DiscountCode.query.filter_by(is_active=True, brand_name=brand).all()
     offers = Offer.query.filter_by(is_active=True, provider_name=brand).order_by(Offer.created_at.desc()).all()
-    if not codes and not offers:
+    company_account = User.query.filter_by(is_company=True, company_name=brand).first()
+    if not codes and not offers and not company_account:
         abort(404)
+
+    user_age = compute_age(user.birthdate) if user and user.birthdate else None
     offer_cards = [{
         "offer": offer,
         "normal_price": offer.normal_price_cents / 100,
         "discount_price": offer.discount_price_cents / 100 if offer.discount_price_cents is not None else None,
+        "eligible": offer_eligible_for(offer, user_age),
     } for offer in offers]
+
+    used_code_ids = set()
+    if user:
+        used_code_ids = {u.code_id for u in DiscountCodeUse.query.filter_by(user_id=user.id).all()}
+    code_cards = [{"code": c, "used": c.id in used_code_ids} for c in codes]
+
+    follower_count = BrandFollow.query.filter_by(brand_name=brand).count()
+    my_follow = BrandFollow.query.filter_by(user_id=user.id, brand_name=brand).first() if user else None
+
+    logo_url = None
+    if company_account and company_account.profile_image:
+        logo_url = company_account.profile_image
+    elif codes:
+        logo_url = codes[0].image_url
+
     return render_template(
-        "brand_detail.html", user=user, brand=brand, codes=codes, offer_cards=offer_cards,
-        category_labels=OFFER_CATEGORY_LABELS,
+        "brand_detail.html", user=user, brand=brand,
+        code_cards=code_cards, offer_cards=offer_cards, category_labels=OFFER_CATEGORY_LABELS,
+        follower_count=follower_count, my_follow=my_follow, notify_modes=NOTIFY_MODES,
+        logo_url=logo_url, company_account=company_account,
+        is_own_company=bool(user and company_account and user.id == company_account.id),
     )
+
+
+@app.route("/marke/<brand>/folgen", methods=["POST"])
+def brand_follow(brand):
+    user = current_user()
+    if user is None:
+        abort(403)
+    notify_mode = request.form.get("notify_mode", "all")
+    if notify_mode not in NOTIFY_MODES:
+        notify_mode = "all"
+    follow = BrandFollow.query.filter_by(user_id=user.id, brand_name=brand).first()
+    if follow:
+        follow.notify_mode = notify_mode
+    else:
+        db.session.add(BrandFollow(user_id=user.id, brand_name=brand, notify_mode=notify_mode))
+    db.session.commit()
+    return redirect(url_for("brand_detail", brand=brand))
+
+
+@app.route("/marke/<brand>/entfolgen", methods=["POST"])
+def brand_unfollow(brand):
+    user = current_user()
+    if user is None:
+        abort(403)
+    BrandFollow.query.filter_by(user_id=user.id, brand_name=brand).delete()
+    db.session.commit()
+    return redirect(url_for("brand_detail", brand=brand))
+
+
+@app.route("/marke/<brand>/melden", methods=["POST"])
+def brand_report(brand):
+    user = current_user()
+    if user is None:
+        abort(403)
+    db.session.add(BrandReport(brand_name=brand, reporter_id=user.id))
+    db.session.commit()
+    flash("Danke, wir haben deine Meldung erhalten.")
+    return redirect(url_for("brand_detail", brand=brand))
+
+
+@app.route("/push/subscribe", methods=["POST"])
+def push_subscribe():
+    user = current_user()
+    if user is None:
+        abort(403)
+    data = request.get_json(silent=True) or {}
+    endpoint = (data.get("endpoint") or "").strip()
+    keys = data.get("keys") or {}
+    p256dh = (keys.get("p256dh") or "").strip()
+    auth = (keys.get("auth") or "").strip()
+    if not endpoint or not p256dh or not auth:
+        return jsonify({"error": "invalid subscription"}), 400
+    existing = PushSubscription.query.filter_by(endpoint=endpoint).first()
+    if existing:
+        existing.user_id = user.id
+        existing.p256dh = p256dh
+        existing.auth = auth
+    else:
+        db.session.add(PushSubscription(user_id=user.id, endpoint=endpoint, p256dh=p256dh, auth=auth))
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/push/unsubscribe", methods=["POST"])
+def push_unsubscribe():
+    user = current_user()
+    if user is None:
+        abort(403)
+    data = request.get_json(silent=True) or {}
+    endpoint = (data.get("endpoint") or "").strip()
+    PushSubscription.query.filter_by(user_id=user.id, endpoint=endpoint).delete()
+    db.session.commit()
+    return jsonify({"ok": True})
 
 
 def parse_onboarding_fields(form):
@@ -1543,6 +1666,24 @@ def company_dashboard():
     )
 
 
+@app.route("/firma/profil", methods=["POST"])
+def company_profile_update():
+    """Lets a company account edit what its own /marke/<brand> page shows:
+    logo (reuses profile_image, the same field a private account's avatar
+    would use), banner image, bio/slogan, and website. company_name itself
+    is intentionally not editable here -- it's the brand key every Offer/
+    DiscountCode row for this company is matched against, so changing it
+    would silently orphan all of them from their own profile page."""
+    user = require_company()
+    user.profile_image = (request.form.get("profile_image") or "").strip() or None
+    user.banner_image = (request.form.get("banner_image") or "").strip() or None
+    user.bio = (request.form.get("bio") or "").strip() or None
+    user.website_url = (request.form.get("website_url") or "").strip() or None
+    db.session.commit()
+    flash("Profil aktualisiert.")
+    return redirect(url_for("company_dashboard"))
+
+
 def _apply_offer_form(offer, form):
     offer.provider_name = (form.get("provider_name") or "").strip()
     offer.title = (form.get("title") or "").strip()
@@ -1578,6 +1719,12 @@ def company_offer_new():
             return render_template("company_offer_form.html", user=user, offer=None, form_values=request.form, categories=OFFER_CATEGORIES, category_labels=OFFER_CATEGORY_LABELS)
         db.session.add(offer)
         db.session.commit()
+        push_notify.notify_followers(
+            offer.provider_name, "offer",
+            title=f"{offer.provider_name}: neues Angebot",
+            body=offer.title,
+            url=url_for("offer_detail", offer_id=offer.id),
+        )
         flash("Angebot erstellt.")
         return redirect(url_for("company_dashboard"))
     return render_template("company_offer_form.html", user=user, offer=None, form_values=None, categories=OFFER_CATEGORIES, category_labels=OFFER_CATEGORY_LABELS)

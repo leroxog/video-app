@@ -4,21 +4,95 @@
 
 <a class="cheaper-detail-back" href="{{ url_for('index') }}">&larr; Zurück</a>
 
-<div class="cheaper-brand-header">
-    {% set logo = (codes[0].image_url if codes else None) %}
-    {% if logo %}
-        <img class="cheaper-brand-header-logo" src="{{ logo }}" alt="{{ brand }}">
-    {% else %}
-        <div class="cheaper-brand-header-logo-fallback">🏷️</div>
-    {% endif %}
-    <h1 class="cheaper-brand-header-title">{{ brand }}</h1>
+<div class="cheaper-xprofile">
+    <div class="cheaper-xprofile-banner" {% if company_account and company_account.banner_image %}style="background-image:url('{{ company_account.banner_image }}')"{% elif logo_url %}style="background-image:url('{{ logo_url }}')"{% endif %}>
+        <div class="cheaper-xprofile-banner-fade"></div>
+    </div>
+
+    <div class="cheaper-xprofile-row">
+        {% if logo_url %}
+            <img class="cheaper-xprofile-avatar" src="{{ logo_url }}" alt="{{ brand }}">
+        {% else %}
+            <div class="cheaper-xprofile-avatar cheaper-xprofile-avatar-fallback">🏷️</div>
+        {% endif %}
+
+        <div class="cheaper-xprofile-actions">
+            {% if is_own_company %}
+                <a class="cheaper-btn secondary" href="{{ url_for('company_dashboard') }}">Profil bearbeiten</a>
+            {% elif user %}
+                <div class="cheaper-follow-wrap">
+                    {% if my_follow %}
+                        <button type="button" class="cheaper-follow-btn is-following" id="cheaperFollowBtn">
+                            {% if my_follow.notify_mode == "all" %}🔔
+                            {% elif my_follow.notify_mode == "none" %}🔕
+                            {% elif my_follow.notify_mode == "codes" %}<span class="cheaper-notify-badge">123</span>
+                            {% elif my_follow.notify_mode == "offers" %}<span class="cheaper-notify-badge">%</span>
+                            {% endif %}
+                            Follow
+                        </button>
+                    {% else %}
+                        <button type="button" class="cheaper-follow-btn" id="cheaperFollowBtn">+ Follow</button>
+                    {% endif %}
+
+                    <div class="cheaper-follow-menu" id="cheaperFollowMenu" hidden>
+                        <form method="post" action="{{ url_for('brand_follow', brand=brand) }}" class="cheaper-follow-option-form">
+                            <input type="hidden" name="notify_mode" value="all">
+                            <button type="submit" class="cheaper-follow-option {% if my_follow and my_follow.notify_mode == 'all' %}is-active{% endif %}">🔔 Follow</button>
+                        </form>
+                        <form method="post" action="{{ url_for('brand_follow', brand=brand) }}" class="cheaper-follow-option-form">
+                            <input type="hidden" name="notify_mode" value="none">
+                            <button type="submit" class="cheaper-follow-option {% if my_follow and my_follow.notify_mode == 'none' %}is-active{% endif %}">🔕 Follow</button>
+                        </form>
+                        <form method="post" action="{{ url_for('brand_follow', brand=brand) }}" class="cheaper-follow-option-form">
+                            <input type="hidden" name="notify_mode" value="codes">
+                            <button type="submit" class="cheaper-follow-option {% if my_follow and my_follow.notify_mode == 'codes' %}is-active{% endif %}"><span class="cheaper-notify-badge">123</span> Follow</button>
+                        </form>
+                        <form method="post" action="{{ url_for('brand_follow', brand=brand) }}" class="cheaper-follow-option-form">
+                            <input type="hidden" name="notify_mode" value="offers">
+                            <button type="submit" class="cheaper-follow-option {% if my_follow and my_follow.notify_mode == 'offers' %}is-active{% endif %}"><span class="cheaper-notify-badge">%</span> Follow</button>
+                        </form>
+                        {% if my_follow %}
+                            <form method="post" action="{{ url_for('brand_unfollow', brand=brand) }}" class="cheaper-follow-option-form">
+                                <button type="submit" class="cheaper-follow-option cheaper-follow-unfollow">Follow</button>
+                            </form>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endif %}
+
+            {% if user %}
+                <div class="cheaper-xprofile-menu-wrap">
+                    <button type="button" class="cheaper-xprofile-menu-btn" id="cheaperBrandMenuBtn">⋯</button>
+                    <div class="cheaper-xprofile-menu" id="cheaperBrandMenu" hidden>
+                        <form method="post" action="{{ url_for('brand_report', brand=brand) }}">
+                            <button type="submit" class="cheaper-xprofile-menu-report">⚠ Problem Melden</button>
+                        </form>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="cheaper-xprofile-info">
+        <h1 class="cheaper-xprofile-name">{{ (company_account.company_name if company_account and company_account.company_name else brand) }}</h1>
+        {% set bio = company_account.bio if company_account else None %}
+        {% if bio %}<p class="cheaper-xprofile-bio">{{ bio }}</p>{% endif %}
+        {% set website = company_account.website_url if company_account else None %}
+        {% if website %}
+            <a class="cheaper-xprofile-website" href="{{ website }}" target="_blank" rel="noopener noreferrer">
+                🔗 {{ website }}
+            </a>
+        {% endif %}
+        <p class="cheaper-xprofile-followers">{{ follower_count }} Follower</p>
+    </div>
 </div>
 
-{% if codes %}
-    <p class="cheaper-section-label">Rabattcodes</p>
+{% if code_cards %}
+    <p class="cheaper-section-label" style="margin-top: 30px;">Rabattcodes</p>
     <div class="cheaper-coupon-grid">
-        {% for code in codes %}
-            <div class="cheaper-coupon">
+        {% for cc in code_cards %}
+            {% set code = cc.code %}
+            <div class="cheaper-coupon {% if cc.used %}is-used{% endif %}">
                 {% if code.image_url %}
                     <img class="cheaper-coupon-logo" src="{{ code.image_url }}" alt="{{ code.brand_name }}" loading="lazy">
                 {% else %}
@@ -33,7 +107,11 @@
                             <span class="cheaper-coupon-code-copy">Kopieren</span>
                         </button>
                     {% endif %}
-                    <a class="cheaper-btn secondary cheaper-coupon-cta" href="{{ url_for('discount_code_go', code_id=code.id) }}">Zum Shop</a>
+                    {% if cc.used %}
+                        <span class="cheaper-coupon-used-label">Bereits verwendet</span>
+                    {% else %}
+                        <a class="cheaper-btn secondary cheaper-coupon-cta" href="{{ url_for('discount_code_go', code_id=code.id) }}">Zum Shop</a>
+                    {% endif %}
                 </div>
             </div>
         {% endfor %}
@@ -44,7 +122,7 @@
     <p class="cheaper-section-label" style="margin-top: 30px;">Angebote</p>
     <div class="cheaper-card-grid">
         {% for c in offer_cards %}
-            <a class="cheaper-card" href="{{ url_for('offer_detail', offer_id=c.offer.id) }}">
+            {% set inner %}
                 {% if c.offer.image_url %}
                     <img class="cheaper-card-image" src="{{ c.offer.image_url }}" alt="{{ c.offer.title }}" loading="lazy">
                 {% else %}
@@ -65,17 +143,22 @@
                     {% if c.discount_price is not none %}
                         <span class="cheaper-card-savings">
                             Rabatt{% if c.offer.discount_label %} &middot; {{ c.offer.discount_label }}{% elif c.offer.discount_max_age %} &middot; bis {{ c.offer.discount_max_age }} Jahre{% endif %}
-                            -- gilt evtl. nicht für dich, siehe Detailseite
+                            {% if not c.eligible %} &middot; gilt nicht für dich{% endif %}
                         </span>
                     {% endif %}
                 </div>
-            </a>
+            {% endset %}
+            {% if c.eligible %}
+                <a class="cheaper-card cheaper-card-eligible" href="{{ url_for('offer_detail', offer_id=c.offer.id) }}">{{ inner }}</a>
+            {% else %}
+                <div class="cheaper-card cheaper-card-ineligible" aria-disabled="true">{{ inner }}</div>
+            {% endif %}
         {% endfor %}
     </div>
 {% endif %}
 
-{% if not codes and not offer_cards %}
-    <p class="cheaper-empty-state">Nichts gefunden für "{{ brand }}".</p>
+{% if not code_cards and not offer_cards %}
+    <p class="cheaper-empty-state">Noch nichts von {{ brand }} auf Cheaper.</p>
 {% endif %}
 
 {% endblock %}
@@ -98,5 +181,42 @@
             }
         });
     });
+
+    (function () {
+        var followBtn = document.getElementById("cheaperFollowBtn");
+        var followMenu = document.getElementById("cheaperFollowMenu");
+        if (followBtn && followMenu) {
+            followBtn.addEventListener("click", function (e) {
+                e.stopPropagation();
+                followMenu.hidden = !followMenu.hidden;
+            });
+        }
+
+        var menuBtn = document.getElementById("cheaperBrandMenuBtn");
+        var menu = document.getElementById("cheaperBrandMenu");
+        if (menuBtn && menu) {
+            menuBtn.addEventListener("click", function (e) {
+                e.stopPropagation();
+                menu.hidden = !menu.hidden;
+            });
+        }
+
+        document.addEventListener("click", function () {
+            if (followMenu) followMenu.hidden = true;
+            if (menu) menu.hidden = true;
+        });
+
+        // Wenn man auf eine Benachrichtigungs-Option (ausser "aus") klickt,
+        // gleich auch eine echte Push-Subscription im Browser anlegen.
+        var vapidKey = "{{ vapid_public_key or '' }}";
+        document.querySelectorAll(".cheaper-follow-option-form").forEach(function (form) {
+            var mode = form.querySelector("input[name='notify_mode']");
+            if (mode && mode.value !== "none" && vapidKey) {
+                form.addEventListener("submit", function () {
+                    window.cheaperEnsurePushSubscribed && window.cheaperEnsurePushSubscribed(vapidKey);
+                });
+            }
+        });
+    })();
 </script>
 {% endblock %}
