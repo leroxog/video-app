@@ -1084,6 +1084,8 @@ main.cheaper-main {
   justify-content: space-between;
   margin-top: -46px;
   padding: 0 4px;
+  position: relative;
+  z-index: 1;
 }
 
 .cheaper-xprofile-avatar {

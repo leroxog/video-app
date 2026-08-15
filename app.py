@@ -1288,6 +1288,13 @@ def index():
     elif sort_mode == "guenstig":
         offer_cards.sort(key=lambda c: c["price"])
 
+    discount_codes_query = DiscountCode.query.filter_by(is_active=True)
+    if q:
+        like = f"%{q}%"
+        discount_codes_query = discount_codes_query.filter(db.or_(
+            DiscountCode.brand_name.ilike(like), DiscountCode.description.ilike(like),
+        ))
+
     return render_template(
         "home.html", user=user, offer_cards=offer_cards, q=q,
         selected_categories=selected_categories,
@@ -1295,7 +1302,7 @@ def index():
         chips=CHEAPER_SUGGESTION_CHIPS, resolved_city=resolved_city,
         sort_mode=sort_mode, sort_modes=SORT_MODES, sort_mode_labels=SORT_MODE_LABELS,
         brand_codes=matching_discount_code_brands(q),
-        discount_codes=DiscountCode.query.filter_by(is_active=True).order_by(DiscountCode.brand_name).all(),
+        discount_codes=discount_codes_query.order_by(DiscountCode.brand_name).all(),
     )
 
 
