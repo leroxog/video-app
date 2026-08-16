@@ -794,25 +794,13 @@ with app.app_context():
         except Exception:
             logger.exception("Angebote konnten beim Start nicht automatisch geladen werden.")
 
-    # Pre-warms the local AI model (download + load, ~1 GB, see
-    # local_ai.py) in the background at startup instead of leaving it to
-    # happen lazily on whichever user's chat request is first -- that
-    # request would otherwise eat the full download+load time itself and
-    # risk the gunicorn worker's own request timeout. Runs in a daemon
-    # thread so a slow/failed download never blocks the app from starting;
-    # get_llama() is called again (and just returns the cached instance)
-    # on the first real chat request either way. Skipped under pytest --
-    # loading a real ~1.5 GB model would eat CPU throughout the whole test
-    # run and race with tests that assume a mocked generate_reply()
-    # completes near-instantly.
-    if "pytest" not in sys.modules:
-        def _prewarm_local_ai():
-            try:
-                local_ai.get_llama()
-            except Exception:
-                logger.exception("Lokales KI-Modell konnte beim Start nicht vorgeladen werden.")
-
-        threading.Thread(target=_prewarm_local_ai, daemon=True).start()
+    # Live chat generation moved back to Groq's hosted API (see
+    # ai_assistant.py's _generate_groq) -- local_ai.py's self-hosted model
+    # is no longer on the hot path, only still used lazily by the admin
+    # fine-tuning feature if a training run is actually started, so there's
+    # no reason to eagerly download/load its ~1 GB model at every startup
+    # anymore (that used to happen here; removed to save the memory/CPU on
+    # Railway's free tier).
 
     admin_username = os.environ.get("ADMIN_USERNAME")
     admin_password = os.environ.get("ADMIN_PASSWORD")

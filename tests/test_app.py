@@ -1043,14 +1043,13 @@ def test_ai_chat_status_unknown_job_404s(client):
     assert response.status_code == 404
 
 
-def test_ai_chat_reports_error_when_local_model_fails_to_load(client, monkeypatch):
+def test_ai_chat_reports_error_when_model_call_fails(client, monkeypatch):
     import ai_assistant
-    import local_ai
 
     def boom(*args, **kwargs):
         raise RuntimeError("Modell konnte nicht geladen werden.")
 
-    monkeypatch.setattr(local_ai, "generate_chat", boom)
+    monkeypatch.setattr(ai_assistant, "_generate_groq", boom)
     register(client)
 
     start_res = client.post("/api/ai/chat", json={"message": "Hallo"})

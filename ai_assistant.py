@@ -2,31 +2,32 @@
 floating widget in base.html) and as programming help inside NexAI
 studio (where the user's current script is sent along as context).
 
-Text generation runs entirely on NexAI's own infrastructure: a small,
-heavily quantized open-weight model (see local_ai.py), loaded directly
-into this process and run on the server's own CPU via llama-cpp-python --
-no external chat API, no per-token cost, nothing to configure. This
-replaced an earlier version of this module that called Groq's hosted
-inference API instead; that gave much larger-model quality/speed for
-free, but at the cost of depending on a third party for the app's core
-feature. The tradeoff was made deliberately and is expected to show:
-noticeably weaker and slower replies than before, and no native
-structured tool-calling (see _tools_instructions/_parse_tool_call below
-for the prompt-based scheme that replaces it) -- an accepted quality
-regression in exchange for genuinely owning the whole pipeline, not a bug
-to "fix" back to bigger/faster.
+Text generation runs through Groq's hosted inference API (see
+_generate_groq below; requires GROQ_API_KEY) -- a far larger free-tier
+model, giving noticeably better/faster replies than this app's brief
+stint on a small self-hosted CPU model (local_ai.py, ~1.5B params run via
+llama-cpp-python). That self-hosted setup was tried deliberately (see
+local_ai.py's own docstring) to avoid depending on a third party for the
+app's core feature, but the reply-quality tradeoff wasn't worth it and
+this module was switched back. local_ai.py itself is NOT deleted -- the
+admin fine-tuning feature (see app.py's admin_ai_training_start) still
+fine-tunes that same local model on demand, it's just no longer on live
+chat's hot path. Tool-calling stays on this module's own prompt-based
+```tool_call``` convention (see _tools_instructions/_parse_tool_call
+below) rather than switching to Groq's native structured tool-calling --
+that convention already works reliably, and reply quality was the actual
+problem being fixed here, not the tool pipeline.
 
 Image generation (generate_image, via Pollinations.ai) and cloned-voice
 audio (generate_audio, via ElevenLabs/browser TTS) are unaffected by any
 of this -- those were always separate external services and still are;
-only the actual chat/voice-chat TEXT reply is now self-hosted.
+only the actual chat/voice-chat TEXT reply's backend changed.
 
 Requests still run through a background-thread job queue and are polled by
-the client (see start_chat_job()/get_job_status()) even though local
-inference is comparatively fast, since that keeps the API contract the
-same regardless of which backend answers it and matches the
-run_video_wipe()-style pattern already used elsewhere in this app for
-other async jobs.
+the client (see start_chat_job()/get_job_status()), since that keeps the
+API contract the same regardless of which backend answers it (Groq today,
+something else potentially later) and matches the run_video_wipe()-style
+pattern already used elsewhere in this app for other async jobs.
 
 This module knows nothing about the database -- chat history persistence
 lives in app.py (AiChat/AiChatMessage), which passes prior turns in as
@@ -34,15 +35,17 @@ lives in app.py (AiChat/AiChatMessage), which passes prior turns in as
 history is always scoped to the same user's own past chats; it is never
 shared with or used to influence another user's replies.
 
-Also gives the assistant tool-calling abilities -- OpenAI/Groq-style
-structured function calling isn't available from a small local model run
-through llama-cpp-python, so this is instead taught entirely through the
-system prompt (see _tools_instructions) as a convention the model
-follows by imitation: to call a tool, respond with nothing but a fenced
-```tool_call``` block containing {"name", "arguments"} JSON, which
-_parse_tool_call then reads back out. Not model fine-tuning either way --
-there's still no way to retrain this model from within the app, tool use
-is purely a per-request prompting technique. Split by which of three
+Also gives the assistant tool-calling abilities -- rather than switching to
+Groq's native structured function calling, tool use is still taught
+entirely through the system prompt (see _tools_instructions) as a
+convention the model follows by imitation: to call a tool, respond with
+nothing but a fenced ```tool_call``` block containing {"name",
+"arguments"} JSON, which _parse_tool_call then reads back out. This is
+the same prompt-based scheme from this module's brief self-hosted-model
+era, kept as-is because it already works reliably and switching tool-call
+mechanisms wasn't needed just to fix reply quality. Not model fine-tuning
+either way -- Groq's hosted model can't be retrained from within this
+app, tool use is purely a per-request prompting technique. Split by which of three
 modes generate_reply() runs in (`project_type`):
   - None (general chat): search_wikipedia, get_weather, search_docs --
     live lookups for factual questions, not available in the other two
@@ -105,20 +108,24 @@ is still a fresh, stateless call (see above) -- it's prompt-level
 roleplay/personalization, read only by the AI itself, same privacy
 framing as the rest of a user's private profile.
 """
+import os
 import re
 import json
 import html
 import logging
 import threading
+import time
 import uuid
 import urllib.parse
 import urllib.robotparser
 
 import requests
 
-import local_ai
-
 logger = logging.getLogger(__name__)
+
+GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
+CHAT_REQUEST_TIMEOUT_SECONDS = 30
 
 MAX_MESSAGE_CHARS = 2000
 MAX_CONTEXT_CHARS = 4000
@@ -126,11 +133,11 @@ MAX_REPLY_TOKENS = 900
 MAX_HISTORY_MESSAGES = 12
 # Code modes (game DSL, webapp) stay at the lower, more predictable value --
 # the flat Studio DSL in particular has zero tolerance for invented syntax.
-# General chat gets more room for varied, creative phrasing, but not as
-# much as the old Groq-hosted model got (1.1) -- this local model's
-# prompt-based tool-calling (see _tools_instructions) is far more prone to
-# going off the rails at high sampling temperature than Groq's native,
-# separately-constrained tool selection ever was.
+# General chat gets more room for varied, creative phrasing, but kept
+# below Groq's own default (1.1) since this module's prompt-based
+# tool-calling (see _tools_instructions) is more prone to going off the
+# rails at high sampling temperature than Groq's native, separately-
+# constrained tool selection would be.
 CODE_TEMPERATURE = 0.7
 GENERAL_TEMPERATURE = 0.85
 
@@ -854,13 +861,16 @@ def _execute_one_tool_call(name, args, captured, available_tokens=None, synthesi
 
 MAX_TOOL_ROUNDS = 3
 
-# The local model's entire "tool-calling API" is this one convention,
-# taught via _tools_instructions and read back out by _parse_tool_call: a
-# fenced code block, language-tagged "tool_call", containing nothing but
-# {"name": ..., "arguments": {...}} JSON. Chosen over e.g. a custom XML tag
-# because fenced code blocks are exactly the kind of structured-looking
-# output small instruct models already imitate reliably from their own
-# training data.
+# This module's entire prompt-based "tool-calling API" is this one
+# convention, taught via _tools_instructions and read back out by
+# _parse_tool_call: a fenced code block, language-tagged "tool_call",
+# containing nothing but {"name": ..., "arguments": {...}} JSON. Chosen
+# over e.g. a custom XML tag because fenced code blocks are exactly the
+# kind of structured-looking output instruct models already imitate
+# reliably from their own training data -- kept even after switching back
+# to Groq (which does support native structured tool-calling) since it
+# already works reliably and reply quality, not tool-calling, was the
+# actual problem being fixed.
 _TOOL_CALL_PATTERN = re.compile(r"```tool_call\s*\n(.*?)```", re.DOTALL)
 # propose_project_change's new_code argument is often too long, and too
 # easy to mangle via JSON string-escaping, for a small model to embed
@@ -872,7 +882,7 @@ _NEW_CODE_BLOCK_PATTERN = re.compile(r"```new_code\s*\n(.*?)\n```", re.DOTALL)
 
 
 def _parse_tool_call(raw):
-    """Parses the local model's raw text reply for _TOOL_CALL_PATTERN.
+    """Parses the model's raw text reply for _TOOL_CALL_PATTERN.
     Returns (remaining_text, tool_calls_or_None) -- remaining_text always
     has any matched tool_call/new_code block stripped out (so a
     malformed/unwanted one never leaks into what the user sees), even if
@@ -905,10 +915,10 @@ def _parse_tool_call(raw):
 
 
 def _tools_instructions(tools):
-    """System-prompt addendum that teaches the local model NexAI's own
+    """System-prompt addendum that teaches the model NexAI's own
     prompt-based tool-calling convention (the matching parser is
-    _parse_tool_call) -- entirely through worked examples, since a small
-    model follows a concrete example far more reliably than an abstract
+    _parse_tool_call) -- entirely through worked examples, since a model
+    follows a concrete example far more reliably than an abstract
     instruction alone. Only ever appended when `tools` is non-empty."""
     lines = [
         "\n\nDu hast Zugriff auf Werkzeuge, brauchst sie aber nur SEHR SELTEN -- die meisten "
@@ -947,6 +957,59 @@ def _tools_instructions(tools):
     return "\n".join(lines)
 
 
+def _generate_groq(messages, max_tokens, temperature=0.7):
+    """Drop-in replacement for the self-hosted local_ai.generate_chat with
+    the identical (messages, max_tokens, temperature) signature -- routes
+    text generation through Groq's hosted API (a far larger free-tier
+    model) instead of the small self-hosted CPU model. Reverts the
+    quality/speed-for-ownership tradeoff local_ai.py was built for: this
+    module still keeps its own prompt-based ```tool_call``` convention
+    (see _call_local_model_message below) rather than switching to Groq's
+    native structured tool-calling, since that convention already works
+    reliably and rewriting the tool pipeline isn't needed just to fix
+    reply quality. Retries a couple of times on a transient network
+    error/429/5xx before giving up, so a brief Groq blip doesn't read as
+    the assistant randomly failing."""
+    api_key = os.environ.get("GROQ_API_KEY")
+    if not api_key:
+        raise RuntimeError(
+            "GROQ_API_KEY ist nicht gesetzt. Auf groq.com einen kostenlosen API-Key erstellen "
+            "und als Umgebungsvariable GROQ_API_KEY hinterlegen."
+        )
+    payload = {
+        "model": GROQ_MODEL,
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        # gpt-oss models spend part of their token budget on hidden
+        # "reasoning" before the visible answer; "low" keeps that short so
+        # there's always room left for the actual reply.
+        "reasoning_effort": "low",
+    }
+    last_exc = None
+    for attempt in range(3):
+        try:
+            response = requests.post(
+                GROQ_API_URL,
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json=payload,
+                timeout=CHAT_REQUEST_TIMEOUT_SECONDS,
+            )
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as exc:
+            last_exc = exc
+            if attempt < 2:
+                time.sleep(1.5 * (attempt + 1))
+                continue
+            raise
+        if response.status_code in (429, 500, 502, 503, 504) and attempt < 2:
+            last_exc = requests.exceptions.HTTPError(f"Groq status {response.status_code}", response=response)
+            time.sleep(1.5 * (attempt + 1))
+            continue
+        response.raise_for_status()
+        return response.json()["choices"][0]["message"]["content"] or ""
+    raise last_exc
+
+
 def _call_local_model_message(messages, max_tokens, tools=None, tool_choice="auto", temperature=CODE_TEMPERATURE):
     call_messages = messages
     if tool_choice == "none" and tools:
@@ -960,7 +1023,7 @@ def _call_local_model_message(messages, max_tokens, tools=None, tool_choice="aut
                 "auch wenn du vorher eins gebraucht hast."
             ),
         }]
-    raw = local_ai.generate_chat(call_messages, max_tokens, temperature=temperature)
+    raw = _generate_groq(call_messages, max_tokens, temperature=temperature)
     remaining, tool_calls = _parse_tool_call(raw) if tools else (raw, None)
     if tool_choice == "none":
         tool_calls = None
@@ -1035,7 +1098,7 @@ def _classify_tool(user_message, tools):
         {"role": "user", "content": user_message[:MAX_MESSAGE_CHARS]},
     ]
     try:
-        raw = local_ai.generate_chat(messages, max_tokens=150, temperature=0.1)
+        raw = _generate_groq(messages, max_tokens=150, temperature=0.1)
     except Exception:
         logger.exception("Werkzeug-Klassifizierung fehlgeschlagen.")
         return None, {}
@@ -1057,9 +1120,9 @@ def _call_model_with_router(messages, user_message, max_tokens, tools, captured,
                              available_tokens=None, synthesize_audio_fn=None):
     """General-mode counterpart to _call_model: tool selection runs as its
     own dedicated classification pass (_classify_tool) instead of being
-    embedded in the same call as the actual reply. This local model
-    follows a short, single-purpose prompt (just the tool list and the
-    latest message) far more reliably than the same tool-calling
+    embedded in the same call as the actual reply. The model follows a
+    short, single-purpose prompt (just the tool list and the latest
+    message) far more reliably than the same tool-calling
     convention competing for attention inside NexAI's much longer,
     already-elaborate character/personality system prompt (see this
     module's docstring) -- verified empirically: the combined-prompt
@@ -1129,7 +1192,7 @@ def _call_model_with_router(messages, user_message, max_tokens, tools, captured,
                     "einbezieht."
                 )
             final_messages = messages + [{"role": "system", "content": follow_up}]
-    content = local_ai.generate_chat(final_messages, max_tokens, temperature=temperature).strip()
+    content = _generate_groq(final_messages, max_tokens, temperature=temperature).strip()
     if forced_markdown and forced_markdown not in content:
         content = f"{content}\n\n{forced_markdown}" if content else forced_markdown
     return content, captured["proposed_change"]
@@ -1197,8 +1260,8 @@ def _learned_facts_addendum(wikipedia_facts, user_facts, docs_facts=None, behavi
 def generate_reply(message, context=None, history=None, project_type=None, facts=None,
                     learned_facts=None, captured=None, behavior_note=None, personality=None,
                     available_tokens=None, synthesize_audio_fn=None):
-    """Runs one turn against the local model (see local_ai.py). Not meant
-    to be called directly from a request handler -- see start_chat_job().
+    """Runs one turn against Groq's hosted model (see _generate_groq). Not
+    meant to be called directly from a request handler -- see start_chat_job().
     `history` is this same chat's own prior turns (a list of
     {"role": "user"|"assistant", "content": str} dicts, oldest first).
     `project_type` is "game", "webapp", or None (general chat) and picks
