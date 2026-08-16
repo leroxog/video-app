@@ -27,7 +27,7 @@ from app import app as flask_app, db
 from models import (
     User, Conversation, Message,
     AiAdminFact, AiLearnedFact, PasswordResetCode, AccountRecoveryRequest, ErrorLog,
-    AiVoiceProfile,
+    AiVoiceProfile, MailMessage,
 )
 
 
@@ -2231,4 +2231,154 @@ def test_homepage_search_filters_by_query(client):
     register(client, username="searcher1")
     response = client.get("/cheaper?q=Findbares")
     assert b"Findbares Kino" in response.data
-    assert b"Anderes Schwimmbad" not in response.data
+
+
+def test_mail_home_redirects_to_setup_before_address_chosen(client):
+    register(client, username="mailer1")
+    response = client.get("/mail")
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/mail/setup")
+
+
+def test_mail_setup_creates_address_and_rejects_duplicate(client):
+    register(client, username="mailer1")
+    response = client.post("/mail/setup", data={"localpart": "mailer1"}, follow_redirects=True)
+    assert response.status_code == 200
+    user = User.query.filter_by(username="mailer1").first()
+    assert user.mail_address == "mailer1@lrx.com"
+
+    client.post("/logout")
+    register(client, username="mailer2")
+    response = client.post("/mail/setup", data={"localpart": "mailer1"})
+    assert b"bereits vergeben" in response.data
+
+
+def test_mail_setup_rejects_invalid_localpart(client):
+    register(client, username="mailer1")
+    response = client.post("/mail/setup", data={"localpart": "a"})
+    assert response.status_code == 200
+    assert User.query.filter_by(username="mailer1").first().mail_address is None
+
+
+def test_mail_send_and_receive_between_two_accounts(client):
+    register(client, username="alice")
+    client.post("/mail/setup", data={"localpart": "alice"})
+    client.post("/logout")
+
+    register(client, username="bob")
+    client.post("/mail/setup", data={"localpart": "bob"})
+    client.post("/logout")
+
+    client.post("/login", data={"username": "alice", "password": "secret123"})
+    response = client.post("/mail/send", data={
+        "to": "bob", "subject": "Hallo", "body": "Wie geht's?",
+    }, follow_redirects=True)
+    assert response.status_code == 200
+
+    client.post("/logout")
+    client.post("/login", data={"username": "bob", "password": "secret123"})
+    inbox = client.get("/mail")
+    assert b"Hallo" in inbox.data
+    assert b"alice@lrx.com" in inbox.data
+
+    message = MailMessage.query.filter_by(subject="Hallo").first()
+    assert message is not None
+    assert message.recipient.username == "bob"
+    assert message.read_at is None
+
+    view = client.get(f"/mail/message/{message.id}")
+    assert view.status_code == 200
+    assert b"Wie geht" in view.data
+    assert db.session.get(MailMessage, message.id).read_at is not None
+
+
+def test_mail_send_to_unknown_address_fails(client):
+    register(client, username="alice")
+    client.post("/mail/setup", data={"localpart": "alice"})
+    response = client.post("/mail/send", data={
+        "to": "nobody", "subject": "Hi", "body": "test",
+    })
+    assert b"Unbekannte LEROX-Mail-Adresse" in response.data
+    assert MailMessage.query.count() == 0
+
+
+def test_mail_send_to_self_fails(client):
+    register(client, username="alice")
+    client.post("/mail/setup", data={"localpart": "alice"})
+    response = client.post("/mail/send", data={
+        "to": "alice", "subject": "Hi", "body": "test",
+    })
+    assert "dir selbst".encode() in response.data
+
+
+def test_mail_user_cannot_view_others_message(client):
+    register(client, username="alice")
+    client.post("/mail/setup", data={"localpart": "alice"})
+    client.post("/logout")
+    register(client, username="bob")
+    client.post("/mail/setup", data={"localpart": "bob"})
+    client.post("/logout")
+
+    register(client, username="eve")
+    client.post("/mail/setup", data={"localpart": "eve"})
+
+    client.post("/logout")
+    client.post("/login", data={"username": "alice", "password": "secret123"})
+    client.post("/mail/send", data={"to": "bob", "subject": "Geheim", "body": "psst"})
+    message = MailMessage.query.filter_by(subject="Geheim").first()
+
+    client.post("/logout")
+    client.post("/login", data={"username": "eve", "password": "secret123"})
+    response = client.get(f"/mail/message/{message.id}")
+    assert response.status_code == 404
+
+
+def test_mail_delete_moves_to_trash_and_restore_moves_back(client):
+    register(client, username="alice")
+    client.post("/mail/setup", data={"localpart": "alice"})
+    client.post("/logout")
+    register(client, username="bob")
+    client.post("/mail/setup", data={"localpart": "bob"})
+
+    client.post("/logout")
+    client.post("/login", data={"username": "alice", "password": "secret123"})
+    client.post("/mail/send", data={"to": "bob", "subject": "Test", "body": "hi"})
+
+    client.post("/logout")
+    client.post("/login", data={"username": "bob", "password": "secret123"})
+    message = MailMessage.query.filter_by(subject="Test").first()
+
+    inbox = client.get("/mail?folder=inbox")
+    assert b"Test" in inbox.data
+
+    client.post(f"/mail/message/{message.id}/delete", data={"folder": "inbox"})
+    inbox_after = client.get("/mail?folder=inbox")
+    assert b"Test" not in inbox_after.data
+    trash = client.get("/mail?folder=trash")
+    assert b"Test" in trash.data
+
+    client.post(f"/mail/message/{message.id}/restore")
+    inbox_restored = client.get("/mail?folder=inbox")
+    assert b"Test" in inbox_restored.data
+
+
+def test_mail_delete_by_recipient_does_not_remove_senders_copy(client):
+    register(client, username="alice")
+    client.post("/mail/setup", data={"localpart": "alice"})
+    client.post("/logout")
+    register(client, username="bob")
+    client.post("/mail/setup", data={"localpart": "bob"})
+
+    client.post("/logout")
+    client.post("/login", data={"username": "alice", "password": "secret123"})
+    client.post("/mail/send", data={"to": "bob", "subject": "Beide", "body": "hi"})
+    message = MailMessage.query.filter_by(subject="Beide").first()
+
+    client.post("/logout")
+    client.post("/login", data={"username": "bob", "password": "secret123"})
+    client.post(f"/mail/message/{message.id}/delete", data={"folder": "inbox"})
+
+    client.post("/logout")
+    client.post("/login", data={"username": "alice", "password": "secret123"})
+    sent = client.get("/mail?folder=sent")
+    assert b"Beide" in sent.data

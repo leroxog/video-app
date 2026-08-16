@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#2a1650">
+    <title>LEROX Mail einrichten</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/mail.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='img/cheaper-mark.svg') }}" type="image/svg+xml">
+</head>
+<body>
+<div class="mail-setup-page">
+    <div class="mail-setup-card">
+        <div class="mark">✉️</div>
+        <h1>LEROX Mail einrichten</h1>
+        <p>Wähle deine eigene Adresse -- gilt nur innerhalb von LEROX STUDIO, zum Mailen mit anderen LEROX-Konten.</p>
+
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <ul class="mail-flashes" style="text-align:left;">
+                    {% for message in messages %}
+                        <li>{{ message }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        {% endwith %}
+
+        <form method="POST">
+            <div class="mail-setup-form">
+                <input type="text" name="localpart" placeholder="deinname" maxlength="30"
+                       autocomplete="off" autofocus required
+                       value="{{ request.form.get('localpart', '') }}">
+                <span>@{{ domain }}</span>
+            </div>
+            <button type="submit" class="mail-setup-submit">Adresse anlegen</button>
+        </form>
+        <a class="mail-setup-back" href="{{ url_for('studio_home') }}">← Zurück zu LEROX STUDIO</a>
+    </div>
+</div>
+</body>
+</html>

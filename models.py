@@ -76,6 +76,11 @@ class User(db.Model):
     bio = db.Column(db.Text, nullable=True)
     banner_image = db.Column(db.String(255), nullable=True)
     website_url = db.Column(db.String(300), nullable=True)
+    # LEROX Mail address (see app.py's /mail routes) -- always the full
+    # "localpart@lrx.com" string, lowercase, unique. Nullable because
+    # setting one up is a separate opt-in step (mail_setup), not part of
+    # account registration itself: most LEROX accounts never touch Mail.
+    mail_address = db.Column(db.String(120), unique=True, nullable=True)
     sounds_uploaded = db.relationship("Sound", backref="uploader", lazy=True, cascade="all, delete-orphan")
     subscriptions_made = db.relationship(
         "Subscription",
@@ -798,3 +803,27 @@ class BrandReport(db.Model):
     reporter_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     reporter = db.relationship("User")
+
+
+class MailMessage(db.Model):
+    """One LEROX Mail message between two LEROX accounts (see app.py's
+    /mail routes) -- internal delivery only: both sender and recipient
+    must already have a mail_address set up via /mail/setup, there is no
+    real Internet SMTP involved (this is not the account's real_email
+    field, and never sends anything outside this app). sender_deleted /
+    recipient_deleted are independent per-side "in my trash" flags on the
+    same shared row, rather than two separate copies of the message, so
+    deleting from one side's Papierkorb never affects what the other side
+    still sees; there is deliberately no permanent-delete action for the
+    same reason (see mail_delete/mail_restore in app.py)."""
+    id = db.Column(db.Integer, primary_key=True)
+    sender_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    recipient_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    subject = db.Column(db.String(300), nullable=False, default="")
+    body = db.Column(db.Text, nullable=False)
+    sent_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    read_at = db.Column(db.DateTime, nullable=True)
+    sender_deleted = db.Column(db.Boolean, nullable=False, default=False)
+    recipient_deleted = db.Column(db.Boolean, nullable=False, default=False)
+    sender = db.relationship("User", foreign_keys=[sender_id])
+    recipient = db.relationship("User", foreign_keys=[recipient_id])

@@ -1,0 +1,35 @@
+{% extends "mail_base.html" %}
+{% block title %}Verfassen - LEROX Mail{% endblock %}
+{% block content %}
+    <h1 class="mail-folder-title">✏️ Neue Nachricht</h1>
+
+    <form class="mail-compose-form" method="POST" action="{{ url_for('mail_send') }}" id="mailComposeForm">
+        <div class="mail-field">
+            <label for="to">An</label>
+            <input type="text" id="to" name="to" placeholder="empfaenger" required
+                   value="{{ prefill_to }}" autofocus>
+            <div class="mail-address-hint">Nur der Name reicht -- @{{ domain }} wird automatisch ergänzt.</div>
+        </div>
+        <div class="mail-field">
+            <label for="subject">Betreff</label>
+            <input type="text" id="subject" name="subject" maxlength="300" value="{{ prefill_subject }}">
+        </div>
+        <div class="mail-field">
+            <label for="body">Nachricht</label>
+            <textarea id="body" name="body" required>{{ prefill_body or "" }}</textarea>
+        </div>
+        <div>
+            <button type="submit" class="mail-btn primary">📤 Senden</button>
+        </div>
+    </form>
+
+    <script>
+        document.getElementById("mailComposeForm").addEventListener("submit", function (e) {
+            if (!window.leroxMailSounds || !window.leroxMailSounds.ctx) return;
+            e.preventDefault();
+            window.leroxMailSounds.send();
+            var form = e.target;
+            setTimeout(function () { form.submit(); }, 140);
+        });
+    </script>
+{% endblock %}

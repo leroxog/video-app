@@ -1,5 +1,6 @@
 import os
 import io
+import re
 import sys
 import uuid
 import shutil
@@ -36,6 +37,7 @@ from models import (
     AiTrainingExample, AiTrainingRun,
     Offer, OFFER_CATEGORIES, OFFER_CATEGORY_LABELS, DiscountCode,
     BrandFollow, PushSubscription, DiscountCodeUse, BrandReport,
+    MailMessage,
 )
 import ai_assistant
 import local_ai
@@ -630,6 +632,7 @@ def ensure_sqlite_columns_exist():
             ("bio", "TEXT"),
             ("banner_image", "VARCHAR(255)"),
             ("website_url", "VARCHAR(300)"),
+            ("mail_address", "VARCHAR(120)"),
         ],
         # ai_personality itself is created fresh by db.create_all() on any
         # brand-new database, but on one that already had the table from
@@ -757,6 +760,7 @@ def ensure_columns_exist():
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS bio TEXT',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS banner_image VARCHAR(255)',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS website_url VARCHAR(300)',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS mail_address VARCHAR(120)',
     ]
     with db.engine.connect() as conn:
         for statement in statements:
@@ -1258,6 +1262,24 @@ LEROX_STUDIO_PROJECTS = [
         "website_endpoint": "index",
         "download_url": "/static/downloads/Cheaper-Setup.exe",
     },
+    {
+        "key": "mail",
+        "name": "LEROX Mail",
+        "tagline": "Deine eigene @lrx.com-Adresse -- Mail zwischen LEROX-Konten.",
+        "icon": "✉️",
+        "website_endpoint": "mail_home",
+        "download_url": "/static/downloads/LEROX-Mail-Setup.exe",
+    },
+    {
+        "key": "browser",
+        "name": "LEROX Browser",
+        "tagline": "Ein einfacher, lila-getönter Browser mit Tabs.",
+        "icon": "🟣",
+        # No website_endpoint -- it's a native desktop app only, there is
+        # nothing meaningful to "open" in-browser for a browser itself.
+        "website_endpoint": None,
+        "download_url": "/static/downloads/LEROX-Browser-Setup.exe",
+    },
 ]
 
 
@@ -1272,7 +1294,7 @@ def studio_home():
     projects = []
     for project in LEROX_STUDIO_PROJECTS:
         entry = dict(project)
-        entry["website_url"] = url_for(project["website_endpoint"])
+        entry["website_url"] = url_for(project["website_endpoint"]) if project["website_endpoint"] else None
         projects.append(entry)
     return render_template("studio_home.html", user=user, projects=projects)
 
@@ -1723,6 +1745,175 @@ def company_profile_update():
     db.session.commit()
     flash("Profil aktualisiert.")
     return redirect(url_for("company_dashboard"))
+
+
+# --- LEROX Mail -------------------------------------------------------
+# Internal-only webmail between LEROX accounts (see MailMessage's own
+# docstring in models.py for why): sending only ever works if the
+# recipient's @lrx.com address already exists as another LEROX account's
+# mail_address, there is no real Internet SMTP delivery anywhere in this
+# module. This was a deliberate, disclosed scope decision, not a
+# shortcut -- real cross-Internet email would need this app to own a
+# real domain's DNS/MX records and run its own mail server, neither of
+# which is something this deployment has.
+
+MAIL_DOMAIN = "lrx.com"
+MAIL_LOCALPART_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{1,28}[a-z0-9]$")
+MAIL_PAGE_SIZE = 30
+
+
+def require_mail_address():
+    """Every /mail route below except mail_setup needs the current user to
+    already have chosen an address -- redirects to that setup step rather
+    than 403ing, since "you haven't set this up yet" is a normal, expected
+    state for most accounts (mail_address is opt-in, see its column
+    docstring), not an error."""
+    user = current_user()
+    if user.mail_address is None:
+        return None, redirect(url_for("mail_setup"))
+    return user, None
+
+
+@app.route("/mail/setup", methods=["GET", "POST"])
+def mail_setup():
+    user = current_user()
+    if user.mail_address is not None:
+        return redirect(url_for("mail_home"))
+    if request.method == "POST":
+        localpart = (request.form.get("localpart") or "").strip().lower()
+        if not MAIL_LOCALPART_RE.match(localpart):
+            flash("Bitte 3-30 Zeichen: Kleinbuchstaben, Ziffern, Punkt, Unterstrich oder Bindestrich, "
+                  "nicht am Anfang/Ende.")
+            return render_template("mail_setup.html", user=user, domain=MAIL_DOMAIN)
+        address = f"{localpart}@{MAIL_DOMAIN}"
+        if User.query.filter_by(mail_address=address).first():
+            flash("Diese Adresse ist bereits vergeben.")
+            return render_template("mail_setup.html", user=user, domain=MAIL_DOMAIN)
+        user.mail_address = address
+        db.session.commit()
+        return redirect(url_for("mail_home"))
+    return render_template("mail_setup.html", user=user, domain=MAIL_DOMAIN)
+
+
+@app.route("/mail")
+def mail_home():
+    """Shows one of three folders (?folder=inbox|sent|trash, default
+    inbox). Trash is entirely per-side (see MailMessage's docstring) --
+    the query for it matches rows where MY OWN side is flagged deleted,
+    regardless of the other party's copy."""
+    user, redirect_resp = require_mail_address()
+    if redirect_resp:
+        return redirect_resp
+    folder = request.args.get("folder", "inbox")
+    if folder not in ("inbox", "sent", "trash"):
+        folder = "inbox"
+    if folder == "inbox":
+        query = MailMessage.query.filter_by(recipient_id=user.id, recipient_deleted=False)
+    elif folder == "sent":
+        query = MailMessage.query.filter_by(sender_id=user.id, sender_deleted=False)
+    else:
+        query = MailMessage.query.filter(
+            db.or_(
+                db.and_(MailMessage.recipient_id == user.id, MailMessage.recipient_deleted.is_(True)),
+                db.and_(MailMessage.sender_id == user.id, MailMessage.sender_deleted.is_(True)),
+            )
+        )
+    messages = query.order_by(MailMessage.sent_at.desc()).limit(MAIL_PAGE_SIZE).all()
+    unread_count = MailMessage.query.filter_by(
+        recipient_id=user.id, recipient_deleted=False, read_at=None,
+    ).count()
+    return render_template(
+        "mail_inbox.html", user=user, messages=messages, folder=folder, unread_count=unread_count,
+    )
+
+
+@app.route("/mail/compose")
+def mail_compose():
+    user, redirect_resp = require_mail_address()
+    if redirect_resp:
+        return redirect_resp
+    return render_template(
+        "mail_compose.html", user=user, domain=MAIL_DOMAIN,
+        prefill_to=request.args.get("to", ""), prefill_subject=request.args.get("subject", ""),
+    )
+
+
+@app.route("/mail/send", methods=["POST"])
+def mail_send():
+    user, redirect_resp = require_mail_address()
+    if redirect_resp:
+        return redirect_resp
+    to_raw = (request.form.get("to") or "").strip().lower()
+    subject = (request.form.get("subject") or "").strip()
+    body = (request.form.get("body") or "").strip()
+
+    def rerender(error):
+        flash(error)
+        return render_template(
+            "mail_compose.html", user=user, domain=MAIL_DOMAIN,
+            prefill_to=to_raw, prefill_subject=subject, prefill_body=body,
+        )
+
+    if not to_raw or not body:
+        return rerender("Empfänger und Nachricht sind Pflichtfelder.")
+    to_address = to_raw if "@" in to_raw else f"{to_raw}@{MAIL_DOMAIN}"
+    if to_address == user.mail_address:
+        return rerender("Du kannst dir selbst keine Nachricht senden.")
+    recipient = User.query.filter_by(mail_address=to_address).first()
+    if recipient is None:
+        return rerender(f"Unbekannte LEROX-Mail-Adresse: {to_address}")
+    message = MailMessage(sender_id=user.id, recipient_id=recipient.id, subject=subject, body=body)
+    db.session.add(message)
+    db.session.commit()
+    flash(f"Gesendet an {to_address}.")
+    return redirect(url_for("mail_home"))
+
+
+def _mail_message_for(user, message_id):
+    message = db.session.get(MailMessage, message_id)
+    if message is None or user.id not in (message.sender_id, message.recipient_id):
+        abort(404)
+    return message
+
+
+@app.route("/mail/message/<int:message_id>")
+def mail_view_message(message_id):
+    user, redirect_resp = require_mail_address()
+    if redirect_resp:
+        return redirect_resp
+    message = _mail_message_for(user, message_id)
+    if message.recipient_id == user.id and message.read_at is None:
+        message.read_at = datetime.now(timezone.utc)
+        db.session.commit()
+    return render_template("mail_message.html", user=user, message=message)
+
+
+@app.route("/mail/message/<int:message_id>/delete", methods=["POST"])
+def mail_delete_message(message_id):
+    user, redirect_resp = require_mail_address()
+    if redirect_resp:
+        return redirect_resp
+    message = _mail_message_for(user, message_id)
+    if message.recipient_id == user.id:
+        message.recipient_deleted = True
+    if message.sender_id == user.id:
+        message.sender_deleted = True
+    db.session.commit()
+    return redirect(url_for("mail_home", folder=request.form.get("folder", "inbox")))
+
+
+@app.route("/mail/message/<int:message_id>/restore", methods=["POST"])
+def mail_restore_message(message_id):
+    user, redirect_resp = require_mail_address()
+    if redirect_resp:
+        return redirect_resp
+    message = _mail_message_for(user, message_id)
+    if message.recipient_id == user.id:
+        message.recipient_deleted = False
+    if message.sender_id == user.id:
+        message.sender_deleted = False
+    db.session.commit()
+    return redirect(url_for("mail_home", folder="trash"))
 
 
 def _apply_offer_form(offer, form):

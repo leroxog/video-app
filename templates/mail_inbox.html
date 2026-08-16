@@ -1,0 +1,46 @@
+{% extends "mail_base.html" %}
+{% block title %}{{ {"inbox": "Posteingang", "sent": "Gesendet", "trash": "Papierkorb"}[folder] }} - LEROX Mail{% endblock %}
+{% block content %}
+    <h1 class="mail-folder-title">
+        {{ {"inbox": "📥 Posteingang", "sent": "📤 Gesendet", "trash": "🗑️ Papierkorb"}[folder] }}
+    </h1>
+
+    {% if not messages %}
+        <p class="mail-empty">
+            {% if folder == "inbox" %}Noch keine Nachrichten.
+            {% elif folder == "sent" %}Du hast noch nichts gesendet.
+            {% else %}Der Papierkorb ist leer.{% endif %}
+        </p>
+    {% else %}
+        <div class="mail-list">
+            {% for m in messages %}
+                {% set i_am_recipient = m.recipient_id == user.id %}
+                {% set counterpart = m.sender if i_am_recipient else m.recipient %}
+                {% set unread = folder == "inbox" and m.read_at is none %}
+                <a class="mail-row {{ 'unread' if unread else '' }}" href="{{ url_for('mail_view_message', message_id=m.id) }}">
+                    <span class="mail-row-avatar">{{ (counterpart.mail_address or "?")[0]|upper }}</span>
+                    <span class="mail-row-main">
+                        <span class="mail-row-from">
+                            {% if i_am_recipient %}Von: {{ m.sender.mail_address }}
+                            {% else %}An: {{ m.recipient.mail_address }}{% endif %}
+                        </span>
+                        <span class="mail-row-subject">
+                            {{ m.subject or "(kein Betreff)" }}
+                            <span class="mail-row-snippet">-- {{ m.body[:70] }}{{ "…" if m.body|length > 70 else "" }}</span>
+                        </span>
+                    </span>
+                    <span class="mail-row-date">{{ m.sent_at.strftime("%d.%m.%Y %H:%M") }}</span>
+                    <span class="mail-row-actions">
+                        <form method="POST"
+                              action="{{ url_for(('mail_restore_message' if folder == 'trash' else 'mail_delete_message'), message_id=m.id) }}"
+                              onclick="event.stopPropagation();"
+                              onsubmit="window.leroxMailSounds && window.leroxMailSounds.{{ 'restore' if folder == 'trash' else 'delete' }}();">
+                            <input type="hidden" name="folder" value="{{ folder }}">
+                            <button type="submit">{{ "Wiederherstellen" if folder == "trash" else "Löschen" }}</button>
+                        </form>
+                    </span>
+                </a>
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endblock %}

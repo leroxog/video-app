@@ -1,0 +1,33 @@
+{% extends "mail_base.html" %}
+{% block title %}{{ message.subject or "(kein Betreff)" }} - LEROX Mail{% endblock %}
+{% block content %}
+    {% set i_am_recipient = message.recipient_id == user.id %}
+    {% set counterpart = message.sender if i_am_recipient else message.recipient %}
+    {% set my_trashed = (message.recipient_deleted if i_am_recipient else message.sender_deleted) %}
+
+    <div class="mail-message-toolbar">
+        <a class="mail-btn" href="{{ url_for('mail_home', folder=('trash' if my_trashed else ('inbox' if i_am_recipient else 'sent'))) }}">← Zurück</a>
+        {% if i_am_recipient %}
+            <a class="mail-btn primary"
+               href="{{ url_for('mail_compose', to=counterpart.mail_address, subject=('Re: ' ~ message.subject if message.subject else 'Re:')) }}">
+                ↩️ Antworten
+            </a>
+        {% endif %}
+        <form method="POST"
+              action="{{ url_for(('mail_restore_message' if my_trashed else 'mail_delete_message'), message_id=message.id) }}"
+              onsubmit="window.leroxMailSounds && window.leroxMailSounds.{{ 'restore' if my_trashed else 'delete' }}();">
+            <input type="hidden" name="folder" value="{{ 'inbox' if i_am_recipient else 'sent' }}">
+            <button type="submit" class="mail-btn danger">{{ "Wiederherstellen" if my_trashed else "🗑️ Löschen" }}</button>
+        </form>
+    </div>
+
+    <div class="mail-message-card">
+        <h1 class="mail-message-subject">{{ message.subject or "(kein Betreff)" }}</h1>
+        <div class="mail-message-meta">
+            <span>Von: {{ message.sender.mail_address }}</span>
+            <span>An: {{ message.recipient.mail_address }}</span>
+            <span>{{ message.sent_at.strftime("%d.%m.%Y %H:%M") }}</span>
+        </div>
+        <div class="mail-message-body">{{ message.body }}</div>
+    </div>
+{% endblock %}

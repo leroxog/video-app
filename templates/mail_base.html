@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#2a1650">
+    <title>{% block title %}LEROX Mail{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/mail.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='img/cheaper-mark.svg') }}" type="image/svg+xml">
+</head>
+<body>
+<div class="mail-app">
+    <header class="mail-header">
+        <a class="mail-brand" href="{{ url_for('mail_home') }}">
+            <span class="mail-brand-mark">✉️</span>LEROX Mail
+        </a>
+        <nav class="mail-header-nav">
+            <a href="{{ url_for('studio_home') }}" title="Alle LEROX STUDIO Projekte">LEROX STUDIO</a>
+            <span class="mail-username">{{ user.mail_address }}</span>
+            <a href="{{ url_for('account_settings') }}">Konto</a>
+            <form action="{{ url_for('logout') }}" method="post" style="display:contents;">
+                <button type="submit">Abmelden</button>
+            </form>
+        </nav>
+    </header>
+
+    <div class="mail-body">
+        <aside class="mail-sidebar">
+            <a class="mail-compose-btn" href="{{ url_for('mail_compose') }}">✏️ Verfassen</a>
+            <nav class="mail-folder-nav">
+                <a href="{{ url_for('mail_home', folder='inbox') }}"
+                   class="{{ 'active' if folder == 'inbox' else '' }}">
+                    📥 Posteingang
+                    {% if unread_count %}<span class="mail-unread-badge">{{ unread_count }}</span>{% endif %}
+                </a>
+                <a href="{{ url_for('mail_home', folder='sent') }}"
+                   class="{{ 'active' if folder == 'sent' else '' }}">📤 Gesendet</a>
+                <a href="{{ url_for('mail_home', folder='trash') }}"
+                   class="{{ 'active' if folder == 'trash' else '' }}">🗑️ Papierkorb</a>
+            </nav>
+        </aside>
+
+        <main class="mail-main">
+            {% with messages = get_flashed_messages() %}
+                {% if messages %}
+                    <ul class="mail-flashes">
+                        {% for message in messages %}
+                            <li>{{ message }}</li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+            {% endwith %}
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/mail-sounds.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>
