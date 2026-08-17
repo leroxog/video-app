@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#2a1650">
+    <title>Kampumion - LEROX Games</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/games.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='img/cheaper-mark.svg') }}" type="image/svg+xml">
+</head>
+<body>
+<header class="lg-header">
+    <a class="lg-brand" href="{{ url_for('games_home') }}">🎮 LEROX Games</a>
+    <nav class="lg-header-nav">
+        <a href="{{ url_for('studio_home') }}">LEROX STUDIO</a>
+        <span>{{ user.username }}</span>
+    </nav>
+</header>
+
+<main class="lg-main">
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            <ul class="lg-flashes">
+                {% for message in messages %}<li>{{ message }}</li>{% endfor %}
+            </ul>
+        {% endif %}
+    {% endwith %}
+
+    <div class="km-landing-card">
+        <h1>💻 Kampumion</h1>
+        <p>3+ Spieler empfohlen. Eine Person ist im Hackerraum blind, eine taub, eine stumm -- der Rest muss ihr per Sprachchat und einer gehackten KI helfen, den Code zu knacken.</p>
+
+        <div class="km-landing-actions">
+            <form method="POST" action="{{ url_for('kampumion_create') }}">
+                <button type="submit" class="lg-btn primary" style="width:100%;">Neue Lobby erstellen</button>
+            </form>
+            <form method="POST" action="{{ url_for('kampumion_join') }}" class="km-join-form">
+                <input type="text" name="code" placeholder="CODE" maxlength="8" required autocomplete="off">
+                <button type="submit" class="lg-btn">Beitreten</button>
+            </form>
+        </div>
+
+        <div class="km-rules">
+            <p><b>Blind:</b> Bildschirm ist schwarz -- ein Tastendruck zeigt kurz einen Blitz. Tippt am Ende den Code ein.</p>
+            <p><b>Taub:</b> hört niemanden über Sprachchat.</p>
+            <p><b>Stumm:</b> wird von niemandem über Sprachchat gehört.</p>
+            <p>Alle sehen den Terminal-Bildschirm und können die KI im Terminal-Panel nach Hinweisen fragen -- nur der/die Blinde darf den Code eintippen.</p>
+        </div>
+    </div>
+</main>
+</body>
+</html>

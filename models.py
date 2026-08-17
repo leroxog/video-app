@@ -827,3 +827,57 @@ class MailMessage(db.Model):
     recipient_deleted = db.Column(db.Boolean, nullable=False, default=False)
     sender = db.relationship("User", foreign_keys=[sender_id])
     recipient = db.relationship("User", foreign_keys=[recipient_id])
+
+
+KAMPUMION_ROLES = ("blind", "deaf", "mute", "normal")
+
+
+class KampumionLobby(db.Model):
+    """One Kampumion (LEROX Games) lobby -- players join a short join
+    `code` from /games/kampumion, move around the pixel waiting room, and
+    once everyone presses START the whole lobby moves together into the
+    hacker room for one round. status: "waiting" (pixel room) ->
+    "hacking" (hacker room, round in progress) -> "finished" (round
+    solved). Live position/ready-toggle traffic during "waiting" is
+    Socket.IO-only (see app.py's kampumion socket handlers) and never
+    touches this table -- only durable state (who's in the lobby, their
+    assigned role) is persisted here."""
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(8), unique=True, nullable=False)
+    host_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    status = db.Column(db.String(20), nullable=False, default="waiting")
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    started_at = db.Column(db.DateTime, nullable=True)
+    host = db.relationship("User")
+
+
+class KampumionPlayer(db.Model):
+    """One user's membership in one KampumionLobby. role is null while
+    still in the waiting room, and randomly assigned (see kampumion.py's
+    assign_roles) the moment the lobby transitions to "hacking" --
+    exactly one "blind" (operates the terminal), one "deaf" (can't hear
+    incoming voice chat), one "mute" (can't be heard over voice chat) if
+    there are enough players, everyone else "normal"."""
+    id = db.Column(db.Integer, primary_key=True)
+    lobby_id = db.Column(db.Integer, db.ForeignKey("kampumion_lobby.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    role = db.Column(db.String(10), nullable=True)
+    ready = db.Column(db.Boolean, nullable=False, default=False)
+    joined_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    user = db.relationship("User")
+    __table_args__ = (db.UniqueConstraint("lobby_id", "user_id", name="uq_kampumion_player"),)
+
+
+class KampumionRound(db.Model):
+    """The hacking puzzle for one playthrough of a lobby. secret_code is
+    the digit sequence the blind player must end up typing into the
+    terminal -- the sighted players work it out together from the
+    terminal's key-flash glimpses and the in-room AI's hints (see
+    kampumion.py's ask_hint) and relay it over voice chat."""
+    id = db.Column(db.Integer, primary_key=True)
+    lobby_id = db.Column(db.Integer, db.ForeignKey("kampumion_lobby.id"), nullable=False)
+    secret_code = db.Column(db.String(10), nullable=False)
+    attempts = db.Column(db.Integer, nullable=False, default=0)
+    solved_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    lobby = db.relationship("KampumionLobby")

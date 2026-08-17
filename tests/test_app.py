@@ -23,11 +23,11 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 os.environ["DATABASE_URL"] = f"sqlite:///{tempfile.gettempdir()}/video_app_test_import_throwaway.db"
 
 import pytest
-from app import app as flask_app, db
+from app import app as flask_app, db, socketio
 from models import (
     User, Conversation, Message,
     AiAdminFact, AiLearnedFact, PasswordResetCode, AccountRecoveryRequest, ErrorLog,
-    AiVoiceProfile, MailMessage,
+    AiVoiceProfile, MailMessage, KampumionLobby, KampumionPlayer, KampumionRound,
 )
 
 
@@ -2382,3 +2382,140 @@ def test_mail_delete_by_recipient_does_not_remove_senders_copy(client):
     client.post("/login", data={"username": "alice", "password": "secret123"})
     sent = client.get("/mail?folder=sent")
     assert b"Beide" in sent.data
+
+
+def _kampumion_code_from_redirect(response):
+    return response.headers["Location"].rstrip("/").rsplit("/", 1)[-1]
+
+
+def test_games_home_and_kampumion_home_render(client):
+    register(client)
+    assert client.get("/games").status_code == 200
+    assert client.get("/games/kampumion").status_code == 200
+
+
+def test_kampumion_create_and_join_by_code(client):
+    register(client, username="host1")
+    create_res = client.post("/games/kampumion/create")
+    assert create_res.status_code == 302
+    code = _kampumion_code_from_redirect(create_res)
+    assert len(code) == 5
+
+    lobby_page = client.get(f"/games/kampumion/{code}")
+    assert lobby_page.status_code == 200
+    assert code.encode() in lobby_page.data
+
+    join_res = client.post("/games/kampumion/join", data={"code": code.lower()})
+    assert join_res.status_code == 302
+    assert join_res.headers["Location"].endswith(f"/games/kampumion/{code}")
+
+
+def test_kampumion_join_unknown_code_flashes_error(client):
+    register(client)
+    response = client.post("/games/kampumion/join", data={"code": "ZZZZZ"}, follow_redirects=True)
+    assert "gibt es nicht".encode() in response.data
+
+
+def test_kampumion_room_redirects_back_while_still_waiting(client):
+    register(client, username="host1")
+    create_res = client.post("/games/kampumion/create")
+    code = _kampumion_code_from_redirect(create_res)
+    room_res = client.get(f"/games/kampumion/{code}/room")
+    assert room_res.status_code == 302
+    assert room_res.headers["Location"].endswith(f"/games/kampumion/{code}")
+
+
+def _second_registered_client(username):
+    second = flask_app.test_client()
+    with second.session_transaction() as sess:
+        sess["terms_accepted"] = True
+    register(second, username=username)
+    return second
+
+
+def test_kampumion_full_round_two_players(client, monkeypatch):
+    monkeypatch.setattr(
+        "kampumion.ask_hint",
+        lambda secret_code, question, history=None: f"Hinweis zu '{question}' (Code hat {len(secret_code)} Ziffern).",
+    )
+
+    register(client, username="host1")
+    create_res = client.post("/games/kampumion/create")
+    code = _kampumion_code_from_redirect(create_res)
+
+    client2 = _second_registered_client("host2")
+    client2.post("/games/kampumion/join", data={"code": code})
+
+    sio1 = socketio.test_client(flask_app, flask_test_client=client)
+    sio2 = socketio.test_client(flask_app, flask_test_client=client2)
+
+    sio1.emit("km_join_lobby", {"code": code})
+    sio2.emit("km_join_lobby", {"code": code})
+    sio1.get_received()
+    sio2.get_received()
+
+    sio1.emit("km_ready", {"ready": True})
+    sio2.emit("km_ready", {"ready": True})
+
+    received1 = sio1.get_received()
+    received2 = sio2.get_received()
+
+    def role_of(received):
+        for msg in received:
+            if msg["name"] == "km_role":
+                return msg["args"][0]["role"]
+        return None
+
+    role1 = role_of(received1)
+    role2 = role_of(received2)
+    assert {role1, role2} == {"blind", "deaf"}
+    assert any(msg["name"] == "km_start" for msg in received1)
+    assert any(msg["name"] == "km_start" for msg in received2)
+
+    lobby = KampumionLobby.query.filter_by(code=code).first()
+    assert lobby.status == "hacking"
+    round_ = KampumionRound.query.filter_by(lobby_id=lobby.id).first()
+    assert round_ is not None and len(round_.secret_code) == 4
+
+    blind_sio, sighted_sio = (sio1, sio2) if role1 == "blind" else (sio2, sio1)
+
+    # Only the blind player's keypress produces a shared flash.
+    sighted_sio.get_received()
+    sighted_sio.emit("km_key_press", {"key": "5"})
+    assert not [m for m in sighted_sio.get_received() if m["name"] == "km_flash"]
+
+    blind_sio.get_received()
+    blind_sio.emit("km_key_press", {"key": "5"})
+    flash_events = [m for m in blind_sio.get_received() if m["name"] == "km_flash"]
+    assert flash_events and flash_events[0]["args"][0]["key"] == "5"
+
+    # A sighted player can't submit the code, only the blind one can.
+    sighted_sio.get_received()
+    sighted_sio.emit("km_submit_code", {"code": round_.secret_code})
+    assert not [m for m in sighted_sio.get_received() if m["name"] in ("km_wrong", "km_solved")]
+
+    # Wrong guess from the blind player.
+    wrong_guess = "0000" if round_.secret_code != "0000" else "1111"
+    blind_sio.get_received()
+    blind_sio.emit("km_submit_code", {"code": wrong_guess})
+    wrong_events = [m for m in blind_sio.get_received() if m["name"] == "km_wrong"]
+    assert wrong_events and wrong_events[0]["args"][0]["attempts"] == 1
+
+    # The AI hint panel, reachable by the sighted player, with ask_hint mocked.
+    sighted_sio.get_received()
+    sighted_sio.emit("km_ask_ai", {"question": "Ist die erste Ziffer gerade?"})
+    ai_events = [m for m in sighted_sio.get_received() if m["name"] == "km_ai_answer"]
+    assert ai_events and "Ist die erste Ziffer gerade?" in ai_events[0]["args"][0]["question"]
+
+    # Correct guess solves the round for everyone.
+    blind_sio.get_received()
+    sighted_sio.get_received()
+    blind_sio.emit("km_submit_code", {"code": round_.secret_code})
+    solved_events = [m for m in blind_sio.get_received() if m["name"] == "km_solved"]
+    assert solved_events and solved_events[0]["args"][0]["code"] == round_.secret_code
+    assert any(m["name"] == "km_solved" for m in sighted_sio.get_received())
+
+    db.session.refresh(lobby)
+    assert lobby.status == "finished"
+    db.session.refresh(round_)
+    assert round_.solved_at is not None

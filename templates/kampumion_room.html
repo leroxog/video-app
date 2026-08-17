@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0a0512">
+    <title>Hackerraum - Kampumion</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/games.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='img/cheaper-mark.svg') }}" type="image/svg+xml">
+</head>
+<body>
+<div class="km-app"
+     id="kmRoomApp"
+     data-code="{{ lobby.code }}"
+     data-user-id="{{ user.id }}"
+     data-username="{{ user.username }}"
+     data-role="{{ role }}"
+     data-solved="{{ 'true' if solved else 'false' }}">
+
+    <div class="km-room-scene">
+        <div class="km-terminal-stage {{ 'blackout' if role == 'blind' else '' }}" id="kmTerminalStage">
+            <div class="km-role-banner" id="kmRoleBanner"></div>
+
+            <div class="km-terminal-flash" id="kmFlash">
+                <div class="km-flash-scene">
+                    <div class="chair"></div><div class="chair"></div><div class="chair"></div>
+                    <div class="chair"></div><div class="chair"></div><div class="chair"></div>
+                </div>
+                <div class="km-flash-key" id="kmFlashKey">?</div>
+            </div>
+
+            {% if role != "blind" %}
+                <div class="km-terminal-idle">Der Terminal-Bildschirm der/des Blinden -- bei jedem Tastendruck seht ihr hier den gleichen kurzen Blitz.</div>
+            {% endif %}
+
+            {% if role == "blind" %}
+                <div class="km-terminal-input-row">
+                    <input type="text" id="kmCodeInput" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="----" autocomplete="off">
+                    <button type="button" class="lg-btn primary" id="kmSubmitBtn">Hacken</button>
+                </div>
+            {% endif %}
+
+            <div class="km-wrong-flash" id="kmWrongFlash"></div>
+            <div class="km-mic-indicator" id="kmMicIndicator">🎤 verbinde…</div>
+
+            <div class="km-solved-overlay" id="kmSolvedOverlay" style="display:none;">
+                <h2>✅ System gehackt!</h2>
+                <p id="kmSolvedCode" style="color:var(--lg-text-dim); font-family: var(--lg-pixel-font);"></p>
+                <button type="button" class="lg-btn primary" id="kmRematchBtn">Nochmal spielen</button>
+                <a class="lg-btn" href="{{ url_for('games_home') }}">Zurück zu LEROX Games</a>
+            </div>
+        </div>
+
+        {% if role != "blind" %}
+            <div class="km-sighted-view">
+                <div class="km-panel">
+                    <h3>🖥️ Gehackte KI -- frag nach Hinweisen</h3>
+                    <div class="km-ai-log" id="kmAiLog"></div>
+                    <form class="km-ai-form" id="kmAiForm">
+                        <input type="text" id="kmAiQuestion" placeholder="z.B. Ist die erste Ziffer gerade?" maxlength="200" autocomplete="off">
+                        <button type="submit" class="lg-btn">Fragen</button>
+                    </form>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/vendor/socket.io.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/games-sounds.js') }}"></script>
+<script src="{{ url_for('static', filename='js/webrtc-voice.js') }}"></script>
+<script src="{{ url_for('static', filename='js/kampumion-room.js') }}"></script>
+</body>
+</html>

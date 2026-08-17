@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#2a1650">
+    <title>LEROX Games</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/games.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='img/cheaper-mark.svg') }}" type="image/svg+xml">
+</head>
+<body>
+<header class="lg-header">
+    <a class="lg-brand" href="{{ url_for('games_home') }}">🎮 LEROX Games</a>
+    <nav class="lg-header-nav">
+        <a href="{{ url_for('studio_home') }}" title="Alle LEROX STUDIO Projekte">LEROX STUDIO</a>
+        {% if user %}
+            <span>{{ user.username }}</span>
+            <a href="{{ url_for('account_settings') }}">Konto</a>
+            <form action="{{ url_for('logout') }}" method="post" style="display:contents;">
+                <button type="submit">Abmelden</button>
+            </form>
+        {% else %}
+            <a href="{{ url_for('login') }}">Login</a>
+        {% endif %}
+    </nav>
+</header>
+
+<main class="lg-main">
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            <ul class="lg-flashes">
+                {% for message in messages %}<li>{{ message }}</li>{% endfor %}
+            </ul>
+        {% endif %}
+    {% endwith %}
+
+    <div class="lg-hero">
+        <h1>LEROX Games</h1>
+        <p>Party-Spiele zum Herunterladen oder direkt im Browser -- mit Freunden per Lobby-Code.</p>
+    </div>
+
+    <div class="lg-game-grid">
+        <div class="lg-game-card">
+            <span class="icon">💻</span>
+            <h2>Kampumion</h2>
+            <p>Ein Team hackt gemeinsam ein System -- eine Person ist blind, eine taub, eine stumm. Nur zusammen (und mit Hilfe einer KI) klappt der Hack.</p>
+            <a class="lg-btn primary" href="{{ url_for('kampumion_home') }}">Spielen</a>
+        </div>
+    </div>
+
+    <p style="text-align:center; margin-top: 40px;">
+        <a class="lg-btn" href="{{ url_for('static', filename='downloads/LEROX-Games-Setup.exe') }}">📲 LEROX Games als App herunterladen</a>
+    </p>
+</main>
+</body>
+</html>

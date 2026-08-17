@@ -26,6 +26,7 @@ from flask import (
     Flask, render_template, request, redirect, url_for,
     session, send_from_directory, abort, flash, jsonify, Response
 )
+from flask_socketio import SocketIO, join_room, leave_room, emit
 from sqlalchemy import text
 from werkzeug.utils import secure_filename
 from werkzeug.exceptions import HTTPException
@@ -37,11 +38,12 @@ from models import (
     AiTrainingExample, AiTrainingRun,
     Offer, OFFER_CATEGORIES, OFFER_CATEGORY_LABELS, DiscountCode,
     BrandFollow, PushSubscription, DiscountCodeUse, BrandReport,
-    MailMessage,
+    MailMessage, KampumionLobby, KampumionPlayer, KampumionRound,
 )
 import ai_assistant
 import local_ai
 import push_notify
+import kampumion
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -554,6 +556,17 @@ def avatar_color_filter(username):
 
 
 db.init_app(app)
+
+# Powers Kampumion's real-time lobby/room sync and WebRTC voice-chat
+# signaling (see kampumion.py) -- nothing else in the app uses this.
+# async_mode="eventlet" matches the gunicorn worker class set in
+# Procfile/railpack.json ("--worker-class eventlet"); gunicorn's eventlet
+# worker does the necessary eventlet.monkey_patch() itself as part of its
+# own bootstrap, before this module's code runs, so there's no explicit
+# monkey_patch() call here -- doing that unconditionally at import time
+# would affect every process that imports app.py (pytest, one-off
+# scripts), including ones that never touch sockets at all.
+socketio = SocketIO(app, async_mode="eventlet")
 
 
 def ensure_r2_cors_configured():
@@ -1279,6 +1292,14 @@ LEROX_STUDIO_PROJECTS = [
         # nothing meaningful to "open" in-browser for a browser itself.
         "website_endpoint": None,
         "download_url": "/static/downloads/LEROX-Browser-Setup.exe",
+    },
+    {
+        "key": "games",
+        "name": "LEROX Games",
+        "tagline": "Party-Spiele zum Herunterladen -- als Erstes: Kampumion.",
+        "icon": "🎮",
+        "website_endpoint": "games_home",
+        "download_url": "/static/downloads/LEROX-Games-Setup.exe",
     },
 ]
 
@@ -3439,6 +3460,324 @@ def admin_voice_profile_reset(gender):
     return redirect(url_for("admin_dashboard"))
 
 
+# --- LEROX Games: Kampumion ---------------------------------------------
+# A real-time, asymmetric-roles party game (see kampumion.py for the pure
+# puzzle-generation/AI-hint logic). Live lobby/room state travels over
+# Socket.IO (see `socketio = SocketIO(app, ...)` near the top of this
+# file) instead of HTTP polling; voice chat is peer-to-peer WebRTC with
+# signaling relayed through the same socket connection (see
+# static/js/kampumion-room.js). The module-level dicts below are
+# in-memory only, never persisted -- fine because this deployment always
+# runs a single gunicorn worker (see Procfile/railpack.json); a second
+# worker process would need a shared message queue (e.g. Redis) for
+# Socket.IO broadcasts to reach clients connected to a different worker,
+# which this app doesn't have and doesn't need at this scale.
+
+KAMPUMION_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # no 0/O/1/I
+
+# (lobby_code, user_id) -> sid, and the reverse index -- lets a private
+# per-player event (e.g. "here is YOUR OWN role") go to exactly one
+# connected client without broadcasting everyone's role to everyone.
+# Each player only learns their own role and has to work out everyone
+# else's from how they act in the room, same as a real hidden-role party
+# game -- broadcasting the full role list would spoil that.
+_km_sid_by_user = {}
+_km_user_by_sid = {}
+# lobby_id -> AI hint chat history for the current round (oldest first) --
+# purely ephemeral flavor-text context for kampumion.ask_hint, never
+# persisted to the database.
+_km_ai_history = {}
+
+
+def _km_room(code):
+    return f"km_{code}"
+
+
+def _km_lobby_state(lobby):
+    players = KampumionPlayer.query.filter_by(lobby_id=lobby.id).order_by(KampumionPlayer.joined_at).all()
+    return {
+        "code": lobby.code,
+        "status": lobby.status,
+        "players": [{"user_id": p.user_id, "username": p.user.username, "ready": p.ready} for p in players],
+    }
+
+
+@app.route("/games")
+def games_home():
+    return render_template("games_home.html", user=current_user())
+
+
+@app.route("/games/kampumion")
+def kampumion_home():
+    return render_template("kampumion_home.html", user=current_user())
+
+
+@app.route("/games/kampumion/create", methods=["POST"])
+def kampumion_create():
+    user = current_user()
+    code = None
+    for _ in range(10):
+        candidate = "".join(secrets.choice(KAMPUMION_CODE_ALPHABET) for _ in range(5))
+        if not KampumionLobby.query.filter_by(code=candidate).first():
+            code = candidate
+            break
+    if code is None:
+        flash("Konnte gerade keine neue Lobby anlegen, bitte nochmal versuchen.")
+        return redirect(url_for("kampumion_home"))
+    lobby = KampumionLobby(code=code, host_user_id=user.id)
+    db.session.add(lobby)
+    db.session.commit()
+    return redirect(url_for("kampumion_lobby", code=code))
+
+
+@app.route("/games/kampumion/join", methods=["POST"])
+def kampumion_join():
+    code = (request.form.get("code") or "").strip().upper()
+    lobby = KampumionLobby.query.filter_by(code=code).first()
+    if lobby is None:
+        flash("Diese Lobby gibt es nicht (mehr).")
+        return redirect(url_for("kampumion_home"))
+    return redirect(url_for("kampumion_lobby", code=lobby.code))
+
+
+@app.route("/games/kampumion/<code>")
+def kampumion_lobby(code):
+    lobby = KampumionLobby.query.filter_by(code=code.upper()).first()
+    if lobby is None:
+        abort(404)
+    if lobby.status != "waiting":
+        return redirect(url_for("kampumion_room", code=lobby.code))
+    return render_template("kampumion_lobby.html", user=current_user(), lobby=lobby)
+
+
+@app.route("/games/kampumion/<code>/room")
+def kampumion_room(code):
+    user = current_user()
+    lobby = KampumionLobby.query.filter_by(code=code.upper()).first()
+    if lobby is None:
+        abort(404)
+    if lobby.status == "waiting":
+        return redirect(url_for("kampumion_lobby", code=lobby.code))
+    player = KampumionPlayer.query.filter_by(lobby_id=lobby.id, user_id=user.id).first()
+    if player is None:
+        abort(403)
+    round_ = KampumionRound.query.filter_by(lobby_id=lobby.id).order_by(KampumionRound.created_at.desc()).first()
+    return render_template(
+        "kampumion_room.html", user=user, lobby=lobby, role=player.role,
+        solved=bool(round_ and round_.solved_at),
+    )
+
+
+# --- Kampumion Socket.IO events ---
+
+@socketio.on("km_join_lobby")
+def km_on_join_lobby(data):
+    user = current_user()
+    if user is None:
+        return
+    code = ((data or {}).get("code") or "").upper()
+    lobby = KampumionLobby.query.filter_by(code=code).first()
+    if lobby is None:
+        return
+    join_room(_km_room(code))
+    _km_sid_by_user[(code, user.id)] = request.sid
+    _km_user_by_sid[request.sid] = (code, user.id)
+
+    player = KampumionPlayer.query.filter_by(lobby_id=lobby.id, user_id=user.id).first()
+    if player is None:
+        player = KampumionPlayer(lobby_id=lobby.id, user_id=user.id)
+        db.session.add(player)
+        db.session.commit()
+
+    emit("km_state", _km_lobby_state(lobby), room=_km_room(code))
+    if player.role:
+        emit("km_role", {"role": player.role})
+
+
+@socketio.on("km_move")
+def km_on_move(data):
+    entry = _km_user_by_sid.get(request.sid)
+    if entry is None:
+        return
+    code, user_id = entry
+    emit(
+        "km_player_moved",
+        {"user_id": user_id, "x": (data or {}).get("x", 0), "y": (data or {}).get("y", 0)},
+        room=_km_room(code), include_self=False,
+    )
+
+
+@socketio.on("km_ready")
+def km_on_ready(data):
+    entry = _km_user_by_sid.get(request.sid)
+    if entry is None:
+        return
+    code, user_id = entry
+    lobby = KampumionLobby.query.filter_by(code=code).first()
+    if lobby is None or lobby.status != "waiting":
+        return
+    player = KampumionPlayer.query.filter_by(lobby_id=lobby.id, user_id=user_id).first()
+    if player is None:
+        return
+    player.ready = bool((data or {}).get("ready"))
+    db.session.commit()
+
+    players = KampumionPlayer.query.filter_by(lobby_id=lobby.id).all()
+    emit("km_state", _km_lobby_state(lobby), room=_km_room(code))
+
+    if players and all(p.ready for p in players):
+        roles = kampumion.assign_roles(len(players))
+        for p, role in zip(players, roles):
+            p.role = role
+        lobby.status = "hacking"
+        lobby.started_at = datetime.now(timezone.utc)
+        round_ = KampumionRound(lobby_id=lobby.id, secret_code=kampumion.generate_secret_code())
+        db.session.add(round_)
+        db.session.commit()
+        _km_ai_history[lobby.id] = []
+
+        for p in players:
+            target_sid = _km_sid_by_user.get((code, p.user_id))
+            if target_sid:
+                emit("km_role", {"role": p.role}, room=target_sid)
+        emit("km_start", {}, room=_km_room(code))
+
+
+@socketio.on("km_leave_lobby")
+def km_on_leave_lobby():
+    entry = _km_user_by_sid.pop(request.sid, None)
+    if entry is None:
+        return
+    code, user_id = entry
+    _km_sid_by_user.pop((code, user_id), None)
+    leave_room(_km_room(code))
+    lobby = KampumionLobby.query.filter_by(code=code).first()
+    if lobby is None:
+        return
+    if lobby.status == "waiting":
+        player = KampumionPlayer.query.filter_by(lobby_id=lobby.id, user_id=user_id).first()
+        if player is not None:
+            db.session.delete(player)
+            db.session.commit()
+        emit("km_state", _km_lobby_state(lobby), room=_km_room(code))
+    emit("km_player_left", {"user_id": user_id}, room=_km_room(code))
+
+
+@socketio.on("disconnect")
+def km_on_disconnect():
+    km_on_leave_lobby()
+
+
+@socketio.on("km_key_press")
+def km_on_key_press(data):
+    """The blind player's terminal keypress -- mirrored to the whole room
+    (not just their own screen) so the sighted players see the same brief
+    flash, since they're all "in the same room" watching the terminal."""
+    entry = _km_user_by_sid.get(request.sid)
+    if entry is None:
+        return
+    code, user_id = entry
+    lobby = KampumionLobby.query.filter_by(code=code).first()
+    if lobby is None or lobby.status != "hacking":
+        return
+    player = KampumionPlayer.query.filter_by(lobby_id=lobby.id, user_id=user_id).first()
+    if player is None or player.role != "blind":
+        return
+    key = str((data or {}).get("key", ""))[:4]
+    emit("km_flash", {"key": key}, room=_km_room(code))
+
+
+@socketio.on("km_ask_ai")
+def km_on_ask_ai(data):
+    entry = _km_user_by_sid.get(request.sid)
+    if entry is None:
+        return
+    code, user_id = entry
+    lobby = KampumionLobby.query.filter_by(code=code).first()
+    if lobby is None or lobby.status != "hacking":
+        return
+    round_ = KampumionRound.query.filter_by(lobby_id=lobby.id).order_by(KampumionRound.created_at.desc()).first()
+    if round_ is None:
+        return
+    question = ((data or {}).get("question") or "").strip()
+    if not question:
+        return
+    history = _km_ai_history.setdefault(lobby.id, [])
+    try:
+        answer = kampumion.ask_hint(round_.secret_code, question, history)
+    except Exception as exc:
+        emit(
+            "km_ai_answer",
+            {"question": question, "answer": f"[Terminal antwortet nicht: {exc}]"},
+            room=_km_room(code),
+        )
+        return
+    history.append({"role": "user", "content": question})
+    history.append({"role": "assistant", "content": answer})
+    emit("km_ai_answer", {"question": question, "answer": answer}, room=_km_room(code))
+
+
+@socketio.on("km_submit_code")
+def km_on_submit_code(data):
+    entry = _km_user_by_sid.get(request.sid)
+    if entry is None:
+        return
+    code, user_id = entry
+    lobby = KampumionLobby.query.filter_by(code=code).first()
+    if lobby is None or lobby.status != "hacking":
+        return
+    player = KampumionPlayer.query.filter_by(lobby_id=lobby.id, user_id=user_id).first()
+    if player is None or player.role != "blind":
+        return
+    round_ = KampumionRound.query.filter_by(lobby_id=lobby.id).order_by(KampumionRound.created_at.desc()).first()
+    if round_ is None or round_.solved_at is not None:
+        return
+    guess = str((data or {}).get("code", "")).strip()
+    round_.attempts += 1
+    if guess == round_.secret_code:
+        round_.solved_at = datetime.now(timezone.utc)
+        lobby.status = "finished"
+        db.session.commit()
+        emit("km_solved", {"code": round_.secret_code}, room=_km_room(code))
+    else:
+        db.session.commit()
+        emit("km_wrong", {"attempts": round_.attempts}, room=_km_room(code))
+
+
+@socketio.on("km_rematch")
+def km_on_rematch():
+    entry = _km_user_by_sid.get(request.sid)
+    if entry is None:
+        return
+    code, user_id = entry
+    lobby = KampumionLobby.query.filter_by(code=code).first()
+    if lobby is None or lobby.status != "finished":
+        return
+    for p in KampumionPlayer.query.filter_by(lobby_id=lobby.id).all():
+        p.ready = False
+        p.role = None
+    lobby.status = "waiting"
+    lobby.started_at = None
+    db.session.commit()
+    emit("km_reset", {}, room=_km_room(code))
+
+
+# Pure relay, no media ever touches the server: WebRTC offer/answer/ICE
+# candidate payloads are forwarded verbatim to one specific peer (by
+# user_id) inside the same lobby room. Actual audio stays peer-to-peer.
+@socketio.on("km_rtc_signal")
+def km_on_rtc_signal(data):
+    entry = _km_user_by_sid.get(request.sid)
+    if entry is None:
+        return
+    code, from_user_id = entry
+    to_user_id = (data or {}).get("to")
+    target_sid = _km_sid_by_user.get((code, to_user_id))
+    if not target_sid:
+        return
+    emit("km_rtc_signal", {"from": from_user_id, "signal": (data or {}).get("signal")}, room=target_sid)
+
+
 if __name__ == "__main__":
-    app.run(debug=True)
+    socketio.run(app, debug=True)
 

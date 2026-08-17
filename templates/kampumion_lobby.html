@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#2a1650">
+    <title>Lobby {{ lobby.code }} - Kampumion</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/games.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='img/cheaper-mark.svg') }}" type="image/svg+xml">
+</head>
+<body>
+<div class="km-app"
+     id="kmLobbyApp"
+     data-code="{{ lobby.code }}"
+     data-user-id="{{ user.id }}"
+     data-username="{{ user.username }}">
+    <div class="km-lobby-toolbar">
+        <div style="display:flex; align-items:center; gap:12px;">
+            <a href="{{ url_for('games_home') }}" style="color:var(--lg-text-dim); text-decoration:none;">← LEROX Games</a>
+            <span class="km-code-pill">{{ lobby.code }}</span>
+        </div>
+        <div class="km-player-list" id="kmPlayerList"></div>
+    </div>
+
+    <div class="km-room-view" id="kmRoomView">
+        <div class="km-start-corner">
+            <span class="km-hint">WASD / Pfeiltasten zum Bewegen</span>
+            <button type="button" class="km-start-btn" id="kmStartBtn">START</button>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/vendor/socket.io.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/games-sounds.js') }}"></script>
+<script src="{{ url_for('static', filename='js/kampumion-lobby.js') }}"></script>
+</body>
+</html>

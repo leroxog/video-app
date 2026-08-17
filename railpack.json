@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.railpack.com",
   "deploy": {
-    "startCommand": "gunicorn app:app --timeout 300 --workers 2"
+    "startCommand": "gunicorn app:app --timeout 300 --workers 1 --worker-class eventlet"
   }
 }
