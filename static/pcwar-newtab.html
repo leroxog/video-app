@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>Neuer Tab</title>
+<style>
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    background: radial-gradient(circle at 50% 0%, #2d1854, #150a26 70%);
+    font-family: "Segoe UI", system-ui, sans-serif;
+    color: #f3e8ff;
+  }
+  h1 { font-size: 20px; margin: 0; }
+  .tiles { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; max-width: 420px; }
+  a.tile {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    padding: 14px 18px; border-radius: 12px;
+    background: rgba(168, 85, 247, 0.12); border: 1px solid rgba(196, 132, 252, 0.35);
+    color: #f3e8ff; text-decoration: none; font-size: 12px;
+  }
+  a.tile:hover { background: rgba(168, 85, 247, 0.22); }
+  .icon { font-size: 22px; }
+</style>
+</head>
+<body>
+  <h1>🌐 Neuer Tab</h1>
+  <div class="tiles">
+    <a class="tile" href="https://duckduckgo.com"><span class="icon">🦆</span>DuckDuckGo</a>
+    <a class="tile" href="https://de.wikipedia.org"><span class="icon">📚</span>Wikipedia</a>
+    <a class="tile" href="https://html.duckduckgo.com/html/"><span class="icon">🔍</span>Suche (einbettbar)</a>
+  </div>
+</body>
+</html>

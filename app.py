@@ -3804,19 +3804,63 @@ def pcwar_home():
 
 @app.route("/games/pcwar/<target_key>")
 def pcwar_target(target_key):
+    """The "attacker PC" desktop for this one target -- Terminal, a real
+    little Browser, and a couple of decorative icons, the same as picking
+    up a pre-configured laptop for one engagement. Hacking is just what
+    the Terminal icon happens to lead to; the Browser genuinely browses,
+    you don't have to touch the Terminal at all."""
     user = current_user()
     if target_key not in pcwar.TARGETS_BY_KEY:
         abort(404)
     target = pcwar.TARGETS_BY_KEY[target_key]
     tutorial = request.args.get("tutorial") == "1"
-    return render_template("pcwar_target.html", user=user, target=target, tutorial=tutorial)
+    return render_template("pcwar_desktop.html", user=user, target=target, tutorial=tutorial)
+
+
+@app.route("/games/pcwar/<target_key>/terminal")
+def pcwar_terminal(target_key):
+    user = current_user()
+    if target_key not in pcwar.TARGETS_BY_KEY:
+        abort(404)
+    target = pcwar.TARGETS_BY_KEY[target_key]
+    tutorial = request.args.get("tutorial") == "1"
+    return render_template("pcwar_terminal.html", user=user, target=target, tutorial=tutorial)
+
+
+@app.route("/games/pcwar/<target_key>/browser")
+def pcwar_browser(target_key):
+    user = current_user()
+    if target_key not in pcwar.TARGETS_BY_KEY:
+        abort(404)
+    target = pcwar.TARGETS_BY_KEY[target_key]
+    return render_template("pcwar_browser.html", user=user, target=target)
 
 
 @app.route("/games/pcwar/<target_key>/start", methods=["POST"])
 def pcwar_start(target_key):
-    """Real engagements start from a known target IP (that's the
-    assignment, not itself something to "hack") -- so /start hands it
-    back immediately instead of treating IP discovery as a step."""
+    """Idempotent -- returns the existing in-progress attempt's IP if
+    there already is one, only generating a fresh one the first time.
+    That way switching between the desktop's apps (e.g. Terminal ->
+    Browser -> back to Terminal) never resets hacking progress; see
+    /restart below for an explicit "start over" action. Real engagements
+    also start from a known target IP (that's the assignment, not itself
+    something to "hack"), so this hands it back immediately rather than
+    treating IP discovery as a step."""
+    user = current_user()
+    if target_key not in pcwar.TARGETS_BY_KEY:
+        abort(404)
+    attempt = _pcwar_attempts.get((user.id, target_key))
+    if attempt is None:
+        attempt = pcwar.generate_attempt(target_key)
+        _pcwar_attempts[(user.id, target_key)] = attempt
+    return jsonify({"ip": attempt["ip"]})
+
+
+@app.route("/games/pcwar/<target_key>/restart", methods=["POST"])
+def pcwar_restart(target_key):
+    """Explicitly throws away the current attempt and generates a fresh
+    one (new IP/ports/username/password/profile) -- unlike /start, always
+    regenerates rather than resuming."""
     user = current_user()
     if target_key not in pcwar.TARGETS_BY_KEY:
         abort(404)

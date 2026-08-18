@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#150a26">
+    <title>{{ target.name }} - PCwar</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/games.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='img/cheaper-mark.svg') }}" type="image/svg+xml">
+</head>
+<body>
+<div class="pcwar-app"
+     id="pcwarDesktopApp"
+     data-target-key="{{ target.key }}"
+     data-target-name="{{ target.name }}"
+     data-difficulty="{{ target.difficulty }}"
+     data-tutorial="{{ 'true' if tutorial else 'false' }}">
+    <div class="pcwar-topbar">
+        <a href="{{ url_for('pcwar_home') }}">← Ziele</a>
+        <div class="pcwar-topbar-title">
+            {{ target.name }}
+            <span class="pcwar-topbar-diff difficulty-{{ target.difficulty }}">{{ target.difficulty }}</span>
+        </div>
+        <button type="button" class="lg-btn" id="pcwarRestartBtn" title="Neuer Versuch -- neue IP/Zugangsdaten">↻ Neu starten</button>
+    </div>
+
+    <div class="pcwar-desktop-view" id="pcwarDesktopView">
+        <div class="pcwar-desktop-icons">
+            <a class="pcwar-dicon" href="{{ url_for('pcwar_terminal', target_key=target.key, tutorial=1 if tutorial else 0) }}">
+                <span class="glyph">🖥️</span><span class="name">Terminal</span>
+            </a>
+            <a class="pcwar-dicon" href="{{ url_for('pcwar_browser', target_key=target.key) }}">
+                <span class="glyph">🌐</span><span class="name">Browser</span>
+            </a>
+            <button type="button" class="pcwar-dicon" id="pcwarNotesIcon">
+                <span class="glyph">🗒️</span><span class="name">Notizen</span>
+            </button>
+            <button type="button" class="pcwar-dicon" id="pcwarTrashIcon">
+                <span class="glyph">🗑️</span><span class="name">Papierkorb</span>
+            </button>
+        </div>
+        <div class="pcwar-desktop-hint">Alles hier ist erfunden -- ein normaler PC-Desktop, kein echter Computer.</div>
+        <div class="pcwar-taskbar"><span>🟣 Start</span><span id="pcwarClock"></span></div>
+    </div>
+
+    <div class="pcwar-window-overlay" id="pcwarNotesOverlay" style="display:none;">
+        <div class="pcwar-window">
+            <div class="pcwar-window-titlebar">
+                <span>Notizen.txt</span>
+                <button type="button" id="pcwarNotesClose">×</button>
+            </div>
+            <div class="pcwar-window-body" id="pcwarNotesBody">
+                <div class="pcwar-line dim">wird geladen…</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/games-sounds.js') }}"></script>
+<script src="{{ url_for('static', filename='js/pcwar-desktop.js') }}"></script>
+</body>
+</html>

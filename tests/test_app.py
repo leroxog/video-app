@@ -2529,10 +2529,14 @@ def test_pcwar_home_lists_targets(client):
     assert b"SHADOWCORE" in response.data
 
 
-def test_pcwar_target_page_renders_and_unknown_target_404s(client):
+def test_pcwar_desktop_terminal_browser_pages_render_and_unknown_target_404s(client):
     register(client)
     assert client.get("/games/pcwar/shadowcore").status_code == 200
+    assert client.get("/games/pcwar/shadowcore/terminal").status_code == 200
+    assert client.get("/games/pcwar/shadowcore/browser").status_code == 200
     assert client.get("/games/pcwar/does-not-exist").status_code == 404
+    assert client.get("/games/pcwar/does-not-exist/terminal").status_code == 404
+    assert client.get("/games/pcwar/does-not-exist/browser").status_code == 404
 
 
 def test_pcwar_steps_require_a_started_attempt(client):
@@ -2609,11 +2613,20 @@ def test_pcwar_full_hack_flow_grants_completion_badge(client):
     assert "gehackt".encode() in home_after.data
 
 
-def test_pcwar_new_attempt_generates_fresh_fake_data(client):
+def test_pcwar_start_is_idempotent_but_restart_generates_fresh_data(client):
     register(client)
     first_ip = client.post("/games/pcwar/shadowcore/start").get_json()["ip"]
-    second_ip = client.post("/games/pcwar/shadowcore/start").get_json()["ip"]
+    # Calling /start again (e.g. re-visiting the desktop, or opening the
+    # Terminal app after the Browser app) must resume the same attempt,
+    # not silently reset hacking progress.
+    again_ip = client.post("/games/pcwar/shadowcore/start").get_json()["ip"]
+    assert first_ip == again_ip
 
+    # /restart is the explicit "throw this attempt away" action.
+    restarted_ip = client.post("/games/pcwar/shadowcore/restart").get_json()["ip"]
     # Extremely unlikely to collide by chance (254^4 possibilities) --
-    # a match here would mean start() isn't actually regenerating.
-    assert first_ip != second_ip
+    # a match here would mean restart() isn't actually regenerating.
+    assert restarted_ip != first_ip
+
+    resumed_ip = client.post("/games/pcwar/shadowcore/start").get_json()["ip"]
+    assert resumed_ip == restarted_ip

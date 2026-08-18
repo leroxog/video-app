@@ -4,14 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#0a0512">
-    <title>{{ target.name }} - PCwar</title>
+    <title>Terminal - {{ target.name }} - PCwar</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/games.css') }}">
     <link rel="icon" href="{{ url_for('static', filename='img/cheaper-mark.svg') }}" type="image/svg+xml">
 </head>
 <body>
 <div class="pcwar-app" id="pcwarApp" data-target-key="{{ target.key }}" data-tutorial="{{ 'true' if tutorial else 'false' }}">
     <div class="pcwar-topbar">
-        <a href="{{ url_for('pcwar_home') }}">← Ziele</a>
+        <a href="{{ url_for('pcwar_target', target_key=target.key) }}">← Desktop</a>
         <div class="pcwar-topbar-title">
             {{ target.name }}
             <span class="pcwar-topbar-diff difficulty-{{ target.difficulty }}">{{ target.difficulty }}</span>

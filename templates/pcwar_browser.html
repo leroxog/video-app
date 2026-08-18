@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#150a26">
+    <title>Browser - {{ target.name }} - PCwar</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/games.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='img/cheaper-mark.svg') }}" type="image/svg+xml">
+</head>
+<body>
+<div class="pcwar-app">
+    <div class="pcwar-topbar">
+        <a href="{{ url_for('pcwar_target', target_key=target.key) }}">← Desktop</a>
+        <div class="pcwar-topbar-title">Browser</div>
+        <div></div>
+    </div>
+
+    <div class="pcwar-browser-view">
+        <div class="pcwar-browser-toolbar">
+            <button type="button" class="lg-btn" id="pcwarBrowserHome" title="Startseite">⌂</button>
+            <button type="button" class="lg-btn" id="pcwarBrowserReload" title="Neu laden">⟳</button>
+            <form id="pcwarBrowserForm" class="pcwar-browser-form">
+                <input type="text" id="pcwarBrowserUrl" placeholder="Adresse eingeben oder suchen…" autocomplete="off">
+                <button type="submit" class="lg-btn primary">Los</button>
+            </form>
+        </div>
+        <div class="pcwar-browser-note">
+            Das ist ein echter kleiner Browser -- du kannst normal im Web surfen. Manche Seiten lassen sich aus
+            Sicherheitsgründen nicht einbetten (X-Frame-Options) und bleiben dann leer; das ist eine echte
+            Browser-Einschränkung, keine Fehlfunktion. Zum Hacken brauchst du das nicht -- Terminal reicht.
+        </div>
+        <iframe id="pcwarBrowserFrame" class="pcwar-browser-frame" src="about:blank" title="PCwar Browser"></iframe>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/games-sounds.js') }}"></script>
+<script src="{{ url_for('static', filename='js/pcwar-browser.js') }}"></script>
+</body>
+</html>
