@@ -881,3 +881,19 @@ class KampumionRound(db.Model):
     solved_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     lobby = db.relationship("KampumionLobby")
+
+
+class PCWarCompletion(db.Model):
+    """Records that a user has successfully finished one PCwar hacking
+    simulation target at least once (see app.py's /games/pcwar routes and
+    pcwar.py) -- purely a "gehackt" badge on the target-select screen.
+    Everything about the simulation itself (fake IP/ports/password/victim
+    profile) is regenerated fresh per attempt and lives only in an
+    in-memory dict on the server (see app.py's _pcwar_attempts), never
+    stored here or anywhere else -- there's nothing real to persist."""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    target_key = db.Column(db.String(50), nullable=False)
+    completed_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    user = db.relationship("User")
+    __table_args__ = (db.UniqueConstraint("user_id", "target_key", name="uq_pcwar_completion"),)

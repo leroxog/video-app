@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#150a26">
+    <title>PCwar - LEROX Games</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/games.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='img/cheaper-mark.svg') }}" type="image/svg+xml">
+</head>
+<body>
+<header class="lg-header">
+    <a class="lg-brand" href="{{ url_for('games_home') }}">🎮 LEROX Games</a>
+    <nav class="lg-header-nav">
+        <a href="{{ url_for('studio_home') }}">LEROX STUDIO</a>
+        <span>{{ user.username }}</span>
+    </nav>
+</header>
+
+<main class="lg-main">
+    <div class="lg-hero">
+        <h1>🖥️ PCwar</h1>
+        <p>Alles hier ist erfunden -- fiktive Ziele, erfundene IPs, erfundene Passwörter. Kein echter Computer wird angerührt.</p>
+    </div>
+
+    <div class="pcwar-grid">
+        {% for target in targets %}
+            <div class="pcwar-card difficulty-{{ target.difficulty }}">
+                {% if target.key in completed %}
+                    <span class="pcwar-hacked-badge">✅ gehackt</span>
+                {% endif %}
+                <div class="pcwar-card-icon">🖥️</div>
+                <div class="pcwar-card-name">{{ target.name }}</div>
+                <div class="pcwar-card-difficulty">{{ difficulty_labels[target.difficulty] }}</div>
+                <div class="pcwar-card-overlay">
+                    <a class="lg-btn primary" href="{{ url_for('pcwar_target', target_key=target.key) }}">Starten</a>
+                    <a class="lg-btn" href="{{ url_for('pcwar_target', target_key=target.key, tutorial=1) }}">Tutorial</a>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+</main>
+</body>
+</html>

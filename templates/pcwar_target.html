@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#150a26">
+    <title>{{ target.name }} - PCwar</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/games.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='img/cheaper-mark.svg') }}" type="image/svg+xml">
+</head>
+<body>
+<div class="pcwar-app" id="pcwarApp" data-target-key="{{ target.key }}" data-tutorial="{{ 'true' if tutorial else 'false' }}">
+    <div class="pcwar-topbar">
+        <a href="{{ url_for('pcwar_home') }}">← Ziele</a>
+        <div class="pcwar-topbar-title">
+            {{ target.name }}
+            <span class="pcwar-topbar-diff difficulty-{{ target.difficulty }}">{{ target.difficulty }}</span>
+        </div>
+        <div></div>
+    </div>
+
+    {% if tutorial %}
+        <div class="pcwar-tutorial-banner" id="pcwarTutorialBanner">
+            <b>Tutorial -- Schritt 1/4:</b> Öffne den <b>IP-Scanner</b> auf deinem PC (links), um die Adresse des Ziels herauszufinden.
+        </div>
+    {% endif %}
+
+    <div class="pcwar-desks">
+        <div class="pcwar-desk attacker">
+            <div class="pcwar-desk-label">DEIN PC</div>
+            <div class="pcwar-icons">
+                <button type="button" class="pcwar-icon" data-tool="ip" id="pcwarIconIp">
+                    <span class="glyph">🛰️</span><span class="name">IP-Scanner</span>
+                </button>
+                <button type="button" class="pcwar-icon" data-tool="ports" id="pcwarIconPorts">
+                    <span class="glyph">🔌</span><span class="name">Port-Scanner</span>
+                </button>
+                <button type="button" class="pcwar-icon" data-tool="password" id="pcwarIconPassword">
+                    <span class="glyph">🔓</span><span class="name">Passwort-Cracker</span>
+                </button>
+                <button type="button" class="pcwar-icon" data-tool="login" id="pcwarIconLogin">
+                    <span class="glyph">🔑</span><span class="name">Zugriff</span>
+                </button>
+                <button type="button" class="pcwar-icon" data-tool="results" id="pcwarIconResults" disabled>
+                    <span class="glyph">📁</span><span class="name">Ergebnisse</span>
+                </button>
+            </div>
+            <div class="pcwar-taskbar"><span>🟣 Start</span><span id="pcwarClock"></span></div>
+        </div>
+
+        <div class="pcwar-desk target">
+            <div class="pcwar-desk-label">ZIEL-PC ({{ target.name }})</div>
+            <div class="pcwar-target-screen" id="pcwarTargetScreen">
+                <div class="pcwar-lock">🔒</div>
+                <div class="pcwar-status-list">
+                    <div class="pcwar-status" id="pcwarStatusIp">○ IP-Adresse unbekannt</div>
+                    <div class="pcwar-status" id="pcwarStatusPorts">○ Offene Ports unbekannt</div>
+                    <div class="pcwar-status" id="pcwarStatusPassword">○ Passwort unbekannt</div>
+                </div>
+            </div>
+            <div class="pcwar-profile-view" id="pcwarProfileView" style="display:none;"></div>
+        </div>
+    </div>
+
+    <div class="pcwar-window-overlay" id="pcwarWindowOverlay" style="display:none;">
+        <div class="pcwar-window">
+            <div class="pcwar-window-titlebar">
+                <span id="pcwarWindowTitle">Terminal</span>
+                <button type="button" id="pcwarWindowClose">×</button>
+            </div>
+            <div class="pcwar-window-body" id="pcwarWindowBody"></div>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/games-sounds.js') }}"></script>
+<script src="{{ url_for('static', filename='js/pcwar.js') }}"></script>
+</body>
+</html>

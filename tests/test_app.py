@@ -28,6 +28,7 @@ from models import (
     User, Conversation, Message,
     AiAdminFact, AiLearnedFact, PasswordResetCode, AccountRecoveryRequest, ErrorLog,
     AiVoiceProfile, MailMessage, KampumionLobby, KampumionPlayer, KampumionRound,
+    PCWarCompletion,
 )
 
 
@@ -2519,3 +2520,83 @@ def test_kampumion_full_round_two_players(client, monkeypatch):
     assert lobby.status == "finished"
     db.session.refresh(round_)
     assert round_.solved_at is not None
+
+
+def test_pcwar_home_lists_targets(client):
+    register(client)
+    response = client.get("/games/pcwar")
+    assert response.status_code == 200
+    assert b"SHADOWCORE" in response.data
+
+
+def test_pcwar_target_page_renders_and_unknown_target_404s(client):
+    register(client)
+    assert client.get("/games/pcwar/shadowcore").status_code == 200
+    assert client.get("/games/pcwar/does-not-exist").status_code == 404
+
+
+def test_pcwar_steps_require_a_started_attempt(client):
+    register(client)
+    response = client.post("/games/pcwar/shadowcore/scan-ip")
+    assert response.status_code == 400
+    assert "zuerst starten" in response.get_json()["error"]
+
+
+def test_pcwar_steps_enforce_order(client):
+    register(client)
+    client.post("/games/pcwar/shadowcore/start")
+
+    ports_first = client.post("/games/pcwar/shadowcore/scan-ports")
+    assert ports_first.status_code == 400
+
+    password_first = client.post("/games/pcwar/shadowcore/crack-password")
+    assert password_first.status_code == 400
+
+    login_first = client.post("/games/pcwar/shadowcore/login")
+    assert login_first.status_code == 400
+
+
+def test_pcwar_full_hack_flow_grants_completion_badge(client):
+    register(client, username="hacker1")
+    client.post("/games/pcwar/shadowcore/start")
+
+    ip_res = client.post("/games/pcwar/shadowcore/scan-ip")
+    assert ip_res.status_code == 200
+    ip = ip_res.get_json()["ip"]
+    assert ip.count(".") == 3
+
+    ports_res = client.post("/games/pcwar/shadowcore/scan-ports")
+    assert ports_res.status_code == 200
+    ports = ports_res.get_json()["ports"]
+    assert len(ports) >= 2
+
+    password_res = client.post("/games/pcwar/shadowcore/crack-password")
+    assert password_res.status_code == 200
+    password = password_res.get_json()["password"]
+    assert len(password) >= 6
+
+    login_res = client.post("/games/pcwar/shadowcore/login")
+    assert login_res.status_code == 200
+    login_data = login_res.get_json()
+    assert login_data["ip"] == ip
+    assert login_data["password"] == password
+    assert "name" in login_data["profile"]
+
+    user = User.query.filter_by(username="hacker1").first()
+    assert PCWarCompletion.query.filter_by(user_id=user.id, target_key="shadowcore").first() is not None
+
+    home_after = client.get("/games/pcwar")
+    assert "gehackt".encode() in home_after.data
+
+
+def test_pcwar_new_attempt_generates_fresh_fake_data(client):
+    register(client)
+    client.post("/games/pcwar/shadowcore/start")
+    first_ip = client.post("/games/pcwar/shadowcore/scan-ip").get_json()["ip"]
+
+    client.post("/games/pcwar/shadowcore/start")
+    second_ip = client.post("/games/pcwar/shadowcore/scan-ip").get_json()["ip"]
+
+    # Extremely unlikely to collide by chance (254^4 possibilities) --
+    # a match here would mean start() isn't actually regenerating.
+    assert first_ip != second_ip

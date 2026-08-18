@@ -38,12 +38,13 @@ from models import (
     AiTrainingExample, AiTrainingRun,
     Offer, OFFER_CATEGORIES, OFFER_CATEGORY_LABELS, DiscountCode,
     BrandFollow, PushSubscription, DiscountCodeUse, BrandReport,
-    MailMessage, KampumionLobby, KampumionPlayer, KampumionRound,
+    MailMessage, KampumionLobby, KampumionPlayer, KampumionRound, PCWarCompletion,
 )
 import ai_assistant
 import local_ai
 import push_notify
 import kampumion
+import pcwar
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -3776,6 +3777,100 @@ def km_on_rtc_signal(data):
     if not target_sid:
         return
     emit("km_rtc_signal", {"from": from_user_id, "signal": (data or {}).get("signal")}, room=target_sid)
+
+
+# --- LEROX Games: PCwar -------------------------------------------------
+# A fully fake hacking simulation (see pcwar.py) -- every "target" is a
+# fictional codename, and every IP address/open port/password/victim
+# profile is randomly invented per attempt, entirely server-side. Nothing
+# in this module or pcwar.py ever makes a real network connection to
+# anything; it's a simulation of what hacking looks like, not a tool that
+# does it. Attempts live in an in-memory dict (see Kampumion's module docs
+# above for why that's fine on this single-worker deployment) -- only the
+# final "gehackt" badge (PCWarCompletion) is actually persisted.
+
+_pcwar_attempts = {}  # (user_id, target_key) -> dict from pcwar.generate_attempt
+
+
+@app.route("/games/pcwar")
+def pcwar_home():
+    user = current_user()
+    completed = {c.target_key for c in PCWarCompletion.query.filter_by(user_id=user.id).all()}
+    return render_template(
+        "pcwar_home.html", user=user, targets=pcwar.TARGETS,
+        difficulty_labels=pcwar.DIFFICULTY_LABELS, completed=completed,
+    )
+
+
+@app.route("/games/pcwar/<target_key>")
+def pcwar_target(target_key):
+    user = current_user()
+    if target_key not in pcwar.TARGETS_BY_KEY:
+        abort(404)
+    target = pcwar.TARGETS_BY_KEY[target_key]
+    tutorial = request.args.get("tutorial") == "1"
+    return render_template("pcwar_target.html", user=user, target=target, tutorial=tutorial)
+
+
+@app.route("/games/pcwar/<target_key>/start", methods=["POST"])
+def pcwar_start(target_key):
+    user = current_user()
+    if target_key not in pcwar.TARGETS_BY_KEY:
+        abort(404)
+    _pcwar_attempts[(user.id, target_key)] = pcwar.generate_attempt(target_key)
+    return jsonify({"ok": True})
+
+
+def _pcwar_current_attempt(user_id, target_key):
+    return _pcwar_attempts.get((user_id, target_key))
+
+
+@app.route("/games/pcwar/<target_key>/scan-ip", methods=["POST"])
+def pcwar_scan_ip(target_key):
+    user = current_user()
+    attempt = _pcwar_current_attempt(user.id, target_key)
+    if attempt is None:
+        return jsonify({"error": "Kein laufender Versuch -- zuerst starten."}), 400
+    attempt["revealed"]["ip"] = True
+    return jsonify({"ip": attempt["ip"]})
+
+
+@app.route("/games/pcwar/<target_key>/scan-ports", methods=["POST"])
+def pcwar_scan_ports(target_key):
+    user = current_user()
+    attempt = _pcwar_current_attempt(user.id, target_key)
+    if attempt is None:
+        return jsonify({"error": "Kein laufender Versuch -- zuerst starten."}), 400
+    if not attempt["revealed"]["ip"]:
+        return jsonify({"error": "Erst die IP-Adresse scannen."}), 400
+    attempt["revealed"]["ports"] = True
+    return jsonify({"ports": attempt["ports"]})
+
+
+@app.route("/games/pcwar/<target_key>/crack-password", methods=["POST"])
+def pcwar_crack_password(target_key):
+    user = current_user()
+    attempt = _pcwar_current_attempt(user.id, target_key)
+    if attempt is None:
+        return jsonify({"error": "Kein laufender Versuch -- zuerst starten."}), 400
+    if not attempt["revealed"]["ports"]:
+        return jsonify({"error": "Erst die Ports scannen."}), 400
+    attempt["revealed"]["password"] = True
+    return jsonify({"password": attempt["password"], "login_port": attempt["login_port"]})
+
+
+@app.route("/games/pcwar/<target_key>/login", methods=["POST"])
+def pcwar_login(target_key):
+    user = current_user()
+    attempt = _pcwar_current_attempt(user.id, target_key)
+    if attempt is None:
+        return jsonify({"error": "Kein laufender Versuch -- zuerst starten."}), 400
+    if not (attempt["revealed"]["ip"] and attempt["revealed"]["ports"] and attempt["revealed"]["password"]):
+        return jsonify({"error": "Noch nicht alle Schritte abgeschlossen."}), 400
+    if not PCWarCompletion.query.filter_by(user_id=user.id, target_key=target_key).first():
+        db.session.add(PCWarCompletion(user_id=user.id, target_key=target_key))
+        db.session.commit()
+    return jsonify({"ip": attempt["ip"], "password": attempt["password"], "profile": attempt["profile"]})
 
 
 if __name__ == "__main__":
