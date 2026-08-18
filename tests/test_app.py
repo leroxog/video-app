@@ -2537,7 +2537,7 @@ def test_pcwar_target_page_renders_and_unknown_target_404s(client):
 
 def test_pcwar_steps_require_a_started_attempt(client):
     register(client)
-    response = client.post("/games/pcwar/shadowcore/scan-ip")
+    response = client.post("/games/pcwar/shadowcore/scan-ports")
     assert response.status_code == 400
     assert "zuerst starten" in response.get_json()["error"]
 
@@ -2546,41 +2546,61 @@ def test_pcwar_steps_enforce_order(client):
     register(client)
     client.post("/games/pcwar/shadowcore/start")
 
-    ports_first = client.post("/games/pcwar/shadowcore/scan-ports")
-    assert ports_first.status_code == 400
-
     password_first = client.post("/games/pcwar/shadowcore/crack-password")
     assert password_first.status_code == 400
 
-    login_first = client.post("/games/pcwar/shadowcore/login")
+    login_first = client.post(
+        "/games/pcwar/shadowcore/login", json={"username": "admin", "password": "x"},
+    )
     assert login_first.status_code == 400
+
+    client.post("/games/pcwar/shadowcore/scan-ports")
+    read_file_first = client.post("/games/pcwar/shadowcore/read-file")
+    assert read_file_first.status_code == 400
+
+
+def test_pcwar_login_rejects_wrong_credentials(client):
+    register(client)
+    client.post("/games/pcwar/shadowcore/start")
+    client.post("/games/pcwar/shadowcore/scan-ports")
+    client.post("/games/pcwar/shadowcore/crack-password")
+
+    wrong = client.post(
+        "/games/pcwar/shadowcore/login", json={"username": "nope", "password": "wrong"},
+    )
+    assert wrong.status_code == 400
 
 
 def test_pcwar_full_hack_flow_grants_completion_badge(client):
     register(client, username="hacker1")
-    client.post("/games/pcwar/shadowcore/start")
-
-    ip_res = client.post("/games/pcwar/shadowcore/scan-ip")
-    assert ip_res.status_code == 200
-    ip = ip_res.get_json()["ip"]
+    start_res = client.post("/games/pcwar/shadowcore/start")
+    assert start_res.status_code == 200
+    ip = start_res.get_json()["ip"]
     assert ip.count(".") == 3
 
     ports_res = client.post("/games/pcwar/shadowcore/scan-ports")
     assert ports_res.status_code == 200
     ports = ports_res.get_json()["ports"]
     assert len(ports) >= 2
+    assert any(p["port"] == 22 and p["service"] == "ssh" for p in ports)
 
     password_res = client.post("/games/pcwar/shadowcore/crack-password")
     assert password_res.status_code == 200
-    password = password_res.get_json()["password"]
+    creds = password_res.get_json()
+    username, password = creds["username"], creds["password"]
     assert len(password) >= 6
 
-    login_res = client.post("/games/pcwar/shadowcore/login")
+    login_res = client.post(
+        "/games/pcwar/shadowcore/login", json={"username": username, "password": password},
+    )
     assert login_res.status_code == 200
-    login_data = login_res.get_json()
-    assert login_data["ip"] == ip
-    assert login_data["password"] == password
-    assert "name" in login_data["profile"]
+
+    read_res = client.post("/games/pcwar/shadowcore/read-file")
+    assert read_res.status_code == 200
+    read_data = read_res.get_json()
+    assert read_data["ip"] == ip
+    assert read_data["password"] == password
+    assert "name" in read_data["profile"]
 
     user = User.query.filter_by(username="hacker1").first()
     assert PCWarCompletion.query.filter_by(user_id=user.id, target_key="shadowcore").first() is not None
@@ -2591,11 +2611,8 @@ def test_pcwar_full_hack_flow_grants_completion_badge(client):
 
 def test_pcwar_new_attempt_generates_fresh_fake_data(client):
     register(client)
-    client.post("/games/pcwar/shadowcore/start")
-    first_ip = client.post("/games/pcwar/shadowcore/scan-ip").get_json()["ip"]
-
-    client.post("/games/pcwar/shadowcore/start")
-    second_ip = client.post("/games/pcwar/shadowcore/scan-ip").get_json()["ip"]
+    first_ip = client.post("/games/pcwar/shadowcore/start").get_json()["ip"]
+    second_ip = client.post("/games/pcwar/shadowcore/start").get_json()["ip"]
 
     # Extremely unlikely to collide by chance (254^4 possibilities) --
     # a match here would mean start() isn't actually regenerating.

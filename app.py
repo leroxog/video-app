@@ -3814,63 +3814,81 @@ def pcwar_target(target_key):
 
 @app.route("/games/pcwar/<target_key>/start", methods=["POST"])
 def pcwar_start(target_key):
+    """Real engagements start from a known target IP (that's the
+    assignment, not itself something to "hack") -- so /start hands it
+    back immediately instead of treating IP discovery as a step."""
     user = current_user()
     if target_key not in pcwar.TARGETS_BY_KEY:
         abort(404)
-    _pcwar_attempts[(user.id, target_key)] = pcwar.generate_attempt(target_key)
-    return jsonify({"ok": True})
+    attempt = pcwar.generate_attempt(target_key)
+    _pcwar_attempts[(user.id, target_key)] = attempt
+    return jsonify({"ip": attempt["ip"]})
 
 
 def _pcwar_current_attempt(user_id, target_key):
     return _pcwar_attempts.get((user_id, target_key))
 
 
-@app.route("/games/pcwar/<target_key>/scan-ip", methods=["POST"])
-def pcwar_scan_ip(target_key):
-    user = current_user()
-    attempt = _pcwar_current_attempt(user.id, target_key)
-    if attempt is None:
-        return jsonify({"error": "Kein laufender Versuch -- zuerst starten."}), 400
-    attempt["revealed"]["ip"] = True
-    return jsonify({"ip": attempt["ip"]})
-
-
 @app.route("/games/pcwar/<target_key>/scan-ports", methods=["POST"])
 def pcwar_scan_ports(target_key):
+    """The fake `nmap` step."""
     user = current_user()
     attempt = _pcwar_current_attempt(user.id, target_key)
     if attempt is None:
         return jsonify({"error": "Kein laufender Versuch -- zuerst starten."}), 400
-    if not attempt["revealed"]["ip"]:
-        return jsonify({"error": "Erst die IP-Adresse scannen."}), 400
     attempt["revealed"]["ports"] = True
     return jsonify({"ports": attempt["ports"]})
 
 
 @app.route("/games/pcwar/<target_key>/crack-password", methods=["POST"])
 def pcwar_crack_password(target_key):
+    """The fake `hydra` step."""
     user = current_user()
     attempt = _pcwar_current_attempt(user.id, target_key)
     if attempt is None:
         return jsonify({"error": "Kein laufender Versuch -- zuerst starten."}), 400
     if not attempt["revealed"]["ports"]:
-        return jsonify({"error": "Erst die Ports scannen."}), 400
+        return jsonify({"error": "Erst die offenen Ports scannen (nmap)."}), 400
     attempt["revealed"]["password"] = True
-    return jsonify({"password": attempt["password"], "login_port": attempt["login_port"]})
+    return jsonify({"username": attempt["username"], "password": attempt["password"]})
 
 
 @app.route("/games/pcwar/<target_key>/login", methods=["POST"])
 def pcwar_login(target_key):
+    """The fake `ssh` step -- the client only ever gets here after already
+    being told the real username/password by crack-password, so this is
+    really just checking the player typed back what they were just
+    shown, the same way a real terminal both "knows" and still requires
+    you to type the password you found."""
     user = current_user()
     attempt = _pcwar_current_attempt(user.id, target_key)
     if attempt is None:
         return jsonify({"error": "Kein laufender Versuch -- zuerst starten."}), 400
-    if not (attempt["revealed"]["ip"] and attempt["revealed"]["ports"] and attempt["revealed"]["password"]):
-        return jsonify({"error": "Noch nicht alle Schritte abgeschlossen."}), 400
+    if not attempt["revealed"]["password"]:
+        return jsonify({"error": "Erst das Passwort knacken (hydra)."}), 400
+    data = request.get_json(silent=True) or {}
+    submitted_username = (data.get("username") or "").strip()
+    submitted_password = data.get("password") or ""
+    if submitted_username != attempt["username"] or submitted_password != attempt["password"]:
+        return jsonify({"error": "Permission denied, please try again."}), 400
+    attempt["logged_in"] = True
+    return jsonify({"ok": True})
+
+
+@app.route("/games/pcwar/<target_key>/read-file", methods=["POST"])
+def pcwar_read_file(target_key):
+    """The fake `cat` step, read once actually inside the fake shell --
+    this is what marks the target as "gehackt", not merely logging in."""
+    user = current_user()
+    attempt = _pcwar_current_attempt(user.id, target_key)
+    if attempt is None:
+        return jsonify({"error": "Kein laufender Versuch -- zuerst starten."}), 400
+    if not attempt["logged_in"]:
+        return jsonify({"error": "Nicht eingeloggt."}), 400
     if not PCWarCompletion.query.filter_by(user_id=user.id, target_key=target_key).first():
         db.session.add(PCWarCompletion(user_id=user.id, target_key=target_key))
         db.session.commit()
-    return jsonify({"ip": attempt["ip"], "password": attempt["password"], "profile": attempt["profile"]})
+    return jsonify({"profile": attempt["profile"], "ip": attempt["ip"], "password": attempt["password"]})
 
 
 if __name__ == "__main__":

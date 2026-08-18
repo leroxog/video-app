@@ -1,10 +1,12 @@
 """Pure game logic for PCwar (see LEROX Games / /games/pcwar) -- a fully
-fake hacking simulation. Every "target" is a fictional codename, every IP
-address/open port/password/personal profile is randomly invented per
-attempt and never touches a real network in any way; this module exists
-purely to generate that fake data and never makes an HTTP/socket
-connection anywhere. See app.py's /games/pcwar routes for how an attempt
-is stepped through (scan IP -> scan ports -> crack password -> log in).
+fake hacking simulation styled after real pentesting-training sites like
+TryHackMe: the player types actual-looking recon/exploit commands
+(nmap/hydra/ssh) into a terminal, not clicking icons. Every "target" is a
+fictional codename, and every IP address/open port/username/password/
+victim profile is randomly invented per attempt -- this module never
+makes a real network connection to anything, it only generates the fake
+data a fake terminal (see app.py's /games/pcwar routes and
+static/js/pcwar.js) displays as if a real scan/crack/login had happened.
 """
 import random
 
@@ -25,14 +27,15 @@ DIFFICULTY_LABELS = {"leicht": "Leicht", "mittel": "Mittel", "schwer": "Schwer"}
 DIFFICULTY_PORT_COUNT = {"leicht": 2, "mittel": 3, "schwer": 4}
 DIFFICULTY_PASSWORD_LENGTH = {"leicht": 6, "mittel": 9, "schwer": 13}
 
-COMMON_PORTS = [21, 22, 23, 25, 53, 80, 110, 143, 443, 445, 3306, 3389, 8080]
+SSH_PORT = 22
+DECOY_PORTS = [21, 23, 25, 53, 80, 110, 143, 443, 445, 3306, 3389, 8080]
 PORT_SERVICES = {
-    21: "FTP", 22: "SSH", 23: "Telnet", 25: "SMTP", 53: "DNS", 80: "HTTP",
-    110: "POP3", 143: "IMAP", 443: "HTTPS", 445: "SMB", 3306: "MySQL",
-    3389: "RDP", 8080: "HTTP-Proxy",
+    21: "ftp", 22: "ssh", 23: "telnet", 25: "smtp", 53: "domain", 80: "http",
+    110: "pop3", 143: "imap", 443: "https", 445: "microsoft-ds", 3306: "mysql",
+    3389: "ms-wbt-server", 8080: "http-proxy",
 }
-LOGIN_SERVICE_PORTS = (22, 3389, 21, 23)  # ports that plausibly need a password
 
+USERNAMES = ["admin", "root", "backup", "operator", "sysadmin", "service"]
 FIRST_NAMES = ["Max", "Lena", "Jonas", "Mia", "Finn", "Emma", "Leon", "Hannah", "Paul", "Sophie"]
 LAST_NAMES = ["Mustermann", "Schmidt", "Weber", "Fischer", "Wagner", "Becker", "Hoffmann", "Klein"]
 NOTES = [
@@ -47,33 +50,38 @@ PASSWORD_ALPHABET = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#
 
 def generate_attempt(target_key):
     """A fresh, fully-invented attempt for one target -- new IP, ports,
-    password and victim profile every time, so replaying a target doesn't
-    just mean re-typing the same memorized answer."""
+    username, password and victim profile every time, so replaying a
+    target doesn't just mean re-typing the same memorized answer. The IP
+    is handed back immediately by /start (real engagements start from a
+    known target IP, that's not itself something to "hack") -- ports,
+    username+password, and the final file contents are what the player
+    actually has to work for, via nmap/hydra/ssh/cat."""
     target = TARGETS_BY_KEY[target_key]
     difficulty = target["difficulty"]
 
     ip = ".".join(str(random.randint(1, 254)) for _ in range(4))
 
-    port_count = DIFFICULTY_PORT_COUNT[difficulty]
-    login_port = random.choice(LOGIN_SERVICE_PORTS)
-    other_ports = random.sample([p for p in COMMON_PORTS if p != login_port], port_count - 1)
-    ports = sorted([login_port] + other_ports)
+    decoy_count = DIFFICULTY_PORT_COUNT[difficulty] - 1
+    decoys = random.sample(DECOY_PORTS, decoy_count)
+    ports = sorted([SSH_PORT] + decoys)
 
+    username = random.choice(USERNAMES)
     password = "".join(random.choices(PASSWORD_ALPHABET, k=DIFFICULTY_PASSWORD_LENGTH[difficulty]))
 
     profile = {
         "name": f"{random.choice(FIRST_NAMES)} {random.choice(LAST_NAMES)}",
         "age": random.randint(19, 67),
-        "email": f"user{random.randint(100, 999)}@{target_key}.fake",
+        "email": f"{username}@{target_key}.fake",
         "note": random.choice(NOTES),
     }
 
     return {
         "target": target,
         "ip": ip,
-        "ports": [{"port": p, "service": PORT_SERVICES.get(p, "unbekannt")} for p in ports],
-        "login_port": login_port,
+        "ports": [{"port": p, "service": PORT_SERVICES.get(p, "unknown")} for p in ports],
+        "username": username,
         "password": password,
         "profile": profile,
-        "revealed": {"ip": False, "ports": False, "password": False},
+        "revealed": {"ports": False, "password": False},
+        "logged_in": False,
     }

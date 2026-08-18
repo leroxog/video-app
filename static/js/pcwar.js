@@ -1,112 +1,86 @@
 (() => {
   const appEl = document.getElementById("pcwarApp");
   const targetKey = appEl.dataset.targetKey;
+  const targetName = document.querySelector(".pcwar-topbar-title").firstChild.textContent.trim();
   const tutorial = appEl.dataset.tutorial === "true";
   const base = "/games/pcwar/" + targetKey;
 
-  const overlay = document.getElementById("pcwarWindowOverlay");
-  const windowTitle = document.getElementById("pcwarWindowTitle");
-  const windowBody = document.getElementById("pcwarWindowBody");
-  const closeBtn = document.getElementById("pcwarWindowClose");
-  const tutorialBanner = document.getElementById("pcwarTutorialBanner");
-  const clockEl = document.getElementById("pcwarClock");
-  const profileView = document.getElementById("pcwarProfileView");
-  const targetScreen = document.getElementById("pcwarTargetScreen");
+  const output = document.getElementById("pcwarOutput");
+  const input = document.getElementById("pcwarInput");
+  const promptEl = document.getElementById("pcwarPrompt");
+  const briefIp = document.getElementById("pcwarBriefIp");
+  const tutorialBox = document.getElementById("pcwarTutorialBox");
+  const helpBtn = document.getElementById("pcwarHelpBtn");
 
-  const icons = {
-    ip: document.getElementById("pcwarIconIp"),
-    ports: document.getElementById("pcwarIconPorts"),
-    password: document.getElementById("pcwarIconPassword"),
-    login: document.getElementById("pcwarIconLogin"),
-    results: document.getElementById("pcwarIconResults"),
+  const TUTORIAL_STEPS = [
+    { cmd: "nmap &lt;IP&gt;", text: "Scanne offene Ports mit:" },
+    { cmd: "hydra -l &lt;user&gt; -P wordlist ssh://&lt;IP&gt;", text: "Knacke das Passwort mit:" },
+    { cmd: "ssh &lt;user&gt;@&lt;IP&gt;", text: "Logge dich per SSH ein mit:" },
+    { cmd: "ls  /  cat secrets.txt", text: "Sieh dir die Dateien an und lies die geheime Datei:" },
+    { cmd: "", text: "Geschafft! Der Hack ist abgeschlossen." },
+  ];
+
+  const state = {
+    mode: "shell", // shell | await_password | remote
+    portsKnown: false,
+    username: null,
+    password: null,
+    pendingSshUser: null,
+    ip: null,
+    tutorialStep: 0,
   };
 
-  const TUTORIAL_STEPS = {
-    ip: '<b>Tutorial -- Schritt 1/4:</b> Öffne den <b>IP-Scanner</b>, um die Adresse des Ziels herauszufinden.',
-    ports: '<b>Tutorial -- Schritt 2/4:</b> Öffne den <b>Port-Scanner</b>, um herauszufinden, welche Dienste offen sind.',
-    password: '<b>Tutorial -- Schritt 3/4:</b> Öffne den <b>Passwort-Cracker</b>, um das Zugangspasswort zu knacken.',
-    login: '<b>Tutorial -- Schritt 4/4:</b> Öffne <b>Zugriff</b>, um dich mit IP und Passwort einzuloggen.',
-    done: '<b>Geschafft!</b> Öffne <b>Ergebnisse</b>, um die erbeuteten Daten zu sehen.',
-  };
-  const TOOL_ORDER = ["ip", "ports", "password", "login"];
+  const history = [];
+  let historyIndex = -1;
 
-  function updateClock() {
-    const now = new Date();
-    clockEl.textContent = now.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+  function setTutorialStep(idx) {
+    if (!tutorial || !tutorialBox) return;
+    state.tutorialStep = idx;
+    const step = TUTORIAL_STEPS[Math.min(idx, TUTORIAL_STEPS.length - 1)];
+    tutorialBox.innerHTML =
+      "<b>Tutorial -- Schritt " + Math.min(idx + 1, 4) + "/4</b>" +
+      "<p>" + step.text + "</p>" +
+      (step.cmd ? "<code>" + step.cmd + "</code>" : "");
   }
-  updateClock();
-  setInterval(updateClock, 15000);
 
-  function setTutorialStep(key) {
-    if (!tutorial || !tutorialBanner) return;
-    tutorialBanner.innerHTML = TUTORIAL_STEPS[key] || "";
-    for (const tool of TOOL_ORDER) {
-      icons[tool].classList.toggle("suggested", tool === key);
+  function line(text, cls) {
+    const el = document.createElement("div");
+    el.className = "pcwar-line" + (cls ? " " + cls : "");
+    el.innerHTML = text;
+    output.appendChild(el);
+    output.scrollTop = output.scrollHeight;
+    return el;
+  }
+
+  function lineDelayed(text, cls, delayMs) {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        line(text, cls);
+        window.leroxGamesSounds.keyFlash();
+        resolve();
+      }, delayMs);
+    });
+  }
+
+  async function playSequence(lines, gap) {
+    for (const [text, cls] of lines) {
+      await lineDelayed(text, cls, gap);
     }
   }
 
-  function lockIconsForTutorial() {
-    if (!tutorial) return;
-    TOOL_ORDER.slice(1).forEach((tool) => (icons[tool].disabled = true));
-    setTutorialStep("ip");
+  async function callApi(path, body) {
+    const res = await fetch(base + path, {
+      method: "POST",
+      headers: body ? { "Content-Type": "application/json" } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const data = await res.json().catch(() => ({}));
+    return { ok: res.ok, data };
   }
 
-  function unlockNextTutorialStep(justDoneTool) {
-    if (!tutorial) return;
-    const idx = TOOL_ORDER.indexOf(justDoneTool);
-    const next = TOOL_ORDER[idx + 1];
-    if (next) {
-      icons[next].disabled = false;
-      setTutorialStep(next);
-    } else {
-      setTutorialStep("done");
-    }
-  }
-
-  function openWindow(title) {
-    windowTitle.textContent = title;
-    windowBody.innerHTML = "";
-    overlay.style.display = "flex";
-  }
-  closeBtn.addEventListener("click", () => (overlay.style.display = "none"));
-
-  function appendLine(text, cls) {
-    const line = document.createElement("div");
-    line.className = "pcwar-line" + (cls ? " " + cls : "");
-    line.textContent = text;
-    windowBody.appendChild(line);
-    windowBody.scrollTop = windowBody.scrollHeight;
-    return line;
-  }
-
-  function playLines(lines, delayMs) {
-    return lines.reduce(
-      (chain, text) =>
-        chain.then(
-          () =>
-            new Promise((resolve) => {
-              setTimeout(() => {
-                appendLine(text);
-                window.leroxGamesSounds.keyFlash();
-                resolve();
-              }, delayMs);
-            })
-        ),
-      Promise.resolve()
-    );
-  }
-
-  async function callStep(path) {
-    const res = await fetch(base + path, { method: "POST" });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Unbekannter Fehler.");
-    return data;
-  }
-
-  function markStatus(id, text) {
-    const el = document.getElementById(id);
-    el.textContent = "● " + text;
-    el.classList.add("done");
+  function updatePrompt() {
+    promptEl.textContent =
+      state.mode === "remote" ? state.username + "@" + targetKey + ":~$" : "attacker@kali:~$";
   }
 
   function scrambleReveal(el, finalText, stepMs) {
@@ -129,105 +103,206 @@
     });
   }
 
-  icons.ip.addEventListener("click", async () => {
-    window.leroxGamesSounds.click();
-    openWindow("IP-Scanner");
-    await playLines(["Initiiere Netzwerk-Trace...", "Verfolge Paketrouten zu " + targetKeyLabel() + "...", "Ziel lokalisiert."], 550);
-    try {
-      const data = await callStep("/scan-ip");
-      appendLine("");
-      appendLine("IP-Adresse: " + data.ip, "result");
-      markStatus("pcwarStatusIp", "IP: " + data.ip);
-      unlockNextTutorialStep("ip");
-    } catch (e) {
-      appendLine("Fehler: " + e.message, "error");
-      window.leroxGamesSounds.wrong();
-    }
-  });
+  const HELP_TEXT = [
+    ["Verfügbare Befehle:", "dim"],
+    ["  nmap &lt;IP&gt;                       -- Ports scannen", "dim"],
+    ["  hydra -l &lt;user&gt; -P wl ssh://&lt;IP&gt;  -- Passwort knacken", "dim"],
+    ["  ssh &lt;user&gt;@&lt;IP&gt;                 -- einloggen", "dim"],
+    ["  ls / cat &lt;datei&gt;                -- (nach dem Login) Dateien lesen", "dim"],
+    ["  clear                            -- Bildschirm leeren", "dim"],
+  ];
 
-  icons.ports.addEventListener("click", async () => {
-    window.leroxGamesSounds.click();
-    openWindow("Port-Scanner");
-    await playLines(["Scanne Ports 1-65535...", "Prüfe Antwortzeiten...", "Offene Ports gefunden."], 550);
-    try {
-      const data = await callStep("/scan-ports");
-      appendLine("");
-      data.ports.forEach((p) => appendLine("Port " + p.port + "/tcp  offen  " + p.service, "result"));
-      markStatus("pcwarStatusPorts", data.ports.length + " offene Ports gefunden");
-      unlockNextTutorialStep("ports");
-    } catch (e) {
-      appendLine("Fehler: " + e.message, "error");
-      window.leroxGamesSounds.wrong();
-    }
-  });
+  async function runShellCommand(raw) {
+    const trimmed = raw.trim();
+    const cmd = trimmed.split(/\s+/)[0] || "";
 
-  icons.password.addEventListener("click", async () => {
-    window.leroxGamesSounds.click();
-    openWindow("Passwort-Cracker");
-    await playLines(["Lade Wörterbuch...", "Teste Kombinationen..."], 550);
-    try {
-      const data = await callStep("/crack-password");
-      const line = appendLine("", "result");
-      await scrambleReveal(line, data.password, 55);
-      appendLine("Passwort geknackt (Dienst auf Port " + data.login_port + ").", "result");
-      markStatus("pcwarStatusPassword", "Passwort geknackt");
+    if (cmd === "help") {
+      HELP_TEXT.forEach(([t, c]) => line(t, c));
+      return;
+    }
+    if (cmd === "clear") {
+      output.innerHTML = "";
+      return;
+    }
+    if (cmd === "nmap") {
+      await playSequence(
+        [
+          ["Starting Nmap...", "dim"],
+          ["Scanning " + state.ip + " [1000 ports]...", "dim"],
+        ],
+        450
+      );
+      const { ok, data } = await callApi("/scan-ports");
+      if (!ok) return line(data.error || "Fehler.", "error");
+      line("PORT     STATE  SERVICE", "result");
+      data.ports.forEach((p) => line(String(p.port).padEnd(9, " ") + "open   " + p.service, "result"));
+      state.portsKnown = true;
       window.leroxGamesSounds.aiAnswer();
-      unlockNextTutorialStep("password");
-    } catch (e) {
-      appendLine("Fehler: " + e.message, "error");
-      window.leroxGamesSounds.wrong();
+      if (state.tutorialStep === 0) setTutorialStep(1);
+      return;
     }
-  });
+    if (cmd === "hydra") {
+      if (!state.portsKnown) return line("hydra: Ziel unbekannt -- erst 'nmap " + state.ip + "' ausführen.", "error");
+      await playSequence(
+        [
+          ["Hydra starting...", "dim"],
+          ["[DATA] attacking ssh://" + state.ip + ":22/", "dim"],
+          ["[ATTEMPT] login \"admin\" - pass \"123456\" - 1 of 14344399", "dim"],
+          ["[ATTEMPT] login \"admin\" - pass \"password\" - 2 of 14344399", "dim"],
+        ],
+        450
+      );
+      const { ok, data } = await callApi("/crack-password");
+      if (!ok) return line(data.error || "Fehler.", "error");
+      state.username = data.username;
+      const passLine = line("", "result");
+      await scrambleReveal(passLine, data.password, 55);
+      line("[22][ssh] host: " + state.ip + "   login: " + data.username + "   password: " + data.password, "result");
+      line("1 valid password found", "dim");
+      window.leroxGamesSounds.aiAnswer();
+      if (state.tutorialStep === 1) setTutorialStep(2);
+      return;
+    }
+    if (cmd === "ssh") {
+      if (!state.username) return line("ssh: erst das Passwort knacken (hydra).", "error");
+      const arg = trimmed.split(/\s+/)[1] || "";
+      const user = arg.includes("@") ? arg.split("@")[0] : state.username;
+      state.pendingSshUser = user;
+      line(user + "@" + state.ip + "'s password:", "dim");
+      state.mode = "await_password";
+      input.type = "password";
+      return;
+    }
+    if (cmd === "") return;
+    line("bash: " + cmd + ": command not found", "error");
+  }
 
-  icons.login.addEventListener("click", async () => {
-    window.leroxGamesSounds.click();
-    openWindow("Zugriff");
-    await playLines(["Verbinde zum Ziel...", "Authentifiziere mit erbeuteten Zugangsdaten..."], 600);
-    try {
-      const data = await callStep("/login");
-      appendLine("");
-      appendLine("ZUGRIFF GEWÄHRT.", "result");
+  async function runRemoteCommand(raw) {
+    const trimmed = raw.trim();
+    const cmd = trimmed.split(/\s+/)[0] || "";
+
+    if (cmd === "help") {
+      HELP_TEXT.forEach(([t, c]) => line(t, c));
+      return;
+    }
+    if (cmd === "clear") {
+      output.innerHTML = "";
+      return;
+    }
+    if (cmd === "whoami") {
+      line(state.username, "file");
+      return;
+    }
+    if (cmd === "ls") {
+      line("secrets.txt", "file");
+      return;
+    }
+    if (cmd === "cat") {
+      const arg = trimmed.split(/\s+/)[1] || "";
+      if (!arg || !arg.includes("secrets")) {
+        return line("cat: " + (arg || "") + ": No such file or directory", "error");
+      }
+      const { ok, data } = await callApi("/read-file");
+      if (!ok) return line(data.error || "Fehler.", "error");
+      const p = data.profile;
+      line("--- secrets.txt ---", "dim");
+      line("name: " + p.name, "file");
+      line("age: " + p.age, "file");
+      line("email: " + p.email, "file");
+      line("password: " + data.password, "file");
+      line("note: " + p.note, "file");
+      line("");
+      line("ZUGRIFF ABGESCHLOSSEN -- alle Daten hier sind erfunden.", "result");
       window.leroxGamesSounds.solved();
-      icons.results.disabled = false;
-      showProfile(data.profile, data.ip, data.password);
-      unlockNextTutorialStep("login");
-    } catch (e) {
-      appendLine("Fehler: " + e.message, "error");
-      window.leroxGamesSounds.wrong();
+      if (state.tutorialStep === 3) setTutorialStep(4);
+      return;
     }
-  });
-
-  let lastProfile = null;
-  function showProfile(profile, ip, password) {
-    lastProfile = { profile, ip, password };
-    targetScreen.style.display = "none";
-    profileView.style.display = "block";
-    profileView.innerHTML =
-      '<div class="pcwar-profile-title">🔓 ZUGRIFF GEWÄHRT -- private Daten</div>' +
-      '<div class="pcwar-profile-row"><b>Name:</b> ' + profile.name + "</div>" +
-      '<div class="pcwar-profile-row"><b>Alter:</b> ' + profile.age + "</div>" +
-      '<div class="pcwar-profile-row"><b>E-Mail:</b> ' + profile.email + "</div>" +
-      '<div class="pcwar-profile-row"><b>Passwort:</b> ' + password + "</div>" +
-      '<div class="pcwar-profile-row"><b>IP:</b> ' + ip + "</div>" +
-      '<div class="pcwar-profile-note">' + profile.note + "</div>" +
-      '<p style="color:var(--lg-text-dim); font-size:11.5px;">Alles auf dieser Seite ist erfunden -- keine echte Person, keine echte Adresse.</p>';
+    if (cmd === "exit") {
+      line("logout", "dim");
+      state.mode = "shell";
+      updatePrompt();
+      return;
+    }
+    if (cmd === "") return;
+    line("bash: " + cmd + ": command not found", "error");
   }
 
-  icons.results.addEventListener("click", () => {
+  async function handlePasswordEntry(pw) {
+    input.type = "text";
+    const { ok } = await callApi("/login", { username: state.pendingSshUser, password: pw });
+    if (!ok) {
+      line("Permission denied, please try again.", "error");
+      state.mode = "shell";
+      return;
+    }
+    state.username = state.pendingSshUser;
+    line("");
+    line("Welcome to " + targetName + " (fake shell).", "dim");
+    line("Last login: just now from 10.0.0.1", "dim");
+    state.mode = "remote";
+    updatePrompt();
+    window.leroxGamesSounds.aiAnswer();
+    if (state.tutorialStep === 2) setTutorialStep(3);
+  }
+
+  input.addEventListener("keydown", async (e) => {
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (history.length && historyIndex > 0) {
+        historyIndex--;
+        input.value = history[historyIndex];
+      }
+      return;
+    }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (historyIndex < history.length - 1) {
+        historyIndex++;
+        input.value = history[historyIndex];
+      } else {
+        historyIndex = history.length;
+        input.value = "";
+      }
+      return;
+    }
+    if (e.key !== "Enter") return;
+
+    const value = input.value;
+    input.value = "";
     window.leroxGamesSounds.click();
-    openWindow("Ergebnisse");
-    if (lastProfile) {
-      showProfile(lastProfile.profile, lastProfile.ip, lastProfile.password);
-      overlay.style.display = "none";
+
+    if (state.mode === "await_password") {
+      // Real ssh never echoes the password or shows a "$" prompt line for
+      // it -- just silently move on to the auth result.
+      await handlePasswordEntry(value);
+      return;
+    }
+
+    history.push(value);
+    historyIndex = history.length;
+    line(value, "cmd");
+    if (state.mode === "remote") {
+      await runRemoteCommand(value);
+    } else {
+      await runShellCommand(value);
     }
   });
 
-  function targetKeyLabel() {
-    return appEl.dataset.targetKey.toUpperCase();
-  }
+  helpBtn.addEventListener("click", () => {
+    input.focus();
+    HELP_TEXT.forEach(([t, c]) => line(t, c));
+  });
 
-  // Start a fresh attempt as soon as the page loads.
-  fetch(base + "/start", { method: "POST" }).then(() => {
-    lockIconsForTutorial();
+  document.addEventListener("click", () => input.focus());
+
+  // Fresh attempt on load -- the IP is handed over immediately, like a
+  // real engagement's target IP, not something to "discover".
+  callApi("/start").then(({ data }) => {
+    state.ip = data.ip;
+    briefIp.textContent = data.ip;
+    line("Verbindung zu " + targetName + " (" + data.ip + ") vorbereitet.", "dim");
+    line("Tippe 'help' für verfügbare Befehle.", "dim");
+    if (tutorial) setTutorialStep(0);
+    input.focus();
   });
 })();
