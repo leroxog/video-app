@@ -112,9 +112,21 @@
     ["  clear                            -- Bildschirm leeren", "dim"],
   ];
 
+  // Syntax is checked with the same strictness a real terminal would --
+  // wrong/missing arguments, a mistyped target IP, or skipping "user@" on
+  // ssh all fail exactly the way the real tool would fail, not just "any
+  // command starting with the right word succeeds". Only the underlying
+  // data (which IP/password is "real") is fake; the command behavior
+  // around it isn't.
+  function extractIp(str) {
+    const m = str.match(/\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b/);
+    return m ? m[1] : null;
+  }
+
   async function runShellCommand(raw) {
     const trimmed = raw.trim();
-    const cmd = trimmed.split(/\s+/)[0] || "";
+    const tokens = trimmed.split(/\s+/).filter(Boolean);
+    const cmd = tokens[0] || "";
 
     if (cmd === "help") {
       HELP_TEXT.forEach(([t, c]) => line(t, c));
@@ -125,6 +137,23 @@
       return;
     }
     if (cmd === "nmap") {
+      const target = extractIp(trimmed);
+      if (!target) {
+        line("Usage: nmap [Scan Type(s)] [Options] {target specification}", "dim");
+        return;
+      }
+      if (target !== state.ip) {
+        await playSequence(
+          [
+            ["Starting Nmap...", "dim"],
+            ["Nmap scan report for " + target, "dim"],
+          ],
+          450
+        );
+        line("Host seems down. If it is really up, but blocking our ping probes, try -Pn", "error");
+        line("Nmap done: 1 IP address (0 hosts up) scanned", "dim");
+        return;
+      }
       await playSequence(
         [
           ["Starting Nmap...", "dim"],
@@ -142,7 +171,29 @@
       return;
     }
     if (cmd === "hydra") {
-      if (!state.portsKnown) return line("hydra: Ziel unbekannt -- erst 'nmap " + state.ip + "' ausführen.", "error");
+      if (!state.portsKnown) return line("hydra: Ziel unbekannt -- erst nmap ausführen.", "error");
+      const hasLogin = tokens.includes("-l") || tokens.includes("-L");
+      const hasPass = tokens.includes("-p") || tokens.includes("-P");
+      if (!hasLogin || !hasPass) {
+        line("Hydra v9.5 (c) 2023 by van Hauser/THC & David Maciejak", "dim");
+        line("[ERROR] You must supply a login (-l/-L) and a password (-p/-P) option.", "error");
+        return;
+      }
+      const target = extractIp(trimmed);
+      if (!target) {
+        line("[ERROR] no target specified", "error");
+        return;
+      }
+      if (target !== state.ip) {
+        await playSequence(
+          [
+            ["Hydra starting...", "dim"],
+            ["[ERROR] could not connect to target " + target + ":22 - Connection timed out", "error"],
+          ],
+          450
+        );
+        return;
+      }
       await playSequence(
         [
           ["Hydra starting...", "dim"],
@@ -165,8 +216,25 @@
     }
     if (cmd === "ssh") {
       if (!state.username) return line("ssh: erst das Passwort knacken (hydra).", "error");
-      const arg = trimmed.split(/\s+/)[1] || "";
-      const user = arg.includes("@") ? arg.split("@")[0] : state.username;
+      const arg = tokens[1] || "";
+      if (!arg) {
+        line("usage: ssh [-46AaCfGgKkMNnqsTtVvXxYy] destination [command [argument ...]]", "dim");
+        return;
+      }
+      // Real ssh: "ssh host" (no "user@") logs in as your CURRENT local
+      // user, not whatever user the target actually needs -- it doesn't
+      // guess the right username for you.
+      let user, host;
+      if (arg.includes("@")) {
+        [user, host] = arg.split("@");
+      } else {
+        user = "attacker";
+        host = arg;
+      }
+      if (host !== state.ip) {
+        line("ssh: connect to host " + host + " port 22: Connection timed out", "error");
+        return;
+      }
       state.pendingSshUser = user;
       line(user + "@" + state.ip + "'s password:", "dim");
       state.mode = "await_password";
@@ -199,8 +267,9 @@
     }
     if (cmd === "cat") {
       const arg = trimmed.split(/\s+/)[1] || "";
-      if (!arg || !arg.includes("secrets")) {
-        return line("cat: " + (arg || "") + ": No such file or directory", "error");
+      if (!arg) return line("cat: missing operand", "error");
+      if (arg !== "secrets.txt") {
+        return line("cat: " + arg + ": No such file or directory", "error");
       }
       const { ok, data } = await callApi("/read-file");
       if (!ok) return line(data.error || "Fehler.", "error");
