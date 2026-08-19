@@ -2630,3 +2630,104 @@ def test_pcwar_start_is_idempotent_but_restart_generates_fresh_data(client):
 
     resumed_ip = client.post("/games/pcwar/shadowcore/start").get_json()["ip"]
     assert resumed_ip == restarted_ip
+
+
+def test_edit_image_tool_builds_kontext_url_and_stashes_it(client):
+    import ai_assistant
+
+    captured = {}
+    result = ai_assistant._execute_one_tool_call(
+        "edit_image",
+        {"image_url": "https://image.pollinations.ai/prompt/a%20cat", "prompt": "add a hat"},
+        captured,
+        available_tokens=ai_assistant.IMAGE_TOKEN_COST,
+    )
+    assert "image_generated" in captured
+    url = captured["image_generated"]["url"]
+    assert "model=kontext" in url
+    assert "image=https%3A%2F%2Fimage.pollinations.ai" in url
+    assert "add%20a%20hat" in url or "add+a+hat" in url
+    assert "tool_call" not in result  # sanity: this is the tool *result* text, not a nested call
+
+
+def test_edit_image_tool_rejects_missing_args_and_fake_urls(client):
+    import ai_assistant
+
+    captured = {}
+    assert "Keine Bildbeschreibung" in ai_assistant._execute_one_tool_call(
+        "edit_image", {"image_url": "", "prompt": "add a hat"}, captured,
+    )
+    assert "image_generated" not in captured
+
+    assert "Ungültige Bild-URL" in ai_assistant._execute_one_tool_call(
+        "edit_image", {"image_url": "not-a-real-url", "prompt": "add a hat"}, captured,
+    )
+    assert "image_generated" not in captured
+
+
+def test_edit_image_tool_blocks_when_not_enough_tokens(client):
+    import ai_assistant
+
+    captured = {}
+    result = ai_assistant._execute_one_tool_call(
+        "edit_image",
+        {"image_url": "https://example.com/cat.png", "prompt": "add a hat"},
+        captured,
+        available_tokens=ai_assistant.IMAGE_TOKEN_COST - 1,
+    )
+    assert "Nicht genug Tokens" in result
+    assert "image_generated" not in captured
+
+
+def test_edit_image_is_listed_in_ai_tools(client):
+    import ai_assistant
+
+    names = [t["function"]["name"] for t in ai_assistant.AI_TOOLS]
+    assert "edit_image" in names
+    assert "generate_image" in names
+
+
+def test_cheaper_match_finds_active_code_by_domain(client):
+    from models import DiscountCode
+
+    db.session.add(DiscountCode(
+        brand_name="Testmarke", code="SAVE10", description="10% Rabatt",
+        link_url="https://shop.testmarke.de/checkout", is_active=True,
+    ))
+    db.session.commit()
+
+    res = client.get("/api/cheaper/match", query_string={"domain": "shop.testmarke.de"})
+    assert res.status_code == 200
+    data = res.get_json()
+    assert len(data["matches"]) == 1
+    assert data["matches"][0]["code"] == "SAVE10"
+    assert data["matches"][0]["brand_name"] == "Testmarke"
+    assert res.headers["Access-Control-Allow-Origin"] == "*"
+
+
+def test_cheaper_match_ignores_www_and_inactive_codes(client):
+    from models import DiscountCode
+
+    db.session.add(DiscountCode(
+        brand_name="Testmarke", code="SAVE10", description="10% Rabatt",
+        link_url="https://www.testmarke.de/checkout", is_active=True,
+    ))
+    db.session.add(DiscountCode(
+        brand_name="Alte Marke", code="OLD5", description="5% (abgelaufen)",
+        link_url="https://old.de/checkout", is_active=False,
+    ))
+    db.session.commit()
+
+    res = client.get("/api/cheaper/match", query_string={"domain": "www.testmarke.de"})
+    assert [m["code"] for m in res.get_json()["matches"]] == ["SAVE10"]
+
+    res_old = client.get("/api/cheaper/match", query_string={"domain": "old.de"})
+    assert res_old.get_json()["matches"] == []
+
+
+def test_cheaper_match_returns_empty_for_unmatched_domain(client):
+    res = client.get("/api/cheaper/match", query_string={"domain": "unrelated-site.example"})
+    assert res.get_json()["matches"] == []
+
+    res_no_domain = client.get("/api/cheaper/match")
+    assert res_no_domain.get_json()["matches"] == []

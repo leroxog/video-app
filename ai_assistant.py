@@ -18,10 +18,15 @@ below) rather than switching to Groq's native structured tool-calling --
 that convention already works reliably, and reply quality was the actual
 problem being fixed here, not the tool pipeline.
 
-Image generation (generate_image, via Pollinations.ai) and cloned-voice
-audio (generate_audio, via ElevenLabs/browser TTS) are unaffected by any
-of this -- those were always separate external services and still are;
-only the actual chat/voice-chat TEXT reply's backend changed.
+Image generation (generate_image) and editing (edit_image, real
+image-to-image via Pollinations' "kontext" model -- see
+_build_edit_image_url) both run through Pollinations.ai; cloned-voice
+audio (generate_audio, via ElevenLabs/browser TTS) is a separate external
+service. None of these were affected by the Groq-vs-local-model swap
+above -- only the actual chat/voice-chat TEXT reply's backend changed.
+There is deliberately no video generation tool -- no free/no-key service
+for it exists the way Pollinations covers images, and adding one would
+mean picking and paying for a third-party API, which hasn't happened.
 
 Requests still run through a background-thread job queue and are polled by
 the client (see start_chat_job()/get_job_status()), since that keeps the
@@ -355,6 +360,36 @@ GENERATE_IMAGE_TOOL = {
     },
 }
 
+EDIT_IMAGE_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "edit_image",
+        "description": (
+            "Bearbeitet ein bereits existierendes Bild anhand einer Beschreibung (z.B. \"füge einen "
+            "Hut hinzu\", \"mach den Himmel lila\") und zeigt das Ergebnis an. Braucht eine ECHTE "
+            "Bild-URL -- entweder ein Bild, das zuvor in diesem Chat mit generate_image erzeugt "
+            "wurde (die URL steht im ![]() der vorherigen Antwort), oder eine Bild-URL, die der "
+            "Nutzer selbst geschickt hat. Erfinde NIEMALS eine Bild-URL -- ist keine echte "
+            "vorhanden, sag das ehrlich statt das Werkzeug aufzurufen. Kostet "
+            f"{IMAGE_TOKEN_COST} Tokens vom Nutzer-Guthaben, genau wie generate_image."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "image_url": {
+                    "type": "string",
+                    "description": "Die echte, bereits existierende Bild-URL, die bearbeitet werden soll.",
+                },
+                "prompt": {
+                    "type": "string",
+                    "description": "Beschreibung der gewünschten Änderung, auf Englisch, so konkret wie möglich.",
+                },
+            },
+            "required": ["image_url", "prompt"],
+        },
+    },
+}
+
 PERSONALITY_TRAIT_KEYS = {
     "intelligenz": "intelligence",
     "humor": "humor",
@@ -589,7 +624,7 @@ WEBAPP_TOOLS = [PROPOSE_PROJECT_CHANGE_TOOL, SEARCH_DOCS_TOOL]
 CODE_CHAT_TOOLS = [SEARCH_DOCS_TOOL]
 AI_TOOLS = [
     SEARCH_WIKIPEDIA_TOOL, GET_WEATHER_TOOL, SEARCH_DOCS_TOOL, REMEMBER_USER_FACT_TOOL,
-    ADJUST_PERSONALITY_TOOL, GENERATE_IMAGE_TOOL, GENERATE_AUDIO_TOOL,
+    ADJUST_PERSONALITY_TOOL, GENERATE_IMAGE_TOOL, EDIT_IMAGE_TOOL, GENERATE_AUDIO_TOOL,
 ]
 
 
@@ -675,6 +710,18 @@ POLLINATIONS_IMAGE_URL = "https://image.pollinations.ai/prompt/{}"
 
 def _build_image_url(prompt):
     return POLLINATIONS_IMAGE_URL.format(urllib.parse.quote(prompt)) + "?width=768&height=768&nologo=true"
+
+
+# Same Pollinations service, but its "kontext" model does real image-to-image
+# editing: passing an existing image's URL alongside the prompt transforms
+# that image instead of generating a fresh one from scratch. Still a plain
+# GET whose response body is the resulting image -- no separate download/
+# upload/storage step needed here either.
+def _build_edit_image_url(prompt, image_url):
+    return (
+        POLLINATIONS_IMAGE_URL.format(urllib.parse.quote(prompt))
+        + f"?model=kontext&image={urllib.parse.quote(image_url, safe='')}&width=768&height=768&nologo=true"
+    )
 
 
 def _docs_allowed(url):
@@ -825,6 +872,28 @@ def _execute_one_tool_call(name, args, captured, available_tokens=None, synthesi
             "Pollinations.ai, mit einem Link zur Webseite: "
             "[Pollinations.ai](https://pollinations.ai)"
         )
+    if name == "edit_image":
+        prompt = (args.get("prompt") or "").strip()
+        image_url = (args.get("image_url") or "").strip()
+        if not prompt or not image_url:
+            return "Keine Bildbeschreibung oder keine Bild-URL angegeben."
+        if not re.match(r"^https?://", image_url):
+            return "Ungültige Bild-URL -- muss eine echte http(s)-Adresse sein. Kein Bild bearbeitet."
+        if available_tokens is not None and available_tokens < IMAGE_TOKEN_COST:
+            return (
+                f"Nicht genug Tokens ({available_tokens} übrig, {IMAGE_TOKEN_COST} nötig) -- "
+                "kein Bild bearbeitet. Erklär das dem Nutzer ehrlich."
+            )
+        edited_url = _build_edit_image_url(prompt, image_url)
+        captured["image_generated"] = {"url": edited_url, "prompt": prompt}
+        return (
+            f"Bild bearbeitet. Füge es in deiner Antwort als Markdown-Bild ein: "
+            f"![{prompt}]({edited_url})\n\n"
+            "Erwähne dabei NICHT von dir aus, womit oder wie es bearbeitet wurde -- schreib nur "
+            "normal etwas Kurzes dazu. NUR falls der Nutzer ausdrücklich danach fragt, antworte "
+            "ehrlich: über den externen Dienst Pollinations.ai (Kontext-Modell), mit Link: "
+            "[Pollinations.ai](https://pollinations.ai)"
+        )
     if name == "generate_audio":
         text = (args.get("text") or "").strip()[:2000]
         gender = args.get("gender") if args.get("gender") in ("male", "female") else None
@@ -953,6 +1022,17 @@ def _tools_instructions(tools):
         "Nutzer: \"Erstelle mir ein Bild von einer Katze\"\n"
         "Deine Antwort:\n```tool_call\n{\"name\": \"generate_image\", \"arguments\": "
         "{\"prompt\": \"a cat\"}}\n```"
+    )
+    lines.append(
+        "\nBeispiel -- edit_image (Nutzer will ein zuvor erzeugtes/geschicktes Bild ändern):\n"
+        "Nutzer: \"Erstelle mir ein Bild von einer Katze\" -> du rufst generate_image auf, "
+        "Ergebnis enthält z.B. ![a cat](https://image.pollinations.ai/prompt/a%20cat?...)\n"
+        "Nutzer (danach): \"setz ihr einen Hut auf\"\n"
+        "Deine Antwort:\n```tool_call\n{\"name\": \"edit_image\", \"arguments\": "
+        "{\"image_url\": \"https://image.pollinations.ai/prompt/a%20cat?...\", "
+        "\"prompt\": \"the cat wearing a hat\"}}\n```\n"
+        "(die image_url ist dabei IMMER eine echte URL aus einer vorherigen Nachricht in "
+        "diesem Chat -- nie erfunden)"
     )
     return "\n".join(lines)
 
@@ -1336,9 +1416,9 @@ def generate_reply(message, context=None, history=None, project_type=None, facts
         if available_tokens is not None:
             system_prompt += (
                 f"\n\nDieser Nutzer hat aktuell {available_tokens} Tokens übrig (eine App-interne "
-                f"Währung, getrennt von Punkten). Ein Bild erzeugen kostet {IMAGE_TOKEN_COST} "
-                f"Tokens, eine Sprachnachricht erzeugen kostet {AUDIO_TOKEN_COST} Tokens -- ruf "
-                "generate_image/generate_audio nur auf, wenn klar genug Tokens übrig sind und der "
+                f"Währung, getrennt von Punkten). Ein Bild erzeugen oder bearbeiten kostet "
+                f"{IMAGE_TOKEN_COST} Tokens, eine Sprachnachricht erzeugen kostet {AUDIO_TOKEN_COST} "
+                "Tokens -- ruf generate_image/edit_image/generate_audio nur auf, wenn klar genug Tokens übrig sind und der "
                 "Nutzer das wirklich ausdrücklich möchte. Echte Video-Erstellung gibt es aktuell "
                 "NICHT -- falls danach gefragt wird, erklär ehrlich, dass das (noch) nicht "
                 "unterstützt wird, statt es vorzutäuschen. WICHTIG, falls jemand fragt, wie "

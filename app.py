@@ -4,6 +4,7 @@ import re
 import sys
 import uuid
 import shutil
+import urllib.parse
 import secrets
 import hashlib
 import logging
@@ -1065,6 +1066,11 @@ LOGIN_GATE_ALLOWED_ENDPOINTS = {
     "logout", "static", "service_worker", "offline_page",
     "forgot_password", "forgot_password_email", "forgot_password_verify",
     "forgot_password_help", "studio_home",
+    # cheaper_match is called from LEROX Browser's chrome window (a file://
+    # origin with no LEROX login session of its own), see that route's
+    # docstring -- same public Rabattcode data /rabattcodes already shows
+    # to anyone once logged in, just reachable without a session here too.
+    "cheaper_match",
 } | TERMS_ALLOWED_ENDPOINTS
 
 
@@ -1448,6 +1454,36 @@ def discount_code_go(code_id):
         db.session.add(DiscountCodeUse(user_id=user.id, code_id=code.id))
     db.session.commit()
     return redirect(code.link_url)
+
+
+@app.route("/api/cheaper/match")
+def cheaper_match():
+    """Powers Cheaper's "Auto-Modus" in LEROX Browser: given the hostname
+    of whatever site the user is currently browsing (?domain=...), returns
+    any REAL, active Rabattcode whose own link_url points at that same
+    hostname. Deliberately only matches Cheaper's existing hand-verified
+    DiscountCode rows (see that model's docstring on why those are never
+    scraped/live-searched) -- there is no web-wide coupon search here, on
+    the same "real data or an honest empty result, never fabricated"
+    stance the rest of this app follows. Public/no-auth: this is the same
+    data /rabattcodes already shows to anyone, just filtered by domain
+    instead of browsed by hand -- and CORS is opened for this one read-only
+    route since the caller is LEROX Browser's chrome window (a file://
+    origin, not a normal web page)."""
+    domain = (request.args.get("domain") or "").strip().lower().removeprefix("www.")
+    matches = []
+    if domain:
+        for code in DiscountCode.query.filter_by(is_active=True).all():
+            host = (urllib.parse.urlparse(code.link_url).hostname or "").lower().removeprefix("www.")
+            if host and host == domain:
+                matches.append({
+                    "id": code.id, "brand_name": code.brand_name, "code": code.code,
+                    "description": code.description,
+                    "go_url": url_for("discount_code_go", code_id=code.id, _external=True),
+                })
+    resp = jsonify({"matches": matches})
+    resp.headers["Access-Control-Allow-Origin"] = "*"
+    return resp
 
 
 NOTIFY_MODES = ("all", "none", "codes", "offers")
