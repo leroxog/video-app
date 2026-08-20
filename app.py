@@ -648,6 +648,8 @@ def ensure_sqlite_columns_exist():
             ("banner_image", "VARCHAR(255)"),
             ("website_url", "VARCHAR(300)"),
             ("mail_address", "VARCHAR(120)"),
+            ("api_token", "VARCHAR(64)"),
+            ("chepal_last_check_enabled", "BOOLEAN NOT NULL DEFAULT 0"),
         ],
         # ai_personality itself is created fresh by db.create_all() on any
         # brand-new database, but on one that already had the table from
@@ -776,6 +778,8 @@ def ensure_columns_exist():
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS banner_image VARCHAR(255)',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS website_url VARCHAR(300)',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS mail_address VARCHAR(120)',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS api_token VARCHAR(64)',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS chepal_last_check_enabled BOOLEAN NOT NULL DEFAULT FALSE',
     ]
     with db.engine.connect() as conn:
         for statement in statements:
@@ -841,6 +845,17 @@ def allowed_image_file(filename):
 
 
 def current_user():
+    """Session cookie is the normal path (every page in this browser-based
+    app). Also checks an `Authorization: Bearer <token>` header against
+    User.api_token first -- LEROX Browser (a separate Electron app with no
+    shared cookie jar with this site) authenticates that way instead, see
+    api_login(). Checked first since a request either carries one or the
+    other, never meaningfully both."""
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[len("Bearer "):].strip()
+        if token:
+            return User.query.filter_by(api_token=token).first()
     user_id = session.get("user_id")
     if user_id is None:
         return None
@@ -1036,7 +1051,7 @@ TERMS_ALLOWED_ENDPOINTS = {
 # matches. Anonymous visitors go through the session-based path below
 # regardless of this number (a fresh browser session always sees the
 # current terms once anyway).
-TERMS_VERSION = 4
+TERMS_VERSION = 5
 
 
 @app.before_request
@@ -1066,11 +1081,13 @@ LOGIN_GATE_ALLOWED_ENDPOINTS = {
     "logout", "static", "service_worker", "offline_page",
     "forgot_password", "forgot_password_email", "forgot_password_verify",
     "forgot_password_help", "studio_home",
-    # cheaper_match is called from LEROX Browser's chrome window (a file://
-    # origin with no LEROX login session of its own), see that route's
-    # docstring -- same public Rabattcode data /rabattcodes already shows
-    # to anyone once logged in, just reachable without a session here too.
-    "cheaper_match",
+    # api_login is how a client with no session cookie (LEROX Browser) gets
+    # authenticated at all -- has to be reachable before that happens.
+    # cheaper_match now requires a real account (Bearer token or session)
+    # so "Letzte Kontrolle" can be gated per-account -- NOT allow-listed
+    # here on purpose; an unauthenticated call correctly gets the global
+    # gate's 401 JSON (request.path.startswith("/api/") branch below).
+    "api_login",
 } | TERMS_ALLOWED_ENDPOINTS
 
 
@@ -1122,7 +1139,7 @@ def terms_accept():
         db.session.commit()
     else:
         session["terms_accepted"] = True
-    return redirect(url_for("index"))
+    return redirect(url_for("cheaper_home"))
 
 
 @app.route("/terms/decline", methods=["POST"])
@@ -1276,10 +1293,10 @@ LEROX_STUDIO_PROJECTS = [
     },
     {
         "key": "cheaper",
-        "name": "Cheaper",
+        "name": "Chepal",
         "tagline": "Reduzierte Preise, Rabattcodes und Vergünstigungen in deiner Nähe.",
         "icon": "🏷️",
-        "website_endpoint": "index",
+        "website_endpoint": "cheaper_home",
         "download_url": "/static/downloads/Cheaper-Setup.exe",
     },
     {
@@ -1314,7 +1331,7 @@ LEROX_STUDIO_PROJECTS = [
 @app.route("/")
 def studio_home():
     """The public LEROX STUDIO storefront -- deliberately reachable without
-    logging in or accepting Cheaper's own terms (see TERMS_ALLOWED_ENDPOINTS
+    logging in or accepting Chepal's own terms (see TERMS_ALLOWED_ENDPOINTS
     / LOGIN_GATE_ALLOWED_ENDPOINTS), same as browsing a real app store
     before installing anything. Clicking into an actual product still goes
     through that product's own login/terms gate as before."""
@@ -1327,13 +1344,15 @@ def studio_home():
     return render_template("studio_home.html", user=user, projects=projects)
 
 
-@app.route("/cheaper")
+@app.route("/cheaper/angebote")
 def index():
-    """Cheaper's homepage (its own endpoint is still named "index" so every
-    existing url_for('index') across Cheaper's own templates keeps working
-    unchanged, now resolving to /cheaper instead of /) -- search + category
-    filter + offer cards, sorted
-    to favor the visitor's own metro area (profile city, or a live browser
+    """The Angebote/Rabattcode marketplace grid -- its own endpoint is
+    still named "index" (this used to BE Chepal's homepage, at "/", then
+    "/cheaper") so every existing url_for('index') across this codebase
+    keeps working unchanged; only the URL moved again, this time to make
+    room for cheaper_home() (see below) as the actual landing page at
+    "/cheaper" -- search + category filter + offer cards, sorted to favor
+    the visitor's own metro area (profile city, or a live browser
     geolocation lookup, see resolved_city below) when known. Prices shown
     already reflect this visitor's own age-based discount, see
     Offer.price_for(). A brand-name search additionally surfaces matching
@@ -1388,6 +1407,35 @@ def index():
         brand_codes=matching_discount_code_brands(q),
         discount_codes=discount_codes_query.order_by(DiscountCode.brand_name).all(),
     )
+
+
+@app.route("/cheaper")
+def cheaper_home():
+    """Chepal's actual landing page (2026-08-19 redesign, replacing the
+    Angebote grid that used to greet visitors here -- that grid still
+    exists, just moved to index()/"/cheaper/angebote", reachable via the
+    header nav's "Angebote" link). require_login_everywhere already 401s/
+    redirects an anonymous visitor before this ever runs, so there's no
+    separate "please log in" branch to write here -- landing on this page
+    at all already implies a real logged-in account. Shows the "Pakete"
+    the user can switch on; currently just "Letzte Kontrolle" (see
+    toggle_last_check()/api/cheaper/match) is real. A second package
+    (long-press-a-product-photo price comparison across other sites) was
+    also asked for but deliberately NOT built yet -- it would need a real
+    paid visual-search/shopping API (no free option exists the way
+    Pollinations covers images), and the user chose "vorerst nicht bauen"
+    when asked. Shown here as a disabled/"bald verfügbar" card instead of
+    silently omitted, so the plan stays visible rather than looking
+    forgotten."""
+    return render_template("cheaper_home.html", user=current_user())
+
+
+@app.route("/cheaper/pakete/letzte-kontrolle", methods=["POST"])
+def toggle_last_check():
+    user = current_user()
+    user.chepal_last_check_enabled = not user.chepal_last_check_enabled
+    db.session.commit()
+    return redirect(url_for("cheaper_home"))
 
 
 @app.route("/angebot/<int:offer_id>")
@@ -1458,21 +1506,31 @@ def discount_code_go(code_id):
 
 @app.route("/api/cheaper/match")
 def cheaper_match():
-    """Powers Cheaper's "Auto-Modus" in LEROX Browser: given the hostname
-    of whatever site the user is currently browsing (?domain=...), returns
-    any REAL, active Rabattcode whose own link_url points at that same
-    hostname. Deliberately only matches Cheaper's existing hand-verified
-    DiscountCode rows (see that model's docstring on why those are never
-    scraped/live-searched) -- there is no web-wide coupon search here, on
-    the same "real data or an honest empty result, never fabricated"
-    stance the rest of this app follows. Public/no-auth: this is the same
-    data /rabattcodes already shows to anyone, just filtered by domain
-    instead of browsed by hand -- and CORS is opened for this one read-only
-    route since the caller is LEROX Browser's chrome window (a file://
-    origin, not a normal web page)."""
+    """Powers Chepal's "Letzte Kontrolle" package in LEROX Browser: given
+    the hostname of whatever site the user is currently browsing
+    (?domain=...), returns any REAL, active Rabattcode whose own link_url
+    points at that same hostname -- but only for an authenticated account
+    (Bearer token, see current_user()/api_login()) that has actually
+    switched "Letzte Kontrolle" on (see cheaper_home()). Not logged in at
+    all never reaches this function's body -- require_login_everywhere's
+    before_request hook already 401s it first (this endpoint is
+    deliberately NOT in LOGIN_GATE_ALLOWED_ENDPOINTS); logged in with the
+    toggle off falls through to here and gets an empty match list instead.
+    Either way LEROX Browser's own fetch handling treats a non-200 and an
+    empty match list identically (no toast) -- it doesn't need to tell
+    "not logged in" apart from "no deal found" apart from "feature off".
+    Deliberately only
+    matches Chepal's existing hand-verified DiscountCode rows (see that
+    model's docstring on why those are never scraped/live-searched) --
+    there is no web-wide coupon search here, on the same "real data or an
+    honest empty result, never fabricated" stance the rest of this app
+    follows. CORS is opened for this one read-only route since the caller
+    is LEROX Browser's chrome window (a file:// origin, not a normal web
+    page)."""
     domain = (request.args.get("domain") or "").strip().lower().removeprefix("www.")
     matches = []
-    if domain:
+    user = current_user()
+    if domain and user is not None and user.chepal_last_check_enabled:
         for code in DiscountCode.query.filter_by(is_active=True).all():
             host = (urllib.parse.urlparse(code.link_url).hostname or "").lower().removeprefix("www.")
             if host and host == domain:
@@ -1501,7 +1559,7 @@ def offer_eligible_for(offer, age):
 
 @app.route("/marke/<brand>")
 def brand_detail(brand):
-    """Everything Cheaper has on one company: its Rabattcodes and its
+    """Everything Chepal has on one company: its Rabattcodes and its
     Offers, listed as plain facts (normal price, discount price, and
     whatever age condition applies) regardless of whether they apply to
     this particular viewer -- e.g. a 17-year-old still sees a "nur unter
@@ -1717,14 +1775,14 @@ def register():
         # account settings) -- so that's who gets the welcome notice here.
         if user.guardian_email:
             send_email_best_effort(
-                user.guardian_email, "Willkommen bei Cheaper",
+                user.guardian_email, "Willkommen bei Chepal",
                 f"Hallo,\n\n"
-                f"für {user.username} wurde gerade ein Cheaper-Konto erstellt. Diese E-Mail-Adresse "
+                f"für {user.username} wurde gerade ein Chepal-Konto erstellt. Diese E-Mail-Adresse "
                 "wurde bei der Registrierung als Kontakt eines Erziehungsberechtigten angegeben.\n\n"
-                "Das Cheaper-Team",
+                "Das Chepal-Team",
             )
         session["user_id"] = user.id
-        return redirect(url_for("index"))
+        return redirect(url_for("cheaper_home"))
     return render_template("register.html")
 
 
@@ -2066,7 +2124,7 @@ def complete_profile():
     if user is None:
         return redirect(url_for("login"))
     if not user_needs_onboarding(user):
-        return redirect(url_for("index"))
+        return redirect(url_for("cheaper_home"))
 
     if request.method == "POST":
         onboarding = parse_onboarding_fields(request.form)
@@ -2103,7 +2161,7 @@ def complete_profile():
         user.gender = gender
         apply_onboarding_fields(user, onboarding)
         db.session.commit()
-        return redirect(url_for("index"))
+        return redirect(url_for("cheaper_home"))
 
     return render_template("complete_profile.html", user=user)
 
@@ -2116,9 +2174,35 @@ def login():
         user = User.query.filter_by(username=username).first()
         if user and user.check_password(password):
             session["user_id"] = user.id
-            return redirect(url_for("index"))
+            return redirect(url_for("cheaper_home"))
         flash("Benutzername oder Passwort ist falsch.")
     return render_template("login.html")
+
+
+@app.route("/api/login", methods=["POST"])
+def api_login():
+    """JSON-token counterpart to login() -- for LEROX Browser, which has no
+    shared cookie jar with this site (it's a separate Electron app, see
+    current_user()'s Authorization: Bearer lookup). Issues a long-lived
+    per-account token lazily on first successful call rather than at
+    registration, since most accounts never need one. CORS-open (like
+    cheaper_match) since the caller is a file:// origin, and safe to open
+    since this is a bearer token, not a cookie -- no credentials mode/
+    same-site concerns the way session auth would have."""
+    data = request.get_json(silent=True) or {}
+    username = (data.get("username") or "").strip()
+    password = data.get("password") or ""
+    user = User.query.filter_by(username=username).first()
+    if not user or not user.check_password(password):
+        resp = jsonify({"ok": False, "error": "invalid_credentials"})
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        return resp, 401
+    if not user.api_token:
+        user.api_token = secrets.token_hex(32)
+        db.session.commit()
+    resp = jsonify({"ok": True, "token": user.api_token, "username": user.username})
+    resp.headers["Access-Control-Allow-Origin"] = "*"
+    return resp
 
 
 @app.route("/logout", methods=["POST"])
@@ -2229,7 +2313,7 @@ def forgot_password_verify():
         session.pop("recovery_user_id", None)
         session["user_id"] = target_user.id
         flash("Dein Passwort wurde geändert.")
-        return redirect(url_for("index"))
+        return redirect(url_for("cheaper_home"))
 
     return render_template("forgot_password_verify.html")
 

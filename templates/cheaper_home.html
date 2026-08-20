@@ -1,0 +1,57 @@
+{% extends "cheaper_base.html" %}
+{% block title %}Chepal{% endblock %}
+{% block content %}
+
+<div class="cheaper-packages-page">
+    <p class="cheaper-section-label">Willkommen zurück, {{ user.username }}</p>
+    <h1 class="cheaper-packages-heading">Deine Pakete</h1>
+    <p class="cheaper-form-hint">
+        Schalte ein oder mehrere Pakete ein -- du kannst auch beide gleichzeitig aktivieren. Sie gelten dann
+        automatisch überall, wo du im LEROX Browser unterwegs bist, nicht nur hier auf Chepal.
+    </p>
+
+    <div class="cheaper-package-list">
+        <div class="cheaper-package-card {% if user.chepal_last_check_enabled %}is-on{% endif %}">
+            <div class="cheaper-package-icon">🎯</div>
+            <div class="cheaper-package-body">
+                <h2>Letzte Kontrolle</h2>
+                <p>
+                    Immer wenn du bezahlst, prüft Chepal im Hintergrund, ob es für genau diesen Shop einen echten
+                    Rabattcode gibt. Wenn ja, bekommst du eine Nachricht "Chepal hat eine Vergünstigung gefunden" --
+                    ein Klick darauf setzt den Code direkt ein, du machst genau da weiter, wo du warst.
+                </p>
+            </div>
+            <form method="post" action="{{ url_for('toggle_last_check') }}" class="cheaper-package-switch-form">
+                <button
+                    type="submit"
+                    class="cheaper-switch {% if user.chepal_last_check_enabled %}is-on{% endif %}"
+                    aria-pressed="{{ 'true' if user.chepal_last_check_enabled else 'false' }}"
+                    title="Letzte Kontrolle {{ 'ausschalten' if user.chepal_last_check_enabled else 'einschalten' }}"
+                >
+                    <span class="cheaper-switch-knob"></span>
+                </button>
+            </form>
+        </div>
+
+        <div class="cheaper-package-card is-disabled">
+            <div class="cheaper-package-icon">📸</div>
+            <div class="cheaper-package-body">
+                <h2>Preisvergleich per Bild <span class="cheaper-package-badge">bald verfügbar</span></h2>
+                <p>
+                    Langes Drücken auf ein Produktbild (z.B. Schuhe) soll dir zeigen, wo genau dieses Produkt gerade
+                    günstiger zu haben ist -- zum Anklicken direkt zur jeweiligen Seite. Dafür wird ein externer
+                    Dienst gebraucht, der noch nicht angebunden ist; kommt, sobald das steht.
+                </p>
+            </div>
+            <span class="cheaper-switch is-disabled" aria-disabled="true" title="Noch nicht verfügbar">
+                <span class="cheaper-switch-knob"></span>
+            </span>
+        </div>
+    </div>
+
+    <p class="cheaper-packages-footer">
+        <a href="{{ url_for('index') }}" class="cheaper-btn secondary">Angebote durchsuchen &rarr;</a>
+    </p>
+</div>
+
+{% endblock %}

@@ -1,9 +1,9 @@
 {% extends "cheaper_base.html" %}
-{% block title %}Firmenkonto erstellen - Cheaper{% endblock %}
+{% block title %}Firmenkonto erstellen - Chepal{% endblock %}
 {% block content %}
 <div class="cheaper-auth-page">
     <h1>Firmenkonto erstellen</h1>
-    <p class="cheaper-form-hint" style="margin-bottom:16px;">Damit könnt ihr eure eigenen Angebote (Preise, Altersrabatte) selbst auf Cheaper eintragen.</p>
+    <p class="cheaper-form-hint" style="margin-bottom:16px;">Damit könnt ihr eure eigenen Angebote (Preise, Altersrabatte) selbst auf Chepal eintragen.</p>
     <form action="{{ url_for('register_company') }}" method="post" class="cheaper-form">
         <label for="username">Benutzername
             <input type="text" id="username" name="username" required maxlength="50" value="{{ form_values.username if form_values else '' }}">

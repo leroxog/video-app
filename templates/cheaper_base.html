@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#ffffff">
-    <title>{% block title %}Cheaper{% endblock %}</title>
+    <title>{% block title %}Chepal{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/cheaper.css') }}">
     <link rel="manifest" href="{{ url_for('static', filename='cheaper-manifest.json') }}">
     <link rel="icon" href="{{ url_for('static', filename='img/cheaper-mark.svg') }}" type="image/svg+xml">
@@ -13,19 +13,20 @@
     <div class="cheaper-app">
         {% if not is_app_context %}
             <div class="download-banner" id="downloadBanner" hidden>
-                📲 Hol dir Cheaper als App für deinen Rechner &ndash;
+                📲 Hol dir Chepal als App für deinen Rechner &ndash;
                 <a href="{{ url_for('static', filename='downloads/Cheaper-Setup.exe') }}">jetzt herunterladen</a>
                 <button type="button" class="download-banner-close" id="downloadBannerClose" title="Schließen" aria-label="Schließen">&times;</button>
             </div>
         {% endif %}
 
         <header class="cheaper-header">
-            <a class="cheaper-brand" href="{{ url_for('index') }}">
-                <span class="cheaper-brand-mark">C</span>Cheaper
+            <a class="cheaper-brand" href="{{ url_for('cheaper_home') }}">
+                <span class="cheaper-brand-mark">C</span>Chepal
             </a>
             <nav class="cheaper-header-nav">
                 <a href="{{ url_for('studio_home') }}" title="Alle LEROX STUDIO Projekte">LEROX STUDIO</a>
                 {% if user %}
+                    <a href="{{ url_for('index') }}">Angebote</a>
                     {% if user.is_company %}
                         <a href="{{ url_for('company_dashboard') }}">Meine Angebote</a>
                     {% endif %}

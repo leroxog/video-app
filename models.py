@@ -81,6 +81,17 @@ class User(db.Model):
     # setting one up is a separate opt-in step (mail_setup), not part of
     # account registration itself: most LEROX accounts never touch Mail.
     mail_address = db.Column(db.String(120), unique=True, nullable=True)
+    # Chepal (formerly "Cheaper") account-level settings, see app.py's
+    # cheaper_home()/api_login(). api_token authenticates first-party
+    # clients that can't hold a browser session cookie -- currently just
+    # LEROX Browser (see current_user()'s Authorization: Bearer lookup) --
+    # generated lazily on first /api/login call, not at registration.
+    # chepal_last_check_enabled is the "Letzte Kontrolle" package: whether
+    # /api/cheaper/match should ever return a match for this account at
+    # all, checked wherever the user is browsing in LEROX Browser, not
+    # just on Chepal's own site.
+    api_token = db.Column(db.String(64), unique=True, nullable=True)
+    chepal_last_check_enabled = db.Column(db.Boolean, nullable=False, default=False)
     sounds_uploaded = db.relationship("Sound", backref="uploader", lazy=True, cascade="all, delete-orphan")
     subscriptions_made = db.relationship(
         "Subscription",

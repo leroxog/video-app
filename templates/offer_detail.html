@@ -1,5 +1,5 @@
 {% extends "cheaper_base.html" %}
-{% block title %}{{ c.offer.title }} -- {{ c.offer.provider_name }} -- Cheaper{% endblock %}
+{% block title %}{{ c.offer.title }} -- {{ c.offer.provider_name }} -- Chepal{% endblock %}
 {% block content %}
 
 <a class="cheaper-detail-back" href="{{ url_for('index') }}">&larr; Zurück</a>
@@ -35,7 +35,7 @@
         <a class="cheaper-btn cheaper-detail-cta" href="{{ url_for('offer_go', offer_id=c.offer.id) }}">
             Weiter zu {{ c.offer.provider_name }}
         </a>
-        <p class="cheaper-form-hint">Du verlässt Cheaper und wirst zur Seite von {{ c.offer.provider_name }} weitergeleitet.</p>
+        <p class="cheaper-form-hint">Du verlässt Chepal und wirst zur Seite von {{ c.offer.provider_name }} weitergeleitet.</p>
     </div>
 </div>
 

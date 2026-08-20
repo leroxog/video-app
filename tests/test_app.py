@@ -108,11 +108,11 @@ def test_register_and_login(client):
         follow_redirects=True,
     )
     assert response.status_code == 200
-    # "/" is Cheaper's homepage for logged-in visitors (see index()) --
-    # anonymous visitors get redirected to /login instead of ever reaching
-    # it, so landing on the search form is proof the login actually landed
+    # A successful login lands on cheaper_home ("Deine Pakete") -- anonymous
+    # visitors get redirected to /login instead of ever reaching it, so
+    # landing on the Pakete screen is proof the login actually landed
     # logged in.
-    assert b"cheaperSearchForm" in response.data
+    assert b"Deine Pakete" in response.data
 
 
 def test_register_stores_birthdate_and_gender(client):
@@ -378,7 +378,7 @@ def test_admin_can_create_fake_account(client):
         "birthdate": "1990-01-01", "gender": "keine_angabe",
     })
     home_response = client.get("/cheaper")
-    assert b"cheaperSearchForm" in home_response.data
+    assert b"Deine Pakete" in home_response.data
 
 
 def test_non_admin_cannot_create_account_via_admin_route(client):
@@ -511,9 +511,8 @@ def test_add_email_unlocks_username_and_password_change(client):
     response = client.post(
         "/login", data={"username": "newalice", "password": "newpass123"}, follow_redirects=True
     )
-    # See test_register_and_login -- "/" is the homepage and doesn't show
-    # the username, so confirm login via landing there.
-    assert b"cheaperSearchForm" in response.data
+    # See test_register_and_login -- confirm login via landing on cheaper_home.
+    assert b"Deine Pakete" in response.data
 
 
 def test_password_change_rejects_wrong_current_password(client):
@@ -2159,7 +2158,7 @@ def test_company_can_create_offer_and_it_appears_on_homepage(client):
 
     client.post("/logout")
     register(client, username="customer1")
-    home_response = client.get("/cheaper")
+    home_response = client.get("/cheaper/angebote")
     assert b"Testkino" in home_response.data
     assert b"Normaler Sitz" in home_response.data
 
@@ -2197,7 +2196,7 @@ def test_homepage_shows_age_discount_for_young_customer(client):
     client.post("/logout")
     young_birthdate = date(date.today().year - 11, 1, 1).isoformat()
     register(client, username="kid1", birthdate=young_birthdate)
-    response = client.get("/cheaper")
+    response = client.get("/cheaper/angebote")
     assert "9.00 €".encode() in response.data
     assert "Du sparst 11.00 €".encode() in response.data
 
@@ -2212,7 +2211,7 @@ def test_homepage_shows_normal_price_for_adult_customer(client):
 
     client.post("/logout")
     register(client, username="adult1", birthdate="1990-01-01")
-    response = client.get("/cheaper")
+    response = client.get("/cheaper/angebote")
     assert "20.00 €".encode() in response.data
     assert b"Du sparst" not in response.data
 
@@ -2230,7 +2229,7 @@ def test_homepage_search_filters_by_query(client):
 
     client.post("/logout")
     register(client, username="searcher1")
-    response = client.get("/cheaper?q=Findbares")
+    response = client.get("/cheaper/angebote?q=Findbares")
     assert b"Findbares Kino" in response.data
 
 
@@ -2687,9 +2686,38 @@ def test_edit_image_is_listed_in_ai_tools(client):
     assert "generate_image" in names
 
 
+def _enable_last_check(username="alice"):
+    user = User.query.filter_by(username=username).first()
+    user.chepal_last_check_enabled = True
+    db.session.commit()
+
+
+def test_cheaper_match_requires_login(client):
+    res = client.get("/api/cheaper/match", query_string={"domain": "shop.testmarke.de"})
+    assert res.status_code == 401
+
+
+def test_cheaper_match_empty_when_letzte_kontrolle_is_off(client):
+    from models import DiscountCode
+
+    register(client)
+    db.session.add(DiscountCode(
+        brand_name="Testmarke", code="SAVE10", description="10% Rabatt",
+        link_url="https://shop.testmarke.de/checkout", is_active=True,
+    ))
+    db.session.commit()
+
+    # chepal_last_check_enabled defaults to False -- logged in is not enough.
+    res = client.get("/api/cheaper/match", query_string={"domain": "shop.testmarke.de"})
+    assert res.status_code == 200
+    assert res.get_json()["matches"] == []
+
+
 def test_cheaper_match_finds_active_code_by_domain(client):
     from models import DiscountCode
 
+    register(client)
+    _enable_last_check()
     db.session.add(DiscountCode(
         brand_name="Testmarke", code="SAVE10", description="10% Rabatt",
         link_url="https://shop.testmarke.de/checkout", is_active=True,
@@ -2708,6 +2736,8 @@ def test_cheaper_match_finds_active_code_by_domain(client):
 def test_cheaper_match_ignores_www_and_inactive_codes(client):
     from models import DiscountCode
 
+    register(client)
+    _enable_last_check()
     db.session.add(DiscountCode(
         brand_name="Testmarke", code="SAVE10", description="10% Rabatt",
         link_url="https://www.testmarke.de/checkout", is_active=True,
@@ -2726,11 +2756,85 @@ def test_cheaper_match_ignores_www_and_inactive_codes(client):
 
 
 def test_cheaper_match_returns_empty_for_unmatched_domain(client):
+    register(client)
+    _enable_last_check()
+
     res = client.get("/api/cheaper/match", query_string={"domain": "unrelated-site.example"})
     assert res.get_json()["matches"] == []
 
     res_no_domain = client.get("/api/cheaper/match")
     assert res_no_domain.get_json()["matches"] == []
+
+
+def test_cheaper_match_works_with_bearer_token(client):
+    """LEROX Browser has no session cookie -- it authenticates via the
+    Authorization: Bearer token from api_login() instead."""
+    from models import DiscountCode
+
+    register(client)
+    _enable_last_check()
+    db.session.add(DiscountCode(
+        brand_name="Testmarke", code="SAVE10", description="10% Rabatt",
+        link_url="https://shop.testmarke.de/checkout", is_active=True,
+    ))
+    db.session.commit()
+
+    login_res = client.post("/api/login", json={"username": "alice", "password": "secret123"})
+    assert login_res.status_code == 200
+    token = login_res.get_json()["token"]
+    assert token
+
+    # A fresh client with NO session cookie at all -- only the bearer token.
+    with flask_app.test_client() as bare_client:
+        res = bare_client.get(
+            "/api/cheaper/match", query_string={"domain": "shop.testmarke.de"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert res.status_code == 200
+        assert res.get_json()["matches"][0]["code"] == "SAVE10"
+
+
+def test_api_login_rejects_wrong_password_and_reuses_existing_token(client):
+    register(client)
+    user = User.query.filter_by(username="alice").first()
+    assert user.api_token is None
+
+    bad = client.post("/api/login", json={"username": "alice", "password": "wrong"})
+    assert bad.status_code == 401
+    assert bad.get_json()["ok"] is False
+
+    good = client.post("/api/login", json={"username": "alice", "password": "secret123"})
+    assert good.status_code == 200
+    first_token = good.get_json()["token"]
+
+    again = client.post("/api/login", json={"username": "alice", "password": "secret123"})
+    assert again.get_json()["token"] == first_token
+
+
+def test_toggle_last_check_flips_setting_and_redirects_home(client):
+    register(client)
+    user = User.query.filter_by(username="alice").first()
+    assert user.chepal_last_check_enabled is False
+
+    res = client.post("/cheaper/pakete/letzte-kontrolle", follow_redirects=False)
+    assert res.status_code == 302
+    assert res.headers["Location"].endswith("/cheaper")
+    user = User.query.filter_by(username="alice").first()
+    assert user.chepal_last_check_enabled is True
+
+    client.post("/cheaper/pakete/letzte-kontrolle")
+    user = User.query.filter_by(username="alice").first()
+    assert user.chepal_last_check_enabled is False
+
+
+def test_cheaper_home_shows_current_toggle_state(client):
+    register(client)
+    off_res = client.get("/cheaper")
+    assert b'class="cheaper-switch is-on"' not in off_res.data
+
+    _enable_last_check()
+    on_res = client.get("/cheaper")
+    assert b"cheaper-switch is-on" in on_res.data
 
 
 def test_generate_groq_falls_back_when_model_is_decommissioned(client, monkeypatch):
