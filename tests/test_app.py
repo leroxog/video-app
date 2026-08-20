@@ -28,7 +28,7 @@ from models import (
     User, Conversation, Message,
     AiAdminFact, AiLearnedFact, PasswordResetCode, AccountRecoveryRequest, ErrorLog,
     AiVoiceProfile, MailMessage, KampumionLobby, KampumionPlayer, KampumionRound,
-    PCWarCompletion,
+    PCWarCompletion, MiniJob,
 )
 
 
@@ -2888,3 +2888,217 @@ def test_generate_groq_does_not_fall_back_on_unrelated_errors(client, monkeypatc
 
     with pytest.raises(requests.exceptions.HTTPError):
         ai_assistant._generate_groq([{"role": "user", "content": "Hallo"}], 100)
+
+
+# --- Mini Job: id_scan.py's OCR heuristics ---
+
+def test_guess_birthdate_finds_first_valid_date():
+    import id_scan
+    text = "Irgendwas\nGeburtsdatum 12.03.2008\nAusstellung 01.01.2023\n"
+    assert id_scan.guess_birthdate(text) == date(2008, 3, 12)
+
+
+def test_guess_birthdate_returns_none_without_a_date():
+    import id_scan
+    assert id_scan.guess_birthdate("Kein Datum hier.") is None
+
+
+def test_guess_name_prefers_mixed_case_lines_over_all_caps_header():
+    import id_scan
+    text = "BUNDESREPUBLIK DEUTSCHLAND\nPERSONALAUSWEIS\nMustermann\nErika\n"
+    assert id_scan.guess_name(text) == "Mustermann Erika"
+
+
+def test_guess_name_returns_none_without_plausible_lines():
+    import id_scan
+    assert id_scan.guess_name("ALLES GROSSBUCHSTABEN\n12345\n") is None
+
+
+def test_read_id_photo_reports_ocr_unavailable_gracefully(monkeypatch):
+    import id_scan
+    import pytesseract
+
+    def boom(*a, **k):
+        raise pytesseract.TesseractNotFoundError()
+
+    monkeypatch.setattr(id_scan, "extract_text", boom)
+    result = id_scan.read_id_photo(b"not-really-an-image")
+    assert result["ocr_available"] is False
+    assert result["name"] is None
+    assert result["birthdate"] is None
+
+
+def test_read_id_photo_reports_unreadable_image(monkeypatch):
+    import id_scan
+
+    monkeypatch.setattr(id_scan, "extract_text", lambda *a, **k: (_ for _ in ()).throw(ValueError("not an image")))
+    result = id_scan.read_id_photo(b"garbage")
+    assert result["ocr_available"] is True
+    assert result["image_readable"] is False
+
+
+def test_read_id_photo_success_path(monkeypatch):
+    import id_scan
+
+    monkeypatch.setattr(
+        id_scan, "extract_text",
+        lambda image_bytes: "Mustermann\nErika\nGeburtsdatum 12.03.2008\n",
+    )
+    result = id_scan.read_id_photo(b"fake-bytes")
+    assert result["ocr_available"] is True
+    assert result["image_readable"] is True
+    assert result["name"] == "Mustermann Erika"
+    assert result["birthdate"] == date(2008, 3, 12)
+
+
+# --- Mini Job: routes ---
+
+def _verify_minijob(client, username, birthdate="2009-01-01"):
+    """Registers + completes Mini Job verification via the session-guess
+    shortcut (same session key minijob_verify() itself writes), bypassing
+    the actual multipart file upload/OCR call -- those are covered
+    separately above (id_scan.py) and via a live-browser check during
+    development (no tesseract binary in this test environment)."""
+    register(client, username=username, birthdate=birthdate)
+    with client.session_transaction() as sess:
+        sess["minijob_ocr_guess"] = {"name": None, "birthdate": None, "ocr_available": True}
+    client.post("/minijob/verify/confirm", data={
+        "name": "Test Person", "birthdate": birthdate, "email": f"{username}@example.com",
+    })
+
+
+def test_minijob_requires_verification_before_browsing(client):
+    register(client, username="jobseeker1")
+    res = client.get("/minijob", follow_redirects=False)
+    assert res.status_code == 302
+    assert res.headers["Location"].endswith("/minijob/verify")
+
+
+def test_minijob_verify_requires_a_file(client):
+    register(client, username="jobseeker1")
+    res = client.post("/minijob/verify", data={}, content_type="multipart/form-data")
+    assert b"Bitte ein Foto" in res.data
+
+
+def test_minijob_verify_confirm_redirects_without_a_prior_upload(client):
+    register(client, username="jobseeker1")
+    res = client.get("/minijob/verify/confirm", follow_redirects=False)
+    assert res.status_code == 302
+    assert res.headers["Location"].endswith("/minijob/verify")
+
+
+def test_minijob_verify_confirm_saves_name_birthdate_and_email(client):
+    register(client, username="jobseeker1", birthdate="2009-01-01")
+    with client.session_transaction() as sess:
+        sess["minijob_ocr_guess"] = {"name": "Erika Musterfrau", "birthdate": "2009-01-01", "ocr_available": True}
+
+    res = client.post("/minijob/verify/confirm", data={
+        "name": "Erika Musterfrau", "birthdate": "2009-01-01", "email": "erika@example.com",
+    }, follow_redirects=True)
+    assert res.status_code == 200
+
+    user = User.query.filter_by(username="jobseeker1").first()
+    assert user.legal_name == "Erika Musterfrau"
+    assert user.email == "erika@example.com"
+    assert user.minijob_verified_at is not None
+
+    with client.session_transaction() as sess:
+        assert "minijob_ocr_guess" not in sess
+
+
+def test_minijob_verify_confirm_rejects_email_already_used(client):
+    register(client, username="jobseeker1")
+    client.post("/account/email", data={"email": "taken@example.com"})
+    client.post("/logout")
+
+    register(client, username="jobseeker2")
+    with client.session_transaction() as sess:
+        sess["minijob_ocr_guess"] = {"name": None, "birthdate": None, "ocr_available": True}
+    res = client.post("/minijob/verify/confirm", data={
+        "name": "Test Name", "birthdate": "2009-01-01", "email": "taken@example.com",
+    })
+    assert "wird schon von einem anderen Konto verwendet".encode() in res.data
+
+    user = User.query.filter_by(username="jobseeker2").first()
+    assert user.minijob_verified_at is None
+
+
+def test_minijob_home_filters_by_viewer_age(client):
+    register_company(client, username="pizzafirma1")
+    client.post("/firma/minijobs/neu", data={
+        "provider_name": "Pizzeria Roma", "title": "Ab 15 Job", "category": "lieferung",
+        "duration_type": "einmalig", "link_url": "https://example.com/a", "min_age": "15",
+    })
+    client.post("/firma/minijobs/neu", data={
+        "provider_name": "Pizzeria Roma", "title": "Ab 18 Job", "category": "lieferung",
+        "duration_type": "einmalig", "link_url": "https://example.com/b", "min_age": "18",
+    })
+    client.post("/logout")
+
+    sixteen_years_ago = date.today().replace(year=date.today().year - 16).isoformat()
+    _verify_minijob(client, "teen1", birthdate=sixteen_years_ago)
+    res = client.get("/minijob")
+    assert b"Ab 15 Job" in res.data
+    assert b"Ab 18 Job" not in res.data
+
+
+def test_minijob_go_redirects_and_bumps_click_count(client):
+    register_company(client, username="pizzafirma1")
+    client.post("/firma/minijobs/neu", data={
+        "provider_name": "Pizzeria Roma", "title": "Job", "category": "lieferung",
+        "duration_type": "einmalig", "link_url": "https://example.com/apply", "min_age": "13",
+    })
+    job = MiniJob.query.filter_by(title="Job").first()
+    client.post("/logout")
+
+    _verify_minijob(client, "teen2")
+    res = client.get(f"/minijob/{job.id}/gehe", follow_redirects=False)
+    assert res.status_code == 302
+    assert res.headers["Location"] == "https://example.com/apply"
+
+    job = db.session.get(MiniJob, job.id)
+    assert job.click_count == 1
+
+
+def test_company_minijob_crud(client):
+    register_company(client, username="pizzafirma1")
+    create_res = client.post("/firma/minijobs/neu", data={
+        "provider_name": "Pizzeria Roma", "title": "Neuer Job", "category": "gastro",
+        "duration_type": "kurzzeit", "link_url": "https://example.com/apply", "min_age": "14",
+    }, follow_redirects=True)
+    assert b"Mini Job erstellt" in create_res.data
+
+    job = MiniJob.query.filter_by(title="Neuer Job").first()
+    assert job is not None
+    assert job.min_age == 14
+
+    edit_res = client.post(f"/firma/minijobs/{job.id}/bearbeiten", data={
+        "provider_name": "Pizzeria Roma", "title": "Neuer Job (bearbeitet)", "category": "gastro",
+        "duration_type": "kurzzeit", "link_url": "https://example.com/apply", "min_age": "16",
+    }, follow_redirects=True)
+    assert b"Mini Job aktualisiert" in edit_res.data
+    job = db.session.get(MiniJob, job.id)
+    assert job.title == "Neuer Job (bearbeitet)"
+    assert job.min_age == 16
+
+    client.post(f"/firma/minijobs/{job.id}/toggle")
+    job = db.session.get(MiniJob, job.id)
+    assert job.is_active is False
+
+    delete_res = client.post(f"/firma/minijobs/{job.id}/loeschen", follow_redirects=True)
+    assert "Mini Job gel".encode() in delete_res.data
+    assert db.session.get(MiniJob, job.id) is None
+
+
+def test_company_cannot_edit_another_companys_minijob(client):
+    register_company(client, username="firma_a")
+    client.post("/firma/minijobs/neu", data={
+        "provider_name": "Firma A", "title": "Job A", "category": "sonstiges",
+        "duration_type": "laufend", "link_url": "https://example.com/a", "min_age": "13",
+    })
+    job = MiniJob.query.filter_by(title="Job A").first()
+    client.post("/logout")
+
+    register_company(client, username="firma_b", extra={"company_name": "Firma B"})
+    res = client.get(f"/firma/minijobs/{job.id}/bearbeiten")
+    assert res.status_code == 403

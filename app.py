@@ -40,10 +40,13 @@ from models import (
     Offer, OFFER_CATEGORIES, OFFER_CATEGORY_LABELS, DiscountCode,
     BrandFollow, PushSubscription, DiscountCodeUse, BrandReport,
     MailMessage, KampumionLobby, KampumionPlayer, KampumionRound, PCWarCompletion,
+    MiniJob, MINIJOB_CATEGORIES, MINIJOB_CATEGORY_LABELS,
+    MINIJOB_DURATION_TYPES, MINIJOB_DURATION_LABELS,
 )
 import ai_assistant
 import local_ai
 import push_notify
+import id_scan
 import kampumion
 import pcwar
 
@@ -650,6 +653,8 @@ def ensure_sqlite_columns_exist():
             ("mail_address", "VARCHAR(120)"),
             ("api_token", "VARCHAR(64)"),
             ("chepal_last_check_enabled", "BOOLEAN NOT NULL DEFAULT 0"),
+            ("legal_name", "VARCHAR(200)"),
+            ("minijob_verified_at", "DATETIME"),
         ],
         # ai_personality itself is created fresh by db.create_all() on any
         # brand-new database, but on one that already had the table from
@@ -780,6 +785,8 @@ def ensure_columns_exist():
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS mail_address VARCHAR(120)',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS api_token VARCHAR(64)',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS chepal_last_check_enabled BOOLEAN NOT NULL DEFAULT FALSE',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS legal_name VARCHAR(200)',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS minijob_verified_at TIMESTAMP',
     ]
     with db.engine.connect() as conn:
         for statement in statements:
@@ -1325,6 +1332,15 @@ LEROX_STUDIO_PROJECTS = [
         "website_endpoint": "games_home",
         "download_url": "/static/downloads/LEROX-Games-Setup.exe",
     },
+    {
+        "key": "minijob",
+        "name": "Mini Job",
+        "tagline": "Nebenjobs für dein Alter -- Lieferung, Fahrdienst und mehr, auch für nur einen Tag.",
+        "icon": "🧾",
+        "website_endpoint": "minijob_home",
+        # Web-only for now, no desktop wrapper built for this one.
+        "download_url": None,
+    },
 ]
 
 
@@ -1861,6 +1877,266 @@ def company_profile_update():
     db.session.commit()
     flash("Profil aktualisiert.")
     return redirect(url_for("company_dashboard"))
+
+
+# --- LEROX Mini Job ----------------------------------------------------
+# A curated board for real casual/side-job opportunities (delivery,
+# driving, one-off event help, ...) -- same non-scraping stance as
+# Cheaper's Offer/DiscountCode (see MiniJob's own docstring in models.py):
+# every listing is hand-entered by a company account or admin-seeded,
+# never scraped live, and clicking through takes the applicant to the
+# real provider's own application process -- Mini Job itself is not the
+# employer and isn't a party to whatever happens after that click, same
+# posture as Cheaper toward the purchases it links out to.
+#
+# Browsing requires a one-time "verification" step first (see
+# minijob_verify()/minijob_verify_confirm()): an ID-photo upload OCR'd via
+# id_scan.py, plus an email address on the account. This is explicitly
+# NOT a real, legally-binding identity check (no forgery/liveness
+# detection) -- disclosed as such in minijob_verify.html -- it exists so
+# there's at least a real name and a real, reachable email on file for
+# whoever's browsing job listings, not to authenticate anyone's identity
+# in a legally meaningful way. The uploaded photo itself is never written
+# to disk or object storage anywhere in this flow -- only the name/
+# birthdate the user confirms afterward gets saved.
+
+
+def require_minijob_verified():
+    user = current_user()
+    if user.minijob_verified_at is None:
+        return None, redirect(url_for("minijob_verify"))
+    return user, None
+
+
+@app.route("/minijob/verify", methods=["GET", "POST"])
+def minijob_verify():
+    """Step 1 of Mini Job's one-time verification: upload a photo of an
+    ID document. The photo is read into memory, handed to id_scan.py, and
+    then simply falls out of scope at the end of this request -- it is
+    never written to disk or R2, see this section's module-level notes.
+    The OCR guesses (if any) are stashed in the session (plain text, tiny)
+    for minijob_verify_confirm() to show as editable/correctable fields --
+    nothing gets saved to the User row until that confirm step."""
+    user = current_user()
+    if user.minijob_verified_at is not None:
+        return redirect(url_for("minijob_home"))
+    if request.method == "POST":
+        file = request.files.get("id_photo")
+        if not file or not file.filename:
+            flash("Bitte ein Foto deines Ausweises hochladen.")
+            return render_template("minijob_verify.html", user=user)
+        result = id_scan.read_id_photo(file.read())
+        if result["ocr_available"] and not result["image_readable"]:
+            flash("Das hochgeladene Foto konnte nicht gelesen werden -- bitte ein echtes Bild hochladen.")
+            return render_template("minijob_verify.html", user=user)
+        session["minijob_ocr_guess"] = {
+            "name": result["name"],
+            "birthdate": result["birthdate"].isoformat() if result["birthdate"] else None,
+            "ocr_available": result["ocr_available"],
+        }
+        return redirect(url_for("minijob_verify_confirm"))
+    return render_template("minijob_verify.html", user=user)
+
+
+@app.route("/minijob/verify/confirm", methods=["GET", "POST"])
+def minijob_verify_confirm():
+    """Step 2: shows whatever minijob_verify() guessed (or blank fields,
+    if OCR wasn't available/found nothing) as plain editable inputs, plus
+    an email field if the account doesn't already have one -- confirming
+    here is what actually saves anything to the User row."""
+    user = current_user()
+    if user.minijob_verified_at is not None:
+        return redirect(url_for("minijob_home"))
+    guess = session.get("minijob_ocr_guess")
+    if guess is None:
+        return redirect(url_for("minijob_verify"))
+    if request.method == "POST":
+        name = (request.form.get("name") or "").strip()
+        birthdate_raw = (request.form.get("birthdate") or "").strip()
+        email = (request.form.get("email") or user.email or "").strip()
+
+        def rerender(error):
+            flash(error)
+            return render_template(
+                "minijob_verify_confirm.html", user=user, guess=guess,
+                form_values=request.form, needs_email=not user.email,
+            )
+
+        if not name:
+            return rerender("Bitte deinen Namen bestätigen oder eintragen.")
+        try:
+            birthdate = datetime.strptime(birthdate_raw, "%Y-%m-%d").date()
+        except ValueError:
+            return rerender("Bitte ein gültiges Geburtsdatum eintragen.")
+        if not email or "@" not in email:
+            return rerender("Bitte eine gültige E-Mail-Adresse eintragen.")
+        existing_email = User.query.filter(User.email == email, User.id != user.id).first()
+        if existing_email:
+            return rerender("Diese E-Mail-Adresse wird schon von einem anderen Konto verwendet.")
+
+        user.legal_name = name
+        if user.birthdate is None:
+            user.birthdate = birthdate
+        user.email = email
+        user.minijob_verified_at = datetime.now(timezone.utc)
+        db.session.commit()
+        session.pop("minijob_ocr_guess", None)
+        flash("Verifizierung abgeschlossen.")
+        return redirect(url_for("minijob_home"))
+    return render_template(
+        "minijob_verify_confirm.html", user=user, guess=guess,
+        form_values=None, needs_email=not user.email,
+    )
+
+
+@app.route("/minijob")
+def minijob_home():
+    user, redirect_resp = require_minijob_verified()
+    if redirect_resp:
+        return redirect_resp
+    q = (request.args.get("q") or "").strip()
+    selected_categories = [c for c in request.args.getlist("category") if c in MINIJOB_CATEGORIES]
+    selected_duration = request.args.get("duration") if request.args.get("duration") in MINIJOB_DURATION_TYPES else None
+
+    viewer_age = compute_age(user.birthdate) if user.birthdate else None
+    query = MiniJob.query.filter_by(is_active=True)
+    if viewer_age is not None:
+        query = query.filter(MiniJob.min_age <= viewer_age)
+    if selected_categories:
+        query = query.filter(MiniJob.category.in_(selected_categories))
+    if selected_duration:
+        query = query.filter_by(duration_type=selected_duration)
+    if q:
+        like = f"%{q}%"
+        query = query.filter(db.or_(
+            MiniJob.title.ilike(like), MiniJob.provider_name.ilike(like), MiniJob.city.ilike(like),
+        ))
+    jobs = query.order_by(MiniJob.created_at.desc()).all()
+    return render_template(
+        "minijob_home.html", user=user, jobs=jobs, q=q,
+        selected_categories=selected_categories, selected_duration=selected_duration,
+        categories=MINIJOB_CATEGORIES, category_labels=MINIJOB_CATEGORY_LABELS,
+        duration_types=MINIJOB_DURATION_TYPES, duration_labels=MINIJOB_DURATION_LABELS,
+    )
+
+
+@app.route("/minijob/<int:job_id>")
+def minijob_detail(job_id):
+    user, redirect_resp = require_minijob_verified()
+    if redirect_resp:
+        return redirect_resp
+    job = MiniJob.query.filter_by(id=job_id, is_active=True).first_or_404()
+    return render_template(
+        "minijob_detail.html", user=user, job=job,
+        category_labels=MINIJOB_CATEGORY_LABELS, duration_labels=MINIJOB_DURATION_LABELS,
+    )
+
+
+@app.route("/minijob/<int:job_id>/gehe")
+def minijob_go(job_id):
+    user, redirect_resp = require_minijob_verified()
+    if redirect_resp:
+        return redirect_resp
+    job = MiniJob.query.filter_by(id=job_id, is_active=True).first_or_404()
+    job.click_count += 1
+    db.session.commit()
+    return redirect(job.link_url)
+
+
+def _apply_minijob_form(job, form):
+    job.provider_name = (form.get("provider_name") or "").strip()
+    job.title = (form.get("title") or "").strip()
+    job.category = form.get("category") if form.get("category") in MINIJOB_CATEGORIES else "sonstiges"
+    job.duration_type = form.get("duration_type") if form.get("duration_type") in MINIJOB_DURATION_TYPES else "laufend"
+    job.description = (form.get("description") or "").strip() or None
+    job.image_url = (form.get("image_url") or "").strip() or None
+    job.link_url = (form.get("link_url") or "").strip()
+    job.pay_info = (form.get("pay_info") or "").strip() or None
+    job.city = (form.get("city") or "").strip() or None
+    min_age_raw = (form.get("min_age") or "").strip()
+    job.min_age = int(min_age_raw) if min_age_raw.isdigit() else 13
+
+
+@app.route("/firma/minijobs")
+def company_minijob_dashboard():
+    user = require_company()
+    jobs = MiniJob.query.filter_by(company_id=user.id).order_by(MiniJob.created_at.desc()).all()
+    return render_template(
+        "company_minijob_dashboard.html", user=user, jobs=jobs,
+        categories=MINIJOB_CATEGORIES, category_labels=MINIJOB_CATEGORY_LABELS,
+    )
+
+
+@app.route("/firma/minijobs/neu", methods=["GET", "POST"])
+def company_minijob_new():
+    user = require_company()
+    if request.method == "POST":
+        job = MiniJob(company_id=user.id)
+        _apply_minijob_form(job, request.form)
+        if not job.provider_name or not job.title or not job.link_url:
+            flash("Bitte Anbieter, Titel und Link ausfüllen.")
+            return render_template(
+                "company_minijob_form.html", user=user, job=None, form_values=request.form,
+                categories=MINIJOB_CATEGORIES, category_labels=MINIJOB_CATEGORY_LABELS,
+                duration_types=MINIJOB_DURATION_TYPES, duration_labels=MINIJOB_DURATION_LABELS,
+            )
+        db.session.add(job)
+        db.session.commit()
+        flash("Mini Job erstellt.")
+        return redirect(url_for("company_minijob_dashboard"))
+    return render_template(
+        "company_minijob_form.html", user=user, job=None, form_values=None,
+        categories=MINIJOB_CATEGORIES, category_labels=MINIJOB_CATEGORY_LABELS,
+        duration_types=MINIJOB_DURATION_TYPES, duration_labels=MINIJOB_DURATION_LABELS,
+    )
+
+
+@app.route("/firma/minijobs/<int:job_id>/bearbeiten", methods=["GET", "POST"])
+def company_minijob_edit(job_id):
+    user = require_company()
+    job = MiniJob.query.get_or_404(job_id)
+    if job.company_id != user.id:
+        abort(403)
+    if request.method == "POST":
+        _apply_minijob_form(job, request.form)
+        if not job.provider_name or not job.title or not job.link_url:
+            flash("Bitte Anbieter, Titel und Link ausfüllen.")
+            return render_template(
+                "company_minijob_form.html", user=user, job=job, form_values=request.form,
+                categories=MINIJOB_CATEGORIES, category_labels=MINIJOB_CATEGORY_LABELS,
+                duration_types=MINIJOB_DURATION_TYPES, duration_labels=MINIJOB_DURATION_LABELS,
+            )
+        db.session.commit()
+        flash("Mini Job aktualisiert.")
+        return redirect(url_for("company_minijob_dashboard"))
+    return render_template(
+        "company_minijob_form.html", user=user, job=job, form_values=None,
+        categories=MINIJOB_CATEGORIES, category_labels=MINIJOB_CATEGORY_LABELS,
+        duration_types=MINIJOB_DURATION_TYPES, duration_labels=MINIJOB_DURATION_LABELS,
+    )
+
+
+@app.route("/firma/minijobs/<int:job_id>/loeschen", methods=["POST"])
+def company_minijob_delete(job_id):
+    user = require_company()
+    job = MiniJob.query.get_or_404(job_id)
+    if job.company_id != user.id:
+        abort(403)
+    db.session.delete(job)
+    db.session.commit()
+    flash("Mini Job gelöscht.")
+    return redirect(url_for("company_minijob_dashboard"))
+
+
+@app.route("/firma/minijobs/<int:job_id>/toggle", methods=["POST"])
+def company_minijob_toggle(job_id):
+    user = require_company()
+    job = MiniJob.query.get_or_404(job_id)
+    if job.company_id != user.id:
+        abort(403)
+    job.is_active = not job.is_active
+    db.session.commit()
+    return redirect(url_for("company_minijob_dashboard"))
 
 
 # --- LEROX Mail -------------------------------------------------------

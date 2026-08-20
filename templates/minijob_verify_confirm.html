@@ -1,0 +1,42 @@
+{% extends "cheaper_base.html" %}
+{% block title %}Mini Job -- Angaben bestätigen - Chepal{% endblock %}
+{% block content %}
+<div class="cheaper-auth-page" style="max-width:480px;">
+    <h1>Angaben bestätigen</h1>
+    {% if not guess.ocr_available %}
+        <p class="cheaper-form-hint">
+            Die automatische Texterkennung ist gerade nicht verfügbar -- bitte Name und Geburtsdatum von Hand
+            eintragen.
+        </p>
+    {% elif not guess.name and not guess.birthdate %}
+        <p class="cheaper-form-hint">
+            Auf dem Foto konnte nichts Verwertbares erkannt werden -- bitte Name und Geburtsdatum von Hand
+            eintragen.
+        </p>
+    {% else %}
+        <p class="cheaper-form-hint">
+            So wurde dein Ausweis automatisch gelesen -- bitte prüfen und bei Bedarf korrigieren, Texterkennung
+            liest nicht immer perfekt.
+        </p>
+    {% endif %}
+
+    <form method="post" class="cheaper-form">
+        <label for="name">Name
+            <input type="text" id="name" name="name" required maxlength="200"
+                   value="{{ (form_values.name if form_values else guess.name) or '' }}">
+        </label>
+        <label for="birthdate">Geburtsdatum
+            <input type="date" id="birthdate" name="birthdate" required
+                   value="{{ (form_values.birthdate if form_values else guess.birthdate) or '' }}">
+        </label>
+        {% if needs_email %}
+            <label for="email">E-Mail-Adresse
+                <input type="email" id="email" name="email" required maxlength="255"
+                       value="{{ form_values.email if form_values else '' }}">
+            </label>
+        {% endif %}
+        <button type="submit" class="cheaper-btn">Bestätigen</button>
+    </form>
+    <p class="cheaper-auth-footer"><a href="{{ url_for('minijob_verify') }}">&larr; Anderes Foto hochladen</a></p>
+</div>
+{% endblock %}

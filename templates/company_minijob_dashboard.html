@@ -1,0 +1,47 @@
+{% extends "cheaper_base.html" %}
+{% block title %}Meine Mini Jobs - Chepal{% endblock %}
+{% block content %}
+<h1 style="font-size:22px;margin-bottom:4px;">Meine Mini Jobs</h1>
+<p class="cheaper-form-hint" style="margin-bottom:20px;">{{ user.company_name }} &middot; {{ user.company_address }}</p>
+
+<a href="{{ url_for('company_minijob_new') }}" class="cheaper-btn" style="margin-bottom:20px;display:inline-flex;">+ Neuer Mini Job</a>
+
+{% if jobs %}
+<div class="cheaper-panel" style="overflow-x:auto;">
+    <table class="cheaper-table">
+        <thead>
+            <tr>
+                <th>Titel</th>
+                <th>Kategorie</th>
+                <th>Dauer</th>
+                <th>Mindestalter</th>
+                <th>Status</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for job in jobs %}
+            <tr>
+                <td>{{ job.title }}</td>
+                <td>{{ category_labels[job.category] }}</td>
+                <td>{{ job.duration_type }}</td>
+                <td>{{ job.min_age }}+</td>
+                <td>{{ "Aktiv" if job.is_active else "Deaktiviert" }}</td>
+                <td class="cheaper-table-actions">
+                    <a href="{{ url_for('company_minijob_edit', job_id=job.id) }}"><button type="button">Bearbeiten</button></a>
+                    <form action="{{ url_for('company_minijob_toggle', job_id=job.id) }}" method="post" style="display:contents;">
+                        <button type="submit">{{ "Deaktivieren" if job.is_active else "Aktivieren" }}</button>
+                    </form>
+                    <form action="{{ url_for('company_minijob_delete', job_id=job.id) }}" method="post" style="display:contents;" onsubmit="return confirm('Mini Job wirklich löschen?');">
+                        <button type="submit">Löschen</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+    <p class="cheaper-empty-state">Noch keine Mini Jobs &ndash; leg deinen ersten an.</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,38 @@
+{% extends "cheaper_base.html" %}
+{% block title %}{{ job.title }} -- {{ job.provider_name }} -- Chepal{% endblock %}
+{% block content %}
+
+<a class="cheaper-detail-back" href="{{ url_for('minijob_home') }}">&larr; Zurück</a>
+
+<div class="cheaper-detail">
+    {% if job.image_url %}
+        <img class="cheaper-detail-image" src="{{ job.image_url }}" alt="{{ job.title }}">
+    {% else %}
+        <div class="cheaper-detail-image-fallback">🧾</div>
+    {% endif %}
+
+    <div class="cheaper-detail-body">
+        <span class="cheaper-card-category">{{ category_labels[job.category] }}</span>
+        <h1 class="cheaper-detail-title">{{ job.title }}</h1>
+        <p class="cheaper-detail-provider">{{ job.provider_name }}{% if job.city %} &middot; {{ job.city }}{% endif %}</p>
+
+        <div class="cheaper-detail-price-block">
+            <span class="cheaper-detail-price">{{ job.pay_info or "Bezahlung siehe Anbieter" }}</span>
+        </div>
+        <span class="cheaper-card-savings">{{ duration_labels[job.duration_type] }} &middot; ab {{ job.min_age }} Jahren</span>
+
+        {% if job.description %}
+            <p class="cheaper-detail-description">{{ job.description }}</p>
+        {% endif %}
+
+        <a class="cheaper-btn cheaper-detail-cta" href="{{ url_for('minijob_go', job_id=job.id) }}">
+            Weiter zur Bewerbung bei {{ job.provider_name }}
+        </a>
+        <p class="cheaper-form-hint">
+            Du verlässt Chepal und wirst zur echten Bewerbungsseite von {{ job.provider_name }} weitergeleitet --
+            der Job selbst findet direkt dort statt, nicht über LEROX.
+        </p>
+    </div>
+</div>
+
+{% endblock %}

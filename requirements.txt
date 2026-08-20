@@ -11,6 +11,15 @@ requests==2.32.3
 python-dotenv==1.0.1
 pywebpush==2.4.0
 
+# Mini Job's ID-scan step (see id_scan.py) -- pytesseract is a thin
+# wrapper that shells out to the real "tesseract" binary, which is NOT a
+# Python package and must be installed separately (railpack.json's
+# deploy.aptPackages handles that in production; a local dev machine
+# needs it on PATH too, e.g. via `winget install UB-Mannheim.TesseractOCR`
+# on Windows or `apt install tesseract-ocr` on Linux).
+pytesseract==0.3.13
+Pillow==11.1.0
+
 # Both extra indexes below serve prebuilt CPU-only wheels -- without them,
 # pip falls back to plain PyPI, which only has an sdist for
 # llama-cpp-python (needs cmake + a C++ toolchain to build, which the

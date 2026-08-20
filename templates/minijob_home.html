@@ -1,0 +1,77 @@
+{% extends "cheaper_base.html" %}
+{% block title %}Mini Job - Chepal{% endblock %}
+{% block content %}
+
+<h1 style="font-size:22px;margin-bottom:4px;">Mini Job</h1>
+<p class="cheaper-form-hint" style="margin-bottom:20px;">
+    Nebenjobs, die zu deinem Alter passen -- auch für nur einen Tag. LEROX vermittelt nicht selbst: ein Klick bringt
+    dich direkt zur echten Bewerbung beim jeweiligen Anbieter.
+</p>
+
+<form method="get" class="cheaper-search-row" style="margin-bottom:18px;">
+    <div class="cheaper-search-box">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        <input type="text" name="q" value="{{ q }}" placeholder="Wonach suchst du? Z.B. Lieferung, Fahrdienst, Stadt ...">
+    </div>
+</form>
+
+<div class="cheaper-filter-option-row" style="display:flex;flex-wrap:wrap;gap:16px;margin-bottom:20px;">
+    <div>
+        <p class="cheaper-filter-group-title">Kategorie</p>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+            {% for cat in categories %}
+                <label class="cheaper-filter-option">
+                    <input type="checkbox" name="category" value="{{ cat }}" onchange="this.form.submit()" {% if cat in selected_categories %}checked{% endif %} form="minijobFilterForm">
+                    {{ category_labels[cat] }}
+                </label>
+            {% endfor %}
+        </div>
+    </div>
+    <div>
+        <p class="cheaper-filter-group-title">Dauer</p>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+            <label class="cheaper-filter-option">
+                <input type="radio" name="duration" value="" onchange="this.form.submit()" {% if not selected_duration %}checked{% endif %} form="minijobFilterForm">
+                Alle
+            </label>
+            {% for d in duration_types %}
+                <label class="cheaper-filter-option">
+                    <input type="radio" name="duration" value="{{ d }}" onchange="this.form.submit()" {% if d == selected_duration %}checked{% endif %} form="minijobFilterForm">
+                    {{ duration_labels[d] }}
+                </label>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+<form method="get" id="minijobFilterForm" hidden><input type="hidden" name="q" value="{{ q }}"></form>
+
+{% if jobs %}
+    <div class="cheaper-card-grid">
+        {% for job in jobs %}
+            <a class="cheaper-card" href="{{ url_for('minijob_detail', job_id=job.id) }}">
+                {% if job.image_url %}
+                    <img class="cheaper-card-image" src="{{ job.image_url }}" alt="{{ job.title }}" loading="lazy">
+                {% else %}
+                    <div class="cheaper-card-image-fallback">🧾</div>
+                {% endif %}
+                <span class="cheaper-card-badge">{{ duration_labels[job.duration_type] }}</span>
+                <div class="cheaper-card-body">
+                    <span class="cheaper-card-category">{{ category_labels[job.category] }}</span>
+                    <p class="cheaper-card-title">{{ job.title }}</p>
+                    <p class="cheaper-card-provider">{{ job.provider_name }}{% if job.city %} &middot; {{ job.city }}{% endif %}</p>
+                    <div class="cheaper-card-price-row">
+                        <span class="cheaper-card-price">{{ job.pay_info or "Bezahlung siehe Anbieter" }}</span>
+                    </div>
+                    <p class="cheaper-card-savings">ab {{ job.min_age }} Jahren</p>
+                </div>
+            </a>
+        {% endfor %}
+    </div>
+{% else %}
+    <p class="cheaper-empty-state">Aktuell keine passenden Mini Jobs für dein Alter/deine Filter -- schau später nochmal vorbei.</p>
+{% endif %}
+
+{% if user.is_company %}
+    <p class="cheaper-auth-footer" style="text-align:left;"><a href="{{ url_for('company_minijob_dashboard') }}">→ Meine Mini Jobs verwalten</a></p>
+{% endif %}
+{% endblock %}

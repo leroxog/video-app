@@ -1,0 +1,24 @@
+{% extends "cheaper_base.html" %}
+{% block title %}Mini Job -- Verifizierung - Chepal{% endblock %}
+{% block content %}
+<div class="cheaper-auth-page" style="max-width:480px;">
+    <h1>Mini Job: kurz verifizieren</h1>
+    <p class="cheaper-form-hint">
+        Bevor du nach Mini Jobs suchen kannst, einmal ein Foto deines Ausweises hochladen -- wir lesen Name und
+        Geburtsdatum automatisch aus, du bestätigst sie im nächsten Schritt.
+    </p>
+    <p class="cheaper-form-hint">
+        <strong>Wichtig:</strong> das ist keine echte, rechtssichere Identitätsprüfung -- nur eine automatische
+        Texterkennung. Das Foto selbst wird nicht dauerhaft gespeichert, nur der bestätigte Name und das
+        Geburtsdatum als Text.
+    </p>
+
+    <form method="post" enctype="multipart/form-data" class="cheaper-form">
+        <label for="id_photo">Foto deines Ausweises
+            <input type="file" id="id_photo" name="id_photo" accept="image/*" required>
+        </label>
+        <button type="submit" class="cheaper-btn">Foto hochladen &amp; auslesen</button>
+    </form>
+    <p class="cheaper-auth-footer"><a href="{{ url_for('studio_home') }}">&larr; Zurück zu LEROX STUDIO</a></p>
+</div>
+{% endblock %}

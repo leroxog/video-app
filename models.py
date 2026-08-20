@@ -92,6 +92,16 @@ class User(db.Model):
     # just on Chepal's own site.
     api_token = db.Column(db.String(64), unique=True, nullable=True)
     chepal_last_check_enabled = db.Column(db.Boolean, nullable=False, default=False)
+    # Mini Job verification (see app.py's minijob_verify()/id_scan.py).
+    # legal_name comes from the ID-scan step -- OCR's best-effort read,
+    # confirmed/corrected by hand before saving, never the raw ID photo
+    # itself (that's deliberately never written to disk/R2, see
+    # minijob_verify's own docstring). minijob_verified_at just marks that
+    # this one-time step happened; it is explicitly NOT a real, legally
+    # binding identity verification (no forgery/liveness detection) --
+    # disclosed as such everywhere this matters in the UI.
+    legal_name = db.Column(db.String(200), nullable=True)
+    minijob_verified_at = db.Column(db.DateTime, nullable=True)
     sounds_uploaded = db.relationship("Sound", backref="uploader", lazy=True, cascade="all, delete-orphan")
     subscriptions_made = db.relationship(
         "Subscription",
@@ -908,3 +918,57 @@ class PCWarCompletion(db.Model):
     completed_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     user = db.relationship("User")
     __table_args__ = (db.UniqueConstraint("user_id", "target_key", name="uq_pcwar_completion"),)
+
+
+MINIJOB_CATEGORIES = ["lieferung", "fahrdienst", "einzelhandel", "gastro", "haushalt", "sonstiges"]
+MINIJOB_CATEGORY_LABELS = {
+    "lieferung": "Lieferung",
+    "fahrdienst": "Fahrdienst",
+    "einzelhandel": "Einzelhandel",
+    "gastro": "Gastro",
+    "haushalt": "Haushalt",
+    "sonstiges": "Sonstiges",
+}
+MINIJOB_DURATION_TYPES = ["einmalig", "kurzzeit", "laufend"]
+MINIJOB_DURATION_LABELS = {
+    "einmalig": "Nur 1 Tag",
+    "kurzzeit": "Kurzzeitig",
+    "laufend": "Laufend",
+}
+
+
+class MiniJob(db.Model):
+    """One real casual/side-job opportunity for LEROX's "Mini Job" board
+    (delivery, driving, one-off event help, ...) -- prices/details entered
+    by hand (by an admin seeding examples, or by a company account from
+    its own dashboard), never scraped live, same non-scraping stance as
+    Cheaper's Offer/DiscountCode (see those models' docstrings) and for
+    the same reason: a live-scraped listing can't be vouched for, a
+    hand-entered one at least has a real person behind it. Mini Job itself
+    doesn't broker or process anything -- link_url (like Offer.link_url)
+    takes the applicant straight to the real provider's own application
+    process; Mini Job is not the employer and not a party to whatever
+    happens after that click. min_age is set by whoever posts the job and
+    is their responsibility to get right (same "not independently
+    verified" stance as Offer's age-discount fields) -- app.py's
+    minijob_home filters listings against the *viewer's* age using this
+    field, but that's a courtesy filter, not a compliance guarantee."""
+    id = db.Column(db.Integer, primary_key=True)
+    company_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    provider_name = db.Column(db.String(150), nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    category = db.Column(db.String(20), nullable=False, default="sonstiges")
+    description = db.Column(db.Text, nullable=True)
+    image_url = db.Column(db.String(500), nullable=True)
+    link_url = db.Column(db.String(500), nullable=False)
+    # Free text, not cents-based like Offer's prices -- gig pay is quoted
+    # in wildly different shapes ("12€/Stunde", "50€ pauschal + Trinkgeld",
+    # "auf Provisionsbasis") that don't fit one structured field honestly.
+    pay_info = db.Column(db.String(200), nullable=True)
+    min_age = db.Column(db.Integer, nullable=False, default=13)
+    duration_type = db.Column(db.String(20), nullable=False, default="laufend")
+    city = db.Column(db.String(100), nullable=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    click_count = db.Column(db.Integer, nullable=False, default=0)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    company = db.relationship("User")

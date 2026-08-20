@@ -1,0 +1,52 @@
+{% extends "cheaper_base.html" %}
+{% block title %}{{ "Mini Job bearbeiten" if job else "Neuer Mini Job" }} - Chepal{% endblock %}
+{% block content %}
+<div class="cheaper-auth-page" style="max-width:520px;">
+    <h1>{{ "Mini Job bearbeiten" if job else "Neuer Mini Job" }}</h1>
+    <form method="post" class="cheaper-form">
+        <label for="provider_name">Anbieter/Name
+            <input type="text" id="provider_name" name="provider_name" required maxlength="150" value="{{ (form_values.provider_name if form_values else job.provider_name) or '' }}">
+        </label>
+        <label for="title">Titel des Jobs
+            <input type="text" id="title" name="title" required maxlength="200" placeholder="z.B. Zeitungsausträger/in gesucht" value="{{ (form_values.title if form_values else job.title) or '' }}">
+        </label>
+        <label for="category">Kategorie
+            <select id="category" name="category">
+                {% for cat in categories %}
+                    <option value="{{ cat }}" {% if (form_values.category if form_values else job.category if job else '') == cat %}selected{% endif %}>{{ category_labels[cat] }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label for="duration_type">Dauer
+            <select id="duration_type" name="duration_type">
+                {% for d in duration_types %}
+                    <option value="{{ d }}" {% if (form_values.duration_type if form_values else job.duration_type if job else 'laufend') == d %}selected{% endif %}>{{ duration_labels[d] }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label for="description">Beschreibung (optional)
+            <textarea id="description" name="description" rows="3">{{ (form_values.description if form_values else job.description) or '' }}</textarea>
+        </label>
+        <label for="image_url">Bild-URL (optional)
+            <input type="text" id="image_url" name="image_url" maxlength="500" value="{{ (form_values.image_url if form_values else job.image_url) or '' }}">
+        </label>
+        <label for="link_url">Link zur echten Bewerbung (Pflicht)
+            <input type="text" id="link_url" name="link_url" required maxlength="500" placeholder="https://..." value="{{ (form_values.link_url if form_values else job.link_url) or '' }}">
+        </label>
+        <label for="pay_info">Bezahlung (z.B. "12€/Stunde" oder "50€ pauschal")
+            <input type="text" id="pay_info" name="pay_info" maxlength="200" value="{{ (form_values.pay_info if form_values else job.pay_info) or '' }}">
+        </label>
+        <div class="cheaper-form-grid">
+            <label for="city">Stadt
+                <input type="text" id="city" name="city" maxlength="100" value="{{ (form_values.city if form_values else job.city) or '' }}">
+            </label>
+            <label for="min_age">Mindestalter
+                <input type="number" id="min_age" name="min_age" min="0" max="99" value="{{ (form_values.min_age if form_values else job.min_age) or 13 }}">
+            </label>
+        </div>
+        <p class="cheaper-form-hint">Das Mindestalter liegt in deiner Verantwortung -- LEROX prüft es nicht unabhängig, es filtert nur, wem der Job in der Suche angezeigt wird.</p>
+        <button type="submit" class="cheaper-btn">{{ "Speichern" if job else "Mini Job erstellen" }}</button>
+    </form>
+    <p class="cheaper-auth-footer"><a href="{{ url_for('company_minijob_dashboard') }}">&larr; Zurück zur Übersicht</a></p>
+</div>
+{% endblock %}
