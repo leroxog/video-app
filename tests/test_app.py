@@ -3102,3 +3102,401 @@ def test_company_cannot_edit_another_companys_minijob(client):
     register_company(client, username="firma_b", extra={"company_name": "Firma B"})
     res = client.get(f"/firma/minijobs/{job.id}/bearbeiten")
     assert res.status_code == 403
+
+
+# --- AutoTrain: autotrain.py's pure simulation logic ---
+
+def test_inventory_add_stacks_before_using_new_slots():
+    import autotrain as at
+    inv = at.new_inventory()
+    at.add_to_inventory(inv, "coal", 5)
+    at.add_to_inventory(inv, "coal", 10)
+    assert inv[0] == {"item": "coal", "count": 15}
+    assert inv[1] is None
+
+
+def test_inventory_add_respects_stack_cap_and_spills_to_next_slot():
+    import autotrain as at
+    inv = at.new_inventory()
+    at.add_to_inventory(inv, "coal", 32)
+    added = at.add_to_inventory(inv, "coal", 5)
+    assert inv[0] == {"item": "coal", "count": 32}
+    assert inv[1] == {"item": "coal", "count": 5}
+    assert added == 5
+
+
+def test_inventory_full_loses_the_rest_instead_of_queuing():
+    import autotrain as at
+    inv = [{"item": "coal", "count": 32}] * 5
+    added = at.add_to_inventory(inv, "iron", 3)
+    assert added == 0
+    assert all(slot["item"] == "coal" for slot in inv)
+
+
+def test_tool_items_always_stack_at_one():
+    import autotrain as at
+    inv = at.new_inventory()
+    at.add_to_inventory(inv, "crafting_table", 1)
+    at.add_to_inventory(inv, "crafting_table", 1)
+    assert inv[0] == {"item": "crafting_table", "count": 1}
+    assert inv[1] == {"item": "crafting_table", "count": 1}
+
+
+def test_remove_from_inventory_all_or_nothing():
+    import autotrain as at
+    inv = at.new_inventory()
+    at.add_to_inventory(inv, "iron", 2)
+    assert at.remove_from_inventory(inv, "iron", 5) is False
+    assert inv[0] == {"item": "iron", "count": 2}  # untouched on failure
+    assert at.remove_from_inventory(inv, "iron", 2) is True
+    assert inv[0] is None
+
+
+def test_craft_rail_consumes_iron_and_wood_no_station_needed():
+    import autotrain as at
+    inv = at.new_inventory()
+    at.add_to_inventory(inv, "iron", 1)
+    at.add_to_inventory(inv, "wood", 1)
+    ok, reason = at.craft(inv, "rail", station_nearby=False)
+    assert ok is True and reason is None
+    assert any(s and s["item"] == "rail" and s["count"] == 1 for s in inv)
+    assert not any(s and s["item"] in ("iron", "wood") for s in inv)
+
+
+def test_craft_crafting_table_needs_two_wood():
+    import autotrain as at
+    inv = at.new_inventory()
+    at.add_to_inventory(inv, "wood", 1)
+    ok, reason = at.craft(inv, "crafting_table", station_nearby=False)
+    assert ok is False and reason == "missing_materials"
+    at.add_to_inventory(inv, "wood", 1)
+    ok, reason = at.craft(inv, "crafting_table", station_nearby=False)
+    assert ok is True
+
+
+def test_craft_rail_machine_requires_station():
+    import autotrain as at
+    inv = at.new_inventory()
+    at.add_to_inventory(inv, "iron", 2)
+    at.add_to_inventory(inv, "wood", 1)
+    ok, reason = at.craft(inv, "rail_machine", station_nearby=False)
+    assert ok is False and reason == "needs_station"
+    ok, reason = at.craft(inv, "rail_machine", station_nearby=True)
+    assert ok is True
+
+
+def test_craft_unknown_recipe():
+    import autotrain as at
+    ok, reason = at.craft(at.new_inventory(), "does_not_exist", station_nearby=True)
+    assert ok is False and reason == "unknown_recipe"
+
+
+def test_train_accelerates_slowly_and_consumes_track():
+    import autotrain as at
+    train = at.new_train_state(now=0)
+    at.tick_train(train, 1.0)
+    assert 0 < train["speed"] < 0.05  # very slow at first, per spec
+    assert train["track_ahead"] < at.STARTING_TRACK_AHEAD
+
+
+def test_train_derails_when_track_runs_out():
+    import autotrain as at
+    train = at.new_train_state(now=0)
+    derailed = False
+    for _ in range(2000):
+        derailed = at.tick_train(train, 0.5) or derailed
+        if derailed:
+            break
+    assert derailed is True
+    assert train["track_ahead"] == 0
+
+
+def test_place_rail_extends_track_ahead():
+    import autotrain as at
+    train = at.new_train_state(now=0)
+    before = train["track_ahead"]
+    at.place_rail(train)
+    assert train["track_ahead"] == before + at.RAIL_PLACEMENT_LENGTH
+
+
+def test_furnace_starving_reduces_effective_speed_without_losing_base_progress():
+    import autotrain as at
+    train = at.new_train_state(now=0)
+    for _ in range(200):
+        at.tick_train(train, 1.0)
+    assert train["fuel"] == 0
+    starved_speed = train["speed"]
+    assert starved_speed < train["base_speed"]
+    at.feed_furnace(train, 4)
+    at.tick_train(train, 0.01)
+    assert train["speed"] == pytest.approx(train["base_speed"], rel=0.05)
+
+
+def test_rail_machine_processes_input_into_output_over_time():
+    import autotrain as at
+    m = at.new_machine("rail_machine")
+    at.feed_machine(m, "iron", 2)
+    at.feed_machine(m, "wood", 1)
+    for _ in range(5):
+        assert at.tick_machine(m, 1.0) is False
+    assert at.tick_machine(m, 1.0) is True  # 6th second -- finishes
+    assert m["output"] == 1
+    assert m["input"] == {"iron": 0, "wood": 0}
+
+
+def test_rail_machine_does_not_process_without_enough_input():
+    import autotrain as at
+    m = at.new_machine("rail_machine")
+    at.feed_machine(m, "iron", 1)  # needs 2
+    for _ in range(10):
+        assert at.tick_machine(m, 1.0) is False
+    assert m["output"] == 0
+
+
+def test_feed_machine_rejects_wrong_item_and_wrong_machine_type():
+    import autotrain as at
+    m = at.new_machine("rail_machine")
+    assert at.feed_machine(m, "wood_that_does_not_exist", 1) is False
+    chest = at.new_machine("chest")
+    assert at.feed_machine(chest, "iron", 1) is False
+
+
+def test_adjacent_machine_wagon_matches_the_fixed_layout():
+    import autotrain as at
+    assert at.adjacent_machine_wagon(at.RESOURCE_WAGONS["coal"]) == (2,)
+    assert at.adjacent_machine_wagon(at.RESOURCE_WAGONS["wood"]) == (4,)
+    assert set(at.adjacent_machine_wagon(at.RESOURCE_WAGONS["iron"])) == {2, 4}
+
+
+def test_spawn_worker_miner_costs_wood_only():
+    import autotrain as at
+    inv = at.new_inventory()
+    at.add_to_inventory(inv, "wood", 32)
+    worker, reason = at.spawn_worker(inv, "coal_miner")
+    assert worker is not None and reason is None
+    assert worker["task"] == "coal_miner"
+    assert worker["home_wagon"] == at.RESOURCE_WAGONS["coal"]
+    assert not any(s for s in inv)  # wood fully spent
+
+
+def test_spawn_worker_fails_without_enough_materials():
+    import autotrain as at
+    worker, reason = at.spawn_worker(at.new_inventory(), "iron_miner")
+    assert worker is None and reason == "missing_materials"
+
+
+def test_spawn_rail_placer_costs_wood_and_iron():
+    import autotrain as at
+    inv = at.new_inventory()
+    at.add_to_inventory(inv, "wood", 64)
+    at.add_to_inventory(inv, "iron", 23)
+    worker, reason = at.spawn_worker(inv, "rail_placer")
+    assert worker is not None and worker["task"] == "rail_placer"
+
+
+def test_buy_chest_costs_twelve_wood():
+    import autotrain as at
+    inv = at.new_inventory()
+    at.add_to_inventory(inv, "wood", 11)
+    assert at.buy_chest(inv) is False
+    at.add_to_inventory(inv, "wood", 1)
+    assert at.buy_chest(inv) is True
+    assert not any(s for s in inv)
+
+
+# --- AutoTrain: Socket.IO wiring ---
+
+def _autotrain_code_from_redirect(response):
+    return response.headers["Location"].rstrip("/").rsplit("/", 1)[-1]
+
+
+def test_autotrain_home_and_create_and_join(client):
+    register(client, username="conductor1")
+    assert client.get("/games/autotrain").status_code == 200
+
+    create_res = client.post(
+        "/games/autotrain/create", data={"character_name": "Lok-Lena", "gender": "f"},
+    )
+    code = _autotrain_code_from_redirect(create_res)
+    assert len(code) == 6
+
+    from models import AutoTrainLobby, AutoTrainPlayer
+    lobby = AutoTrainLobby.query.filter_by(code=code).first()
+    assert lobby is not None and lobby.status == "waiting"
+    player = AutoTrainPlayer.query.filter_by(lobby_id=lobby.id).first()
+    assert player.character_name == "Lok-Lena"
+    assert player.gender == "f"
+
+    client2 = _second_registered_client("conductor2")
+    join_res = client2.post(
+        "/games/autotrain/join", data={"code": code, "character_name": "Beppo", "gender": "m"},
+    )
+    assert join_res.status_code == 302
+    assert AutoTrainPlayer.query.filter_by(lobby_id=lobby.id).count() == 2
+
+
+def test_autotrain_ready_starts_the_game_and_assigns_snapshot_state(client):
+    import app as app_module
+    from models import AutoTrainLobby
+
+    register(client, username="conductor1")
+    create_res = client.post(
+        "/games/autotrain/create", data={"character_name": "Lena", "gender": "f"},
+    )
+    code = _autotrain_code_from_redirect(create_res)
+
+    sio1 = socketio.test_client(flask_app, flask_test_client=client)
+    sio1.emit("at_join_lobby", {"code": code})
+    sio1.get_received()
+
+    sio1.emit("at_ready", {"ready": True})
+    received = sio1.get_received()
+    assert any(msg["name"] == "at_start" for msg in received)
+
+    lobby = AutoTrainLobby.query.filter_by(code=code).first()
+    assert lobby.status == "playing"
+    assert code in app_module._at_lobbies
+    user_id = User.query.filter_by(username="conductor1").first().id
+    assert user_id in app_module._at_lobbies[code]["players"]
+
+
+def test_autotrain_mine_start_and_craft_via_socket(client):
+    import app as app_module
+
+    register(client, username="conductor1")
+    create_res = client.post(
+        "/games/autotrain/create", data={"character_name": "Lena", "gender": "f"},
+    )
+    code = _autotrain_code_from_redirect(create_res)
+    sio1 = socketio.test_client(flask_app, flask_test_client=client)
+    sio1.emit("at_join_lobby", {"code": code})
+    sio1.get_received()
+    sio1.emit("at_ready", {"ready": True})
+    sio1.get_received()
+
+    user_id = User.query.filter_by(username="conductor1").first().id
+    state = app_module._at_lobbies[code]
+
+    sio1.emit("at_mine_start", {"resource": "coal"})
+    assert state["players"][user_id]["mining"]["resource"] == "coal"
+
+    sio1.emit("at_mine_cancel")
+    assert state["players"][user_id]["mining"] is None
+
+    # Craft without materials -> explicit failure reason back to the client.
+    sio1.emit("at_craft", {"output_item": "rail", "station_nearby": False})
+    received = sio1.get_received()
+    craft_msgs = [m for m in received if m["name"] == "at_craft_result"]
+    assert craft_msgs and craft_msgs[0]["args"][0]["ok"] is False
+
+    # Give materials directly (bypassing the 12s mine timer) and retry.
+    import autotrain as at
+    at.add_to_inventory(state["players"][user_id]["inventory"], "iron", 1)
+    at.add_to_inventory(state["players"][user_id]["inventory"], "wood", 1)
+    sio1.emit("at_craft", {"output_item": "rail", "station_nearby": False})
+    received = sio1.get_received()
+    craft_msgs = [m for m in received if m["name"] == "at_craft_result"]
+    assert craft_msgs and craft_msgs[0]["args"][0]["ok"] is True
+
+
+def test_autotrain_place_block_and_feed_and_collect_machine(client):
+    import app as app_module
+    import autotrain as at
+
+    register(client, username="conductor1")
+    create_res = client.post(
+        "/games/autotrain/create", data={"character_name": "Lena", "gender": "f"},
+    )
+    code = _autotrain_code_from_redirect(create_res)
+    sio1 = socketio.test_client(flask_app, flask_test_client=client)
+    sio1.emit("at_join_lobby", {"code": code})
+    sio1.get_received()
+    sio1.emit("at_ready", {"ready": True})
+    sio1.get_received()
+
+    user_id = User.query.filter_by(username="conductor1").first().id
+    state = app_module._at_lobbies[code]
+    inv = state["players"][user_id]["inventory"]
+    at.add_to_inventory(inv, "crafting_table", 1)
+
+    sio1.emit("at_place_block", {"wagon": 2, "slot": 0, "block_type": "crafting_table"})
+    received = sio1.get_received()
+    place_msgs = [m for m in received if m["name"] == "at_place_result"]
+    assert place_msgs and place_msgs[0]["args"][0]["ok"] is True
+    assert "2:0" in state["machines"]
+    assert not any(s for s in inv)  # crafting table consumed from inventory
+
+    # Placing again on the same slot fails -- already occupied.
+    at.add_to_inventory(inv, "crafting_table", 1)
+    sio1.emit("at_place_block", {"wagon": 2, "slot": 0, "block_type": "crafting_table"})
+    received = sio1.get_received()
+    place_msgs = [m for m in received if m["name"] == "at_place_result"]
+    assert place_msgs and place_msgs[0]["args"][0]["ok"] is False
+    assert place_msgs[0]["args"][0]["reason"] == "occupied"
+
+    # Build+feed a rail machine directly (bypassing the crafting step) and collect its output.
+    state["machines"]["4:0"] = at.new_machine("rail_machine")
+    at.add_to_inventory(inv, "iron", 2)
+    at.add_to_inventory(inv, "wood", 1)
+    sio1.emit("at_feed_machine", {"wagon": 4, "slot": 0, "item": "iron"})
+    sio1.emit("at_feed_machine", {"wagon": 4, "slot": 0, "item": "iron"})
+    sio1.emit("at_feed_machine", {"wagon": 4, "slot": 0, "item": "wood"})
+    machine = state["machines"]["4:0"]
+    assert machine["input"] == {"iron": 2, "wood": 1}
+    machine["output"] = 3  # simulate ticks having already processed some
+    sio1.emit("at_collect_machine", {"wagon": 4, "slot": 0})
+    assert any(s and s["item"] == "rail" and s["count"] == 3 for s in inv)
+    assert machine["output"] == 0
+
+
+def test_autotrain_rejoin_after_server_state_loss_rebuilds_game(client):
+    """Regression test for a real bug found via live testing: if the
+    in-memory _at_lobbies entry for a "playing" lobby disappears (e.g. the
+    server process restarted) while the DB still says "playing", a
+    reconnecting player used to get silently stuck -- no at_snapshot ever
+    arrived again because nothing restarted the tick loop for them. Now a
+    rejoin rebuilds a fresh game state and gets a real snapshot back."""
+    import app as app_module
+
+    register(client, username="conductor1")
+    create_res = client.post(
+        "/games/autotrain/create", data={"character_name": "Lena", "gender": "f"},
+    )
+    code = _autotrain_code_from_redirect(create_res)
+    sio1 = socketio.test_client(flask_app, flask_test_client=client)
+    sio1.emit("at_join_lobby", {"code": code})
+    sio1.get_received()
+    sio1.emit("at_ready", {"ready": True})
+    sio1.get_received()
+
+    assert code in app_module._at_lobbies
+    del app_module._at_lobbies[code]  # simulate the state a restart would cause
+    app_module._at_ticking.discard(code)
+
+    sio1.emit("at_join_lobby", {"code": code})
+    received = sio1.get_received()
+    assert any(msg["name"] == "at_snapshot" for msg in received)
+    assert code in app_module._at_lobbies  # rebuilt
+
+
+def test_autotrain_rejoin_after_derailing_shows_end_screen(client):
+    """Regression test for the second bug found alongside the one above:
+    joining a lobby whose run already ended (derailed) used to get no
+    response at all -- now it gets an at_snapshot with ended=True so the
+    client actually shows the end screen instead of a frozen scene."""
+    from models import AutoTrainLobby
+
+    register(client, username="conductor1")
+    create_res = client.post(
+        "/games/autotrain/create", data={"character_name": "Lena", "gender": "f"},
+    )
+    code = _autotrain_code_from_redirect(create_res)
+    lobby = AutoTrainLobby.query.filter_by(code=code).first()
+    lobby.status = "ended"
+    db.session.commit()
+
+    sio1 = socketio.test_client(flask_app, flask_test_client=client)
+    sio1.emit("at_join_lobby", {"code": code})
+    received = sio1.get_received()
+    snapshot_msgs = [m for m in received if m["name"] == "at_snapshot"]
+    assert snapshot_msgs and snapshot_msgs[0]["args"][0]["ended"] is True

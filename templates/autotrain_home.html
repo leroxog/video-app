@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#2a1650">
+    <title>AutoTrain - LEROX Games</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/games.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='img/cheaper-mark.svg') }}" type="image/svg+xml">
+</head>
+<body>
+<header class="lg-header">
+    <a class="lg-brand" href="{{ url_for('games_home') }}">🎮 LEROX Games</a>
+    <nav class="lg-header-nav">
+        <a href="{{ url_for('studio_home') }}">LEROX STUDIO</a>
+        <span>{{ user.username }}</span>
+    </nav>
+</header>
+
+<main class="lg-main">
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            <ul class="lg-flashes">
+                {% for message in messages %}<li>{{ message }}</li>{% endfor %}
+            </ul>
+        {% endif %}
+    {% endwith %}
+
+    <div class="at-landing-card">
+        <h1>🚂 AutoTrain</h1>
+        <p>Ein Zug, der immer schneller wird -- baut Gleise, baut euch eine kleine Fabrik über die Wagons und haltet den Zug am Laufen, bevor ihm die Schienen ausgehen.</p>
+
+        <div class="at-creator">
+            <div id="atPreviewCanvas" class="at-preview-canvas"></div>
+            <div class="at-creator-form">
+                <label class="at-field-label" for="atNameInput">Name
+                    <input type="text" id="atNameInput" maxlength="30" placeholder="{{ user.username }}" autocomplete="off">
+                </label>
+                <p class="at-field-label">Geschlecht</p>
+                <div class="at-gender-toggle">
+                    <button type="button" class="at-gender-btn active" data-gender="m">♂ Männlich</button>
+                    <button type="button" class="at-gender-btn" data-gender="f">♀ Weiblich</button>
+                </div>
+
+                <form method="POST" action="{{ url_for('autotrain_create') }}" id="atCreateForm">
+                    <input type="hidden" name="character_name" id="atCreateName">
+                    <input type="hidden" name="gender" id="atCreateGender" value="m">
+                    <button type="submit" class="lg-btn primary" style="width:100%;">Neue Lobby erstellen</button>
+                </form>
+                <form method="POST" action="{{ url_for('autotrain_join') }}" id="atJoinForm" class="at-join-form">
+                    <input type="hidden" name="character_name" id="atJoinName">
+                    <input type="hidden" name="gender" id="atJoinGender" value="m">
+                    <input type="text" name="code" placeholder="CODE" maxlength="8" required autocomplete="off">
+                    <button type="submit" class="lg-btn">Beitreten</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="at-rules">
+            <p><b>Kohle, Eisen, Holz:</b> in den drei Rohstoff-Wagons abbauen (12 Sek. pro Stück).</p>
+            <p><b>Schienen:</b> Eisen + Holz im Inventar kombinieren -- hält den Zug auf der Strecke.</p>
+            <p><b>Werkbank:</b> Holz + Holz -- darauf lassen sich Maschinen bauen.</p>
+            <p><b>Ofen:</b> an der Lokomotive mit "E" Kohle nachlegen, sonst wird der Zug langsamer.</p>
+        </div>
+    </div>
+</main>
+
+<script type="module" src="{{ url_for('static', filename='js/autotrain-home.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#150a26">
+    <title>AutoTrain -- {{ lobby.code }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/games.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='img/cheaper-mark.svg') }}" type="image/svg+xml">
+</head>
+<body class="at-game-body">
+<div id="atGameApp"
+     data-code="{{ lobby.code }}"
+     data-user-id="{{ user.id }}"
+     data-username="{{ user.username }}"
+     data-name="{{ player.character_name }}"
+     data-gender="{{ player.gender }}"
+     data-wagon-types='{{ wagon_types|tojson }}'
+     data-wagon-length="{{ wagon_length }}"
+     data-wagon-width="{{ wagon_width }}">
+
+    <div id="atCanvasHost"></div>
+
+    <div id="atHud">
+        <a href="{{ url_for('games_home') }}" class="at-hud-back">← Verlassen</a>
+        <div class="at-hud-train">
+            <div class="at-hud-row"><span>Tempo</span><div class="at-bar"><div id="atSpeedBar" class="at-bar-fill speed"></div></div></div>
+            <div class="at-hud-row"><span>Gleis voraus</span><div class="at-bar"><div id="atTrackBar" class="at-bar-fill track"></div></div></div>
+            <div class="at-hud-row"><span>Ofen</span><div class="at-bar"><div id="atFuelBar" class="at-bar-fill fuel"></div></div></div>
+        </div>
+    </div>
+
+    <div id="atInteractPrompt" class="at-interact-prompt hidden"></div>
+    <div id="atMiningBar" class="at-mining-bar hidden"><div class="fill" id="atMiningFill"></div></div>
+
+    <div id="atHotbar" class="at-hotbar"></div>
+
+    <div id="atCraftMenu" class="at-panel hidden">
+        <div class="at-panel-header"><span>Herstellen</span><button type="button" class="at-panel-close" data-close="atCraftMenu">×</button></div>
+        <div class="at-panel-body" id="atCraftList"></div>
+    </div>
+
+    <div id="atPlaceMenu" class="at-panel hidden">
+        <div class="at-panel-header"><span>Platzieren</span><button type="button" class="at-panel-close" data-close="atPlaceMenu">×</button></div>
+        <div class="at-panel-body" id="atPlaceList"></div>
+    </div>
+
+    <div id="atMachineMenu" class="at-panel hidden">
+        <div class="at-panel-header"><span id="atMachineTitle">Maschine</span><button type="button" class="at-panel-close" data-close="atMachineMenu">×</button></div>
+        <div class="at-panel-body" id="atMachineBody"></div>
+    </div>
+
+    <div id="atEndScreen" class="at-end-screen hidden">
+        <div class="at-end-card">
+            <h1>🚂💥 Entgleist!</h1>
+            <p>Dem Zug sind die Gleise ausgegangen.</p>
+            <a href="{{ url_for('games_home') }}" class="lg-btn primary">Zurück zu LEROX Games</a>
+        </div>
+    </div>
+
+    <div class="at-controls-hint">WASD bewegen · F abbauen · E interagieren · C herstellen</div>
+</div>
+
+<script src="{{ url_for('static', filename='js/vendor/socket.io.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/games-sounds.js') }}"></script>
+<script type="module" src="{{ url_for('static', filename='js/autotrain-game.js') }}"></script>
+</body>
+</html>

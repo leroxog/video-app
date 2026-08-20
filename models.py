@@ -972,3 +972,41 @@ class MiniJob(db.Model):
     click_count = db.Column(db.Integer, nullable=False, default=0)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     company = db.relationship("User")
+
+
+class AutoTrainLobby(db.Model):
+    """One AutoTrain (LEROX Games) lobby -- same "durable identity in the
+    database, live per-tick state in memory" split as Kampumion (see that
+    model's own docstring): this row is just "does this lobby/code exist,
+    who's in it, what's their character," never touched by the actual
+    30-times-a-second game simulation (train position, mining timers,
+    machine state, worker AI -- see app.py's _at_lobbies dict and
+    autotrain.py's tick logic). status: "waiting" (character-creation/
+    lobby screen) -> "playing" (train run in progress) -> "ended" (train
+    derailed -- ran out of laid track ahead of it)."""
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(8), unique=True, nullable=False)
+    host_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    status = db.Column(db.String(20), nullable=False, default="waiting")
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    started_at = db.Column(db.DateTime, nullable=True)
+    host = db.relationship("User")
+
+
+class AutoTrainPlayer(db.Model):
+    """One user's membership + chosen character in one AutoTrainLobby.
+    character_name/gender are picked once on the character-creation
+    screen before joining/creating a lobby and stay for that lobby's
+    lifetime -- gender picks between the two hand-built low-poly 3D
+    models in static/js/autotrain-game.js (buildMaleCharacter/
+    buildFemaleCharacter), it isn't a real account-level gender field and
+    is intentionally separate from User's own gender column."""
+    id = db.Column(db.Integer, primary_key=True)
+    lobby_id = db.Column(db.Integer, db.ForeignKey("auto_train_lobby.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    character_name = db.Column(db.String(30), nullable=False)
+    gender = db.Column(db.String(10), nullable=False, default="m")
+    ready = db.Column(db.Boolean, nullable=False, default=False)
+    joined_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    user = db.relationship("User")
+    __table_args__ = (db.UniqueConstraint("lobby_id", "user_id", name="uq_autotrain_player"),)

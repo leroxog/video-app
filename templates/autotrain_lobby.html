@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#2a1650">
+    <title>Lobby {{ lobby.code }} - AutoTrain</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/games.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='img/cheaper-mark.svg') }}" type="image/svg+xml">
+</head>
+<body>
+<div class="at-app"
+     id="atLobbyApp"
+     data-code="{{ lobby.code }}"
+     data-user-id="{{ user.id }}"
+     data-username="{{ user.username }}">
+    <div class="km-lobby-toolbar">
+        <div style="display:flex; align-items:center; gap:12px;">
+            <a href="{{ url_for('games_home') }}" style="color:var(--lg-text-dim); text-decoration:none;">← LEROX Games</a>
+            <span class="km-code-pill">{{ lobby.code }}</span>
+        </div>
+        <div class="km-player-list" id="atPlayerList"></div>
+    </div>
+
+    <div class="at-lobby-view">
+        <p class="at-lobby-hint">Warte, bis alle bereit sind -- dann geht's los.</p>
+        <div class="at-lobby-previews" id="atLobbyPreviews"></div>
+        <button type="button" class="km-start-btn" id="atReadyBtn">BEREIT</button>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/vendor/socket.io.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/games-sounds.js') }}"></script>
+<script type="module" src="{{ url_for('static', filename='js/autotrain-lobby.js') }}"></script>
+</body>
+</html>
