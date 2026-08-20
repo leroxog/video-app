@@ -2731,3 +2731,56 @@ def test_cheaper_match_returns_empty_for_unmatched_domain(client):
 
     res_no_domain = client.get("/api/cheaper/match")
     assert res_no_domain.get_json()["matches"] == []
+
+
+def test_generate_groq_falls_back_when_model_is_decommissioned(client, monkeypatch):
+    import ai_assistant
+    import requests
+
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+    calls = []
+
+    class FakeResponse:
+        def __init__(self, status_code, body):
+            self.status_code = status_code
+            self._body = body
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise requests.exceptions.HTTPError(f"status {self.status_code}", response=self)
+
+        def json(self):
+            return self._body
+
+    def fake_post(url, headers=None, json=None, timeout=None):
+        calls.append(json["model"])
+        if json["model"] == ai_assistant.GROQ_MODEL:
+            return FakeResponse(404, {})
+        return FakeResponse(200, {"choices": [{"message": {"content": "Fallback-Antwort"}}]})
+
+    monkeypatch.setattr(ai_assistant.requests, "post", fake_post)
+
+    reply = ai_assistant._generate_groq([{"role": "user", "content": "Hallo"}], 100)
+    assert reply == "Fallback-Antwort"
+    assert calls == [ai_assistant.GROQ_MODEL, ai_assistant.GROQ_FALLBACK_MODEL]
+
+
+def test_generate_groq_does_not_fall_back_on_unrelated_errors(client, monkeypatch):
+    import ai_assistant
+    import requests
+
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+
+    class FakeResponse:
+        status_code = 401
+
+        def raise_for_status(self):
+            raise requests.exceptions.HTTPError("status 401", response=self)
+
+        def json(self):
+            return {}
+
+    monkeypatch.setattr(ai_assistant.requests, "post", lambda *a, **k: FakeResponse())
+
+    with pytest.raises(requests.exceptions.HTTPError):
+        ai_assistant._generate_groq([{"role": "user", "content": "Hallo"}], 100)

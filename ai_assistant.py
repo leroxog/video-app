@@ -129,7 +129,16 @@ import requests
 logger = logging.getLogger(__name__)
 
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
-GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
+# Switched to a real open-weight Chinese model (Alibaba's Qwen) on the
+# user's explicit request (2026-08-19), knowingly accepting the tradeoff:
+# it's Preview-tier on Groq ("intended for evaluation purposes, not
+# production" per Groq's own docs), and Groq has already deprecated two
+# other Chinese preview models this year without much notice
+# (qwen/qwen3-32b in June 2026, moonshotai/kimi-k2-instruct-0905 in March
+# 2026). GROQ_FALLBACK_MODEL below is the safety net for exactly that --
+# see _generate_groq.
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "qwen/qwen3.6-27b")
+GROQ_FALLBACK_MODEL = os.environ.get("GROQ_FALLBACK_MODEL", "openai/gpt-oss-120b")
 CHAT_REQUEST_TIMEOUT_SECONDS = 30
 
 MAX_MESSAGE_CHARS = 2000
@@ -1037,34 +1046,33 @@ def _tools_instructions(tools):
     return "\n".join(lines)
 
 
-def _generate_groq(messages, max_tokens, temperature=0.7):
-    """Drop-in replacement for the self-hosted local_ai.generate_chat with
-    the identical (messages, max_tokens, temperature) signature -- routes
-    text generation through Groq's hosted API (a far larger free-tier
-    model) instead of the small self-hosted CPU model. Reverts the
-    quality/speed-for-ownership tradeoff local_ai.py was built for: this
-    module still keeps its own prompt-based ```tool_call``` convention
-    (see _call_local_model_message below) rather than switching to Groq's
-    native structured tool-calling, since that convention already works
-    reliably and rewriting the tool pipeline isn't needed just to fix
-    reply quality. Retries a couple of times on a transient network
-    error/429/5xx before giving up, so a brief Groq blip doesn't read as
-    the assistant randomly failing."""
-    api_key = os.environ.get("GROQ_API_KEY")
-    if not api_key:
-        raise RuntimeError(
-            "GROQ_API_KEY ist nicht gesetzt. Auf groq.com einen kostenlosen API-Key erstellen "
-            "und als Umgebungsvariable GROQ_API_KEY hinterlegen."
-        )
+# reasoning_effort's accepted values aren't uniform across Groq's models --
+# gpt-oss takes "low"/"medium"/"high", but Qwen3.6 only accepts "none" or
+# "default" and returns a hard 400 for anything else (found by actually
+# testing live against Groq's API, not assumed -- an initial "harmless
+# no-op" assumption here was wrong and made every Qwen request 400,
+# permanently masked by _generate_groq's own fallback-on-400 logic below,
+# which is exactly the kind of silent failure that's worse than an honest
+# error). "none" is Qwen's closest match to gpt-oss's "low": skip/minimize
+# hidden reasoning so there's more room left for the actual visible reply.
+GROQ_REASONING_EFFORT_BY_MODEL = {
+    "qwen/qwen3.6-27b": "none",
+}
+GROQ_DEFAULT_REASONING_EFFORT = "low"
+
+
+def _generate_groq_with_model(model, messages, max_tokens, temperature, api_key):
+    """One model's worth of the actual Groq call, with retries on
+    transient network errors/429/5xx -- factored out of _generate_groq so
+    it can be tried once against GROQ_MODEL and, only on a definitive
+    "this model doesn't exist" response, once more against
+    GROQ_FALLBACK_MODEL (see _generate_groq)."""
     payload = {
-        "model": GROQ_MODEL,
+        "model": model,
         "messages": messages,
         "max_tokens": max_tokens,
         "temperature": temperature,
-        # gpt-oss models spend part of their token budget on hidden
-        # "reasoning" before the visible answer; "low" keeps that short so
-        # there's always room left for the actual reply.
-        "reasoning_effort": "low",
+        "reasoning_effort": GROQ_REASONING_EFFORT_BY_MODEL.get(model, GROQ_DEFAULT_REASONING_EFFORT),
     }
     last_exc = None
     for attempt in range(3):
@@ -1088,6 +1096,44 @@ def _generate_groq(messages, max_tokens, temperature=0.7):
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"] or ""
     raise last_exc
+
+
+def _generate_groq(messages, max_tokens, temperature=0.7):
+    """Drop-in replacement for the self-hosted local_ai.generate_chat with
+    the identical (messages, max_tokens, temperature) signature -- routes
+    text generation through Groq's hosted API instead of the small
+    self-hosted CPU model. Reverts the quality/speed-for-ownership
+    tradeoff local_ai.py was built for; still keeps this module's own
+    prompt-based ```tool_call``` convention (see _call_local_model_message
+    below) rather than switching to Groq's native structured tool-calling,
+    since that convention already works reliably and rewriting the tool
+    pipeline isn't needed just to fix reply quality.
+
+    GROQ_MODEL defaults to a Preview-tier Chinese open-weight model
+    (qwen/qwen3.6-27b, see that constant's own comment on why and the
+    accepted risk) -- if Groq responds that the model itself is invalid or
+    decommissioned (400/404, distinct from a transient 429/5xx which
+    _generate_groq_with_model already retries), this falls back to
+    GROQ_FALLBACK_MODEL once so live chat degrades gracefully instead of
+    breaking outright the moment Groq pulls a preview model, same as it
+    already did to qwen3-32b and kimi-k2 earlier this year."""
+    api_key = os.environ.get("GROQ_API_KEY")
+    if not api_key:
+        raise RuntimeError(
+            "GROQ_API_KEY ist nicht gesetzt. Auf groq.com einen kostenlosen API-Key erstellen "
+            "und als Umgebungsvariable GROQ_API_KEY hinterlegen."
+        )
+    try:
+        return _generate_groq_with_model(GROQ_MODEL, messages, max_tokens, temperature, api_key)
+    except requests.exceptions.HTTPError as exc:
+        status = exc.response.status_code if exc.response is not None else None
+        if status not in (400, 404) or GROQ_MODEL == GROQ_FALLBACK_MODEL:
+            raise
+        logger.warning(
+            "Groq-Modell '%s' hat mit Status %s abgelehnt (vermutlich abgeschaltet/Preview-Ende) -- "
+            "weiche einmalig auf Fallback-Modell '%s' aus.", GROQ_MODEL, status, GROQ_FALLBACK_MODEL,
+        )
+        return _generate_groq_with_model(GROQ_FALLBACK_MODEL, messages, max_tokens, temperature, api_key)
 
 
 def _call_local_model_message(messages, max_tokens, tools=None, tool_choice="auto", temperature=CODE_TEMPERATURE):
