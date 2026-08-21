@@ -3500,3 +3500,32 @@ def test_autotrain_rejoin_after_derailing_shows_end_screen(client):
     received = sio1.get_received()
     snapshot_msgs = [m for m in received if m["name"] == "at_snapshot"]
     assert snapshot_msgs and snapshot_msgs[0]["args"][0]["ended"] is True
+
+
+def test_autotrain_solo_skips_the_lobby_and_starts_playing_immediately(client):
+    import app as app_module
+    from models import AutoTrainLobby, AutoTrainPlayer
+
+    register(client, username="loner1")
+    res = client.post(
+        "/games/autotrain/solo", data={"character_name": "Einzelgänger", "gender": "m"},
+        follow_redirects=False,
+    )
+    assert res.status_code == 302
+    # Redirects straight to .../<code>/spiel (not .../<code> like create()
+    # does), so the code is the second-to-last path segment here.
+    code = res.headers["Location"].rstrip("/").split("/")[-2]
+
+    lobby = AutoTrainLobby.query.filter_by(code=code).first()
+    assert lobby.status == "playing"
+    player = AutoTrainPlayer.query.filter_by(lobby_id=lobby.id).first()
+    assert player.ready is True
+    assert player.character_name == "Einzelgänger"
+
+    # No separate "ready up" step needed -- the game page itself works right away.
+    game_res = client.get(f"/games/autotrain/{code}/spiel")
+    assert game_res.status_code == 200
+
+    assert code in app_module._at_lobbies
+    user_id = User.query.filter_by(username="loner1").first().id
+    assert user_id in app_module._at_lobbies[code]["players"]

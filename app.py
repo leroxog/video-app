@@ -4528,17 +4528,20 @@ def autotrain_home():
     return render_template("autotrain_home.html", user=current_user())
 
 
+def _at_generate_code():
+    for _ in range(10):
+        candidate = "".join(secrets.choice(AUTOTRAIN_CODE_ALPHABET) for _ in range(6))
+        if not AutoTrainLobby.query.filter_by(code=candidate).first():
+            return candidate
+    return None
+
+
 @app.route("/games/autotrain/create", methods=["POST"])
 def autotrain_create():
     user = current_user()
     name = (request.form.get("character_name") or "").strip()[:30] or user.username
     gender = request.form.get("gender") if request.form.get("gender") in ("m", "f") else "m"
-    code = None
-    for _ in range(10):
-        candidate = "".join(secrets.choice(AUTOTRAIN_CODE_ALPHABET) for _ in range(6))
-        if not AutoTrainLobby.query.filter_by(code=candidate).first():
-            code = candidate
-            break
+    code = _at_generate_code()
     if code is None:
         flash("Konnte gerade keine neue Lobby anlegen, bitte nochmal versuchen.")
         return redirect(url_for("autotrain_home"))
@@ -4548,6 +4551,41 @@ def autotrain_create():
     db.session.add(AutoTrainPlayer(lobby_id=lobby.id, user_id=user.id, character_name=name, gender=gender))
     db.session.commit()
     return redirect(url_for("autotrain_lobby", code=code))
+
+
+@app.route("/games/autotrain/solo", methods=["POST"])
+def autotrain_solo():
+    """Skips the lobby/ready-up screen entirely -- creates a lobby
+    already in "playing" status with just this one (auto-readied)
+    player, sets up its live game state and starts its tick loop right
+    here, then goes straight to the game itself. Everything downstream
+    (at_join_lobby's "playing" branch, the tick loop, disconnect
+    handling) already treats a one-player lobby as completely ordinary --
+    this route only exists to skip the *waiting-room UI*, not to
+    special-case solo play in the simulation itself."""
+    user = current_user()
+    name = (request.form.get("character_name") or "").strip()[:30] or user.username
+    gender = request.form.get("gender") if request.form.get("gender") in ("m", "f") else "m"
+    code = _at_generate_code()
+    if code is None:
+        flash("Konnte gerade keine neue Lobby anlegen, bitte nochmal versuchen.")
+        return redirect(url_for("autotrain_home"))
+    lobby = AutoTrainLobby(code=code, host_user_id=user.id, status="playing", started_at=datetime.now(timezone.utc))
+    db.session.add(lobby)
+    db.session.flush()
+    db.session.add(AutoTrainPlayer(
+        lobby_id=lobby.id, user_id=user.id, character_name=name, gender=gender, ready=True,
+    ))
+    db.session.commit()
+
+    state = _at_new_game_state()
+    state["players"][user.id] = {"inventory": autotrain.new_inventory(), "mining": None, "wagon": 0}
+    _at_lobbies[code] = state
+    if code not in _at_ticking:
+        _at_ticking.add(code)
+        socketio.start_background_task(_at_tick_loop, code)
+
+    return redirect(url_for("autotrain_game", code=code))
 
 
 @app.route("/games/autotrain/join", methods=["POST"])

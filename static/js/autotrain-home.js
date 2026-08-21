@@ -5,6 +5,8 @@ import { buildCharacter } from "./autotrain-character.js";
   const canvasHost = document.getElementById("atPreviewCanvas");
   const nameInput = document.getElementById("atNameInput");
   const genderBtns = document.querySelectorAll(".at-gender-btn");
+  const soloName = document.getElementById("atSoloName");
+  const soloGender = document.getElementById("atSoloGender");
   const createName = document.getElementById("atCreateName");
   const createGender = document.getElementById("atCreateGender");
   const joinName = document.getElementById("atJoinName");
@@ -14,8 +16,10 @@ import { buildCharacter } from "./autotrain-character.js";
 
   function syncHiddenFields() {
     const name = nameInput.value.trim();
+    soloName.value = name;
     createName.value = name;
     joinName.value = name;
+    soloGender.value = gender;
     createGender.value = gender;
     joinGender.value = gender;
   }

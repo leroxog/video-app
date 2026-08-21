@@ -42,10 +42,15 @@
                     <button type="button" class="at-gender-btn" data-gender="f">♀ Weiblich</button>
                 </div>
 
+                <form method="POST" action="{{ url_for('autotrain_solo') }}" id="atSoloForm">
+                    <input type="hidden" name="character_name" id="atSoloName">
+                    <input type="hidden" name="gender" id="atSoloGender" value="m">
+                    <button type="submit" class="lg-btn primary" style="width:100%;">Allein spielen</button>
+                </form>
                 <form method="POST" action="{{ url_for('autotrain_create') }}" id="atCreateForm">
                     <input type="hidden" name="character_name" id="atCreateName">
                     <input type="hidden" name="gender" id="atCreateGender" value="m">
-                    <button type="submit" class="lg-btn primary" style="width:100%;">Neue Lobby erstellen</button>
+                    <button type="submit" class="lg-btn" style="width:100%;">Neue Lobby erstellen (mit Freunden)</button>
                 </form>
                 <form method="POST" action="{{ url_for('autotrain_join') }}" id="atJoinForm" class="at-join-form">
                     <input type="hidden" name="character_name" id="atJoinName">
