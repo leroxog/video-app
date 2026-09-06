@@ -1,7 +1,6 @@
 {
   "$schema": "https://schema.railpack.com",
   "deploy": {
-    "startCommand": "gunicorn app:app --timeout 300 --workers 1 --worker-class eventlet",
-    "aptPackages": ["tesseract-ocr", "tesseract-ocr-deu"]
+    "startCommand": "gunicorn app:app --timeout 300"
   }
 }

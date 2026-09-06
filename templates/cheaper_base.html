@@ -4,32 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#ffffff">
-    <title>{% block title %}Chepal{% endblock %}</title>
+    <title>{% block title %}LEROX STUDIO{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/cheaper.css') }}">
     <link rel="manifest" href="{{ url_for('static', filename='cheaper-manifest.json') }}">
     <link rel="icon" href="{{ url_for('static', filename='img/cheaper-mark.svg') }}" type="image/svg+xml">
 </head>
 <body>
     <div class="cheaper-app">
-        {% if not is_app_context %}
-            <div class="download-banner" id="downloadBanner" hidden>
-                📲 Hol dir Chepal als App für deinen Rechner &ndash;
-                <a href="{{ url_for('static', filename='downloads/Cheaper-Setup.exe') }}">jetzt herunterladen</a>
-                <button type="button" class="download-banner-close" id="downloadBannerClose" title="Schließen" aria-label="Schließen">&times;</button>
-            </div>
-        {% endif %}
-
         <header class="cheaper-header">
-            <a class="cheaper-brand" href="{{ url_for('cheaper_home') }}">
-                <span class="cheaper-brand-mark">C</span>Chepal
+            <a class="cheaper-brand" href="{{ url_for('studio_home') }}">
+                <span class="cheaper-brand-mark">L</span>LEROX STUDIO
             </a>
             <nav class="cheaper-header-nav">
-                <a href="{{ url_for('studio_home') }}" title="Alle LEROX STUDIO Projekte">LEROX STUDIO</a>
                 {% if user %}
-                    <a href="{{ url_for('index') }}">Angebote</a>
-                    {% if user.is_company %}
-                        <a href="{{ url_for('company_dashboard') }}">Meine Angebote</a>
-                    {% endif %}
                     <span class="cheaper-username">{{ user.username }}</span>
                     <a href="{{ url_for('account_settings') }}">Konto</a>
                     <form action="{{ url_for('logout') }}" method="post" style="display:contents;">
@@ -57,30 +44,6 @@
         </main>
     </div>
 
-    {% if not is_app_context %}
-        <script>
-            // Dismissible "get the app" banner -- shown once per browser
-            // unless closed (localStorage, not a cookie: purely a client-
-            // side UI preference, no reason to send it back to the server).
-            (function () {
-                var banner = document.getElementById("downloadBanner");
-                var closeBtn = document.getElementById("downloadBannerClose");
-                if (!banner || !closeBtn) return;
-                try {
-                    if (localStorage.getItem("cheaper_hide_app_banner") !== "1") {
-                        banner.hidden = false;
-                    }
-                } catch (e) {
-                    banner.hidden = false;
-                }
-                closeBtn.addEventListener("click", function () {
-                    banner.hidden = true;
-                    try { localStorage.setItem("cheaper_hide_app_banner", "1"); } catch (e) {}
-                });
-            })();
-        </script>
-    {% endif %}
-
     <script>
         if ("serviceWorker" in navigator) {
             window.addEventListener("load", () => {
@@ -88,7 +51,6 @@
             });
         }
     </script>
-    <script src="{{ url_for('static', filename='js/push.js') }}"></script>
 
     {% block scripts %}{% endblock %}
 </body>

@@ -1,5 +1,5 @@
 {% extends "cheaper_base.html" %}
-{% block title %}Login - Chepal{% endblock %}
+{% block title %}Login - LEROX STUDIO{% endblock %}
 {% block content %}
 <div class="cheaper-auth-page">
     <h1>Willkommen zurück</h1>
@@ -15,6 +15,5 @@
     </form>
     <p class="cheaper-auth-footer"><a href="{{ url_for('forgot_password') }}">Passwort oder Benutzername vergessen?</a></p>
     <p class="cheaper-auth-footer">Noch kein Konto? <a href="{{ url_for('register') }}">Registrieren</a></p>
-    <p class="cheaper-auth-footer"><a href="{{ url_for('register_company') }}">Firmenkonto erstellen &rarr;</a></p>
 </div>
 {% endblock %}

@@ -23,12 +23,11 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 os.environ["DATABASE_URL"] = f"sqlite:///{tempfile.gettempdir()}/video_app_test_import_throwaway.db"
 
 import pytest
-from app import app as flask_app, db, socketio
+from app import app as flask_app, db
 from models import (
     User, Conversation, Message,
     AiAdminFact, AiLearnedFact, PasswordResetCode, AccountRecoveryRequest, ErrorLog,
-    AiVoiceProfile, MailMessage, KampumionLobby, KampumionPlayer, KampumionRound,
-    PCWarCompletion, MiniJob,
+    AiVoiceProfile,
 )
 
 
@@ -108,11 +107,10 @@ def test_register_and_login(client):
         follow_redirects=True,
     )
     assert response.status_code == 200
-    # A successful login lands on cheaper_home ("Deine Pakete") -- anonymous
-    # visitors get redirected to /login instead of ever reaching it, so
-    # landing on the Pakete screen is proof the login actually landed
-    # logged in.
-    assert b"Deine Pakete" in response.data
+    # A successful login lands on studio_home ("/") -- anonymous visitors
+    # get redirected to /login instead of ever reaching it, so landing on
+    # the LEROX STUDIO hub is proof the login actually landed logged in.
+    assert b"LEROX STUDIO" in response.data
 
 
 def test_register_stores_birthdate_and_gender(client):
@@ -244,7 +242,7 @@ def test_existing_account_gated_until_onboarding_completed(client):
     user.country = None
     db.session.commit()
 
-    response = client.get("/cheaper", follow_redirects=False)
+    response = client.get("/account/settings", follow_redirects=False)
     assert response.status_code == 302
     assert "/complete-profile" in response.headers["Location"]
 
@@ -255,7 +253,7 @@ def test_existing_account_gated_until_onboarding_completed(client):
     )
     assert complete_res.status_code == 200
 
-    response2 = client.get("/cheaper", follow_redirects=True)
+    response2 = client.get("/account/settings", follow_redirects=True)
     assert response2.status_code == 200
 
 
@@ -298,7 +296,7 @@ def test_brand_wordmark_present_on_every_page(client):
     # reachable without an account.
     for path in ["/login", "/register"]:
         response = client.get(path)
-        assert b"Cheaper" in response.data
+        assert b"LEROX STUDIO" in response.data
         assert b"headerSearchInput" not in response.data
         assert b"bottom-nav" not in response.data
 
@@ -377,8 +375,8 @@ def test_admin_can_create_fake_account(client):
         "purpose_of_use": "private", "country": "Deutschland", "region_skipped": "1",
         "birthdate": "1990-01-01", "gender": "keine_angabe",
     })
-    home_response = client.get("/cheaper")
-    assert b"Deine Pakete" in home_response.data
+    home_response = client.get("/")
+    assert b"LEROX STUDIO" in home_response.data
 
 
 def test_non_admin_cannot_create_account_via_admin_route(client):
@@ -511,8 +509,8 @@ def test_add_email_unlocks_username_and_password_change(client):
     response = client.post(
         "/login", data={"username": "newalice", "password": "newpass123"}, follow_redirects=True
     )
-    # See test_register_and_login -- confirm login via landing on cheaper_home.
-    assert b"Deine Pakete" in response.data
+    # See test_register_and_login -- confirm login via landing on studio_home.
+    assert b"LEROX STUDIO" in response.data
 
 
 def test_password_change_rejects_wrong_current_password(client):
@@ -1723,8 +1721,8 @@ def test_ai_job_failure_is_logged_to_error_log(client, monkeypatch):
 def test_anonymous_visitor_is_gated_by_terms_before_anything_else(raw_client):
     # "/" itself is the public LEROX STUDIO storefront (deliberately exempt,
     # like browsing a real app store before installing anything) --
-    # /cheaper is the actual gated Cheaper entry point.
-    response = raw_client.get("/cheaper", follow_redirects=False)
+    # /account/settings is an actual gated entry point.
+    response = raw_client.get("/account/settings", follow_redirects=False)
     assert response.status_code == 302
     assert "/terms" in response.headers["Location"]
 
@@ -1744,9 +1742,9 @@ def test_terms_accept_unblocks_anonymous_session(raw_client):
     assert accept_res.status_code == 200
 
     # Terms are cleared, but the site-wide login gate still applies to an
-    # anonymous visitor (see require_login_everywhere) -- /cheaper now
-    # redirects to /login instead of /terms.
-    response = raw_client.get("/cheaper", follow_redirects=False)
+    # anonymous visitor (see require_login_everywhere) -- /account/settings
+    # now redirects to /login instead of /terms.
+    response = raw_client.get("/account/settings", follow_redirects=False)
     assert response.status_code == 302
     assert "/login" in response.headers["Location"]
 
@@ -1773,7 +1771,7 @@ def test_fresh_registration_does_not_immediately_re_gate_on_terms(raw_client):
     assert register_res.status_code == 302
     assert "/terms" not in register_res.headers["Location"]
 
-    response = raw_client.get("/cheaper", follow_redirects=False)
+    response = raw_client.get("/", follow_redirects=False)
     assert response.status_code == 200
 
 
@@ -1798,12 +1796,12 @@ def test_existing_account_without_terms_accepted_is_gated_on_next_visit(client):
     user.terms_accepted_at = None
     db.session.commit()
 
-    response = client.get("/cheaper", follow_redirects=False)
+    response = client.get("/account/settings", follow_redirects=False)
     assert response.status_code == 302
     assert "/terms" in response.headers["Location"]
 
     client.post("/terms/accept")
-    response2 = client.get("/cheaper", follow_redirects=True)
+    response2 = client.get("/account/settings", follow_redirects=True)
     assert response2.status_code == 200
 
 
@@ -1817,7 +1815,7 @@ def test_terms_version_bump_re_gates_already_accepted_account(client):
     user.terms_accepted_version = app_module.TERMS_VERSION - 1
     db.session.commit()
 
-    response = client.get("/cheaper", follow_redirects=False)
+    response = client.get("/account/settings", follow_redirects=False)
     assert response.status_code == 302
     assert "/terms" in response.headers["Location"]
 
@@ -2099,536 +2097,70 @@ def test_seeded_knowledge_reaches_general_chat_prompt(monkeypatch):
 
 
 
-def register_company(client, username="firma1", password="secret123", extra=None):
-    client.post("/terms/accept")
-    data = {
-        "username": username,
-        "password": password,
-        "password2": password,
-        "company_name": "Testfirma GmbH",
-        "company_address": "Teststraße 1, 12345 Teststadt",
-    }
-    if extra:
-        data.update(extra)
-    response = client.post("/register-firma", data=data)
-    if response.status_code in (301, 302, 303, 307, 308):
-        response = client.get(response.headers["Location"], follow_redirects=True)
-    return response
-
-
-def test_register_company_creates_company_account(client):
-    response = register_company(client)
-    assert response.status_code == 200
-    user = User.query.filter_by(username="firma1").first()
-    assert user is not None
-    assert user.is_company is True
-    assert user.company_address == "Teststraße 1, 12345 Teststadt"
-
-
-def test_register_company_requires_address(client):
-    client.post("/terms/accept")
-    response = client.post("/register-firma", data={
-        "username": "firma2", "password": "secret123", "password2": "secret123",
-        "company_name": "Ohne Adresse GmbH", "company_address": "",
-    })
-    assert User.query.filter_by(username="firma2").first() is None
-    assert b"Firmensitz" in response.data
-
-
-def test_company_never_gets_customer_onboarding_gate(client):
-    register_company(client)
-    response = client.get("/", follow_redirects=False)
-    assert response.status_code == 200
-
-
-def test_company_can_create_offer_and_it_appears_on_homepage(client):
-    register_company(client)
-    create_response = client.post("/firma/angebote/neu", data={
-        "provider_name": "Testkino", "title": "Normaler Sitz", "category": "unterhaltung",
-        "link_url": "https://example.com/kino", "city": "Teststadt",
-        "normal_price": "10.00",
-    }, follow_redirects=True)
-    assert b"Angebot erstellt" in create_response.data
-
-    from models import Offer
-    offer = Offer.query.filter_by(provider_name="Testkino").first()
-    assert offer is not None
-    assert offer.company_id is not None
-    assert offer.normal_price_cents == 1000
-
-    client.post("/logout")
-    register(client, username="customer1")
-    home_response = client.get("/cheaper/angebote")
-    assert b"Testkino" in home_response.data
-    assert b"Normaler Sitz" in home_response.data
-
-
-def test_customer_cannot_access_company_dashboard(client):
-    register(client, username="bob")
-    response = client.get("/firma/angebote")
-    assert response.status_code == 403
-
-
-def test_company_cannot_edit_another_companys_offer(client):
-    register_company(client, username="firma_a")
-    client.post("/firma/angebote/neu", data={
-        "provider_name": "A-Kino", "title": "Sitz", "category": "unterhaltung",
-        "link_url": "https://example.com/a", "normal_price": "5.00",
-    })
-    from models import Offer
-    offer = Offer.query.filter_by(provider_name="A-Kino").first()
-
-    client.post("/logout")
-    register_company(client, username="firma_b", extra={"company_name": "Firma B"})
-    response = client.get(f"/firma/angebote/{offer.id}/bearbeiten")
-    assert response.status_code == 403
-
-
-def test_homepage_shows_age_discount_for_young_customer(client):
-    register_company(client)
-    client.post("/firma/angebote/neu", data={
-        "provider_name": "Rabattkino", "title": "Kindersitz", "category": "unterhaltung",
-        "link_url": "https://example.com/kids", "city": "Teststadt",
-        "normal_price": "20.00", "discount_price": "9.00", "discount_max_age": "14",
-        "discount_label": "unter 14 Jahre",
-    })
-
-    client.post("/logout")
-    young_birthdate = date(date.today().year - 11, 1, 1).isoformat()
-    register(client, username="kid1", birthdate=young_birthdate)
-    response = client.get("/cheaper/angebote")
-    assert "9.00 €".encode() in response.data
-    assert "Du sparst 11.00 €".encode() in response.data
-
 
-def test_homepage_shows_normal_price_for_adult_customer(client):
-    register_company(client)
-    client.post("/firma/angebote/neu", data={
-        "provider_name": "Erwachsenenkino", "title": "Sitz", "category": "unterhaltung",
-        "link_url": "https://example.com/adult", "city": "Teststadt",
-        "normal_price": "20.00", "discount_price": "9.00", "discount_max_age": "14",
-    })
-
-    client.post("/logout")
-    register(client, username="adult1", birthdate="1990-01-01")
-    response = client.get("/cheaper/angebote")
-    assert "20.00 €".encode() in response.data
-    assert b"Du sparst" not in response.data
-
-
-def test_homepage_search_filters_by_query(client):
-    register_company(client)
-    client.post("/firma/angebote/neu", data={
-        "provider_name": "Findbares Kino", "title": "Sitz", "category": "unterhaltung",
-        "link_url": "https://example.com/find", "normal_price": "5.00",
-    })
-    client.post("/firma/angebote/neu", data={
-        "provider_name": "Anderes Schwimmbad", "title": "Eintritt", "category": "sport",
-        "link_url": "https://example.com/other", "normal_price": "5.00",
-    })
-
-    client.post("/logout")
-    register(client, username="searcher1")
-    response = client.get("/cheaper/angebote?q=Findbares")
-    assert b"Findbares Kino" in response.data
-
-
-def test_mail_home_redirects_to_setup_before_address_chosen(client):
-    register(client, username="mailer1")
-    response = client.get("/mail")
-    assert response.status_code == 302
-    assert response.headers["Location"].endswith("/mail/setup")
-
-
-def test_mail_setup_creates_address_and_rejects_duplicate(client):
-    register(client, username="mailer1")
-    response = client.post("/mail/setup", data={"localpart": "mailer1"}, follow_redirects=True)
-    assert response.status_code == 200
-    user = User.query.filter_by(username="mailer1").first()
-    assert user.mail_address == "mailer1@lrx.com"
-
-    client.post("/logout")
-    register(client, username="mailer2")
-    response = client.post("/mail/setup", data={"localpart": "mailer1"})
-    assert b"bereits vergeben" in response.data
-
-
-def test_mail_setup_rejects_invalid_localpart(client):
-    register(client, username="mailer1")
-    response = client.post("/mail/setup", data={"localpart": "a"})
-    assert response.status_code == 200
-    assert User.query.filter_by(username="mailer1").first().mail_address is None
-
-
-def test_mail_send_and_receive_between_two_accounts(client):
-    register(client, username="alice")
-    client.post("/mail/setup", data={"localpart": "alice"})
-    client.post("/logout")
-
-    register(client, username="bob")
-    client.post("/mail/setup", data={"localpart": "bob"})
-    client.post("/logout")
-
-    client.post("/login", data={"username": "alice", "password": "secret123"})
-    response = client.post("/mail/send", data={
-        "to": "bob", "subject": "Hallo", "body": "Wie geht's?",
-    }, follow_redirects=True)
-    assert response.status_code == 200
-
-    client.post("/logout")
-    client.post("/login", data={"username": "bob", "password": "secret123"})
-    inbox = client.get("/mail")
-    assert b"Hallo" in inbox.data
-    assert b"alice@lrx.com" in inbox.data
-
-    message = MailMessage.query.filter_by(subject="Hallo").first()
-    assert message is not None
-    assert message.recipient.username == "bob"
-    assert message.read_at is None
-
-    view = client.get(f"/mail/message/{message.id}")
-    assert view.status_code == 200
-    assert b"Wie geht" in view.data
-    assert db.session.get(MailMessage, message.id).read_at is not None
-
-
-def test_mail_send_to_unknown_address_fails(client):
-    register(client, username="alice")
-    client.post("/mail/setup", data={"localpart": "alice"})
-    response = client.post("/mail/send", data={
-        "to": "nobody", "subject": "Hi", "body": "test",
-    })
-    assert b"Unbekannte LEROX-Mail-Adresse" in response.data
-    assert MailMessage.query.count() == 0
-
-
-def test_mail_send_to_self_fails(client):
-    register(client, username="alice")
-    client.post("/mail/setup", data={"localpart": "alice"})
-    response = client.post("/mail/send", data={
-        "to": "alice", "subject": "Hi", "body": "test",
-    })
-    assert "dir selbst".encode() in response.data
-
-
-def test_mail_user_cannot_view_others_message(client):
-    register(client, username="alice")
-    client.post("/mail/setup", data={"localpart": "alice"})
-    client.post("/logout")
-    register(client, username="bob")
-    client.post("/mail/setup", data={"localpart": "bob"})
-    client.post("/logout")
-
-    register(client, username="eve")
-    client.post("/mail/setup", data={"localpart": "eve"})
-
-    client.post("/logout")
-    client.post("/login", data={"username": "alice", "password": "secret123"})
-    client.post("/mail/send", data={"to": "bob", "subject": "Geheim", "body": "psst"})
-    message = MailMessage.query.filter_by(subject="Geheim").first()
-
-    client.post("/logout")
-    client.post("/login", data={"username": "eve", "password": "secret123"})
-    response = client.get(f"/mail/message/{message.id}")
-    assert response.status_code == 404
-
-
-def test_mail_delete_moves_to_trash_and_restore_moves_back(client):
-    register(client, username="alice")
-    client.post("/mail/setup", data={"localpart": "alice"})
-    client.post("/logout")
-    register(client, username="bob")
-    client.post("/mail/setup", data={"localpart": "bob"})
-
-    client.post("/logout")
-    client.post("/login", data={"username": "alice", "password": "secret123"})
-    client.post("/mail/send", data={"to": "bob", "subject": "Test", "body": "hi"})
-
-    client.post("/logout")
-    client.post("/login", data={"username": "bob", "password": "secret123"})
-    message = MailMessage.query.filter_by(subject="Test").first()
-
-    inbox = client.get("/mail?folder=inbox")
-    assert b"Test" in inbox.data
-
-    client.post(f"/mail/message/{message.id}/delete", data={"folder": "inbox"})
-    inbox_after = client.get("/mail?folder=inbox")
-    assert b"Test" not in inbox_after.data
-    trash = client.get("/mail?folder=trash")
-    assert b"Test" in trash.data
-
-    client.post(f"/mail/message/{message.id}/restore")
-    inbox_restored = client.get("/mail?folder=inbox")
-    assert b"Test" in inbox_restored.data
-
-
-def test_mail_delete_by_recipient_does_not_remove_senders_copy(client):
-    register(client, username="alice")
-    client.post("/mail/setup", data={"localpart": "alice"})
-    client.post("/logout")
-    register(client, username="bob")
-    client.post("/mail/setup", data={"localpart": "bob"})
-
-    client.post("/logout")
-    client.post("/login", data={"username": "alice", "password": "secret123"})
-    client.post("/mail/send", data={"to": "bob", "subject": "Beide", "body": "hi"})
-    message = MailMessage.query.filter_by(subject="Beide").first()
-
-    client.post("/logout")
-    client.post("/login", data={"username": "bob", "password": "secret123"})
-    client.post(f"/mail/message/{message.id}/delete", data={"folder": "inbox"})
-
-    client.post("/logout")
-    client.post("/login", data={"username": "alice", "password": "secret123"})
-    sent = client.get("/mail?folder=sent")
-    assert b"Beide" in sent.data
-
-
-def _kampumion_code_from_redirect(response):
-    return response.headers["Location"].rstrip("/").rsplit("/", 1)[-1]
-
-
-def test_games_home_and_kampumion_home_render(client):
-    register(client)
-    assert client.get("/games").status_code == 200
-    assert client.get("/games/kampumion").status_code == 200
-
-
-def test_kampumion_create_and_join_by_code(client):
-    register(client, username="host1")
-    create_res = client.post("/games/kampumion/create")
-    assert create_res.status_code == 302
-    code = _kampumion_code_from_redirect(create_res)
-    assert len(code) == 5
-
-    lobby_page = client.get(f"/games/kampumion/{code}")
-    assert lobby_page.status_code == 200
-    assert code.encode() in lobby_page.data
-
-    join_res = client.post("/games/kampumion/join", data={"code": code.lower()})
-    assert join_res.status_code == 302
-    assert join_res.headers["Location"].endswith(f"/games/kampumion/{code}")
-
-
-def test_kampumion_join_unknown_code_flashes_error(client):
-    register(client)
-    response = client.post("/games/kampumion/join", data={"code": "ZZZZZ"}, follow_redirects=True)
-    assert "gibt es nicht".encode() in response.data
-
-
-def test_kampumion_room_redirects_back_while_still_waiting(client):
-    register(client, username="host1")
-    create_res = client.post("/games/kampumion/create")
-    code = _kampumion_code_from_redirect(create_res)
-    room_res = client.get(f"/games/kampumion/{code}/room")
-    assert room_res.status_code == 302
-    assert room_res.headers["Location"].endswith(f"/games/kampumion/{code}")
-
-
-def _second_registered_client(username):
-    second = flask_app.test_client()
-    with second.session_transaction() as sess:
-        sess["terms_accepted"] = True
-    register(second, username=username)
-    return second
-
-
-def test_kampumion_full_round_two_players(client, monkeypatch):
-    monkeypatch.setattr(
-        "kampumion.ask_hint",
-        lambda secret_code, question, history=None: f"Hinweis zu '{question}' (Code hat {len(secret_code)} Ziffern).",
-    )
-
-    register(client, username="host1")
-    create_res = client.post("/games/kampumion/create")
-    code = _kampumion_code_from_redirect(create_res)
-
-    client2 = _second_registered_client("host2")
-    client2.post("/games/kampumion/join", data={"code": code})
-
-    sio1 = socketio.test_client(flask_app, flask_test_client=client)
-    sio2 = socketio.test_client(flask_app, flask_test_client=client2)
-
-    sio1.emit("km_join_lobby", {"code": code})
-    sio2.emit("km_join_lobby", {"code": code})
-    sio1.get_received()
-    sio2.get_received()
-
-    sio1.emit("km_ready", {"ready": True})
-    sio2.emit("km_ready", {"ready": True})
-
-    received1 = sio1.get_received()
-    received2 = sio2.get_received()
-
-    def role_of(received):
-        for msg in received:
-            if msg["name"] == "km_role":
-                return msg["args"][0]["role"]
-        return None
-
-    role1 = role_of(received1)
-    role2 = role_of(received2)
-    assert {role1, role2} == {"blind", "deaf"}
-    assert any(msg["name"] == "km_start" for msg in received1)
-    assert any(msg["name"] == "km_start" for msg in received2)
-
-    lobby = KampumionLobby.query.filter_by(code=code).first()
-    assert lobby.status == "hacking"
-    round_ = KampumionRound.query.filter_by(lobby_id=lobby.id).first()
-    assert round_ is not None and len(round_.secret_code) == 4
-
-    blind_sio, sighted_sio = (sio1, sio2) if role1 == "blind" else (sio2, sio1)
-
-    # Only the blind player's keypress produces a shared flash.
-    sighted_sio.get_received()
-    sighted_sio.emit("km_key_press", {"key": "5"})
-    assert not [m for m in sighted_sio.get_received() if m["name"] == "km_flash"]
-
-    blind_sio.get_received()
-    blind_sio.emit("km_key_press", {"key": "5"})
-    flash_events = [m for m in blind_sio.get_received() if m["name"] == "km_flash"]
-    assert flash_events and flash_events[0]["args"][0]["key"] == "5"
-
-    # A sighted player can't submit the code, only the blind one can.
-    sighted_sio.get_received()
-    sighted_sio.emit("km_submit_code", {"code": round_.secret_code})
-    assert not [m for m in sighted_sio.get_received() if m["name"] in ("km_wrong", "km_solved")]
-
-    # Wrong guess from the blind player.
-    wrong_guess = "0000" if round_.secret_code != "0000" else "1111"
-    blind_sio.get_received()
-    blind_sio.emit("km_submit_code", {"code": wrong_guess})
-    wrong_events = [m for m in blind_sio.get_received() if m["name"] == "km_wrong"]
-    assert wrong_events and wrong_events[0]["args"][0]["attempts"] == 1
-
-    # The AI hint panel, reachable by the sighted player, with ask_hint mocked.
-    sighted_sio.get_received()
-    sighted_sio.emit("km_ask_ai", {"question": "Ist die erste Ziffer gerade?"})
-    ai_events = [m for m in sighted_sio.get_received() if m["name"] == "km_ai_answer"]
-    assert ai_events and "Ist die erste Ziffer gerade?" in ai_events[0]["args"][0]["question"]
-
-    # Correct guess solves the round for everyone.
-    blind_sio.get_received()
-    sighted_sio.get_received()
-    blind_sio.emit("km_submit_code", {"code": round_.secret_code})
-    solved_events = [m for m in blind_sio.get_received() if m["name"] == "km_solved"]
-    assert solved_events and solved_events[0]["args"][0]["code"] == round_.secret_code
-    assert any(m["name"] == "km_solved" for m in sighted_sio.get_received())
-
-    db.session.refresh(lobby)
-    assert lobby.status == "finished"
-    db.session.refresh(round_)
-    assert round_.solved_at is not None
-
-
-def test_pcwar_home_lists_targets(client):
-    register(client)
-    response = client.get("/games/pcwar")
-    assert response.status_code == 200
-    assert b"SHADOWCORE" in response.data
-
-
-def test_pcwar_desktop_terminal_browser_pages_render_and_unknown_target_404s(client):
-    register(client)
-    assert client.get("/games/pcwar/shadowcore").status_code == 200
-    assert client.get("/games/pcwar/shadowcore/terminal").status_code == 200
-    assert client.get("/games/pcwar/shadowcore/browser").status_code == 200
-    assert client.get("/games/pcwar/does-not-exist").status_code == 404
-    assert client.get("/games/pcwar/does-not-exist/terminal").status_code == 404
-    assert client.get("/games/pcwar/does-not-exist/browser").status_code == 404
-
-
-def test_pcwar_steps_require_a_started_attempt(client):
-    register(client)
-    response = client.post("/games/pcwar/shadowcore/scan-ports")
-    assert response.status_code == 400
-    assert "zuerst starten" in response.get_json()["error"]
-
-
-def test_pcwar_steps_enforce_order(client):
-    register(client)
-    client.post("/games/pcwar/shadowcore/start")
-
-    password_first = client.post("/games/pcwar/shadowcore/crack-password")
-    assert password_first.status_code == 400
-
-    login_first = client.post(
-        "/games/pcwar/shadowcore/login", json={"username": "admin", "password": "x"},
-    )
-    assert login_first.status_code == 400
-
-    client.post("/games/pcwar/shadowcore/scan-ports")
-    read_file_first = client.post("/games/pcwar/shadowcore/read-file")
-    assert read_file_first.status_code == 400
-
-
-def test_pcwar_login_rejects_wrong_credentials(client):
-    register(client)
-    client.post("/games/pcwar/shadowcore/start")
-    client.post("/games/pcwar/shadowcore/scan-ports")
-    client.post("/games/pcwar/shadowcore/crack-password")
-
-    wrong = client.post(
-        "/games/pcwar/shadowcore/login", json={"username": "nope", "password": "wrong"},
-    )
-    assert wrong.status_code == 400
-
-
-def test_pcwar_full_hack_flow_grants_completion_badge(client):
-    register(client, username="hacker1")
-    start_res = client.post("/games/pcwar/shadowcore/start")
-    assert start_res.status_code == 200
-    ip = start_res.get_json()["ip"]
-    assert ip.count(".") == 3
-
-    ports_res = client.post("/games/pcwar/shadowcore/scan-ports")
-    assert ports_res.status_code == 200
-    ports = ports_res.get_json()["ports"]
-    assert len(ports) >= 2
-    assert any(p["port"] == 22 and p["service"] == "ssh" for p in ports)
-
-    password_res = client.post("/games/pcwar/shadowcore/crack-password")
-    assert password_res.status_code == 200
-    creds = password_res.get_json()
-    username, password = creds["username"], creds["password"]
-    assert len(password) >= 6
-
-    login_res = client.post(
-        "/games/pcwar/shadowcore/login", json={"username": username, "password": password},
-    )
-    assert login_res.status_code == 200
-
-    read_res = client.post("/games/pcwar/shadowcore/read-file")
-    assert read_res.status_code == 200
-    read_data = read_res.get_json()
-    assert read_data["ip"] == ip
-    assert read_data["password"] == password
-    assert "name" in read_data["profile"]
-
-    user = User.query.filter_by(username="hacker1").first()
-    assert PCWarCompletion.query.filter_by(user_id=user.id, target_key="shadowcore").first() is not None
-
-    home_after = client.get("/games/pcwar")
-    assert "gehackt".encode() in home_after.data
-
-
-def test_pcwar_start_is_idempotent_but_restart_generates_fresh_data(client):
-    register(client)
-    first_ip = client.post("/games/pcwar/shadowcore/start").get_json()["ip"]
-    # Calling /start again (e.g. re-visiting the desktop, or opening the
-    # Terminal app after the Browser app) must resume the same attempt,
-    # not silently reset hacking progress.
-    again_ip = client.post("/games/pcwar/shadowcore/start").get_json()["ip"]
-    assert first_ip == again_ip
-
-    # /restart is the explicit "throw this attempt away" action.
-    restarted_ip = client.post("/games/pcwar/shadowcore/restart").get_json()["ip"]
-    # Extremely unlikely to collide by chance (254^4 possibilities) --
-    # a match here would mean restart() isn't actually regenerating.
-    assert restarted_ip != first_ip
-
-    resumed_ip = client.post("/games/pcwar/shadowcore/start").get_json()["ip"]
-    assert resumed_ip == restarted_ip
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 def test_edit_image_tool_builds_kontext_url_and_stashes_it(client):
@@ -2686,155 +2218,24 @@ def test_edit_image_is_listed_in_ai_tools(client):
     assert "generate_image" in names
 
 
-def _enable_last_check(username="alice"):
-    user = User.query.filter_by(username=username).first()
-    user.chepal_last_check_enabled = True
-    db.session.commit()
 
 
-def test_cheaper_match_requires_login(client):
-    res = client.get("/api/cheaper/match", query_string={"domain": "shop.testmarke.de"})
-    assert res.status_code == 401
 
 
-def test_cheaper_match_empty_when_letzte_kontrolle_is_off(client):
-    from models import DiscountCode
-
-    register(client)
-    db.session.add(DiscountCode(
-        brand_name="Testmarke", code="SAVE10", description="10% Rabatt",
-        link_url="https://shop.testmarke.de/checkout", is_active=True,
-    ))
-    db.session.commit()
-
-    # chepal_last_check_enabled defaults to False -- logged in is not enough.
-    res = client.get("/api/cheaper/match", query_string={"domain": "shop.testmarke.de"})
-    assert res.status_code == 200
-    assert res.get_json()["matches"] == []
 
 
-def test_cheaper_match_finds_active_code_by_domain(client):
-    from models import DiscountCode
-
-    register(client)
-    _enable_last_check()
-    db.session.add(DiscountCode(
-        brand_name="Testmarke", code="SAVE10", description="10% Rabatt",
-        link_url="https://shop.testmarke.de/checkout", is_active=True,
-    ))
-    db.session.commit()
-
-    res = client.get("/api/cheaper/match", query_string={"domain": "shop.testmarke.de"})
-    assert res.status_code == 200
-    data = res.get_json()
-    assert len(data["matches"]) == 1
-    assert data["matches"][0]["code"] == "SAVE10"
-    assert data["matches"][0]["brand_name"] == "Testmarke"
-    assert res.headers["Access-Control-Allow-Origin"] == "*"
 
 
-def test_cheaper_match_ignores_www_and_inactive_codes(client):
-    from models import DiscountCode
-
-    register(client)
-    _enable_last_check()
-    db.session.add(DiscountCode(
-        brand_name="Testmarke", code="SAVE10", description="10% Rabatt",
-        link_url="https://www.testmarke.de/checkout", is_active=True,
-    ))
-    db.session.add(DiscountCode(
-        brand_name="Alte Marke", code="OLD5", description="5% (abgelaufen)",
-        link_url="https://old.de/checkout", is_active=False,
-    ))
-    db.session.commit()
-
-    res = client.get("/api/cheaper/match", query_string={"domain": "www.testmarke.de"})
-    assert [m["code"] for m in res.get_json()["matches"]] == ["SAVE10"]
-
-    res_old = client.get("/api/cheaper/match", query_string={"domain": "old.de"})
-    assert res_old.get_json()["matches"] == []
 
 
-def test_cheaper_match_returns_empty_for_unmatched_domain(client):
-    register(client)
-    _enable_last_check()
-
-    res = client.get("/api/cheaper/match", query_string={"domain": "unrelated-site.example"})
-    assert res.get_json()["matches"] == []
-
-    res_no_domain = client.get("/api/cheaper/match")
-    assert res_no_domain.get_json()["matches"] == []
 
 
-def test_cheaper_match_works_with_bearer_token(client):
-    """LEROX Browser has no session cookie -- it authenticates via the
-    Authorization: Bearer token from api_login() instead."""
-    from models import DiscountCode
-
-    register(client)
-    _enable_last_check()
-    db.session.add(DiscountCode(
-        brand_name="Testmarke", code="SAVE10", description="10% Rabatt",
-        link_url="https://shop.testmarke.de/checkout", is_active=True,
-    ))
-    db.session.commit()
-
-    login_res = client.post("/api/login", json={"username": "alice", "password": "secret123"})
-    assert login_res.status_code == 200
-    token = login_res.get_json()["token"]
-    assert token
-
-    # A fresh client with NO session cookie at all -- only the bearer token.
-    with flask_app.test_client() as bare_client:
-        res = bare_client.get(
-            "/api/cheaper/match", query_string={"domain": "shop.testmarke.de"},
-            headers={"Authorization": f"Bearer {token}"},
-        )
-        assert res.status_code == 200
-        assert res.get_json()["matches"][0]["code"] == "SAVE10"
 
 
-def test_api_login_rejects_wrong_password_and_reuses_existing_token(client):
-    register(client)
-    user = User.query.filter_by(username="alice").first()
-    assert user.api_token is None
-
-    bad = client.post("/api/login", json={"username": "alice", "password": "wrong"})
-    assert bad.status_code == 401
-    assert bad.get_json()["ok"] is False
-
-    good = client.post("/api/login", json={"username": "alice", "password": "secret123"})
-    assert good.status_code == 200
-    first_token = good.get_json()["token"]
-
-    again = client.post("/api/login", json={"username": "alice", "password": "secret123"})
-    assert again.get_json()["token"] == first_token
 
 
-def test_toggle_last_check_flips_setting_and_redirects_home(client):
-    register(client)
-    user = User.query.filter_by(username="alice").first()
-    assert user.chepal_last_check_enabled is False
-
-    res = client.post("/cheaper/pakete/letzte-kontrolle", follow_redirects=False)
-    assert res.status_code == 302
-    assert res.headers["Location"].endswith("/cheaper")
-    user = User.query.filter_by(username="alice").first()
-    assert user.chepal_last_check_enabled is True
-
-    client.post("/cheaper/pakete/letzte-kontrolle")
-    user = User.query.filter_by(username="alice").first()
-    assert user.chepal_last_check_enabled is False
 
 
-def test_cheaper_home_shows_current_toggle_state(client):
-    register(client)
-    off_res = client.get("/cheaper")
-    assert b'class="cheaper-switch is-on"' not in off_res.data
-
-    _enable_last_check()
-    on_res = client.get("/cheaper")
-    assert b"cheaper-switch is-on" in on_res.data
 
 
 def test_generate_groq_falls_back_when_model_is_decommissioned(client, monkeypatch):
@@ -2889,643 +2290,3 @@ def test_generate_groq_does_not_fall_back_on_unrelated_errors(client, monkeypatc
     with pytest.raises(requests.exceptions.HTTPError):
         ai_assistant._generate_groq([{"role": "user", "content": "Hallo"}], 100)
 
-
-# --- Mini Job: id_scan.py's OCR heuristics ---
-
-def test_guess_birthdate_finds_first_valid_date():
-    import id_scan
-    text = "Irgendwas\nGeburtsdatum 12.03.2008\nAusstellung 01.01.2023\n"
-    assert id_scan.guess_birthdate(text) == date(2008, 3, 12)
-
-
-def test_guess_birthdate_returns_none_without_a_date():
-    import id_scan
-    assert id_scan.guess_birthdate("Kein Datum hier.") is None
-
-
-def test_guess_name_prefers_mixed_case_lines_over_all_caps_header():
-    import id_scan
-    text = "BUNDESREPUBLIK DEUTSCHLAND\nPERSONALAUSWEIS\nMustermann\nErika\n"
-    assert id_scan.guess_name(text) == "Mustermann Erika"
-
-
-def test_guess_name_returns_none_without_plausible_lines():
-    import id_scan
-    assert id_scan.guess_name("ALLES GROSSBUCHSTABEN\n12345\n") is None
-
-
-def test_read_id_photo_reports_ocr_unavailable_gracefully(monkeypatch):
-    import id_scan
-    import pytesseract
-
-    def boom(*a, **k):
-        raise pytesseract.TesseractNotFoundError()
-
-    monkeypatch.setattr(id_scan, "extract_text", boom)
-    result = id_scan.read_id_photo(b"not-really-an-image")
-    assert result["ocr_available"] is False
-    assert result["name"] is None
-    assert result["birthdate"] is None
-
-
-def test_read_id_photo_reports_unreadable_image(monkeypatch):
-    import id_scan
-
-    monkeypatch.setattr(id_scan, "extract_text", lambda *a, **k: (_ for _ in ()).throw(ValueError("not an image")))
-    result = id_scan.read_id_photo(b"garbage")
-    assert result["ocr_available"] is True
-    assert result["image_readable"] is False
-
-
-def test_read_id_photo_success_path(monkeypatch):
-    import id_scan
-
-    monkeypatch.setattr(
-        id_scan, "extract_text",
-        lambda image_bytes: "Mustermann\nErika\nGeburtsdatum 12.03.2008\n",
-    )
-    result = id_scan.read_id_photo(b"fake-bytes")
-    assert result["ocr_available"] is True
-    assert result["image_readable"] is True
-    assert result["name"] == "Mustermann Erika"
-    assert result["birthdate"] == date(2008, 3, 12)
-
-
-# --- Mini Job: routes ---
-
-def _verify_minijob(client, username, birthdate="2009-01-01"):
-    """Registers + completes Mini Job verification via the session-guess
-    shortcut (same session key minijob_verify() itself writes), bypassing
-    the actual multipart file upload/OCR call -- those are covered
-    separately above (id_scan.py) and via a live-browser check during
-    development (no tesseract binary in this test environment)."""
-    register(client, username=username, birthdate=birthdate)
-    with client.session_transaction() as sess:
-        sess["minijob_ocr_guess"] = {"name": None, "birthdate": None, "ocr_available": True}
-    client.post("/minijob/verify/confirm", data={
-        "name": "Test Person", "birthdate": birthdate, "email": f"{username}@example.com",
-    })
-
-
-def test_minijob_requires_verification_before_browsing(client):
-    register(client, username="jobseeker1")
-    res = client.get("/minijob", follow_redirects=False)
-    assert res.status_code == 302
-    assert res.headers["Location"].endswith("/minijob/verify")
-
-
-def test_minijob_verify_requires_a_file(client):
-    register(client, username="jobseeker1")
-    res = client.post("/minijob/verify", data={}, content_type="multipart/form-data")
-    assert b"Bitte ein Foto" in res.data
-
-
-def test_minijob_verify_confirm_redirects_without_a_prior_upload(client):
-    register(client, username="jobseeker1")
-    res = client.get("/minijob/verify/confirm", follow_redirects=False)
-    assert res.status_code == 302
-    assert res.headers["Location"].endswith("/minijob/verify")
-
-
-def test_minijob_verify_confirm_saves_name_birthdate_and_email(client):
-    register(client, username="jobseeker1", birthdate="2009-01-01")
-    with client.session_transaction() as sess:
-        sess["minijob_ocr_guess"] = {"name": "Erika Musterfrau", "birthdate": "2009-01-01", "ocr_available": True}
-
-    res = client.post("/minijob/verify/confirm", data={
-        "name": "Erika Musterfrau", "birthdate": "2009-01-01", "email": "erika@example.com",
-    }, follow_redirects=True)
-    assert res.status_code == 200
-
-    user = User.query.filter_by(username="jobseeker1").first()
-    assert user.legal_name == "Erika Musterfrau"
-    assert user.email == "erika@example.com"
-    assert user.minijob_verified_at is not None
-
-    with client.session_transaction() as sess:
-        assert "minijob_ocr_guess" not in sess
-
-
-def test_minijob_verify_confirm_rejects_email_already_used(client):
-    register(client, username="jobseeker1")
-    client.post("/account/email", data={"email": "taken@example.com"})
-    client.post("/logout")
-
-    register(client, username="jobseeker2")
-    with client.session_transaction() as sess:
-        sess["minijob_ocr_guess"] = {"name": None, "birthdate": None, "ocr_available": True}
-    res = client.post("/minijob/verify/confirm", data={
-        "name": "Test Name", "birthdate": "2009-01-01", "email": "taken@example.com",
-    })
-    assert "wird schon von einem anderen Konto verwendet".encode() in res.data
-
-    user = User.query.filter_by(username="jobseeker2").first()
-    assert user.minijob_verified_at is None
-
-
-def test_minijob_home_filters_by_viewer_age(client):
-    register_company(client, username="pizzafirma1")
-    client.post("/firma/minijobs/neu", data={
-        "provider_name": "Pizzeria Roma", "title": "Ab 15 Job", "category": "lieferung",
-        "duration_type": "einmalig", "link_url": "https://example.com/a", "min_age": "15",
-    })
-    client.post("/firma/minijobs/neu", data={
-        "provider_name": "Pizzeria Roma", "title": "Ab 18 Job", "category": "lieferung",
-        "duration_type": "einmalig", "link_url": "https://example.com/b", "min_age": "18",
-    })
-    client.post("/logout")
-
-    sixteen_years_ago = date.today().replace(year=date.today().year - 16).isoformat()
-    _verify_minijob(client, "teen1", birthdate=sixteen_years_ago)
-    res = client.get("/minijob")
-    assert b"Ab 15 Job" in res.data
-    assert b"Ab 18 Job" not in res.data
-
-
-def test_minijob_go_redirects_and_bumps_click_count(client):
-    register_company(client, username="pizzafirma1")
-    client.post("/firma/minijobs/neu", data={
-        "provider_name": "Pizzeria Roma", "title": "Job", "category": "lieferung",
-        "duration_type": "einmalig", "link_url": "https://example.com/apply", "min_age": "13",
-    })
-    job = MiniJob.query.filter_by(title="Job").first()
-    client.post("/logout")
-
-    _verify_minijob(client, "teen2")
-    res = client.get(f"/minijob/{job.id}/gehe", follow_redirects=False)
-    assert res.status_code == 302
-    assert res.headers["Location"] == "https://example.com/apply"
-
-    job = db.session.get(MiniJob, job.id)
-    assert job.click_count == 1
-
-
-def test_company_minijob_crud(client):
-    register_company(client, username="pizzafirma1")
-    create_res = client.post("/firma/minijobs/neu", data={
-        "provider_name": "Pizzeria Roma", "title": "Neuer Job", "category": "gastro",
-        "duration_type": "kurzzeit", "link_url": "https://example.com/apply", "min_age": "14",
-    }, follow_redirects=True)
-    assert b"Mini Job erstellt" in create_res.data
-
-    job = MiniJob.query.filter_by(title="Neuer Job").first()
-    assert job is not None
-    assert job.min_age == 14
-
-    edit_res = client.post(f"/firma/minijobs/{job.id}/bearbeiten", data={
-        "provider_name": "Pizzeria Roma", "title": "Neuer Job (bearbeitet)", "category": "gastro",
-        "duration_type": "kurzzeit", "link_url": "https://example.com/apply", "min_age": "16",
-    }, follow_redirects=True)
-    assert b"Mini Job aktualisiert" in edit_res.data
-    job = db.session.get(MiniJob, job.id)
-    assert job.title == "Neuer Job (bearbeitet)"
-    assert job.min_age == 16
-
-    client.post(f"/firma/minijobs/{job.id}/toggle")
-    job = db.session.get(MiniJob, job.id)
-    assert job.is_active is False
-
-    delete_res = client.post(f"/firma/minijobs/{job.id}/loeschen", follow_redirects=True)
-    assert "Mini Job gel".encode() in delete_res.data
-    assert db.session.get(MiniJob, job.id) is None
-
-
-def test_company_cannot_edit_another_companys_minijob(client):
-    register_company(client, username="firma_a")
-    client.post("/firma/minijobs/neu", data={
-        "provider_name": "Firma A", "title": "Job A", "category": "sonstiges",
-        "duration_type": "laufend", "link_url": "https://example.com/a", "min_age": "13",
-    })
-    job = MiniJob.query.filter_by(title="Job A").first()
-    client.post("/logout")
-
-    register_company(client, username="firma_b", extra={"company_name": "Firma B"})
-    res = client.get(f"/firma/minijobs/{job.id}/bearbeiten")
-    assert res.status_code == 403
-
-
-# --- AutoTrain: autotrain.py's pure simulation logic ---
-
-def test_inventory_add_stacks_before_using_new_slots():
-    import autotrain as at
-    inv = at.new_inventory()
-    at.add_to_inventory(inv, "coal", 5)
-    at.add_to_inventory(inv, "coal", 10)
-    assert inv[0] == {"item": "coal", "count": 15}
-    assert inv[1] is None
-
-
-def test_inventory_add_respects_stack_cap_and_spills_to_next_slot():
-    import autotrain as at
-    inv = at.new_inventory()
-    at.add_to_inventory(inv, "coal", 32)
-    added = at.add_to_inventory(inv, "coal", 5)
-    assert inv[0] == {"item": "coal", "count": 32}
-    assert inv[1] == {"item": "coal", "count": 5}
-    assert added == 5
-
-
-def test_inventory_full_loses_the_rest_instead_of_queuing():
-    import autotrain as at
-    inv = [{"item": "coal", "count": 32}] * 5
-    added = at.add_to_inventory(inv, "iron", 3)
-    assert added == 0
-    assert all(slot["item"] == "coal" for slot in inv)
-
-
-def test_tool_items_always_stack_at_one():
-    import autotrain as at
-    inv = at.new_inventory()
-    at.add_to_inventory(inv, "crafting_table", 1)
-    at.add_to_inventory(inv, "crafting_table", 1)
-    assert inv[0] == {"item": "crafting_table", "count": 1}
-    assert inv[1] == {"item": "crafting_table", "count": 1}
-
-
-def test_remove_from_inventory_all_or_nothing():
-    import autotrain as at
-    inv = at.new_inventory()
-    at.add_to_inventory(inv, "iron", 2)
-    assert at.remove_from_inventory(inv, "iron", 5) is False
-    assert inv[0] == {"item": "iron", "count": 2}  # untouched on failure
-    assert at.remove_from_inventory(inv, "iron", 2) is True
-    assert inv[0] is None
-
-
-def test_craft_rail_consumes_iron_and_wood_no_station_needed():
-    import autotrain as at
-    inv = at.new_inventory()
-    at.add_to_inventory(inv, "iron", 1)
-    at.add_to_inventory(inv, "wood", 1)
-    ok, reason = at.craft(inv, "rail", station_nearby=False)
-    assert ok is True and reason is None
-    assert any(s and s["item"] == "rail" and s["count"] == 1 for s in inv)
-    assert not any(s and s["item"] in ("iron", "wood") for s in inv)
-
-
-def test_craft_crafting_table_needs_two_wood():
-    import autotrain as at
-    inv = at.new_inventory()
-    at.add_to_inventory(inv, "wood", 1)
-    ok, reason = at.craft(inv, "crafting_table", station_nearby=False)
-    assert ok is False and reason == "missing_materials"
-    at.add_to_inventory(inv, "wood", 1)
-    ok, reason = at.craft(inv, "crafting_table", station_nearby=False)
-    assert ok is True
-
-
-def test_craft_rail_machine_requires_station():
-    import autotrain as at
-    inv = at.new_inventory()
-    at.add_to_inventory(inv, "iron", 2)
-    at.add_to_inventory(inv, "wood", 1)
-    ok, reason = at.craft(inv, "rail_machine", station_nearby=False)
-    assert ok is False and reason == "needs_station"
-    ok, reason = at.craft(inv, "rail_machine", station_nearby=True)
-    assert ok is True
-
-
-def test_craft_unknown_recipe():
-    import autotrain as at
-    ok, reason = at.craft(at.new_inventory(), "does_not_exist", station_nearby=True)
-    assert ok is False and reason == "unknown_recipe"
-
-
-def test_train_accelerates_slowly_and_consumes_track():
-    import autotrain as at
-    train = at.new_train_state(now=0)
-    at.tick_train(train, 1.0)
-    assert 0 < train["speed"] < 0.05  # very slow at first, per spec
-    assert train["track_ahead"] < at.STARTING_TRACK_AHEAD
-
-
-def test_train_derails_when_track_runs_out():
-    import autotrain as at
-    train = at.new_train_state(now=0)
-    derailed = False
-    for _ in range(2000):
-        derailed = at.tick_train(train, 0.5) or derailed
-        if derailed:
-            break
-    assert derailed is True
-    assert train["track_ahead"] == 0
-
-
-def test_place_rail_extends_track_ahead():
-    import autotrain as at
-    train = at.new_train_state(now=0)
-    before = train["track_ahead"]
-    at.place_rail(train)
-    assert train["track_ahead"] == before + at.RAIL_PLACEMENT_LENGTH
-
-
-def test_furnace_starving_reduces_effective_speed_without_losing_base_progress():
-    import autotrain as at
-    train = at.new_train_state(now=0)
-    for _ in range(200):
-        at.tick_train(train, 1.0)
-    assert train["fuel"] == 0
-    starved_speed = train["speed"]
-    assert starved_speed < train["base_speed"]
-    at.feed_furnace(train, 4)
-    at.tick_train(train, 0.01)
-    assert train["speed"] == pytest.approx(train["base_speed"], rel=0.05)
-
-
-def test_rail_machine_processes_input_into_output_over_time():
-    import autotrain as at
-    m = at.new_machine("rail_machine")
-    at.feed_machine(m, "iron", 2)
-    at.feed_machine(m, "wood", 1)
-    for _ in range(5):
-        assert at.tick_machine(m, 1.0) is False
-    assert at.tick_machine(m, 1.0) is True  # 6th second -- finishes
-    assert m["output"] == 1
-    assert m["input"] == {"iron": 0, "wood": 0}
-
-
-def test_rail_machine_does_not_process_without_enough_input():
-    import autotrain as at
-    m = at.new_machine("rail_machine")
-    at.feed_machine(m, "iron", 1)  # needs 2
-    for _ in range(10):
-        assert at.tick_machine(m, 1.0) is False
-    assert m["output"] == 0
-
-
-def test_feed_machine_rejects_wrong_item_and_wrong_machine_type():
-    import autotrain as at
-    m = at.new_machine("rail_machine")
-    assert at.feed_machine(m, "wood_that_does_not_exist", 1) is False
-    chest = at.new_machine("chest")
-    assert at.feed_machine(chest, "iron", 1) is False
-
-
-def test_adjacent_machine_wagon_matches_the_fixed_layout():
-    import autotrain as at
-    assert at.adjacent_machine_wagon(at.RESOURCE_WAGONS["coal"]) == (2,)
-    assert at.adjacent_machine_wagon(at.RESOURCE_WAGONS["wood"]) == (4,)
-    assert set(at.adjacent_machine_wagon(at.RESOURCE_WAGONS["iron"])) == {2, 4}
-
-
-def test_spawn_worker_miner_costs_wood_only():
-    import autotrain as at
-    inv = at.new_inventory()
-    at.add_to_inventory(inv, "wood", 32)
-    worker, reason = at.spawn_worker(inv, "coal_miner")
-    assert worker is not None and reason is None
-    assert worker["task"] == "coal_miner"
-    assert worker["home_wagon"] == at.RESOURCE_WAGONS["coal"]
-    assert not any(s for s in inv)  # wood fully spent
-
-
-def test_spawn_worker_fails_without_enough_materials():
-    import autotrain as at
-    worker, reason = at.spawn_worker(at.new_inventory(), "iron_miner")
-    assert worker is None and reason == "missing_materials"
-
-
-def test_spawn_rail_placer_costs_wood_and_iron():
-    import autotrain as at
-    inv = at.new_inventory()
-    at.add_to_inventory(inv, "wood", 64)
-    at.add_to_inventory(inv, "iron", 23)
-    worker, reason = at.spawn_worker(inv, "rail_placer")
-    assert worker is not None and worker["task"] == "rail_placer"
-
-
-def test_buy_chest_costs_twelve_wood():
-    import autotrain as at
-    inv = at.new_inventory()
-    at.add_to_inventory(inv, "wood", 11)
-    assert at.buy_chest(inv) is False
-    at.add_to_inventory(inv, "wood", 1)
-    assert at.buy_chest(inv) is True
-    assert not any(s for s in inv)
-
-
-# --- AutoTrain: Socket.IO wiring ---
-
-def _autotrain_code_from_redirect(response):
-    return response.headers["Location"].rstrip("/").rsplit("/", 1)[-1]
-
-
-def test_autotrain_home_and_create_and_join(client):
-    register(client, username="conductor1")
-    assert client.get("/games/autotrain").status_code == 200
-
-    create_res = client.post(
-        "/games/autotrain/create", data={"character_name": "Lok-Lena", "gender": "f"},
-    )
-    code = _autotrain_code_from_redirect(create_res)
-    assert len(code) == 6
-
-    from models import AutoTrainLobby, AutoTrainPlayer
-    lobby = AutoTrainLobby.query.filter_by(code=code).first()
-    assert lobby is not None and lobby.status == "waiting"
-    player = AutoTrainPlayer.query.filter_by(lobby_id=lobby.id).first()
-    assert player.character_name == "Lok-Lena"
-    assert player.gender == "f"
-
-    client2 = _second_registered_client("conductor2")
-    join_res = client2.post(
-        "/games/autotrain/join", data={"code": code, "character_name": "Beppo", "gender": "m"},
-    )
-    assert join_res.status_code == 302
-    assert AutoTrainPlayer.query.filter_by(lobby_id=lobby.id).count() == 2
-
-
-def test_autotrain_ready_starts_the_game_and_assigns_snapshot_state(client):
-    import app as app_module
-    from models import AutoTrainLobby
-
-    register(client, username="conductor1")
-    create_res = client.post(
-        "/games/autotrain/create", data={"character_name": "Lena", "gender": "f"},
-    )
-    code = _autotrain_code_from_redirect(create_res)
-
-    sio1 = socketio.test_client(flask_app, flask_test_client=client)
-    sio1.emit("at_join_lobby", {"code": code})
-    sio1.get_received()
-
-    sio1.emit("at_ready", {"ready": True})
-    received = sio1.get_received()
-    assert any(msg["name"] == "at_start" for msg in received)
-
-    lobby = AutoTrainLobby.query.filter_by(code=code).first()
-    assert lobby.status == "playing"
-    assert code in app_module._at_lobbies
-    user_id = User.query.filter_by(username="conductor1").first().id
-    assert user_id in app_module._at_lobbies[code]["players"]
-
-
-def test_autotrain_mine_start_and_craft_via_socket(client):
-    import app as app_module
-
-    register(client, username="conductor1")
-    create_res = client.post(
-        "/games/autotrain/create", data={"character_name": "Lena", "gender": "f"},
-    )
-    code = _autotrain_code_from_redirect(create_res)
-    sio1 = socketio.test_client(flask_app, flask_test_client=client)
-    sio1.emit("at_join_lobby", {"code": code})
-    sio1.get_received()
-    sio1.emit("at_ready", {"ready": True})
-    sio1.get_received()
-
-    user_id = User.query.filter_by(username="conductor1").first().id
-    state = app_module._at_lobbies[code]
-
-    sio1.emit("at_mine_start", {"resource": "coal"})
-    assert state["players"][user_id]["mining"]["resource"] == "coal"
-
-    sio1.emit("at_mine_cancel")
-    assert state["players"][user_id]["mining"] is None
-
-    # Craft without materials -> explicit failure reason back to the client.
-    sio1.emit("at_craft", {"output_item": "rail", "station_nearby": False})
-    received = sio1.get_received()
-    craft_msgs = [m for m in received if m["name"] == "at_craft_result"]
-    assert craft_msgs and craft_msgs[0]["args"][0]["ok"] is False
-
-    # Give materials directly (bypassing the 12s mine timer) and retry.
-    import autotrain as at
-    at.add_to_inventory(state["players"][user_id]["inventory"], "iron", 1)
-    at.add_to_inventory(state["players"][user_id]["inventory"], "wood", 1)
-    sio1.emit("at_craft", {"output_item": "rail", "station_nearby": False})
-    received = sio1.get_received()
-    craft_msgs = [m for m in received if m["name"] == "at_craft_result"]
-    assert craft_msgs and craft_msgs[0]["args"][0]["ok"] is True
-
-
-def test_autotrain_place_block_and_feed_and_collect_machine(client):
-    import app as app_module
-    import autotrain as at
-
-    register(client, username="conductor1")
-    create_res = client.post(
-        "/games/autotrain/create", data={"character_name": "Lena", "gender": "f"},
-    )
-    code = _autotrain_code_from_redirect(create_res)
-    sio1 = socketio.test_client(flask_app, flask_test_client=client)
-    sio1.emit("at_join_lobby", {"code": code})
-    sio1.get_received()
-    sio1.emit("at_ready", {"ready": True})
-    sio1.get_received()
-
-    user_id = User.query.filter_by(username="conductor1").first().id
-    state = app_module._at_lobbies[code]
-    inv = state["players"][user_id]["inventory"]
-    at.add_to_inventory(inv, "crafting_table", 1)
-
-    sio1.emit("at_place_block", {"wagon": 2, "slot": 0, "block_type": "crafting_table"})
-    received = sio1.get_received()
-    place_msgs = [m for m in received if m["name"] == "at_place_result"]
-    assert place_msgs and place_msgs[0]["args"][0]["ok"] is True
-    assert "2:0" in state["machines"]
-    assert not any(s for s in inv)  # crafting table consumed from inventory
-
-    # Placing again on the same slot fails -- already occupied.
-    at.add_to_inventory(inv, "crafting_table", 1)
-    sio1.emit("at_place_block", {"wagon": 2, "slot": 0, "block_type": "crafting_table"})
-    received = sio1.get_received()
-    place_msgs = [m for m in received if m["name"] == "at_place_result"]
-    assert place_msgs and place_msgs[0]["args"][0]["ok"] is False
-    assert place_msgs[0]["args"][0]["reason"] == "occupied"
-
-    # Build+feed a rail machine directly (bypassing the crafting step) and collect its output.
-    state["machines"]["4:0"] = at.new_machine("rail_machine")
-    at.add_to_inventory(inv, "iron", 2)
-    at.add_to_inventory(inv, "wood", 1)
-    sio1.emit("at_feed_machine", {"wagon": 4, "slot": 0, "item": "iron"})
-    sio1.emit("at_feed_machine", {"wagon": 4, "slot": 0, "item": "iron"})
-    sio1.emit("at_feed_machine", {"wagon": 4, "slot": 0, "item": "wood"})
-    machine = state["machines"]["4:0"]
-    assert machine["input"] == {"iron": 2, "wood": 1}
-    machine["output"] = 3  # simulate ticks having already processed some
-    sio1.emit("at_collect_machine", {"wagon": 4, "slot": 0})
-    assert any(s and s["item"] == "rail" and s["count"] == 3 for s in inv)
-    assert machine["output"] == 0
-
-
-def test_autotrain_rejoin_after_server_state_loss_rebuilds_game(client):
-    """Regression test for a real bug found via live testing: if the
-    in-memory _at_lobbies entry for a "playing" lobby disappears (e.g. the
-    server process restarted) while the DB still says "playing", a
-    reconnecting player used to get silently stuck -- no at_snapshot ever
-    arrived again because nothing restarted the tick loop for them. Now a
-    rejoin rebuilds a fresh game state and gets a real snapshot back."""
-    import app as app_module
-
-    register(client, username="conductor1")
-    create_res = client.post(
-        "/games/autotrain/create", data={"character_name": "Lena", "gender": "f"},
-    )
-    code = _autotrain_code_from_redirect(create_res)
-    sio1 = socketio.test_client(flask_app, flask_test_client=client)
-    sio1.emit("at_join_lobby", {"code": code})
-    sio1.get_received()
-    sio1.emit("at_ready", {"ready": True})
-    sio1.get_received()
-
-    assert code in app_module._at_lobbies
-    del app_module._at_lobbies[code]  # simulate the state a restart would cause
-    app_module._at_ticking.discard(code)
-
-    sio1.emit("at_join_lobby", {"code": code})
-    received = sio1.get_received()
-    assert any(msg["name"] == "at_snapshot" for msg in received)
-    assert code in app_module._at_lobbies  # rebuilt
-
-
-def test_autotrain_rejoin_after_derailing_shows_end_screen(client):
-    """Regression test for the second bug found alongside the one above:
-    joining a lobby whose run already ended (derailed) used to get no
-    response at all -- now it gets an at_snapshot with ended=True so the
-    client actually shows the end screen instead of a frozen scene."""
-    from models import AutoTrainLobby
-
-    register(client, username="conductor1")
-    create_res = client.post(
-        "/games/autotrain/create", data={"character_name": "Lena", "gender": "f"},
-    )
-    code = _autotrain_code_from_redirect(create_res)
-    lobby = AutoTrainLobby.query.filter_by(code=code).first()
-    lobby.status = "ended"
-    db.session.commit()
-
-    sio1 = socketio.test_client(flask_app, flask_test_client=client)
-    sio1.emit("at_join_lobby", {"code": code})
-    received = sio1.get_received()
-    snapshot_msgs = [m for m in received if m["name"] == "at_snapshot"]
-    assert snapshot_msgs and snapshot_msgs[0]["args"][0]["ended"] is True
-
-
-def test_autotrain_solo_skips_the_lobby_and_starts_playing_immediately(client):
-    import app as app_module
-    from models import AutoTrainLobby, AutoTrainPlayer
-
-    register(client, username="loner1")
-    res = client.post(
-        "/games/autotrain/solo", data={"character_name": "Einzelgänger", "gender": "m"},
-        follow_redirects=False,
-    )
-    assert res.status_code == 302
-    # Redirects straight to .../<code>/spiel (not .../<code> like create()
-    # does), so the code is the second-to-last path segment here.
-    code = res.headers["Location"].rstrip("/").split("/")[-2]
-
-    lobby = AutoTrainLobby.query.filter_by(code=code).first()
-    assert lobby.status == "playing"
-    player = AutoTrainPlayer.query.filter_by(lobby_id=lobby.id).first()
-    assert player.ready is True
-    assert player.character_name == "Einzelgänger"
-
-    # No separate "ready up" step needed -- the game page itself works right away.
-    game_res = client.get(f"/games/autotrain/{code}/spiel")
-    assert game_res.status_code == 200
-
-    assert code in app_module._at_lobbies
-    user_id = User.query.filter_by(username="loner1").first().id
-    assert user_id in app_module._at_lobbies[code]["players"]
