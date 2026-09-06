@@ -1269,12 +1269,51 @@ def test_code_project_type_uses_base_system_prompt(monkeypatch):
     )
 
 
+def test_code_adjacent_modes_route_to_code_model_with_bigger_reply_budget(monkeypatch):
+    # 2026-09-06: code/game/webapp all answer via GROQ_CODE_MODEL (a much
+    # bigger, reasoning-capable model) instead of general chat's small
+    # GROQ_MODEL, and get a bigger reply-token budget so real code doesn't
+    # get truncated mid-function -- see generate_reply/GROQ_CODE_MODEL.
+    import ai_assistant
+
+    captured = {}
+
+    def fake_call_model(messages, max_tokens, tools=None, model=None, **kwargs):
+        captured["max_tokens"] = max_tokens
+        captured["model"] = model
+        return "ok", None
+
+    def fake_call_model_with_router(messages, user_message, max_tokens, tools, *args, **kwargs):
+        captured["max_tokens"] = max_tokens
+        captured["model"] = kwargs.get("model")
+        return "ok", None
+
+    monkeypatch.setattr(ai_assistant, "_call_model", fake_call_model)
+    monkeypatch.setattr(ai_assistant, "_call_model_with_router", fake_call_model_with_router)
+
+    for kwargs in (
+        {"project_type": "code"},
+        {"context": "Erlaubte Befehle: ..."},  # defaults to "game"
+        {"context": "Aktueller Code: ...", "project_type": "webapp"},
+    ):
+        captured.clear()
+        ai_assistant.generate_reply("Schreib eine Funktion.", **kwargs)
+        assert captured["model"] == ai_assistant.GROQ_CODE_MODEL
+        assert captured["max_tokens"] == ai_assistant.CODE_CHAT_MAX_REPLY_TOKENS
+
+    # General chat stays on the small default model and the normal budget.
+    captured.clear()
+    ai_assistant.generate_reply("Wie alt ist die Erde?")
+    assert captured["model"] is None
+    assert captured["max_tokens"] == ai_assistant.MAX_REPLY_TOKENS
+
+
 def test_call_model_executes_tool_call_then_returns_final_reply(monkeypatch):
     import ai_assistant
 
     calls = []
 
-    def fake_call_local_model_message(messages, max_tokens, tools=None, tool_choice="auto", temperature=None):
+    def fake_call_local_model_message(messages, max_tokens, tools=None, tool_choice="auto", temperature=None, model=None):
         calls.append(messages)
         if len(calls) == 1:
             return {
@@ -1299,7 +1338,7 @@ def test_call_model_returns_proposed_change_from_propose_project_change(monkeypa
 
     calls = []
 
-    def fake_call_local_model_message(messages, max_tokens, tools=None, tool_choice="auto", temperature=None):
+    def fake_call_local_model_message(messages, max_tokens, tools=None, tool_choice="auto", temperature=None, model=None):
         calls.append(messages)
         if len(calls) == 1:
             return {

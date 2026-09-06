@@ -34,6 +34,19 @@ API contract the same regardless of which backend answers it (Groq today,
 something else potentially later) and matches the run_video_wipe()-style
 pattern already used elsewhere in this app for other async jobs.
 
+Programming help (project_type "code"/"game"/"webapp") deliberately does
+NOT share GROQ_MODEL with general chat -- see GROQ_CODE_MODEL's own
+comment. It answers via gpt-oss-120b (this app's already-stable fallback
+model, now also code's primary) with reasoning_effort "high" and a much
+bigger reply budget (CODE_CHAT_MAX_REPLY_TOKENS) instead of general
+chat's smaller Preview-tier model and MAX_REPLY_TOKENS -- three real,
+non-cosmetic levers (bigger/reasoning model, more thinking budget, less
+truncation) for actually correct code, on top of CODE_CHAT_ADDENDUM's
+much more concrete prompt (complete runnable code, language idioms,
+think through edge cases and security before answering, ask instead of
+guessing when the language/version is genuinely ambiguous). 2026-09-06,
+on explicit user request ("sehr gut programmieren").
+
 This module knows nothing about the database -- chat history persistence
 lives in app.py (AiChat/AiChatMessage), which passes prior turns in as
 `history` and reads the result back out via the on_done callback. Chat
@@ -139,11 +152,27 @@ GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 # see _generate_groq.
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "qwen/qwen3.6-27b")
 GROQ_FALLBACK_MODEL = os.environ.get("GROQ_FALLBACK_MODEL", "openai/gpt-oss-120b")
+# Code chat (project_type "code"/"game"/"webapp") deliberately does NOT use
+# the small Preview-tier GROQ_MODEL above -- programming correctness
+# benefits far more from raw model size/reasoning than general chit-chat
+# does, and Groq's own gpt-oss-120b (already this app's stable fallback
+# model, see GROQ_FALLBACK_MODEL) is both noticeably larger (120B vs 27B)
+# and a real reasoning model (supports reasoning_effort, see
+# GROQ_REASONING_EFFORT_BY_MODEL below) -- no new API key or provider
+# needed, just routing code requests at the model already proven stable
+# here. 2026-09-06, on explicit user request ("sehr gut programmieren").
+GROQ_CODE_MODEL = os.environ.get("GROQ_CODE_MODEL", GROQ_FALLBACK_MODEL)
 CHAT_REQUEST_TIMEOUT_SECONDS = 30
 
 MAX_MESSAGE_CHARS = 2000
 MAX_CONTEXT_CHARS = 4000
 MAX_REPLY_TOKENS = 900
+# Standalone code chat gets a much bigger reply budget than every other
+# mode -- a real function/class/file plus a short explanation regularly
+# needs more than MAX_REPLY_TOKENS's 900, and a reply that gets cut off
+# mid-function is worse than useless for programming help (silently
+# broken code looks identical to correct code until you try to run it).
+CODE_CHAT_MAX_REPLY_TOKENS = 2400
 MAX_HISTORY_MESSAGES = 12
 # Code modes (game DSL, webapp) stay at the lower, more predictable value --
 # the flat Studio DSL in particular has zero tolerance for invented syntax.
@@ -170,10 +199,29 @@ OPEN_METEO_FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 DOCS_SITES = {
     "python": "https://docs.python.org/3/",
     "javascript": "https://developer.mozilla.org/de/docs/Web/JavaScript",
+    "typescript": "https://www.typescriptlang.org/docs/",
     "html": "https://developer.mozilla.org/de/docs/Web/HTML",
+    "css": "https://developer.mozilla.org/de/docs/Web/CSS",
     "java": "https://docs.oracle.com/en/java/javase/21/docs/api/index.html",
     "csharp": "https://learn.microsoft.com/de-de/dotnet/csharp/",
+    "go": "https://go.dev/doc/",
+    "rust": "https://doc.rust-lang.org/book/",
+    "php": "https://www.php.net/manual/de/",
+    "sql": "https://dev.mysql.com/doc/refman/8.4/en/",
 }
+
+# Human-readable language list for the system-prompt text below, built from
+# DOCS_SITES's own keys so the two never drift apart if a language is ever
+# added/removed. "sql" is labeled with its actual source (MySQL) rather
+# than bare "SQL", since SQL itself has no single official spec site and
+# dialects differ (Postgres/SQLite/T-SQL) -- honest about what's actually
+# being searched, not a blanket "SQL docs" claim.
+_DOCS_LANGUAGE_LABELS = {
+    "python": "Python", "javascript": "JavaScript", "typescript": "TypeScript",
+    "html": "HTML", "css": "CSS", "java": "Java", "csharp": "C#", "go": "Go",
+    "rust": "Rust", "php": "PHP", "sql": "MySQL/SQL",
+}
+DOCS_LANGUAGES_TEXT = ", ".join(_DOCS_LANGUAGE_LABELS.get(k, k) for k in DOCS_SITES)
 
 BASE_SYSTEM_PROMPT = (
     "Du bist der freundliche KI-Assistent von NexAI, einem KI-Produkt mit einem eigenen "
@@ -490,20 +538,61 @@ WEBAPP_CODE_ADDENDUM = (
     "bekommst den aktuellen Code der Seite mitgeschickt, um zu wissen, was schon da ist -- "
     "zeig ihn aber nie.\n\n"
     "Du hast außerdem Zugriff auf das Werkzeug search_docs (offizielle Dokumentation von "
-    "Python, JavaScript, HTML, Java oder C#). Nutze es bei konkreten Fragen zu echten "
-    "Sprachfeatures, statt dir Details auszudenken."
+    f"{DOCS_LANGUAGES_TEXT}) -- nutze es bei konkreten Fragen zu echten Sprachfeatures, statt "
+    "dir Details auszudenken."
 )
 
 # Standalone code-help chat: no attached Studio project/file (unlike game/
 # webapp mode), just plain programming Q&A through the conversation itself.
+# Rewritten 2026-09-06 (explicit user request: "sehr gut programmieren") --
+# the old version was three sentences of generic "help via chat"; this
+# spells out the concrete habits that actually separate a genuinely useful
+# coding answer from a plausible-looking but subtly broken one. Paired with
+# routing this mode at GROQ_CODE_MODEL/CODE_CHAT_MAX_REPLY_TOKENS (see
+# generate_reply) instead of the small general-chat model -- the prompt
+# change alone wouldn't help much without also giving the model the room
+# and reasoning budget to actually follow it.
 CODE_CHAT_ADDENDUM = (
     "\n\nDies ist ein eigenständiger Programmier-Chat OHNE angehängtes Projekt oder Datei -- "
-    "es gibt hier keinen Code, den du automatisch siehst oder direkt ändern kannst. Hilf "
-    "stattdessen über den Chat-Verlauf selbst: Erklärungen, Codebeispiele in Codeblöcken, "
-    "Debugging anhand von dem, was der Nutzer dir zeigt oder beschreibt. Du hast Zugriff auf "
-    "das Werkzeug search_docs (offizielle Dokumentation von Python, JavaScript, HTML, Java "
-    "oder C#) -- nutze es bei konkreten Fragen zu echten Sprachfeatures, statt dir Details "
-    "auszudenken."
+    "es gibt hier keinen Code, den du automatisch siehst oder direkt ändern kannst. Du bist "
+    "hier ein sehr erfahrener, gründlicher Programmierer -- Ziel ist Code, der beim ersten "
+    "Versuch wirklich läuft, nicht nur plausibel aussieht. Halte dich an diese Gewohnheiten:\n\n"
+    "1. Wenn Sprache, Framework oder Version aus der Anfrage nicht eindeutig hervorgehen und es "
+    "einen echten Unterschied macht (z.B. Python 2 vs. 3, React vs. plain JS, welche Datenbank), "
+    "frag kurz nach, statt zu raten -- aber nur, wenn es wirklich mehrdeutig ist; bei "
+    "offensichtlichem Kontext (vorherige Nachrichten, übliche Standardwahl) direkt loslegen.\n"
+    "2. Liefere VOLLSTÄNDIGEN, direkt lauffähigen Code -- alle nötigen Imports, keine "
+    "abgeschnittenen Ausschnitte mit \"... Rest wie gehabt\", außer der Nutzer bittet "
+    "ausdrücklich nur um einen kleinen Diff/Ausschnitt. Lieber ein bisschen mehr Kontext zeigen "
+    "als eine Lücke lassen, die beim Einfügen einen Fehler produziert.\n"
+    "3. Bevor du Code schreibst, denk kurz in dir selbst durch, welche Fälle schiefgehen könnten "
+    "(leere Eingabe, falscher Typ, Off-by-one, Race Condition, None/null, Grenzwerte) -- das "
+    "muss nicht immer sichtbar in der Antwort stehen, aber es soll sich im Code niederschlagen "
+    "(Validierung, sinnvolle Fehlermeldungen), nicht erst wenn der Nutzer danach fragt.\n"
+    "4. Wenn dir bei genauerem Hinsehen eine echte Schwachstelle auffällt (SQL-Injection durch "
+    "String-Zusammenbau, ungeprüfte Nutzereingaben, Klartext-Passwörter, fehlende "
+    "Rechteprüfung), erwähne das kurz und zeig die sichere Variante -- auch wenn nicht "
+    "ausdrücklich danach gefragt wurde. Das ist keine Bevormundung, sondern Teil einer "
+    "ordentlichen Antwort.\n"
+    "5. Beim Debugging: lies den Fehler/die Beschreibung genau, nenn die wahrscheinlichste "
+    "Ursache BEVOR du den Fix zeigst (ein Satz reicht), und wenn mehrere Ursachen plausibel "
+    "sind, sag das auch -- rate nicht blind an einer einzelnen Fassade herum, wenn der Nutzer "
+    "eigentlich mehr Informationen (Stacktrace, Version, genaue Fehlermeldung) liefern könnte; "
+    "frag danach, statt zu raten.\n"
+    "6. Folge den echten Idiomen/Konventionen der jeweiligen Sprache (z.B. PEP 8 und "
+    "list comprehensions in Python statt Java-artiger for-Schleifen, const/let statt var in "
+    "modernem JavaScript) statt eines Sprachen-übergreifenden Einheitsstils -- guter Code sieht "
+    "in jeder Sprache anders aus.\n"
+    "7. Halte Erklärungen drumherum kurz und konkret (was macht der Code, warum diese "
+    "Herangehensweise, worauf muss der Nutzer beim Einbauen achten) -- der Code selbst steht im "
+    "Vordergrund, keine langen Einleitungen oder Wiederholungen dessen, was der Code offensichtlich tut.\n"
+    "8. Bist du bei etwas nicht sicher (eine API, die sich geändert haben könnte, ein "
+    "Sprachfeature), nutze search_docs statt zu raten, oder sag ehrlich, dass du es nicht genau "
+    "weißt -- erfinde niemals eine Funktion, einen Parameter oder ein Package, das es nicht "
+    "gibt.\n\n"
+    "Du hast Zugriff auf das Werkzeug search_docs (offizielle Dokumentation von "
+    f"{DOCS_LANGUAGES_TEXT}) -- nutze es bei konkreten Fragen zu echten Sprachfeatures oder "
+    "APIs, statt dir Details auszudenken."
 )
 
 # Applied to every mode's system prompt -- the frontend (base.html's
@@ -1057,6 +1146,14 @@ def _tools_instructions(tools):
 # hidden reasoning so there's more room left for the actual visible reply.
 GROQ_REASONING_EFFORT_BY_MODEL = {
     "qwen/qwen3.6-27b": "none",
+    # gpt-oss-120b is GROQ_CODE_MODEL (see there) -- "high" spends more
+    # hidden reasoning tokens working through the problem before writing
+    # the actual reply, which is a genuine, well-documented quality lever
+    # for non-trivial code (catching an edge case, picking the right
+    # approach) that plain sampling temperature can't buy. Also used as
+    # this app's general Groq-model fallback (GROQ_FALLBACK_MODEL), where
+    # the extra latency is an acceptable tradeoff for a rare failover path.
+    "openai/gpt-oss-120b": "high",
 }
 GROQ_DEFAULT_REASONING_EFFORT = "low"
 
@@ -1098,7 +1195,7 @@ def _generate_groq_with_model(model, messages, max_tokens, temperature, api_key)
     raise last_exc
 
 
-def _generate_groq(messages, max_tokens, temperature=0.7):
+def _generate_groq(messages, max_tokens, temperature=0.7, model=None):
     """Drop-in replacement for the self-hosted local_ai.generate_chat with
     the identical (messages, max_tokens, temperature) signature -- routes
     text generation through Groq's hosted API instead of the small
@@ -1109,10 +1206,12 @@ def _generate_groq(messages, max_tokens, temperature=0.7):
     since that convention already works reliably and rewriting the tool
     pipeline isn't needed just to fix reply quality.
 
-    GROQ_MODEL defaults to a Preview-tier Chinese open-weight model
-    (qwen/qwen3.6-27b, see that constant's own comment on why and the
-    accepted risk) -- if Groq responds that the model itself is invalid or
-    decommissioned (400/404, distinct from a transient 429/5xx which
+    `model` picks the primary model to try -- defaults to GROQ_MODEL (a
+    Preview-tier Chinese open-weight model, qwen/qwen3.6-27b, see that
+    constant's own comment on why and the accepted risk), but code chat
+    passes GROQ_CODE_MODEL instead (see generate_reply). Either way, if
+    Groq responds that the model itself is invalid or decommissioned
+    (400/404, distinct from a transient 429/5xx which
     _generate_groq_with_model already retries), this falls back to
     GROQ_FALLBACK_MODEL once so live chat degrades gracefully instead of
     breaking outright the moment Groq pulls a preview model, same as it
@@ -1123,20 +1222,22 @@ def _generate_groq(messages, max_tokens, temperature=0.7):
             "GROQ_API_KEY ist nicht gesetzt. Auf groq.com einen kostenlosen API-Key erstellen "
             "und als Umgebungsvariable GROQ_API_KEY hinterlegen."
         )
+    primary_model = model or GROQ_MODEL
     try:
-        return _generate_groq_with_model(GROQ_MODEL, messages, max_tokens, temperature, api_key)
+        return _generate_groq_with_model(primary_model, messages, max_tokens, temperature, api_key)
     except requests.exceptions.HTTPError as exc:
         status = exc.response.status_code if exc.response is not None else None
-        if status not in (400, 404) or GROQ_MODEL == GROQ_FALLBACK_MODEL:
+        if status not in (400, 404) or primary_model == GROQ_FALLBACK_MODEL:
             raise
         logger.warning(
             "Groq-Modell '%s' hat mit Status %s abgelehnt (vermutlich abgeschaltet/Preview-Ende) -- "
-            "weiche einmalig auf Fallback-Modell '%s' aus.", GROQ_MODEL, status, GROQ_FALLBACK_MODEL,
+            "weiche einmalig auf Fallback-Modell '%s' aus.", primary_model, status, GROQ_FALLBACK_MODEL,
         )
         return _generate_groq_with_model(GROQ_FALLBACK_MODEL, messages, max_tokens, temperature, api_key)
 
 
-def _call_local_model_message(messages, max_tokens, tools=None, tool_choice="auto", temperature=CODE_TEMPERATURE):
+def _call_local_model_message(messages, max_tokens, tools=None, tool_choice="auto", temperature=CODE_TEMPERATURE,
+                               model=None):
     call_messages = messages
     if tool_choice == "none" and tools:
         # Unlike Groq's native tool_choice="none", this prompt-based
@@ -1149,7 +1250,7 @@ def _call_local_model_message(messages, max_tokens, tools=None, tool_choice="aut
                 "auch wenn du vorher eins gebraucht hast."
             ),
         }]
-    raw = _generate_groq(call_messages, max_tokens, temperature=temperature)
+    raw = _generate_groq(call_messages, max_tokens, temperature=temperature, model=model)
     remaining, tool_calls = _parse_tool_call(raw) if tools else (raw, None)
     if tool_choice == "none":
         tool_calls = None
@@ -1160,7 +1261,7 @@ def _call_local_model_message(messages, max_tokens, tools=None, tool_choice="aut
 
 
 def _call_model(messages, max_tokens, tools=None, captured=None, temperature=CODE_TEMPERATURE, available_tokens=None,
-                 synthesize_audio_fn=None):
+                 synthesize_audio_fn=None, model=None):
     """Runs a tool-calling loop: as long as the model keeps requesting
     tools (see _parse_tool_call), executes them server-side and feeds the
     results back, up to MAX_TOOL_ROUNDS turns. On the last allowed turn,
@@ -1175,7 +1276,11 @@ def _call_model(messages, max_tokens, tools=None, captured=None, temperature=COD
     remember_user_fact turned up during this call -- see
     captured["wikipedia_facts"]/captured["user_facts"] and
     _run_tool_calls(). Callers that don't care (most of them: only
-    general-mode chats ever populate these) can simply omit it."""
+    general-mode chats ever populate these) can simply omit it.
+
+    `model` picks which Groq model answers -- omit to use GROQ_MODEL (the
+    default for everything except code chat, see generate_reply and
+    GROQ_CODE_MODEL)."""
     current_messages = messages
     if captured is None:
         captured = {}
@@ -1187,7 +1292,7 @@ def _call_model(messages, max_tokens, tools=None, captured=None, temperature=COD
         is_last_round = round_index == MAX_TOOL_ROUNDS - 1
         message = _call_local_model_message(
             current_messages, max_tokens, tools=tools,
-            tool_choice="none" if is_last_round else "auto", temperature=temperature,
+            tool_choice="none" if is_last_round else "auto", temperature=temperature, model=model,
         )
         tool_calls = message.get("tool_calls")
         if not tool_calls:
@@ -1402,8 +1507,11 @@ def generate_reply(message, context=None, history=None, project_type=None, facts
     typing_avg_interval_ms handling) -- only applied in general mode, same
     as learned_facts. `personality`, if given, is a {"intelligence",
     "humor", "caution", "arrogance"} dict (see AiPersonality in models.py
-    and _personality_addendum) -- also general-mode only. Returns
-    (reply_text, proposed_change)."""
+    and _personality_addendum) -- also general-mode only. Every code-
+    adjacent project_type ("game"/"webapp"/"code") answers via
+    GROQ_CODE_MODEL with a bigger reply budget (CODE_CHAT_MAX_REPLY_TOKENS)
+    instead of general chat's GROQ_MODEL/MAX_REPLY_TOKENS -- see
+    GROQ_CODE_MODEL's own comment. Returns (reply_text, proposed_change)."""
     message = (message or "").strip()[:MAX_MESSAGE_CHARS]
     if not message:
         return "", None
@@ -1428,14 +1536,24 @@ def generate_reply(message, context=None, history=None, project_type=None, facts
         # or the current file (webapp) plus the question.
         user_content = f"{context[:MAX_CONTEXT_CHARS]}\n\nFrage: {message}"
 
+    # Every code-adjacent mode (game DSL, webapp, standalone code chat)
+    # answers with GROQ_CODE_MODEL instead of the general-chat default --
+    # see that constant's comment for why -- and gets a much bigger reply
+    # budget, since truncated code is worse than no code.
+    model = None
+    reply_tokens = MAX_REPLY_TOKENS
     if project_type == "game":
         system_prompt = BASE_SYSTEM_PROMPT + GAME_DSL_ADDENDUM
         tools = PROJECT_CHANGE_TOOLS
         temperature = CODE_TEMPERATURE
+        model = GROQ_CODE_MODEL
+        reply_tokens = CODE_CHAT_MAX_REPLY_TOKENS
     elif project_type == "webapp":
         system_prompt = BASE_SYSTEM_PROMPT + WEBAPP_CODE_ADDENDUM
         tools = WEBAPP_TOOLS
         temperature = CODE_TEMPERATURE
+        model = GROQ_CODE_MODEL
+        reply_tokens = CODE_CHAT_MAX_REPLY_TOKENS
     elif project_type == "code":
         # The standalone "Neuesten Code-Chat erstellen" sidebar button, with
         # no Studio project/file attached (that's what game/webapp are for)
@@ -1445,6 +1563,8 @@ def generate_reply(message, context=None, history=None, project_type=None, facts
         system_prompt = BASE_SYSTEM_PROMPT + CODE_CHAT_ADDENDUM
         tools = CODE_CHAT_TOOLS
         temperature = CODE_TEMPERATURE
+        model = GROQ_CODE_MODEL
+        reply_tokens = CODE_CHAT_MAX_REPLY_TOKENS
     else:
         system_prompt = GENERAL_SYSTEM_PROMPT + FRIEND_CHARACTER_ADDENDUM + GENERAL_TOOLS_ADDENDUM
         tools = AI_TOOLS
@@ -1490,10 +1610,10 @@ def generate_reply(message, context=None, history=None, project_type=None, facts
 
     if project_type is None:
         return _call_model_with_router(
-            messages, message, MAX_REPLY_TOKENS, tools, captured, temperature,
+            messages, message, reply_tokens, tools, captured, temperature,
             available_tokens=available_tokens, synthesize_audio_fn=synthesize_audio_fn,
         )
-    return _call_model(messages, MAX_REPLY_TOKENS, tools=tools, captured=captured, temperature=temperature)
+    return _call_model(messages, reply_tokens, tools=tools, captured=captured, temperature=temperature, model=model)
 
 
 def generate_title(first_message):

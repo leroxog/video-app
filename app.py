@@ -516,8 +516,9 @@ def media_url(kind, stored_filename):
         return ""
     if USE_R2:
         return f"{R2_PUBLIC_URL}/{kind}/{stored_filename}"
-    if kind == "posts":
-        return url_for("post_photo_file", filename=stored_filename)
+    # "posts" was the old photo-feed's media kind -- that feature (and its
+    # post_photo_file route) is gone, see run_post_wipe()'s docstring below.
+    # No caller passes "posts" here anymore; intentionally no branch for it.
     if kind == "sounds":
         return url_for("static", filename=f"sounds/{stored_filename}")
     if kind in ("meme_templates", "meme_creations"):
