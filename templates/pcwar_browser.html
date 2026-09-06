@@ -26,10 +26,12 @@
             </form>
         </div>
         <div class="pcwar-browser-note">
-            Das ist ein echter kleiner Browser -- du kannst normal im Web surfen. Manche Seiten lassen sich aus
-            Sicherheitsgründen nicht einbetten (X-Frame-Options) und bleiben dann leer; das ist eine echte
-            Browser-Einschränkung, keine Fehlfunktion. Zum Hacken brauchst du das nicht -- Terminal reicht.
+            Das ist ein echter kleiner Browser. Echte Web-Adressen lassen sich aus Sicherheitsgründen vieler Seiten
+            (X-Frame-Options) nicht in dieses Fenster einbetten -- deshalb öffnen sie sich stattdessen in einem
+            echten neuen Browser-Tab, damit wirklich jede Seite funktioniert, nicht nur die wenigen, die eine
+            Einbettung erlauben. Zum Hacken brauchst du das nicht -- Terminal reicht.
         </div>
+        <div id="pcwarBrowserOpenedNotice" class="pcwar-browser-opened-notice hidden"></div>
         <iframe id="pcwarBrowserFrame" class="pcwar-browser-frame" src="about:blank" title="PCwar Browser"></iframe>
     </div>
 </div>

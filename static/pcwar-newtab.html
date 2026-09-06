@@ -26,14 +26,16 @@
   }
   a.tile:hover { background: rgba(168, 85, 247, 0.22); }
   .icon { font-size: 22px; }
+  .hint { font-size: 11px; color: #c4b5fd; opacity: 0.7; margin: -12px 0 0; }
 </style>
 </head>
 <body>
   <h1>🌐 Neuer Tab</h1>
   <div class="tiles">
-    <a class="tile" href="https://duckduckgo.com"><span class="icon">🦆</span>DuckDuckGo</a>
-    <a class="tile" href="https://de.wikipedia.org"><span class="icon">📚</span>Wikipedia</a>
-    <a class="tile" href="https://html.duckduckgo.com/html/"><span class="icon">🔍</span>Suche (einbettbar)</a>
+    <a class="tile" href="https://duckduckgo.com" target="_blank" rel="noopener"><span class="icon">🦆</span>DuckDuckGo</a>
+    <a class="tile" href="https://de.wikipedia.org" target="_blank" rel="noopener"><span class="icon">📚</span>Wikipedia</a>
+    <a class="tile" href="https://www.google.com" target="_blank" rel="noopener"><span class="icon">🔍</span>Google</a>
   </div>
+  <p class="hint">Öffnet in einem neuen Browser-Tab.</p>
 </body>
 </html>
