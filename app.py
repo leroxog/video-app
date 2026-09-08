@@ -30,6 +30,11 @@ from flask import (
 from sqlalchemy import text
 from werkzeug.utils import secure_filename
 from werkzeug.exceptions import HTTPException
+# Flask's own transitive dependency (used internally for session-cookie
+# signing) -- reused directly here for the site-unlock cookie, see
+# UNLOCK_COOKIE_NAME's own comment on why that can't just live in the
+# normal `session` cookie.
+from itsdangerous import URLSafeSerializer, BadSignature
 from models import (
     db, User, Subscription, UserCreatedCode, Conversation, ConversationMember, Message,
     AiChatFeedback, AiChat, AiChatMessage, AiAdminFact, AiLearnedFact, PasswordResetCode,
@@ -992,6 +997,43 @@ def _record_unlock_attempt(ip):
     _unlock_attempts_by_ip.setdefault(ip, []).append(datetime.now(timezone.utc).timestamp())
 
 
+# Deliberately NOT stored in the normal `session` cookie -- that cookie is
+# forced permanent (30 days, see _make_session_permanent) on every single
+# request for login's sake, and Flask's "permanent" flag applies to the
+# WHOLE cookie, not per-key, so an unlock flag living there would
+# inevitably inherit that same 30-day persistence with no way to keep it
+# short-lived independently. Instead this is its own cookie, still
+# cryptographically signed with the app's real SECRET_KEY (so it can't be
+# forged by just setting "site_unlocked=1" by hand -- that would still get
+# rejected as an invalid signature) but with NO expiry set at all, which
+# browsers treat as a true session cookie: gone the moment the browser
+# itself fully closes, regardless of login state. On explicit user
+# request (2026-09-08) -- the code must be re-entered on every new browser
+# session, even for an already-logged-in returning visitor, not just once
+# ever per browser.
+_unlock_cookie_signer = URLSafeSerializer(app.config["SECRET_KEY"], salt="site-unlock")
+UNLOCK_COOKIE_NAME = "site_unlocked"
+
+
+def _request_is_unlocked():
+    token = request.cookies.get(UNLOCK_COOKIE_NAME)
+    if not token:
+        return False
+    try:
+        return _unlock_cookie_signer.loads(token) is True
+    except BadSignature:
+        return False
+
+
+def _set_unlock_cookie(response):
+    response.set_cookie(
+        UNLOCK_COOKIE_NAME, _unlock_cookie_signer.dumps(True),
+        httponly=True, samesite="Lax",
+        # No max_age/expires -- a real browser-session cookie, cleared
+        # when the browser fully closes (see the comment above).
+    )
+
+
 @app.before_request
 def require_site_unlock():
     """The real outermost gate on this whole app -- registered first (see
@@ -1006,17 +1048,16 @@ def require_site_unlock():
 
     Inactive entirely unless SITE_UNLOCK_CODE is actually configured --
     local dev and the test suite never see this gate at all. Once
-    unlocked, session["site_unlocked"] persists via the same permanent
-    session cookie every other gate in this app already uses (see
-    _make_session_permanent), so a real visitor only ever needs the code
-    once per browser, not on every visit."""
+    unlocked (see _set_unlock_cookie), that lasts for the current browser
+    session only -- closing the browser resets it, even for an
+    already-logged-in returning visitor (see UNLOCK_COOKIE_NAME's own
+    comment for why this can't just live in the normal session cookie)."""
     if not SITE_UNLOCK_CODE:
         return
     if request.endpoint == "unlock_site":
         return
-    if session.get("site_unlocked"):
+    if _request_is_unlocked():
         return
-    session.permanent = True
     return render_template("site_locked.html"), 503
 
 
@@ -1028,9 +1069,9 @@ def unlock_site():
     if not _unlock_is_rate_limited(ip):
         submitted = (request.form.get("code") or "").strip()
         if submitted and submitted == SITE_UNLOCK_CODE:
-            session["site_unlocked"] = True
-            session.permanent = True
-            return redirect(url_for("studio_home"))
+            response = redirect(url_for("studio_home"))
+            _set_unlock_cookie(response)
+            return response
         _record_unlock_attempt(ip)
     # Wrong code, missing code, or rate-limited -- all look identical from
     # the outside (silently back to the same locked page, no "wrong code"

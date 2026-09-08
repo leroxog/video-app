@@ -1981,10 +1981,36 @@ def test_site_unlock_gate_blocks_everything_until_correct_code(raw_client, monke
     assert raw_client.get("/").status_code == 503
 
     # Correct code -- unlocks, persists for the rest of this browser
-    # session (same permanent-cookie mechanism every other gate here uses).
+    # session via its own dedicated cookie (see UNLOCK_COOKIE_NAME).
     right_res = raw_client.post("/unlock", data={"code": "2613"}, follow_redirects=False)
     assert right_res.status_code == 302
     assert raw_client.get("/").status_code == 200
+
+
+def test_site_unlock_cookie_is_browser_session_scoped_and_tamper_proof(raw_client, monkeypatch):
+    # 2026-09-08, explicit follow-up request: the code must be required
+    # again on every NEW browser session, even for an already-logged-in
+    # returning visitor -- not remembered forever like login is. Checked
+    # two ways: (1) the Set-Cookie header carries no Max-Age/Expires at
+    # all, which is what makes a browser treat it as a true session
+    # cookie (cleared when the browser fully closes) instead of the
+    # 30-day persistent cookie every other gate in this app uses; (2) a
+    # hand-crafted "site_unlocked=1" cookie (no real signature) is
+    # rejected just like a wrong code would be -- can't bypass by simply
+    # setting the cookie name/value without knowing SECRET_KEY.
+    import app as app_module
+
+    app_module._unlock_attempts_by_ip.clear()
+    monkeypatch.setattr(app_module, "SITE_UNLOCK_CODE", "2613")
+
+    right_res = raw_client.post("/unlock", data={"code": "2613"}, follow_redirects=False)
+    set_cookie_headers = right_res.headers.get_all("Set-Cookie")
+    unlock_cookie_header = next(h for h in set_cookie_headers if h.startswith("site_unlocked="))
+    assert "Max-Age" not in unlock_cookie_header
+    assert "Expires" not in unlock_cookie_header
+
+    raw_client.set_cookie("site_unlocked", "1")  # forged, unsigned value
+    assert raw_client.get("/").status_code == 503
 
 
 def test_site_unlock_gate_rate_limits_repeated_wrong_codes(raw_client, monkeypatch):
