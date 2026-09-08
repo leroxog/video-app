@@ -1949,6 +1949,60 @@ def test_agb_redirects_to_terms_page(client):
     assert response.headers["Location"].endswith("/terms")
 
 
+def test_site_unlock_gate_inactive_without_configured_code(client):
+    # SITE_UNLOCK_CODE is unset in every dev/test environment by design
+    # (see its own comment in app.py -- never hardcoded, this repo is
+    # public) -- the gate must stay a complete no-op here.
+    response = client.get("/")
+    assert response.status_code == 200
+    assert b"Diese Seite ist f" not in response.data
+
+
+def test_site_unlock_gate_blocks_everything_until_correct_code(raw_client, monkeypatch):
+    import app as app_module
+
+    app_module._unlock_attempts_by_ip.clear()
+    monkeypatch.setattr(app_module, "SITE_UNLOCK_CODE", "2613")
+
+    # Blocks the real homepage, an arbitrary/nonexistent URL, AND an /api/
+    # path -- "egal wie oder wann man auf die Web geht" (every request, no
+    # exceptions except the unlock form's own POST).
+    for path in ("/", "/this-page-does-not-exist", "/api/ai/chats", "/login"):
+        response = raw_client.get(path)
+        assert response.status_code == 503
+        assert "Diese Seite ist für dich nicht verfügbar!".encode() in response.data
+        assert b"unlockCode" in response.data
+
+    # Wrong code -- stays locked, no distinguishing error message (the
+    # disguise never hints this is a real, working gate).
+    wrong_res = raw_client.post("/unlock", data={"code": "0000"})
+    assert wrong_res.status_code == 503
+    assert b"Diese Seite ist f" in wrong_res.data
+    assert raw_client.get("/").status_code == 503
+
+    # Correct code -- unlocks, persists for the rest of this browser
+    # session (same permanent-cookie mechanism every other gate here uses).
+    right_res = raw_client.post("/unlock", data={"code": "2613"}, follow_redirects=False)
+    assert right_res.status_code == 302
+    assert raw_client.get("/").status_code == 200
+
+
+def test_site_unlock_gate_rate_limits_repeated_wrong_codes(raw_client, monkeypatch):
+    import app as app_module
+
+    app_module._unlock_attempts_by_ip.clear()
+    monkeypatch.setattr(app_module, "SITE_UNLOCK_CODE", "2613")
+
+    for _ in range(app_module.UNLOCK_MAX_ATTEMPTS):
+        raw_client.post("/unlock", data={"code": "0000"})
+
+    # Even the genuinely correct code is rejected once rate-limited --
+    # a light deterrent against trivially brute-forcing a 4-digit code.
+    still_locked = raw_client.post("/unlock", data={"code": "2613"}, follow_redirects=False)
+    assert still_locked.status_code == 503
+    assert raw_client.get("/").status_code == 503
+
+
 def test_registration_with_guardian_email_sends_welcome_notice(client, monkeypatch):
     import app as app_module
 

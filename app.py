@@ -222,6 +222,17 @@ app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-change-in-pr
 app.config["MAX_CONTENT_LENGTH"] = 200 * 1024 * 1024  # 200 MB pro Upload
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
 
+# Site-wide "locked" gate (2026-09-08, explicit user request) -- see
+# require_site_unlock() near the other before_request hooks below.
+# Deliberately NEVER hardcoded here -- this repo (leroxog/video-app) is
+# public on GitHub, so the actual code must only ever live in a real
+# environment variable (Railway's dashboard in production, this app's
+# gitignored .env locally), never in source control. Left unset, the gate
+# stays fully inactive -- local dev and the whole test suite never need
+# to know a secret code, only a real deployment that deliberately
+# configures this env var actually gets gated.
+SITE_UNLOCK_CODE = os.environ.get("SITE_UNLOCK_CODE")
+
 UPLOAD_FOLDER = os.path.join(app.root_path, "static", "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
@@ -961,6 +972,73 @@ def _compute_message_token_cost(message, via_voice, is_buddy):
     return cost
 
 
+# In-memory only (same pattern as video_wipe_status/post_wipe_status
+# elsewhere in this app) -- resets on every restart, which is fine here:
+# this is a light deterrent against trivially brute-forcing a short
+# numeric code, not a hardened security boundary. Keyed by IP.
+_unlock_attempts_by_ip = {}
+UNLOCK_MAX_ATTEMPTS = 8
+UNLOCK_WINDOW_SECONDS = 300
+
+
+def _unlock_is_rate_limited(ip):
+    now = datetime.now(timezone.utc).timestamp()
+    recent = [t for t in _unlock_attempts_by_ip.get(ip, []) if now - t < UNLOCK_WINDOW_SECONDS]
+    _unlock_attempts_by_ip[ip] = recent
+    return len(recent) >= UNLOCK_MAX_ATTEMPTS
+
+
+def _record_unlock_attempt(ip):
+    _unlock_attempts_by_ip.setdefault(ip, []).append(datetime.now(timezone.utc).timestamp())
+
+
+@app.before_request
+def require_site_unlock():
+    """The real outermost gate on this whole app -- registered first (see
+    module docstring notes on before_request order elsewhere) so it runs
+    before terms/login/profile-completion and every single route,
+    blocking every request -- "/","/api/*", static files, the service
+    worker, literally everything except the unlock form's own POST --
+    behind a page styled to look like a browser's own offline error, with
+    a real playable dino-jump minigame, until the right code is entered.
+    See templates/site_locked.html and SITE_UNLOCK_CODE's own comment for
+    why the code itself is never in source control.
+
+    Inactive entirely unless SITE_UNLOCK_CODE is actually configured --
+    local dev and the test suite never see this gate at all. Once
+    unlocked, session["site_unlocked"] persists via the same permanent
+    session cookie every other gate in this app already uses (see
+    _make_session_permanent), so a real visitor only ever needs the code
+    once per browser, not on every visit."""
+    if not SITE_UNLOCK_CODE:
+        return
+    if request.endpoint == "unlock_site":
+        return
+    if session.get("site_unlocked"):
+        return
+    session.permanent = True
+    return render_template("site_locked.html"), 503
+
+
+@app.route("/unlock", methods=["POST"])
+def unlock_site():
+    if not SITE_UNLOCK_CODE:
+        return redirect(url_for("studio_home"))
+    ip = request.remote_addr or "unknown"
+    if not _unlock_is_rate_limited(ip):
+        submitted = (request.form.get("code") or "").strip()
+        if submitted and submitted == SITE_UNLOCK_CODE:
+            session["site_unlocked"] = True
+            session.permanent = True
+            return redirect(url_for("studio_home"))
+        _record_unlock_attempt(ip)
+    # Wrong code, missing code, or rate-limited -- all look identical from
+    # the outside (silently back to the same locked page, no "wrong code"
+    # message) on purpose: nothing here should hint that this is even a
+    # real, working gate rather than a genuinely offline page.
+    return render_template("site_locked.html"), 503
+
+
 @app.before_request
 def update_last_seen():
     user_id = session.get("user_id")
@@ -993,6 +1071,14 @@ def _make_session_permanent():
 TERMS_ALLOWED_ENDPOINTS = {
     "terms_page", "terms_accept", "terms_decline", "terms_declined_page",
     "logout", "static", "service_worker", "offline_page", "studio_home",
+    # unlock_site is the site-lock gate's OWN submission endpoint (see
+    # require_site_unlock() above) -- it must stay reachable before terms/
+    # login/profile-completion too, or those gates would themselves block
+    # the very form that's supposed to get a visitor past the site lock in
+    # the first place. LOGIN_GATE_ALLOWED_ENDPOINTS/
+    # PROFILE_COMPLETION_ALLOWED_ENDPOINTS both union this set in below, so
+    # this one entry covers all three.
+    "unlock_site",
 }
 
 # Bump this whenever terms.html's actual content changes -- it forces

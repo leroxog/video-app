@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Diese Seite ist nicht verfügbar</title>
+<style>
+    /* Fully self-contained on purpose (no external CSS/JS/image files) --
+       this page is the ONE thing this app still serves while the site-wide
+       unlock gate is active (see app.py's require_site_unlock), so it must
+       never depend on a /static/ request that gate would otherwise block. */
+    * { box-sizing: border-box; }
+    html, body {
+        margin: 0; padding: 0; height: 100%;
+        background: #ffffff; color: #1a1a1a;
+        font-family: Arial, Helvetica, sans-serif;
+    }
+    body {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 6px; padding: 24px; text-align: center;
+    }
+    .icon { width: 44px; height: 44px; color: #6e6e6e; margin-bottom: 8px; }
+    h1 { font-size: 20px; font-weight: 400; margin: 0; color: #1a1a1a; }
+    p.sub { font-size: 14px; color: #6e6e6e; margin: 0 0 28px; }
+    canvas#dinoGame { image-rendering: pixelated; touch-action: none; outline: none; }
+    p.hint { font-size: 12px; color: #b3b3b3; margin: 10px 0 0; }
+    .unlock-row { margin-top: 70px; height: 20px; }
+    .unlock-row input {
+        width: 70px; text-align: center; font-size: 14px; letter-spacing: 3px;
+        border: none; border-bottom: 1px solid transparent; background: transparent;
+        color: #1a1a1a; outline: none; padding: 2px 0;
+    }
+    .unlock-row input:focus { border-bottom-color: #ddd; }
+</style>
+</head>
+<body>
+    <svg class="icon" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="4" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M20 70 Q20 40 45 35 L55 20 L65 35 Q80 35 80 55 L80 70 Q80 80 68 80 L60 80 L60 70 L45 70 L45 80 L32 80 Q20 80 20 70 Z" />
+        <circle cx="63" cy="42" r="2.5" fill="currentColor" stroke="none" />
+        <path d="M78 48 L88 45 L80 56 Z" />
+    </svg>
+    <h1>Diese Seite ist für dich nicht verfügbar!</h1>
+    <p class="sub">Wir haben Bauarbeiten, komm später nochmal!</p>
+
+    <canvas id="dinoGame" width="600" height="150"></canvas>
+    <p class="hint">Leertaste zum Spielen</p>
+
+    <form class="unlock-row" id="unlockForm" method="POST" action="{{ url_for('unlock_site') }}">
+        <input type="text" name="code" id="unlockCode" maxlength="4" inputmode="numeric" pattern="[0-9]*" autocomplete="off" spellcheck="false">
+    </form>
+
+    <script>
+        (() => {
+            // --- Blank-looking code field: auto-submits once 4 digits are
+            // typed, so nothing about it needs to look or behave like a
+            // real "enter a code" prompt. ---
+            const codeInput = document.getElementById("unlockCode");
+            const unlockForm = document.getElementById("unlockForm");
+            codeInput.addEventListener("input", () => {
+                codeInput.value = codeInput.value.replace(/\D/g, "");
+                if (codeInput.value.length === 4) unlockForm.submit();
+            });
+
+            // --- Small self-contained jump-over-obstacles game, styled
+            // after the well-known "no internet connection" browser page
+            // (own original code/art here, not copied from anywhere) --
+            // purely part of the disguise, has no effect on the real gate. ---
+            const canvas = document.getElementById("dinoGame");
+            const ctx = canvas.getContext("2d");
+            const W = canvas.width, H = canvas.height;
+            const GROUND_Y = H - 24;
+
+            let running = false;
+            let gameOver = false;
+            let speed = 6;
+            let score = 0;
+            let groundOffset = 0;
+            let obstacles = [];
+            let spawnTimer = 0;
+
+            const player = { x: 40, y: GROUND_Y - 32, w: 26, h: 32, vy: 0, jumping: false };
+            const GRAVITY = 0.9;
+            const JUMP_VELOCITY = -13;
+
+            function resetGame() {
+                player.y = GROUND_Y - player.h;
+                player.vy = 0;
+                player.jumping = false;
+                obstacles = [];
+                spawnTimer = 0;
+                speed = 6;
+                score = 0;
+                gameOver = false;
+            }
+
+            function jump() {
+                if (document.activeElement === codeInput) return; // typing the code, not playing
+                if (!running) { running = true; resetGame(); }
+                if (gameOver) { resetGame(); return; }
+                if (!player.jumping) {
+                    player.vy = JUMP_VELOCITY;
+                    player.jumping = true;
+                }
+            }
+
+            document.addEventListener("keydown", (e) => {
+                if (e.code === "Space" || e.code === "ArrowUp") {
+                    if (document.activeElement === codeInput) return;
+                    e.preventDefault();
+                    jump();
+                }
+            });
+            canvas.addEventListener("pointerdown", jump);
+
+            function spawnObstacle() {
+                const h = 20 + Math.random() * 20;
+                obstacles.push({ x: W + 10, y: GROUND_Y - h, w: 12 + Math.random() * 8, h });
+            }
+
+            function step() {
+                ctx.clearRect(0, 0, W, H);
+
+                // Ground
+                ctx.strokeStyle = "#c9c9c9";
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(0, GROUND_Y);
+                ctx.lineTo(W, GROUND_Y);
+                ctx.stroke();
+
+                if (running && !gameOver) {
+                    // Ground tick marks scrolling by, for a sense of motion
+                    groundOffset = (groundOffset + speed) % 24;
+                    ctx.strokeStyle = "#dcdcdc";
+                    for (let gx = -groundOffset; gx < W; gx += 24) {
+                        ctx.beginPath();
+                        ctx.moveTo(gx, GROUND_Y + 4);
+                        ctx.lineTo(gx + 10, GROUND_Y + 4);
+                        ctx.stroke();
+                    }
+
+                    // Physics
+                    player.vy += GRAVITY;
+                    player.y += player.vy;
+                    if (player.y >= GROUND_Y - player.h) {
+                        player.y = GROUND_Y - player.h;
+                        player.vy = 0;
+                        player.jumping = false;
+                    }
+
+                    spawnTimer -= 1;
+                    if (spawnTimer <= 0) {
+                        spawnObstacle();
+                        spawnTimer = 55 + Math.random() * 55 - speed;
+                    }
+                    obstacles.forEach((o) => { o.x -= speed; });
+                    obstacles = obstacles.filter((o) => o.x + o.w > 0);
+
+                    for (const o of obstacles) {
+                        if (
+                            player.x < o.x + o.w && player.x + player.w > o.x &&
+                            player.y < o.y + o.h && player.y + player.h > o.y
+                        ) {
+                            gameOver = true;
+                        }
+                    }
+
+                    score += 1;
+                    speed = Math.min(14, 6 + score / 500);
+                }
+
+                // Player (simple blocky silhouette)
+                ctx.fillStyle = gameOver ? "#c9c9c9" : "#535353";
+                ctx.fillRect(player.x, player.y, player.w, player.h);
+                ctx.fillRect(player.x + player.w - 8, player.y - 8, 14, 12);
+
+                // Obstacles
+                ctx.fillStyle = "#535353";
+                obstacles.forEach((o) => ctx.fillRect(o.x, o.y, o.w, o.h));
+
+                // Score
+                ctx.fillStyle = "#8c8c8c";
+                ctx.font = "12px monospace";
+                ctx.textAlign = "right";
+                ctx.fillText(String(Math.floor(score / 5)).padStart(5, "0"), W - 8, 16);
+
+                if (!running) {
+                    ctx.fillStyle = "#8c8c8c";
+                    ctx.font = "12px Arial";
+                    ctx.textAlign = "center";
+                    ctx.fillText("Leertaste zum Starten", W / 2, GROUND_Y - 40);
+                } else if (gameOver) {
+                    ctx.fillStyle = "#535353";
+                    ctx.font = "14px Arial";
+                    ctx.textAlign = "center";
+                    ctx.fillText("Game Over -- Leertaste für Neustart", W / 2, GROUND_Y - 40);
+                }
+
+                requestAnimationFrame(step);
+            }
+
+            requestAnimationFrame(step);
+        })();
+    </script>
+</body>
+</html>
