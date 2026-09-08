@@ -89,6 +89,15 @@
                     <a class="ai-chat-sidebar-nav-item" href="{{ url_for('ai_gallery') }}">
                         <span class="ai-chat-sidebar-nav-icon" aria-hidden="true">{{ icon('image') }}</span><span>Galerie</span>
                     </a>
+                    <!-- Only shown on the two dedicated full-page chats
+                         (/assistant, /7ai) -- see aiChatSwitchCharacterLink
+                         in the script below, which sets its href/label and
+                         reveals it there. Not on the floating widget
+                         elsewhere: switching AI persona mid-page doesn't
+                         make sense outside a chat's own full page. -->
+                    <a class="ai-chat-sidebar-nav-item" id="aiChatSwitchCharacterLink" href="{{ url_for('sevenai_page') }}" style="display:none;">
+                        <span class="ai-chat-sidebar-nav-icon" aria-hidden="true" id="aiChatSwitchCharacterIcon">😈</span><span id="aiChatSwitchCharacterLabel">Zu 7Ai wechseln</span>
+                    </a>
                     <div class="ai-chat-sidebar-more-wrap">
                         <button type="button" class="ai-chat-sidebar-nav-item" id="aiChatMoreBtn">
                             <span class="ai-chat-sidebar-nav-icon" aria-hidden="true">&#8943;</span><span>Mehr</span>
@@ -352,6 +361,9 @@
                 const buddyConfirmOverlay = document.getElementById("aiBuddyConfirmOverlay");
                 const buddyConfirmYes = document.getElementById("aiBuddyConfirmYes");
                 const buddyConfirmNo = document.getElementById("aiBuddyConfirmNo");
+                const switchCharacterLink = document.getElementById("aiChatSwitchCharacterLink");
+                const switchCharacterIcon = document.getElementById("aiChatSwitchCharacterIcon");
+                const switchCharacterLabel = document.getElementById("aiChatSwitchCharacterLabel");
                 const SIDEBAR_RECENT_LIMIT = 3;
                 let allChatsCache = [];
 
@@ -386,14 +398,50 @@
                 // the chat (with its full sidebar) lives on its own page
                 // rather than in a floating modal on every page.
                 const pageEmbedTarget = document.getElementById("aiChatPageEmbed");
+                // "nex" everywhere except the dedicated /7ai page (see
+                // sevenai.html's data-ai-character on this same element) --
+                // sent to the server on every message/chat-list request so
+                // Nex and 7Ai stay two entirely separate characters with
+                // separate chat histories (see AiChat.character in
+                // models.py). The floating widget on every other page has
+                // no pageEmbedTarget at all, so it's always "nex" there.
+                const currentCharacter = (pageEmbedTarget && pageEmbedTarget.dataset.aiCharacter === "sevenai")
+                    ? "sevenai" : "nex";
                 // The dedicated full-page assistant gets its own welcome
                 // message instead of the Studio-editor-embedded chat's
                 // code-help-flavored greeting, which wouldn't make sense
                 // outside the editor.
                 if (pageEmbedTarget) {
-                    GREETING = '<div class="ai-chat-message ai-chat-message-bot">'
-                        + 'Willkommen, ich bin Nex, schön dass du hier bist!</div>';
+                    GREETING = currentCharacter === "sevenai"
+                        ? '<div class="ai-chat-message ai-chat-message-bot">Was willst du?</div>'
+                        : '<div class="ai-chat-message ai-chat-message-bot">'
+                            + 'Willkommen, ich bin Nex, schön dass du hier bist!</div>';
                     messagesEl.innerHTML = GREETING;
+                }
+                // "Neuesten Code-Chat erstellen" and Buddy are Nex-specific
+                // features (7Ai has no code-context mode and no per-user
+                // personality/memory system, see ai_assistant.py's
+                // SEVENAI_SYSTEM_PROMPT) -- hide both on 7Ai's own page so
+                // they don't sit there doing something that doesn't apply.
+                // The switch-character link is the opposite: hidden by
+                // default (see its style="display:none" in the HTML above),
+                // shown only on these two full pages, pointed at whichever
+                // page is NOT the current one.
+                if (currentCharacter === "sevenai") {
+                    if (sidebarNewCodeBtn) sidebarNewCodeBtn.style.display = "none";
+                    if (buddyBtn) buddyBtn.style.display = "none";
+                }
+                if (pageEmbedTarget && switchCharacterLink) {
+                    switchCharacterLink.style.display = "flex";
+                    if (currentCharacter === "sevenai") {
+                        switchCharacterLink.href = "/assistant";
+                        switchCharacterIcon.textContent = "🤖";
+                        switchCharacterLabel.textContent = "Zu Nex wechseln";
+                    } else {
+                        switchCharacterLink.href = "/7ai";
+                        switchCharacterIcon.textContent = "😈";
+                        switchCharacterLabel.textContent = "Zu 7Ai wechseln";
+                    }
                 }
 
                 let currentChatId = null;
@@ -526,7 +574,7 @@
                 }
 
                 function loadSidebarList() {
-                    fetch("/api/ai/chats")
+                    fetch(`/api/ai/chats?character=${currentCharacter}`)
                         .then((res) => res.json())
                         .then((data) => {
                             if (!data.ok) return;
@@ -682,7 +730,7 @@
                 }
 
                 function loadChatList() {
-                    fetch("/api/ai/chats")
+                    fetch(`/api/ai/chats?character=${currentCharacter}`)
                         .then((res) => res.json())
                         .then((data) => { if (data.ok) renderChatList(data.chats); });
                 }
@@ -1399,11 +1447,17 @@
                     const typingIntervalMs = consumeTypingIntervalMs();
 
                     const includeContext = codeTextarea && currentChatMode === "code";
-                    const body = { message: text };
+                    const body = { message: text, character: currentCharacter };
                     if (currentChatId) body.chat_id = currentChatId;
                     if (typingIntervalMs) body.typing_avg_interval_ms = typingIntervalMs;
                     const contextParts = [];
-                    if (includeContext) {
+                    if (currentCharacter === "sevenai") {
+                        // 7Ai has no Studio-editor/code-context concept at
+                        // all (it's never embedded in an editor) -- always
+                        // "sevenai", regardless of the attachment branch
+                        // below, which otherwise defaults to "general" (Nex).
+                        body.project_type = "sevenai";
+                    } else if (includeContext) {
                         body.project_type = projectType;
                         if (projectType === "game") {
                             const reference = buildSyntaxReference();
@@ -1419,7 +1473,7 @@
                     }
                     if (attachedFile) {
                         contextParts.push(`Angehängte Datei "${attachedFile.name}":\n${attachedFile.content}`);
-                        if (!includeContext) body.project_type = "general";
+                        if (!includeContext && currentCharacter !== "sevenai") body.project_type = "general";
                         attachmentName.textContent = "";
                         attachmentChip.style.display = "none";
                         addMessage("📎 " + attachedFile.name, "user");
@@ -1805,7 +1859,7 @@
                                 if (data.status === "done") {
                                     const reply = data.reply || "(keine Antwort)";
                                     addVoiceLine(reply, "bot");
-                                    voiceStatus.textContent = "Nex spricht ...";
+                                    voiceStatus.textContent = (currentCharacter === "sevenai" ? "7Ai" : "Nex") + " spricht ...";
                                     // Continuous conversation: go straight back to
                                     // listening once the reply finishes playing,
                                     // instead of waiting for another click -- only
@@ -1829,7 +1883,8 @@
                     function sendVoiceMessage(text) {
                         addVoiceLine(text, "user");
                         voiceStatus.textContent = "Die KI denkt nach ...";
-                        const body = { message: text, via_voice: true };
+                        const body = { message: text, via_voice: true, character: currentCharacter };
+                        if (currentCharacter === "sevenai") body.project_type = "sevenai";
                         if (voiceChatId) body.chat_id = voiceChatId;
                         if (voiceWasInterrupted) {
                             body.was_interrupted = true;

@@ -635,6 +635,10 @@ def ensure_sqlite_columns_exist():
         # exists to self-heal for every other table.
         "ai_personality": [("mimic_user_style", "BOOLEAN NOT NULL DEFAULT 0")],
         "ai_generated_media": [("liked", "BOOLEAN NOT NULL DEFAULT 0")],
+        # 7Ai (2026-09-08, see ai_assistant.py's SEVENAI_SYSTEM_PROMPT) --
+        # existing ai_chat rows predate this column and are all Nex chats,
+        # so the default backfills them correctly with no extra code.
+        "ai_chat": [("character", "VARCHAR(20) NOT NULL DEFAULT 'nex'")],
     }
     with db.engine.connect() as conn:
         for table, columns in wanted.items():
@@ -745,6 +749,10 @@ def ensure_columns_exist():
             created_at TIMESTAMP
         )""",
         "ALTER TABLE ai_generated_media ADD COLUMN IF NOT EXISTS liked BOOLEAN NOT NULL DEFAULT FALSE",
+        # 7Ai (2026-09-08, see ai_assistant.py's SEVENAI_SYSTEM_PROMPT) --
+        # existing ai_chat rows predate this column and are all Nex chats,
+        # so the default backfills them correctly with no extra code.
+        "ALTER TABLE ai_chat ADD COLUMN IF NOT EXISTS character VARCHAR(20) NOT NULL DEFAULT 'nex'",
     ]
     with db.engine.connect() as conn:
         for statement in statements:
@@ -1134,6 +1142,18 @@ LEROX_STUDIO_PROJECTS = [
         "website_endpoint": "assistant_page",
         "download_url": "/static/downloads/NexAI-Setup.exe",
     },
+    {
+        "key": "sevenai",
+        "name": "7Ai",
+        "tagline": "Direkt, frech, ohne Zuckerguss -- ein ganz anderer Charakter als Nex.",
+        "icon": "😈",
+        "website_endpoint": "sevenai_page",
+        # Browser-only, deliberately -- no separate desktop wrapper for
+        # this one (out of scope for what was asked; NexAI's own
+        # installer/Electron pattern would need duplicating for a second
+        # product if that's ever wanted).
+        "download_url": None,
+    },
 ]
 
 
@@ -1480,6 +1500,16 @@ def assistant_page():
     return render_template("assistant.html", user=current_user())
 
 
+@app.route("/7ai")
+def sevenai_page():
+    """7Ai's own full-page chat -- structurally identical to /assistant
+    (same shared chat widget in base.html), just with a different persona
+    server-side and its own chat history (see AiChat.character). See
+    templates/sevenai.html's data-ai-character attribute, which is what
+    tells base.html's script to send character "sevenai" instead of "nex"."""
+    return render_template("sevenai.html", user=current_user())
+
+
 @app.route("/galerie")
 def ai_gallery():
     user = current_user()
@@ -1516,6 +1546,7 @@ def serialize_ai_chat(chat):
         "id": chat.id,
         "title": chat.title or "Neuer Chat",
         "mode": chat.mode,
+        "character": chat.character,
         "specialize_prompted": chat.specialize_prompted,
         "updated_at": chat.updated_at.strftime("%d.%m.%Y %H:%M"),
     }
@@ -1526,7 +1557,14 @@ def api_ai_list_chats():
     user = current_user()
     if user is None:
         return jsonify({"ok": False, "error": "not_logged_in"}), 401
-    chats = AiChat.query.filter_by(user_id=user.id).order_by(AiChat.updated_at.desc()).all()
+    # Defaults to "nex" so old frontend code that never sends `character`
+    # (there is none anymore, but this keeps the endpoint itself backward-
+    # compatible) still only sees Nex chats -- see AiChat.character.
+    character = request.args.get("character") if request.args.get("character") in ("nex", "sevenai") else "nex"
+    chats = (
+        AiChat.query.filter_by(user_id=user.id, character=character)
+        .order_by(AiChat.updated_at.desc()).all()
+    )
     return jsonify({"ok": True, "chats": [serialize_ai_chat(c) for c in chats]})
 
 
@@ -1535,7 +1573,9 @@ def api_ai_create_chat():
     user = current_user()
     if user is None:
         return jsonify({"ok": False, "error": "not_logged_in"}), 401
-    chat = AiChat(user_id=user.id)
+    data = request.get_json(silent=True) or {}
+    character = data.get("character") if data.get("character") in ("nex", "sevenai") else "nex"
+    chat = AiChat(user_id=user.id, character=character)
     db.session.add(chat)
     db.session.commit()
     return jsonify({"ok": True, "chat": serialize_ai_chat(chat)})
@@ -1689,7 +1729,16 @@ def api_ai_chat():
     data = request.get_json(silent=True) or {}
     message = (data.get("message") or "").strip()
     context = (data.get("context") or "").strip() or None
-    project_type = data.get("project_type") if data.get("project_type") in ("game", "webapp", "general", "code") else None
+    project_type = (
+        data.get("project_type")
+        if data.get("project_type") in ("game", "webapp", "general", "code", "sevenai") else None
+    )
+    # Which AI character this message belongs to -- see AiChat.character
+    # and ai_assistant.py's SEVENAI_SYSTEM_PROMPT. Not trusted blindly for
+    # an existing chat (see below, once `chat` is resolved) -- an already-
+    # started chat keeps whatever character it was created with, since a
+    # chat's persona/history shouldn't be able to flip mid-conversation.
+    character = data.get("character") if data.get("character") in ("nex", "sevenai") else "nex"
     # Only messages sent through the admin dashboard's dedicated "KI-Wissen"
     # chat become a global fact -- an admin's ordinary chats elsewhere are
     # unaffected, and a non-admin can never set save_as_fact regardless of
@@ -1746,7 +1795,10 @@ def api_ai_chat():
         # mode="code" from creation, so reopening it later keeps sending
         # project_type "code" on every message -- see openChat() in
         # base.html, which reads chat.mode back into currentChatMode.
-        chat = AiChat(user_id=user.id, mode="code" if project_type == "code" else "general")
+        # `character` (see AiChat.character) is set once at creation from
+        # whichever page started the chat (/assistant sends "nex", /7ai
+        # sends "sevenai") and never changes afterwards.
+        chat = AiChat(user_id=user.id, mode="code" if project_type == "code" else "general", character=character)
         db.session.add(chat)
         db.session.flush()
 

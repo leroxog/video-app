@@ -491,6 +491,14 @@ class AiChat(db.Model):
     # chats do (after the user accepts the "Chat auf Code spezialisieren"
     # suggestion, or by starting the chat from inside the Studio editor).
     mode = db.Column(db.String(20), nullable=False, default="general")
+    # Which AI character this chat belongs to -- "nex" (default, NexAI) or
+    # "sevenai" (7Ai, a separate, deliberately blunter/sassier character,
+    # see ai_assistant.py's SEVENAI_SYSTEM_PROMPT). Orthogonal to `mode`
+    # above (which is Nex-specific code-context bookkeeping) -- this only
+    # decides which persona/system-prompt/chat-list a chat belongs to.
+    # api_ai_list_chats() filters by this so a user's Nex and 7Ai chats
+    # never mix in either product's own sidebar.
+    character = db.Column(db.String(20), nullable=False, default="nex")
     specialize_prompted = db.Column(db.Boolean, nullable=False, default=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))

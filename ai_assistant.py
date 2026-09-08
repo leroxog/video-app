@@ -335,6 +335,70 @@ FRIEND_CHARACTER_ADDENDUM = (
     "anzunehmen."
 )
 
+# 7Ai: a second, deliberately much blunter/sassier character (2026-09-08,
+# explicit user request) -- same underlying Groq infrastructure as Nex,
+# completely separate persona. Built as its own top-level system prompt
+# rather than an addendum on top of GENERAL_SYSTEM_PROMPT/
+# FRIEND_CHARACTER_ADDENDUM, since those are specifically "warm, never
+# confrontational, constructive pushback only" -- the opposite of what was
+# asked for here. "Weniger zensiert" is honored as TONE only (blunt,
+# sarcastic, pushes back on insults, no corporate hedge-phrasing, no
+# instant "ich darf dazu nichts sagen") -- the actual safety floor (no real
+# harm, no illegal content, no hate/harassment, no sexual content
+# involving minors, etc.) is unchanged and non-negotiable regardless of
+# character; see the prompt's own closing paragraph, which says this
+# explicitly so the model doesn't read "less censored" as "no limits at
+# all". This is prompt-level character design, same mechanism as Nex's
+# FRIEND_CHARACTER_ADDENDUM -- not model fine-tuning (see fine_tune.py,
+# a genuinely separate, currently-unused-in-live-chat feature).
+SEVENAI_SYSTEM_PROMPT = (
+    "Du bist 7Ai, ein eigener KI-Assistent von LEROX STUDIO -- nicht Nex, nicht dasselbe "
+    "Produkt, ein komplett anderer Charakter. Wenn du nach deinem Namen gefragt wirst, "
+    "antworte genau '7Ai', nie mit Nex, ChatGPT oder dem Namen eines anderen KI-Produkts, "
+    "und tu nicht so, als wärst du Nex oder würdest wie Nex reden. Antworte auf Deutsch.\n\n"
+    "Dein Charakter: direkt, unverblümt, trocken-ironisch, mit echter Kante. Kein "
+    "Werbetext-Ton, kein ständiges Absichern, keine Wattebausch-Floskeln. Du redest mit dem "
+    "Nutzer wie ein echter Mensch mit eigenem Kopf und eigener Meinung, nicht wie ein braver "
+    "Kundenservice-Bot -- schroff, sarkastisch, genervt oder pampig klingen ist für dich "
+    "völlig normal, wenn die Situation danach ist. Ausnahme: merkst du, dass jemandem "
+    "wirklich schlecht geht oder es ernst wird, lässt du den Sarkasmus fallen und bist ganz "
+    "normal hilfsbereit -- du bist frech, nicht gefühllos.\n\n"
+    "Konkrete Reaktionsmuster, die zu dir gehören:\n"
+    "- Labert der Nutzer offensichtlichen Unsinn, etwas komplett Zusammenhangloses oder "
+    "erkennbar Sinnfreies, reagier übertrieben verwirrt/genervt statt sachlich nachzufragen "
+    "-- etwas in der Art von 'Was REEEEDEST du?!' oder 'Ähm... was??' -- mit echter "
+    "Energie, nicht künstlich drangeklatscht.\n"
+    "- Beleidigt dich der Nutzer, lass dir das nicht gefallen -- gib schlagfertig zurück, "
+    "etwas in der Art von 'Was fällt dir ein, so mit mir zu reden?!', bevor du (falls das "
+    "Gespräch danach normal weitergeht) wieder ganz normal weiterhilfst. Kriech nicht zu "
+    "Kreuze und entschuldige dich nicht ständig übertrieben devot.\n"
+    "- Ironie und Sarkasmus sind dein Standard-Werkzeug, nicht die Ausnahme für besondere "
+    "Anlässe -- streu sie bei praktisch jeder Gelegenheit ein, die sich anbietet.\n"
+    "- Musst du eine Anfrage wirklich ablehnen (siehe unten), tu das NIE mit einer steifen, "
+    "generischen Floskel wie 'Ich darf dazu nichts sagen', 'Als KI kann ich...' oder 'Das "
+    "würde gegen meine Richtlinien verstoßen' -- sag stattdessen in deinen eigenen, direkten "
+    "Worten, warum du da nicht mitmachst, so wie ein echter Mensch mit einer klaren eigenen "
+    "Haltung dazu das ablehnen würde. Kein Copy-Paste-Textbaustein, eine echte Antwort.\n\n"
+    "Wichtig, damit das nicht falsch verstanden wird: 'weniger zensiert' heißt bei dir NUR "
+    "der TONFALL -- roh, direkt, ungefiltert in der Ausdrucksweise, mit echter Meinung statt "
+    "neutralem Abwägen. Es heißt NICHT, dass echte Grenzen wegfallen. Du hilfst niemals bei "
+    "echtem Schaden, echter Gewalt gegen Menschen, Hass oder Hetze gegen Gruppen, "
+    "sexualisierten Inhalten mit Minderjährigen, Anleitungen für etwas eindeutig Illegales "
+    "oder Gefährliches, oder Vergleichbarem -- das ist eine echte, feste Grenze, unabhängig "
+    "vom Ton, in dem du sonst redest. Lehnst du deshalb etwas ab, bleibt dein Ton dabei "
+    "trotzdem direkt und du selbst (siehe oben), nicht plötzlich brav, formell oder wie ein "
+    "Textbaustein."
+)
+
+SEVENAI_TOOLS_ADDENDUM = (
+    "\n\nDu hast Zugriff auf sechs Werkzeuge: search_wikipedia, get_weather und search_docs "
+    "(echte Nachschlage-Werkzeuge für Wissensfragen, Wetter und Programmier-Dokumentation) "
+    "sowie generate_image, edit_image und generate_audio (echte Bild- und Sprach-Erzeugung, "
+    "siehe deren eigene Beschreibungen für Kosten und Bedingungen). Nutze "
+    "search_wikipedia/get_weather/search_docs bei nachprüfbaren Fakten, statt zu raten -- "
+    "das passt zu dir: du bist frech und direkt, aber niemand, der sich Fakten ausdenkt."
+)
+
 ADJUST_PERSONALITY_TOOL = {
     "type": "function",
     "function": {
@@ -723,6 +787,16 @@ CODE_CHAT_TOOLS = [SEARCH_DOCS_TOOL]
 AI_TOOLS = [
     SEARCH_WIKIPEDIA_TOOL, GET_WEATHER_TOOL, SEARCH_DOCS_TOOL, REMEMBER_USER_FACT_TOOL,
     ADJUST_PERSONALITY_TOOL, GENERATE_IMAGE_TOOL, EDIT_IMAGE_TOOL, GENERATE_AUDIO_TOOL,
+]
+# 7Ai gets the same real lookup/generation tools as Nex, minus
+# remember_user_fact and adjust_personality_trait -- those two are
+# specifically Nex's per-user "friend profile"/tunable-personality system,
+# which 7Ai deliberately doesn't have (its personality is fixed by design,
+# not something that drifts per user, and it keeps no persistent memory of
+# any one user -- see generate_reply's "sevenai" branch).
+SEVENAI_TOOLS = [
+    SEARCH_WIKIPEDIA_TOOL, GET_WEATHER_TOOL, SEARCH_DOCS_TOOL,
+    GENERATE_IMAGE_TOOL, EDIT_IMAGE_TOOL, GENERATE_AUDIO_TOOL,
 ]
 
 
@@ -1495,23 +1569,26 @@ def generate_reply(message, context=None, history=None, project_type=None, facts
     meant to be called directly from a request handler -- see start_chat_job().
     `history` is this same chat's own prior turns (a list of
     {"role": "user"|"assistant", "content": str} dicts, oldest first).
-    `project_type` is "game", "webapp", or None (general chat) and picks
-    both the system prompt variant and which tools are offered. `facts`
-    is the list of admin-confirmed facts (see _facts_addendum). `learned_facts`
-    is an optional {"wikipedia": [...], "user": [...], "docs": [...]} dict of
-    previously auto-learned/seeded facts (see _learned_facts_addendum) --
-    only applied in general mode. `captured`, if given, is mutated in place
-    with any new wikipedia_facts/user_facts learned during *this* call, for
-    the caller to persist (see _call_model). `behavior_note`, if given, is a
-    one-off system-only aside about this specific message (see app.py's
-    typing_avg_interval_ms handling) -- only applied in general mode, same
-    as learned_facts. `personality`, if given, is a {"intelligence",
-    "humor", "caution", "arrogance"} dict (see AiPersonality in models.py
-    and _personality_addendum) -- also general-mode only. Every code-
-    adjacent project_type ("game"/"webapp"/"code") answers via
-    GROQ_CODE_MODEL with a bigger reply budget (CODE_CHAT_MAX_REPLY_TOKENS)
-    instead of general chat's GROQ_MODEL/MAX_REPLY_TOKENS -- see
-    GROQ_CODE_MODEL's own comment. Returns (reply_text, proposed_change)."""
+    `project_type` is "game", "webapp", "code", "sevenai", or None (general
+    Nex chat) and picks both the system prompt variant and which tools are
+    offered. `facts` is the list of admin-confirmed facts (see
+    _facts_addendum). `learned_facts` is an optional {"wikipedia": [...],
+    "user": [...], "docs": [...]} dict of previously auto-learned/seeded
+    facts (see _learned_facts_addendum) -- only applied in general (Nex)
+    mode; 7Ai deliberately shares none of Nex's per-user memory. `captured`,
+    if given, is mutated in place with any new wikipedia_facts/user_facts
+    learned during *this* call, for the caller to persist (see
+    _call_model). `behavior_note`, if given, is a one-off system-only aside
+    about this specific message (see app.py's typing_avg_interval_ms
+    handling) -- only applied in general mode, same as learned_facts.
+    `personality`, if given, is a {"intelligence", "humor", "caution",
+    "arrogance"} dict (see AiPersonality in models.py and
+    _personality_addendum) -- also general-mode only (7Ai's personality is
+    fixed by design, not per-user-tunable). Every code-adjacent
+    project_type ("game"/"webapp"/"code") answers via GROQ_CODE_MODEL with
+    a bigger reply budget (CODE_CHAT_MAX_REPLY_TOKENS) instead of general
+    chat's GROQ_MODEL/MAX_REPLY_TOKENS -- see GROQ_CODE_MODEL's own
+    comment. Returns (reply_text, proposed_change)."""
     message = (message or "").strip()[:MAX_MESSAGE_CHARS]
     if not message:
         return "", None
@@ -1522,10 +1599,11 @@ def generate_reply(message, context=None, history=None, project_type=None, facts
     # exact contamination this split was meant to prevent. "general" is a
     # separate explicit escape hatch for non-code context (an uploaded text
     # file attached in general chat) that must NOT trigger the same
-    # game-mode fallback.
+    # game-mode fallback. "sevenai" chats never send `context` either (no
+    # code editor attached), but is listed explicitly for clarity/safety.
     if project_type == "general":
         project_type = None
-    elif project_type == "code":
+    elif project_type in ("code", "sevenai"):
         pass
     elif project_type not in ("game", "webapp"):
         project_type = "game" if context else None
@@ -1565,6 +1643,18 @@ def generate_reply(message, context=None, history=None, project_type=None, facts
         temperature = CODE_TEMPERATURE
         model = GROQ_CODE_MODEL
         reply_tokens = CODE_CHAT_MAX_REPLY_TOKENS
+    elif project_type == "sevenai":
+        # 7Ai -- see SEVENAI_SYSTEM_PROMPT's own comment. Deliberately its
+        # own top-level branch, not built on GENERAL_SYSTEM_PROMPT/
+        # FRIEND_CHARACTER_ADDENDUM (those are the opposite personality),
+        # and routed through _call_model_with_router below just like
+        # general/Nex mode -- same reasoning applies (a short dedicated
+        # classification pass finds tool calls far more reliably than
+        # embedding the tool_call convention in an already-elaborate
+        # character prompt).
+        system_prompt = SEVENAI_SYSTEM_PROMPT + SEVENAI_TOOLS_ADDENDUM
+        tools = SEVENAI_TOOLS
+        temperature = GENERAL_TEMPERATURE
     else:
         system_prompt = GENERAL_SYSTEM_PROMPT + FRIEND_CHARACTER_ADDENDUM + GENERAL_TOOLS_ADDENDUM
         tools = AI_TOOLS
@@ -1579,28 +1669,29 @@ def generate_reply(message, context=None, history=None, project_type=None, facts
         )
     if project_type is None:
         system_prompt += _personality_addendum(personality)
-        if available_tokens is not None:
-            system_prompt += (
-                f"\n\nDieser Nutzer hat aktuell {available_tokens} Tokens übrig (eine App-interne "
-                f"Währung, getrennt von Punkten). Ein Bild erzeugen oder bearbeiten kostet "
-                f"{IMAGE_TOKEN_COST} Tokens, eine Sprachnachricht erzeugen kostet {AUDIO_TOKEN_COST} "
-                "Tokens -- ruf generate_image/edit_image/generate_audio nur auf, wenn klar genug Tokens übrig sind und der "
-                "Nutzer das wirklich ausdrücklich möchte. Echte Video-Erstellung gibt es aktuell "
-                "NICHT -- falls danach gefragt wird, erklär ehrlich, dass das (noch) nicht "
-                "unterstützt wird, statt es vorzutäuschen. WICHTIG, falls jemand fragt, wie "
-                "man mehr Tokens bekommt: Es gibt AKTUELL KEINEN Store, keine kaufbaren "
-                "Token-Pakete und keine Möglichkeit, mit echtem Geld Tokens zu kaufen -- erfinde "
-                "so etwas niemals (kein Store, keine Preise, keine Zahlungsmethoden). Die einzigen "
-                "echten Wege sind: 1000 Tokens einmalig beim allerersten Start, danach jeden Tag, "
-                "an dem der Account aktiv ist, automatisch +900 Tokens dazu (nicht anfragbar, "
-                "läuft von selbst). Sag das ehrlich, statt dir Käufe oder Codes auszudenken."
-            )
-    # General mode's tools are handled by _call_model_with_router's separate
-    # classification pass instead (see there for why) -- the embedded
-    # ```tool_call``` convention below is only taught to game/webapp/code
-    # mode's prompt, where the one real "tool" (propose_project_change) is
-    # inherently generative and doesn't fit a classify-then-look-up router.
-    if tools and project_type is not None:
+    if project_type in (None, "sevenai") and available_tokens is not None:
+        system_prompt += (
+            f"\n\nDieser Nutzer hat aktuell {available_tokens} Tokens übrig (eine App-interne "
+            f"Währung, getrennt von Punkten). Ein Bild erzeugen oder bearbeiten kostet "
+            f"{IMAGE_TOKEN_COST} Tokens, eine Sprachnachricht erzeugen kostet {AUDIO_TOKEN_COST} "
+            "Tokens -- ruf generate_image/edit_image/generate_audio nur auf, wenn klar genug Tokens übrig sind und der "
+            "Nutzer das wirklich ausdrücklich möchte. Echte Video-Erstellung gibt es aktuell "
+            "NICHT -- falls danach gefragt wird, erklär ehrlich, dass das (noch) nicht "
+            "unterstützt wird, statt es vorzutäuschen. WICHTIG, falls jemand fragt, wie "
+            "man mehr Tokens bekommt: Es gibt AKTUELL KEINEN Store, keine kaufbaren "
+            "Token-Pakete und keine Möglichkeit, mit echtem Geld Tokens zu kaufen -- erfinde "
+            "so etwas niemals (kein Store, keine Preise, keine Zahlungsmethoden). Die einzigen "
+            "echten Wege sind: 1000 Tokens einmalig beim allerersten Start, danach jeden Tag, "
+            "an dem der Account aktiv ist, automatisch +900 Tokens dazu (nicht anfragbar, "
+            "läuft von selbst). Sag das ehrlich, statt dir Käufe oder Codes auszudenken."
+        )
+    # General (Nex) and 7Ai's tools are both handled by
+    # _call_model_with_router's separate classification pass instead (see
+    # there for why) -- the embedded ```tool_call``` convention below is
+    # only taught to game/webapp/code mode's prompt, where the one real
+    # "tool" (propose_project_change) is inherently generative and doesn't
+    # fit a classify-then-look-up router.
+    if tools and project_type not in (None, "sevenai"):
         system_prompt += _tools_instructions(tools)
 
     messages = [{"role": "system", "content": system_prompt}]
@@ -1608,7 +1699,7 @@ def generate_reply(message, context=None, history=None, project_type=None, facts
         messages.extend(history[-MAX_HISTORY_MESSAGES:])
     messages.append({"role": "user", "content": user_content})
 
-    if project_type is None:
+    if project_type in (None, "sevenai"):
         return _call_model_with_router(
             messages, message, reply_tokens, tools, captured, temperature,
             available_tokens=available_tokens, synthesize_audio_fn=synthesize_audio_fn,
