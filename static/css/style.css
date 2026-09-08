@@ -2258,6 +2258,12 @@ body.studio-fullscreen .ai-chat-message-bot {
     text-align: center;
 }
 
+.ai-chat-disclaimer a {
+    color: var(--accent-blue-bright);
+    font-weight: 600;
+    text-decoration: underline;
+}
+
 .ai-chat-feedback-row {
     display: flex;
     gap: 0.4rem;

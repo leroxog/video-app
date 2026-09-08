@@ -202,6 +202,12 @@
                             </button>
                         </div>
                         <p class="ai-chat-disclaimer">Sie schreiben mit einer KI, nicht mit einem Menschen. Eine KI kann Fehler machen.</p>
+                        <!-- 7Ai's escape hatch -- always here, in code, not
+                             left to the model to remember to mention (see
+                             aiChatCharacterHint in the script below, which
+                             reveals this only when currentCharacter is
+                             "sevenai" and points it at /assistant). -->
+                        <p class="ai-chat-disclaimer" id="aiChatCharacterHint" style="display:none;"></p>
                         </div>
 
                         <!-- Lives right inside the normal conversation area
@@ -364,6 +370,7 @@
                 const switchCharacterLink = document.getElementById("aiChatSwitchCharacterLink");
                 const switchCharacterIcon = document.getElementById("aiChatSwitchCharacterIcon");
                 const switchCharacterLabel = document.getElementById("aiChatSwitchCharacterLabel");
+                const characterHint = document.getElementById("aiChatCharacterHint");
                 const SIDEBAR_RECENT_LIMIT = 3;
                 let allChatsCache = [];
 
@@ -430,6 +437,15 @@
                 if (currentCharacter === "sevenai") {
                     if (sidebarNewCodeBtn) sidebarNewCodeBtn.style.display = "none";
                     if (buddyBtn) buddyBtn.style.display = "none";
+                    // Guaranteed by code, not by the model remembering to
+                    // say it -- always visible under the message box on
+                    // 7Ai's own page, regardless of what any individual
+                    // reply says.
+                    if (characterHint) {
+                        characterHint.style.display = "block";
+                        characterHint.innerHTML = 'Wenn du dich von dieser KI/7Ai unwohl oder beleidigt fühlst, '
+                            + '<a href="/assistant">wechsle zu NexAi!</a>';
+                    }
                 }
                 if (pageEmbedTarget && switchCharacterLink) {
                     switchCharacterLink.style.display = "flex";
