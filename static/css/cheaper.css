@@ -23,6 +23,16 @@
      block below. */
   --pink: #ff2d95;
   --pink-soft: rgba(255, 45, 149, 0.14);
+  /* Glass mode (2026-09-09, "mach alles im glass modus") -- identical
+     values to style.css's --glass-* tokens (the main Nex/7Ai chat app has
+     used these for a while) so this stylesheet's pages (Pinklemon hub,
+     login/register/account/terms) finally match rather than being the one
+     part of the site still on flat opaque panels. */
+  --glass-bg: rgba(20, 30, 45, 0.045);
+  --glass-bg-strong: rgba(20, 30, 45, 0.08);
+  --glass-border: 1px solid rgba(20, 30, 45, 0.1);
+  --glass-blur: blur(20px) saturate(1.7);
+  --glass-shadow: 0 8px 26px rgba(20, 30, 45, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
 /* Dark is the default for every visitor across the rest of this app (see
@@ -53,6 +63,11 @@
   --primary-btn-text: #000000;
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.5);
   --shadow-sticky: 0 2px 10px rgba(0, 0, 0, 0.5);
+  --glass-bg: rgba(255, 255, 255, 0.07);
+  --glass-bg-strong: rgba(255, 255, 255, 0.1);
+  --glass-border: 1px solid rgba(255, 255, 255, 0.14);
+  --glass-blur: blur(20px) saturate(1.7);
+  --glass-shadow: 0 8px 26px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 * {
@@ -85,6 +100,50 @@ button, input, select, textarea {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+}
+
+/* ---------- Ambient glow (behind the glass panels) ---------- */
+/* Same technique as style.css's .ai-ambient-light on the Nex/7Ai side of
+   the site (a soft light slowly drifting behind the glass panels, so
+   their backdrop-filter blur picks it up as a moving glow shining
+   through) -- pink-tinted here instead of white/orange to match
+   Pinklemon's own brand color rather than reusing Nex/7Ai's. Needs a
+   div.cheaper-ambient-light placed once per page (cheaper_base.html /
+   studio_home.html), same as assistant.html/sevenai.html do for
+   .ai-ambient-light. */
+.cheaper-ambient-light {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: radial-gradient(700px circle, rgba(255, 45, 149, 0.18), transparent 65%);
+  background-repeat: no-repeat;
+  background-position: 15% 10%;
+  filter: blur(20px);
+  mix-blend-mode: screen;
+  animation: cheaperAmbientDrift 34s ease-in-out infinite alternate;
+}
+
+/* Light theme has no data-theme attribute at all (only dark sets one, see
+   base.html's theme-init script) -- "screen" blending barely shows on a
+   white background, so light mode switches to "multiply" instead, same
+   fix style.css already applies to .ai-ambient-light for the same reason. */
+:root:not([data-theme="dark"]) .cheaper-ambient-light {
+  mix-blend-mode: multiply;
+}
+
+@keyframes cheaperAmbientDrift {
+  0%   { background-position: 8%  6%; }
+  25%  { background-position: 92% 18%; }
+  50%  { background-position: 78% 88%; }
+  75%  { background-position: 12% 76%; }
+  100% { background-position: 30% 30%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cheaper-ambient-light {
+    animation: none;
+  }
 }
 
 /* ---------- App-download banner ---------- */
@@ -133,8 +192,10 @@ button, input, select, textarea {
   justify-content: space-between;
   gap: 16px;
   padding: 14px 20px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg);
+  border-bottom: var(--glass-border);
+  background: var(--glass-bg-strong);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   position: sticky;
   top: 0;
   z-index: 50;
@@ -228,6 +289,8 @@ main.cheaper-main {
 
 .cheaper-flashes li {
   background: var(--accent-soft);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   color: var(--accent-strong);
   border-radius: var(--radius-sm);
   padding: 10px 14px;
@@ -721,8 +784,10 @@ main.cheaper-main {
 .cheaper-form input[type="number"],
 .cheaper-form select,
 .cheaper-form textarea {
-  border: 1px solid var(--border);
-  background: var(--bg-soft);
+  border: var(--glass-border);
+  background: var(--glass-bg-strong);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   border-radius: var(--radius-sm);
   padding: 11px 13px;
   font-size: 14.5px;
@@ -764,9 +829,11 @@ main.cheaper-main {
 }
 
 .cheaper-btn.secondary {
-  background: transparent;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   color: var(--text);
-  border: 1px solid var(--border);
+  border: var(--glass-border);
 }
 
 .cheaper-btn.danger {
@@ -793,6 +860,8 @@ main.cheaper-main {
 
 .kids-account-bubble {
   background: var(--accent-soft);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   border: 1px solid var(--accent);
   border-radius: var(--radius-sm);
   padding: 12px 14px;
@@ -849,9 +918,11 @@ main.cheaper-main {
   justify-content: center;
   gap: 4px;
   height: 200px;
-  border: 1px solid var(--border);
+  border: var(--glass-border);
   border-radius: var(--radius-md);
-  background: var(--bg-soft);
+  background: var(--glass-bg-strong);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   overflow: hidden;
 }
 
@@ -924,12 +995,12 @@ main.cheaper-main {
 
 .date-wheel::before {
   top: 0;
-  background: linear-gradient(var(--bg-soft), rgba(0, 0, 0, 0));
+  background: linear-gradient(var(--glass-bg-strong), rgba(0, 0, 0, 0));
 }
 
 .date-wheel::after {
   bottom: 0;
-  background: linear-gradient(rgba(0, 0, 0, 0), var(--bg-soft));
+  background: linear-gradient(rgba(0, 0, 0, 0), var(--glass-bg-strong));
 }
 
 /* ---------- Company dashboard ---------- */
@@ -1526,8 +1597,10 @@ main.cheaper-main {
   align-items: center;
   gap: 12px 18px;
   padding: 12px 20px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg);
+  border-bottom: var(--glass-border);
+  background: var(--glass-bg-strong);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   position: sticky;
   top: 0;
   z-index: 50;
@@ -1563,8 +1636,10 @@ main.cheaper-main {
   display: flex;
   align-items: center;
   gap: 10px;
-  background: var(--bg-soft);
-  border: 1px solid var(--border);
+  background: var(--glass-bg-strong);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: var(--glass-border);
   border-radius: 999px;
   padding: 9px 16px;
   color: var(--text-faint);
@@ -1609,8 +1684,10 @@ main.cheaper-main {
 }
 
 .pl-topbar-actions a, .pl-topbar-actions button {
-  background: transparent;
-  border: 1px solid var(--border);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: var(--glass-border);
   border-radius: 999px;
   padding: 8px 16px;
   cursor: pointer;
@@ -1627,8 +1704,10 @@ main.cheaper-main {
   display: flex;
   align-items: center;
   gap: 6px;
-  background: var(--bg-soft);
-  border: 1px solid var(--border);
+  background: var(--glass-bg-strong);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: var(--glass-border);
   border-radius: 999px;
   padding: 7px 14px;
   color: var(--text);
@@ -1657,8 +1736,10 @@ main.cheaper-main {
   height: 34px;
   padding: 0;
   border-radius: 50%;
-  border: 1px solid var(--border);
-  background: var(--bg-card);
+  border: var(--glass-border);
+  background: var(--glass-bg-strong);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   color: var(--text-dim);
   flex-shrink: 0;
 }
@@ -1694,7 +1775,10 @@ main.cheaper-main {
   width: 224px;
   flex-shrink: 0;
   align-self: stretch;
-  border-right: 1px solid var(--border);
+  border-right: var(--glass-border);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   padding: 20px 14px;
   display: flex;
   flex-direction: column;
@@ -1795,8 +1879,11 @@ main.cheaper-main {
   position: relative;
   overflow: hidden;
   border-radius: var(--radius-lg);
-  border: 1px solid var(--border);
-  background: var(--bg-card);
+  border: var(--glass-border);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-shadow);
   padding: 36px 34px;
   margin-bottom: 30px;
 }
@@ -1854,11 +1941,13 @@ main.cheaper-main {
 .pl-card {
   display: flex;
   flex-direction: column;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
+  background: var(--glass-bg);
+  border: var(--glass-border);
   border-radius: var(--radius-lg);
   overflow: hidden;
-  box-shadow: var(--shadow-card);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-shadow);
   transition: transform 0.14s ease, box-shadow 0.14s ease;
 }
 
