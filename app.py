@@ -1247,12 +1247,14 @@ def offline_page():
     return render_template("offline.html")
 
 
-# Every product listed on the LEROX STUDIO hub -- deliberately a plain
-# curated list here (not a database table): new entries only ever get
-# added when explicitly asked for in conversation. website_endpoint is a
-# Flask endpoint name resolved fresh per-request (so it survives future
-# route renames); download_url is a static installer path, or None if
-# that product has no desktop app yet.
+# Every product listed on the Pinklemon hub (renamed from "Pinklemon"
+# 2026-09-09, on request -- the underlying LEROX-Konto/account system and
+# LEROX Browser were NOT part of that request and keep their name) --
+# deliberately a plain curated list here (not a database table): new
+# entries only ever get added when explicitly asked for in conversation.
+# website_endpoint is a Flask endpoint name resolved fresh per-request (so
+# it survives future route renames); download_url is a static installer
+# path, or None if that product has no desktop app yet.
 #
 # Chepal, LEROX Mail, LEROX Games (Kampumion/PCwar/AutoTrain), and Mini
 # Job were deliberately deleted from the app (2026-09-06, on request) --
@@ -1260,7 +1262,7 @@ def offline_page():
 # just hidden. LEROX Browser still exists and works, but is deliberately
 # NOT listed here (also on request) -- still reachable directly via
 # /static/downloads/LEROX-Browser-Setup.exe for anyone with that link.
-LEROX_STUDIO_PROJECTS = [
+PINKLEMON_PROJECTS = [
     {
         "key": "nex",
         "name": "NexAI",
@@ -1292,18 +1294,31 @@ LEROX_STUDIO_PROJECTS = [
 
 @app.route("/")
 def studio_home():
-    """The public LEROX STUDIO storefront -- deliberately reachable without
+    """The public Pinklemon storefront -- deliberately reachable without
     logging in or accepting the terms (see TERMS_ALLOWED_ENDPOINTS /
     LOGIN_GATE_ALLOWED_ENDPOINTS), same as browsing a real app store
     before installing anything. Clicking into an actual product still goes
     through that product's own login/terms gate as before."""
     user = current_user()
     projects = []
-    for project in LEROX_STUDIO_PROJECTS:
+    for project in PINKLEMON_PROJECTS:
         entry = dict(project)
         entry["website_url"] = url_for(project["website_endpoint"]) if project["website_endpoint"] else None
         projects.append(entry)
-    return render_template("studio_home.html", user=user, projects=projects)
+    # Store-style wallet chip in the hub's top bar (see studio_home.html) --
+    # reuses the same real AI-token balance the chat sidebar shows
+    # (base.html), not a separate/fake number. "unbegrenzt" for accounts
+    # with unlimited tokens rather than printing their (irrelevant)
+    # underlying ai_tokens number.
+    tokens_available = None
+    if user:
+        tokens_available = (
+            "unbegrenzt" if user_has_unlimited_ai_tokens(user)
+            else (user.ai_tokens if user.ai_tokens is not None else STARTING_AI_TOKENS)
+        )
+    return render_template(
+        "studio_home.html", user=user, projects=projects, tokens_available=tokens_available,
+    )
 
 
 def parse_onboarding_fields(form):

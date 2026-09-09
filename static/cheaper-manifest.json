@@ -1,15 +1,15 @@
 {
-    "name": "Cheaper",
-    "short_name": "Cheaper",
-    "description": "Finde reduzierte Preise in deiner Nähe",
+    "name": "Pinklemon",
+    "short_name": "Pinklemon",
+    "description": "Pinklemon -- NexAI und 7Ai an einem Ort.",
     "start_url": "/",
     "scope": "/",
     "display": "standalone",
-    "background_color": "#ffffff",
-    "theme_color": "#ffffff",
+    "background_color": "#000000",
+    "theme_color": "#0a0a0c",
     "icons": [
         {
-            "src": "/static/img/cheaper-mark.svg",
+            "src": "/static/img/pinklemon-mark.svg",
             "sizes": "any",
             "type": "image/svg+xml",
             "purpose": "any"

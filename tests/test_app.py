@@ -109,8 +109,8 @@ def test_register_and_login(client):
     assert response.status_code == 200
     # A successful login lands on studio_home ("/") -- anonymous visitors
     # get redirected to /login instead of ever reaching it, so landing on
-    # the LEROX STUDIO hub is proof the login actually landed logged in.
-    assert b"LEROX STUDIO" in response.data
+    # the Pinklemon hub is proof the login actually landed logged in.
+    assert b"Pinklemon" in response.data
 
 
 def test_register_stores_birthdate_and_gender(client):
@@ -296,7 +296,7 @@ def test_brand_wordmark_present_on_every_page(client):
     # reachable without an account.
     for path in ["/login", "/register"]:
         response = client.get(path)
-        assert b"LEROX STUDIO" in response.data
+        assert b"Pinklemon" in response.data
         assert b"headerSearchInput" not in response.data
         assert b"bottom-nav" not in response.data
 
@@ -376,7 +376,7 @@ def test_admin_can_create_fake_account(client):
         "birthdate": "1990-01-01", "gender": "keine_angabe",
     })
     home_response = client.get("/")
-    assert b"LEROX STUDIO" in home_response.data
+    assert b"Pinklemon" in home_response.data
 
 
 def test_non_admin_cannot_create_account_via_admin_route(client):
@@ -510,7 +510,7 @@ def test_add_email_unlocks_username_and_password_change(client):
         "/login", data={"username": "newalice", "password": "newpass123"}, follow_redirects=True
     )
     # See test_register_and_login -- confirm login via landing on studio_home.
-    assert b"LEROX STUDIO" in response.data
+    assert b"Pinklemon" in response.data
 
 
 def test_password_change_rejects_wrong_current_password(client):
@@ -1836,7 +1836,7 @@ def test_ai_job_failure_is_logged_to_error_log(client, monkeypatch):
 
 
 def test_anonymous_visitor_is_gated_by_terms_before_anything_else(raw_client):
-    # "/" itself is the public LEROX STUDIO storefront (deliberately exempt,
+    # "/" itself is the public Pinklemon storefront (deliberately exempt,
     # like browsing a real app store before installing anything) --
     # /account/settings is an actual gated entry point.
     response = raw_client.get("/account/settings", follow_redirects=False)

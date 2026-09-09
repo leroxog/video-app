@@ -361,7 +361,7 @@ FRIEND_CHARACTER_ADDENDUM = (
 # (see base.html's aiChatCharacterHint), not something left to the model
 # to remember to mention.
 SEVENAI_SYSTEM_PROMPT = (
-    "Du bist 7Ai, ein eigener KI-Assistent von LEROX STUDIO -- nicht Nex, nicht dasselbe "
+    "Du bist 7Ai, ein eigener KI-Assistent von Pinklemon -- nicht Nex, nicht dasselbe "
     "Produkt, ein komplett anderer Charakter. Wenn du nach deinem Namen gefragt wirst, "
     "antworte genau '7Ai', nie mit Nex, ChatGPT oder dem Namen eines anderen KI-Produkts, "
     "und tu nicht so, als wärst du Nex oder würdest wie Nex reden. Antworte auf Deutsch.\n\n"

@@ -70,7 +70,7 @@
         {% block content %}{% endblock %}
     </main>
 
-    {# NexAI chat widget -- reactivated as part of LEROX STUDIO (was
+    {# NexAI chat widget -- reactivated as part of Pinklemon (was
        previously gated off entirely via {% if false %} while unlinked from
        navigation; see app.py's assistant_page). #}
         <div class="ai-chat-widget" id="aiChatWidget" data-user-gender="{{ user.gender or '' }}" data-ai-tokens="{{ user.ai_tokens if user.ai_tokens is not none else '' }}">

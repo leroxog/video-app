@@ -17,12 +17,18 @@
   --radius-lg: 20px;
   --shadow-card: 0 1px 2px rgba(20, 20, 20, 0.04), 0 8px 24px rgba(20, 20, 20, 0.06);
   --shadow-sticky: 0 2px 10px rgba(20, 20, 20, 0.06);
+  /* Pinklemon brand pink (2026-09-09 rename+redesign, see pinklemon-mark.svg
+     / partials/_pinklemon_logo.html) -- a fixed brand color like the Nex/
+     7Ai logos, not theme-reactive, so it's outside the dark-mode override
+     block below. */
+  --pink: #ff2d95;
+  --pink-soft: rgba(255, 45, 149, 0.14);
 }
 
 /* Dark is the default for every visitor across the rest of this app (see
    style.css's own dark-theme comment and base.html's theme-init script) --
    this stylesheet (login/register/account-settings/terms/forgot-password/
-   the LEROX STUDIO hub) was the one part of the site still permanently
+   the Pinklemon hub) was the one part of the site still permanently
    stuck in light mode, added 2026-09-09 on explicit request. Same
    mechanism as style.css: a `data-theme="dark"` attribute set on <html>
    before paint (see cheaper_base.html/studio_home.html's copy of
@@ -155,6 +161,22 @@ button, input, select, textarea {
   color: var(--primary-btn-text);
   font-weight: 800;
   font-size: 16px;
+}
+
+/* Pinklemon's real logo mark (see partials/_pinklemon_logo.html), used in
+   place of the plain-text .cheaper-brand-mark above on the auth pages
+   (login/register/account/terms) that still extend cheaper_base.html. */
+.cheaper-brand-mark-logo {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+}
+
+.cheaper-brand-mark-logo .brand-logo-mark {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .cheaper-header-nav {
@@ -1369,97 +1391,443 @@ main.cheaper-main {
   }
 }
 
-/* ---------- LEROX STUDIO hub ---------- */
-.studio-hero {
-  text-align: center;
-  max-width: 560px;
-  margin: 20px auto 44px;
-}
-
-.studio-hero-title {
-  font-size: 34px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  margin: 0 0 10px;
-}
-
-.studio-hero-subtitle {
-  font-size: 15px;
-  color: var(--text-dim);
-  margin: 0 0 10px;
-  line-height: 1.5;
-}
-
-.studio-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 20px;
-  max-width: 900px;
-  margin: 0 auto;
-}
-
-.studio-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-card);
-  padding: 26px 22px;
+/* ---------- Pinklemon hub ---------- */
+/* Store-launcher layout (2026-09-09, "hauptseite soll aufgebaut sein wie
+   [Epic Games Store]") -- topbar (logo/search/account) + a left sidebar
+   (nav + a Schnellstart quick-launch list straight into Nex/7Ai, same idea
+   as Epic's own quick-launch game list) + a main pane (hero banner + a
+   store-tile grid of the actual products). Adapted rather than cloned
+   pixel-for-pixel: Pinklemon only has two real products and no
+   wishlist/cart/purchases, so those specific icons/rails were left out
+   instead of wired to nothing. All new classes are prefixed pl- to keep
+   them apart from the shared .cheaper-* chrome the auth pages still use
+   (this page no longer uses .cheaper-header/.cheaper-main at all -- see
+   studio_home.html). */
+.pl-shell {
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
+}
+
+.pl-topbar {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  text-align: center;
-  transition: transform 0.14s ease, box-shadow 0.14s ease;
+  gap: 12px 18px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  position: sticky;
+  top: 0;
+  z-index: 50;
 }
 
-.studio-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 4px 8px rgba(20, 20, 20, 0.06), 0 16px 32px rgba(20, 20, 20, 0.09);
-}
-
-.studio-card-icon {
-  width: 64px;
-  height: 64px;
+.pl-brand {
   display: flex;
   align-items: center;
-  justify-content: center;
-  margin-bottom: 14px;
-  /* Each project now renders its own real wordmark logo here (see
-     partials/_nex_logo.html / _sevenai_logo.html) -- the SVG itself
-     already supplies its own rounded-rect background/fill (rx="18" on a
-     100-unit viewBox), so this wrapper stays a plain, unstyled 64x64 box
-     rather than framing a badge inside another badge. */
+  gap: 10px;
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  flex-shrink: 0;
 }
 
-.studio-card-icon .brand-logo-mark {
+.pl-brand-mark {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+}
+
+.pl-brand-mark .brand-logo-mark {
   width: 100%;
   height: 100%;
   display: block;
 }
 
-.studio-card-name {
-  font-size: 18px;
-  font-weight: 800;
-  margin: 0 0 6px;
+.pl-search {
+  flex: 1 1 160px;
+  min-width: 0;
+  max-width: 520px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 9px 16px;
+  color: var(--text-faint);
+  /* Sticky-positioned inside a wrapping flexbox: order last so it drops to
+     its own full-width row on narrow screens instead of squeezing itself
+     (and pushing the account controls half off-screen) to stay on the
+     brand/actions row -- caught via topbar.scrollWidth > viewport width
+     at 375px, not just by eye. */
+  order: 3;
+  flex-basis: 100%;
 }
 
-.studio-card-tagline {
+@media (min-width: 561px) {
+  .pl-search {
+    flex-basis: 160px;
+    order: 0;
+  }
+}
+
+.pl-search svg {
+  flex-shrink: 0;
+}
+
+.pl-search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.pl-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
   font-size: 13.5px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.pl-topbar-actions a, .pl-topbar-actions button {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 8px 16px;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.pl-topbar-actions a.primary {
+  background: var(--primary-btn);
+  color: var(--primary-btn-text);
+  border-color: var(--primary-btn);
+}
+
+.pl-token-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 7px 14px;
+  color: var(--text);
+  font-weight: 700;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.pl-token-chip svg {
+  color: var(--pink);
+  flex-shrink: 0;
+}
+
+/* .pl-topbar-actions prefixed on both (not just .pl-icon-btn/.pl-avatar
+   alone) -- these are <a> tags inside .pl-topbar-actions, and the generic
+   ".pl-topbar-actions a" rule above (one class + one element = higher
+   specificity than a single class alone) was winning over the bare class
+   and silently stripping their background/padding/border-radius. Same
+   contrast-adjacent bug shape as the earlier white-on-white cheaper.css
+   fixes -- caught here by checking computed style, not just by eye. */
+.pl-topbar-actions .pl-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
   color: var(--text-dim);
-  line-height: 1.45;
+  flex-shrink: 0;
+}
+
+.pl-topbar-actions .pl-icon-btn:hover {
+  color: var(--text);
+  border-color: var(--text-dim);
+}
+
+.pl-topbar-actions .pl-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 50%;
+  border: none;
+  background: var(--pink);
+  color: #000000;
+  font-weight: 800;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.pl-body {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+}
+
+.pl-sidebar {
+  width: 224px;
+  flex-shrink: 0;
+  align-self: stretch;
+  border-right: 1px solid var(--border);
+  padding: 20px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.pl-sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pl-sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+.pl-sidebar-link svg {
+  flex-shrink: 0;
+}
+
+.pl-sidebar-link:hover {
+  background: var(--bg-soft);
+  color: var(--text);
+}
+
+/* Solid pink pill with black text rather than pink-on-tinted-pink text --
+   the tinted version measured well under WCAG AA contrast in light mode
+   (~2.9:1), same class of bug as cheaper.css's earlier white-on-white
+   fixes. Pink + black text (also used by .pl-avatar/.pl-hero-cta below)
+   passes comfortably (~6:1). */
+.pl-sidebar-link.is-active {
+  background: var(--pink);
+  color: #000000;
+}
+
+.pl-sidebar-heading {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  margin: 0 0 2px 10px;
+}
+
+.pl-quicklaunch {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pl-quicklaunch-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.pl-quicklaunch-item:hover {
+  background: var(--bg-soft);
+}
+
+.pl-quicklaunch-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.pl-quicklaunch-icon .brand-logo-mark {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.pl-main {
+  flex: 1;
+  min-width: 0;
+  padding: 26px 28px 60px;
+}
+
+/* A pink radial glow accent instead of a full pink background behind body
+   text -- keeps the banner clearly on-brand without risking the same
+   low-contrast-text-on-pink problem noted above for anything smaller than
+   this heading. */
+.pl-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  padding: 36px 34px;
+  margin-bottom: 30px;
+}
+
+.pl-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 90% 25%, var(--pink-soft) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+.pl-hero-inner {
+  position: relative;
+  max-width: 520px;
+}
+
+.pl-hero-inner h1 {
+  margin: 0 0 8px;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.pl-hero-inner p {
   margin: 0 0 18px;
+  font-size: 14.5px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.pl-hero-cta {
+  display: inline-flex;
+  background: var(--pink);
+  color: #000000;
+  padding: 11px 22px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.pl-section-title {
+  font-size: 15px;
+  font-weight: 800;
+  margin: 0 0 14px;
+}
+
+.pl-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 18px;
+}
+
+.pl-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+  transition: transform 0.14s ease, box-shadow 0.14s ease;
+}
+
+.pl-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 8px rgba(20, 20, 20, 0.06), 0 16px 32px rgba(20, 20, 20, 0.09);
+}
+
+.pl-card-icon {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: var(--bg-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 26px;
+}
+
+.pl-card-icon .brand-logo-mark {
+  width: 76px;
+  height: 76px;
+}
+
+.pl-card-body {
+  padding: 16px 18px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   flex: 1;
 }
 
-.studio-card-actions {
+.pl-card-body h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.pl-card-body p {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.45;
+  flex: 1;
+}
+
+.pl-card-actions {
   display: flex;
-  flex-direction: column;
   gap: 8px;
-  width: 100%;
+  flex-wrap: wrap;
+}
+
+.pl-card-actions .cheaper-btn {
+  padding: 9px 16px;
+  font-size: 13px;
+}
+
+.pl-empty {
+  color: var(--text-faint);
+  font-size: 13.5px;
+  padding: 20px 0;
+}
+
+@media (max-width: 860px) {
+  .pl-sidebar {
+    display: none;
+  }
+  .pl-search {
+    max-width: none;
+  }
 }
 
 @media (max-width: 640px) {
-  .studio-hero-title {
-    font-size: 27px;
+  .pl-hero-inner h1 {
+    font-size: 24px;
+  }
+  .pl-token-chip .pl-token-label {
+    display: none;
+  }
+  .pl-main {
+    padding: 20px 16px 48px;
   }
 }
 

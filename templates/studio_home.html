@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+{%- from "partials/_icons.html" import icon -%}
 <html lang="de">
 <head>
     <meta charset="UTF-8">
@@ -18,21 +19,31 @@
             }
         })();
     </script>
-    <title>LEROX STUDIO</title>
+    <title>Pinklemon</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/cheaper.css') }}">
     <link rel="manifest" href="{{ url_for('static', filename='cheaper-manifest.json') }}">
-    <link rel="icon" href="{{ url_for('static', filename='img/cheaper-mark.svg') }}" type="image/svg+xml">
+    <link rel="icon" href="{{ url_for('static', filename='img/pinklemon-mark.svg') }}" type="image/svg+xml">
 </head>
 <body>
-<div class="cheaper-app">
-    <header class="cheaper-header">
-        <a class="cheaper-brand" href="{{ url_for('studio_home') }}">
-            <span class="cheaper-brand-mark">L</span>LEROX STUDIO
+<div class="pl-shell">
+    <header class="pl-topbar">
+        <a class="pl-brand" href="{{ url_for('studio_home') }}">
+            <span class="pl-brand-mark">{% include "partials/_pinklemon_logo.html" %}</span>
+            Pinklemon
         </a>
-        <nav class="cheaper-header-nav">
+        <div class="pl-search">
+            {{ icon('search', 17) }}
+            <input type="text" id="plSearchInput" placeholder="Im Store suchen" autocomplete="off">
+        </div>
+        <nav class="pl-topbar-actions">
             {% if user %}
-                <span class="cheaper-username">{{ user.username }}</span>
-                <a href="{{ url_for('account_settings') }}">Konto</a>
+                {% if tokens_available is not none %}
+                    <span class="pl-token-chip" title="Deine KI-Tokens (für Nex/7Ai)">
+                        {{ icon('bolt', 14) }}<span class="pl-token-label">{{ tokens_available }}</span>
+                    </span>
+                {% endif %}
+                <a class="pl-icon-btn" href="{{ url_for('account_settings') }}" title="Konto-Einstellungen">{{ icon('gear', 17) }}</a>
+                <a class="pl-avatar" href="{{ url_for('account_settings') }}" title="{{ user.username }}">{{ user.username[0]|upper }}</a>
                 <form action="{{ url_for('logout') }}" method="post" style="display:contents;">
                     <button type="submit">Abmelden</button>
                 </form>
@@ -43,33 +54,73 @@
         </nav>
     </header>
 
-    <main class="cheaper-main">
-        <div class="studio-hero">
-            <h1 class="studio-hero-title">LEROX STUDIO</h1>
-            <p class="studio-hero-subtitle">Alle Projekte von LEROX an einem Ort -- als App zum Herunterladen oder direkt im Browser.</p>
-            {% if not user %}
-                <p class="cheaper-form-hint">Ein LEROX-Konto funktioniert für alle Projekte hier -- einmal registrieren, überall einloggen.</p>
-            {% endif %}
-        </div>
-
-        <div class="studio-grid">
-            {% for project in projects %}
-                <div class="studio-card">
-                    <div class="studio-card-icon">{% include project.icon_partial %}</div>
-                    <h2 class="studio-card-name">{{ project.name }}</h2>
-                    <p class="studio-card-tagline">{{ project.tagline }}</p>
-                    <div class="studio-card-actions">
+    <div class="pl-body">
+        <aside class="pl-sidebar">
+            <nav class="pl-sidebar-nav">
+                <a class="pl-sidebar-link is-active" href="{{ url_for('studio_home') }}">{{ icon('house', 17) }} Store</a>
+                {% if user %}
+                    <a class="pl-sidebar-link" href="{{ url_for('account_settings') }}">{{ icon('gear', 17) }} Konto</a>
+                {% endif %}
+            </nav>
+            <div>
+                <p class="pl-sidebar-heading">Schnellstart</p>
+                <div class="pl-quicklaunch">
+                    {% for project in projects %}
                         {% if project.website_url %}
-                            <a class="cheaper-btn" href="{{ project.website_url }}">Website öffnen</a>
+                            <a class="pl-quicklaunch-item" href="{{ project.website_url }}">
+                                <span class="pl-quicklaunch-icon">{% include project.icon_partial %}</span>
+                                {{ project.name }}
+                            </a>
                         {% endif %}
-                        {% if project.download_url %}
-                            <a class="cheaper-btn secondary" href="{{ project.download_url }}">App herunterladen</a>
-                        {% endif %}
-                    </div>
+                    {% endfor %}
                 </div>
-            {% endfor %}
-        </div>
-    </main>
+            </div>
+        </aside>
+
+        <main class="pl-main">
+            {% with messages = get_flashed_messages() %}
+                {% if messages %}
+                    <ul class="cheaper-flashes">
+                        {% for message in messages %}
+                            <li>{{ message }}</li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+            {% endwith %}
+
+            <section class="pl-hero">
+                <div class="pl-hero-inner">
+                    <h1>Pinklemon</h1>
+                    <p>Alle KI-Projekte von Pinklemon an einem Ort -- als App zum Herunterladen oder direkt im Browser.</p>
+                    {% if not user %}
+                        <a class="pl-hero-cta" href="{{ url_for('register') }}">Jetzt loslegen</a>
+                    {% endif %}
+                </div>
+            </section>
+
+            <h2 class="pl-section-title">Store</h2>
+            <div class="pl-grid" id="plGrid">
+                {% for project in projects %}
+                    <div class="pl-card" data-search-name="{{ project.name|lower }}">
+                        <div class="pl-card-icon">{% include project.icon_partial %}</div>
+                        <div class="pl-card-body">
+                            <h2>{{ project.name }}</h2>
+                            <p>{{ project.tagline }}</p>
+                            <div class="pl-card-actions">
+                                {% if project.website_url %}
+                                    <a class="cheaper-btn" href="{{ project.website_url }}">Öffnen</a>
+                                {% endif %}
+                                {% if project.download_url %}
+                                    <a class="cheaper-btn secondary" href="{{ project.download_url }}">Herunterladen</a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+            <p class="pl-empty" id="plEmptyMsg" hidden>Nichts gefunden.</p>
+        </main>
+    </div>
 </div>
 <script>
     if ("serviceWorker" in navigator) {
@@ -77,6 +128,27 @@
             navigator.serviceWorker.register("/service-worker.js").catch(() => {});
         });
     }
+
+    // Simple client-side filter over the (short, fully-loaded) product
+    // list -- there's no search backend for two items, so this just
+    // shows/hides the existing cards rather than pretending to hit a
+    // real search endpoint.
+    (function () {
+        const searchInput = document.getElementById("plSearchInput");
+        const cards = Array.from(document.querySelectorAll("#plGrid .pl-card"));
+        const emptyMsg = document.getElementById("plEmptyMsg");
+        if (!searchInput || !cards.length) return;
+        searchInput.addEventListener("input", () => {
+            const q = searchInput.value.trim().toLowerCase();
+            let visible = 0;
+            cards.forEach((card) => {
+                const match = !q || card.dataset.searchName.includes(q);
+                card.hidden = !match;
+                if (match) visible += 1;
+            });
+            emptyMsg.hidden = visible !== 0;
+        });
+    })();
 </script>
 </body>
 </html>
