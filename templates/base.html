@@ -1930,6 +1930,25 @@
 
                     const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
 
+                    // Real, non-recoverable reasons the mic just never
+                    // picks anything up -- until this fix, recognition.onerror
+                    // (below) treated EVERY error the same as a harmless
+                    // "no-speech" blip and silently kept calling
+                    // startListening() again in an instant, invisible loop.
+                    // If the actual cause was one of these (permission
+                    // blocked, no mic device, browser policy), the UI just
+                    // sat there forever saying "Ich höre zu ..." while doing
+                    // nothing and never telling the person why -- exactly
+                    // "hört nicht zu, was man sagt". These get a real
+                    // message and stop the auto-retry instead; everything
+                    // else (no-speech, network hiccup, aborted) still just
+                    // keeps listening as before.
+                    const VOICE_FATAL_ERRORS = {
+                        "not-allowed": "Kein Zugriff aufs Mikrofon -- bitte erlaube es im Browser (Symbol/Schloss in der Adressleiste) und klick den Mikrofon-Button nochmal.",
+                        "service-not-allowed": "Kein Zugriff aufs Mikrofon -- bitte erlaube es im Browser (Symbol/Schloss in der Adressleiste) und klick den Mikrofon-Button nochmal.",
+                        "audio-capture": "Es wurde kein Mikrofon gefunden -- ist eins angeschlossen und in den Systemeinstellungen ausgewählt?",
+                    };
+
                     function startListening() {
                         if (!SpeechRecognitionCtor) {
                             voiceStatus.textContent = "Dein Browser unterstützt leider keine Spracheingabe.";
@@ -1959,17 +1978,26 @@
                             const text = event.results[0][0].transcript;
                             sendVoiceMessage(text);
                         };
-                        recognition.onerror = () => {
+                        recognition.onerror = (event) => {
                             voiceMicBtn.classList.remove("is-listening");
                             stopOrbListening();
-                            // No error shown, no dead end -- e.g. "no-speech"
-                            // just means nothing was said yet, not a real
-                            // failure, so just keep listening. Only actually
-                            // stops if the person explicitly clicked to stop
-                            // or closed voice mode in the meantime.
-                            if (!listeningStoppedByUser && voiceOverlay.style.display !== "none") {
-                                startListening();
+                            if (listeningStoppedByUser || voiceOverlay.style.display === "none") return;
+                            const fatalMessage = VOICE_FATAL_ERRORS[event.error];
+                            if (fatalMessage) {
+                                // Stop the auto-retry loop and actually say
+                                // why -- clicking the mic button again calls
+                                // startListening() fresh (it resets
+                                // listeningStoppedByUser itself), so this
+                                // isn't a dead end, just no longer a silent
+                                // infinite retry.
+                                listeningStoppedByUser = true;
+                                voiceStatus.textContent = fatalMessage;
+                                return;
                             }
+                            // Anything else (e.g. "no-speech", "network",
+                            // "aborted") isn't a real failure -- just keep
+                            // listening, same as before.
+                            startListening();
                         };
                         recognition.onend = () => {
                             voiceMicBtn.classList.remove("is-listening");
@@ -2069,10 +2097,19 @@
                             input.value = baseValue + transcript;
                             updateInputMicVisibility();
                         };
-                        inputRecognition.onerror = () => {
-                            // Same "never a dead end" idea as voice mode --
-                            // a hiccup just keeps listening until the user
-                            // explicitly stops it via the button.
+                        inputRecognition.onerror = (event) => {
+                            // Same fatal-vs-recoverable split as voice mode
+                            // above (see VOICE_FATAL_ERRORS) -- without it
+                            // a blocked mic just looped invisibly forever
+                            // instead of ever telling the person why.
+                            if (VOICE_FATAL_ERRORS[event.error]) {
+                                stopInputDictation();
+                                if (inputMicBtn) inputMicBtn.title = VOICE_FATAL_ERRORS[event.error];
+                                return;
+                            }
+                            // A hiccup (no-speech, network, aborted) just
+                            // keeps listening until the user explicitly
+                            // stops it via the button.
                             if (inputDictationActive) {
                                 try { inputRecognition.start(); } catch (e) {}
                             }
