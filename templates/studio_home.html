@@ -55,7 +55,7 @@
         <div class="studio-grid">
             {% for project in projects %}
                 <div class="studio-card">
-                    <div class="studio-card-icon">{{ project.icon }}</div>
+                    <div class="studio-card-icon">{% include project.icon_partial %}</div>
                     <h2 class="studio-card-name">{{ project.name }}</h2>
                     <p class="studio-card-tagline">{{ project.tagline }}</p>
                     <div class="studio-card-actions">

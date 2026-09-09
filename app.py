@@ -1265,7 +1265,13 @@ LEROX_STUDIO_PROJECTS = [
         "key": "nex",
         "name": "NexAI",
         "tagline": "Dein persönlicher KI-Assistent -- Chat, Bilder und Sprache.",
-        "icon": "🤖",
+        # Real wordmark logos (2026-09-09, "mach nex/7ai leicht anders
+        # aussehen") instead of emoji -- white/black for Nex, inverted
+        # black/white for 7Ai, matching each character's tone. See
+        # templates/partials/_nex_logo.html / _sevenai_logo.html and their
+        # reuse as the floating brand mark on each one's own /assistant
+        # and /7ai page.
+        "icon_partial": "partials/_nex_logo.html",
         "website_endpoint": "assistant_page",
         "download_url": "/static/downloads/NexAI-Setup.exe",
     },
@@ -1273,7 +1279,7 @@ LEROX_STUDIO_PROJECTS = [
         "key": "sevenai",
         "name": "7Ai",
         "tagline": "Direkt, frech, ohne Zuckerguss -- ein ganz anderer Charakter als Nex.",
-        "icon": "😈",
+        "icon_partial": "partials/_sevenai_logo.html",
         "website_endpoint": "sevenai_page",
         # Browser-only, deliberately -- no separate desktop wrapper for
         # this one (out of scope for what was asked; NexAI's own
