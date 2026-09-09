@@ -3,7 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#ffffff">
+    <meta name="theme-color" content="#0a0a0c">
+    <script>
+        // Same mechanism/flag as base.html's theme-init script (see its
+        // own comment) -- dark is the default here too now, kept in sync
+        // across both stylesheets via the one shared NexAI_theme flag.
+        (function () {
+            try {
+                if (localStorage.getItem("NexAI_theme") !== "light") {
+                    document.documentElement.setAttribute("data-theme", "dark");
+                }
+            } catch (e) {
+                document.documentElement.setAttribute("data-theme", "dark");
+            }
+        })();
+    </script>
     <title>{% block title %}LEROX STUDIO{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/cheaper.css') }}">
     <link rel="manifest" href="{{ url_for('static', filename='cheaper-manifest.json') }}">

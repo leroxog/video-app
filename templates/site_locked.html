@@ -9,29 +9,47 @@
     /* Fully self-contained on purpose (no external CSS/JS/image files) --
        this page is the ONE thing this app still serves while the site-wide
        unlock gate is active (see app.py's require_site_unlock), so it must
-       never depend on a /static/ request that gate would otherwise block. */
+       never depend on a /static/ request that gate would otherwise block.
+       Dark mode here follows the OS/browser's own prefers-color-scheme
+       (2026-09-09, "mach alle in dark mode") rather than this app's usual
+       NexAI_theme localStorage flag -- a real browser's own offline page
+       already follows system dark mode, not some app-specific toggle, and
+       reading localStorage here would be one more thing this page depends
+       on beyond "still renders even with everything else blocked". The
+       canvas game's own colors are set from matching JS variables below
+       (canvas fillStyle/strokeStyle can't read CSS custom properties). */
     * { box-sizing: border-box; }
+    :root {
+        --bg: #ffffff; --text: #1a1a1a; --text-dim: #6e6e6e; --text-faint: #b3b3b3;
+        --input-focus-line: #ddd;
+    }
+    @media (prefers-color-scheme: dark) {
+        :root {
+            --bg: #000000; --text: #f1f1f1; --text-dim: #9a9a9a; --text-faint: #5a5a5a;
+            --input-focus-line: #3a3a3a;
+        }
+    }
     html, body {
         margin: 0; padding: 0; height: 100%;
-        background: #ffffff; color: #1a1a1a;
+        background: var(--bg); color: var(--text);
         font-family: Arial, Helvetica, sans-serif;
     }
     body {
         display: flex; flex-direction: column; align-items: center; justify-content: center;
         gap: 6px; padding: 24px; text-align: center;
     }
-    .icon { width: 44px; height: 44px; color: #6e6e6e; margin-bottom: 8px; }
-    h1 { font-size: 20px; font-weight: 400; margin: 0; color: #1a1a1a; }
-    p.sub { font-size: 14px; color: #6e6e6e; margin: 0 0 28px; }
+    .icon { width: 44px; height: 44px; color: var(--text-dim); margin-bottom: 8px; }
+    h1 { font-size: 20px; font-weight: 400; margin: 0; color: var(--text); }
+    p.sub { font-size: 14px; color: var(--text-dim); margin: 0 0 28px; }
     canvas#dinoGame { image-rendering: pixelated; touch-action: none; outline: none; }
-    p.hint { font-size: 12px; color: #b3b3b3; margin: 10px 0 0; }
+    p.hint { font-size: 12px; color: var(--text-faint); margin: 10px 0 0; }
     .unlock-row { margin-top: 70px; height: 20px; }
     .unlock-row input {
         width: 70px; text-align: center; font-size: 14px; letter-spacing: 3px;
         border: none; border-bottom: 1px solid transparent; background: transparent;
-        color: #1a1a1a; outline: none; padding: 2px 0;
+        color: var(--text); outline: none; padding: 2px 0;
     }
-    .unlock-row input:focus { border-bottom-color: #ddd; }
+    .unlock-row input:focus { border-bottom-color: var(--input-focus-line); }
 </style>
 </head>
 <body>
@@ -70,6 +88,15 @@
             const ctx = canvas.getContext("2d");
             const W = canvas.width, H = canvas.height;
             const GROUND_Y = H - 24;
+
+            // Canvas fillStyle/strokeStyle can't read CSS custom
+            // properties, so the game's own palette is mirrored here --
+            // same light/dark split as the :root variables above, kept in
+            // sync with the OS/browser's own color scheme.
+            const isDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+            const GAME_COLORS = isDark
+                ? { ground: "#4a4a4a", groundTick: "#333333", player: "#d8d8d8", playerDead: "#5a5a5a", obstacle: "#d8d8d8", score: "#6e6e6e" }
+                : { ground: "#c9c9c9", groundTick: "#dcdcdc", player: "#535353", playerDead: "#c9c9c9", obstacle: "#535353", score: "#8c8c8c" };
 
             let running = false;
             let gameOver = false;
@@ -122,7 +149,7 @@
                 ctx.clearRect(0, 0, W, H);
 
                 // Ground
-                ctx.strokeStyle = "#c9c9c9";
+                ctx.strokeStyle = GAME_COLORS.ground;
                 ctx.lineWidth = 2;
                 ctx.beginPath();
                 ctx.moveTo(0, GROUND_Y);
@@ -132,7 +159,7 @@
                 if (running && !gameOver) {
                     // Ground tick marks scrolling by, for a sense of motion
                     groundOffset = (groundOffset + speed) % 24;
-                    ctx.strokeStyle = "#dcdcdc";
+                    ctx.strokeStyle = GAME_COLORS.groundTick;
                     for (let gx = -groundOffset; gx < W; gx += 24) {
                         ctx.beginPath();
                         ctx.moveTo(gx, GROUND_Y + 4);
@@ -171,27 +198,27 @@
                 }
 
                 // Player (simple blocky silhouette)
-                ctx.fillStyle = gameOver ? "#c9c9c9" : "#535353";
+                ctx.fillStyle = gameOver ? GAME_COLORS.playerDead : GAME_COLORS.player;
                 ctx.fillRect(player.x, player.y, player.w, player.h);
                 ctx.fillRect(player.x + player.w - 8, player.y - 8, 14, 12);
 
                 // Obstacles
-                ctx.fillStyle = "#535353";
+                ctx.fillStyle = GAME_COLORS.obstacle;
                 obstacles.forEach((o) => ctx.fillRect(o.x, o.y, o.w, o.h));
 
                 // Score
-                ctx.fillStyle = "#8c8c8c";
+                ctx.fillStyle = GAME_COLORS.score;
                 ctx.font = "12px monospace";
                 ctx.textAlign = "right";
                 ctx.fillText(String(Math.floor(score / 5)).padStart(5, "0"), W - 8, 16);
 
                 if (!running) {
-                    ctx.fillStyle = "#8c8c8c";
+                    ctx.fillStyle = GAME_COLORS.score;
                     ctx.font = "12px Arial";
                     ctx.textAlign = "center";
                     ctx.fillText("Leertaste zum Starten", W / 2, GROUND_Y - 40);
                 } else if (gameOver) {
-                    ctx.fillStyle = "#535353";
+                    ctx.fillStyle = GAME_COLORS.player;
                     ctx.font = "14px Arial";
                     ctx.textAlign = "center";
                     ctx.fillText("Game Over -- Leertaste für Neustart", W / 2, GROUND_Y - 40);

@@ -3,7 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#ffffff">
+    <meta name="theme-color" content="#0a0a0c">
+    <script>
+        // Same mechanism/flag as base.html's theme-init script (see its
+        // own comment) -- dark is the default here too now, kept in sync
+        // across both stylesheets via the one shared NexAI_theme flag.
+        (function () {
+            try {
+                if (localStorage.getItem("NexAI_theme") !== "light") {
+                    document.documentElement.setAttribute("data-theme", "dark");
+                }
+            } catch (e) {
+                document.documentElement.setAttribute("data-theme", "dark");
+            }
+        })();
+    </script>
     <title>LEROX STUDIO</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/cheaper.css') }}">
     <link rel="manifest" href="{{ url_for('static', filename='cheaper-manifest.json') }}">
@@ -13,7 +27,7 @@
 <div class="cheaper-app">
     <header class="cheaper-header">
         <a class="cheaper-brand" href="{{ url_for('studio_home') }}">
-            <span class="cheaper-brand-mark" style="background:#16181c;">L</span>LEROX STUDIO
+            <span class="cheaper-brand-mark">L</span>LEROX STUDIO
         </a>
         <nav class="cheaper-header-nav">
             {% if user %}
