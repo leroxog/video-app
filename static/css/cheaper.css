@@ -821,6 +821,117 @@ main.cheaper-main {
   font-weight: 600;
 }
 
+/* ---------- Birthdate scroll-wheel picker ---------- */
+/* Tag/Monat/Jahr scrolling columns (2026-09-09, "wie bei tiktok scrollen")
+   replacing the native <input type="date"> on register/complete-profile --
+   see static/js/date-wheel.js. 40px rows (ITEM_HEIGHT there) x 5 visible
+   rows; keep these two files' numbers in sync if either changes. */
+.date-wheel-labels {
+  display: flex;
+  gap: 4px;
+  margin: 10px 0 4px;
+}
+
+.date-wheel-labels span {
+  flex: 1;
+  max-width: 120px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+}
+
+.date-wheel {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  height: 200px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-soft);
+  overflow: hidden;
+}
+
+.date-wheel-col {
+  flex: 1;
+  max-width: 120px;
+  min-width: 0;
+}
+
+.date-wheel-list {
+  height: 200px;
+  overflow-y: scroll;
+  scroll-snap-type: y mandatory;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.date-wheel-list::-webkit-scrollbar {
+  display: none;
+}
+
+.date-wheel-list:focus-visible {
+  outline: 2px solid var(--pink, var(--accent));
+  outline-offset: -2px;
+}
+
+.date-wheel-pad {
+  height: 80px;
+}
+
+.date-wheel-item {
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  color: var(--text-faint);
+  scroll-snap-align: center;
+  cursor: pointer;
+  user-select: none;
+}
+
+.date-wheel-item.is-center {
+  color: var(--text);
+  font-weight: 800;
+  font-size: 17px;
+}
+
+.date-wheel-highlight {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 40px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  pointer-events: none;
+}
+
+.date-wheel::before, .date-wheel::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 64px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.date-wheel::before {
+  top: 0;
+  background: linear-gradient(var(--bg-soft), rgba(0, 0, 0, 0));
+}
+
+.date-wheel::after {
+  bottom: 0;
+  background: linear-gradient(rgba(0, 0, 0, 0), var(--bg-soft));
+}
+
 /* ---------- Company dashboard ---------- */
 .cheaper-table {
   width: 100%;

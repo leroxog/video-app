@@ -17,9 +17,15 @@
             <input type="password" id="password2" name="password2" required>
         </label>
 
-        <label for="birthdate">Geburtsdatum
-            <input type="date" id="birthdate" name="birthdate" required value="{{ form_values.birthdate if form_values else '' }}">
-        </label>
+        <label>Geburtsdatum</label>
+        <div class="date-wheel-labels"><span>Tag</span><span>Monat</span><span>Jahr</span></div>
+        <div class="date-wheel" id="birthdateWheel">
+            <div class="date-wheel-col" data-unit="day"><div class="date-wheel-list" tabindex="0" role="listbox" aria-label="Tag"></div></div>
+            <div class="date-wheel-col" data-unit="month"><div class="date-wheel-list" tabindex="0" role="listbox" aria-label="Monat"></div></div>
+            <div class="date-wheel-col" data-unit="year"><div class="date-wheel-list" tabindex="0" role="listbox" aria-label="Jahr"></div></div>
+            <div class="date-wheel-highlight" aria-hidden="true"></div>
+        </div>
+        <input type="hidden" id="birthdate" name="birthdate" required value="{{ form_values.birthdate if form_values else '' }}">
         <p class="cheaper-form-hint">Damit wir dir Alters-Rabatte automatisch anzeigen können.</p>
 
         <div class="kids-account-bubble" id="kidsAccountBubble" style="display:none;">
@@ -79,6 +85,10 @@
     </form>
     <p class="cheaper-auth-footer">Bereits registriert? <a href="{{ url_for('login') }}">Login</a></p>
 
+    <script src="{{ url_for('static', filename='js/date-wheel.js') }}"></script>
+    <script>
+        initDateWheel(document.getElementById("birthdateWheel"), document.getElementById("birthdate"));
+    </script>
     <script>
         (function () {
             const birthdateInput = document.getElementById("birthdate");
