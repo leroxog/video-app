@@ -5,8 +5,9 @@ argue in the feed, plus a background daemon that keeps them writing so the
 app never looks empty. Bots are marked with User.purpose_of_use == "bot".
 
 Everything here is best-effort: any failure is logged and swallowed so a
-bad tick can never take the web process down. Disable entirely with
-env PL_BOTS=0; disable only the live daemon with PL_BOTS_ACTIVE=0.
+bad tick can never take the web process down. Bots are OFF by default --
+set env PL_BOTS=1 to enable them; while off, bootstrap() purges any that
+already exist.
 """
 
 import logging
@@ -383,15 +384,59 @@ def _daemon(app):
         tick(app)
 
 
+def purge(app):
+    """Delete every bot account and everything it created -- posts,
+    comments, likes, chats/DMs, follows. Safe to run repeatedly."""
+    try:
+        with app.app_context():
+            bot_ids = [u.id for u in User.query.filter_by(purpose_of_use=BOT_MARK).all()]
+            if not bot_ids:
+                return
+            # feed posts by bots -> ORM delete cascades their likes/comments/ps
+            for p in FeedPost.query.filter(FeedPost.author_id.in_(bot_ids)).all():
+                db.session.delete(p)
+            db.session.commit()
+            # bot comments / likes left on humans' posts
+            for c in FeedComment.query.filter(FeedComment.author_id.in_(bot_ids)).all():
+                db.session.delete(c)
+            db.session.commit()
+            FeedLike.query.filter(FeedLike.user_id.in_(bot_ids)).delete(synchronize_session=False)
+            FeedCommentLike.query.filter(FeedCommentLike.user_id.in_(bot_ids)).delete(synchronize_session=False)
+            db.session.commit()
+            # any chat a bot is in -> drop the whole chat (cascades members + messages)
+            chat_ids = {m.chat_id for m in PlChatMember.query.filter(PlChatMember.user_id.in_(bot_ids)).all()}
+            for cid in chat_ids:
+                ch = db.session.get(PlChat, cid)
+                if ch:
+                    db.session.delete(ch)
+            db.session.commit()
+            Subscription.query.filter(
+                db.or_(Subscription.subscriber_id.in_(bot_ids), Subscription.channel_id.in_(bot_ids))
+            ).delete(synchronize_session=False)
+            db.session.commit()
+            User.query.filter(User.id.in_(bot_ids)).delete(synchronize_session=False)
+            db.session.commit()
+            _SOCIALIZED.clear()
+            logger.info("pl_bots: purged %d bot accounts", len(bot_ids))
+    except Exception:
+        db.session.rollback()
+        logger.exception("pl_bots.purge failed")
+
+
 _STARTED = False
 
 
 def bootstrap(app):
-    """Called once at startup from app.py -- spawns the seed+activity thread."""
+    """Called once at startup from app.py. Bots are OFF unless PL_BOTS=1;
+    when off, any leftover bots are purged."""
     global _STARTED
     if _STARTED:
         return
     _STARTED = True
-    t = threading.Thread(target=_daemon, args=(app,), daemon=True, name="pl-bots")
-    t.start()
-    logger.info("pl_bots: worker thread started")
+    if os.environ.get("PL_BOTS") == "1":
+        t = threading.Thread(target=_daemon, args=(app,), daemon=True, name="pl-bots")
+        t.start()
+        logger.info("pl_bots: worker thread started")
+    else:
+        threading.Thread(target=purge, args=(app,), daemon=True, name="pl-bots-purge").start()
+        logger.info("pl_bots: disabled -- purging any leftover bots")

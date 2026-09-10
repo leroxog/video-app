@@ -835,10 +835,10 @@ with app.app_context():
             admin_user.is_admin = True
             db.session.commit()
 
-# pinklemon fake community: ~1000 bot accounts that post/comment/argue, plus
-# a background daemon that keeps them writing. Off under pytest and when
-# PL_BOTS=0.
-if "pytest" not in sys.modules and os.environ.get("PL_BOTS", "1") != "0":
+# pinklemon fake community. Bots are OFF by default (set PL_BOTS=1 to
+# enable); bootstrap() purges any leftover bot accounts when disabled.
+# Skipped entirely under pytest.
+if "pytest" not in sys.modules:
     try:
         import pl_bots
         pl_bots.bootstrap(app)
@@ -1210,7 +1210,7 @@ def _pl_rate_ok(uid, limit=8, window=120):
 def _pl_socialise(me):
     """Best-effort: give this real user a populated feed/Freunde tab from
     the bot community. No-op under pytest / when bots are disabled."""
-    if "pytest" in sys.modules:
+    if "pytest" in sys.modules or os.environ.get("PL_BOTS") != "1":
         return
     try:
         import pl_bots
