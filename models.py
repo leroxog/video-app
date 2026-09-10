@@ -540,7 +540,7 @@ class AiGeneratedMedia(db.Model):
     media_url() for audio)."""
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    kind = db.Column(db.String(10), nullable=False)  # "image" or "audio"
+    kind = db.Column(db.String(10), nullable=False)  # "image", "audio" or "video"
     url = db.Column(db.String(500), nullable=False)
     prompt = db.Column(db.Text, nullable=True)
     # Liking an item here feeds a remember_user_fact-style row back into
@@ -710,7 +710,6 @@ class FeedPost(db.Model):
     comments = db.relationship("FeedComment", backref="post", lazy=True, cascade="all, delete-orphan")
     ps = db.relationship("FeedPS", backref="post", uselist=False, cascade="all, delete-orphan")
     reposts = db.relationship("FeedRepost", backref="post", lazy=True, cascade="all, delete-orphan")
-    bookmarks = db.relationship("FeedBookmark", backref="post", lazy=True, cascade="all, delete-orphan")
     poll_votes = db.relationship("FeedPollVote", backref="post", lazy=True, cascade="all, delete-orphan")
 
 
@@ -723,15 +722,6 @@ class FeedRepost(db.Model):
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     user = db.relationship("User")
     __table_args__ = (db.UniqueConstraint("post_id", "user_id", name="uq_feedrepost_post_user"),)
-
-
-class FeedBookmark(db.Model):
-    __tablename__ = "feed_bookmark"
-    id = db.Column(db.Integer, primary_key=True)
-    post_id = db.Column(db.Integer, db.ForeignKey("feed_post.id"), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
-    __table_args__ = (db.UniqueConstraint("post_id", "user_id", name="uq_feedbookmark_post_user"),)
 
 
 class FeedReport(db.Model):

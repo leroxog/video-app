@@ -45,7 +45,7 @@ from models import (
     AiVoiceProfile, AiPersonality, AiGeneratedMedia,
     AiTrainingExample, AiTrainingRun,
     FeedPost, FeedLike, FeedComment, FeedCommentLike, FeedPS,
-    FeedRepost, FeedBookmark, FeedReport, FeedPollVote,
+    FeedRepost, FeedReport, FeedPollVote,
     PlChat, PlChatMember, PlMessage,
 )
 import ai_assistant
@@ -1353,9 +1353,7 @@ def serialize_pl_post(post, me, repost_meta=None):
         "like_count": len(post.likes),
         "comment_count": len(post.comments),
         "repost_count": len(post.reposts),
-        "view_count": post.view_count or 0,
         "liked_by_me": me.id in liked_ids,
-        "bookmarked_by_me": any(b.user_id == me.id for b in post.bookmarks),
         "reposted_by_me": any(r.user_id == me.id and not r.quote for r in post.reposts),
         "is_mine": post.author_id == me.id,
         "edited": post.edited_at is not None,
@@ -1533,20 +1531,6 @@ def pl_home():
             User.id.notin_({s.channel_id for s in Subscription.query.filter_by(subscriber_id=me.id)} | {me.id})
         ).order_by(db.func.random()).limit(3).all()] if not before else [],
         trending=_pl_trending() if not before else [],
-        me_json={"id": me.id, "username": me.username},
-    )
-
-
-@app.route("/lesezeichen")
-def pl_bookmarks():
-    me = current_user()
-    rows = (db.session.query(FeedPost)
-            .join(FeedBookmark, FeedBookmark.post_id == FeedPost.id)
-            .filter(FeedBookmark.user_id == me.id)
-            .order_by(FeedBookmark.id.desc()).limit(80).all())
-    return render_template(
-        "pl_bookmarks.html",
-        posts=[serialize_pl_post(p, me) for p in rows],
         me_json={"id": me.id, "username": me.username},
     )
 
@@ -1823,23 +1807,6 @@ def api_pl_pin_post(post_id):
     return jsonify({"ok": True, "pinned": pinned})
 
 
-@app.route("/api/pl/posts/<int:post_id>/bookmark", methods=["POST"])
-def api_pl_bookmark_post(post_id):
-    me = current_user()
-    post = db.session.get(FeedPost, post_id)
-    if post is None:
-        return jsonify({"ok": False, "error": "not_found"}), 404
-    existing = FeedBookmark.query.filter_by(post_id=post_id, user_id=me.id).first()
-    if existing:
-        db.session.delete(existing)
-        saved = False
-    else:
-        db.session.add(FeedBookmark(post_id=post_id, user_id=me.id))
-        saved = True
-    db.session.commit()
-    return jsonify({"ok": True, "bookmarked": saved})
-
-
 @app.route("/api/pl/posts/<int:post_id>/repost", methods=["POST"])
 def api_pl_repost(post_id):
     me = current_user()
@@ -1870,21 +1837,6 @@ def api_pl_report_post(post_id):
     db.session.add(FeedReport(post_id=post_id, user_id=me.id, reason=reason or None))
     db.session.commit()
     return jsonify({"ok": True})
-
-
-@app.route("/api/pl/posts/<int:post_id>/view", methods=["POST"])
-def api_pl_view_post(post_id):
-    seen = session.setdefault("_pl_viewed", [])
-    if post_id in seen:
-        return jsonify({"ok": True, "counted": False})
-    post = db.session.get(FeedPost, post_id)
-    if post is None:
-        return jsonify({"ok": False}), 404
-    post.view_count = (post.view_count or 0) + 1
-    seen.append(post_id)
-    session["_pl_viewed"] = seen[-400:]
-    db.session.commit()
-    return jsonify({"ok": True, "counted": True, "views": post.view_count})
 
 
 @app.route("/api/pl/posts/<int:post_id>/likes")
@@ -2613,6 +2565,7 @@ def api_ai_chat():
                 # just applying the charge for one that actually ran.
                 image_generated = (new_learned_facts or {}).get("image_generated")
                 audio_generated = (new_learned_facts or {}).get("audio_generated")
+                video_generated = (new_learned_facts or {}).get("video_generated")
                 if image_generated and not is_unlimited_tokens:
                     image_user_row = db.session.get(User, user_id_captured)
                     if image_user_row is not None:
@@ -2624,6 +2577,12 @@ def api_ai_chat():
                     if audio_user_row is not None:
                         audio_user_row.ai_tokens = max(
                             0, (audio_user_row.ai_tokens or 0) - ai_assistant.AUDIO_TOKEN_COST,
+                        )
+                if video_generated and not is_unlimited_tokens:
+                    video_user_row = db.session.get(User, user_id_captured)
+                    if video_user_row is not None:
+                        video_user_row.ai_tokens = max(
+                            0, (video_user_row.ai_tokens or 0) - ai_assistant.VIDEO_TOKEN_COST,
                         )
                 # Kept as its own record (in addition to being embedded
                 # inline in the reply above) purely so the "Galerie" page
@@ -2637,6 +2596,11 @@ def api_ai_chat():
                     db.session.add(AiGeneratedMedia(
                         user_id=user_id_captured, kind="audio",
                         url=audio_generated.get("url", ""), prompt=audio_generated.get("text"),
+                    ))
+                if video_generated:
+                    db.session.add(AiGeneratedMedia(
+                        user_id=user_id_captured, kind="video",
+                        url=video_generated.get("url", ""), prompt=video_generated.get("prompt"),
                     ))
                 db.session.commit()
                 if is_first_message:

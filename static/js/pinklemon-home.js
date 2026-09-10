@@ -425,11 +425,14 @@
 
   $all(".pl-post").forEach(wirePost);
 
-  // ---------------- kebab menu + repost + bookmark + poll + sensitive ----------------
+  // ---------------- kebab menu + repost + poll + sensitive ----------------
   document.addEventListener("click", function (e) {
     // close any open menu when clicking elsewhere
     if (!e.target.closest(".pl-post-menu") && !e.target.closest("[data-kebab]")) {
       $all(".pl-post-menu").forEach(function (m) { m.hidden = true; });
+    }
+    if (!e.target.closest(".pl-repost-menu") && !e.target.closest("[data-repost-toggle]")) {
+      $all(".pl-repost-menu").forEach(function (m) { m.hidden = true; });
     }
 
     var kb = e.target.closest("[data-kebab]");
@@ -451,8 +454,6 @@
         var link = location.origin + "/p/" + pid;
         if (navigator.clipboard) navigator.clipboard.writeText(link).then(function () { window.plToast("Link kopiert."); });
         else window.plToast(link);
-      } else if (a === "bookmark") {
-        toggleBookmark(grp);
       } else if (a === "edit") {
         var post = grp.querySelector(".pl-post");
         openNewPost({
@@ -476,29 +477,23 @@
       return;
     }
 
-    var rb = e.target.closest("[data-repost]");
-    if (rb) {
-      var g = rb.closest(".pl-post-group");
-      var on = g.dataset.reposted === "1";
-      var quote = null;
-      if (!on) {
-        var q = prompt("Repost mit Kommentar? (leer lassen für einfachen Repost)");
-        if (q === null) return;
-        quote = q.trim() || null;
-      }
-      api("POST", "/api/pl/posts/" + g.dataset.postId + "/repost", { quote: quote }).then(function (j) {
-        if (!j.ok) return;
-        g.dataset.reposted = j.reposted && !j.quote ? "1" : "0";
-        rb.classList.toggle("on", j.reposted && !j.quote);
-        var c = g.querySelector(".pl-repost-count"); if (c) c.textContent = j.repost_count;
-        S.play(j.reposted ? "like" : "close");
-        window.plToast(j.reposted ? (j.quote ? "Zitiert." : "Repostet.") : "Repost entfernt.");
-      });
+    var rtog = e.target.closest("[data-repost-toggle]");
+    if (rtog) {
+      var rmenu = rtog.parentElement.querySelector(".pl-repost-menu");
+      var rWasHidden = rmenu.hidden;
+      $all(".pl-repost-menu").forEach(function (m) { m.hidden = true; });
+      rmenu.hidden = !rWasHidden;
       return;
     }
 
-    var bm = e.target.closest("[data-bookmark]");
-    if (bm) { toggleBookmark(bm.closest(".pl-post-group")); return; }
+    var rdo = e.target.closest("[data-repost-do]");
+    if (rdo) {
+      var g = rdo.closest(".pl-post-group");
+      rdo.closest(".pl-repost-menu").hidden = true;
+      if (rdo.dataset.repostDo === "quote") { openQuoteModal(g); return; }
+      sendRepost(g, null);
+      return;
+    }
 
     var sens = e.target.closest(".pl-sensitive-show");
     if (sens) {
@@ -538,14 +533,48 @@
     }
   });
 
-  function toggleBookmark(grp) {
-    api("POST", "/api/pl/posts/" + grp.dataset.postId + "/bookmark").then(function (j) {
+  function sendRepost(g, quote) {
+    api("POST", "/api/pl/posts/" + g.dataset.postId + "/repost", { quote: quote || null }).then(function (j) {
       if (!j.ok) return;
-      grp.dataset.bookmarked = j.bookmarked ? "1" : "0";
-      var b = grp.querySelector("[data-bookmark]");
-      if (b) b.classList.toggle("on", j.bookmarked);
-      window.plToast(j.bookmarked ? "Gespeichert." : "Entfernt.");
+      var plain = j.reposted && !j.quote;
+      g.dataset.reposted = plain ? "1" : "0";
+      var btn = g.querySelector("[data-repost-toggle]");
+      if (btn) {
+        btn.classList.toggle("on", plain);
+        var n = btn.querySelector(".pl-repost-n");
+        if (j.repost_count) {
+          if (!n) { n = document.createElement("b"); n.className = "pl-repost-n"; btn.appendChild(n); }
+          n.textContent = j.repost_count;
+        } else if (n) { n.remove(); }
+      }
+      if (S) S.play(j.reposted ? "like" : "close");
+      window.plToast(j.reposted ? (j.quote ? "Zitiert." : "Repostet.") : "Repost entfernt.");
     });
+  }
+
+  function openQuoteModal(g) {
+    var back = document.createElement("div");
+    back.className = "pl-quote-modal-back";
+    back.innerHTML =
+      '<div class="pl-quote-modal" role="dialog" aria-modal="true">' +
+        '<div class="pl-quote-modal-head"><button type="button" class="pl-quote-x" aria-label="Schließen">✕</button><b>Zitieren</b>' +
+          '<button type="button" class="pl-quote-send" disabled>Reposten</button></div>' +
+        '<textarea class="pl-quote-ta" maxlength="2000" placeholder="Sag etwas dazu …"></textarea>' +
+      '</div>';
+    document.body.appendChild(back);
+    var ta = back.querySelector(".pl-quote-ta");
+    var send = back.querySelector(".pl-quote-send");
+    function close() { back.remove(); }
+    ta.addEventListener("input", function () { send.disabled = !ta.value.trim(); });
+    back.querySelector(".pl-quote-x").addEventListener("click", close);
+    back.addEventListener("click", function (e) { if (e.target === back) close(); });
+    send.addEventListener("click", function () {
+      var q = ta.value.trim();
+      if (!q) return;
+      sendRepost(g, q);
+      close();
+    });
+    setTimeout(function () { ta.focus(); }, 30);
   }
 
   // ---------------- load more ----------------
@@ -565,21 +594,6 @@
       else btn.remove();
     }).catch(function () { btn.disabled = false; btn.textContent = "Ältere Posts laden"; });
   });
-
-  // ---------------- view tracking ----------------
-  if ("IntersectionObserver" in window) {
-    var vio = new IntersectionObserver(function (entries) {
-      entries.forEach(function (en) {
-        if (en.isIntersecting && !en.target.dataset.viewed) {
-          en.target.dataset.viewed = "1";
-          var id = en.target.dataset.postId;
-          fetch("/api/pl/posts/" + id + "/view", { method: "POST" }).catch(function () {});
-          vio.unobserve(en.target);
-        }
-      });
-    }, { threshold: 0.6 });
-    $all(".pl-post-group").forEach(function (g) { vio.observe(g); });
-  }
 
   // ---------------- search ----------------
   var searchForm = $("#plSearchForm");

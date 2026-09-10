@@ -428,7 +428,7 @@ def test_edit_and_delete_own_post(client):
     assert client.get(f"/p/{pid}").status_code == 404
 
 
-def test_repost_bookmark_pin_and_poll(client):
+def test_repost_pin_and_poll(client):
     signup(client, "alice")
     j = client.post("/api/pl/posts", json={
         "heading": "Umfrage", "poll": ["Ja", "Nein", "Vielleicht"],
@@ -437,10 +437,24 @@ def test_repost_bookmark_pin_and_poll(client):
     assert j["post"]["poll"]["options"] == ["Ja", "Nein", "Vielleicht"]
     v = client.post(f"/api/pl/posts/{pid}/poll-vote", json={"choice": 1}).get_json()
     assert v["ok"] and v["poll"]["counts"][1] == 1 and v["poll"]["my_vote"] == 1
-    assert client.post(f"/api/pl/posts/{pid}/repost", json={}).get_json()["reposted"] is True
-    assert client.post(f"/api/pl/posts/{pid}/bookmark").get_json()["bookmarked"] is True
+    # plain repost toggles on, then off again
+    r1 = client.post(f"/api/pl/posts/{pid}/repost", json={}).get_json()
+    assert r1["reposted"] is True and r1["repost_count"] == 1
+    r2 = client.post(f"/api/pl/posts/{pid}/repost", json={}).get_json()
+    assert r2["reposted"] is False and r2["repost_count"] == 0
+    # quote repost keeps it on and records the quote
+    r3 = client.post(f"/api/pl/posts/{pid}/repost", json={"quote": "seht euch das an"}).get_json()
+    assert r3["reposted"] is True and r3["quote"] is True
     assert client.post(f"/api/pl/posts/{pid}/pin").get_json()["pinned"] is True
-    assert b"Umfrage" in client.get("/lesezeichen").data
+
+
+def test_bookmarks_and_views_are_gone(client):
+    signup(client, "alice")
+    pid = client.post("/api/pl/posts", json={"heading": "x"}).get_json()["post"]["id"]
+    assert client.get("/lesezeichen").status_code == 404
+    assert client.post(f"/api/pl/posts/{pid}/bookmark").status_code == 404
+    assert client.post(f"/api/pl/posts/{pid}/view").status_code == 404
+    assert b"Aufrufe" not in client.get("/").data
 
 
 def test_new_feed_tab_and_pagination(client):

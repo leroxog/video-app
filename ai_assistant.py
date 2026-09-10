@@ -24,9 +24,10 @@ _build_edit_image_url) both run through Pollinations.ai; cloned-voice
 audio (generate_audio, via ElevenLabs/browser TTS) is a separate external
 service. None of these were affected by the Groq-vs-local-model swap
 above -- only the actual chat/voice-chat TEXT reply's backend changed.
-There is deliberately no video generation tool -- no free/no-key service
-for it exists the way Pollinations covers images, and adding one would
-mean picking and paying for a third-party API, which hasn't happened.
+Short text-to-video (generate_video) runs through Replicate and is gated
+on REPLICATE_API_TOKEN -- there is no free/no-key video service the way
+Pollinations covers images, so without the key the tool returns an honest
+"not configured" message and Nex explains the user needs a provider key.
 
 Requests still run through a background-thread job queue and are polled by
 the client (see start_chat_job()/get_job_status()), since that keeps the
@@ -539,10 +540,12 @@ NEX_BLUNT_SYSTEM_PROMPT = (
 )
 
 SEVENAI_TOOLS_ADDENDUM = (
-    "\n\nDu hast Zugriff auf sechs Werkzeuge: search_wikipedia, get_weather und search_docs "
+    "\n\nDu hast Zugriff auf sieben Werkzeuge: search_wikipedia, get_weather und search_docs "
     "(echte Nachschlage-Werkzeuge für Wissensfragen, Wetter und Programmier-Dokumentation) "
-    "sowie generate_image, edit_image und generate_audio (echte Bild- und Sprach-Erzeugung, "
-    "siehe deren eigene Beschreibungen für Kosten und Bedingungen). Nutze "
+    "sowie generate_image, edit_image, generate_audio und generate_video (echte Bild-, "
+    "Sprach- und kurze Video-Erzeugung, siehe deren eigene Beschreibungen für Kosten und "
+    "Bedingungen -- generate_video braucht einen serverseitig konfigurierten Provider und "
+    "meldet sonst ehrlich einen Fehler). Nutze "
     "search_wikipedia/get_weather/search_docs bei nachprüfbaren Fakten, statt zu raten -- "
     "das passt zu dir: du bist frech und direkt, aber niemand, der sich Fakten ausdenkt."
 )
@@ -574,6 +577,18 @@ ADJUST_PERSONALITY_TOOL = {
 
 IMAGE_TOKEN_COST = 600
 AUDIO_TOKEN_COST = 400
+VIDEO_TOKEN_COST = 1500
+
+# Text-to-video needs a real external provider. Set REPLICATE_API_TOKEN (and
+# optionally REPLICATE_VIDEO_MODEL, default a fast Wan/LTX-style model) to
+# enable it. Without the key the tool returns an honest "not configured"
+# message and Nex explains it to the user instead of pretending.
+REPLICATE_API_TOKEN = os.getenv("REPLICATE_API_TOKEN", "").strip()
+REPLICATE_VIDEO_MODEL = os.getenv(
+    "REPLICATE_VIDEO_MODEL",
+    "wan-video/wan-2.5-t2v-fast",
+).strip()
+VIDEO_GENERATION_ENABLED = bool(REPLICATE_API_TOKEN)
 
 GENERATE_AUDIO_TOOL = {
     "type": "function",
@@ -655,6 +670,32 @@ EDIT_IMAGE_TOOL = {
                 },
             },
             "required": ["image_url", "prompt"],
+        },
+    },
+}
+
+GENERATE_VIDEO_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "generate_video",
+        "description": (
+            "Erzeugt ein echtes, kurzes Video (ca. 5 Sekunden) aus einer Textbeschreibung und "
+            f"zeigt es dem Nutzer als abspielbares Video an. Kostet {VIDEO_TOKEN_COST} Tokens vom "
+            "Nutzer-Guthaben -- nur aufrufen, wenn der Nutzer wirklich ausdrücklich ein Video "
+            "möchte UND genug Tokens übrig hat. Funktioniert nur, wenn serverseitig ein "
+            "Video-Provider konfiguriert ist -- falls nicht, kommt ehrlich ein Fehler zurück, den "
+            "du dem Nutzer erklären sollst (er braucht einen Provider-Key), statt es erneut zu "
+            "versuchen oder ein Video vorzutäuschen."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "prompt": {
+                    "type": "string",
+                    "description": "Videobeschreibung, auf Englisch, so konkret wie möglich (Szene, Kamera, Stil).",
+                },
+            },
+            "required": ["prompt"],
         },
     },
 }
@@ -935,6 +976,7 @@ CODE_CHAT_TOOLS = [SEARCH_DOCS_TOOL]
 AI_TOOLS = [
     SEARCH_WIKIPEDIA_TOOL, GET_WEATHER_TOOL, SEARCH_DOCS_TOOL, REMEMBER_USER_FACT_TOOL,
     ADJUST_PERSONALITY_TOOL, GENERATE_IMAGE_TOOL, EDIT_IMAGE_TOOL, GENERATE_AUDIO_TOOL,
+    GENERATE_VIDEO_TOOL,
 ]
 # 7Ai gets the same real lookup/generation tools as Nex, minus
 # remember_user_fact and adjust_personality_trait -- those two are
@@ -944,7 +986,7 @@ AI_TOOLS = [
 # any one user -- see generate_reply's "sevenai" branch).
 SEVENAI_TOOLS = [
     SEARCH_WIKIPEDIA_TOOL, GET_WEATHER_TOOL, SEARCH_DOCS_TOOL,
-    GENERATE_IMAGE_TOOL, EDIT_IMAGE_TOOL, GENERATE_AUDIO_TOOL,
+    GENERATE_IMAGE_TOOL, EDIT_IMAGE_TOOL, GENERATE_AUDIO_TOOL, GENERATE_VIDEO_TOOL,
 ]
 
 
@@ -1042,6 +1084,52 @@ def _build_edit_image_url(prompt, image_url):
         POLLINATIONS_IMAGE_URL.format(urllib.parse.quote(prompt))
         + f"?model=kontext&image={urllib.parse.quote(image_url, safe='')}&width=768&height=768&nologo=true"
     )
+
+
+def _generate_video_url(prompt):
+    """Text-to-video via Replicate. Unlike Pollinations images, there is no
+    free no-key video service, so this needs REPLICATE_API_TOKEN set.
+    Returns a real playable .mp4 URL, or None on any failure/timeout.
+
+    Uses `Prefer: wait` so a single request blocks for up to ~60s and
+    returns the finished prediction inline; falls back to polling the
+    prediction's `get` URL a few times for slower models."""
+    if not REPLICATE_API_TOKEN:
+        return None
+    headers = {
+        "Authorization": f"Bearer {REPLICATE_API_TOKEN}",
+        "Content-Type": "application/json",
+        "Prefer": "wait",
+    }
+    body = {"input": {"prompt": prompt, "num_frames": 81, "aspect_ratio": "16:9"}}
+    try:
+        resp = requests.post(
+            f"https://api.replicate.com/v1/models/{REPLICATE_VIDEO_MODEL}/predictions",
+            headers=headers, json=body, timeout=90,
+        )
+        data = resp.json()
+    except Exception:
+        logging.exception("replicate video request failed")
+        return None
+
+    for _ in range(20):
+        status = data.get("status")
+        if status == "succeeded":
+            out = data.get("output")
+            if isinstance(out, list):
+                out = out[0] if out else None
+            return out if isinstance(out, str) and out.startswith("http") else None
+        if status in ("failed", "canceled"):
+            return None
+        get_url = (data.get("urls") or {}).get("get")
+        if not get_url:
+            return None
+        time.sleep(3)
+        try:
+            data = requests.get(get_url, headers=headers, timeout=30).json()
+        except Exception:
+            return None
+    return None
 
 
 def _docs_allowed(url):
@@ -1240,6 +1328,37 @@ def _execute_one_tool_call(name, args, captured, available_tokens=None, synthesi
         return (
             "Sprachnachricht erzeugt. Füge sie in deiner Antwort als Audio-Markdown ein: "
             f"!audio[Sprachnachricht]({audio_url})"
+        )
+    if name == "generate_video":
+        prompt = (args.get("prompt") or "").strip()
+        if not prompt:
+            return "Keine Videobeschreibung angegeben."
+        if not VIDEO_GENERATION_ENABLED:
+            return (
+                "Videogenerierung ist auf diesem Server nicht konfiguriert -- es ist kein "
+                "Text-zu-Video-Provider hinterlegt (dafür müsste ein REPLICATE_API_TOKEN "
+                "gesetzt sein; anders als bei Bildern gibt es keinen kostenlosen Dienst ohne "
+                "Key). Erklär dem Nutzer ehrlich, dass echte Videos gerade nicht erzeugt "
+                "werden können und er dafür einen Provider-Key einrichten müsste -- täusch "
+                "kein Video vor und ruf das Werkzeug nicht erneut auf."
+            )
+        if available_tokens is not None and available_tokens < VIDEO_TOKEN_COST:
+            return (
+                f"Nicht genug Tokens ({available_tokens} übrig, {VIDEO_TOKEN_COST} nötig) -- "
+                "kein Video erzeugt. Erklär das dem Nutzer ehrlich."
+            )
+        video_url = _generate_video_url(prompt)
+        if not video_url:
+            return (
+                "Die Videogenerierung ist gerade fehlgeschlagen oder hat zu lange gebraucht. "
+                "Erklär das dem Nutzer ehrlich, statt es sofort erneut zu versuchen."
+            )
+        captured["video_generated"] = {"url": video_url, "prompt": prompt}
+        return (
+            "Video erzeugt. Füge es in deiner Antwort als Video-Markdown ein: "
+            f"!video[{prompt}]({video_url})\n\n"
+            "Schreib nur kurz normal etwas dazu und erwähne nicht von dir aus, womit es "
+            "erzeugt wurde."
         )
     impl = TOOL_IMPLEMENTATIONS.get(name)
     result = impl(args) if impl else f"Unbekanntes Werkzeug: {name}"
@@ -1626,10 +1745,13 @@ def _call_model_with_router(messages, user_message, max_tokens, tools, captured,
                 )
             image_generated = captured.get("image_generated")
             audio_generated = captured.get("audio_generated")
+            video_generated = captured.get("video_generated")
             if tool_name == "generate_image" and image_generated:
                 forced_markdown = f"![{image_generated['prompt']}]({image_generated['url']})"
             elif tool_name == "generate_audio" and audio_generated:
                 forced_markdown = f"!audio[Sprachnachricht]({audio_generated['url']})"
+            elif tool_name == "generate_video" and video_generated:
+                forced_markdown = f"!video[{video_generated['prompt']}]({video_generated['url']})"
             follow_up = (
                 f"Du hast gerade automatisch das Werkzeug '{tool_name}' benutzt. Ergebnis:\n{result}\n\n"
             )
@@ -1823,14 +1945,21 @@ def generate_reply(message, context=None, history=None, project_type=None, facts
     if project_type is None:
         system_prompt += _personality_addendum(personality)
     if project_type in (None, "sevenai") and available_tokens is not None:
+        video_line = (
+            f"Ein kurzes Video erzeugen kostet {VIDEO_TOKEN_COST} Tokens -- ruf generate_video "
+            "nur auf, wenn klar genug Tokens übrig sind und der Nutzer das wirklich ausdrücklich "
+            "möchte."
+            if VIDEO_GENERATION_ENABLED else
+            "Echte Video-Erstellung ist auf diesem Server aktuell NICHT konfiguriert (kein "
+            "Provider-Key hinterlegt) -- falls danach gefragt wird, erklär ehrlich, dass dafür "
+            "ein Text-zu-Video-Provider eingerichtet werden müsste, statt ein Video vorzutäuschen."
+        )
         system_prompt += (
             f"\n\nDieser Nutzer hat aktuell {available_tokens} Tokens übrig (eine App-interne "
             f"Währung, getrennt von Punkten). Ein Bild erzeugen oder bearbeiten kostet "
             f"{IMAGE_TOKEN_COST} Tokens, eine Sprachnachricht erzeugen kostet {AUDIO_TOKEN_COST} "
             "Tokens -- ruf generate_image/edit_image/generate_audio nur auf, wenn klar genug Tokens übrig sind und der "
-            "Nutzer das wirklich ausdrücklich möchte. Echte Video-Erstellung gibt es aktuell "
-            "NICHT -- falls danach gefragt wird, erklär ehrlich, dass das (noch) nicht "
-            "unterstützt wird, statt es vorzutäuschen. WICHTIG, falls jemand fragt, wie "
+            f"Nutzer das wirklich ausdrücklich möchte. {video_line} WICHTIG, falls jemand fragt, wie "
             "man mehr Tokens bekommt: Es gibt AKTUELL KEINEN Store, keine kaufbaren "
             "Token-Pakete und keine Möglichkeit, mit echtem Geld Tokens zu kaufen -- erfinde "
             "so etwas niemals (kein Store, keine Preise, keine Zahlungsmethoden). Die einzigen "
@@ -1925,6 +2054,7 @@ def start_chat_job(message, context=None, history=None, project_type=None, facts
                 "personality_adjustments": captured.get("personality_adjustments") or [],
                 "image_generated": captured.get("image_generated"),
                 "audio_generated": captured.get("audio_generated"),
+                "video_generated": captured.get("video_generated"),
             }
             if on_done:
                 on_done(reply, None, proposed_change, new_learned_facts)

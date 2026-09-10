@@ -42,7 +42,12 @@
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
 
-  // very small markdown: fenced code, inline code, **bold**, line breaks
+  function safeUrl(u) {
+    return /^https?:\/\//i.test(u) ? u.replace(/"/g, "%22") : "";
+  }
+
+  // very small markdown: fenced code, inline code, **bold**, line breaks,
+  // plus generated media: ![alt](url), !audio[label](url), !video[label](url)
   function render(text) {
     var parts = String(text).split(/```/);
     var html = "";
@@ -51,10 +56,26 @@
         var body = parts[i].replace(/^[a-zA-Z0-9_-]*\n/, "");
         html += "<pre>" + esc(body.replace(/\n$/, "")) + "</pre>";
       } else {
-        var seg = esc(parts[i])
+        var media = [];
+        function stash(tag) { media.push(tag); return "" + (media.length - 1) + ""; }
+        var seg = parts[i]
+          .replace(/!video\[[^\]]*\]\(([^)]+)\)/g, function (_m, u) {
+            u = safeUrl(u.trim()); if (!u) return "";
+            return stash('<video class="nx-media" src="' + u + '" controls playsinline preload="metadata"></video>');
+          })
+          .replace(/!audio\[[^\]]*\]\(([^)]+)\)/g, function (_m, u) {
+            u = safeUrl(u.trim()); if (!u) return "";
+            return stash('<audio class="nx-media" src="' + u + '" controls preload="metadata"></audio>');
+          })
+          .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, function (_m, alt, u) {
+            u = safeUrl(u.trim()); if (!u) return "";
+            return stash('<img class="nx-media" src="' + u + '" alt="' + esc(alt) + '" loading="lazy">');
+          });
+        seg = esc(seg)
           .replace(/`([^`]+)`/g, "<code>$1</code>")
           .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
-          .replace(/\n/g, "<br>");
+          .replace(/\n/g, "<br>")
+          .replace(/(\d+)/g, function (_m, n) { return media[Number(n)] || ""; });
         html += seg;
       }
     }

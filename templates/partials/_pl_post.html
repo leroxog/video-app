@@ -3,7 +3,6 @@
 <div class="pl-post-group" data-post-id="{{ post.id }}"
      data-has-ps="{{ '1' if post.ps else '0' }}"
      data-mine="{{ '1' if post.is_mine else '0' }}"
-     data-bookmarked="{{ '1' if post.bookmarked_by_me else '0' }}"
      data-reposted="{{ '1' if post.reposted_by_me else '0' }}">
 
   {% if post.repost %}
@@ -18,13 +17,11 @@
       <div class="pl-post-stats">
           <span class="pl-stat-like {{ 'pl-stat-liked' if post.liked_by_me }}">{{ plicon('heart', 13) }}<b class="pl-like-count">{{ post.like_count }}</b></span>
           <button type="button" class="pl-stat-comment" data-comments-toggle>{{ plicon('comment', 13) }}<b class="pl-comment-count">{{ post.comment_count }}</b></button>
-          <span class="pl-stat-repost"><b class="pl-repost-count">{{ post.repost_count }}</b></span>
       </div>
 
       <button type="button" class="pl-post-kebab" data-kebab aria-label="Mehr">&#8942;</button>
       <div class="pl-post-menu" hidden>
         <button type="button" data-act="copy">Link kopieren</button>
-        <button type="button" data-act="bookmark">{{ 'Aus Lesezeichen' if post.bookmarked_by_me else 'Lesezeichen' }}</button>
         {% if post.is_mine %}
         <button type="button" data-act="edit">Bearbeiten</button>
         <button type="button" data-act="pin">{{ 'Losl&ouml;sen' if post.pinned else 'Anheften' }}</button>
@@ -67,12 +64,15 @@
           <button class="pl-ps-add-btn" data-ps-add>{{ plicon('plus', 13) }} P.S.</button>
           {% endif %}
           <button class="pl-comments-btn" data-comments-toggle>{{ plicon('comment', 13) }} Kommentare</button>
-          <button class="pl-repost-btn {{ 'on' if post.reposted_by_me }}" data-repost>{{ plicon('share', 13) }} <span>Repost</span></button>
-          <button class="pl-bookmark-btn {{ 'on' if post.bookmarked_by_me }}" data-bookmark aria-label="Lesezeichen">&#128278;</button>
+          <div class="pl-repost-wrap">
+            <button class="pl-repost-btn {{ 'on' if post.reposted_by_me }}" data-repost-toggle aria-haspopup="true">{{ plicon('share', 13) }} <span class="pl-repost-word">Repost</span>{% if post.repost_count %} <b class="pl-repost-n">{{ post.repost_count }}</b>{% endif %}</button>
+            <div class="pl-repost-menu" hidden>
+              <button type="button" data-repost-do="plain">{{ plicon('share', 14) }} <span>{{ 'Repost zur&uuml;cknehmen' if post.reposted_by_me else 'Repost' }}</span></button>
+              <button type="button" data-repost-do="quote">{{ plicon('comment', 14) }} <span>Zitieren</span></button>
+            </div>
+          </div>
           <button class="pl-share-btn" data-share>{{ plicon('share', 13) }} Teilen</button>
       </div>
-
-      {% if post.view_count %}<div class="pl-post-views">{{ post.view_count }} Aufrufe</div>{% endif %}
 
       <div class="pl-like-burst">{{ plicon('heart', 84) }}</div>
       <div class="pl-longpress-hint"></div>
