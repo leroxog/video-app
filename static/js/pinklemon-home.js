@@ -22,9 +22,11 @@
       .replace(/"/g, "&quot;");
   }
 
+  var S = window.plSound || { play: function () {} };
+
   // ---------------- sheets ----------------
-  function openSheet(el) { el.classList.add("open"); document.body.style.overflow = "hidden"; }
-  function closeSheet(el) { el.classList.remove("open"); document.body.style.overflow = ""; }
+  function openSheet(el) { el.classList.add("open"); document.body.style.overflow = "hidden"; S.play("open"); }
+  function closeSheet(el) { el.classList.remove("open"); document.body.style.overflow = ""; S.play("close"); }
   function closeAllSheets() { $all(".pl-sheet-backdrop.open").forEach(closeSheet); }
 
   $all(".pl-sheet-backdrop").forEach(function (bd) {
@@ -258,6 +260,7 @@
     if (panel.dataset.built && !panel.hidden) { panel.hidden = true; return; }
     if (!panel.dataset.built) buildCommentsPanel(group, panel);
     panel.hidden = false;
+    S.play("open");
     if (!panel.dataset.loaded) {
       var listEl = panel.querySelector(".pl-comments-list");
       listEl.innerHTML = '<div class="pl-empty" style="padding:18px 0;background:none;border:none;">Lädt …</div>';
@@ -293,6 +296,7 @@
     b.classList.remove("go");
     void b.offsetWidth;
     b.classList.add("go");
+    S.play("like");
   }
 
   function wirePost(post) {

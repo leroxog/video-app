@@ -52,6 +52,7 @@
     window.PL_CHAT = { id: {{ chat_id }}, isGroup: {{ 'true' if chat.is_group else 'false' }} };
     window.PL_ME = {{ me_json | tojson }};
 </script>
+<script src="{{ url_for('static', filename='js/pl-sound.js') }}"></script>
 <script src="{{ url_for('static', filename='js/pl-attach.js') }}"></script>
 <script src="{{ url_for('static', filename='js/pinklemon-chat.js') }}"></script>
 </body>

@@ -722,6 +722,29 @@ img { max-width: 100%; display: block; }
 }
 .pl-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
+/* tiny mute toggle for the UI sounds */
+.pl-soundtoggle {
+  position: fixed;
+  left: 12px;
+  bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  z-index: 70;
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--pl-border);
+  background: var(--pl-surface-2);
+  -webkit-backdrop-filter: var(--pl-blur);
+  backdrop-filter: var(--pl-blur);
+  font-size: 15px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0.55;
+  transition: opacity 0.15s ease, transform 0.12s ease;
+}
+.pl-soundtoggle:hover { opacity: 1; }
+.pl-soundtoggle:active { transform: scale(0.9); }
+@media (min-width: 900px) {
+  .pl-soundtoggle { left: auto; right: 16px; bottom: 16px; }
+}
+
 /* ---------- Auth ---------- */
 .pl-auth {
   min-height: 100vh;

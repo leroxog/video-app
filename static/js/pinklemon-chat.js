@@ -41,8 +41,10 @@
         if (!j.ok) return;
         if (j.messages.length) {
           var stick = atBottom();
+          var fromOther = j.messages.some(function (m) { return !m.is_mine; });
           j.messages.forEach(addMsg);
           if (stick) scrollDown();
+          if (fromOther && window.plSound) window.plSound.play("receive");
         }
       })
       .catch(function () {});

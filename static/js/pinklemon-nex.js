@@ -113,6 +113,7 @@
         setBusy(false);
         if (j.status === "done" && j.reply) addMsg("assistant", j.reply);
         else addMsg("assistant", "Ich bin gerade nicht erreichbar. Versuch's gleich nochmal.");
+        if (window.plSound) window.plSound.play("receive");
       })
       .catch(function () { hideTyping(); setBusy(false); addMsg("assistant", "Verbindungsfehler."); });
   }
