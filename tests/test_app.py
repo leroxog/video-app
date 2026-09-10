@@ -1,5 +1,6 @@
 import os
 import sys
+import io
 import shutil
 import tempfile
 
@@ -293,6 +294,22 @@ def test_nex_chat_uses_the_blunt_nex_prompt(client, monkeypatch):
             break
         time.sleep(0.05)
     assert "Du bist Nex" in seen["sp"] and "7Ai" not in seen["sp"]
+
+
+def test_nex_voice_endpoint_rejects_missing_audio(client):
+    signup(client, "alice")
+    r = client.post("/api/pl/nex/voice")
+    assert r.status_code == 400 and r.get_json()["ok"] is False
+
+
+def test_nex_voice_endpoint_transcribes_with_whisper(client, monkeypatch):
+    import ai_assistant
+    monkeypatch.setattr(ai_assistant, "transcribe_audio", lambda *a, **k: "hallo nex")
+    signup(client, "alice")
+    data = {"audio": (io.BytesIO(b"x" * 4000), "speech.webm")}
+    r = client.post("/api/pl/nex/voice", data=data, content_type="multipart/form-data")
+    j = r.get_json()
+    assert j["ok"] is True and j["transcript"] == "hallo nex"
 
 
 # ---------------- Spiele ----------------

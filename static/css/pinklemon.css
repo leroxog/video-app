@@ -460,6 +460,8 @@ img { max-width: 100%; display: block; }
   border-bottom: none;
   padding: 10px 18px calc(20px + env(safe-area-inset-bottom, 0px));
   max-height: 82vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   display: flex;
   flex-direction: column;
   transform: translateY(100%);

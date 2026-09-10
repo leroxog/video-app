@@ -142,6 +142,36 @@ import requests
 logger = logging.getLogger(__name__)
 
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_TRANSCRIBE_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
+# Groq hosts OpenAI's Whisper for speech-to-text -- same GROQ_API_KEY as
+# chat, no extra provider. "turbo" is fast and good enough for short
+# spoken turns; override with GROQ_TRANSCRIBE_MODEL if needed.
+GROQ_TRANSCRIBE_MODEL = os.environ.get("GROQ_TRANSCRIBE_MODEL", "whisper-large-v3-turbo")
+
+
+def transcribe_audio(audio_bytes, filename="speech.webm", language="de"):
+    """Speech -> text via Groq's hosted Whisper. Returns the transcript
+    string (stripped), or "" on any failure / no key / empty audio. Used by
+    the Nex voice orb (see app.py's /api/pl/nex/voice) -- recording the
+    mic and transcribing server-side works on iOS Safari too, unlike the
+    browser's own webkitSpeechRecognition."""
+    api_key = os.environ.get("GROQ_API_KEY")
+    if not api_key or not audio_bytes:
+        return ""
+    try:
+        resp = requests.post(
+            GROQ_TRANSCRIBE_URL,
+            headers={"Authorization": f"Bearer {api_key}"},
+            files={"file": (filename, audio_bytes, "application/octet-stream")},
+            data={"model": GROQ_TRANSCRIBE_MODEL, "language": language,
+                  "response_format": "json", "temperature": "0"},
+            timeout=45,
+        )
+        resp.raise_for_status()
+        return (resp.json().get("text") or "").strip()
+    except Exception:
+        logger.exception("Groq-Whisper-Transkription fehlgeschlagen.")
+        return ""
 # Switched to a real open-weight Chinese model (Alibaba's Qwen) on the
 # user's explicit request (2026-08-19), knowingly accepting the tradeoff:
 # it's Preview-tier on Groq ("intended for evaluation purposes, not

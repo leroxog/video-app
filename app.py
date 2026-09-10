@@ -1249,6 +1249,24 @@ def pl_nex():
     )
 
 
+@app.route("/api/pl/nex/voice", methods=["POST"])
+def api_pl_nex_voice():
+    """Nex voice orb: the browser records the mic (MediaRecorder) and
+    posts the audio here; we transcribe it with Groq Whisper and hand the
+    text back. The frontend then sends that text through the normal
+    /api/ai/chat pipeline. Works on iOS Safari (no webkitSpeechRecognition
+    there)."""
+    current_user()  # require_login already gated this
+    f = request.files.get("audio")
+    if f is None:
+        return jsonify({"ok": False, "error": "no_audio"}), 400
+    audio = f.read()
+    if len(audio) < 1200:
+        return jsonify({"ok": True, "transcript": ""})  # basically silence
+    transcript = ai_assistant.transcribe_audio(audio, f.filename or "speech.webm")
+    return jsonify({"ok": bool(transcript), "transcript": transcript})
+
+
 PL_GAMES = [
     {"slug": "block-blast", "title": "Block Blast!", "sub": "Blöcke legen, Reihen sprengen", "tpl": "spiele/block_blast.html"},
     {"slug": "dress-up", "title": "Dress up!", "sub": "Style dein Outfit", "tpl": "spiele/dress_up.html"},
