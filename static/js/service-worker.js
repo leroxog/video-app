@@ -66,7 +66,7 @@ self.addEventListener("fetch", (event) => {
 // Real Web Push delivery (see push_notify.py) -- payload is
 // {title, body, url} JSON, set by notify_followers() on the server.
 self.addEventListener("push", (event) => {
-    let payload = { title: "Pinklemon", body: "Neuigkeiten von einer gefolgten Marke.", url: "/" };
+    let payload = { title: "HEXAGONUM", body: "Neuigkeiten von einer gefolgten Marke.", url: "/" };
     try {
         if (event.data) payload = Object.assign(payload, event.data.json());
     } catch (e) {

@@ -365,7 +365,7 @@
         post.querySelector(".pl-share-count").textContent = j.share_count;
         var link = location.origin + "/p/" + id;
         if (navigator.share) {
-          navigator.share({ title: "pinklemon", url: link }).catch(function () {});
+          navigator.share({ title: "HEXAGONUM", url: link }).catch(function () {});
         } else if (navigator.clipboard) {
           navigator.clipboard.writeText(link).then(function () { window.plToast("Link kopiert."); });
         } else {

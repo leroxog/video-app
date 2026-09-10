@@ -51,7 +51,7 @@ def test_signup_then_land_on_feed(client):
     assert r.status_code in (302, 303)
     home = client.get("/")
     assert home.status_code == 200
-    assert b"pinklemon" in home.data
+    assert b"HEXAGONUM" in home.data
 
 
 def test_signup_rejects_bad_username_and_short_password(client):

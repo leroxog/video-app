@@ -8,14 +8,14 @@
     <script>
         try { if (localStorage.getItem("pl_theme") === "light") document.documentElement.setAttribute("data-theme", "light"); } catch (e) {}
     </script>
-    <title>pinklemon</title>
+    <title>HEXAGONUM</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/pinklemon.css') }}">
     <link rel="icon" href="{{ url_for('static', filename='img/pinklemon-mark.svg') }}" type="image/svg+xml">
 </head>
 <body>
 <div class="pl-auth">
     <div class="pl-logo">{% include "partials/_pinklemon_logo.html" %}</div>
-    <h1>pinklemon</h1>
+    <h1>HEXAGONUM</h1>
     <p class="sub">{% if mode == 'signup' %}Erstell dir einen Account.{% else %}Willkommen zurück.{% endif %}</p>
     <form method="post" action="{{ url_for('pl_signup') if mode == 'signup' else url_for('pl_login') }}">
         <input class="pl-input" name="username" placeholder="Benutzername" maxlength="30" autocomplete="username"

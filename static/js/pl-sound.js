@@ -1,13 +1,13 @@
-/* pinklemon -- UI sound. Every press and most things that happen make a
-   short synthesised sound (Web Audio, no files). window.plSound.play(name)
+/* HEXAGONUM -- UI sound. Short, bright, modern synth cues (Web Audio, no
+   files) for every press and most things that happen. window.plSound.play(name)
    for explicit cues; a global listener covers taps and typing.
-   Persisted mute via localStorage("pl_sound_off"); a small 🔊 toggle
-   sits bottom-left. */
+   Persisted mute via localStorage("pl_sound_off"); a small toggle sits in
+   a corner. */
 (function () {
   "use strict";
 
   var KEY = "pl_sound_off";
-  var ctx = null;
+  var ctx = null, master = null;
   var muted = false;
   try { muted = localStorage.getItem(KEY) === "1"; } catch (e) {}
 
@@ -15,61 +15,118 @@
     if (!ctx) {
       try { ctx = new (window.AudioContext || window.webkitAudioContext)(); }
       catch (e) { return null; }
+      // gentle limiter so layered cues stay clean and even
+      var comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -14; comp.knee.value = 12;
+      comp.ratio.value = 8; comp.attack.value = 0.002; comp.release.value = 0.12;
+      master = ctx.createGain();
+      master.gain.value = 0.9;
+      master.connect(comp); comp.connect(ctx.destination);
     }
     if (ctx.state === "suspended") { try { ctx.resume(); } catch (e) {} }
     return ctx;
   }
 
-  function tone(o) {
-    var c = ac();
-    if (!c || muted) return;
-    var t = c.currentTime;
+  // one tonal partial with an attack/decay envelope + optional lowpass
+  function voice(o) {
+    var c = ac(); if (!c || muted) return;
+    var t = (o.at || 0) + c.currentTime;
     var dur = o.dur || 0.12;
     var osc = c.createOscillator();
-    var g = c.createGain();
     osc.type = o.type || "sine";
-    osc.frequency.setValueAtTime(o.f0 || 440, t);
+    osc.frequency.setValueAtTime(o.f0, t);
     if (o.f1) {
-      try { osc.frequency.exponentialRampToValueAtTime(Math.max(1, o.f1), t + dur); }
-      catch (e) { osc.frequency.linearRampToValueAtTime(o.f1, t + dur); }
+      try { osc.frequency.exponentialRampToValueAtTime(Math.max(1, o.f1), t + (o.gl || dur)); }
+      catch (e) { osc.frequency.linearRampToValueAtTime(o.f1, t + (o.gl || dur)); }
     }
-    var vol = o.vol == null ? 0.05 : o.vol;
+    var node = osc;
+    if (o.lp) {
+      var f = c.createBiquadFilter();
+      f.type = "lowpass"; f.frequency.value = o.lp; f.Q.value = o.q || 0.6;
+      osc.connect(f); node = f;
+    }
+    var g = c.createGain();
+    var peak = o.vol == null ? 0.06 : o.vol;
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(vol, t + 0.006);
+    g.gain.exponentialRampToValueAtTime(peak, t + (o.a || 0.004));
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    osc.connect(g); g.connect(c.destination);
+    node.connect(g); g.connect(master);
     osc.start(t); osc.stop(t + dur + 0.03);
   }
 
-  function noise(dur, vol, freq) {
-    var c = ac();
-    if (!c || muted) return;
-    var t = c.currentTime;
-    var n = Math.floor(c.sampleRate * dur);
+  // short filtered noise transient -- the "tick" that makes a cue feel tactile
+  function tick(o) {
+    var c = ac(); if (!c || muted) return;
+    var t = (o.at || 0) + c.currentTime;
+    var dur = o.dur || 0.02;
+    var n = Math.max(1, Math.floor(c.sampleRate * dur));
     var buf = c.createBuffer(1, n, c.sampleRate);
     var d = buf.getChannelData(0);
-    for (var i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
+    for (var i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 2);
     var src = c.createBufferSource(); src.buffer = buf;
-    var bp = c.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = freq || 1400; bp.Q.value = 0.8;
+    var bp = c.createBiquadFilter();
+    bp.type = "bandpass"; bp.frequency.value = o.freq || 2600; bp.Q.value = o.q || 1.1;
     var g = c.createGain();
-    g.gain.setValueAtTime(vol == null ? 0.04 : vol, t);
+    g.gain.setValueAtTime(o.vol == null ? 0.05 : o.vol, t);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    src.connect(bp); bp.connect(g); g.connect(c.destination);
+    src.connect(bp); bp.connect(g); g.connect(master);
     src.start(t); src.stop(t + dur + 0.02);
   }
 
   var SOUNDS = {
-    tap: function () { noise(0.045, 0.035, 1700); tone({ type: "triangle", f0: 170, f1: 110, dur: 0.045, vol: 0.025 }); },
-    key: function () { noise(0.018, 0.02, 2600); },
-    open: function () { tone({ type: "sine", f0: 300, f1: 640, dur: 0.16, vol: 0.045 }); },
-    close: function () { tone({ type: "sine", f0: 560, f1: 240, dur: 0.14, vol: 0.04 }); },
-    send: function () { tone({ type: "sine", f0: 480, f1: 900, dur: 0.13, vol: 0.055 }); },
-    success: function () { tone({ type: "sine", f0: 640, dur: 0.08, vol: 0.045 }); setTimeout(function () { tone({ type: "sine", f0: 970, dur: 0.13, vol: 0.05 }); }, 65); },
-    error: function () { tone({ type: "sawtooth", f0: 210, f1: 120, dur: 0.22, vol: 0.045 }); },
-    like: function () { tone({ type: "sine", f0: 780, f1: 1500, dur: 0.14, vol: 0.055 }); },
-    receive: function () { tone({ type: "sine", f0: 940, f1: 640, dur: 0.13, vol: 0.045 }); },
-    nav: function () { tone({ type: "triangle", f0: 440, f1: 680, dur: 0.08, vol: 0.04 }); },
-    toggle: function () { tone({ type: "square", f0: 520, dur: 0.05, vol: 0.04 }); }
+    // crisp, near-subliminal press
+    tap: function () {
+      tick({ dur: 0.014, freq: 3000, vol: 0.028 });
+      voice({ type: "sine", f0: 1050, f1: 760, dur: 0.05, gl: 0.05, vol: 0.03, lp: 5000 });
+    },
+    key: function () { tick({ dur: 0.01, freq: 3400, vol: 0.02 }); },
+    // bubbly upward "pop"
+    pop: function () {
+      tick({ dur: 0.012, freq: 2400, vol: 0.03 });
+      voice({ type: "sine", f0: 300, f1: 1000, dur: 0.09, gl: 0.07, vol: 0.06, lp: 4200 });
+    },
+    // airy rise / fall for panels
+    open: function () {
+      voice({ type: "triangle", f0: 520, f1: 1040, dur: 0.14, gl: 0.12, vol: 0.045, lp: 5200 });
+      voice({ type: "sine", f0: 780, f1: 1560, dur: 0.14, gl: 0.12, vol: 0.03, lp: 6000, at: 0.01 });
+    },
+    close: function () {
+      voice({ type: "triangle", f0: 900, f1: 440, dur: 0.13, gl: 0.11, vol: 0.04, lp: 4200 });
+    },
+    // quick 3-step swoosh up
+    send: function () {
+      voice({ type: "sine", f0: 523, dur: 0.05, vol: 0.045, lp: 6000 });
+      voice({ type: "sine", f0: 784, dur: 0.05, vol: 0.05, lp: 6000, at: 0.035 });
+      voice({ type: "sine", f0: 1175, dur: 0.09, vol: 0.055, lp: 7000, at: 0.07 });
+    },
+    // pleasant major arpeggio
+    success: function () {
+      voice({ type: "sine", f0: 659, dur: 0.09, vol: 0.045, lp: 6000 });
+      voice({ type: "sine", f0: 988, dur: 0.10, vol: 0.05, lp: 6500, at: 0.06 });
+      voice({ type: "sine", f0: 1319, dur: 0.16, vol: 0.05, lp: 7000, at: 0.12 });
+    },
+    // soft, non-harsh "no"
+    error: function () {
+      voice({ type: "sine", f0: 360, f1: 300, dur: 0.10, gl: 0.09, vol: 0.05, lp: 1400 });
+      voice({ type: "sine", f0: 300, f1: 232, dur: 0.16, gl: 0.14, vol: 0.05, lp: 1200, at: 0.10 });
+    },
+    // sparkle
+    like: function () {
+      tick({ dur: 0.01, freq: 5200, vol: 0.02 });
+      voice({ type: "sine", f0: 880, f1: 1400, dur: 0.06, gl: 0.06, vol: 0.05, lp: 8000 });
+      voice({ type: "sine", f0: 1320, f1: 2100, dur: 0.10, gl: 0.09, vol: 0.045, lp: 9000, at: 0.05 });
+    },
+    // gentle two-tone bell for anything incoming
+    receive: function () {
+      voice({ type: "sine", f0: 1245, dur: 0.10, vol: 0.045, lp: 7000 });
+      voice({ type: "sine", f0: 1661, dur: 0.20, vol: 0.05, lp: 8000, at: 0.08 });
+    },
+    nav: function () {
+      voice({ type: "triangle", f0: 540, f1: 820, dur: 0.07, gl: 0.06, vol: 0.04, lp: 5000 });
+    },
+    toggle: function () {
+      voice({ type: "sine", f0: 720, dur: 0.05, vol: 0.045, lp: 6000 });
+    }
   };
 
   function play(name) {
@@ -79,7 +136,7 @@
 
   // --- global: a sound for anything you press ---
   document.addEventListener("pointerdown", function (e) {
-    if (muted || !e.isPrimary) return;
+    if (muted || (e.isPrimary === false)) return;
     var t = e.target;
     if (!t || !t.closest) return;
     if (t.closest("input:not([type=checkbox]):not([type=radio]), textarea, select, [contenteditable='']")) return;
