@@ -1,0 +1,13 @@
+{
+    "name": "pinklemon",
+    "short_name": "pinklemon",
+    "description": "pinklemon",
+    "start_url": "/",
+    "scope": "/",
+    "display": "standalone",
+    "background_color": "#0b0b0d",
+    "theme_color": "#0b0b0d",
+    "icons": [
+        { "src": "/static/img/pinklemon-mark.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+    ]
+}

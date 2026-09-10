@@ -57,6 +57,12 @@ class User(db.Model):
     # genuinely already spent down to 0.
     ai_tokens = db.Column(db.Integer, nullable=True)
     ai_tokens_last_award_date = db.Column(db.Date, nullable=True)
+    # Which of the 5 Nex7 personalities this user's AI is currently set to
+    # (see app.py NEX7_PERSONAS): "nex", "seven", "ehrgeizig", "ruhig",
+    # "chaos". None == not chosen yet == treated as "nex".
+    nex7_persona = db.Column(db.String(20), nullable=True)
+    # Free-text short bio shown on the profile / next to posts.
+    bio = db.Column(db.String(300), nullable=True)
     # city is free-text (e.g. "München-Pasing"). is_company/company_name/
     # company_address are legacy: the last real consumer (Chepal's company
     # offer-management, and briefly Mini Job's company job-postings) was
@@ -663,4 +669,72 @@ class StudioBlock(db.Model):
     height = db.Column(db.Integer, nullable=False, default=40)
     color = db.Column(db.String(20), nullable=False, default="#3ea6ff")
     __table_args__ = (db.UniqueConstraint("project_id", "name", name="uq_studioblock_project_name"),)
+
+
+# ==========================================================================
+# pinklemon social feed (2026-09-10) -- Home tab: text posts with a heading
+# + optional body, double-tap likes, long-press comments (nested one level,
+# each likeable), a share counter, and exactly one "P.S." the author can
+# append later. Deliberately NOT named `post` -- a legacy `post` photo-feed
+# table (dropped from the app, rows may still exist in prod) has an
+# incompatible schema, so these get their own `feed_*` tables.
+# ==========================================================================
+
+class FeedPost(db.Model):
+    __tablename__ = "feed_post"
+    id = db.Column(db.Integer, primary_key=True)
+    author_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    heading = db.Column(db.String(140), nullable=False)
+    body = db.Column(db.Text, nullable=True)
+    share_count = db.Column(db.Integer, nullable=False, default=0)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    author = db.relationship("User")
+    likes = db.relationship("FeedLike", backref="post", lazy=True, cascade="all, delete-orphan")
+    comments = db.relationship("FeedComment", backref="post", lazy=True, cascade="all, delete-orphan")
+    ps = db.relationship("FeedPS", backref="post", uselist=False, cascade="all, delete-orphan")
+
+
+class FeedLike(db.Model):
+    __tablename__ = "feed_like"
+    id = db.Column(db.Integer, primary_key=True)
+    post_id = db.Column(db.Integer, db.ForeignKey("feed_post.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    __table_args__ = (db.UniqueConstraint("post_id", "user_id", name="uq_feedlike_post_user"),)
+
+
+class FeedComment(db.Model):
+    __tablename__ = "feed_comment"
+    id = db.Column(db.Integer, primary_key=True)
+    post_id = db.Column(db.Integer, db.ForeignKey("feed_post.id"), nullable=False)
+    author_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    # One level of nesting only: a reply has parent_id set; a reply to a
+    # reply is collapsed onto the same top-level thread (app.py enforces).
+    parent_id = db.Column(db.Integer, db.ForeignKey("feed_comment.id"), nullable=True)
+    body = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    author = db.relationship("User")
+    likes = db.relationship("FeedCommentLike", backref="comment", lazy=True, cascade="all, delete-orphan")
+    replies = db.relationship(
+        "FeedComment", backref=db.backref("parent", remote_side=[id]),
+        lazy=True, cascade="all, delete-orphan",
+    )
+
+
+class FeedCommentLike(db.Model):
+    __tablename__ = "feed_comment_like"
+    id = db.Column(db.Integer, primary_key=True)
+    comment_id = db.Column(db.Integer, db.ForeignKey("feed_comment.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    __table_args__ = (db.UniqueConstraint("comment_id", "user_id", name="uq_feedcommentlike_comment_user"),)
+
+
+class FeedPS(db.Model):
+    __tablename__ = "feed_ps"
+    id = db.Column(db.Integer, primary_key=True)
+    post_id = db.Column(db.Integer, db.ForeignKey("feed_post.id"), nullable=False, unique=True)
+    body = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 

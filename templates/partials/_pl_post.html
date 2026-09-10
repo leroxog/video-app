@@ -1,0 +1,38 @@
+{%- from "partials/_pl_icons.html" import plicon -%}
+<article class="pl-post" data-post-id="{{ post.id }}"
+         data-liked="{{ '1' if post.liked_by_me else '0' }}"
+         data-mine="{{ '1' if post.is_mine else '0' }}"
+         data-has-ps="{{ '1' if post.ps else '0' }}">
+    <div class="pl-post-stats">
+        <span class="pl-stat-like {{ 'pl-stat-liked' if post.liked_by_me }}">{{ plicon('heart', 13) }}<b class="pl-like-count">{{ post.like_count }}</b></span>
+        <span>{{ plicon('comment', 13) }}<b class="pl-comment-count">{{ post.comment_count }}</b></span>
+        <span>{{ plicon('share', 13) }}<b class="pl-share-count">{{ post.share_count }}</b></span>
+    </div>
+    <div class="pl-post-head">
+        <div class="pl-avatar">{{ post.author.avatar_letter }}</div>
+        <span class="pl-post-user">@{{ post.author.username }}</span>
+        <span class="pl-post-time">{{ post.created_ago }}</span>
+    </div>
+    <div class="pl-post-heading">{{ post.heading }}</div>
+    {% if post.body %}<div class="pl-post-body">{{ post.body }}</div>{% endif %}
+
+    <div class="pl-ps-slot">
+    {% if post.ps %}
+        <div class="pl-ps">
+            <div class="pl-ps-label">P.S.</div>
+            <div class="pl-ps-body">{{ post.ps.body }}</div>
+            <div class="pl-ps-time">{{ post.ps.created_ago }}</div>
+        </div>
+    {% endif %}
+    </div>
+
+    <div class="pl-post-actions">
+        {% if post.is_mine and not post.ps %}
+        <button class="pl-ps-add-btn" data-ps-add>{{ plicon('plus', 13) }} P.S.</button>
+        {% endif %}
+        <button class="pl-share-btn" data-share>{{ plicon('share', 13) }} Teilen</button>
+    </div>
+
+    <div class="pl-like-burst">{{ plicon('heart', 84) }}</div>
+    <div class="pl-longpress-hint"></div>
+</article>

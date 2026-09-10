@@ -41,6 +41,7 @@ from models import (
     AccountRecoveryRequest, ErrorLog,
     AiVoiceProfile, AiPersonality, AiGeneratedMedia,
     AiTrainingExample, AiTrainingRun,
+    FeedPost, FeedLike, FeedComment, FeedCommentLike, FeedPS,
 )
 import ai_assistant
 import local_ai
@@ -644,6 +645,8 @@ def ensure_sqlite_columns_exist():
             ("is_company", "BOOLEAN NOT NULL DEFAULT 0"),
             ("company_name", "VARCHAR(200)"),
             ("company_address", "VARCHAR(300)"),
+            ("nex7_persona", "VARCHAR(20)"),
+            ("bio", "VARCHAR(300)"),
         ],
         # ai_personality itself is created fresh by db.create_all() on any
         # brand-new database, but on one that already had the table from
@@ -732,6 +735,8 @@ def ensure_columns_exist():
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS is_company BOOLEAN NOT NULL DEFAULT FALSE',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS company_name VARCHAR(200)',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS company_address VARCHAR(300)',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS nex7_persona VARCHAR(20)',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS bio VARCHAR(300)',
         'ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS age_rating INTEGER NOT NULL DEFAULT 0',
         'ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS previous_web_code TEXT',
         # Root cause confirmed live (psycopg2.errors.UndefinedColumn):
@@ -820,41 +825,9 @@ def allowed_image_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS
 
 
-def _create_anon_user():
-    """Invisible throwaway account. The AI chat is built end to end around a
-    logged-in user (per-browser history, personality row, generated-media
-    records), so rather than unpicking that everywhere, every visitor who
-    actually reaches a chat silently gets one of these -- no login, signup
-    or terms UI anywhere. Only minted for requests that really need it (see
-    current_user), never for a bare hit on "/" or a crawler."""
-    user = User(
-        username=f"anon_{secrets.token_hex(8)}",
-        purpose_of_use="private",
-        terms_accepted_at=datetime.now(timezone.utc),
-        ai_tokens=None,
-    )
-    user.set_password(secrets.token_urlsafe(32))
-    db.session.add(user)
-    db.session.commit()
-    session["user_id"] = user.id
-    session.permanent = True
-    return user
-
-
-_ENDPOINTS_NEEDING_USER = {"assistant_page", "sevenai_page"}
-
-
 def current_user():
-    user_id = session.get("user_id")
-    if user_id is not None:
-        user = db.session.get(User, user_id)
-        if user is not None:
-            return user
-    endpoint = request.endpoint if request else None
-    path = request.path if request else ""
-    if endpoint in _ENDPOINTS_NEEDING_USER or path.startswith("/api/ai/"):
-        return _create_anon_user()
-    return None
+    uid = session.get("user_id")
+    return db.session.get(User, uid) if uid else None
 
 
 @app.context_processor
@@ -1036,12 +1009,29 @@ def update_last_seen():
 def _make_session_permanent():
     # Without this, Flask issues a session cookie that expires as soon as
     # the browser is closed -- on mobile in particular that meant users got
-    # logged out constantly (backgrounding the browser, restarting the
-    # phone, etc.). Marking the session permanent + a long lifetime above
-    # gives it a real expiry date instead, and Flask refreshes that expiry
-    # on every request by default, so active users effectively never expire.
+    # logged out constantly. Marking the session permanent + a long
+    # lifetime gives it a real expiry date instead.
     session.permanent = True
 
+
+_PUBLIC_ENDPOINTS = {
+    "pl_login", "pl_signup", "static", "service_worker", "offline_page",
+}
+
+
+@app.before_request
+def require_login():
+    """pinklemon is account-only (needed for @usernames, follows, DMs).
+    Anonymous visitors get the login screen; unauthenticated API calls get
+    a 401 JSON so the frontend can react instead of getting an HTML
+    redirect."""
+    if request.endpoint is None or request.endpoint in _PUBLIC_ENDPOINTS:
+        return
+    if current_user() is not None:
+        return
+    if request.path.startswith("/api/"):
+        return jsonify({"ok": False, "error": "not_logged_in"}), 401
+    return redirect(url_for("pl_login"))
 
 
 @app.route("/service-worker.js")
@@ -1061,17 +1051,316 @@ def offline_page():
     return render_template("offline.html")
 
 
+# ==========================================================================
+# pinklemon -- auth (minimal: username + password, no email/terms/age gate)
+# ==========================================================================
+PL_USERNAME_RE = re.compile(r"^[a-zA-Z0-9_.]{3,30}$")
+
+
+@app.route("/login", methods=["GET", "POST"])
+def pl_login():
+    if current_user() is not None:
+        return redirect(url_for("pl_home"))
+    if request.method == "POST":
+        username = (request.form.get("username") or "").strip()
+        password = request.form.get("password") or ""
+        user = User.query.filter(db.func.lower(User.username) == username.lower()).first()
+        if user is None or not user.check_password(password):
+            return render_template("pl_auth.html", mode="login", error="Benutzername oder Passwort falsch.", username=username), 401
+        session["user_id"] = user.id
+        session.permanent = True
+        return redirect(url_for("pl_home"))
+    return render_template("pl_auth.html", mode="login")
+
+
+@app.route("/signup", methods=["GET", "POST"])
+def pl_signup():
+    if current_user() is not None:
+        return redirect(url_for("pl_home"))
+    if request.method == "POST":
+        username = (request.form.get("username") or "").strip()
+        password = request.form.get("password") or ""
+        password2 = request.form.get("password2") or ""
+        err = None
+        if not PL_USERNAME_RE.match(username):
+            err = "3-30 Zeichen, nur Buchstaben, Zahlen, _ und ."
+        elif password != password2:
+            err = "Passwörter stimmen nicht überein."
+        elif len(password) < 6:
+            err = "Passwort muss mindestens 6 Zeichen haben."
+        elif User.query.filter(db.func.lower(User.username) == username.lower()).first():
+            err = "Benutzername ist schon vergeben."
+        if err:
+            return render_template("pl_auth.html", mode="signup", error=err, username=username), 400
+        user = User(username=username, purpose_of_use="private")
+        user.set_password(password)
+        db.session.add(user)
+        db.session.commit()
+        session["user_id"] = user.id
+        session.permanent = True
+        return redirect(url_for("pl_home"))
+    return render_template("pl_auth.html", mode="signup")
+
+
+@app.route("/logout", methods=["POST", "GET"])
+def pl_logout():
+    session.pop("user_id", None)
+    return redirect(url_for("pl_login"))
+
+
+# ==========================================================================
+# pinklemon -- feed helpers
+# ==========================================================================
+def pl_ago(dt):
+    """Compact German relative time: 'gerade eben', '5 Min', '3 Std', '2 d',
+    '3 Wo', then a plain date."""
+    if dt is None:
+        return ""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    secs = (datetime.now(timezone.utc) - dt).total_seconds()
+    if secs < 60:
+        return "gerade eben"
+    if secs < 3600:
+        return f"{int(secs // 60)} Min"
+    if secs < 86400:
+        return f"{int(secs // 3600)} Std"
+    if secs < 86400 * 7:
+        return f"{int(secs // 86400)} d"
+    if secs < 86400 * 60:
+        return f"{int(secs // (86400 * 7))} Wo"
+    return dt.strftime("%d.%m.%y")
+
+
+def pl_avatar_letter(username):
+    return (username or "?").lstrip("@")[:1].upper() or "?"
+
+
+def serialize_pl_post(post, me):
+    liked_ids = {pl.user_id for pl in post.likes}
+    return {
+        "id": post.id,
+        "heading": post.heading,
+        "body": post.body or "",
+        "created_ago": pl_ago(post.created_at),
+        "share_count": post.share_count,
+        "like_count": len(post.likes),
+        "comment_count": len(post.comments),
+        "liked_by_me": me.id in liked_ids,
+        "is_mine": post.author_id == me.id,
+        "author": {
+            "username": post.author.username,
+            "avatar_letter": pl_avatar_letter(post.author.username),
+        },
+        "ps": (
+            {"body": post.ps.body, "created_ago": pl_ago(post.ps.created_at)}
+            if post.ps else None
+        ),
+    }
+
+
+def render_pl_post(post, me):
+    return render_template("partials/_pl_post.html", post=serialize_pl_post(post, me))
+
+
+PL_POST_MAX = 60           # posts per feed page
+_PL_RATE = {}              # user_id -> [timestamps] of recent creates
+
+
+def _pl_rate_ok(uid, limit=8, window=120):
+    now = datetime.now(timezone.utc).timestamp()
+    recent = [t for t in _PL_RATE.get(uid, []) if now - t < window]
+    _PL_RATE[uid] = recent
+    if len(recent) >= limit:
+        return False
+    recent.append(now)
+    return True
+
+
+# ==========================================================================
+# pinklemon -- pages
+# ==========================================================================
 @app.route("/")
-def index():
-    # Nothing is meant to look like it's here. The two AI chats
-    # (/assistant, /7ai) still work for anyone who navigates to them
-    # directly -- there's just no page, link or hint pointing at them.
-    return Response(
-        "<!doctype html><html lang=\"de\"><head><meta charset=\"utf-8\">"
-        "<meta name=\"robots\" content=\"noindex, nofollow\"><title></title></head>"
-        "<body style=\"margin:0;background:#fff\"></body></html>",
-        mimetype="text/html",
+def pl_home():
+    me = current_user()
+    q = (request.args.get("q") or "").strip()
+    query = FeedPost.query
+    if q:
+        like = f"%{q}%"
+        query = query.filter(db.or_(FeedPost.heading.ilike(like), FeedPost.body.ilike(like)))
+    posts = query.order_by(FeedPost.created_at.desc()).limit(PL_POST_MAX).all()
+    serialized = [serialize_pl_post(p, me) for p in posts]
+    return render_template(
+        "pl_home.html", posts=serialized, q=q,
+        me_json={"id": me.id, "username": me.username},
     )
+
+
+@app.route("/freunde")
+def pl_friends():
+    return render_template("pl_friends.html")
+
+
+@app.route("/nex7")
+def pl_nex7():
+    return render_template("pl_nex7.html")
+
+
+@app.route("/spiele")
+def pl_spiele():
+    return render_template("pl_spiele.html")
+
+
+@app.route("/videos")
+def pl_videos():
+    return render_template("pl_videos.html")
+
+
+@app.route("/p/<int:post_id>")
+def pl_post_page(post_id):
+    me = current_user()
+    post = db.session.get(FeedPost, post_id)
+    if post is None:
+        abort(404)
+    return render_template(
+        "pl_home.html", posts=[serialize_pl_post(post, me)], q="",
+        me_json={"id": me.id, "username": me.username},
+    )
+
+
+# ==========================================================================
+# pinklemon -- feed API
+# ==========================================================================
+@app.route("/api/pl/posts", methods=["POST"])
+def api_pl_create_post():
+    me = current_user()
+    if not _pl_rate_ok(me.id):
+        return jsonify({"ok": False, "error": "rate"}), 429
+    data = request.get_json(silent=True) or {}
+    heading = (data.get("heading") or "").strip()[:140]
+    body = (data.get("body") or "").strip()[:4000] or None
+    if not heading:
+        return jsonify({"ok": False, "error": "empty"}), 400
+    post = FeedPost(author_id=me.id, heading=heading, body=body)
+    db.session.add(post)
+    db.session.commit()
+    return jsonify({"ok": True, "post": serialize_pl_post(post, me), "html": render_pl_post(post, me)})
+
+
+@app.route("/api/pl/posts/<int:post_id>/like", methods=["POST"])
+def api_pl_like_post(post_id):
+    me = current_user()
+    post = db.session.get(FeedPost, post_id)
+    if post is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    existing = FeedLike.query.filter_by(post_id=post_id, user_id=me.id).first()
+    if existing:
+        db.session.delete(existing)
+        liked = False
+    else:
+        db.session.add(FeedLike(post_id=post_id, user_id=me.id))
+        liked = True
+    db.session.commit()
+    return jsonify({"ok": True, "liked": liked, "like_count": FeedLike.query.filter_by(post_id=post_id).count()})
+
+
+@app.route("/api/pl/posts/<int:post_id>/share", methods=["POST"])
+def api_pl_share_post(post_id):
+    post = db.session.get(FeedPost, post_id)
+    if post is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    post.share_count = (post.share_count or 0) + 1
+    db.session.commit()
+    return jsonify({"ok": True, "share_count": post.share_count})
+
+
+@app.route("/api/pl/posts/<int:post_id>/ps", methods=["POST"])
+def api_pl_add_ps(post_id):
+    me = current_user()
+    post = db.session.get(FeedPost, post_id)
+    if post is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    if post.author_id != me.id:
+        return jsonify({"ok": False, "error": "not_yours"}), 403
+    if post.ps is not None:
+        return jsonify({"ok": False, "error": "exists"}), 409
+    body = (request.get_json(silent=True) or {}).get("body", "").strip()[:2000]
+    if not body:
+        return jsonify({"ok": False, "error": "empty"}), 400
+    db.session.add(FeedPS(post_id=post_id, body=body))
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+def _serialize_pl_comment(c, me):
+    liked_ids = {cl.user_id for cl in c.likes}
+    return {
+        "id": c.id,
+        "parent_id": c.parent_id,
+        "body": c.body,
+        "created_at": (c.created_at.replace(tzinfo=timezone.utc) if c.created_at.tzinfo is None else c.created_at).isoformat(),
+        "like_count": len(c.likes),
+        "liked_by_me": me.id in liked_ids,
+        "author": {"username": c.author.username, "avatar_letter": pl_avatar_letter(c.author.username)},
+    }
+
+
+@app.route("/api/pl/posts/<int:post_id>/comments")
+def api_pl_list_comments(post_id):
+    me = current_user()
+    post = db.session.get(FeedPost, post_id)
+    if post is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    # Top-level comments oldest-first, each followed by its replies.
+    tops = [c for c in post.comments if c.parent_id is None]
+    tops.sort(key=lambda c: c.created_at)
+    out = []
+    for top in tops:
+        out.append(_serialize_pl_comment(top, me))
+        for r in sorted(top.replies, key=lambda c: c.created_at):
+            out.append(_serialize_pl_comment(r, me))
+    return jsonify({"ok": True, "comments": out})
+
+
+@app.route("/api/pl/posts/<int:post_id>/comments", methods=["POST"])
+def api_pl_add_comment(post_id):
+    me = current_user()
+    post = db.session.get(FeedPost, post_id)
+    if post is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    data = request.get_json(silent=True) or {}
+    body = (data.get("body") or "").strip()[:2000]
+    if not body:
+        return jsonify({"ok": False, "error": "empty"}), 400
+    parent_id = data.get("parent_id")
+    if parent_id is not None:
+        parent = db.session.get(FeedComment, parent_id)
+        if parent is None or parent.post_id != post_id:
+            return jsonify({"ok": False, "error": "bad_parent"}), 400
+        # collapse a reply-to-a-reply onto the same top-level thread
+        if parent.parent_id is not None:
+            parent_id = parent.parent_id
+    c = FeedComment(post_id=post_id, author_id=me.id, parent_id=parent_id, body=body)
+    db.session.add(c)
+    db.session.commit()
+    return jsonify({"ok": True, "comment": _serialize_pl_comment(c, me)})
+
+
+@app.route("/api/pl/comments/<int:comment_id>/like", methods=["POST"])
+def api_pl_like_comment(comment_id):
+    me = current_user()
+    c = db.session.get(FeedComment, comment_id)
+    if c is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    existing = FeedCommentLike.query.filter_by(comment_id=comment_id, user_id=me.id).first()
+    if existing:
+        db.session.delete(existing)
+        liked = False
+    else:
+        db.session.add(FeedCommentLike(comment_id=comment_id, user_id=me.id))
+        liked = True
+    db.session.commit()
+    return jsonify({"ok": True, "liked": liked, "like_count": FeedCommentLike.query.filter_by(comment_id=comment_id).count()})
 
 
 @app.route("/assistant")

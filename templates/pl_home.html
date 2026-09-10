@@ -1,0 +1,87 @@
+{% extends "pl_base.html" %}
+{%- from "partials/_pl_icons.html" import plicon -%}
+{% set active = 'home' %}
+{% block title %}pinklemon{% endblock %}
+
+{% block screen %}
+<div class="pl-searchbar">
+    <form class="pl-search" id="plSearchForm" action="{{ url_for('pl_home') }}" method="get">
+        {{ plicon('search', 18) }}
+        <input type="search" name="q" id="plSearchInput" placeholder="Posts & Videos suchen" value="{{ q or '' }}" autocomplete="off">
+    </form>
+    <button class="pl-plus" id="plNewPostBtn" aria-label="Neuer Post">+</button>
+</div>
+
+{% if q %}
+    <div class="pl-section-label">Videos zu „{{ q }}"</div>
+    <div class="pl-video-row" id="plVideoRow">
+        {% for i in range(6) %}
+        <div class="pl-video-tile is-loading">
+            <span class="pl-video-tile-label"><span class="pl-video-tile-spinner"></span>Lädt</span>
+        </div>
+        {% endfor %}
+    </div>
+    <div class="pl-section-label">Posts zu „{{ q }}"</div>
+{% endif %}
+
+<div class="pl-feed" id="plFeed">
+    {% for post in posts %}
+        {% include "partials/_pl_post.html" %}
+    {% else %}
+        <div class="pl-empty">
+            {% if q %}Keine Posts zu „{{ q }}" gefunden.{% else %}Noch keine Posts. Tipp auf das <b>+</b> und schreib den ersten!{% endif %}
+        </div>
+    {% endfor %}
+</div>
+{% endblock %}
+
+{% block sheets %}
+<!-- Create post -->
+<div class="pl-sheet-backdrop" id="plNewPostSheet">
+    <div class="pl-sheet">
+        <div class="pl-sheet-grip"></div>
+        <h2>Neuer Post</h2>
+        <input class="pl-input" id="plPostHeading" maxlength="140" placeholder="Überschrift">
+        <textarea class="pl-textarea" id="plPostBody" maxlength="4000" placeholder="Text (optional)"></textarea>
+        <div style="display:flex;gap:8px;">
+            <button class="pl-btn ghost" style="flex:0 0 auto;width:auto;padding:15px 22px;" data-close-sheet>Abbrechen</button>
+            <button class="pl-btn" id="plPostSubmit">Posten</button>
+        </div>
+    </div>
+</div>
+
+<!-- Add P.S. -->
+<div class="pl-sheet-backdrop" id="plPsSheet">
+    <div class="pl-sheet">
+        <div class="pl-sheet-grip"></div>
+        <h2>P.S. hinzufügen</h2>
+        <p style="color:var(--pl-text-dim);font-size:13px;margin:0 0 12px;">Eine kurze Ergänzung zu deinem Post. Geht nur einmal.</p>
+        <textarea class="pl-textarea" id="plPsBody" maxlength="2000" placeholder="P.S. ..."></textarea>
+        <div style="display:flex;gap:8px;">
+            <button class="pl-btn ghost" style="flex:0 0 auto;width:auto;padding:15px 22px;" data-close-sheet>Abbrechen</button>
+            <button class="pl-btn" id="plPsSubmit">Speichern</button>
+        </div>
+    </div>
+</div>
+
+<!-- Comments -->
+<div class="pl-sheet-backdrop" id="plCommentsSheet">
+    <div class="pl-sheet">
+        <div class="pl-sheet-grip"></div>
+        <h2>Kommentare</h2>
+        <div class="pl-comments-list" id="plCommentsList"></div>
+        <div class="pl-reply-target" id="plReplyTarget"><span></span><button type="button" id="plCancelReply">&times;</button></div>
+        <div class="pl-comment-compose">
+            <textarea id="plCommentInput" rows="1" maxlength="2000" placeholder="Kommentieren ..."></textarea>
+            <button type="button" id="plCommentSend" aria-label="Senden">{{ plicon('send', 20) }}</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    window.PL_ME = {{ me_json | tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/pinklemon-home.js') }}"></script>
+{% endblock %}

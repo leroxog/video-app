@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0b0b0d">
+    <meta name="robots" content="noindex, nofollow">
+    <script>
+        try { if (localStorage.getItem("pl_theme") === "light") document.documentElement.setAttribute("data-theme", "light"); } catch (e) {}
+    </script>
+    <title>pinklemon</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/pinklemon.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='img/pinklemon-mark.svg') }}" type="image/svg+xml">
+</head>
+<body>
+<div class="pl-auth">
+    <div class="pl-logo">{% include "partials/_pinklemon_logo.html" %}</div>
+    <h1>pinklemon</h1>
+    <p class="sub">{% if mode == 'signup' %}Erstell dir einen Account.{% else %}Willkommen zurück.{% endif %}</p>
+    <form method="post" action="{{ url_for('pl_signup') if mode == 'signup' else url_for('pl_login') }}">
+        <input class="pl-input" name="username" placeholder="Benutzername" maxlength="30" autocomplete="username"
+               autocapitalize="none" spellcheck="false" required value="{{ username or '' }}">
+        <input class="pl-input" name="password" type="password" placeholder="Passwort" autocomplete="{{ 'new-password' if mode == 'signup' else 'current-password' }}" required>
+        {% if mode == 'signup' %}
+        <input class="pl-input" name="password2" type="password" placeholder="Passwort wiederholen" autocomplete="new-password" required>
+        {% endif %}
+        <div class="pl-error">{{ error or '' }}</div>
+        <button class="pl-btn" type="submit">{% if mode == 'signup' %}Los geht's{% else %}Einloggen{% endif %}</button>
+    </form>
+    <div class="pl-switch">
+        {% if mode == 'signup' %}
+            Schon dabei? <a href="{{ url_for('pl_login') }}">Einloggen</a>
+        {% else %}
+            Neu hier? <a href="{{ url_for('pl_signup') }}">Account erstellen</a>
+        {% endif %}
+    </div>
+</div>
+</body>
+</html>

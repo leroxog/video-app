@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0b0b0d">
+    <meta name="robots" content="noindex, nofollow">
+    <script>
+        (function () {
+            try {
+                if (localStorage.getItem("pl_theme") === "light") {
+                    document.documentElement.setAttribute("data-theme", "light");
+                }
+            } catch (e) {}
+        })();
+    </script>
+    <title>{% block title %}pinklemon{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/pinklemon.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='img/pinklemon-mark.svg') }}" type="image/svg+xml">
+    <link rel="manifest" href="{{ url_for('static', filename='pinklemon-manifest.json') }}">
+    {% block head_extra %}{% endblock %}
+</head>
+<body>
+<div class="pl-app">
+    <div class="pl-screen">
+        {% block screen %}{% endblock %}
+    </div>
+    {% include "partials/_pl_nav.html" %}
+    {% block sheets %}{% endblock %}
+</div>
+<div class="pl-toast" id="plToast"></div>
+<script>
+    window.plToast = function (msg) {
+        var t = document.getElementById("plToast");
+        if (!t) return;
+        t.textContent = msg;
+        t.classList.add("show");
+        clearTimeout(window._plToastT);
+        window._plToastT = setTimeout(function () { t.classList.remove("show"); }, 2200);
+    };
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>
