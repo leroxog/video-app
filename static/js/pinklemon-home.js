@@ -3,6 +3,7 @@
 
   var LONGPRESS_MS = 1000; // 1 Sekunde gedrückt halten -> Kommentare
   var DOUBLETAP_MS = 320;
+  var SEND_SVG = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>';
 
   function $(sel, root) { return (root || document).querySelector(sel); }
   function $all(sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); }
@@ -35,15 +36,34 @@
   });
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeAllSheets(); });
 
+  // live character counter for a textarea/input -> "<n> / <max>"
+  function wireChar(fieldSel, outSel) {
+    var f = $(fieldSel), out = $(outSel);
+    if (!f || !out) return;
+    var max = f.getAttribute("maxlength") || "";
+    function upd() {
+      var n = f.value.length;
+      out.textContent = n + " / " + max;
+      out.classList.toggle("over", max && n >= max * 0.92);
+    }
+    f.addEventListener("input", upd);
+    f._resetChar = upd;
+    upd();
+  }
+
   // ---------------- new post ----------------
   var newPostSheet = $("#plNewPostSheet");
   function openNewPost() {
     $("#plPostHeading").value = "";
     $("#plPostBody").value = "";
+    if ($("#plPostHeading")._resetChar) $("#plPostHeading")._resetChar();
+    if ($("#plPostBody")._resetChar) $("#plPostBody")._resetChar();
     openSheet(newPostSheet);
     setTimeout(function () { $("#plPostHeading").focus(); }, 250);
   }
   $("#plNewPostBtn").addEventListener("click", openNewPost);
+  wireChar("#plPostHeading", "#plPostChar");
+  wireChar("#plPsBody", "#plPsChar");
   // the desktop sidebar "POSTEN" button links here with ?compose=1
   if (new URLSearchParams(location.search).get("compose")) {
     openNewPost();
@@ -63,9 +83,11 @@
       if (empty) empty.remove();
       var wrap = document.createElement("div");
       wrap.innerHTML = j.html.trim();
-      var node = wrap.firstChild;
-      feed.insertBefore(node, feed.firstChild);
-      wirePost(node);
+      var group = wrap.firstElementChild;
+      group.classList.add("is-new");
+      feed.insertBefore(group, feed.firstChild);
+      wirePost(group.querySelector(".pl-post"));
+      group.addEventListener("animationend", function () { group.classList.remove("is-new"); }, { once: true });
       window.plToast("Gepostet!");
     }).catch(function () { btn.disabled = false; window.plToast("Ging nicht."); });
   });
@@ -76,6 +98,7 @@
   function openPs(postId) {
     psTargetId = postId;
     $("#plPsBody").value = "";
+    if ($("#plPsBody")._resetChar) $("#plPsBody")._resetChar();
     openSheet(psSheet);
     setTimeout(function () { $("#plPsBody").focus(); }, 250);
   }
@@ -86,13 +109,15 @@
     api("POST", "/api/pl/posts/" + psTargetId + "/ps", { body: body }).then(function (j) {
       btn.disabled = false;
       if (!j.ok) { window.plToast(j.error === "exists" ? "Du hast schon ein P.S." : "Ging nicht."); return; }
-      var post = document.querySelector('.pl-post[data-post-id="' + psTargetId + '"]');
-      if (post) {
-        var slot = post.querySelector(".pl-ps-slot");
-        slot.innerHTML = '<div class="pl-ps"><div class="pl-ps-label">P.S.</div><div class="pl-ps-body">'
-          + esc(body) + '</div><div class="pl-ps-time">gerade eben</div></div>';
-        post.dataset.hasPs = "1";
-        var addBtn = post.querySelector("[data-ps-add]");
+      var group = document.querySelector('.pl-post-group[data-post-id="' + psTargetId + '"]');
+      if (group) {
+        var slot = group.querySelector(".pl-ps-slot");
+        slot.innerHTML = '<div class="pl-ps-card is-new"><span class="pl-ps-label">P.S.</span><span class="pl-ps-text">'
+          + esc(body) + '</span></div>';
+        group.dataset.hasPs = "1";
+        var post = group.querySelector(".pl-post");
+        if (post) post.dataset.hasPs = "1";
+        var addBtn = group.querySelector("[data-ps-add]");
         if (addBtn) addBtn.remove();
       }
       closeSheet(psSheet);
@@ -100,14 +125,7 @@
     }).catch(function () { btn.disabled = false; });
   });
 
-  // ---------------- comments ----------------
-  var commentsSheet = $("#plCommentsSheet");
-  var commentsList = $("#plCommentsList");
-  var commentInput = $("#plCommentInput");
-  var replyTarget = $("#plReplyTarget");
-  var commentsPostId = null;
-  var replyToId = null;
-
+  // ---------------- comments (inline, per post) ----------------
   function timeAgo(iso) {
     var s = Math.max(1, (Date.now() - new Date(iso).getTime()) / 1000);
     if (s < 60) return "gerade eben";
@@ -125,89 +143,120 @@
       + '<span class="pl-comment-time">' + timeAgo(c.created_at) + '</span></div>'
       + '<div class="pl-comment-body">' + esc(c.body) + '</div>'
       + '<div class="pl-comment-actions">'
-      + '<button type="button" data-clike class="' + liked.trim() + '">♥ <b class="pl-clike-count">' + c.like_count + '</b></button>'
+      + '<button type="button" data-clike class="' + liked.trim() + '">&#9829; <b class="pl-clike-count">' + c.like_count + '</b></button>'
       + (c.parent_id ? "" : '<button type="button" data-creply>Antworten</button>')
       + '</div></div>';
   }
 
-  function renderComments(list) {
-    if (!list.length) { commentsList.innerHTML = '<div class="pl-empty" style="padding:28px 0;">Noch keine Kommentare.</div>'; return; }
-    commentsList.innerHTML = list.map(commentHTML).join("");
-  }
-
-  function openComments(postId) {
-    commentsPostId = postId;
-    replyToId = null;
-    replyTarget.classList.remove("show");
-    commentInput.value = "";
-    commentsList.innerHTML = '<div class="pl-empty" style="padding:28px 0;">Lädt …</div>';
-    openSheet(commentsSheet);
-    api("GET", "/api/pl/posts/" + postId + "/comments").then(function (j) {
-      if (j.ok) renderComments(j.comments);
-    });
-  }
-
-  commentsList.addEventListener("click", function (e) {
-    var cEl = e.target.closest(".pl-comment");
-    if (!cEl) return;
-    var cid = cEl.dataset.commentId;
-    if (e.target.closest("[data-clike]")) {
-      var btn = e.target.closest("[data-clike]");
-      api("POST", "/api/pl/comments/" + cid + "/like").then(function (j) {
-        if (!j.ok) return;
-        btn.classList.toggle("liked", j.liked);
-        btn.querySelector(".pl-clike-count").textContent = j.like_count;
-      });
-    } else if (e.target.closest("[data-creply]")) {
-      replyToId = cid;
-      var uname = cEl.querySelector(".pl-comment-user").textContent;
-      replyTarget.querySelector("span").textContent = "Antwort an " + uname;
-      replyTarget.classList.add("show");
-      commentInput.focus();
+  function renderComments(listEl, list) {
+    if (!list.length) {
+      listEl.innerHTML = '<div class="pl-empty" style="padding:22px 0;background:none;border:none;">Noch keine Kommentare. Schreib den ersten!</div>';
+      return;
     }
-  });
+    listEl.innerHTML = list.map(commentHTML).join("");
+  }
 
-  $("#plCancelReply").addEventListener("click", function () {
-    replyToId = null;
-    replyTarget.classList.remove("show");
-  });
+  function buildCommentsPanel(group, panel) {
+    panel.innerHTML =
+      '<div class="pl-comments-list"></div>'
+      + '<div class="pl-reply-target"><span></span><button type="button" data-cancel-reply>&times;</button></div>'
+      + '<div class="pl-comment-compose">'
+      +   '<textarea class="pl-comment-input" rows="1" maxlength="2000" placeholder="Kommentieren ..."></textarea>'
+      +   '<button type="button" class="pl-comment-send" aria-label="Senden">' + SEND_SVG + '</button>'
+      + '</div>';
+    panel.dataset.built = "1";
+    panel._replyTo = null;
 
-  function sendComment() {
-    var body = commentInput.value.trim();
-    if (!body || !commentsPostId) return;
-    var payload = { body: body };
-    if (replyToId) payload.parent_id = Number(replyToId);
-    commentInput.value = "";
-    api("POST", "/api/pl/posts/" + commentsPostId + "/comments", payload).then(function (j) {
-      if (!j.ok) { window.plToast("Ging nicht."); return; }
-      var empty = commentsList.querySelector(".pl-empty");
-      if (empty) empty.remove();
-      var wrap = document.createElement("div");
-      wrap.innerHTML = commentHTML(j.comment);
-      var node = wrap.firstChild;
-      if (replyToId) {
-        var parent = commentsList.querySelector('.pl-comment[data-comment-id="' + replyToId + '"]');
-        var after = parent;
-        var sib = parent.nextElementSibling;
-        while (sib && sib.classList.contains("reply")) { after = sib; sib = sib.nextElementSibling; }
-        after.insertAdjacentElement("afterend", node);
-      } else {
-        commentsList.appendChild(node);
-      }
-      commentsList.scrollTop = commentsList.scrollHeight;
-      replyToId = null;
-      replyTarget.classList.remove("show");
-      // bump the post's comment counter
-      var post = document.querySelector('.pl-post[data-post-id="' + commentsPostId + '"]');
-      if (post) {
-        var cc = post.querySelector(".pl-comment-count");
-        cc.textContent = String(Number(cc.textContent || 0) + 1);
+    var listEl = panel.querySelector(".pl-comments-list");
+    var replyTarget = panel.querySelector(".pl-reply-target");
+    var input = panel.querySelector(".pl-comment-input");
+    var postId = group.dataset.postId;
+
+    listEl.addEventListener("click", function (e) {
+      var cEl = e.target.closest(".pl-comment");
+      if (!cEl) return;
+      var cid = cEl.dataset.commentId;
+      if (e.target.closest("[data-clike]")) {
+        var btn = e.target.closest("[data-clike]");
+        api("POST", "/api/pl/comments/" + cid + "/like").then(function (j) {
+          if (!j.ok) return;
+          btn.classList.toggle("liked", j.liked);
+          btn.querySelector(".pl-clike-count").textContent = j.like_count;
+        });
+      } else if (e.target.closest("[data-creply]")) {
+        panel._replyTo = cid;
+        replyTarget.querySelector("span").textContent = "Antwort an " + cEl.querySelector(".pl-comment-user").textContent;
+        replyTarget.classList.add("show");
+        input.focus();
       }
     });
+
+    replyTarget.querySelector("[data-cancel-reply]").addEventListener("click", function () {
+      panel._replyTo = null;
+      replyTarget.classList.remove("show");
+    });
+
+    function send() {
+      var body = input.value.trim();
+      if (!body) return;
+      var payload = { body: body };
+      if (panel._replyTo) payload.parent_id = Number(panel._replyTo);
+      input.value = "";
+      input.style.height = "auto";
+      api("POST", "/api/pl/posts/" + postId + "/comments", payload).then(function (j) {
+        if (!j.ok) { window.plToast("Ging nicht."); return; }
+        var emptyEl = listEl.querySelector(".pl-empty");
+        if (emptyEl) emptyEl.remove();
+        var wrap = document.createElement("div");
+        wrap.innerHTML = commentHTML(j.comment);
+        var node = wrap.firstChild;
+        if (panel._replyTo) {
+          var parent = listEl.querySelector('.pl-comment[data-comment-id="' + panel._replyTo + '"]');
+          var after = parent, sib = parent.nextElementSibling;
+          while (sib && sib.classList.contains("reply")) { after = sib; sib = sib.nextElementSibling; }
+          after.insertAdjacentElement("afterend", node);
+        } else {
+          listEl.appendChild(node);
+        }
+        listEl.scrollTop = listEl.scrollHeight;
+        panel._replyTo = null;
+        replyTarget.classList.remove("show");
+        var cc = group.querySelector(".pl-comment-count");
+        if (cc) cc.textContent = String(Number(cc.textContent || 0) + 1);
+      });
+    }
+    panel.querySelector(".pl-comment-send").addEventListener("click", send);
+    input.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+    });
+    input.addEventListener("input", function () {
+      input.style.height = "auto";
+      input.style.height = Math.min(input.scrollHeight, 96) + "px";
+    });
   }
-  $("#plCommentSend").addEventListener("click", sendComment);
-  commentInput.addEventListener("keydown", function (e) {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendComment(); }
+
+  function toggleComments(group) {
+    var panel = group.querySelector(".pl-comments");
+    if (!panel) return;
+    if (panel.dataset.built && !panel.hidden) { panel.hidden = true; return; }
+    if (!panel.dataset.built) buildCommentsPanel(group, panel);
+    panel.hidden = false;
+    if (!panel.dataset.loaded) {
+      var listEl = panel.querySelector(".pl-comments-list");
+      listEl.innerHTML = '<div class="pl-empty" style="padding:18px 0;background:none;border:none;">Lädt …</div>';
+      api("GET", "/api/pl/posts/" + group.dataset.postId + "/comments").then(function (j) {
+        if (j.ok) renderComments(listEl, j.comments);
+        panel.dataset.loaded = "1";
+      });
+    }
+    panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  document.addEventListener("click", function (e) {
+    var t = e.target.closest("[data-comments-toggle]");
+    if (!t) return;
+    var group = t.closest(".pl-post-group");
+    if (group) toggleComments(group);
   });
 
   // ---------------- per-post: double-tap like + long-press comments + share ----------------
@@ -230,6 +279,9 @@
   }
 
   function wirePost(post) {
+    if (!post || post.dataset.wired) return;
+    post.dataset.wired = "1";
+    var group = post.closest(".pl-post-group") || post;
     var lastTap = 0;
     var lpTimer = null;
     var lpFired = false;
@@ -248,7 +300,7 @@
         lpFired = true;
         post.classList.remove("is-holding");
         if (navigator.vibrate) navigator.vibrate(15);
-        openComments(post.dataset.postId);
+        toggleComments(group);
       }, LONGPRESS_MS);
     }
     function onMove(x, y) {
@@ -260,7 +312,6 @@
       if (lpFired) { lpFired = false; return; }
     }
 
-    // pointer events cover mouse + touch
     post.addEventListener("pointerdown", function (e) {
       if (e.target.closest("button, a")) return;
       onStart(e.clientX, e.clientY);

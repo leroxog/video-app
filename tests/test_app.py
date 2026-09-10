@@ -127,7 +127,13 @@ def test_ps_renders_on_post(client):
     signup(client, "alice")
     pid = client.post("/api/pl/posts", json={"heading": "P"}).get_json()["post"]["id"]
     client.post(f"/api/pl/posts/{pid}/ps", json={"body": "Ein Nachtrag hier"})
-    assert b"Ein Nachtrag hier" in client.get("/").data
+    body = client.get("/").data
+    assert b"Ein Nachtrag hier" in body
+    # P.S. is its own separate card, not inside the post article
+    assert b"pl-ps-card" in body
+    # inline comments panel (no bottom-sheet) + comment toggle button
+    assert b'class="pl-comments"' in body and b"data-comments-toggle" in body
+    assert b'id="plCommentsSheet"' not in body
 
 
 def test_comments_create_list_reply_and_like(client):

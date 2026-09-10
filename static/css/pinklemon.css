@@ -176,6 +176,14 @@ img { max-width: 100%; display: block; }
 /* ---------- Post card ---------- */
 .pl-feed { display: flex; flex-direction: column; gap: 16px; }
 
+/* a post + its P.S. + its inline comments travel together */
+.pl-post-group { display: flex; flex-direction: column; }
+.pl-post-group.is-new { animation: plPostIn 0.34s cubic-bezier(0.2, 0.8, 0.2, 1); }
+@keyframes plPostIn {
+  from { opacity: 0; transform: translateY(-14px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+
 .pl-post {
   background: var(--pl-surface);
   border: 1px solid var(--pl-border);
@@ -248,44 +256,41 @@ img { max-width: 100%; display: block; }
   word-break: break-word;
 }
 
-/* P.S. -- tightly attached second bubble under the original */
-.pl-ps {
-  margin-top: 6px;
-  background: var(--pl-surface-2);
+/* P.S. -- its own separate card just below the post, nothing but the text */
+.pl-ps-slot:empty { display: none; }
+.pl-ps-card {
+  margin-top: 8px;
+  background: var(--pl-surface);
   border: 1px solid var(--pl-border);
-  border-radius: var(--pl-r-md);
-  padding: 10px 14px;
-  position: relative;
+  border-radius: var(--pl-r-lg);
+  padding: 14px 18px;
+  font-size: 14px;
+  color: var(--pl-text-dim);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  -webkit-backdrop-filter: var(--pl-blur);
+  backdrop-filter: var(--pl-blur);
 }
-.pl-ps::before {
-  content: "";
-  position: absolute;
-  left: 26px;
-  top: -7px;
-  width: 12px;
-  height: 12px;
-  background: var(--pl-surface-2);
-  border-left: 1px solid var(--pl-border);
-  border-top: 1px solid var(--pl-border);
-  transform: rotate(45deg);
-}
+.pl-ps-card.is-new { animation: plPostIn 0.3s ease; }
 .pl-ps-label {
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.08em;
   color: var(--pl-pink);
-  margin-bottom: 3px;
+  margin-right: 8px;
 }
-.pl-ps-body { font-size: 13.5px; color: var(--pl-text-dim); line-height: 1.45; white-space: pre-wrap; }
-.pl-ps-time { font-size: 11px; color: var(--pl-text-faint); margin-top: 4px; }
+.pl-ps-text { color: var(--pl-text-dim); }
 
-/* share button bottom-right */
+/* action buttons under a post */
 .pl-post-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
+  gap: 8px;
   margin-top: 12px;
 }
-.pl-share-btn, .pl-ps-add-btn {
+.pl-share-btn, .pl-ps-add-btn, .pl-comments-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -298,7 +303,31 @@ img { max-width: 100%; display: block; }
   font-weight: 600;
 }
 .pl-ps-add-btn { margin-right: auto; color: var(--pl-pink); }
-.pl-share-btn:active, .pl-ps-add-btn:active { transform: scale(0.95); }
+.pl-share-btn:active, .pl-ps-add-btn:active, .pl-comments-btn:active { transform: scale(0.95); }
+
+/* stat pill: comment count is a button now */
+.pl-stat-comment {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+/* inline comments panel that unfolds right under the post */
+.pl-comments {
+  margin-top: 8px;
+  background: var(--pl-surface);
+  border: 1px solid var(--pl-border);
+  border-radius: var(--pl-r-lg);
+  padding: 8px 16px 14px;
+  -webkit-backdrop-filter: var(--pl-blur);
+  backdrop-filter: var(--pl-blur);
+  animation: plPostIn 0.2s ease;
+}
 
 /* double-tap like burst */
 .pl-like-burst {
@@ -485,6 +514,54 @@ img { max-width: 100%; display: block; }
 }
 .pl-sheet h2 { margin: 0 0 12px; font-size: 17px; font-weight: 800; }
 
+/* X-style compose header: close | title | primary action */
+.pl-sheet-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.pl-sheet-bar h2 { margin: 0; flex: 1; text-align: left; font-size: 16px; }
+.pl-sheet-x {
+  flex-shrink: 0;
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: var(--pl-surface-2);
+  color: var(--pl-text);
+  font-size: 20px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+}
+.pl-sheet-x:active { transform: scale(0.9); }
+.pl-btn.pl-sheet-post {
+  width: auto;
+  flex-shrink: 0;
+  padding: 9px 20px;
+  font-size: 14px;
+  border-radius: 999px;
+}
+.pl-compose-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 2px;
+}
+.pl-char { font-size: 12px; color: var(--pl-text-faint); }
+.pl-char.over { color: var(--pl-pink); font-weight: 700; }
+
+/* Desktop (>=760px): compose sheets become a centred modal, like x.com */
+@media (min-width: 760px) {
+  .pl-sheet-modal { align-items: center; }
+  .pl-sheet-modal .pl-sheet {
+    max-width: 540px;
+    border-radius: var(--pl-r-xl);
+    border-bottom: 1px solid var(--pl-border);
+    transform: translateY(16px) scale(0.97);
+    max-height: 86vh;
+  }
+  .pl-sheet-modal.open .pl-sheet { transform: none; }
+  .pl-sheet-modal .pl-sheet-grip { display: none; }
+}
+
 /* form controls */
 .pl-input, .pl-textarea {
   width: 100%;
@@ -517,8 +594,10 @@ img { max-width: 100%; display: block; }
 .pl-btn.ghost { background: var(--pl-surface-2); color: var(--pl-text); border: 1px solid var(--pl-border); }
 
 /* comments */
-.pl-comments-list { flex: 1; overflow-y: auto; margin: 0 -4px 10px; padding: 0 4px; }
+.pl-comments-list { max-height: 360px; overflow-y: auto; margin: 0 -4px 8px; padding: 2px 4px 0; }
+.pl-comments-list:empty { display: none; }
 .pl-comment { padding: 10px 0; border-bottom: 1px solid var(--pl-border); }
+.pl-comment:last-child { border-bottom: none; }
 .pl-comment.reply { margin-left: 34px; }
 .pl-comment-head { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
 .pl-comment-user { font-weight: 700; font-size: 12.5px; }
