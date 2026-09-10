@@ -1710,3 +1710,96 @@ body:has(.nx-app)::before { display: none; }
 
 /* ---- profile Posts / Reposts / Likes tabs ---- */
 .pl-prof2-tabs a { cursor: pointer; }
+
+/* ===================================================================
+   v4 -- fill the "Wem folgen" width, move the compose +, in-feed
+   app-install promo, unclip the share menu.
+   =================================================================== */
+
+/* the search row is just the search now -- compose lives in the nav (+)
+   on mobile and the sidebar POSTEN pill on desktop */
+.pl-plus { display: none !important; }
+.pl-searchbar { gap: 0; }
+
+/* centred raised + in the mobile bottom nav */
+.pl-nav a.pl-nav-plus {
+  flex: 0 0 auto;
+  width: 52px; height: 52px;
+  margin: 0 4px;
+  border-radius: 50%;
+  background: var(--pl-pink);
+  color: #fff;
+  box-shadow: 0 6px 18px var(--pl-pink-soft);
+  transform: translateY(-6px);
+}
+.pl-nav a.pl-nav-plus:active { transform: translateY(-6px) scale(0.9); }
+.pl-nav a.pl-nav-plus svg { width: 26px; height: 26px; }
+@media (min-width: 900px) {
+  .pl-nav a.pl-nav-plus { display: none; }
+}
+
+/* "Wem folgen" fills the card width -- 2 up on desktop, more names */
+@media (min-width: 720px) {
+  #plWhoCard { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 22px; }
+  #plWhoCard .pl-sidecard-title { grid-column: 1 / -1; }
+  #plWhoCard .pl-who-row { padding: 9px 0; }
+}
+@media (min-width: 1200px) {
+  #plWhoCard { grid-template-columns: 1fr 1fr 1fr; }
+}
+.pl-who-row .pl-who-name { flex: 1; min-width: 0; }
+.pl-who-row .pl-mini-btn { flex: none; }
+
+/* ---- in-feed "Hohl dir unsere App!" promo (every 5th post) ---- */
+.pl-promo { cursor: pointer; }
+.pl-promo-inner {
+  display: flex; align-items: center; gap: 14px;
+  border: 1px solid var(--pl-pink);
+  border: 1px solid color-mix(in srgb, var(--pl-pink) 55%, transparent);
+  background: var(--pl-surface-2);
+  background: color-mix(in srgb, var(--pl-pink) 14%, var(--pl-surface-2));
+  border-radius: 22px;
+  padding: 16px 18px;
+  box-shadow: 0 8px 26px rgba(0, 0, 0, .30);
+}
+.pl-promo:active .pl-promo-inner { transform: scale(.99); }
+.pl-promo-mark {
+  flex: none; width: 40px; height: 40px; border-radius: 12px;
+  background: #2f2f2f url("/static/img/pinklemon-mark.svg") center/78% no-repeat;
+}
+.pl-promo-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pl-promo-text b { font-size: 15px; }
+.pl-promo-text span { font-size: 12.5px; color: var(--pl-text-dim); }
+.pl-promo-cta {
+  flex: none; background: var(--pl-pink); color: #fff;
+  font-weight: 800; font-size: 12.5px; padding: 8px 16px; border-radius: 999px;
+}
+
+/* ---- unclip the post kebab / share submenu ---- */
+.pl-feed, .pl-feed .pl-post-group, .pl-feed .pl-post { overflow: visible; }
+.pl-post-group.menu-open { position: relative; z-index: 60; }
+.pl-post-menu { z-index: 65; background: var(--pl-surface); }
+.pl-share-menu { max-height: none; }
+.pl-post-menu.menu-up { top: auto; bottom: 40px; }
+.pl-repost-menu.menu-up { top: auto; bottom: calc(100% + 6px); }
+
+/* ---- install-help modal (iOS / no beforeinstallprompt) ---- */
+.pl-install-back {
+  position: fixed; inset: 0; z-index: 500; background: rgba(0,0,0,.6);
+  display: flex; align-items: center; justify-content: center; padding: 22px;
+}
+.pl-install-card {
+  width: 100%; max-width: 380px; text-align: center;
+  background: var(--pl-bg); border: 1px solid var(--pl-border);
+  border-radius: 20px; padding: 24px 22px; box-shadow: 0 24px 60px rgba(0,0,0,.5);
+}
+.pl-install-mark {
+  display: block; width: 56px; height: 56px; margin: 0 auto 12px; border-radius: 16px;
+  background: #2f2f2f url("/static/img/pinklemon-mark.svg") center/78% no-repeat;
+}
+.pl-install-card h3 { margin: 0 0 6px; font-size: 17px; }
+.pl-install-card p { margin: 0 0 16px; font-size: 13.5px; color: var(--pl-text-dim); line-height: 1.55; }
+.pl-install-ok {
+  border: none; background: var(--pl-pink); color: #fff; font: inherit; font-weight: 800;
+  font-size: 13.5px; padding: 10px 22px; border-radius: 999px;
+}

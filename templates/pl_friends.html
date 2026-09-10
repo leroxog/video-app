@@ -42,9 +42,23 @@
         </div>
         {% if c.unread %}<span class="pl-chatrow-badge">{{ c.unread }}</span>{% endif %}
     </a>
-    {% else %}
-    <div class="pl-empty">Noch keine Chats.<br>Tipp oben auf die Lupe, folgt euch gegenseitig und schreibt los.</div>
     {% endfor %}
+
+    {% for p in pending %}
+    <a class="pl-chatrow" href="{{ url_for('pl_open_dm', username=p.username) }}" data-group="0">
+        <div class="pl-avatar">{% if p.avatar_url %}<img src="{{ p.avatar_url }}" alt="">{% else %}{{ p.avatar_letter }}{% endif %}</div>
+        <div class="pl-chatrow-main">
+            <div class="pl-chatrow-top">
+                <span class="pl-chatrow-title">{{ p.title }}</span>
+            </div>
+            <div class="pl-chatrow-preview">Neuer Chat &mdash; sag Hallo</div>
+        </div>
+    </a>
+    {% endfor %}
+
+    {% if not chats and not pending %}
+    <div class="pl-empty">Noch niemand.<br>Folgt euch gegenseitig, dann taucht ihr hier auf.</div>
+    {% endif %}
 </div>
 {% endblock %}
 

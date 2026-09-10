@@ -1603,8 +1603,9 @@ def pl_home():
         "pl_home.html", posts=serialized, q=q, feed=feed,
         next_cursor=next_cursor,
         who=[_pl_user_brief(u) for u in User.query.filter(
-            User.id.notin_({s.channel_id for s in Subscription.query.filter_by(subscriber_id=me.id)} | {me.id})
-        ).order_by(db.func.random()).limit(3).all()] if not before else [],
+            User.id.notin_({s.channel_id for s in Subscription.query.filter_by(subscriber_id=me.id)} | {me.id}),
+            db.func.lower(User.username).notlike("anon\\_%", escape="\\"),
+        ).order_by(db.func.random()).limit(12).all()] if not before else [],
         trending=_pl_trending() if not before else [],
         me_json={"id": me.id, "username": me.username},
     )
@@ -1614,7 +1615,30 @@ def pl_home():
 def pl_friends():
     me = current_user()
     _pl_socialise(me)
-    return render_template("pl_friends.html", chats=_pl_chat_list(me), me_json={"id": me.id, "username": me.username})
+    chats = _pl_chat_list(me)
+    # Every mutual follow shows up in Nachrichten, chat or no chat yet.
+    i_follow = {s.channel_id for s in Subscription.query.filter_by(subscriber_id=me.id)}
+    follow_me = {s.subscriber_id for s in Subscription.query.filter_by(channel_id=me.id)}
+    mutuals = User.query.filter(User.id.in_(i_follow & follow_me)).all() if (i_follow & follow_me) else []
+    existing_dm_uids = set()
+    for c in PlChatMember.query.filter_by(user_id=me.id):
+        ch = db.session.get(PlChat, c.chat_id)
+        if ch and not ch.is_group and len(ch.members) == 2:
+            existing_dm_uids.update(m.user_id for m in ch.members if m.user_id != me.id)
+    pending = [
+        {
+            "username": u.username,
+            "title": pl_display_name(u),
+            "avatar_letter": pl_avatar_letter(pl_display_name(u)),
+            "avatar_url": _pl_media_url(u.pl_avatar_image),
+        }
+        for u in sorted(mutuals, key=lambda x: pl_display_name(x).lower())
+        if u.id not in existing_dm_uids
+    ]
+    return render_template(
+        "pl_friends.html", chats=chats, pending=pending,
+        me_json={"id": me.id, "username": me.username},
+    )
 
 
 @app.route("/freunde/u/<username>")
@@ -2289,6 +2313,23 @@ def api_pl_chats():
     return jsonify({"ok": True, "chats": _pl_chat_list(current_user())})
 
 
+def _pl_find_or_create_dm(me, other):
+    """Return the 1:1 PlChat between me and other, creating it if needed.
+    Caller must have already checked they are mutual follows."""
+    my_chat_ids = {m.chat_id for m in PlChatMember.query.filter_by(user_id=me.id)}
+    for cid in my_chat_ids:
+        chat = db.session.get(PlChat, cid)
+        if chat and not chat.is_group and len(chat.members) == 2 and any(m.user_id == other.id for m in chat.members):
+            return chat
+    chat = PlChat(is_group=False, created_by=me.id)
+    db.session.add(chat)
+    db.session.flush()
+    db.session.add(PlChatMember(chat_id=chat.id, user_id=me.id))
+    db.session.add(PlChatMember(chat_id=chat.id, user_id=other.id))
+    db.session.commit()
+    return chat
+
+
 @app.route("/api/pl/chats/dm/<username>", methods=["POST"])
 def api_pl_open_dm(username):
     me = current_user()
@@ -2297,19 +2338,16 @@ def api_pl_open_dm(username):
         return jsonify({"ok": False, "error": "bad_user"}), 400
     if not _are_mutual(me.id, other.id):
         return jsonify({"ok": False, "error": "not_mutual"}), 403
-    # existing 1:1?
-    my_chat_ids = {m.chat_id for m in PlChatMember.query.filter_by(user_id=me.id)}
-    for cid in my_chat_ids:
-        chat = db.session.get(PlChat, cid)
-        if chat and not chat.is_group and len(chat.members) == 2 and any(m.user_id == other.id for m in chat.members):
-            return jsonify({"ok": True, "chat_id": chat.id})
-    chat = PlChat(is_group=False, created_by=me.id)
-    db.session.add(chat)
-    db.session.flush()
-    db.session.add(PlChatMember(chat_id=chat.id, user_id=me.id))
-    db.session.add(PlChatMember(chat_id=chat.id, user_id=other.id))
-    db.session.commit()
-    return jsonify({"ok": True, "chat_id": chat.id})
+    return jsonify({"ok": True, "chat_id": _pl_find_or_create_dm(me, other).id})
+
+
+@app.route("/freunde/dm/<username>")
+def pl_open_dm(username):
+    me = current_user()
+    other = User.query.filter(db.func.lower(User.username) == username.lower()).first()
+    if other is None or other.id == me.id or not _are_mutual(me.id, other.id):
+        abort(404)
+    return redirect(url_for("pl_chat_view", chat_id=_pl_find_or_create_dm(me, other).id))
 
 
 @app.route("/api/pl/chats/group", methods=["POST"])

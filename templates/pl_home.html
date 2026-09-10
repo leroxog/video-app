@@ -57,6 +57,7 @@
 <div class="pl-feed" id="plFeed">
     {% for post in posts %}
         {% include "partials/_pl_post.html" %}
+        {% if not q and loop.index % 5 == 0 %}{% include "partials/_pl_apppromo.html" %}{% endif %}
     {% else %}
         <div class="pl-empty">
             {% if q %}Keine Posts zu „{{ q }}" gefunden.{% else %}Noch keine Posts. Tipp auf das <b>+</b> und schreib den ersten!{% endif %}

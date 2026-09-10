@@ -511,6 +511,28 @@ def test_urls_render_as_pink_preview_links(client):
     assert b"pl-link" in body and b'data-pl-preview="https://example.com/x"' in body
 
 
+def test_app_install_promo_every_fifth_post(client):
+    signup(client, "alice")
+    for i in range(11):
+        client.post("/api/pl/posts", json={"heading": f"p{i}"})
+    body = client.get("/?feed=neu").data
+    assert b"Hohl dir unsere App" in body
+    assert body.count(b"pl-promo") >= 2  # at least two promo cards for 11 posts
+
+
+def test_messages_list_every_mutual(client):
+    bob = make_user(client, "bob")
+    signup(client, "alice")
+    # alice <-> bob become mutuals, no chat created yet
+    client.post("/api/pl/follow/bob")
+    bob.post("/api/pl/follow/alice")
+    body = client.get("/freunde").data
+    assert b"bob" in body and b"Neuer Chat" in body
+    # the row opens (creates) the DM directly
+    r = client.get("/freunde/dm/bob", follow_redirects=False)
+    assert r.status_code == 302 and "/freunde/c/" in r.headers["Location"]
+
+
 def test_profile_images_persist_in_db(client):
     import io as _io
     signup(client, "alice")

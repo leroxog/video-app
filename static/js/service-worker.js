@@ -1,9 +1,10 @@
-const CACHE_NAME = "NexAI-shell-v1";
+const CACHE_NAME = "hexagonum-shell-v2";
 const APP_SHELL = [
     "/offline",
-    "/static/css/style.css",
-    "/static/js/photo-text-overlay.js",
-    "/static/manifest.json",
+    "/static/css/pinklemon.css",
+    "/static/pinklemon-manifest.json",
+    "/static/img/icon-192.png",
+    "/static/img/icon-512.png",
 ];
 
 self.addEventListener("install", (event) => {
@@ -75,7 +76,7 @@ self.addEventListener("push", (event) => {
     event.waitUntil(
         self.registration.showNotification(payload.title, {
             body: payload.body,
-            icon: "/static/img/pinklemon-mark.svg",
+            icon: "/static/img/icon-192.png",
             data: { url: payload.url },
         })
     );

@@ -40,6 +40,62 @@
     };
 </script>
 <script src="{{ url_for('static', filename='js/pl-sound.js') }}"></script>
+<script>
+/* PWA: register the service worker + wire "Hohl dir unsere App!" */
+(function () {
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("/service-worker.js").catch(function () {});
+    });
+  }
+  var deferred = null;
+  var standalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+  window.addEventListener("beforeinstallprompt", function (e) {
+    e.preventDefault();
+    deferred = e;
+    document.documentElement.classList.add("pl-can-install");
+  });
+  window.addEventListener("appinstalled", function () {
+    deferred = null;
+    if (window.plToast) window.plToast("App installiert 🎉");
+  });
+
+  function help() {
+    var ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    var back = document.createElement("div");
+    back.className = "pl-install-back";
+    back.innerHTML =
+      '<div class="pl-install-card" role="dialog" aria-modal="true">' +
+        '<span class="pl-install-mark"></span>' +
+        '<h3>HEXAGONUM installieren</h3>' +
+        '<p>' + (ios
+          ? 'Tippe unten in der Leiste auf <b>Teilen</b>, dann auf <b>Zum Home-Bildschirm</b>.'
+          : 'Öffne das Browser-Menü (drei Punkte) und wähle <b>App installieren</b> bzw. <b>Zum Startbildschirm hinzufügen</b>.') +
+        '</p><button type="button" class="pl-install-ok">Alles klar</button>' +
+      '</div>';
+    document.body.appendChild(back);
+    function close() { back.remove(); }
+    back.addEventListener("click", function (e) {
+      if (e.target === back || e.target.classList.contains("pl-install-ok")) close();
+    });
+  }
+
+  window.plInstallApp = function () {
+    if (standalone) { if (window.plToast) window.plToast("Läuft schon als App 🎉"); return; }
+    if (deferred) {
+      deferred.prompt();
+      deferred.userChoice.then(function () { deferred = null; });
+      return;
+    }
+    help();
+  };
+
+  document.addEventListener("click", function (e) {
+    var p = e.target.closest("[data-app-promo]");
+    if (p) { e.preventDefault(); window.plInstallApp(); }
+  });
+})();
+</script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

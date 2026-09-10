@@ -446,7 +446,20 @@
   $all(".pl-post").forEach(wirePost);
 
   // ---------------- kebab menu + repost + poll + sensitive ----------------
+  function syncMenuOpen() {
+    $all(".pl-post-group").forEach(function (g) {
+      var open = g.querySelector('.pl-post-menu:not([hidden]), .pl-repost-menu:not([hidden])');
+      g.classList.toggle("menu-open", !!open);
+      if (open) {
+        var r = open.getBoundingClientRect();
+        // flip upward if the menu would collide with the bottom nav
+        open.classList.toggle("menu-up", r.bottom > window.innerHeight - 84 && r.top > 220);
+      }
+    });
+  }
+
   document.addEventListener("click", function (e) {
+    setTimeout(syncMenuOpen, 0);
     // close any open menu when clicking elsewhere
     if (!e.target.closest(".pl-post-menu") && !e.target.closest("[data-kebab]")) {
       $all(".pl-post-menu").forEach(function (m) { m.hidden = true; });
@@ -682,7 +695,11 @@
       var doc = new DOMParser().parseFromString(html, "text/html");
       var groups = doc.querySelectorAll("#plFeed .pl-post-group");
       var feed = $("#plFeed");
-      groups.forEach(function (g) { feed.appendChild(g); wirePost(g.querySelector(".pl-post")); });
+      groups.forEach(function (g) {
+        feed.appendChild(g);
+        var pa = g.querySelector(".pl-post");
+        if (pa) wirePost(pa);
+      });
       var nm = doc.querySelector("#plLoadMore");
       if (nm) { btn.dataset.cursor = nm.dataset.cursor; btn.disabled = false; btn.textContent = "Ältere Posts laden"; }
       else btn.remove();
