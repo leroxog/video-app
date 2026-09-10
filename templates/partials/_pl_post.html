@@ -65,13 +65,13 @@
           {% endif %}
           <button class="pl-comments-btn" data-comments-toggle>{{ plicon('comment', 13) }} Kommentare</button>
           <div class="pl-repost-wrap">
-            <button class="pl-repost-btn {{ 'on' if post.reposted_by_me }}" data-repost-toggle aria-haspopup="true">{{ plicon('share', 13) }} <span class="pl-repost-word">Repost</span>{% if post.repost_count %} <b class="pl-repost-n">{{ post.repost_count }}</b>{% endif %}</button>
+            <button class="pl-repost-btn {{ 'on' if post.reposted_by_me }}" data-repost-toggle aria-haspopup="true">{{ plicon('repost', 15) }}<span class="pl-repost-word">Repost</span>{% if post.repost_count %}<b class="pl-repost-n">{{ post.repost_count }}</b>{% endif %}</button>
             <div class="pl-repost-menu" hidden>
-              <button type="button" data-repost-do="plain">{{ plicon('share', 14) }} <span>{{ 'Repost zur&uuml;cknehmen' if post.reposted_by_me else 'Repost' }}</span></button>
-              <button type="button" data-repost-do="quote">{{ plicon('comment', 14) }} <span>Zitieren</span></button>
+              <button type="button" data-repost-do="plain">{{ plicon('repost', 15) }} <span>{{ 'Repost zur&uuml;cknehmen' if post.reposted_by_me else 'Repost' }}</span></button>
+              <button type="button" data-repost-do="quote">{{ plicon('comment', 15) }} <span>Zitieren</span></button>
             </div>
           </div>
-          <button class="pl-share-btn" data-share>{{ plicon('share', 13) }} Teilen</button>
+          <button class="pl-share-btn" data-share>{{ plicon('share', 14) }}<span>Teilen</span></button>
       </div>
 
       <div class="pl-like-burst">{{ plicon('heart', 84) }}</div>
