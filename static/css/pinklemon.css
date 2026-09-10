@@ -5,17 +5,21 @@
    =================================================================== */
 
 :root {
-  --pl-bg: #0b0b0d;
-  --pl-surface: #141418;
-  --pl-surface-2: #1c1c22;
-  --pl-surface-3: #26262e;
-  --pl-border: rgba(255, 255, 255, 0.09);
+  --pl-bg: #08080a;
+  /* Glass surfaces: translucent, so a backdrop-filter blur picks up the
+     drifting pink glow behind .pl-app (see .pl-app::before). Solid brand
+     bits (.pl-pink buttons/avatars/pink chat bubbles) stay opaque. */
+  --pl-surface: rgba(255, 255, 255, 0.055);
+  --pl-surface-2: rgba(255, 255, 255, 0.085);
+  --pl-surface-3: rgba(255, 255, 255, 0.15);
+  --pl-border: rgba(255, 255, 255, 0.13);
   --pl-text: #f3f3f5;
-  --pl-text-dim: #a9a9b3;
-  --pl-text-faint: #74747f;
+  --pl-text-dim: #b4b4bd;
+  --pl-text-faint: #7f7f8a;
   --pl-pink: #ff2d95;
   --pl-pink-soft: rgba(255, 45, 149, 0.16);
   --pl-danger: #ff5a5a;
+  --pl-blur: blur(16px) saturate(1.4);
   --pl-r-sm: 12px;
   --pl-r-md: 20px;
   --pl-r-lg: 30px;
@@ -24,14 +28,14 @@
 }
 
 :root[data-theme="light"] {
-  --pl-bg: #f4f4f6;
-  --pl-surface: #ffffff;
-  --pl-surface-2: #f0f0f3;
-  --pl-surface-3: #e6e6ea;
-  --pl-border: rgba(0, 0, 0, 0.10);
+  --pl-bg: #eef0f5;
+  --pl-surface: rgba(255, 255, 255, 0.62);
+  --pl-surface-2: rgba(255, 255, 255, 0.48);
+  --pl-surface-3: rgba(0, 0, 0, 0.07);
+  --pl-border: rgba(0, 0, 0, 0.09);
   --pl-text: #16161a;
-  --pl-text-dim: #5d5d67;
-  --pl-text-faint: #9a9aa4;
+  --pl-text-dim: #4c4c56;
+  --pl-text-faint: #8a8a95;
   --pl-pink-soft: rgba(255, 45, 149, 0.12);
   --pl-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
 }
@@ -47,6 +51,13 @@ html, body {
   -webkit-font-smoothing: antialiased;
   overscroll-behavior-y: none;
 }
+body {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+}
 
 a { color: inherit; text-decoration: none; }
 button { font-family: inherit; cursor: pointer; }
@@ -54,23 +65,56 @@ img { max-width: 100%; display: block; }
 
 /* ---------- Phone frame ---------- */
 .pl-app {
+  width: 100%;
   max-width: 480px;
   margin: 0 auto;
-  min-height: 100vh;
-  min-height: 100dvh;
+  height: 100vh;
+  height: 100dvh;
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   position: relative;
+  overflow: hidden;
   background: var(--pl-bg);
-  border-left: 1px solid var(--pl-border);
-  border-right: 1px solid var(--pl-border);
 }
+/* drifting pink glow the glass surfaces blur through */
+.pl-app::before {
+  content: "";
+  position: absolute;
+  inset: -20%;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(38% 32% at 18% 12%, rgba(255, 45, 149, 0.32), transparent 70%),
+    radial-gradient(42% 34% at 88% 30%, rgba(120, 90, 255, 0.26), transparent 72%),
+    radial-gradient(46% 40% at 55% 100%, rgba(255, 90, 160, 0.22), transparent 72%);
+}
+:root[data-theme="light"] .pl-app::before { opacity: 0.55; }
 
 .pl-screen {
+  position: relative;
+  z-index: 1;
   flex: 1;
   overflow-y: auto;
-  padding: 14px 14px calc(84px + env(safe-area-inset-bottom, 0px));
+  padding: 14px 14px calc(88px + env(safe-area-inset-bottom, 0px));
   -webkit-overflow-scrolling: touch;
+}
+
+/* ---------- Responsive: phone edge-to-edge, bigger screens = app window --- */
+@media (min-width: 560px) {
+  body { padding: 22px 12px; justify-content: center; }
+  .pl-app {
+    flex: 0 1 auto;
+    height: min(900px, calc(100dvh - 44px));
+    border: 1px solid var(--pl-border);
+    border-radius: var(--pl-r-xl);
+    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255,255,255,0.04);
+  }
+}
+@media (max-width: 360px) {
+  .pl-screen { padding-left: 10px; padding-right: 10px; }
+  .pl-post { padding: 36px 14px 14px; }
 }
 
 /* ---------- Top search row ---------- */
@@ -640,3 +684,46 @@ img { max-width: 100%; display: block; }
 .pl-checkrow .pl-avatar { width: 34px; height: 34px; font-size: 13px; }
 .pl-checkrow-name { flex: 1; font-size: 13.5px; font-weight: 600; }
 .pl-checkrow input { width: 22px; height: 22px; accent-color: var(--pl-pink); }
+
+/* ===================================================================
+   Glass mode -- translucent surfaces get a backdrop blur so the pink
+   glow behind .pl-app shows through. Solid brand elements
+   (.pl-pink / primary .pl-btn / pink chat bubbles / avatars) stay opaque.
+   =================================================================== */
+/* Only the big panels get a real backdrop-filter -- putting it on dozens
+   of little chips/swatches too made scrolling janky. The small bits are
+   just translucent (via the surface tokens) with no blur. */
+.pl-post, .pl-sheet, .pl-nav, .pl-search,
+.pl-msg.them, .n7-msg.them, .n7-desc, .n7-compose,
+.pl-chat-header, .pl-chat-compose, .g-top, .g-overlay,
+.pl-input, .pl-textarea, .pl-comment-compose textarea, .pl-chat-compose textarea {
+  -webkit-backdrop-filter: var(--pl-blur);
+  backdrop-filter: var(--pl-blur);
+}
+
+.pl-nav {
+  background: var(--pl-surface-2);
+}
+
+/* game shell + standalone chat page: same app-window treatment on desktop */
+@media (min-width: 560px) {
+  .g-wrap, .pl-chat-screen {
+    height: min(900px, calc(100dvh - 44px)) !important;
+    margin: 22px auto;
+    border: 1px solid var(--pl-border);
+    border-radius: var(--pl-r-xl);
+    overflow: hidden;
+    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.55);
+    position: relative;
+  }
+  body:has(.g-wrap), body:has(.pl-chat-screen) { display: flex; align-items: center; justify-content: center; min-height: 100dvh; }
+}
+.g-wrap, .pl-chat-screen { background: var(--pl-bg); position: relative; }
+.g-wrap::before, .pl-chat-screen::before {
+  content: ""; position: absolute; inset: -20%; z-index: 0; pointer-events: none;
+  background:
+    radial-gradient(40% 34% at 20% 10%, rgba(255, 45, 149, 0.26), transparent 70%),
+    radial-gradient(44% 36% at 86% 40%, rgba(120, 90, 255, 0.20), transparent 72%);
+  filter: blur(30px);
+}
+.g-top, .g-body, .pl-chat-header, .pl-chat-msgs, .pl-chat-compose { position: relative; z-index: 1; }
