@@ -192,3 +192,79 @@ def test_videos_tab_says_coming_soon(client):
     r = client.get("/videos").data
     assert b"Wir arbeiten dran!" in r
     assert "Diese Funktion ist im Moment noch nicht verfügbar".encode() in r
+
+
+# ---------------- Freunde ----------------
+
+def test_dm_needs_mutual_follow(client):
+    signup(client, "alice")
+    bob = make_user(client, "bob")
+    # alice -> bob only: not mutual yet
+    client.post("/api/pl/follow/bob")
+    assert client.post("/api/pl/chats/dm/bob").status_code == 403
+    # bob follows back -> mutual -> DM opens
+    bob.post("/api/pl/follow/alice")
+    j = client.post("/api/pl/chats/dm/bob").get_json()
+    assert j["ok"] and isinstance(j["chat_id"], int)
+    # re-opening returns the same chat
+    assert client.post("/api/pl/chats/dm/bob").get_json()["chat_id"] == j["chat_id"]
+
+
+def test_follow_toggles_and_reports_mutual(client):
+    signup(client, "alice")
+    make_user(client, "bob")
+    a = client.post("/api/pl/follow/bob").get_json()
+    assert a["following"] is True and a["mutual"] is False
+    b = client.post("/api/pl/follow/bob").get_json()
+    assert b["following"] is False
+
+
+def test_send_and_receive_messages(client):
+    signup(client, "alice")
+    bob = make_user(client, "bob")
+    client.post("/api/pl/follow/bob")
+    bob.post("/api/pl/follow/alice")
+    cid = client.post("/api/pl/chats/dm/bob").get_json()["chat_id"]
+    client.post(f"/api/pl/chats/{cid}/messages", json={"text": "hi bob"})
+    got = bob.get(f"/api/pl/chats/{cid}/messages").get_json()
+    assert [m["text"] for m in got["messages"]] == ["hi bob"]
+    assert got["messages"][0]["is_mine"] is False
+
+
+def test_non_member_cannot_read_chat(client):
+    signup(client, "alice")
+    bob = make_user(client, "bob")
+    client.post("/api/pl/follow/bob"); bob.post("/api/pl/follow/alice")
+    cid = client.post("/api/pl/chats/dm/bob").get_json()["chat_id"]
+    cara = make_user(client, "cara")
+    assert cara.get(f"/api/pl/chats/{cid}/messages").status_code == 404
+
+
+def test_group_needs_name_and_mutual_members(client):
+    signup(client, "alice")
+    bob = make_user(client, "bob")
+    client.post("/api/pl/follow/bob"); bob.post("/api/pl/follow/alice")
+    assert client.post("/api/pl/chats/group", json={"name": "", "members": ["bob"]}).status_code == 400
+    j = client.post("/api/pl/chats/group", json={"name": "Crew", "members": ["bob"]}).get_json()
+    assert j["ok"]
+    view = client.get(f"/freunde/c/{j['chat_id']}")
+    assert view.status_code == 200 and b"Crew" in view.data
+
+
+def test_mutuals_endpoint_lists_only_mutuals(client):
+    signup(client, "alice")
+    bob = make_user(client, "bob")
+    make_user(client, "cara")
+    client.post("/api/pl/follow/bob")
+    client.post("/api/pl/follow/cara")
+    bob.post("/api/pl/follow/alice")  # only bob reciprocates
+    users = client.get("/api/pl/mutuals").get_json()["users"]
+    assert [u["username"] for u in users] == ["bob"]
+
+
+def test_profile_page_shows_follow_button(client):
+    signup(client, "alice")
+    make_user(client, "bob")
+    r = client.get("/freunde/u/bob")
+    assert r.status_code == 200 and b"plFollowBtn" in r.data
+    assert client.get("/freunde/u/ghost").status_code == 404

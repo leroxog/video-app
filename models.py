@@ -738,3 +738,48 @@ class FeedPS(db.Model):
     body = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
+
+# ==========================================================================
+# pinklemon "Freunde" -- WhatsApp-style chats. You can only DM someone once
+# you follow each other (Subscription both ways). Groups have no such rule
+# but members must be picked from your mutual follows. Own `pl_*` tables --
+# the legacy conversation/message tables carried disappearing-message
+# behaviour we don't want here.
+# ==========================================================================
+
+class PlChat(db.Model):
+    __tablename__ = "pl_chat"
+    id = db.Column(db.Integer, primary_key=True)
+    is_group = db.Column(db.Boolean, nullable=False, default=False)
+    name = db.Column(db.String(80), nullable=True)          # groups only
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    last_activity = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    members = db.relationship("PlChatMember", backref="chat", lazy=True, cascade="all, delete-orphan")
+    messages = db.relationship(
+        "PlMessage", backref="chat", lazy=True, cascade="all, delete-orphan",
+        order_by="PlMessage.created_at",
+    )
+
+
+class PlChatMember(db.Model):
+    __tablename__ = "pl_chat_member"
+    id = db.Column(db.Integer, primary_key=True)
+    chat_id = db.Column(db.Integer, db.ForeignKey("pl_chat.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    joined_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    last_read_id = db.Column(db.Integer, nullable=False, default=0)
+    user = db.relationship("User")
+    __table_args__ = (db.UniqueConstraint("chat_id", "user_id", name="uq_plchatmember"),)
+
+
+class PlMessage(db.Model):
+    __tablename__ = "pl_message"
+    id = db.Column(db.Integer, primary_key=True)
+    chat_id = db.Column(db.Integer, db.ForeignKey("pl_chat.id"), nullable=False)
+    sender_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    text = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    sender = db.relationship("User")
+

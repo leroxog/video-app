@@ -1,0 +1,40 @@
+{% extends "pl_base.html" %}
+{% set active = 'friends' %}
+{% block title %}@{{ prof.username }} · pinklemon{% endblock %}
+
+{% block screen %}
+<div class="pl-screen-head">
+    <button class="pl-icon-btn" onclick="history.back()" aria-label="Zurück">&#8592;</button>
+    <h1>@{{ prof.username }}</h1>
+</div>
+
+<div class="pl-profile" data-username="{{ prof.username }}">
+    <div class="pl-avatar">{{ avatar_letter }}</div>
+    <h1>@{{ prof.username }}</h1>
+    {% if prof.bio %}<p class="pl-bio">{{ prof.bio }}</p>{% endif %}
+    <div class="pl-profile-stats">
+        <div><b id="plFollowerCount">{{ followers }}</b><span>Follower</span></div>
+        <div><b>{{ following }}</b><span>Folgt</span></div>
+    </div>
+
+    {% if is_me %}
+        <p class="pl-hint">Das bist du.</p>
+    {% else %}
+        <div class="pl-profile-actions">
+            <button class="pl-btn {{ 'ghost' if i_follow }}" id="plFollowBtn" data-following="{{ '1' if i_follow else '0' }}">
+                {{ 'Entfolgen' if i_follow else 'Folgen' }}
+            </button>
+            <button class="pl-btn ghost" id="plMsgBtn" {{ '' if mutual else 'disabled' }}>Nachricht</button>
+        </div>
+        <p class="pl-hint" id="plMutualHint">
+            {% if mutual %}Ihr folgt euch gegenseitig &mdash; ihr könnt schreiben.
+            {% elif follows_me %}Folgt dir. Folge zurück, um zu schreiben.
+            {% else %}Folgt euch gegenseitig, um schreiben zu können.{% endif %}
+        </p>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/pinklemon-profile.js') }}"></script>
+{% endblock %}

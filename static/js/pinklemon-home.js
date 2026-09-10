@@ -256,12 +256,12 @@
 
     // pointer events cover mouse + touch
     post.addEventListener("pointerdown", function (e) {
-      if (e.target.closest("button")) return;
+      if (e.target.closest("button, a")) return;
       onStart(e.clientX, e.clientY);
     });
     post.addEventListener("pointermove", function (e) { onMove(e.clientX, e.clientY); });
     post.addEventListener("pointerup", function (e) {
-      if (e.target.closest("button")) { onEnd(); return; }
+      if (e.target.closest("button, a")) { onEnd(); return; }
       var wasLP = lpFired;
       onEnd();
       if (wasLP) return;

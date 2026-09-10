@@ -545,3 +545,98 @@ img { max-width: 100%; display: block; }
 .pl-soon .pl-logo { width: 64px; height: 64px; opacity: 0.9; margin-bottom: 6px; }
 
 .pl-logo svg, .pl-logo img { width: 100%; height: 100%; }
+
+/* ===================================================================
+   Freunde -- chat list, profile, chat view
+   =================================================================== */
+.pl-screen-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.pl-screen-head h1 { font-size: 22px; font-weight: 900; margin: 0; flex: 1; letter-spacing: -0.02em; }
+.pl-icon-btn {
+  width: 42px; height: 42px; border-radius: 50%; border: 1px solid var(--pl-border);
+  background: var(--pl-surface-2); color: var(--pl-text); display: flex;
+  align-items: center; justify-content: center; flex-shrink: 0;
+}
+.pl-icon-btn.pink { background: var(--pl-pink); color: #fff; border: none; }
+.pl-icon-btn:active { transform: scale(0.9); }
+
+.pl-chatrow {
+  display: flex; align-items: center; gap: 12px; padding: 12px 6px;
+  border-bottom: 1px solid var(--pl-border);
+}
+.pl-chatrow .pl-avatar { width: 46px; height: 46px; font-size: 17px; }
+.pl-chatrow-main { flex: 1; min-width: 0; }
+.pl-chatrow-top { display: flex; align-items: baseline; gap: 8px; }
+.pl-chatrow-title { font-weight: 800; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pl-chatrow-time { margin-left: auto; font-size: 11px; color: var(--pl-text-faint); flex-shrink: 0; }
+.pl-chatrow-preview { font-size: 12.5px; color: var(--pl-text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.pl-chatrow-badge {
+  flex-shrink: 0; min-width: 20px; height: 20px; border-radius: 999px; background: var(--pl-pink);
+  color: #fff; font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; padding: 0 6px;
+}
+.pl-group-tag { font-size: 10px; font-weight: 800; color: var(--pl-text-faint); border: 1px solid var(--pl-border); border-radius: 999px; padding: 1px 6px; }
+
+/* user search results */
+.pl-userrow {
+  display: flex; align-items: center; gap: 12px; padding: 10px 4px;
+  border-bottom: 1px solid var(--pl-border);
+}
+.pl-userrow .pl-avatar { width: 40px; height: 40px; font-size: 15px; }
+.pl-userrow-name { flex: 1; font-weight: 700; font-size: 14px; }
+.pl-userrow .pl-mini-btn { flex-shrink: 0; }
+.pl-mini-btn {
+  border: 1px solid var(--pl-border); background: var(--pl-surface-2); color: var(--pl-text);
+  border-radius: 999px; padding: 7px 14px; font-size: 12px; font-weight: 700;
+}
+.pl-mini-btn.pink { background: var(--pl-pink); color: #fff; border: none; }
+.pl-mini-btn:active { transform: scale(0.95); }
+
+/* profile */
+.pl-profile { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 24px 16px 8px; }
+.pl-profile .pl-avatar { width: 88px; height: 88px; font-size: 34px; margin-bottom: 12px; }
+.pl-profile h1 { font-size: 20px; font-weight: 900; margin: 0; }
+.pl-profile .pl-bio { color: var(--pl-text-dim); font-size: 13.5px; margin: 8px 0 0; max-width: 300px; line-height: 1.5; white-space: pre-wrap; }
+.pl-profile-stats { display: flex; gap: 26px; margin: 16px 0 18px; }
+.pl-profile-stats div { display: flex; flex-direction: column; }
+.pl-profile-stats b { font-size: 17px; font-weight: 900; }
+.pl-profile-stats span { font-size: 11px; color: var(--pl-text-faint); text-transform: uppercase; letter-spacing: 0.05em; }
+.pl-profile-actions { display: flex; gap: 10px; width: 100%; max-width: 320px; }
+.pl-profile-actions button { flex: 1; }
+.pl-hint { font-size: 12px; color: var(--pl-text-faint); margin-top: 10px; }
+
+/* chat view */
+.pl-chat-screen { display: flex; flex-direction: column; height: 100vh; height: 100dvh; max-width: 480px; margin: 0 auto; border-left: 1px solid var(--pl-border); border-right: 1px solid var(--pl-border); }
+.pl-chat-header {
+  display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+  border-bottom: 1px solid var(--pl-border); background: var(--pl-surface); flex-shrink: 0;
+}
+.pl-chat-header .pl-avatar { width: 36px; height: 36px; font-size: 14px; }
+.pl-chat-header-title { font-weight: 800; font-size: 15px; }
+.pl-chat-header-sub { font-size: 11px; color: var(--pl-text-faint); }
+.pl-chat-back { background: none; border: none; color: var(--pl-text); font-size: 26px; line-height: 1; padding: 0 4px; }
+.pl-chat-msgs { flex: 1; overflow-y: auto; padding: 16px 14px; display: flex; flex-direction: column; gap: 8px; }
+.pl-msg { max-width: 78%; padding: 9px 13px; border-radius: var(--pl-r-md); font-size: 14px; line-height: 1.4; word-break: break-word; white-space: pre-wrap; }
+.pl-msg.them { align-self: flex-start; background: var(--pl-surface-2); border: 1px solid var(--pl-border); border-bottom-left-radius: 6px; }
+.pl-msg.me { align-self: flex-end; background: var(--pl-pink); color: #fff; border-bottom-right-radius: 6px; }
+.pl-msg-sender { font-size: 10.5px; font-weight: 800; color: var(--pl-pink); margin-bottom: 2px; }
+.pl-msg-time { font-size: 9.5px; opacity: 0.6; margin-top: 3px; text-align: right; }
+.pl-chat-compose {
+  display: flex; gap: 8px; padding: 10px 12px calc(12px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--pl-border); background: var(--pl-surface); flex-shrink: 0;
+}
+.pl-chat-compose textarea {
+  flex: 1; background: var(--pl-surface-2); border: 1px solid var(--pl-border); border-radius: var(--pl-r-md);
+  padding: 11px 14px; font-size: 14px; color: var(--pl-text); outline: none; resize: none; max-height: 100px; min-height: 44px;
+}
+.pl-chat-compose button {
+  flex-shrink: 0; width: 44px; height: 44px; border-radius: 50%; border: none; background: var(--pl-pink);
+  color: #fff; display: flex; align-items: center; justify-content: center;
+}
+.pl-checkrow { display: flex; align-items: center; gap: 10px; padding: 9px 4px; border-bottom: 1px solid var(--pl-border); }
+.pl-checkrow .pl-avatar { width: 34px; height: 34px; font-size: 13px; }
+.pl-checkrow-name { flex: 1; font-size: 13.5px; font-weight: 600; }
+.pl-checkrow input { width: 22px; height: 22px; accent-color: var(--pl-pink); }

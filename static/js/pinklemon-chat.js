@@ -1,0 +1,76 @@
+(function () {
+  "use strict";
+  var CHAT = window.PL_CHAT;
+  var msgsEl = document.getElementById("plMsgs");
+  var input = document.getElementById("plMsgInput");
+  var sendBtn = document.getElementById("plMsgSend");
+  var lastId = 0;
+  var polling = null;
+
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+
+  function atBottom() { return msgsEl.scrollHeight - msgsEl.scrollTop - msgsEl.clientHeight < 60; }
+  function scrollDown() { msgsEl.scrollTop = msgsEl.scrollHeight; }
+
+  function addMsg(m) {
+    var div = document.createElement("div");
+    div.className = "pl-msg " + (m.is_mine ? "me" : "them");
+    var html = "";
+    if (CHAT.isGroup && !m.is_mine) html += '<div class="pl-msg-sender">@' + esc(m.sender) + "</div>";
+    html += esc(m.text).replace(/\n/g, "<br>");
+    html += '<div class="pl-msg-time">' + esc(m.created_ago) + "</div>";
+    div.innerHTML = html;
+    msgsEl.appendChild(div);
+    lastId = Math.max(lastId, m.id);
+  }
+
+  function poll() {
+    fetch("/api/pl/chats/" + CHAT.id + "/messages?after=" + lastId)
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (!j.ok) return;
+        if (j.messages.length) {
+          var stick = atBottom();
+          j.messages.forEach(addMsg);
+          if (stick) scrollDown();
+        }
+      })
+      .catch(function () {});
+  }
+
+  function send() {
+    var text = input.value.trim();
+    if (!text) return;
+    input.value = "";
+    input.style.height = "auto";
+    fetch("/api/pl/chats/" + CHAT.id + "/messages", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: text }),
+    }).then(function (r) { return r.json(); }).then(function (j) {
+      if (!j.ok) { window.plToast(j.error === "not_mutual" ? "Ihr folgt euch nicht mehr gegenseitig." : "Ging nicht."); return; }
+      addMsg(j.message);
+      scrollDown();
+    });
+  }
+
+  sendBtn.addEventListener("click", send);
+  input.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+  });
+  input.addEventListener("input", function () {
+    input.style.height = "auto";
+    input.style.height = Math.min(input.scrollHeight, 100) + "px";
+  });
+
+  // first load
+  fetch("/api/pl/chats/" + CHAT.id + "/messages?after=0")
+    .then(function (r) { return r.json(); })
+    .then(function (j) {
+      if (j.ok) { j.messages.forEach(addMsg); scrollDown(); }
+      polling = setInterval(poll, 3000);
+    });
+
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) { clearInterval(polling); }
+    else { poll(); polling = setInterval(poll, 3000); }
+  });
+})();

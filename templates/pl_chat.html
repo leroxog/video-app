@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0b0b0d">
+    <meta name="robots" content="noindex, nofollow">
+    <script>try { if (localStorage.getItem("pl_theme") === "light") document.documentElement.setAttribute("data-theme", "light"); } catch (e) {}</script>
+    <title>{{ chat.title }} · pinklemon</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/pinklemon.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='img/pinklemon-mark.svg') }}" type="image/svg+xml">
+</head>
+<body>
+<div class="pl-chat-screen">
+    <div class="pl-chat-header">
+        <button class="pl-chat-back" onclick="location.href='{{ url_for('pl_friends') }}'" aria-label="Zurück">&#8592;</button>
+        <div class="pl-avatar">{{ chat.avatar_letter }}</div>
+        <div>
+            <div class="pl-chat-header-title">{{ chat.title }}</div>
+            <div class="pl-chat-header-sub">
+                {% if chat.is_group %}{{ chat.members | length }} Mitglieder{% else %}Einzelchat{% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="pl-chat-msgs" id="plMsgs"></div>
+    <div class="pl-chat-compose">
+        <textarea id="plMsgInput" rows="1" maxlength="4000" placeholder="Nachricht"></textarea>
+        <button id="plMsgSend" aria-label="Senden">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
+        </button>
+    </div>
+</div>
+<div class="pl-toast" id="plToast"></div>
+<script>
+    window.plToast = function (m) { var t = document.getElementById("plToast"); if (!t) return; t.textContent = m; t.classList.add("show"); clearTimeout(window._plT); window._plT = setTimeout(function () { t.classList.remove("show"); }, 2200); };
+    window.PL_CHAT = { id: {{ chat_id }}, isGroup: {{ 'true' if chat.is_group else 'false' }} };
+    window.PL_ME = {{ me_json | tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/pinklemon-chat.js') }}"></script>
+</body>
+</html>

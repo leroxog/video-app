@@ -1,10 +1,63 @@
 {% extends "pl_base.html" %}
+{%- from "partials/_pl_icons.html" import plicon -%}
 {% set active = 'friends' %}
 {% block title %}Freunde · pinklemon{% endblock %}
+
 {% block screen %}
-<div class="pl-soon">
-    <div class="pl-logo">{% include "partials/_pinklemon_logo.html" %}</div>
+<div class="pl-screen-head">
     <h1>Freunde</h1>
-    <p>Wird gerade gebaut &mdash; kommt in Kürze.</p>
+    <button class="pl-icon-btn" id="plFindBtn" aria-label="Leute finden">{{ plicon('search', 20) }}</button>
+    <button class="pl-icon-btn pink" id="plNewChatBtn" aria-label="Neuer Chat">{{ plicon('plus', 20) }}</button>
 </div>
+
+<div id="plChatList">
+    {% for c in chats %}
+    <a class="pl-chatrow" href="{{ url_for('pl_chat_view', chat_id=c.id) }}">
+        <div class="pl-avatar">{{ c.avatar_letter }}</div>
+        <div class="pl-chatrow-main">
+            <div class="pl-chatrow-top">
+                <span class="pl-chatrow-title">{{ c.title }}</span>
+                {% if c.is_group %}<span class="pl-group-tag">Gruppe</span>{% endif %}
+                <span class="pl-chatrow-time">{{ c.last_ago }}</span>
+            </div>
+            <div class="pl-chatrow-preview">
+                {% if c.last_text %}{% if c.is_group and c.last_sender %}{{ c.last_sender }}: {% endif %}{{ c.last_text }}{% else %}Noch keine Nachrichten{% endif %}
+            </div>
+        </div>
+        {% if c.unread %}<span class="pl-chatrow-badge">{{ c.unread }}</span>{% endif %}
+    </a>
+    {% else %}
+    <div class="pl-empty">Noch keine Chats.<br>Tipp oben rechts auf <b>+</b>, folgt euch gegenseitig und schreibt los.</div>
+    {% endfor %}
+</div>
+{% endblock %}
+
+{% block sheets %}
+<!-- find people -->
+<div class="pl-sheet-backdrop" id="plFindSheet">
+    <div class="pl-sheet">
+        <div class="pl-sheet-grip"></div>
+        <h2>Leute finden</h2>
+        <input class="pl-input" id="plUserSearch" placeholder="Benutzername" autocomplete="off" autocapitalize="none">
+        <div id="plUserResults" style="overflow-y:auto;"></div>
+    </div>
+</div>
+
+<!-- new chat / group -->
+<div class="pl-sheet-backdrop" id="plNewChatSheet">
+    <div class="pl-sheet">
+        <div class="pl-sheet-grip"></div>
+        <h2>Neuer Chat</h2>
+        <p style="color:var(--pl-text-dim);font-size:13px;margin:0 0 12px;">Du kannst nur mit Leuten schreiben, denen du folgst und die dir zurückfolgen.</p>
+        <input class="pl-input" id="plGroupName" placeholder="Gruppenname (leer lassen = Einzelchat)" maxlength="80">
+        <div class="pl-section-label" style="margin:6px 4px;">Gegenseitige Follows</div>
+        <div id="plMutualList" style="overflow-y:auto;max-height:40vh;"></div>
+        <button class="pl-btn" id="plCreateChatBtn" style="margin-top:12px;">Chat starten</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>window.PL_ME = {{ me_json | tojson }};</script>
+<script src="{{ url_for('static', filename='js/pinklemon-friends.js') }}"></script>
 {% endblock %}

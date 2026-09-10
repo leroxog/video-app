@@ -42,6 +42,7 @@ from models import (
     AiVoiceProfile, AiPersonality, AiGeneratedMedia,
     AiTrainingExample, AiTrainingRun,
     FeedPost, FeedLike, FeedComment, FeedCommentLike, FeedPS,
+    PlChat, PlChatMember, PlMessage,
 )
 import ai_assistant
 import local_ai
@@ -1198,7 +1199,37 @@ def pl_home():
 
 @app.route("/freunde")
 def pl_friends():
-    return render_template("pl_friends.html")
+    me = current_user()
+    return render_template("pl_friends.html", chats=_pl_chat_list(me), me_json={"id": me.id, "username": me.username})
+
+
+@app.route("/freunde/u/<username>")
+def pl_profile(username):
+    me = current_user()
+    user = User.query.filter(db.func.lower(User.username) == username.lower()).first()
+    if user is None:
+        abort(404)
+    i_follow = Subscription.query.filter_by(subscriber_id=me.id, channel_id=user.id).first() is not None
+    follows_me = Subscription.query.filter_by(subscriber_id=user.id, channel_id=me.id).first() is not None
+    return render_template(
+        "pl_profile.html", prof=user, is_me=user.id == me.id,
+        i_follow=i_follow, follows_me=follows_me, mutual=i_follow and follows_me,
+        followers=Subscription.query.filter_by(channel_id=user.id).count(),
+        following=Subscription.query.filter_by(subscriber_id=user.id).count(),
+        avatar_letter=pl_avatar_letter(user.username),
+    )
+
+
+@app.route("/freunde/c/<int:chat_id>")
+def pl_chat_view(chat_id):
+    me = current_user()
+    chat = db.session.get(PlChat, chat_id)
+    if chat is None or not any(m.user_id == me.id for m in chat.members):
+        abort(404)
+    return render_template(
+        "pl_chat.html", chat=_pl_chat_summary(chat, me), chat_id=chat_id,
+        me_json={"id": me.id, "username": me.username},
+    )
 
 
 @app.route("/nex7")
@@ -1361,6 +1392,216 @@ def api_pl_like_comment(comment_id):
         liked = True
     db.session.commit()
     return jsonify({"ok": True, "liked": liked, "like_count": FeedCommentLike.query.filter_by(comment_id=comment_id).count()})
+
+
+# ==========================================================================
+# pinklemon "Freunde" -- follows + WhatsApp-style chats
+# ==========================================================================
+def _are_mutual(a_id, b_id):
+    return (
+        Subscription.query.filter_by(subscriber_id=a_id, channel_id=b_id).first() is not None
+        and Subscription.query.filter_by(subscriber_id=b_id, channel_id=a_id).first() is not None
+    )
+
+
+def _pl_chat_title(chat, me):
+    if chat.is_group:
+        return chat.name or "Gruppe"
+    other = next((m.user for m in chat.members if m.user_id != me.id), None)
+    return f"@{other.username}" if other else "Chat"
+
+
+def _pl_chat_summary(chat, me):
+    last = chat.messages[-1] if chat.messages else None
+    my_member = next((m for m in chat.members if m.user_id == me.id), None)
+    unread = 0
+    if my_member:
+        unread = sum(1 for m in chat.messages if m.id > my_member.last_read_id and m.sender_id != me.id)
+    title = _pl_chat_title(chat, me)
+    return {
+        "id": chat.id,
+        "is_group": chat.is_group,
+        "title": title,
+        "avatar_letter": pl_avatar_letter(title.lstrip("@")),
+        "members": [m.user.username for m in chat.members],
+        "last_text": (last.text[:80] if last else ""),
+        "last_sender": (last.sender.username if last else ""),
+        "last_ago": (pl_ago(last.created_at) if last else ""),
+        "unread": unread,
+    }
+
+
+def _pl_chat_list(me):
+    memberships = PlChatMember.query.filter_by(user_id=me.id).all()
+    chats = [db.session.get(PlChat, m.chat_id) for m in memberships]
+    chats = [c for c in chats if c is not None]
+    chats.sort(key=lambda c: c.last_activity or c.created_at, reverse=True)
+    return [_pl_chat_summary(c, me) for c in chats]
+
+
+@app.route("/api/pl/users/search")
+def api_pl_user_search():
+    me = current_user()
+    q = (request.args.get("q") or "").strip()
+    if len(q) < 1:
+        return jsonify({"ok": True, "users": []})
+    rows = (
+        User.query.filter(User.username.ilike(f"%{q}%"), User.id != me.id)
+        .order_by(User.username).limit(20).all()
+    )
+    return jsonify({"ok": True, "users": [
+        {
+            "username": u.username,
+            "avatar_letter": pl_avatar_letter(u.username),
+            "i_follow": Subscription.query.filter_by(subscriber_id=me.id, channel_id=u.id).first() is not None,
+            "mutual": _are_mutual(me.id, u.id),
+        }
+        for u in rows
+    ]})
+
+
+@app.route("/api/pl/follow/<username>", methods=["POST"])
+def api_pl_follow(username):
+    me = current_user()
+    user = User.query.filter(db.func.lower(User.username) == username.lower()).first()
+    if user is None or user.id == me.id:
+        return jsonify({"ok": False, "error": "bad_user"}), 400
+    existing = Subscription.query.filter_by(subscriber_id=me.id, channel_id=user.id).first()
+    if existing:
+        db.session.delete(existing)
+        following = False
+    else:
+        db.session.add(Subscription(subscriber_id=me.id, channel_id=user.id))
+        following = True
+    db.session.commit()
+    return jsonify({
+        "ok": True, "following": following, "mutual": _are_mutual(me.id, user.id),
+        "followers": Subscription.query.filter_by(channel_id=user.id).count(),
+    })
+
+
+@app.route("/api/pl/mutuals")
+def api_pl_mutuals():
+    """Everyone the current user follows who follows back -- the pool you
+    can DM or add to a group."""
+    me = current_user()
+    i_follow_ids = {s.channel_id for s in Subscription.query.filter_by(subscriber_id=me.id)}
+    follow_me_ids = {s.subscriber_id for s in Subscription.query.filter_by(channel_id=me.id)}
+    mutual_ids = i_follow_ids & follow_me_ids
+    users = User.query.filter(User.id.in_(mutual_ids)).order_by(User.username).all() if mutual_ids else []
+    return jsonify({"ok": True, "users": [
+        {"username": u.username, "avatar_letter": pl_avatar_letter(u.username)} for u in users
+    ]})
+
+
+@app.route("/api/pl/chats")
+def api_pl_chats():
+    return jsonify({"ok": True, "chats": _pl_chat_list(current_user())})
+
+
+@app.route("/api/pl/chats/dm/<username>", methods=["POST"])
+def api_pl_open_dm(username):
+    me = current_user()
+    other = User.query.filter(db.func.lower(User.username) == username.lower()).first()
+    if other is None or other.id == me.id:
+        return jsonify({"ok": False, "error": "bad_user"}), 400
+    if not _are_mutual(me.id, other.id):
+        return jsonify({"ok": False, "error": "not_mutual"}), 403
+    # existing 1:1?
+    my_chat_ids = {m.chat_id for m in PlChatMember.query.filter_by(user_id=me.id)}
+    for cid in my_chat_ids:
+        chat = db.session.get(PlChat, cid)
+        if chat and not chat.is_group and len(chat.members) == 2 and any(m.user_id == other.id for m in chat.members):
+            return jsonify({"ok": True, "chat_id": chat.id})
+    chat = PlChat(is_group=False, created_by=me.id)
+    db.session.add(chat)
+    db.session.flush()
+    db.session.add(PlChatMember(chat_id=chat.id, user_id=me.id))
+    db.session.add(PlChatMember(chat_id=chat.id, user_id=other.id))
+    db.session.commit()
+    return jsonify({"ok": True, "chat_id": chat.id})
+
+
+@app.route("/api/pl/chats/group", methods=["POST"])
+def api_pl_create_group():
+    me = current_user()
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()[:80]
+    usernames = data.get("members") or []
+    if not name:
+        return jsonify({"ok": False, "error": "no_name"}), 400
+    members = []
+    for uname in usernames[:50]:
+        u = User.query.filter(db.func.lower(User.username) == str(uname).lower()).first()
+        if u and u.id != me.id and _are_mutual(me.id, u.id):
+            members.append(u)
+    if not members:
+        return jsonify({"ok": False, "error": "no_members"}), 400
+    chat = PlChat(is_group=True, name=name, created_by=me.id)
+    db.session.add(chat)
+    db.session.flush()
+    db.session.add(PlChatMember(chat_id=chat.id, user_id=me.id))
+    for u in members:
+        db.session.add(PlChatMember(chat_id=chat.id, user_id=u.id))
+    db.session.commit()
+    return jsonify({"ok": True, "chat_id": chat.id})
+
+
+def _pl_require_chat_member(chat_id, me):
+    chat = db.session.get(PlChat, chat_id)
+    if chat is None or not any(m.user_id == me.id for m in chat.members):
+        return None
+    return chat
+
+
+@app.route("/api/pl/chats/<int:chat_id>/messages")
+def api_pl_chat_messages(chat_id):
+    me = current_user()
+    chat = _pl_require_chat_member(chat_id, me)
+    if chat is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    after = request.args.get("after", type=int) or 0
+    msgs = [m for m in chat.messages if m.id > after]
+    # mark read up to the newest message
+    if chat.messages:
+        my_member = next(m for m in chat.members if m.user_id == me.id)
+        my_member.last_read_id = max(my_member.last_read_id, chat.messages[-1].id)
+        db.session.commit()
+    return jsonify({"ok": True, "messages": [
+        {
+            "id": m.id, "text": m.text, "sender": m.sender.username,
+            "is_mine": m.sender_id == me.id, "created_ago": pl_ago(m.created_at),
+            "created_at": (m.created_at.replace(tzinfo=timezone.utc) if m.created_at.tzinfo is None else m.created_at).isoformat(),
+        }
+        for m in msgs
+    ]})
+
+
+@app.route("/api/pl/chats/<int:chat_id>/messages", methods=["POST"])
+def api_pl_send_message(chat_id):
+    me = current_user()
+    chat = _pl_require_chat_member(chat_id, me)
+    if chat is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    text = ((request.get_json(silent=True) or {}).get("text") or "").strip()[:4000]
+    if not text:
+        return jsonify({"ok": False, "error": "empty"}), 400
+    # 1:1 chats stay gated on the follow-each-other rule even after creation
+    if not chat.is_group:
+        other = next((m.user for m in chat.members if m.user_id != me.id), None)
+        if other and not _are_mutual(me.id, other.id):
+            return jsonify({"ok": False, "error": "not_mutual"}), 403
+    msg = PlMessage(chat_id=chat_id, sender_id=me.id, text=text)
+    db.session.add(msg)
+    chat.last_activity = datetime.now(timezone.utc)
+    db.session.flush()
+    my_member = next(m for m in chat.members if m.user_id == me.id)
+    my_member.last_read_id = msg.id
+    db.session.commit()
+    return jsonify({"ok": True, "message": {
+        "id": msg.id, "text": msg.text, "sender": me.username, "is_mine": True,
+        "created_ago": pl_ago(msg.created_at),
+    }})
 
 
 @app.route("/assistant")
