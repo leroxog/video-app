@@ -1052,15 +1052,16 @@ img { max-width: 100%; display: block; }
   .pl-nav a.pl-nav-post:hover { filter: brightness(1.06); }
   .pl-nav a.pl-nav-post:active { transform: scale(0.97); }
 
-  /* brand mark at the top of the sidebar */
+  /* brand mark at the top of the sidebar -- icon only (the wordmark lives
+     centred above the feed now) */
   .pl-nav a.pl-nav-brand {
-    display: flex; align-items: center; gap: 11px;
-    height: auto; padding: 4px 14px 14px; border-radius: 0;
-    margin-bottom: 4px;
+    display: flex; align-items: center; justify-content: flex-start;
+    height: auto; padding: 2px 16px 16px; border-radius: 0;
+    margin-bottom: 2px;
   }
-  .pl-nav-brand-mark { width: 34px; height: 34px; flex-shrink: 0; }
-  .pl-nav-brand-mark svg { width: 100%; height: 100%; }
-  .pl-nav-brand-name { font-weight: 900; font-size: 16px; letter-spacing: 0.06em; }
+  .pl-nav-brand-mark { width: 38px; height: 38px; flex-shrink: 0; }
+  .pl-nav-brand-mark svg { width: 100%; height: 100%; display: block; }
+  .pl-nav-brand-name { display: none; }
   .pl-nav a.pl-nav-brand.is-active { background: none; }
 
   /* your own profile, pinned to the bottom of the sidebar */
@@ -1210,4 +1211,17 @@ img { max-width: 100%; display: block; }
 .pl-prof2-tabs a.is-active::after {
   content: ""; position: absolute; left: 50%; transform: translateX(-50%);
   bottom: -1px; width: 46px; height: 3px; border-radius: 3px; background: var(--pl-pink);
+}
+
+/* centred HEXAGONUM mark at the top of the feed column (foto 1) */
+.pl-topbrand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 2px auto 12px;
+}
+.pl-topbrand svg { width: 34px; height: 34px; display: block; }
+@media (min-width: 900px) {
+  .pl-topbrand { margin-top: 0; margin-bottom: 14px; }
+  .pl-topbrand svg { width: 38px; height: 38px; }
 }

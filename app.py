@@ -1408,7 +1408,16 @@ def pl_game(slug):
 
 @app.route("/videos")
 def pl_videos():
-    return render_template("pl_videos.html")
+    me = current_user()
+    vids = (
+        FeedPost.query.filter(FeedPost.att_kind == "video")
+        .order_by(FeedPost.created_at.desc()).limit(40).all()
+    )
+    return render_template(
+        "pl_videos.html",
+        videos=[serialize_pl_post(v, me) for v in vids],
+        me_json={"id": me.id, "username": me.username},
+    )
 
 
 @app.route("/p/<int:post_id>")

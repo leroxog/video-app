@@ -180,7 +180,7 @@ def test_feed_is_shared_across_users(client):
     ("/freunde", b"Freunde"),
     ("/nex", b"nxMsgs"),
     ("/spiele", b"Wir arbeiten dran!"),
-    ("/videos", b"Wir arbeiten dran!"),
+    ("/videos", b"plVidFeed"),
 ])
 def test_pages_render_for_logged_in_user(client, path, label):
     signup(client, "alice")
@@ -197,11 +197,12 @@ def test_bottom_nav_present_on_every_tab(client):
         assert b'pl-nav-post' in data and b'compose=1' in data
 
 
-def test_videos_tab_says_coming_soon(client):
+def test_videos_tab_is_a_vertical_feed(client):
     signup(client, "alice")
     r = client.get("/videos").data
-    assert b"Wir arbeiten dran!" in r
-    assert "Diese Funktion ist im Moment noch nicht verfügbar".encode() in r
+    # TikTok-style vertical video feed (empty until someone uploads a video)
+    assert b"plVidFeed" in r and b"pinklemon-videos.js" in r
+    assert "Noch keine Videos".encode() in r
 
 
 # ---------------- Freunde ----------------

@@ -4,6 +4,7 @@
 {% block title %}HEXAGONUM{% endblock %}
 
 {% block screen %}
+{% include "partials/_pl_topbrand.html" %}
 <div class="pl-searchbar">
     <form class="pl-search" id="plSearchForm" action="{{ url_for('pl_home') }}" method="get">
         {{ plicon('search', 18) }}
