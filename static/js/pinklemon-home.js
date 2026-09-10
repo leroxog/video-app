@@ -51,11 +51,15 @@
     upd();
   }
 
+  var A = window.PlAttach || { mount: function () { return { get: function () { return {}; }, clear: function () {}, raw: function () { return null; } }; }, html: function () { return ""; } };
+
   // ---------------- new post ----------------
   var newPostSheet = $("#plNewPostSheet");
+  var postAtt = A.mount($("#plPostAtt"));
   function openNewPost() {
     $("#plPostHeading").value = "";
     $("#plPostBody").value = "";
+    postAtt.clear();
     if ($("#plPostHeading")._resetChar) $("#plPostHeading")._resetChar();
     if ($("#plPostBody")._resetChar) $("#plPostBody")._resetChar();
     openSheet(newPostSheet);
@@ -74,7 +78,9 @@
     var body = $("#plPostBody").value.trim();
     if (!heading) { $("#plPostHeading").focus(); return; }
     var btn = this; btn.disabled = true;
-    api("POST", "/api/pl/posts", { heading: heading, body: body }).then(function (j) {
+    var payload = { heading: heading, body: body };
+    var a = postAtt.get(); for (var k in a) payload[k] = a[k];
+    api("POST", "/api/pl/posts", payload).then(function (j) {
       btn.disabled = false;
       if (!j.ok) { window.plToast(j.error === "rate" ? "Kurz warten." : "Ging nicht."); return; }
       closeSheet(newPostSheet);
@@ -88,31 +94,37 @@
       feed.insertBefore(group, feed.firstChild);
       wirePost(group.querySelector(".pl-post"));
       group.addEventListener("animationend", function () { group.classList.remove("is-new"); }, { once: true });
+      postAtt.clear();
       window.plToast("Gepostet!");
     }).catch(function () { btn.disabled = false; window.plToast("Ging nicht."); });
   });
 
   // ---------------- P.S. ----------------
   var psSheet = $("#plPsSheet");
+  var psAtt = A.mount($("#plPsAtt"));
   var psTargetId = null;
   function openPs(postId) {
     psTargetId = postId;
     $("#plPsBody").value = "";
+    psAtt.clear();
     if ($("#plPsBody")._resetChar) $("#plPsBody")._resetChar();
     openSheet(psSheet);
     setTimeout(function () { $("#plPsBody").focus(); }, 250);
   }
   $("#plPsSubmit").addEventListener("click", function () {
     var body = $("#plPsBody").value.trim();
-    if (!body || !psTargetId) return;
+    var pa = psAtt.get();
+    if ((!body && !pa.att_kind) || !psTargetId) return;
     var btn = this; btn.disabled = true;
-    api("POST", "/api/pl/posts/" + psTargetId + "/ps", { body: body }).then(function (j) {
+    var psPayload = { body: body }; for (var pk in pa) psPayload[pk] = pa[pk];
+    var psRaw = psAtt.raw();
+    api("POST", "/api/pl/posts/" + psTargetId + "/ps", psPayload).then(function (j) {
       btn.disabled = false;
       if (!j.ok) { window.plToast(j.error === "exists" ? "Du hast schon ein P.S." : "Ging nicht."); return; }
       var group = document.querySelector('.pl-post-group[data-post-id="' + psTargetId + '"]');
       if (group) {
         var slot = group.querySelector(".pl-ps-slot");
-        slot.innerHTML = '<div class="pl-ps-card is-new">' + esc(body) + '</div>';
+        slot.innerHTML = '<div class="pl-ps-card is-new">' + esc(body) + A.html(psRaw) + '</div>';
         group.dataset.hasPs = "1";
         var post = group.querySelector(".pl-post");
         if (post) post.dataset.hasPs = "1";
@@ -141,6 +153,7 @@
       + '<span class="pl-comment-user">@' + esc(c.author.username) + '</span>'
       + '<span class="pl-comment-time">' + timeAgo(c.created_at) + '</span></div>'
       + '<div class="pl-comment-body">' + esc(c.body) + '</div>'
+      + A.html(c.attachment)
       + '<div class="pl-comment-actions">'
       + '<button type="button" data-clike class="' + liked.trim() + '">&#9829; <b class="pl-clike-count">' + c.like_count + '</b></button>'
       + (c.parent_id ? "" : '<button type="button" data-creply>Antworten</button>')
@@ -162,7 +175,8 @@
       + '<div class="pl-comment-compose">'
       +   '<textarea class="pl-comment-input" rows="1" maxlength="2000" placeholder="Kommentieren ..."></textarea>'
       +   '<button type="button" class="pl-comment-send" aria-label="Senden">' + SEND_SVG + '</button>'
-      + '</div>';
+      + '</div>'
+      + '<div class="pl-comment-att"></div>';
     panel.dataset.built = "1";
     panel._replyTo = null;
 
@@ -170,6 +184,7 @@
     var replyTarget = panel.querySelector(".pl-reply-target");
     var input = panel.querySelector(".pl-comment-input");
     var postId = group.dataset.postId;
+    var cAtt = A.mount(panel.querySelector(".pl-comment-att"));
 
     listEl.addEventListener("click", function (e) {
       var cEl = e.target.closest(".pl-comment");
@@ -197,11 +212,14 @@
 
     function send() {
       var body = input.value.trim();
-      if (!body) return;
+      var a = cAtt.get();
+      if (!body && !a.att_kind) return;
       var payload = { body: body };
+      for (var k in a) payload[k] = a[k];
       if (panel._replyTo) payload.parent_id = Number(panel._replyTo);
       input.value = "";
       input.style.height = "auto";
+      cAtt.clear();
       api("POST", "/api/pl/posts/" + postId + "/comments", payload).then(function (j) {
         if (!j.ok) { window.plToast("Ging nicht."); return; }
         var emptyEl = listEl.querySelector(".pl-empty");

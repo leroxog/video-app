@@ -7,6 +7,8 @@
   var sendBtn = document.getElementById("plMsgSend");
   var lastId = 0;
   var polling = null;
+  var A = window.PlAttach || { mount: function () { return { get: function () { return {}; }, clear: function () {}, raw: function () { return null; } }; }, html: function () { return ""; } };
+  var msgAtt = A.mount(document.getElementById("plMsgAtt"));
 
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
 
@@ -23,7 +25,8 @@
     div.className = "pl-msg " + (m.is_mine ? "me" : "them");
     var html = "";
     if (CHAT.isGroup && !m.is_mine) html += '<div class="pl-msg-sender">@' + esc(m.sender) + "</div>";
-    html += esc(m.text).replace(/\n/g, "<br>");
+    if (m.text) html += esc(m.text).replace(/\n/g, "<br>");
+    if (m.attachment) html += A.html(m.attachment);
     html += '<div class="pl-msg-time">' + esc(m.created_ago) + "</div>";
     div.innerHTML = html;
     msgsEl.appendChild(div);
@@ -47,11 +50,15 @@
 
   function send() {
     var text = input.value.trim();
-    if (!text) return;
+    var a = msgAtt.get();
+    if (!text && !a.att_kind) return;
+    var payload = { text: text };
+    for (var k in a) payload[k] = a[k];
     input.value = "";
     input.style.height = "auto";
+    msgAtt.clear();
     fetch("/api/pl/chats/" + CHAT.id + "/messages", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: text }),
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
     }).then(function (r) { return r.json(); }).then(function (j) {
       if (!j.ok) { window.plToast(j.error === "not_mutual" ? "Ihr folgt euch nicht mehr gegenseitig." : "Ging nicht."); return; }
       addMsg(j.message);

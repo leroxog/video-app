@@ -656,6 +656,12 @@ def ensure_sqlite_columns_exist():
         # exists to self-heal for every other table.
         "ai_personality": [("mimic_user_style", "BOOLEAN NOT NULL DEFAULT 0")],
         "ai_generated_media": [("liked", "BOOLEAN NOT NULL DEFAULT 0")],
+        # pinklemon attachments: photo / video / playable game under any
+        # post, comment, P.S. or chat message.
+        "feed_post": [("att_kind", "VARCHAR(12)"), ("att_value", "VARCHAR(255)")],
+        "feed_comment": [("att_kind", "VARCHAR(12)"), ("att_value", "VARCHAR(255)")],
+        "feed_ps": [("att_kind", "VARCHAR(12)"), ("att_value", "VARCHAR(255)")],
+        "pl_message": [("att_kind", "VARCHAR(12)"), ("att_value", "VARCHAR(255)")],
         # 7Ai (2026-09-08, see ai_assistant.py's SEVENAI_SYSTEM_PROMPT) --
         # existing ai_chat rows predate this column and are all Nex chats,
         # so the default backfills them correctly with no extra code.
@@ -740,6 +746,14 @@ def ensure_columns_exist():
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS bio VARCHAR(300)',
         'ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS age_rating INTEGER NOT NULL DEFAULT 0',
         'ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS previous_web_code TEXT',
+        'ALTER TABLE feed_post ADD COLUMN IF NOT EXISTS att_kind VARCHAR(12)',
+        'ALTER TABLE feed_post ADD COLUMN IF NOT EXISTS att_value VARCHAR(255)',
+        'ALTER TABLE feed_comment ADD COLUMN IF NOT EXISTS att_kind VARCHAR(12)',
+        'ALTER TABLE feed_comment ADD COLUMN IF NOT EXISTS att_value VARCHAR(255)',
+        'ALTER TABLE feed_ps ADD COLUMN IF NOT EXISTS att_kind VARCHAR(12)',
+        'ALTER TABLE feed_ps ADD COLUMN IF NOT EXISTS att_value VARCHAR(255)',
+        'ALTER TABLE pl_message ADD COLUMN IF NOT EXISTS att_kind VARCHAR(12)',
+        'ALTER TABLE pl_message ADD COLUMN IF NOT EXISTS att_value VARCHAR(255)',
         # Root cause confirmed live (psycopg2.errors.UndefinedColumn):
         # ai_personality was created by db.create_all() back when the
         # AiPersonality model first shipped (no mimic_user_style yet) --
@@ -1164,9 +1178,11 @@ def serialize_pl_post(post, me):
             "avatar_letter": pl_avatar_letter(post.author.username),
         },
         "ps": (
-            {"body": post.ps.body, "created_ago": pl_ago(post.ps.created_at)}
+            {"body": post.ps.body, "created_ago": pl_ago(post.ps.created_at),
+             "attachment": _pl_attachment(post.ps)}
             if post.ps else None
         ),
+        "attachment": _pl_attachment(post),
     }
 
 
@@ -1301,6 +1317,68 @@ PL_GAMES = [
 ]
 _PL_GAMES_BY_SLUG = {g["slug"]: g for g in PL_GAMES}
 
+# ---- attachments: photo / video / playable game under any text ----
+PL_MEDIA_DIR = os.path.join(app.root_path, "static", "uploads", "pl")
+os.makedirs(PL_MEDIA_DIR, exist_ok=True)
+PL_IMAGE_EXT = {"png", "jpg", "jpeg", "gif", "webp"}
+PL_VIDEO_EXT = {"mp4", "webm", "mov", "m4v"}
+
+
+def _pl_attachment(row):
+    """row is any model with att_kind / att_value -> a small dict for the
+    frontend, or None."""
+    kind = getattr(row, "att_kind", None)
+    value = getattr(row, "att_value", None)
+    if not kind or not value:
+        return None
+    if kind == "game":
+        g = _PL_GAMES_BY_SLUG.get(value)
+        if not g:
+            return None
+        return {"kind": "game", "value": value, "url": f"/spiele/{value}", "title": g["title"]}
+    if kind in ("image", "video"):
+        return {"kind": kind, "value": value, "url": f"/static/uploads/pl/{value}"}
+    return None
+
+
+def _pl_read_att(data):
+    """Validate an {att_kind, att_value} pair from a request body.
+    Returns (kind, value) or (None, None)."""
+    kind = (data.get("att_kind") or "").strip()
+    value = (data.get("att_value") or "").strip()
+    if kind == "game" and value in _PL_GAMES_BY_SLUG:
+        return "game", value
+    if kind in ("image", "video"):
+        safe = os.path.basename(value)
+        if safe == value and safe and os.path.exists(os.path.join(PL_MEDIA_DIR, safe)):
+            return kind, safe
+    return None, None
+
+
+@app.route("/api/pl/upload", methods=["POST"])
+def api_pl_upload():
+    current_user()
+    f = request.files.get("file")
+    if f is None or not f.filename:
+        return jsonify({"ok": False, "error": "no_file"}), 400
+    ext = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else ""
+    if ext in PL_IMAGE_EXT:
+        kind = "image"
+    elif ext in PL_VIDEO_EXT:
+        kind = "video"
+    else:
+        return jsonify({"ok": False, "error": "bad_type"}), 400
+    name = f"{uuid.uuid4().hex}.{ext}"
+    f.save(os.path.join(PL_MEDIA_DIR, name))
+    return jsonify({"ok": True, "kind": kind, "value": name, "url": f"/static/uploads/pl/{name}"})
+
+
+@app.route("/api/pl/games")
+def api_pl_games():
+    return jsonify({"ok": True, "games": [
+        {"slug": g["slug"], "title": g["title"], "sub": g["sub"]} for g in PL_GAMES
+    ]})
+
 
 @app.route("/spiele")
 def pl_spiele():
@@ -1345,7 +1423,9 @@ def api_pl_create_post():
     body = (data.get("body") or "").strip()[:4000] or None
     if not heading:
         return jsonify({"ok": False, "error": "empty"}), 400
-    post = FeedPost(author_id=me.id, heading=heading, body=body)
+    att_kind, att_value = _pl_read_att(data)
+    post = FeedPost(author_id=me.id, heading=heading, body=body,
+                    att_kind=att_kind, att_value=att_value)
     db.session.add(post)
     db.session.commit()
     return jsonify({"ok": True, "post": serialize_pl_post(post, me), "html": render_pl_post(post, me)})
@@ -1388,10 +1468,12 @@ def api_pl_add_ps(post_id):
         return jsonify({"ok": False, "error": "not_yours"}), 403
     if post.ps is not None:
         return jsonify({"ok": False, "error": "exists"}), 409
-    body = (request.get_json(silent=True) or {}).get("body", "").strip()[:2000]
-    if not body:
+    data = request.get_json(silent=True) or {}
+    body = (data.get("body") or "").strip()[:2000]
+    att_kind, att_value = _pl_read_att(data)
+    if not body and not att_kind:
         return jsonify({"ok": False, "error": "empty"}), 400
-    db.session.add(FeedPS(post_id=post_id, body=body))
+    db.session.add(FeedPS(post_id=post_id, body=body, att_kind=att_kind, att_value=att_value))
     db.session.commit()
     return jsonify({"ok": True})
 
@@ -1406,6 +1488,7 @@ def _serialize_pl_comment(c, me):
         "like_count": len(c.likes),
         "liked_by_me": me.id in liked_ids,
         "author": {"username": c.author.username, "avatar_letter": pl_avatar_letter(c.author.username)},
+        "attachment": _pl_attachment(c),
     }
 
 
@@ -1434,7 +1517,8 @@ def api_pl_add_comment(post_id):
         return jsonify({"ok": False, "error": "not_found"}), 404
     data = request.get_json(silent=True) or {}
     body = (data.get("body") or "").strip()[:2000]
-    if not body:
+    att_kind, att_value = _pl_read_att(data)
+    if not body and not att_kind:
         return jsonify({"ok": False, "error": "empty"}), 400
     parent_id = data.get("parent_id")
     if parent_id is not None:
@@ -1444,7 +1528,8 @@ def api_pl_add_comment(post_id):
         # collapse a reply-to-a-reply onto the same top-level thread
         if parent.parent_id is not None:
             parent_id = parent.parent_id
-    c = FeedComment(post_id=post_id, author_id=me.id, parent_id=parent_id, body=body)
+    c = FeedComment(post_id=post_id, author_id=me.id, parent_id=parent_id, body=body,
+                    att_kind=att_kind, att_value=att_value)
     db.session.add(c)
     db.session.commit()
     return jsonify({"ok": True, "comment": _serialize_pl_comment(c, me)})
@@ -1645,6 +1730,7 @@ def api_pl_chat_messages(chat_id):
             "id": m.id, "text": m.text, "sender": m.sender.username,
             "is_mine": m.sender_id == me.id, "created_ago": pl_ago(m.created_at),
             "created_at": (m.created_at.replace(tzinfo=timezone.utc) if m.created_at.tzinfo is None else m.created_at).isoformat(),
+            "attachment": _pl_attachment(m),
         }
         for m in msgs
     ]})
@@ -1656,15 +1742,18 @@ def api_pl_send_message(chat_id):
     chat = _pl_require_chat_member(chat_id, me)
     if chat is None:
         return jsonify({"ok": False, "error": "not_found"}), 404
-    text = ((request.get_json(silent=True) or {}).get("text") or "").strip()[:4000]
-    if not text:
+    data = request.get_json(silent=True) or {}
+    text = (data.get("text") or "").strip()[:4000]
+    att_kind, att_value = _pl_read_att(data)
+    if not text and not att_kind:
         return jsonify({"ok": False, "error": "empty"}), 400
     # 1:1 chats stay gated on the follow-each-other rule even after creation
     if not chat.is_group:
         other = next((m.user for m in chat.members if m.user_id != me.id), None)
         if other and not _are_mutual(me.id, other.id):
             return jsonify({"ok": False, "error": "not_mutual"}), 403
-    msg = PlMessage(chat_id=chat_id, sender_id=me.id, text=text)
+    msg = PlMessage(chat_id=chat_id, sender_id=me.id, text=text,
+                    att_kind=att_kind, att_value=att_value)
     db.session.add(msg)
     chat.last_activity = datetime.now(timezone.utc)
     db.session.flush()
@@ -1673,7 +1762,7 @@ def api_pl_send_message(chat_id):
     db.session.commit()
     return jsonify({"ok": True, "message": {
         "id": msg.id, "text": msg.text, "sender": me.username, "is_mine": True,
-        "created_ago": pl_ago(msg.created_at),
+        "created_ago": pl_ago(msg.created_at), "attachment": _pl_attachment(msg),
     }})
 
 

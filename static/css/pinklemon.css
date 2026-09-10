@@ -44,6 +44,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 
 html, body {
   margin: 0;
@@ -348,6 +349,60 @@ img { max-width: 100%; display: block; }
   animation: plPostIn 0.2s ease;
 }
 
+/* ===== attachments: photo / video / playable game under any text ===== */
+.pl-att { margin-top: 10px; }
+.pl-att img, .pl-att video {
+  display: block; width: 100%; max-height: 440px; border-radius: 16px;
+  border: 1px solid var(--pl-border); background: #000;
+}
+.pl-att img { object-fit: cover; }
+.pl-att-game > .pl-att-game {
+  border: 1px solid var(--pl-border); border-radius: 16px; overflow: hidden; background: #000;
+}
+.pl-att-game .pl-att-game-bar {
+  font-size: 12px; font-weight: 800; padding: 8px 12px; color: var(--pl-text);
+  background: var(--pl-surface-2); border-bottom: 1px solid var(--pl-border);
+}
+.pl-att-game iframe {
+  display: block; width: 100%; height: 420px; border: 0; background: #0b0b0d;
+}
+.pl-msg .pl-att { margin-top: 8px; }
+.pl-msg .pl-att img, .pl-msg .pl-att video { max-height: 320px; }
+.pl-msg .pl-att-game iframe { height: 300px; }
+
+/* composer attach controls */
+.pl-attbar { position: relative; display: inline-flex; align-items: center; gap: 6px; }
+.pl-attbtn {
+  width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--pl-border);
+  background: var(--pl-surface-2); color: var(--pl-text); font-size: 15px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+}
+.pl-attbtn:active { transform: scale(0.9); }
+.pl-attmenu {
+  position: absolute; bottom: 42px; left: 0; z-index: 5; min-width: 190px;
+  background: var(--pl-surface-3); border: 1px solid var(--pl-border); border-radius: 14px;
+  padding: 6px; box-shadow: var(--pl-shadow);
+  -webkit-backdrop-filter: var(--pl-blur); backdrop-filter: var(--pl-blur);
+}
+.pl-attmenu-load { padding: 8px 10px; font-size: 12px; color: var(--pl-text-faint); }
+.pl-attgame {
+  display: block; width: 100%; text-align: left; border: none; background: none;
+  color: var(--pl-text); font-size: 13px; font-weight: 700; padding: 9px 10px; border-radius: 9px;
+}
+.pl-attgame:active, .pl-attgame:hover { background: var(--pl-surface-2); }
+.pl-attprev { display: inline-flex; align-items: center; gap: 6px; }
+.pl-attprev img { width: 34px; height: 34px; border-radius: 8px; object-fit: cover; }
+.pl-attchip {
+  font-size: 12px; font-weight: 700; color: var(--pl-text); background: var(--pl-surface-2);
+  border: 1px solid var(--pl-border); border-radius: 999px; padding: 5px 10px;
+}
+.pl-attx { border: none; background: none; color: var(--pl-text-faint); font-size: 17px; line-height: 1; }
+
+.pl-comment-att { margin-top: 6px; }
+.pl-chat-composewrap { flex-shrink: 0; background: var(--pl-surface); border-top: 1px solid var(--pl-border); }
+.pl-chat-composewrap .pl-chat-compose { border-top: none; background: none; }
+.pl-chat-att:not(:empty) { padding: 8px 14px 0; }
+
 /* double-tap like burst */
 .pl-like-burst {
   position: absolute;
@@ -561,8 +616,10 @@ img { max-width: 100%; display: block; }
 }
 .pl-compose-foot {
   display: flex;
-  justify-content: flex-end;
-  margin-top: 2px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 4px;
 }
 .pl-char { font-size: 12px; color: var(--pl-text-faint); }
 .pl-char.over { color: var(--pl-pink); font-weight: 700; }

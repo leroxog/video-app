@@ -47,7 +47,7 @@
         </div>
         <input class="pl-input" id="plPostHeading" maxlength="140" placeholder="Überschrift" autocomplete="off">
         <textarea class="pl-textarea" id="plPostBody" maxlength="4000" placeholder="Was gibt's?"></textarea>
-        <div class="pl-compose-foot"><span class="pl-char" id="plPostChar">0 / 140</span></div>
+        <div class="pl-compose-foot"><span id="plPostAtt"></span><span class="pl-char" id="plPostChar">0 / 140</span></div>
     </div>
 </div>
 
@@ -62,7 +62,7 @@
         </div>
         <p style="color:var(--pl-text-dim);font-size:13px;margin:0 0 12px;">Eine kurze Ergänzung zu deinem Post. Geht nur einmal.</p>
         <textarea class="pl-textarea" id="plPsBody" maxlength="2000" placeholder="P.S. ..."></textarea>
-        <div class="pl-compose-foot"><span class="pl-char" id="plPsChar">0 / 2000</span></div>
+        <div class="pl-compose-foot"><span id="plPsAtt"></span><span class="pl-char" id="plPsChar">0 / 2000</span></div>
     </div>
 </div>
 {% endblock %}
@@ -71,5 +71,6 @@
 <script>
     window.PL_ME = {{ me_json | tojson }};
 </script>
+<script src="{{ url_for('static', filename='js/pl-attach.js') }}"></script>
 <script src="{{ url_for('static', filename='js/pinklemon-home.js') }}"></script>
 {% endblock %}

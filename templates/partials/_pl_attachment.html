@@ -1,0 +1,16 @@
+{%- macro pl_att(att) -%}
+{%- if att -%}
+<div class="pl-att pl-att-{{ att.kind }}">
+  {%- if att.kind == 'image' -%}
+  <img src="{{ att.url }}" loading="lazy" alt="Foto">
+  {%- elif att.kind == 'video' -%}
+  <video src="{{ att.url }}" controls preload="metadata" playsinline></video>
+  {%- elif att.kind == 'game' -%}
+  <div class="pl-att-game">
+    <div class="pl-att-game-bar">🎮 {{ att.title }}</div>
+    <iframe src="{{ att.url }}" loading="lazy" title="{{ att.title }}"></iframe>
+  </div>
+  {%- endif -%}
+</div>
+{%- endif -%}
+{%- endmacro -%}

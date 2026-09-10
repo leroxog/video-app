@@ -688,6 +688,10 @@ class FeedPost(db.Model):
     body = db.Column(db.Text, nullable=True)
     share_count = db.Column(db.Integer, nullable=False, default=0)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    # optional attachment shown under the text: "image" / "video" -> att_value
+    # is the stored filename; "game" -> att_value is a game slug.
+    att_kind = db.Column(db.String(12), nullable=True)
+    att_value = db.Column(db.String(255), nullable=True)
 
     author = db.relationship("User")
     likes = db.relationship("FeedLike", backref="post", lazy=True, cascade="all, delete-orphan")
@@ -714,6 +718,8 @@ class FeedComment(db.Model):
     parent_id = db.Column(db.Integer, db.ForeignKey("feed_comment.id"), nullable=True)
     body = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    att_kind = db.Column(db.String(12), nullable=True)
+    att_value = db.Column(db.String(255), nullable=True)
 
     author = db.relationship("User")
     likes = db.relationship("FeedCommentLike", backref="comment", lazy=True, cascade="all, delete-orphan")
@@ -737,6 +743,8 @@ class FeedPS(db.Model):
     post_id = db.Column(db.Integer, db.ForeignKey("feed_post.id"), nullable=False, unique=True)
     body = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    att_kind = db.Column(db.String(12), nullable=True)
+    att_value = db.Column(db.String(255), nullable=True)
 
 
 # ==========================================================================
@@ -781,5 +789,7 @@ class PlMessage(db.Model):
     sender_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     text = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    att_kind = db.Column(db.String(12), nullable=True)
+    att_value = db.Column(db.String(255), nullable=True)
     sender = db.relationship("User")
 

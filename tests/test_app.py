@@ -343,3 +343,52 @@ def test_each_game_page_loads(client, slug):
 def test_unknown_game_404s(client):
     signup(client, "alice")
     assert client.get("/spiele/nope").status_code == 404
+
+
+# ---------------- attachments (photo / video / game under any text) ----------------
+
+def test_games_list_endpoint(client):
+    signup(client, "alice")
+    j = client.get("/api/pl/games").get_json()
+    slugs = {g["slug"] for g in j["games"]}
+    assert {"block-blast", "subway-surfers"} <= slugs
+
+
+def test_post_can_carry_a_playable_game(client):
+    signup(client, "alice")
+    j = client.post("/api/pl/posts", json={
+        "heading": "Zock das", "att_kind": "game", "att_value": "block-blast",
+    }).get_json()
+    assert j["ok"] and j["post"]["attachment"]["kind"] == "game"
+    assert b'iframe' in client.get("/").data and b"/spiele/block-blast" in client.get("/").data
+
+
+def test_post_rejects_unknown_game_slug_but_still_posts(client):
+    signup(client, "alice")
+    j = client.post("/api/pl/posts", json={
+        "heading": "Kein Spiel", "att_kind": "game", "att_value": "does-not-exist",
+    }).get_json()
+    assert j["ok"] and j["post"]["attachment"] is None
+
+
+def test_comment_and_message_accept_game_attachment(client):
+    signup(client, "alice")
+    bob = make_user(client, "bob")
+    client.post("/api/pl/follow/bob"); bob.post("/api/pl/follow/alice")
+    pid = client.post("/api/pl/posts", json={"heading": "P"}).get_json()["post"]["id"]
+    c = client.post(f"/api/pl/posts/{pid}/comments", json={
+        "body": "", "att_kind": "game", "att_value": "dress-up",
+    }).get_json()
+    assert c["ok"] and c["comment"]["attachment"]["value"] == "dress-up"
+    cid = client.post("/api/pl/chats/dm/bob").get_json()["chat_id"]
+    m = client.post(f"/api/pl/chats/{cid}/messages", json={
+        "text": "", "att_kind": "game", "att_value": "help-them",
+    }).get_json()
+    assert m["ok"] and m["message"]["attachment"]["kind"] == "game"
+
+
+def test_upload_rejects_non_media(client):
+    signup(client, "alice")
+    data = {"file": (io.BytesIO(b"nope"), "note.txt")}
+    r = client.post("/api/pl/upload", data=data, content_type="multipart/form-data")
+    assert r.status_code == 400

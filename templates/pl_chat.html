@@ -36,11 +36,14 @@
             </div>
         </div>
     </div>
-    <div class="pl-chat-compose">
-        <textarea id="plMsgInput" rows="1" maxlength="4000" placeholder="Nachricht"></textarea>
-        <button id="plMsgSend" aria-label="Senden">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
-        </button>
+    <div class="pl-chat-composewrap">
+        <div class="pl-chat-att" id="plMsgAtt"></div>
+        <div class="pl-chat-compose">
+            <textarea id="plMsgInput" rows="1" maxlength="4000" placeholder="Nachricht"></textarea>
+            <button id="plMsgSend" aria-label="Senden">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
+            </button>
+        </div>
     </div>
 </div>
 <div class="pl-toast" id="plToast"></div>
@@ -49,6 +52,7 @@
     window.PL_CHAT = { id: {{ chat_id }}, isGroup: {{ 'true' if chat.is_group else 'false' }} };
     window.PL_ME = {{ me_json | tojson }};
 </script>
+<script src="{{ url_for('static', filename='js/pl-attach.js') }}"></script>
 <script src="{{ url_for('static', filename='js/pinklemon-chat.js') }}"></script>
 </body>
 </html>

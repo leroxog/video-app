@@ -1,4 +1,5 @@
 {%- from "partials/_pl_icons.html" import plicon -%}
+{%- from "partials/_pl_attachment.html" import pl_att -%}
 <div class="pl-post-group" data-post-id="{{ post.id }}"
      data-has-ps="{{ '1' if post.ps else '0' }}"
      data-mine="{{ '1' if post.is_mine else '0' }}">
@@ -18,6 +19,7 @@
       </div>
       <div class="pl-post-heading">{{ post.heading }}</div>
       {% if post.body %}<div class="pl-post-body">{{ post.body }}</div>{% endif %}
+      {{ pl_att(post.attachment) }}
 
       <div class="pl-post-actions">
           {% if post.is_mine and not post.ps %}
@@ -33,7 +35,7 @@
 
   <div class="pl-ps-slot">
   {% if post.ps %}
-      <div class="pl-ps-card">{{ post.ps.body }}</div>
+      <div class="pl-ps-card">{% if post.ps.body %}{{ post.ps.body }}{% endif %}{{ pl_att(post.ps.attachment) }}</div>
   {% endif %}
   </div>
 
