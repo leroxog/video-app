@@ -631,6 +631,9 @@ def ensure_sqlite_columns_exist():
         ],
         "studio_block": [("kind", "VARCHAR(20) NOT NULL DEFAULT 'normal'")],
         "user": [
+            ("pl_display_name", "VARCHAR(50)"),
+            ("pl_avatar_image", "VARCHAR(255)"),
+            ("pl_banner_image", "VARCHAR(255)"),
             ("purpose_of_use", "VARCHAR(20)"),
             ("country", "VARCHAR(100)"),
             ("region", "VARCHAR(100)"),
@@ -746,6 +749,9 @@ def ensure_columns_exist():
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS bio VARCHAR(300)',
         'ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS age_rating INTEGER NOT NULL DEFAULT 0',
         'ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS previous_web_code TEXT',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS pl_display_name VARCHAR(50)',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS pl_avatar_image VARCHAR(255)',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS pl_banner_image VARCHAR(255)',
         'ALTER TABLE feed_post ADD COLUMN IF NOT EXISTS att_kind VARCHAR(12)',
         'ALTER TABLE feed_post ADD COLUMN IF NOT EXISTS att_value VARCHAR(255)',
         'ALTER TABLE feed_comment ADD COLUMN IF NOT EXISTS att_kind VARCHAR(12)',
@@ -1161,6 +1167,25 @@ def pl_avatar_letter(username):
     return (username or "?").lstrip("@")[:1].upper() or "?"
 
 
+def pl_display_name(user):
+    """The "Spitzname" -- what shows big everywhere. Falls back to the
+    @username when unset."""
+    return (getattr(user, "pl_display_name", None) or "").strip() or user.username
+
+
+def _pl_media_url(name):
+    return f"/static/uploads/pl/{name}" if name else None
+
+
+def _pl_user_brief(user):
+    return {
+        "username": user.username,
+        "name": pl_display_name(user),
+        "avatar_letter": pl_avatar_letter(user.username),
+        "avatar_url": _pl_media_url(getattr(user, "pl_avatar_image", None)),
+    }
+
+
 def serialize_pl_post(post, me):
     liked_ids = {pl.user_id for pl in post.likes}
     return {
@@ -1173,10 +1198,7 @@ def serialize_pl_post(post, me):
         "comment_count": len(post.comments),
         "liked_by_me": me.id in liked_ids,
         "is_mine": post.author_id == me.id,
-        "author": {
-            "username": post.author.username,
-            "avatar_letter": pl_avatar_letter(post.author.username),
-        },
+        "author": _pl_user_brief(post.author),
         "ps": (
             {"body": post.ps.body, "created_ago": pl_ago(post.ps.created_at),
              "attachment": _pl_attachment(post.ps)}
@@ -1269,8 +1291,38 @@ def pl_profile(username):
         followers=Subscription.query.filter_by(channel_id=user.id).count(),
         following=Subscription.query.filter_by(subscriber_id=user.id).count(),
         avatar_letter=pl_avatar_letter(user.username), joined=joined,
+        display_name=pl_display_name(user),
+        avatar_url=_pl_media_url(user.pl_avatar_image),
+        banner_url=_pl_media_url(user.pl_banner_image),
         posts=[serialize_pl_post(p, me) for p in user_posts],
     )
+
+
+@app.route("/api/pl/profile", methods=["POST"])
+def api_pl_update_profile():
+    """Edit your own HEXAGONUM profile: display name ("Spitzname"),
+    avatar image, banner image. multipart form -- any field optional."""
+    me = current_user()
+    if "display_name" in request.form:
+        name = request.form["display_name"].strip()[:50]
+        me.pl_display_name = name or None
+    for field, col, ratio in (("avatar", "pl_avatar_image", None), ("banner", "pl_banner_image", None)):
+        f = request.files.get(field)
+        if f is None or not f.filename:
+            continue
+        ext = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else ""
+        if ext not in PL_IMAGE_EXT:
+            return jsonify({"ok": False, "error": "bad_type"}), 400
+        name = f"{uuid.uuid4().hex}.{ext}"
+        f.save(os.path.join(PL_MEDIA_DIR, name))
+        setattr(me, col, name)
+    db.session.commit()
+    return jsonify({
+        "ok": True,
+        "display_name": pl_display_name(me),
+        "avatar_url": _pl_media_url(me.pl_avatar_image),
+        "banner_url": _pl_media_url(me.pl_banner_image),
+    })
 
 
 @app.route("/freunde/c/<int:chat_id>")
@@ -1509,7 +1561,7 @@ def _serialize_pl_comment(c, me):
         "created_at": (c.created_at.replace(tzinfo=timezone.utc) if c.created_at.tzinfo is None else c.created_at).isoformat(),
         "like_count": len(c.likes),
         "liked_by_me": me.id in liked_ids,
-        "author": {"username": c.author.username, "avatar_letter": pl_avatar_letter(c.author.username)},
+        "author": _pl_user_brief(c.author),
         "attachment": _pl_attachment(c),
     }
 
@@ -1588,7 +1640,7 @@ def _pl_chat_title(chat, me):
     if chat.is_group:
         return chat.name or "Gruppe"
     other = next((m.user for m in chat.members if m.user_id != me.id), None)
-    return f"@{other.username}" if other else "Chat"
+    return pl_display_name(other) if other else "Chat"
 
 
 def _pl_chat_summary(chat, me):
@@ -1598,14 +1650,16 @@ def _pl_chat_summary(chat, me):
     if my_member:
         unread = sum(1 for m in chat.messages if m.id > my_member.last_read_id and m.sender_id != me.id)
     title = _pl_chat_title(chat, me)
+    other = None if chat.is_group else next((m.user for m in chat.members if m.user_id != me.id), None)
     return {
         "id": chat.id,
         "is_group": chat.is_group,
         "title": title,
-        "avatar_letter": pl_avatar_letter(title.lstrip("@")),
-        "members": [m.user.username for m in chat.members],
+        "avatar_letter": pl_avatar_letter(title),
+        "avatar_url": _pl_media_url(getattr(other, "pl_avatar_image", None)) if other else None,
+        "members": [pl_display_name(m.user) for m in chat.members],
         "last_text": (last.text[:80] if last else ""),
-        "last_sender": (last.sender.username if last else ""),
+        "last_sender": (pl_display_name(last.sender) if last else ""),
         "last_ago": (pl_ago(last.created_at) if last else ""),
         "unread": unread,
     }
@@ -1749,7 +1803,8 @@ def api_pl_chat_messages(chat_id):
         db.session.commit()
     return jsonify({"ok": True, "messages": [
         {
-            "id": m.id, "text": m.text, "sender": m.sender.username,
+            "id": m.id, "text": m.text,
+            "sender": m.sender.username, "sender_name": pl_display_name(m.sender),
             "is_mine": m.sender_id == me.id, "created_ago": pl_ago(m.created_at),
             "created_at": (m.created_at.replace(tzinfo=timezone.utc) if m.created_at.tzinfo is None else m.created_at).isoformat(),
             "attachment": _pl_attachment(m),
@@ -1783,7 +1838,8 @@ def api_pl_send_message(chat_id):
     my_member.last_read_id = msg.id
     db.session.commit()
     return jsonify({"ok": True, "message": {
-        "id": msg.id, "text": msg.text, "sender": me.username, "is_mine": True,
+        "id": msg.id, "text": msg.text,
+        "sender": me.username, "sender_name": pl_display_name(me), "is_mine": True,
         "created_ago": pl_ago(msg.created_at), "attachment": _pl_attachment(msg),
     }})
 

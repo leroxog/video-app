@@ -63,6 +63,12 @@ class User(db.Model):
     nex7_persona = db.Column(db.String(20), nullable=True)
     # Free-text short bio shown on the profile / next to posts.
     bio = db.Column(db.String(300), nullable=True)
+    # HEXAGONUM profile: editable display name ("Spitzname", shown big
+    # everywhere instead of @username) + own avatar / banner images
+    # (filenames under static/uploads/pl).
+    pl_display_name = db.Column(db.String(50), nullable=True)
+    pl_avatar_image = db.Column(db.String(255), nullable=True)
+    pl_banner_image = db.Column(db.String(255), nullable=True)
     # city is free-text (e.g. "München-Pasing"). is_company/company_name/
     # company_address are legacy: the last real consumer (Chepal's company
     # offer-management, and briefly Mini Job's company job-postings) was

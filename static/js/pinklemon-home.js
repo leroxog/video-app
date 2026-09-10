@@ -151,8 +151,11 @@
     var liked = c.liked_by_me ? " liked" : "";
     return '<div class="pl-comment' + (c.parent_id ? " reply" : "") + '" data-comment-id="' + c.id + '">'
       + '<div class="pl-comment-head">'
-      + '<div class="pl-avatar" style="width:22px;height:22px;font-size:10px;">' + esc(c.author.avatar_letter) + '</div>'
-      + '<span class="pl-comment-user">@' + esc(c.author.username) + '</span>'
+      + '<div class="pl-avatar" style="width:22px;height:22px;font-size:10px;">'
+      +   (c.author.avatar_url ? '<img src="' + esc(c.author.avatar_url) + '" alt="">' : esc(c.author.avatar_letter))
+      + '</div>'
+      + '<span class="pl-comment-user">' + esc(c.author.name || c.author.username) + '</span>'
+      + '<span class="pl-comment-handle">@' + esc(c.author.username) + '</span>'
       + '<span class="pl-comment-time">' + timeAgo(c.created_at) + '</span></div>'
       + '<div class="pl-comment-body">' + esc(c.body) + '</div>'
       + A.html(c.attachment)

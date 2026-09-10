@@ -284,6 +284,30 @@ def test_profile_page_shows_follow_button(client):
     assert client.get("/freunde/u/ghost").status_code == 404
 
 
+def test_display_name_editable_and_shown_instead_of_handle(client):
+    signup(client, "alice")
+    # own profile has the edit sheet
+    assert b"plEditProfileSheet" in client.get("/freunde/u/alice").data
+    # set a Spitzname
+    r = client.post("/api/pl/profile", data={"display_name": "Alice Wunder"},
+                    content_type="multipart/form-data")
+    assert r.get_json()["display_name"] == "Alice Wunder"
+    # it now shows in the feed for her posts, @handle stays as the small handle
+    client.post("/api/pl/posts", json={"heading": "Hi"})
+    body = client.get("/").data
+    assert b"Alice Wunder" in body and b"pl-post-handle" in body and b"@alice" in body
+
+
+def test_dm_chat_title_uses_display_name(client):
+    signup(client, "alice")
+    bob = make_user(client, "bob")
+    bob.post("/api/pl/profile", data={"display_name": "Bobby"}, content_type="multipart/form-data")
+    client.post("/api/pl/follow/bob"); bob.post("/api/pl/follow/alice")
+    cid = client.post("/api/pl/chats/dm/bob").get_json()["chat_id"]
+    view = client.get(f"/freunde/c/{cid}").data
+    assert b"Bobby" in view and b"@bob" not in view.split(b"pl-chat-header")[1][:200]
+
+
 # ---------------- Nex (single AI) ----------------
 
 def test_nex_page_is_a_text_chat(client):

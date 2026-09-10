@@ -1,23 +1,23 @@
 {% extends "pl_base.html" %}
 {%- from "partials/_pl_icons.html" import plicon -%}
 {% set active = 'friends' %}
-{% block title %}@{{ prof.username }} · HEXAGONUM{% endblock %}
+{% block title %}{{ display_name }} · HEXAGONUM{% endblock %}
 
 {% block screen %}
 <div class="pl-prof2-topbar">
     <button class="pl-prof2-back" onclick="history.back()" aria-label="Zurück">&#8592;</button>
     <div class="pl-prof2-topinfo">
-        <div class="pl-prof2-topname">{{ prof.username }}</div>
+        <div class="pl-prof2-topname">{{ display_name }}</div>
         <div class="pl-prof2-topsub">{{ posts|length }} Posts</div>
     </div>
 </div>
 
 <div class="pl-prof2" data-username="{{ prof.username }}">
-    <div class="pl-prof2-banner"></div>
+    <div class="pl-prof2-banner"{% if banner_url %} style="background-image:url('{{ banner_url }}');background-size:cover;background-position:center;"{% endif %}></div>
     <div class="pl-prof2-head">
         {% if is_me %}
         <div class="pl-prof2-actions">
-            <button class="pl-btn ghost" onclick="location.href='{{ url_for('pl_home') }}?compose=1'">Posten</button>
+            <button class="pl-btn ghost" id="plEditProfileBtn">Profil bearbeiten</button>
         </div>
         {% else %}
         <div class="pl-prof2-actions">
@@ -28,8 +28,8 @@
         </div>
         {% endif %}
 
-        <div class="pl-prof2-avatar">{{ avatar_letter }}</div>
-        <h1 class="pl-prof2-name">{{ prof.username }}</h1>
+        <div class="pl-prof2-avatar" id="plProfAvatar">{% if avatar_url %}<img src="{{ avatar_url }}" alt="">{% else %}{{ avatar_letter }}{% endif %}</div>
+        <h1 class="pl-prof2-name" id="plProfName">{{ display_name }}</h1>
         <div class="pl-prof2-handle">@{{ prof.username }}</div>
         {% if prof.bio %}<p class="pl-prof2-bio">{{ prof.bio }}</p>{% endif %}
         <div class="pl-prof2-meta">
@@ -59,10 +59,40 @@
         {% for post in posts %}
             {% include "partials/_pl_post.html" %}
         {% else %}
-            <div class="pl-empty">{% if is_me %}Du hast noch nichts gepostet.{% else %}@{{ prof.username }} hat noch nichts gepostet.{% endif %}</div>
+            <div class="pl-empty">{% if is_me %}Du hast noch nichts gepostet.{% else %}{{ display_name }} hat noch nichts gepostet.{% endif %}</div>
         {% endfor %}
     </div>
 </div>
+{% endblock %}
+
+{% block sheets %}
+{% if is_me %}
+<div class="pl-sheet-backdrop pl-sheet-modal" id="plEditProfileSheet">
+    <div class="pl-sheet">
+        <div class="pl-sheet-grip"></div>
+        <div class="pl-sheet-bar">
+            <button class="pl-sheet-x" data-close-sheet aria-label="Schließen">&times;</button>
+            <h2>Profil bearbeiten</h2>
+            <button class="pl-btn pl-sheet-post" id="plEditProfileSave">Speichern</button>
+        </div>
+
+        <div class="pl-editbanner" id="plEditBanner"{% if banner_url %} style="background-image:url('{{ banner_url }}')"{% endif %}>
+            <button type="button" class="pl-editpic-btn" data-pick="banner">{{ plicon('plus', 18) }} Banner</button>
+        </div>
+        <div class="pl-editavatar" id="plEditAvatar">
+            {% if avatar_url %}<img src="{{ avatar_url }}" alt="">{% else %}<span>{{ avatar_letter }}</span>{% endif %}
+            <button type="button" class="pl-editpic-btn round" data-pick="avatar">{{ plicon('plus', 16) }}</button>
+        </div>
+
+        <label class="pl-section-label" style="margin:14px 4px 6px;">Spitzname</label>
+        <input class="pl-input" id="plEditName" maxlength="50" value="{{ display_name }}" placeholder="Dein Name">
+        <p class="pl-hint">So heißt du überall &mdash; @{{ prof.username }} bleibt dein fester Nutzername.</p>
+
+        <input type="file" id="plEditAvatarFile" accept="image/*" hidden>
+        <input type="file" id="plEditBannerFile" accept="image/*" hidden>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}

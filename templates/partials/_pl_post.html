@@ -13,8 +13,9 @@
           <span>{{ plicon('share', 13) }}<b class="pl-share-count">{{ post.share_count }}</b></span>
       </div>
       <div class="pl-post-head">
-          <a class="pl-avatar" href="/freunde/u/{{ post.author.username }}">{{ post.author.avatar_letter }}</a>
-          <a class="pl-post-user" href="/freunde/u/{{ post.author.username }}">@{{ post.author.username }}</a>
+          <a class="pl-avatar" href="/freunde/u/{{ post.author.username }}">{% if post.author.avatar_url %}<img src="{{ post.author.avatar_url }}" alt="">{% else %}{{ post.author.avatar_letter }}{% endif %}</a>
+          <a class="pl-post-user" href="/freunde/u/{{ post.author.username }}">{{ post.author.name }}</a>
+          <a class="pl-post-handle" href="/freunde/u/{{ post.author.username }}">@{{ post.author.username }}</a>
           <span class="pl-post-time">{{ post.created_ago }}</span>
       </div>
       <div class="pl-post-heading">{{ post.heading }}</div>

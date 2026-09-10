@@ -24,7 +24,7 @@
     var div = document.createElement("div");
     div.className = "pl-msg " + (m.is_mine ? "me" : "them");
     var html = "";
-    if (CHAT.isGroup && !m.is_mine) html += '<div class="pl-msg-sender">@' + esc(m.sender) + "</div>";
+    if (CHAT.isGroup && !m.is_mine) html += '<div class="pl-msg-sender">' + esc(m.sender_name || m.sender) + "</div>";
     if (m.text) html += esc(m.text).replace(/\n/g, "<br>");
     if (m.attachment) html += A.html(m.attachment);
     html += '<div class="pl-msg-time">' + esc(m.created_ago) + "</div>";

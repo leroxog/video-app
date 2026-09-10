@@ -1246,3 +1246,46 @@ img { max-width: 100%; display: block; }
   .pl-topbrand { margin-top: 0; margin-bottom: 14px; }
   .pl-topbrand svg { width: 38px; height: 38px; }
 }
+
+/* ===== editable display name / avatar / banner ===== */
+.pl-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
+.pl-prof2-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
+
+/* post / comment: display name big, @handle small */
+.pl-post-handle, .pl-comment-handle {
+  color: var(--pl-text-faint);
+  font-weight: 400;
+}
+.pl-post-handle { font-size: 13px; }
+.pl-comment-handle { font-size: 11px; }
+.pl-comment-user { font-weight: 800; }
+
+.pl-nav-me-lines { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+.pl-nav-me-handle { font-size: 12px; color: var(--pl-text-faint); font-weight: 500; }
+
+/* edit-profile sheet */
+.pl-editbanner {
+  height: 110px; border-radius: 16px; margin: 2px 0 0;
+  background: linear-gradient(120deg, var(--pl-pink), #7a3bd0 60%, #3a1c74);
+  background-size: cover; background-position: center;
+  position: relative; display: flex; align-items: center; justify-content: center;
+}
+.pl-editavatar {
+  width: 80px; height: 80px; border-radius: 50%; margin: -34px 0 0 12px;
+  background: var(--pl-surface-3); border: 3px solid var(--pl-bg);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: 28px; color: var(--pl-text);
+  position: relative; overflow: visible;
+}
+.pl-editavatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.pl-editavatar span { position: absolute; }
+.pl-editpic-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: none; background: rgba(0,0,0,.55); color: #fff;
+  border-radius: 999px; padding: 8px 14px; font-size: 12px; font-weight: 700;
+  -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+}
+.pl-editpic-btn.round {
+  position: absolute; right: -4px; bottom: -4px; padding: 8px; border-radius: 50%;
+  background: var(--pl-pink);
+}

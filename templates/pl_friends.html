@@ -29,7 +29,7 @@
 <div id="plChatList">
     {% for c in chats %}
     <a class="pl-chatrow" href="{{ url_for('pl_chat_view', chat_id=c.id) }}" data-group="{{ '1' if c.is_group else '0' }}">
-        <div class="pl-avatar">{{ c.avatar_letter }}</div>
+        <div class="pl-avatar">{% if c.avatar_url %}<img src="{{ c.avatar_url }}" alt="">{% else %}{{ c.avatar_letter }}{% endif %}</div>
         <div class="pl-chatrow-main">
             <div class="pl-chatrow-top">
                 <span class="pl-chatrow-title">{{ c.title }}</span>
