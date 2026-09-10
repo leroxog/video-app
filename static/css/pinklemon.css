@@ -337,8 +337,13 @@ img { max-width: 100%; display: block; }
   text-align: center;
   color: var(--pl-text-faint);
   font-size: 14px;
-  padding: 48px 20px;
+  padding: 40px 24px;
   line-height: 1.6;
+  background: var(--pl-surface);
+  border: 1px solid var(--pl-border);
+  border-radius: var(--pl-r-lg);
+  -webkit-backdrop-filter: var(--pl-blur);
+  backdrop-filter: var(--pl-blur);
 }
 
 /* video results row -- shimmering "Lädt" placeholders */
@@ -436,6 +441,8 @@ img { max-width: 100%; display: block; }
 .pl-nav a svg { width: 24px; height: 24px; }
 .pl-nav a.is-active { color: var(--pl-pink); }
 .pl-nav a:active { transform: scale(0.88); }
+/* "POSTEN" button -- only in the desktop sidebar (see min-width:900px) */
+.pl-nav a.pl-nav-post { display: none; }
 
 /* ---------- Generic sheet / modal ---------- */
 .pl-sheet-backdrop {
@@ -732,7 +739,7 @@ img { max-width: 100%; display: block; }
 /* Only the big panels get a real backdrop-filter -- putting it on dozens
    of little chips/swatches too made scrolling janky. The small bits are
    just translucent (via the surface tokens) with no blur. */
-.pl-post, .pl-sheet, .pl-nav, .pl-search,
+.pl-post, .pl-sheet, .pl-nav, .pl-search, .pl-video-tile,
 .pl-msg.them, .n7-msg.them, .n7-desc, .n7-compose,
 .pl-chat-header, .pl-chat-compose, .g-top, .g-overlay,
 .pl-input, .pl-textarea, .pl-comment-compose textarea, .pl-chat-compose textarea {
@@ -816,4 +823,25 @@ img { max-width: 100%; display: block; }
   .pl-nav-label { display: inline; }
   .pl-screen { padding: 26px 30px 40px; }
   .nx-head, .nx-scroll { padding-left: 30px; padding-right: 30px; }
+
+  /* pink "POSTEN" pill under the Videos entry */
+  .pl-nav a.pl-nav-post {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    height: 48px;
+    margin-top: 12px;
+    padding: 0 16px;
+    border-radius: 999px;
+    background: var(--pl-pink);
+    color: #0b0b0d;
+    font-weight: 800;
+    font-size: 14px;
+    letter-spacing: 0.14em;
+    box-shadow: 0 8px 22px var(--pl-pink-soft);
+    transition: filter 0.12s ease, transform 0.12s ease;
+  }
+  .pl-nav a.pl-nav-post:hover { filter: brightness(1.06); }
+  .pl-nav a.pl-nav-post:active { transform: scale(0.97); }
 }

@@ -37,12 +37,18 @@
 
   // ---------------- new post ----------------
   var newPostSheet = $("#plNewPostSheet");
-  $("#plNewPostBtn").addEventListener("click", function () {
+  function openNewPost() {
     $("#plPostHeading").value = "";
     $("#plPostBody").value = "";
     openSheet(newPostSheet);
     setTimeout(function () { $("#plPostHeading").focus(); }, 250);
-  });
+  }
+  $("#plNewPostBtn").addEventListener("click", openNewPost);
+  // the desktop sidebar "POSTEN" button links here with ?compose=1
+  if (new URLSearchParams(location.search).get("compose")) {
+    openNewPost();
+    try { history.replaceState({}, "", location.pathname); } catch (e) {}
+  }
   $("#plPostSubmit").addEventListener("click", function () {
     var heading = $("#plPostHeading").value.trim();
     var body = $("#plPostBody").value.trim();

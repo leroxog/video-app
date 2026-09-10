@@ -185,7 +185,10 @@ def test_pages_render_for_logged_in_user(client, path, label):
 def test_bottom_nav_present_on_every_tab(client):
     signup(client, "alice")
     for path in ("/", "/freunde", "/nex", "/spiele", "/videos"):
-        assert b'class="pl-nav"' in client.get(path).data
+        data = client.get(path).data
+        assert b'class="pl-nav"' in data
+        # desktop-sidebar "POSTEN" pill (hidden on mobile via CSS)
+        assert b'pl-nav-post' in data and b'compose=1' in data
 
 
 def test_videos_tab_says_coming_soon(client):

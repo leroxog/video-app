@@ -9,7 +9,7 @@
         {{ plicon('search', 18) }}
         <input type="search" name="q" id="plSearchInput" placeholder="Posts & Videos suchen" value="{{ q or '' }}" autocomplete="off">
     </form>
-    <button class="pl-plus" id="plNewPostBtn" aria-label="Neuer Post">+</button>
+    <button class="pl-plus" id="plNewPostBtn" aria-label="Neuer Post">{{ plicon('plus', 22) }}</button>
 </div>
 
 {% if q %}
