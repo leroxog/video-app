@@ -8,16 +8,17 @@
 :root {
   /* rounded UI typeface -- covers letters, numbers, everything */
   --pl-font: "Nunito", "Segoe UI", -apple-system, system-ui, "Helvetica Neue", Arial, sans-serif;
-  /* X-style: flat near-black, hairline borders, no ambient glow */
-  --pl-bg: #000000;
-  --pl-surface: rgba(255, 255, 255, 0.03);
-  --pl-surface-2: rgba(255, 255, 255, 0.07);
-  --pl-surface-3: rgba(255, 255, 255, 0.14);
-  --pl-border: rgba(255, 255, 255, 0.16);
-  --pl-hover: rgba(255, 255, 255, 0.03);
-  --pl-text: #e7e9ea;
-  --pl-text-dim: #b4b4bd;
-  --pl-text-faint: #71767b;
+  /* ChatGPT-style: soft dark greys, gentle borders */
+  --pl-bg: #212121;
+  --pl-bg-2: #171717;           /* sidebar / deeper surface */
+  --pl-surface: #2f2f2f;
+  --pl-surface-2: #373737;
+  --pl-surface-3: #4b4b4b;
+  --pl-border: rgba(255, 255, 255, 0.10);
+  --pl-hover: rgba(255, 255, 255, 0.055);
+  --pl-text: #ececec;
+  --pl-text-dim: #c4c4c4;
+  --pl-text-faint: #8e8e8e;
   --pl-pink: #ff2d95;
   --pl-pink-soft: rgba(255, 45, 149, 0.16);
   --pl-danger: #ff5a5a;
@@ -31,14 +32,15 @@
 
 :root[data-theme="light"] {
   --pl-bg: #ffffff;
-  --pl-surface: rgba(0, 0, 0, 0.03);
-  --pl-surface-2: rgba(0, 0, 0, 0.06);
-  --pl-surface-3: rgba(0, 0, 0, 0.09);
+  --pl-bg-2: #f9f9f9;
+  --pl-surface: #f4f4f4;
+  --pl-surface-2: #ececec;
+  --pl-surface-3: #dcdcdc;
   --pl-border: rgba(0, 0, 0, 0.12);
-  --pl-hover: rgba(0, 0, 0, 0.03);
-  --pl-text: #0f1419;
-  --pl-text-dim: #3d4247;
-  --pl-text-faint: #536471;
+  --pl-hover: rgba(0, 0, 0, 0.04);
+  --pl-text: #0d0d0d;
+  --pl-text-dim: #3d3d3d;
+  --pl-text-faint: #676767;
   --pl-pink-soft: rgba(255, 45, 149, 0.12);
   --pl-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
 }
@@ -1335,3 +1337,70 @@ img { max-width: 100%; display: block; }
 
 /* chat bubbles: keep pink for me, flat surface for them */
 .pl-msg.them { background: var(--pl-surface-2); }
+
+/* ===================================================================
+   ChatGPT-style polish across the app -- soft dark greys, #171717
+   sidebar, rounded fields, gentle hover pills. Pink stays the accent.
+   =================================================================== */
+
+/* opaque surfaces read cleaner on the ChatGPT greys -- drop leftover blur */
+.pl-post, .pl-ps-card, .pl-comments, .pl-video-tile, .pl-search,
+.pl-topsearch-bar, .pl-att, .pl-sheet, .pl-nav, .pl-chat-header, .pl-chat-compose {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* fields */
+.pl-input, .pl-textarea, .pl-search, .pl-topsearch-bar,
+.pl-comment-compose textarea, .pl-chat-compose textarea {
+  background: var(--pl-surface);
+  border: 1px solid var(--pl-border);
+  border-radius: 18px;
+}
+.pl-search { border-radius: 999px; }
+.pl-input:focus, .pl-textarea:focus,
+.pl-comment-compose textarea:focus { border-color: var(--pl-surface-3); }
+
+/* secondary buttons = ChatGPT grey pill */
+.pl-btn.ghost, .pl-mini-btn, .pl-share-btn, .pl-ps-add-btn, .pl-comments-btn,
+.pl-icon-btn, .nx-new {
+  background: var(--pl-surface);
+  border: 1px solid var(--pl-border);
+  color: var(--pl-text);
+}
+.pl-btn.ghost:hover, .pl-mini-btn:hover, .pl-icon-btn:hover { background: var(--pl-surface-2); }
+
+/* rows / cards on the grey ground */
+.pl-post-group { border-bottom-color: var(--pl-border); }
+.pl-post-group:hover, .pl-chatrow:hover, .pl-comment:hover, .pl-userrow:hover {
+  background: var(--pl-hover);
+}
+
+/* sheets: rounded ChatGPT modal */
+.pl-sheet { background: var(--pl-bg); border: 1px solid var(--pl-border); }
+.pl-sheet-modal .pl-sheet { border-radius: 24px; }
+
+/* sticky column headers on the ChatGPT grey */
+.pl-feedtabs, .pl-screen-head, .pl-prof2-topbar {
+  background: var(--pl-bg);
+  background: color-mix(in srgb, var(--pl-bg) 88%, transparent);
+}
+
+@media (min-width: 900px) {
+  /* ChatGPT sidebar: darker panel, rounded hover pills */
+  .pl-nav {
+    background: var(--pl-bg-2);
+    border-right: 1px solid var(--pl-border);
+    padding: 12px 10px;
+    gap: 2px;
+  }
+  .pl-nav a {
+    border-radius: 12px;
+    height: 42px;
+    color: var(--pl-text-dim);
+  }
+  .pl-nav a:hover { background: var(--pl-hover); color: var(--pl-text); }
+  .pl-nav a.is-active { background: var(--pl-surface); color: var(--pl-text); }
+  .pl-nav a.is-active svg { color: var(--pl-pink); }
+  .pl-nav a.pl-nav-me:hover { background: var(--pl-hover); }
+}
