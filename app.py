@@ -46,7 +46,7 @@ from models import (
     AiTrainingExample, AiTrainingRun,
     FeedPost, FeedLike, FeedComment, FeedCommentLike, FeedPS,
     FeedRepost, FeedReport, FeedPollVote,
-    PlChat, PlChatMember, PlMessage,
+    PlChat, PlChatMember, PlMessage, PlMedia,
 )
 import ai_assistant
 import local_ai
@@ -444,6 +444,7 @@ def _synthesize_and_store_audio(text, gender=None):
 
 LOCAL_MEDIA_FOLDERS = {
     "posts": "UPLOAD_FOLDER",
+    "pl": "PL_MEDIA_FOLDER",           # HEXAGONUM avatars/banners + post/comment/chat attachments
     "profile_pics": "PROFILE_PIC_FOLDER",
     "sounds": "SOUND_FOLDER",
     "meme_templates": "MEME_FOLDER",
@@ -552,6 +553,8 @@ def media_url(kind, stored_filename):
         return url_for("static", filename=f"human_spotter/{stored_filename}")
     if kind == "generated_audio":
         return url_for("static", filename=f"generated_audio/{stored_filename}")
+    if kind == "pl":
+        return url_for("static", filename=f"uploads/pl/{stored_filename}")
     return url_for("static", filename=f"profile_pics/{stored_filename}")
 
 
@@ -1194,8 +1197,60 @@ def pl_display_name(user):
     return (getattr(user, "pl_display_name", None) or "").strip() or user.username
 
 
+@app.template_global()
 def _pl_media_url(name):
-    return f"/static/uploads/pl/{name}" if name else None
+    if not name:
+        return None
+    return media_url("pl", name) if USE_R2 else f"/plm/{name}"
+
+
+def _pl_store_media(file_storage, name):
+    """Persist a HEXAGONUM image/video upload durably. R2 when configured;
+    otherwise a Postgres row (Railway wipes local disk on every deploy,
+    the DB survives) plus a best-effort local copy for dev speed."""
+    if USE_R2:
+        save_media(file_storage, "pl", name)
+        return
+    data = file_storage.read()
+    db.session.add(PlMedia(
+        name=name,
+        content_type=(file_storage.mimetype or "application/octet-stream")[:90],
+        data=data,
+    ))
+    try:
+        with open(os.path.join(PL_MEDIA_DIR, name), "wb") as fh:
+            fh.write(data)
+    except OSError:
+        pass
+
+
+def _pl_delete_media(name):
+    if not name:
+        return
+    if USE_R2:
+        delete_media("pl", name)
+        return
+    row = db.session.get(PlMedia, name)
+    if row is not None:
+        db.session.delete(row)
+    try:
+        os.remove(os.path.join(PL_MEDIA_DIR, name))
+    except OSError:
+        pass
+
+
+@app.route("/plm/<name>")
+def pl_media_file(name):
+    """Serve a HEXAGONUM upload from the persistent Postgres store, falling
+    back to local disk (dev / pre-migration rows)."""
+    name = os.path.basename(name)
+    row = db.session.get(PlMedia, name)
+    if row is not None:
+        return Response(row.data, mimetype=row.content_type,
+                        headers={"Cache-Control": "public, max-age=31536000, immutable"})
+    if os.path.exists(os.path.join(PL_MEDIA_DIR, name)):
+        return send_from_directory(PL_MEDIA_DIR, name, max_age=31536000)
+    abort(404)
 
 
 def _pl_user_brief(user):
@@ -1641,9 +1696,12 @@ def api_pl_update_profile():
         ext = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else ""
         if ext not in PL_IMAGE_EXT:
             return jsonify({"ok": False, "error": "bad_type"}), 400
+        old = getattr(me, col, None)
         name = f"{uuid.uuid4().hex}.{ext}"
-        f.save(os.path.join(PL_MEDIA_DIR, name))
+        _pl_store_media(f, name)
         setattr(me, col, name)
+        if old:
+            _pl_delete_media(old)
     db.session.commit()
     return jsonify({
         "ok": True,
@@ -1703,6 +1761,7 @@ def api_pl_nex_voice():
 # ---- attachments: photo / video under any text ----
 PL_MEDIA_DIR = os.path.join(app.root_path, "static", "uploads", "pl")
 os.makedirs(PL_MEDIA_DIR, exist_ok=True)
+app.config["PL_MEDIA_FOLDER"] = PL_MEDIA_DIR   # used by save_media/media_url("pl", ...)
 PL_IMAGE_EXT = {"png", "jpg", "jpeg", "gif", "webp"}
 PL_VIDEO_EXT = {"mp4", "webm", "mov", "m4v"}
 
@@ -1715,18 +1774,22 @@ def _pl_attachment(row):
     if not kind or not value:
         return None
     if kind in ("image", "video"):
-        return {"kind": kind, "value": value, "url": f"/static/uploads/pl/{value}"}
+        return {"kind": kind, "value": value, "url": _pl_media_url(value)}
     return None
 
 
 def _pl_read_att(data):
     """Validate an {att_kind, att_value} pair from a request body.
-    Returns (kind, value) or (None, None)."""
+    Returns (kind, value) or (None, None). The value must be a bare
+    filename our own /api/pl/upload just handed back -- checked by shape
+    (basename + known extension), not by disk existence, since with R2 the
+    file lives in the bucket, not on local disk."""
     kind = (data.get("att_kind") or "").strip()
     value = (data.get("att_value") or "").strip()
     if kind in ("image", "video"):
         safe = os.path.basename(value)
-        if safe == value and safe and os.path.exists(os.path.join(PL_MEDIA_DIR, safe)):
+        ext = safe.rsplit(".", 1)[-1].lower() if "." in safe else ""
+        if safe == value and safe and ext in (PL_IMAGE_EXT | PL_VIDEO_EXT):
             return kind, safe
     return None, None
 
@@ -1745,8 +1808,9 @@ def api_pl_upload():
     else:
         return jsonify({"ok": False, "error": "bad_type"}), 400
     name = f"{uuid.uuid4().hex}.{ext}"
-    f.save(os.path.join(PL_MEDIA_DIR, name))
-    return jsonify({"ok": True, "kind": kind, "value": name, "url": f"/static/uploads/pl/{name}"})
+    _pl_store_media(f, name)
+    db.session.commit()
+    return jsonify({"ok": True, "kind": kind, "value": name, "url": _pl_media_url(name)})
 
 
 

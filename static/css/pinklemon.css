@@ -966,17 +966,15 @@ img { max-width: 100%; display: block; }
 .g-top, .g-body,
 .pl-chat-header, .pl-chat-msgs, .pl-chat-compose, .pl-chat-empty { position: relative; z-index: 1; }
 
-/* Desktop: the conversation becomes a centred chat panel instead of a
-   lonely column of text on a black void. */
+/* Desktop: the conversation fills the whole window (no lonely centred
+   column on a black void) -- header, messages and composer stretch edge
+   to edge, with a centred ~1080px content well so lines stay readable. */
 @media (min-width: 760px) {
-  .pl-chat-screen {
-    max-width: 900px; margin: 0 auto;
-    border-left: 1px solid var(--pl-border); border-right: 1px solid var(--pl-border);
-    box-shadow: 0 0 80px rgba(0, 0, 0, 0.45);
-  }
-  .pl-chat-header, .pl-chat-compose { padding-left: 22px; padding-right: 22px; }
-  .pl-chat-msgs { padding: 24px 22px; }
-  .pl-msg { max-width: 66%; }
+  .pl-chat-screen { width: 100%; max-width: none; margin: 0; }
+  .pl-chat-header { padding-left: max(28px, calc((100% - 1080px) / 2)); padding-right: max(28px, calc((100% - 1080px) / 2)); }
+  .pl-chat-msgs { padding: 26px max(28px, calc((100% - 1080px) / 2)); }
+  .pl-chat-composewrap { padding-left: max(28px, calc((100% - 1080px) / 2)); padding-right: max(28px, calc((100% - 1080px) / 2)); }
+  .pl-msg { max-width: 560px; }
 }
 
 /* ===================================================================
@@ -1585,6 +1583,9 @@ body::before {
     radial-gradient(50% 42% at 88% 4%, rgba(124, 92, 255, 0.15), transparent 70%);
 }
 .pl-screen, .pl-nav, .pl-topbrand { position: relative; z-index: 1; }
+/* the standalone chat page already paints its own stronger glow */
+body:has(.pl-chat-screen)::before,
+body:has(.nx-app)::before { display: none; }
 
 /* ---- feed cards ---- */
 .pl-feed { gap: 14px; display: flex; flex-direction: column; }

@@ -511,6 +511,35 @@ def test_urls_render_as_pink_preview_links(client):
     assert b"pl-link" in body and b'data-pl-preview="https://example.com/x"' in body
 
 
+def test_profile_images_persist_in_db(client):
+    import io as _io
+    signup(client, "alice")
+    png = (b"\x89PNG\r\n\x1a\n" + b"\x00" * 64)
+    r = client.post("/api/pl/profile", data={
+        "avatar": (_io.BytesIO(png), "a.png"),
+        "banner": (_io.BytesIO(png), "b.png"),
+    }, content_type="multipart/form-data").get_json()
+    assert r["ok"] is True
+    assert r["avatar_url"].startswith("/plm/") and r["banner_url"].startswith("/plm/")
+    # the bytes come back from the persistent store, not local disk
+    got = client.get(r["avatar_url"])
+    assert got.status_code == 200 and got.data == png
+    # and a PlMedia row actually exists
+    from models import PlMedia
+    with flask_app.app_context():
+        assert PlMedia.query.count() >= 2
+
+
+def test_pl_upload_is_served_from_store(client):
+    import io as _io
+    signup(client, "alice")
+    r = client.post("/api/pl/upload", data={
+        "file": (_io.BytesIO(b"GIF89a" + b"\x00" * 32), "x.gif"),
+    }, content_type="multipart/form-data").get_json()
+    assert r["ok"] and r["kind"] == "image"
+    assert client.get(r["url"]).status_code == 200
+
+
 def test_new_feed_tab_and_pagination(client):
     signup(client, "alice")
     for i in range(3):

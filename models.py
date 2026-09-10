@@ -844,3 +844,16 @@ class PlMessage(db.Model):
     att_value = db.Column(db.String(255), nullable=True)
     sender = db.relationship("User")
 
+
+class PlMedia(db.Model):
+    """Persistent store for HEXAGONUM avatars / banners / attachments when
+    Cloudflare R2 is NOT configured. Railway's local disk is wiped on
+    every deploy, so without this the images vanish on each push; Postgres
+    survives. When R2 *is* configured, uploads go there instead and this
+    table stays empty."""
+    __tablename__ = "pl_media"
+    name = db.Column(db.String(64), primary_key=True)      # "<uuid>.<ext>"
+    content_type = db.Column(db.String(90), nullable=False)
+    data = db.Column(db.LargeBinary, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
