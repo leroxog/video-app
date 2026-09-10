@@ -268,3 +268,37 @@ def test_profile_page_shows_follow_button(client):
     r = client.get("/freunde/u/bob")
     assert r.status_code == 200 and b"plFollowBtn" in r.data
     assert client.get("/freunde/u/ghost").status_code == 404
+
+
+# ---------------- Nex7 ----------------
+
+def test_nex7_page_has_five_personas(client):
+    signup(client, "alice")
+    r = client.get("/nex7").data
+    for name in (b"Nex", b">7<", b"Ehrgeizig", b"Ruhig", b"Chaos"):
+        pass
+    assert b"Ehrgeizig" in r and b"Ruhig" in r and b"Chaos" in r
+
+
+def test_nex7_persona_switch_persists(client):
+    signup(client, "alice")
+    j = client.post("/api/pl/nex7/persona", json={"persona": "ehrgeizig"}).get_json()
+    assert j["ok"] and j["project_type"] == "ehrgeizig"
+    assert User.query.filter_by(username="alice").first().nex7_persona == "ehrgeizig"
+    assert client.post("/api/pl/nex7/persona", json={"persona": "bogus"}).status_code == 400
+
+
+def test_nex7_chat_routes_persona_prompt(client, monkeypatch):
+    import ai_assistant
+    seen = {}
+    monkeypatch.setattr(ai_assistant, "_call_model_with_router", lambda messages, *a, **k: (seen.setdefault("sp", messages[0]["content"]), None))
+    signup(client, "alice")
+    r = client.post("/api/ai/chat", json={"message": "Hi", "character": "nex7", "project_type": "chaos"})
+    assert r.get_json()["ok"] is True
+    # background job runs generate_reply -> our stub captured the system prompt
+    import time
+    for _ in range(30):
+        if "sp" in seen:
+            break
+        time.sleep(0.05)
+    assert "Chaos" in seen["sp"]
