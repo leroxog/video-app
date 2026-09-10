@@ -1232,42 +1232,21 @@ def pl_chat_view(chat_id):
     )
 
 
-NEX7_PERSONAS = [
-    {"key": "nex", "name": "Nex", "tag": "ausgewogen & hilfsbereit",
-     "desc": "Die klassische Nex: freundlich, klar, immer hilfsbereit."},
-    {"key": "seven", "name": "7", "tag": "direkt & frech",
-     "desc": "Roh, sarkastisch, ohne Zuckerguss. Lässt sich nichts gefallen."},
-    {"key": "ehrgeizig", "name": "Ehrgeizig", "tag": "SEHR SEHR SEHR ehrgeizig",
-     "desc": "Macht aus allem ein Ziel. Fordert dich, feiert Fortschritt, keine Ausreden."},
-    {"key": "ruhig", "name": "Ruhig", "tag": "gelassen & geduldig",
-     "desc": "Nichts bringt sie aus der Ruhe. Kein Druck, ein Schritt nach dem anderen."},
-    {"key": "chaos", "name": "Chaos", "tag": "überdreht & verspielt",
-     "desc": "Hyperaktiv, sprunghaft, voller Energie — liefert am Ende trotzdem sauber ab."},
-]
-# maps the persona key -> the project_type api_ai_chat / ai_assistant expect
-NEX7_PROJECT_TYPE = {"seven": "sevenai", "ehrgeizig": "ehrgeizig", "ruhig": "ruhig", "chaos": "chaos"}
+# The one AI. Its blunt "7"-style personality lives in
+# ai_assistant.NEX_BLUNT_SYSTEM_PROMPT and is reached via project_type
+# "nexblunt". Chat history is scoped to character "nex7" (an internal
+# key, kept from when this tab had personas).
+NEX_PROJECT_TYPE = "nexblunt"
+NEX_CHAT_CHARACTER = "nex7"
 
 
-@app.route("/nex7")
-def pl_nex7():
+@app.route("/nex")
+def pl_nex():
     me = current_user()
-    persona = me.nex7_persona if me.nex7_persona in NEX7_PROJECT_TYPE or me.nex7_persona == "nex" else "nex"
     return render_template(
-        "pl_nex7.html", personas=NEX7_PERSONAS, current_persona=persona,
-        project_type=NEX7_PROJECT_TYPE.get(persona, ""),
+        "pl_nex.html", project_type=NEX_PROJECT_TYPE, chat_character=NEX_CHAT_CHARACTER,
         me_json={"id": me.id, "username": me.username},
     )
-
-
-@app.route("/api/pl/nex7/persona", methods=["POST"])
-def api_pl_nex7_persona():
-    me = current_user()
-    key = (request.get_json(silent=True) or {}).get("persona")
-    if key not in ("nex", "seven", "ehrgeizig", "ruhig", "chaos"):
-        return jsonify({"ok": False, "error": "bad_persona"}), 400
-    me.nex7_persona = key
-    db.session.commit()
-    return jsonify({"ok": True, "persona": key, "project_type": NEX7_PROJECT_TYPE.get(key, "")})
 
 
 PL_GAMES = [
@@ -1847,7 +1826,7 @@ def api_ai_chat():
     context = (data.get("context") or "").strip() or None
     project_type = (
         data.get("project_type")
-        if data.get("project_type") in ("game", "webapp", "general", "code", "sevenai", "ehrgeizig", "ruhig", "chaos") else None
+        if data.get("project_type") in ("game", "webapp", "general", "code", "sevenai", "nexblunt") else None
     )
     # Which AI character this message belongs to -- see AiChat.character
     # and ai_assistant.py's SEVENAI_SYSTEM_PROMPT. Not trusted blindly for

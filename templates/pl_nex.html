@@ -1,0 +1,139 @@
+{% extends "pl_base.html" %}
+{% set active = 'nex' %}
+{% block title %}Nex · pinklemon{% endblock %}
+
+{% block head_extra %}
+<style>
+  .pl-screen.nex { display: flex; flex-direction: column; padding: 0; }
+  .nx-head {
+    display: flex; align-items: center; gap: 10px; padding: 14px 16px 10px; flex-shrink: 0;
+    position: relative; z-index: 2;
+  }
+  .nx-head h1 { font-size: 20px; font-weight: 900; margin: 0; flex: 1; letter-spacing: -0.02em; }
+  .nx-new {
+    width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--pl-border);
+    background: var(--pl-surface-2); color: var(--pl-text); display: flex; align-items: center; justify-content: center;
+    -webkit-backdrop-filter: var(--pl-blur); backdrop-filter: var(--pl-blur);
+  }
+  .nx-new:active { transform: scale(0.9); }
+
+  .nx-scroll { flex: 1; overflow-y: auto; padding: 6px 16px 150px; position: relative; z-index: 1; }
+  .nx-scroll > .nx-inner { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+
+  .nx-turn { display: flex; flex-direction: column; }
+  .nx-turn.user { align-items: flex-end; }
+  .nx-bubble-user {
+    background: var(--pl-pink); color: #fff; padding: 11px 15px; border-radius: 20px;
+    border-bottom-right-radius: 7px; max-width: 85%; font-size: 14.5px; line-height: 1.5;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .nx-assist-label {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+    font-size: 12px; font-weight: 800; color: var(--pl-text-dim);
+  }
+  .nx-assist-mark { width: 22px; height: 22px; border-radius: 7px; overflow: hidden; flex-shrink: 0; }
+  .nx-assist-mark svg { width: 100%; height: 100%; }
+  .nx-assist-body { font-size: 14.5px; line-height: 1.62; color: var(--pl-text); word-break: break-word; }
+  .nx-assist-body p { margin: 0 0 10px; }
+  .nx-assist-body p:last-child { margin-bottom: 0; }
+  .nx-assist-body h1, .nx-assist-body h2, .nx-assist-body h3 { font-weight: 800; margin: 14px 0 8px; line-height: 1.3; }
+  .nx-assist-body h1 { font-size: 19px; } .nx-assist-body h2 { font-size: 17px; } .nx-assist-body h3 { font-size: 15.5px; }
+  .nx-assist-body ul, .nx-assist-body ol { margin: 0 0 10px; padding-left: 22px; }
+  .nx-assist-body li { margin: 3px 0; }
+  .nx-assist-body code {
+    background: var(--pl-surface-3); padding: 1px 6px; border-radius: 6px; font-size: 0.9em;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .nx-assist-body pre {
+    background: rgba(0,0,0,0.35); border: 1px solid var(--pl-border); border-radius: 14px;
+    padding: 12px 14px; overflow-x: auto; margin: 0 0 10px;
+  }
+  .nx-assist-body pre code { background: none; padding: 0; font-size: 12.5px; line-height: 1.5; }
+  .nx-assist-body a { color: var(--pl-pink); text-decoration: underline; }
+  .nx-assist-body strong { font-weight: 800; }
+  .nx-assist-body blockquote { margin: 0 0 10px; padding-left: 12px; border-left: 3px solid var(--pl-border); color: var(--pl-text-dim); }
+
+  .nx-dots { display: inline-flex; gap: 4px; padding: 4px 0; }
+  .nx-dots span { width: 7px; height: 7px; border-radius: 50%; background: var(--pl-text-faint); animation: nxDot 1.2s ease-in-out infinite; }
+  .nx-dots span:nth-child(2) { animation-delay: 0.15s; }
+  .nx-dots span:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes nxDot { 0%,60%,100% { opacity: 0.3; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
+
+  .nx-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 6px; padding: 30px 20px; }
+  .nx-empty .nx-logo { width: 58px; height: 58px; }
+  .nx-empty h2 { font-size: 22px; font-weight: 900; margin: 6px 0 0; }
+  .nx-empty p { color: var(--pl-text-dim); font-size: 13.5px; margin: 0; }
+  .nx-suggs { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 14px; max-width: 440px; }
+  .nx-sugg {
+    border: 1px solid var(--pl-border); background: var(--pl-surface-2); color: var(--pl-text);
+    border-radius: 999px; padding: 9px 16px; font-size: 12.5px; font-weight: 600;
+    -webkit-backdrop-filter: var(--pl-blur); backdrop-filter: var(--pl-blur);
+  }
+  .nx-sugg:active { transform: scale(0.95); }
+
+  .nx-compose {
+    position: absolute; left: 12px; right: 12px; bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+    max-width: 720px; margin: 0 auto; display: flex; gap: 8px; align-items: flex-end;
+    background: var(--pl-surface-2); border: 1px solid var(--pl-border); border-radius: 26px;
+    padding: 7px 7px 7px 16px; box-shadow: var(--pl-shadow); z-index: 30;
+    -webkit-backdrop-filter: var(--pl-blur); backdrop-filter: var(--pl-blur);
+  }
+  .nx-compose textarea {
+    flex: 1; min-width: 0; border: none; background: transparent; outline: none; resize: none;
+    font-size: 14.5px; color: var(--pl-text); line-height: 1.45; max-height: 140px; min-height: 24px; padding: 8px 0;
+  }
+  .nx-compose textarea::placeholder { color: var(--pl-text-faint); }
+  .nx-send {
+    flex-shrink: 0; width: 40px; height: 40px; border-radius: 50%; border: none; background: var(--pl-pink);
+    color: #fff; display: flex; align-items: center; justify-content: center;
+  }
+  .nx-send:disabled { opacity: 0.4; }
+
+  @media (min-width: 900px) {
+    .nx-compose { bottom: 20px; left: 254px; right: 24px; }
+  }
+</style>
+{% endblock %}
+
+{% block screen %}
+<div class="pl-screen nex">
+  <div class="nx-head">
+    <h1>Nex</h1>
+    <button class="nx-new" id="nxNew" aria-label="Neuer Chat">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+    </button>
+  </div>
+  <div class="nx-scroll" id="nxScroll">
+    <div class="nx-inner" id="nxInner">
+      <div class="nx-empty" id="nxEmpty">
+        <span class="nx-logo">{% include "partials/_pinklemon_logo.html" %}</span>
+        <h2>Nex</h2>
+        <p>Frag mich was. Ich halt mich kurz.</p>
+        <div class="nx-suggs">
+          <button class="nx-sugg">Erklär mir Schwarze Löcher</button>
+          <button class="nx-sugg">Schreib mir eine To-do-Liste für morgen</button>
+          <button class="nx-sugg">Gib mir ein einfaches Pasta-Rezept</button>
+          <button class="nx-sugg">Was soll ich heute Abend spielen?</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block sheets %}
+<div class="nx-compose">
+  <textarea id="nxInput" rows="1" maxlength="4000" placeholder="Nachricht an Nex"></textarea>
+  <button class="nx-send" id="nxSend" aria-label="Senden">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
+  </button>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.PL_ME = {{ me_json | tojson }};
+  window.NEX = { projectType: {{ project_type | tojson }}, character: {{ chat_character | tojson }} };
+</script>
+<script src="{{ url_for('static', filename='js/pinklemon-nex.js') }}"></script>
+{% endblock %}

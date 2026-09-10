@@ -1,8 +1,8 @@
 {%- from "partials/_pl_icons.html" import plicon -%}
 <nav class="pl-nav">
-    <a href="{{ url_for('pl_home') }}" class="{{ 'is-active' if active == 'home' }}" aria-label="Home">{{ plicon('home') }}</a>
-    <a href="{{ url_for('pl_friends') }}" class="{{ 'is-active' if active == 'friends' }}" aria-label="Freunde">{{ plicon('friends') }}</a>
-    <a href="{{ url_for('pl_nex7') }}" class="{{ 'is-active' if active == 'nex7' }}" aria-label="Nex7">{{ plicon('nex7') }}</a>
-    <a href="{{ url_for('pl_spiele') }}" class="{{ 'is-active' if active == 'spiele' }}" aria-label="Spiele">{{ plicon('spiele') }}</a>
-    <a href="{{ url_for('pl_videos') }}" class="{{ 'is-active' if active == 'videos' }}" aria-label="Videos">{{ plicon('videos') }}</a>
+    <a href="{{ url_for('pl_home') }}" class="{{ 'is-active' if active == 'home' }}" aria-label="Home">{{ plicon('home') }}<span class="pl-nav-label">Home</span></a>
+    <a href="{{ url_for('pl_friends') }}" class="{{ 'is-active' if active == 'friends' }}" aria-label="Freunde">{{ plicon('friends') }}<span class="pl-nav-label">Freunde</span></a>
+    <a href="{{ url_for('pl_nex') }}" class="{{ 'is-active' if active == 'nex' }}" aria-label="Nex">{{ plicon('nex7') }}<span class="pl-nav-label">Nex</span></a>
+    <a href="{{ url_for('pl_spiele') }}" class="{{ 'is-active' if active == 'spiele' }}" aria-label="Spiele">{{ plicon('spiele') }}<span class="pl-nav-label">Spiele</span></a>
+    <a href="{{ url_for('pl_videos') }}" class="{{ 'is-active' if active == 'videos' }}" aria-label="Videos">{{ plicon('videos') }}<span class="pl-nav-label">Videos</span></a>
 </nav>

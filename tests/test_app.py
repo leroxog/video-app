@@ -171,7 +171,7 @@ def test_feed_is_shared_across_users(client):
 @pytest.mark.parametrize("path,label", [
     ("/", b"Posts & Videos suchen"),
     ("/freunde", b"Freunde"),
-    ("/nex7", b"Nex7"),
+    ("/nex", b"Nachricht an Nex"),
     ("/spiele", b"Spiele"),
     ("/videos", b"Wir arbeiten dran!"),
 ])
@@ -183,7 +183,7 @@ def test_pages_render_for_logged_in_user(client, path, label):
 
 def test_bottom_nav_present_on_every_tab(client):
     signup(client, "alice")
-    for path in ("/", "/freunde", "/nex7", "/spiele", "/videos"):
+    for path in ("/", "/freunde", "/nex", "/spiele", "/videos"):
         assert b'class="pl-nav"' in client.get(path).data
 
 
@@ -270,38 +270,29 @@ def test_profile_page_shows_follow_button(client):
     assert client.get("/freunde/u/ghost").status_code == 404
 
 
-# ---------------- Nex7 ----------------
+# ---------------- Nex (single AI) ----------------
 
-def test_nex7_page_has_five_personas(client):
+def test_nex_page_renders(client):
     signup(client, "alice")
-    r = client.get("/nex7").data
-    for name in (b"Nex", b">7<", b"Ehrgeizig", b"Ruhig", b"Chaos"):
-        pass
-    assert b"Ehrgeizig" in r and b"Ruhig" in r and b"Chaos" in r
+    r = client.get("/nex").data
+    assert b"Nachricht an Nex" in r and b"pinklemon-nex.js" in r
+    # no persona switcher anymore
+    assert b"Ehrgeizig" not in r and b"Chaos" not in r
 
 
-def test_nex7_persona_switch_persists(client):
-    signup(client, "alice")
-    j = client.post("/api/pl/nex7/persona", json={"persona": "ehrgeizig"}).get_json()
-    assert j["ok"] and j["project_type"] == "ehrgeizig"
-    assert User.query.filter_by(username="alice").first().nex7_persona == "ehrgeizig"
-    assert client.post("/api/pl/nex7/persona", json={"persona": "bogus"}).status_code == 400
-
-
-def test_nex7_chat_routes_persona_prompt(client, monkeypatch):
+def test_nex_chat_uses_the_blunt_nex_prompt(client, monkeypatch):
     import ai_assistant
     seen = {}
     monkeypatch.setattr(ai_assistant, "_call_model_with_router", lambda messages, *a, **k: (seen.setdefault("sp", messages[0]["content"]), None))
     signup(client, "alice")
-    r = client.post("/api/ai/chat", json={"message": "Hi", "character": "nex7", "project_type": "chaos"})
+    r = client.post("/api/ai/chat", json={"message": "wer bist du", "character": "nex7", "project_type": "nexblunt"})
     assert r.get_json()["ok"] is True
-    # background job runs generate_reply -> our stub captured the system prompt
     import time
     for _ in range(30):
         if "sp" in seen:
             break
         time.sleep(0.05)
-    assert "Chaos" in seen["sp"]
+    assert "Du bist Nex" in seen["sp"] and "7Ai" not in seen["sp"]
 
 
 # ---------------- Spiele ----------------
