@@ -36,16 +36,9 @@
 
     {% block header %}
         <header>
-            <a class="brand-logo" href="{{ url_for('studio_home') }}">
+            <a class="brand-logo" href="{{ url_for('assistant_page') }}">
                 {% include "partials/_logo.html" %}
             </a>
-
-            {% if not user %}
-                <nav>
-                    <a href="{{ url_for('login') }}">Login</a>
-                    <a href="{{ url_for('register') }}">Registrieren</a>
-                </nav>
-            {% endif %}
         </header>
     {% endblock %}
 
@@ -86,9 +79,6 @@
                     <button type="button" class="ai-chat-sidebar-nav-item" id="aiChatSidebarVoiceBtn">
                         <span class="ai-chat-sidebar-nav-icon" aria-hidden="true">{{ icon('mic') }}</span><span>Mit der KI reden</span>
                     </button>
-                    <a class="ai-chat-sidebar-nav-item" href="{{ url_for('ai_gallery') }}">
-                        <span class="ai-chat-sidebar-nav-icon" aria-hidden="true">{{ icon('image') }}</span><span>Galerie</span>
-                    </a>
                     <!-- Only shown on the two dedicated full-page chats
                          (/assistant, /7ai) -- see aiChatSwitchCharacterLink
                          in the script below, which sets its href/label and
@@ -111,14 +101,6 @@
                     <div class="ai-chat-sidebar-label">Aktuelle</div>
                     <div class="ai-chat-sidebar-list" id="aiChatSidebarList"></div>
 
-                    <!-- Only shown on the full-page assistant (see
-                         .ai-chat-panel-page in the CSS) -- on every other
-                         page the normal header already has the account
-                         avatar, this would just be a duplicate there. -->
-                    <div class="ai-chat-sidebar-avatar-footer">
-                        {% include "partials/_account_avatar.html" %}
-                        <a class="ai-chat-sidebar-avatar-name" href="{{ url_for('account_settings') }}">{{ user.username }}</a>
-                    </div>
                 </div>
 
                 <div class="ai-buddy-confirm-overlay" id="aiBuddyConfirmOverlay" style="display:none;">
@@ -176,7 +158,6 @@
                             <span id="aiChatAttachmentName"></span>
                             <button type="button" id="aiChatAttachmentRemove" title="Anhang entfernen">&times;</button>
                         </p>
-                        <p class="ai-chat-token-balance" id="aiChatTokenBalance"></p>
                         <form class="ai-chat-form" id="aiChatForm">
                             <input type="file" id="aiChatFileInput" accept=".txt,.md,.markdown,.py,.js,.jsx,.ts,.tsx,.json,.csv,.html,.htm,.css,.log,.yaml,.yml,.xml,.java,.c,.cpp,.cs,.sh" style="display:none;">
                             <button type="button" class="ai-chat-attach-btn" id="aiChatAttachBtn" title="Text-Datei anhängen">{{ icon('paperclip', 17) }}</button>
