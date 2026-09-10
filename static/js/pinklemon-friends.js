@@ -14,6 +14,20 @@
     });
   });
 
+  // ---- Alle / Gruppen filter ----
+  var filters = $("#plMsgFilters");
+  if (filters) {
+    filters.addEventListener("click", function (e) {
+      var b = e.target.closest("[data-filter]");
+      if (!b) return;
+      filters.querySelectorAll("button").forEach(function (x) { x.classList.toggle("is-active", x === b); });
+      var f = b.dataset.filter;
+      document.querySelectorAll("#plChatList .pl-chatrow").forEach(function (row) {
+        row.hidden = f === "group" && row.dataset.group !== "1";
+      });
+    });
+  }
+
   // ---- find people (inline row that drops down from the top) ----
   var topSearch = $("#plTopSearch");
   var userSearch = $("#plUserSearch");

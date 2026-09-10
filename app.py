@@ -1224,14 +1224,19 @@ def pl_home():
     me = current_user()
     _pl_socialise(me)
     q = (request.args.get("q") or "").strip()
+    feed = "following" if request.args.get("feed") == "following" else "foryou"
     query = FeedPost.query
     if q:
         like = f"%{q}%"
         query = query.filter(db.or_(FeedPost.heading.ilike(like), FeedPost.body.ilike(like)))
+    elif feed == "following":
+        followed = {s.channel_id for s in Subscription.query.filter_by(subscriber_id=me.id)}
+        followed.add(me.id)
+        query = query.filter(FeedPost.author_id.in_(followed))
     posts = query.order_by(FeedPost.created_at.desc()).limit(PL_POST_MAX).all()
     serialized = [serialize_pl_post(p, me) for p in posts]
     return render_template(
-        "pl_home.html", posts=serialized, q=q,
+        "pl_home.html", posts=serialized, q=q, feed=feed,
         me_json={"id": me.id, "username": me.username},
     )
 
@@ -1251,12 +1256,20 @@ def pl_profile(username):
         abort(404)
     i_follow = Subscription.query.filter_by(subscriber_id=me.id, channel_id=user.id).first() is not None
     follows_me = Subscription.query.filter_by(subscriber_id=user.id, channel_id=me.id).first() is not None
+    user_posts = (
+        FeedPost.query.filter_by(author_id=user.id)
+        .order_by(FeedPost.created_at.desc()).limit(40).all()
+    )
+    joined = None
+    if user.created_at:
+        joined = user.created_at.strftime("%B %Y")
     return render_template(
         "pl_profile.html", prof=user, is_me=user.id == me.id,
         i_follow=i_follow, follows_me=follows_me, mutual=i_follow and follows_me,
         followers=Subscription.query.filter_by(channel_id=user.id).count(),
         following=Subscription.query.filter_by(subscriber_id=user.id).count(),
-        avatar_letter=pl_avatar_letter(user.username),
+        avatar_letter=pl_avatar_letter(user.username), joined=joined,
+        posts=[serialize_pl_post(p, me) for p in user_posts],
     )
 
 

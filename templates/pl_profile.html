@@ -1,37 +1,64 @@
 {% extends "pl_base.html" %}
+{%- from "partials/_pl_icons.html" import plicon -%}
 {% set active = 'friends' %}
 {% block title %}@{{ prof.username }} · HEXAGONUM{% endblock %}
 
 {% block screen %}
-<div class="pl-screen-head">
+<div class="pl-screen-head" style="margin-bottom:6px;">
     <button class="pl-icon-btn" onclick="history.back()" aria-label="Zurück">&#8592;</button>
-    <h1>@{{ prof.username }}</h1>
+    <h1 style="font-size:19px;">@{{ prof.username }}</h1>
 </div>
 
-<div class="pl-profile" data-username="{{ prof.username }}">
-    <div class="pl-avatar">{{ avatar_letter }}</div>
-    <h1>@{{ prof.username }}</h1>
-    {% if prof.bio %}<p class="pl-bio">{{ prof.bio }}</p>{% endif %}
-    <div class="pl-profile-stats">
-        <div><b id="plFollowerCount">{{ followers }}</b><span>Follower</span></div>
-        <div><b>{{ following }}</b><span>Folgt</span></div>
-    </div>
-
-    {% if is_me %}
-        <p class="pl-hint">Das bist du.</p>
-    {% else %}
-        <div class="pl-profile-actions">
+<div class="pl-prof2" data-username="{{ prof.username }}">
+    <div class="pl-prof2-banner"></div>
+    <div class="pl-prof2-head">
+        {% if is_me %}
+        <div class="pl-prof2-actions">
+            <button class="pl-btn ghost" onclick="location.href='{{ url_for('pl_home') }}?compose=1'">Posten</button>
+        </div>
+        {% else %}
+        <div class="pl-prof2-actions">
+            <button class="pl-btn ghost" id="plMsgBtn" {{ '' if mutual else 'disabled' }}>Nachricht</button>
             <button class="pl-btn {{ 'ghost' if i_follow }}" id="plFollowBtn" data-following="{{ '1' if i_follow else '0' }}">
                 {{ 'Entfolgen' if i_follow else 'Folgen' }}
             </button>
-            <button class="pl-btn ghost" id="plMsgBtn" {{ '' if mutual else 'disabled' }}>Nachricht</button>
         </div>
-        <p class="pl-hint" id="plMutualHint">
+        {% endif %}
+
+        <div class="pl-prof2-avatar">{{ avatar_letter }}</div>
+        <h1 class="pl-prof2-name">{{ prof.username }}</h1>
+        <div class="pl-prof2-handle">@{{ prof.username }}</div>
+        {% if prof.bio %}<p class="pl-prof2-bio">{{ prof.bio }}</p>{% endif %}
+        <div class="pl-prof2-meta">
+            {% if prof.city %}<span>&#128205; {{ prof.city }}</span>{% endif %}
+            {% if joined %}<span>&#128197; Beigetreten {{ joined }}</span>{% endif %}
+        </div>
+        <div class="pl-prof2-stats">
+            <div><b>{{ following }}</b> <span>Folgt</span></div>
+            <div><b id="plFollowerCount">{{ followers }}</b> <span>Follower</span></div>
+        </div>
+        {% if not is_me %}
+        <p class="pl-hint" id="plMutualHint" style="margin-top:6px;">
             {% if mutual %}Ihr folgt euch gegenseitig &mdash; ihr könnt schreiben.
             {% elif follows_me %}Folgt dir. Folge zurück, um zu schreiben.
             {% else %}Folgt euch gegenseitig, um schreiben zu können.{% endif %}
         </p>
-    {% endif %}
+        {% endif %}
+    </div>
+
+    <div class="pl-prof2-tabs">
+        <a href="#" class="is-active">Posts</a>
+        <a href="#">Antworten</a>
+        <a href="#">Medien</a>
+    </div>
+
+    <div class="pl-feed" id="plFeed">
+        {% for post in posts %}
+            {% include "partials/_pl_post.html" %}
+        {% else %}
+            <div class="pl-empty">{% if is_me %}Du hast noch nichts gepostet.{% else %}@{{ prof.username }} hat noch nichts gepostet.{% endif %}</div>
+        {% endfor %}
+    </div>
 </div>
 {% endblock %}
 

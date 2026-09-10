@@ -5,9 +5,14 @@
 
 {% block screen %}
 <div class="pl-screen-head">
-    <h1>Freunde</h1>
+    <h1>Nachrichten</h1>
     <button class="pl-icon-btn" id="plFindBtn" aria-label="Leute finden">{{ plicon('search', 20) }}</button>
     <button class="pl-icon-btn pink" id="plNewChatBtn" aria-label="Neuer Chat">{{ plicon('plus', 20) }}</button>
+</div>
+
+<div class="pl-msg-filters" id="plMsgFilters">
+    <button type="button" class="is-active" data-filter="all">Alle</button>
+    <button type="button" data-filter="group">Gruppen</button>
 </div>
 
 <!-- inline search row that drops down from the top (no bottom sheet) -->
@@ -22,7 +27,7 @@
 
 <div id="plChatList">
     {% for c in chats %}
-    <a class="pl-chatrow" href="{{ url_for('pl_chat_view', chat_id=c.id) }}">
+    <a class="pl-chatrow" href="{{ url_for('pl_chat_view', chat_id=c.id) }}" data-group="{{ '1' if c.is_group else '0' }}">
         <div class="pl-avatar">{{ c.avatar_letter }}</div>
         <div class="pl-chatrow-main">
             <div class="pl-chatrow-top">

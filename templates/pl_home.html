@@ -12,6 +12,13 @@
     <button class="pl-plus" id="plNewPostBtn" aria-label="Neuer Post">{{ plicon('plus', 22) }}</button>
 </div>
 
+{% if not q %}
+<div class="pl-feedtabs">
+    <a href="{{ url_for('pl_home') }}" class="{{ 'is-active' if feed != 'following' }}">Für dich</a>
+    <a href="{{ url_for('pl_home') }}?feed=following" class="{{ 'is-active' if feed == 'following' }}">Folge ich</a>
+</div>
+{% endif %}
+
 {% if q %}
     <div class="pl-section-label">Videos zu „{{ q }}"</div>
     <div class="pl-video-row" id="plVideoRow">

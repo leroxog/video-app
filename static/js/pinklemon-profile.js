@@ -1,6 +1,6 @@
 (function () {
   "use strict";
-  var wrap = document.querySelector(".pl-profile");
+  var wrap = document.querySelector(".pl-prof2, .pl-profile");
   if (!wrap) return;
   var uname = wrap.dataset.username;
   var followBtn = document.getElementById("plFollowBtn");

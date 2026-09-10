@@ -542,6 +542,8 @@ img { max-width: 100%; display: block; }
   transition: color 0.12s ease, transform 0.12s ease;
 }
 .pl-nav a svg { width: 24px; height: 24px; }
+/* sidebar-only extras: brand mark on top, own profile at the bottom */
+.pl-nav a.pl-nav-brand, .pl-nav a.pl-nav-me { display: none; }
 .pl-nav a.is-active { color: var(--pl-pink); }
 .pl-nav a:active { transform: scale(0.88); }
 /* "POSTEN" button -- only in the desktop sidebar (see min-width:900px) */
@@ -1049,4 +1051,163 @@ img { max-width: 100%; display: block; }
   }
   .pl-nav a.pl-nav-post:hover { filter: brightness(1.06); }
   .pl-nav a.pl-nav-post:active { transform: scale(0.97); }
+
+  /* brand mark at the top of the sidebar */
+  .pl-nav a.pl-nav-brand {
+    display: flex; align-items: center; gap: 11px;
+    height: auto; padding: 4px 14px 14px; border-radius: 0;
+    margin-bottom: 4px;
+  }
+  .pl-nav-brand-mark { width: 34px; height: 34px; flex-shrink: 0; }
+  .pl-nav-brand-mark svg { width: 100%; height: 100%; }
+  .pl-nav-brand-name { font-weight: 900; font-size: 16px; letter-spacing: 0.06em; }
+  .pl-nav a.pl-nav-brand.is-active { background: none; }
+
+  /* your own profile, pinned to the bottom of the sidebar */
+  .pl-nav a.pl-nav-me {
+    display: flex; align-items: center; gap: 11px;
+    margin-top: auto; height: 56px; padding: 0 12px; border-radius: 999px;
+    font-weight: 700;
+  }
+  .pl-nav a.pl-nav-me:hover { background: var(--pl-surface-2); }
+  .pl-nav a.pl-nav-me .pl-avatar { width: 36px; height: 36px; font-size: 14px; }
+  .pl-nav-me-name { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+
+/* ===================================================================
+   X-style pass -- flat border-separated feed, feed tabs, X-like
+   Nachrichten list and profile. Keeps the HEXAGONUM pink accent.
+   =================================================================== */
+
+/* feed: rows, not floating cards */
+.pl-feed { gap: 0; }
+.pl-post-group {
+  border-bottom: 1px solid var(--pl-border);
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+}
+.pl-post-group:last-child { border-bottom: none; }
+.pl-post {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 14px 2px 4px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: none;
+}
+.pl-post-heading { font-size: 15.5px; margin: 4px 0 4px; }
+.pl-post-body { font-size: 14.5px; }
+
+/* footer counts on one line, X-style */
+.pl-post-stats {
+  position: static;
+  order: 5;
+  align-self: stretch;
+  margin-top: 10px;
+  background: none;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  display: flex;
+  gap: 26px;
+  font-size: 12.5px;
+  color: var(--pl-text-faint);
+}
+.pl-post-stats .pl-stat-comment { font: inherit; color: inherit; }
+.pl-post-stats svg { width: 15px; height: 15px; }
+.pl-post-stats .pl-stat-like { transition: color .12s ease; }
+.pl-post-stats .pl-stat-like.pl-stat-liked { color: var(--pl-pink); }
+
+.pl-post-actions { order: 6; margin-top: 8px; gap: 8px; justify-content: flex-start; }
+.pl-comments-btn { display: none; }
+.pl-share-btn, .pl-ps-add-btn { padding: 5px 12px; font-size: 11.5px; }
+
+/* feed tabs under the search bar */
+.pl-feedtabs {
+  display: flex;
+  border-bottom: 1px solid var(--pl-border);
+  margin: 0 -2px 6px;
+}
+.pl-feedtabs a {
+  flex: 1;
+  text-align: center;
+  padding: 13px 6px;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--pl-text-faint);
+  position: relative;
+}
+.pl-feedtabs a.is-active { color: var(--pl-text); }
+.pl-feedtabs a.is-active::after {
+  content: "";
+  position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: -1px; width: 46px; height: 3px; border-radius: 3px;
+  background: var(--pl-pink);
+}
+
+/* ---- Nachrichten (Freunde) list, X-style ---- */
+.pl-msg-filters { display: flex; gap: 8px; margin: 2px 0 10px; }
+.pl-msg-filters button {
+  border: 1px solid var(--pl-border);
+  background: var(--pl-surface-2);
+  color: var(--pl-text-dim);
+  border-radius: 999px;
+  padding: 7px 16px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.pl-msg-filters button.is-active {
+  background: var(--pl-text);
+  color: var(--pl-bg);
+  border-color: var(--pl-text);
+}
+.pl-chatrow {
+  gap: 13px;
+  padding: 12px 4px;
+}
+.pl-chatrow:hover { background: var(--pl-surface-2); }
+.pl-chatrow .pl-avatar { width: 48px; height: 48px; font-size: 18px; }
+.pl-chatrow-title { font-size: 15px; }
+.pl-chatrow-preview { font-size: 13px; }
+.pl-chatrow-badge { min-width: 10px; height: 10px; padding: 0; font-size: 0; }
+
+/* ---- Profile, X-style ---- */
+.pl-prof2-banner {
+  height: 130px;
+  margin: 0 -30px;
+  background: linear-gradient(120deg, var(--pl-pink), #7a3bd0 60%, #3a1c74);
+}
+@media (max-width: 899px) { .pl-prof2-banner { margin: 0 -14px; } }
+.pl-prof2-head { padding: 0 2px; position: relative; }
+.pl-prof2-avatar {
+  width: 84px; height: 84px; border-radius: 50%;
+  background: var(--pl-surface-3); color: var(--pl-text);
+  border: 4px solid var(--pl-bg);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: 32px;
+  margin: -46px 0 8px;
+}
+.pl-prof2-actions { position: absolute; right: 2px; top: 12px; display: flex; gap: 8px; }
+.pl-prof2-actions .pl-btn {
+  width: auto; padding: 8px 18px; font-size: 13.5px; border-radius: 999px;
+}
+.pl-prof2-name { font-size: 20px; font-weight: 900; margin: 0; }
+.pl-prof2-handle { color: var(--pl-text-faint); font-size: 14px; }
+.pl-prof2-bio { font-size: 14px; margin: 10px 0 8px; line-height: 1.5; }
+.pl-prof2-meta { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--pl-text-faint); margin-bottom: 10px; }
+.pl-prof2-stats { display: flex; gap: 20px; font-size: 13.5px; margin-bottom: 4px; }
+.pl-prof2-stats b { color: var(--pl-text); }
+.pl-prof2-stats span { color: var(--pl-text-faint); }
+.pl-prof2-tabs {
+  display: flex; border-bottom: 1px solid var(--pl-border); margin: 12px -2px 4px;
+}
+.pl-prof2-tabs a {
+  flex: 1; text-align: center; padding: 13px 4px; font-size: 14px; font-weight: 700;
+  color: var(--pl-text-faint); position: relative;
+}
+.pl-prof2-tabs a.is-active { color: var(--pl-text); }
+.pl-prof2-tabs a.is-active::after {
+  content: ""; position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: -1px; width: 46px; height: 3px; border-radius: 3px; background: var(--pl-pink);
 }
