@@ -1311,24 +1311,16 @@ img { max-width: 100%; display: block; }
 .pl-prof2-topbar { margin: 0; }
 .pl-msg-filters { padding: 8px 0 10px; margin: 0; }
 
-/* Desktop: a real bordered timeline column next to the sidebar */
+/* Desktop: the timeline fills the whole space next to the sidebar --
+   no dead black void, content just uses the width it has. */
 @media (min-width: 900px) {
   .pl-screen:not(.nex):not(.vid) {
-    flex: 1 1 auto;
-    max-width: 620px;
-    margin: 0;
-    padding: 0 0 60px;
+    padding: 0 36px 60px;
     align-items: stretch;
-    border-right: 1px solid var(--pl-border);
   }
   .pl-screen:not(.nex):not(.vid) > * { max-width: none; }
-  .pl-screen > *:not(.pl-soon):not(.nx-chat):not(.pl-vidfeed) { padding-left: 16px; padding-right: 16px; }
-  .pl-feed { padding-left: 0; padding-right: 0; }
-  .pl-feed > .pl-post-group { padding-left: 16px; padding-right: 16px; }
   .pl-feed > .pl-post-group:hover { background: var(--pl-hover); }
-  .pl-prof2-banner { margin: 0; }
-  .pl-app { justify-content: flex-start; }
-  /* keep the sidebar a touch wider, X-like */
+  .pl-prof2-banner { margin: 0 -36px; }
   .pl-nav { width: 250px; }
 }
 
