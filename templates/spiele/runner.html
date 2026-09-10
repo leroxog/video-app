@@ -39,8 +39,8 @@
     laneX = [W * 0.28, W * 0.5, W * 0.72];
   }
 
-  function groundY() { return H * 0.82; }
-  function persp(z) { return 0.35 + 0.65 * (1 - z); } // z: 0 near .. 1 far -> scale
+  function groundY() { return H * 0.9; }
+  function persp(z) { return 0.16 + 0.84 * (1 - z); } // z: 0 near .. 1 far -> scale
 
   function spawnObstacle() {
     var lane = (Math.random() * 3) | 0;
@@ -101,7 +101,8 @@
     return vanish + (near - vanish) * persp(z);
   }
   function laneScreenY(z) {
-    return H * 0.32 + (groundY() - H * 0.32) * persp(z);
+    var horizon = H * 0.14;
+    return horizon + (groundY() - horizon) * persp(z);
   }
 
   function draw() {

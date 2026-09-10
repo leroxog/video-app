@@ -37,9 +37,21 @@
 
   // ---------------- new post ----------------
   var newPostSheet = $("#plNewPostSheet");
+  var pvHeading = $("#plPvHeading"), pvBody = $("#plPvBody");
+  function updatePreview() {
+    var h = $("#plPostHeading").value.trim();
+    var b = $("#plPostBody").value.trim();
+    pvHeading.textContent = h || "Überschrift …";
+    pvHeading.style.color = h ? "" : "var(--pl-text-faint)";
+    pvBody.textContent = b;
+    pvBody.hidden = !b;
+  }
+  $("#plPostHeading").addEventListener("input", updatePreview);
+  $("#plPostBody").addEventListener("input", updatePreview);
   $("#plNewPostBtn").addEventListener("click", function () {
     $("#plPostHeading").value = "";
     $("#plPostBody").value = "";
+    updatePreview();
     openSheet(newPostSheet);
     setTimeout(function () { $("#plPostHeading").focus(); }, 250);
   });

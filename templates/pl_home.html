@@ -41,6 +41,16 @@
     <div class="pl-sheet">
         <div class="pl-sheet-grip"></div>
         <h2>Neuer Post</h2>
+        <div class="pl-section-label" style="margin:0 4px 6px;">Vorschau</div>
+        <div class="pl-post" id="plPostPreview" style="padding-top:16px;margin-bottom:14px;pointer-events:none;">
+            <div class="pl-post-head">
+                <div class="pl-avatar">{{ (user.username or '?')[0]|upper }}</div>
+                <span class="pl-post-user">@{{ user.username }}</span>
+                <span class="pl-post-time">gerade eben</span>
+            </div>
+            <div class="pl-post-heading" id="plPvHeading" style="color:var(--pl-text-faint);">Überschrift …</div>
+            <div class="pl-post-body" id="plPvBody" hidden></div>
+        </div>
         <input class="pl-input" id="plPostHeading" maxlength="140" placeholder="Überschrift">
         <textarea class="pl-textarea" id="plPostBody" maxlength="4000" placeholder="Text (optional)"></textarea>
         <div style="display:flex;gap:8px;">
