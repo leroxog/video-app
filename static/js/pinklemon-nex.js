@@ -11,6 +11,32 @@
   var chatId = null;
   var busy = false;
 
+  // opening greeting, localised to the browser language
+  var GREET = {
+    en: ["Hello, I'm Nex", "Your personal friend — ask me anything, I know everything!"],
+    de: ["Hallo, ich bin Nex", "Dein persönlicher Freund — frag mich alles, ich weiß alles!"],
+    es: ["Hola, soy Nex", "Tu amigo personal: pregúntame lo que quieras, ¡lo sé todo!"],
+    fr: ["Salut, je suis Nex", "Ton ami perso — demande-moi n'importe quoi, je sais tout !"],
+    it: ["Ciao, sono Nex", "Il tuo amico personale: chiedimi qualsiasi cosa, so tutto!"],
+    pt: ["Olá, eu sou o Nex", "Teu amigo pessoal — pergunta o que quiseres, eu sei tudo!"],
+    nl: ["Hoi, ik ben Nex", "Je persoonlijke vriend — vraag me alles, ik weet alles!"],
+    pl: ["Cześć, jestem Nex", "Twój osobisty przyjaciel — pytaj o wszystko, wiem wszystko!"],
+    tr: ["Merhaba, ben Nex", "Kişisel arkadaşın — ne istersen sor, her şeyi bilirim!"],
+    ru: ["Привет, я Nex", "Твой личный друг — спрашивай что угодно, я знаю всё!"],
+    ar: ["مرحبا، أنا Nex", "صديقك الشخصي — اسألني أي شيء، أعرف كل شيء!"]
+  };
+  function greeting() {
+    var lang = (navigator.language || "en").slice(0, 2).toLowerCase();
+    return GREET[lang] || GREET.en;
+  }
+  (function applyGreeting() {
+    if (!emptyEl) return;
+    var g = greeting();
+    var h = emptyEl.querySelector("h2"), p = emptyEl.querySelector("p");
+    if (h) h.textContent = g[0];
+    if (p) p.textContent = g[1];
+  })();
+
   function esc(s) {
     return String(s == null ? "" : s)
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -128,7 +154,8 @@
     msgsEl.innerHTML = "";
     emptyEl = document.createElement("div");
     emptyEl.className = "nx-empty";
-    emptyEl.innerHTML = '<div class="nx-empty-orb"></div><h2>Neuer Chat</h2><p>Worüber willst du reden?</p>';
+    var g = greeting();
+    emptyEl.innerHTML = '<div class="nx-empty-orb"></div><h2>' + esc(g[0]) + '</h2><p>' + esc(g[1]) + '</p>';
     msgsEl.appendChild(emptyEl);
     input.focus();
   });
