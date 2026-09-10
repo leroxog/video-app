@@ -2,6 +2,8 @@ import os
 import io
 import re
 import sys
+import math
+import random
 import uuid
 import shutil
 import urllib.parse
@@ -1186,6 +1188,96 @@ def _pl_user_brief(user):
     }
 
 
+def _pl_user_activity_digest(user, max_chars=3600):
+    """A plain-text snapshot of everything this user does on HEXAGONUM --
+    profile, their posts / comments / likes, who they follow, their chats,
+    the media & games they share -- handed to *their own* Nex as private
+    context so it can answer personally. Scoped strictly to the requesting
+    user's own activity."""
+    L = []
+    name = pl_display_name(user)
+    L.append(f"── Kontext: Aktivität von {name} (@{user.username}) auf HEXAGONUM. "
+             f"Intern, NICHT vorlesen. Nutze es, um konkret und persönlich zu antworten. ──")
+
+    followers = Subscription.query.filter_by(channel_id=user.id).count()
+    following_rows = Subscription.query.filter_by(subscriber_id=user.id).all()
+    L.append(f"Profil: Spitzname \"{name}\", @{user.username}"
+             + (f", Bio: \"{user.bio}\"" if user.bio else "")
+             + (f", Ort: {user.city}" if user.city else "")
+             + f". {followers} Follower, folgt {len(following_rows)}.")
+    if user.created_at:
+        L.append(f"Dabei seit {user.created_at.strftime('%B %Y')}.")
+
+    now = datetime.now(timezone.utc)
+    def ago(dt):
+        return pl_ago(dt)
+
+    posts = (FeedPost.query.filter_by(author_id=user.id)
+             .order_by(FeedPost.created_at.desc()).limit(10).all())
+    if posts:
+        L.append("\nSeine letzten Posts:")
+        for p in posts:
+            body = (p.body or "").replace("\n", " ")
+            snip = (f" — {body[:120]}" if body else "")
+            media = f" [{p.att_kind}:{p.att_value}]" if p.att_kind else ""
+            L.append(f"• \"{p.heading}\"{snip} ({ago(p.created_at)}, {len(p.likes)}❤ {len(p.comments)}💬{media})")
+
+    comments = (FeedComment.query.filter_by(author_id=user.id)
+                .order_by(FeedComment.created_at.desc()).limit(10).all())
+    if comments:
+        L.append("\nSeine letzten Kommentare:")
+        for c in comments:
+            post = db.session.get(FeedPost, c.post_id)
+            on = f" (zu \"{post.heading}\" von @{post.author.username})" if post else ""
+            L.append(f"• \"{c.body[:140]}\"{on} ({ago(c.created_at)})")
+
+    liked = (db.session.query(FeedPost)
+             .join(FeedLike, FeedLike.post_id == FeedPost.id)
+             .filter(FeedLike.user_id == user.id)
+             .order_by(FeedLike.id.desc()).limit(10).all())
+    if liked:
+        L.append("\nZuletzt geliked:")
+        for p in liked:
+            L.append(f"• \"{p.heading}\" von @{p.author.username}")
+
+    if following_rows:
+        names = []
+        for s in following_rows[:20]:
+            u = db.session.get(User, s.channel_id)
+            if u:
+                names.append("@" + u.username)
+        if names:
+            L.append("\nFolgt: " + ", ".join(names))
+
+    memberships = PlChatMember.query.filter_by(user_id=user.id).all()
+    chats = [db.session.get(PlChat, m.chat_id) for m in memberships]
+    chats = [c for c in chats if c is not None]
+    chats.sort(key=lambda c: c.last_activity or c.created_at, reverse=True)
+    if chats:
+        L.append("\nChats:")
+        for c in chats[:8]:
+            if c.is_group:
+                who = f"Gruppe \"{c.name or 'Gruppe'}\" ({len(c.members)} Mitglieder)"
+            else:
+                other = next((m.user for m in c.members if m.user_id != user.id), None)
+                who = f"mit @{other.username}" if other else "Chat"
+            last = c.messages[-1] if c.messages else None
+            tail = ""
+            if last:
+                mine = "ich: " if last.sender_id == user.id else ""
+                tail = f" — zuletzt {mine}\"{(last.text or '')[:80]}\" ({ago(last.created_at)})"
+            L.append(f"• {who}{tail}")
+
+    today = now.date()
+    tp = sum(1 for p in posts if _aware(p.created_at).date() == today)
+    tc = sum(1 for c in comments if _aware(c.created_at).date() == today)
+    if tp or tc:
+        L.append(f"\nHeute: {tp} Posts, {tc} Kommentare.")
+
+    text = "\n".join(L)
+    return text[:max_chars]
+
+
 def serialize_pl_post(post, me):
     liked_ids = {pl.user_id for pl in post.likes}
     return {
@@ -1241,21 +1333,84 @@ def _pl_socialise(me):
         logger.exception("pl_bots.ensure_social")
 
 
+def _aware(dt):
+    return dt.replace(tzinfo=timezone.utc) if dt and dt.tzinfo is None else dt
+
+
+# how many recent posts the "Für dich" ranker considers as candidates
+PL_RANK_POOL = 300
+
+
+def _pl_rank_feed(me, pool):
+    """Score + rank the "Für dich" feed. Signals: freshness (time decay),
+    engagement (weighted likes/comments/shares), affinity (people you
+    follow / have liked / have replied to / yourself), a media bonus, a
+    small novelty jitter -- then a diversity pass so the same author never
+    stacks up. Chronological is still one click away as "Folge ich"."""
+    if not pool:
+        return []
+    now = datetime.now(timezone.utc)
+
+    followed = {s.channel_id for s in Subscription.query.filter_by(subscriber_id=me.id)}
+    liked_authors = {
+        a for (a,) in db.session.query(FeedPost.author_id)
+        .join(FeedLike, FeedLike.post_id == FeedPost.id)
+        .filter(FeedLike.user_id == me.id).distinct()
+    }
+    replied_authors = {
+        a for (a,) in db.session.query(FeedPost.author_id)
+        .join(FeedComment, FeedComment.post_id == FeedPost.id)
+        .filter(FeedComment.author_id == me.id, FeedComment.author_id != FeedPost.author_id).distinct()
+    }
+    my_liked_posts = {l.post_id for l in FeedLike.query.filter_by(user_id=me.id)}
+
+    def score(p):
+        age_h = max(0.15, (now - _aware(p.created_at)).total_seconds() / 3600.0)
+        recency = 1.0 / pow(age_h + 2.0, 0.55)
+        eng = math.log1p(len(p.likes) + 2.2 * len(p.comments) + 1.4 * (p.share_count or 0))
+        s = recency * 9.0 + eng * 1.7
+        if p.author_id in followed: s += 4.5
+        if p.author_id in liked_authors: s += 3.0
+        if p.author_id in replied_authors: s += 2.2
+        if p.author_id == me.id: s += 1.5
+        if p.att_kind: s += 1.3
+        if p.id in my_liked_posts: s -= 3.5          # already seen & liked
+        s += random.uniform(0.0, 0.9)                # novelty jitter
+        return s
+
+    ranked = sorted(pool, key=score, reverse=True)
+
+    # diversity: don't let the same author take two of the last three slots
+    out, order, leftovers = [], [], []
+    for p in ranked:
+        if p.author_id in order[-3:]:
+            leftovers.append(p)
+            continue
+        out.append(p)
+        order.append(p.author_id)
+    out.extend(leftovers)
+    return out[:PL_POST_MAX]
+
+
 @app.route("/")
 def pl_home():
     me = current_user()
     _pl_socialise(me)
     q = (request.args.get("q") or "").strip()
     feed = "following" if request.args.get("feed") == "following" else "foryou"
-    query = FeedPost.query
     if q:
         like = f"%{q}%"
-        query = query.filter(db.or_(FeedPost.heading.ilike(like), FeedPost.body.ilike(like)))
+        posts = (FeedPost.query
+                 .filter(db.or_(FeedPost.heading.ilike(like), FeedPost.body.ilike(like)))
+                 .order_by(FeedPost.created_at.desc()).limit(PL_POST_MAX).all())
     elif feed == "following":
         followed = {s.channel_id for s in Subscription.query.filter_by(subscriber_id=me.id)}
         followed.add(me.id)
-        query = query.filter(FeedPost.author_id.in_(followed))
-    posts = query.order_by(FeedPost.created_at.desc()).limit(PL_POST_MAX).all()
+        posts = (FeedPost.query.filter(FeedPost.author_id.in_(followed))
+                 .order_by(FeedPost.created_at.desc()).limit(PL_POST_MAX).all())
+    else:
+        pool = FeedPost.query.order_by(FeedPost.created_at.desc()).limit(PL_RANK_POOL).all()
+        posts = _pl_rank_feed(me, pool)
     serialized = [serialize_pl_post(p, me) for p in posts]
     return render_template(
         "pl_home.html", posts=serialized, q=q, feed=feed,
@@ -2043,6 +2198,16 @@ def api_ai_chat():
     # started chat keeps whatever character it was created with, since a
     # chat's persona/history shouldn't be able to flip mid-conversation.
     character = data.get("character") if data.get("character") in ("nex", "sevenai", "nex7") else "nex"
+
+    # The HEXAGONUM "Nex" tab: hand Nex a private snapshot of everything the
+    # user does on the app (their own activity only) so it can answer
+    # personally. Prepended as `context` -- see ai_assistant.generate_reply.
+    if character == "nex7" and project_type == "nexblunt" and not context:
+        try:
+            context = _pl_user_activity_digest(user)
+        except Exception:
+            logger.exception("Nex-Aktivitäts-Kontext fehlgeschlagen.")
+
     # Only messages sent through the admin dashboard's dedicated "KI-Wissen"
     # chat become a global fact -- an admin's ordinary chats elsewhere are
     # unaffected, and a non-admin can never set save_as_fact regardless of

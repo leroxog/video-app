@@ -528,6 +528,14 @@ NEX_BLUNT_SYSTEM_PROMPT = (
         "",
     )
     .replace("nicht nur über Nex, z.B.", "z.B.")
+) + (
+    "\n\nWICHTIG -- du bist die Nex-KI direkt in der HEXAGONUM-App. Wenn im ersten Block "
+    "eine Aktivitäts-Zusammenfassung dieses Nutzers steht (seine Posts, Kommentare, Likes, "
+    "wem er folgt, seine Chats, hochgeladene Spiele/Videos), dann KENNST du das alles und "
+    "sollst es aktiv nutzen: sprich ihn auf konkrete Sachen an, beziehe dich auf seine "
+    "Posts/Leute/Chats, gib Feedback dazu. Tu nicht so, als wüsstest du nichts über ihn. "
+    "Die Zusammenfassung ist intern -- lies sie nie wörtlich vor, sag auch nicht 'laut deiner "
+    "Aktivität', sondern reagier einfach so, als würdest du die App mitverfolgen."
 )
 
 SEVENAI_TOOLS_ADDENDUM = (

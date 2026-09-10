@@ -334,6 +334,41 @@ def test_nex_chat_uses_the_blunt_nex_prompt(client, monkeypatch):
     assert "Du bist Nex" in seen["sp"] and "7Ai" not in seen["sp"]
 
 
+def test_nex_sees_the_users_activity(client, monkeypatch):
+    import ai_assistant
+    seen = {}
+    monkeypatch.setattr(ai_assistant, "_call_model_with_router",
+                        lambda messages, *a, **k: (seen.setdefault("user", messages[-1]["content"]), None))
+    signup(client, "alice")
+    client.post("/api/pl/posts", json={"heading": "Mein geheimer Lieblingspost"})
+    client.post("/api/ai/chat", json={"message": "hi", "character": "nex7", "project_type": "nexblunt"})
+    import time
+    for _ in range(40):
+        if "user" in seen:
+            break
+        time.sleep(0.05)
+    # the activity digest (with the user's post) is prepended to the message Nex gets
+    assert "Mein geheimer Lieblingspost" in seen["user"]
+    assert "Aktivität von" in seen["user"]
+
+
+def test_for_you_feed_ranks_followed_authors_up(client):
+    signup(client, "alice")
+    bob = make_user(client, "bob")
+    cara = make_user(client, "cara")
+    # cara posts first (older), bob posts later; alice follows bob
+    for i in range(3):
+        cara.post("/api/pl/posts", json={"heading": f"cara {i}"})
+    client.post("/api/pl/follow/bob")
+    bob.post("/api/pl/posts", json={"heading": "bob followed post"})
+    html = client.get("/").data.decode()
+    # bob's post (followed) should land above the older cara posts
+    assert html.index("bob followed post") < html.index("cara 0")
+    # "Folge ich" is still plain chronological-from-follows
+    foll = client.get("/?feed=following").data.decode()
+    assert "bob followed post" in foll and "cara 0" not in foll
+
+
 def test_nex_voice_endpoint_rejects_missing_audio(client):
     signup(client, "alice")
     r = client.post("/api/pl/nex/voice")
