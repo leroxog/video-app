@@ -3,8 +3,11 @@
    mobile-first phone frame. Dark by default (matches the rest of the
    app); light is a data-theme override.
    =================================================================== */
+@import url('https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,700&display=swap');
 
 :root {
+  /* rounded UI typeface -- covers letters, numbers, everything */
+  --pl-font: "Nunito", "Segoe UI", -apple-system, system-ui, "Helvetica Neue", Arial, sans-serif;
   --pl-bg: #08080a;
   /* Glass surfaces: translucent, so a backdrop-filter blur picks up the
      drifting pink glow behind .pl-app (see .pl-app::before). Solid brand
@@ -47,9 +50,16 @@ html, body {
   padding: 0;
   background: var(--pl-bg);
   color: var(--pl-text);
-  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--pl-font);
+  font-synthesis-weight: none;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
   overscroll-behavior-y: none;
+}
+/* form controls + buttons don't inherit font by default -- force the
+   rounded typeface on every element that shows text */
+input, textarea, select, button, optgroup {
+  font-family: var(--pl-font);
 }
 body {
   min-height: 100vh;
@@ -110,9 +120,26 @@ img { max-width: 100%; display: block; }
 .pl-screen.nex { padding: 0; align-items: stretch; }
 .pl-screen.nex > * { max-width: none; flex: 1; }
 
-@media (max-width: 360px) {
+/* never let a long word / URL / number run push a card wider than the screen */
+.pl-post-heading, .pl-post-body, .pl-comment-body, .pl-ps-card,
+.pl-msg, .pl-chat-empty-sub, .pl-post-user, .pl-comment-user {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 380px) {
   .pl-screen { padding-left: 10px; padding-right: 10px; }
-  .pl-post { padding: 36px 14px 14px; }
+  .pl-post { padding: 34px 13px 14px; }
+  .pl-ps-card, .pl-comments { padding-left: 13px; padding-right: 13px; }
+  .pl-post-stats { gap: 7px; padding: 4px 8px; }
+  .pl-searchbar { gap: 6px; }
+  .pl-plus { width: 42px; height: 42px; }
+}
+
+/* short viewports (landscape phones): keep the comment list from eating
+   the whole screen */
+@media (max-height: 560px) {
+  .pl-comments-list { max-height: 200px; }
+  .pl-sheet { max-height: 92vh; }
 }
 
 .pl-nav-label { display: none; }
@@ -268,19 +295,11 @@ img { max-width: 100%; display: block; }
   color: var(--pl-text-dim);
   line-height: 1.5;
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: anywhere;
   -webkit-backdrop-filter: var(--pl-blur);
   backdrop-filter: var(--pl-blur);
 }
 .pl-ps-card.is-new { animation: plPostIn 0.3s ease; }
-.pl-ps-label {
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  color: var(--pl-pink);
-  margin-right: 8px;
-}
-.pl-ps-text { color: var(--pl-text-dim); }
 
 /* action buttons under a post */
 .pl-post-actions {
@@ -901,6 +920,7 @@ img { max-width: 100%; display: block; }
   .pl-nav a:active { transform: none; }
   .pl-nav-label { display: inline; }
   .pl-screen { padding: 26px 30px 40px; }
+  .pl-screen > * { max-width: 660px; }
   .nx-head, .nx-scroll { padding-left: 30px; padding-right: 30px; }
 
   /* pink "POSTEN" pill under the Videos entry */

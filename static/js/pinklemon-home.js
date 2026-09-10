@@ -112,8 +112,7 @@
       var group = document.querySelector('.pl-post-group[data-post-id="' + psTargetId + '"]');
       if (group) {
         var slot = group.querySelector(".pl-ps-slot");
-        slot.innerHTML = '<div class="pl-ps-card is-new"><span class="pl-ps-label">P.S.</span><span class="pl-ps-text">'
-          + esc(body) + '</span></div>';
+        slot.innerHTML = '<div class="pl-ps-card is-new">' + esc(body) + '</div>';
         group.dataset.hasPs = "1";
         var post = group.querySelector(".pl-post");
         if (post) post.dataset.hasPs = "1";
