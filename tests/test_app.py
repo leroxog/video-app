@@ -179,7 +179,6 @@ def test_feed_is_shared_across_users(client):
     ("/", b"Posts & Videos suchen"),
     ("/freunde", b"Freunde"),
     ("/nex", b"nxMsgs"),
-    ("/spiele", b"Wir arbeiten dran!"),
     ("/videos", b"plVidFeed"),
 ])
 def test_pages_render_for_logged_in_user(client, path, label):
@@ -190,7 +189,7 @@ def test_pages_render_for_logged_in_user(client, path, label):
 
 def test_bottom_nav_present_on_every_tab(client):
     signup(client, "alice")
-    for path in ("/", "/freunde", "/nex", "/spiele", "/videos"):
+    for path in ("/", "/freunde", "/nex", "/videos"):
         data = client.get(path).data
         assert b'class="pl-nav"' in data
         # desktop-sidebar "POSTEN" pill (hidden on mobile via CSS)
@@ -385,66 +384,18 @@ def test_nex_voice_endpoint_transcribes_with_whisper(client, monkeypatch):
     assert j["ok"] is True and j["transcript"] == "hallo nex"
 
 
-# ---------------- Spiele ----------------
+# ---------------- attachments (photo / video under any text) ----------------
 
-def test_spiele_hub_shows_coming_soon(client):
+def test_games_are_gone(client):
     signup(client, "alice")
-    r = client.get("/spiele").data
-    assert b"Wir arbeiten dran!" in r
-
-
-@pytest.mark.parametrize("slug", ["block-blast", "dress-up", "help-them", "phone-case", "subway-surfers", "triko-design"])
-def test_each_game_page_loads(client, slug):
-    signup(client, "alice")
-    r = client.get(f"/spiele/{slug}")
-    assert r.status_code == 200 and b"g-back" in r.data
-
-
-def test_unknown_game_404s(client):
-    signup(client, "alice")
-    assert client.get("/spiele/nope").status_code == 404
-
-
-# ---------------- attachments (photo / video / game under any text) ----------------
-
-def test_games_list_endpoint(client):
-    signup(client, "alice")
-    j = client.get("/api/pl/games").get_json()
-    slugs = {g["slug"] for g in j["games"]}
-    assert {"block-blast", "subway-surfers"} <= slugs
-
-
-def test_post_can_carry_a_playable_game(client):
-    signup(client, "alice")
+    # no Spiele tab, no game routes, no game attachments
+    assert client.get("/spiele").status_code == 404
+    assert client.get("/api/pl/games").status_code == 404
+    assert b'aria-label="Spiele"' not in client.get("/").data
     j = client.post("/api/pl/posts", json={
-        "heading": "Zock das", "att_kind": "game", "att_value": "block-blast",
-    }).get_json()
-    assert j["ok"] and j["post"]["attachment"]["kind"] == "game"
-    assert b'iframe' in client.get("/").data and b"/spiele/block-blast" in client.get("/").data
-
-
-def test_post_rejects_unknown_game_slug_but_still_posts(client):
-    signup(client, "alice")
-    j = client.post("/api/pl/posts", json={
-        "heading": "Kein Spiel", "att_kind": "game", "att_value": "does-not-exist",
+        "heading": "kein Spiel", "att_kind": "game", "att_value": "block-blast",
     }).get_json()
     assert j["ok"] and j["post"]["attachment"] is None
-
-
-def test_comment_and_message_accept_game_attachment(client):
-    signup(client, "alice")
-    bob = make_user(client, "bob")
-    client.post("/api/pl/follow/bob"); bob.post("/api/pl/follow/alice")
-    pid = client.post("/api/pl/posts", json={"heading": "P"}).get_json()["post"]["id"]
-    c = client.post(f"/api/pl/posts/{pid}/comments", json={
-        "body": "", "att_kind": "game", "att_value": "dress-up",
-    }).get_json()
-    assert c["ok"] and c["comment"]["attachment"]["value"] == "dress-up"
-    cid = client.post("/api/pl/chats/dm/bob").get_json()["chat_id"]
-    m = client.post(f"/api/pl/chats/{cid}/messages", json={
-        "text": "", "att_kind": "game", "att_value": "help-them",
-    }).get_json()
-    assert m["ok"] and m["message"]["attachment"]["kind"] == "game"
 
 
 def test_upload_rejects_non_media(client):

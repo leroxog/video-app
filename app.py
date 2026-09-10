@@ -1527,17 +1527,7 @@ def api_pl_nex_voice():
     return jsonify({"ok": bool(transcript), "transcript": transcript})
 
 
-PL_GAMES = [
-    {"slug": "block-blast", "title": "Block Blast!", "sub": "Blöcke legen, Reihen sprengen", "tpl": "spiele/block_blast.html"},
-    {"slug": "dress-up", "title": "Dress up!", "sub": "Style dein Outfit", "tpl": "spiele/dress_up.html"},
-    {"slug": "help-them", "title": "Help them!", "sub": "Bring sie sicher ans Ziel", "tpl": "spiele/help_them.html"},
-    {"slug": "phone-case", "title": "Phone case builder", "sub": "Gestalte deine Hülle", "tpl": "spiele/phone_case.html"},
-    {"slug": "subway-surfers", "title": "Subway Surfers", "sub": "Renn, spring, sammel Münzen", "tpl": "spiele/runner.html"},
-    {"slug": "triko-design", "title": "Triko Design", "sub": "Entwirf dein Trikot", "tpl": "spiele/triko.html"},
-]
-_PL_GAMES_BY_SLUG = {g["slug"]: g for g in PL_GAMES}
-
-# ---- attachments: photo / video / playable game under any text ----
+# ---- attachments: photo / video under any text ----
 PL_MEDIA_DIR = os.path.join(app.root_path, "static", "uploads", "pl")
 os.makedirs(PL_MEDIA_DIR, exist_ok=True)
 PL_IMAGE_EXT = {"png", "jpg", "jpeg", "gif", "webp"}
@@ -1551,11 +1541,6 @@ def _pl_attachment(row):
     value = getattr(row, "att_value", None)
     if not kind or not value:
         return None
-    if kind == "game":
-        g = _PL_GAMES_BY_SLUG.get(value)
-        if not g:
-            return None
-        return {"kind": "game", "value": value, "url": f"/spiele/{value}", "title": g["title"]}
     if kind in ("image", "video"):
         return {"kind": kind, "value": value, "url": f"/static/uploads/pl/{value}"}
     return None
@@ -1566,8 +1551,6 @@ def _pl_read_att(data):
     Returns (kind, value) or (None, None)."""
     kind = (data.get("att_kind") or "").strip()
     value = (data.get("att_value") or "").strip()
-    if kind == "game" and value in _PL_GAMES_BY_SLUG:
-        return "game", value
     if kind in ("image", "video"):
         safe = os.path.basename(value)
         if safe == value and safe and os.path.exists(os.path.join(PL_MEDIA_DIR, safe)):
@@ -1593,24 +1576,6 @@ def api_pl_upload():
     return jsonify({"ok": True, "kind": kind, "value": name, "url": f"/static/uploads/pl/{name}"})
 
 
-@app.route("/api/pl/games")
-def api_pl_games():
-    return jsonify({"ok": True, "games": [
-        {"slug": g["slug"], "title": g["title"], "sub": g["sub"]} for g in PL_GAMES
-    ]})
-
-
-@app.route("/spiele")
-def pl_spiele():
-    return render_template("pl_spiele.html", games=PL_GAMES)
-
-
-@app.route("/spiele/<slug>")
-def pl_game(slug):
-    game = _PL_GAMES_BY_SLUG.get(slug)
-    if game is None:
-        abort(404)
-    return render_template(game["tpl"], game=game)
 
 
 @app.route("/videos")
