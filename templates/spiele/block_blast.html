@@ -1,0 +1,197 @@
+{% extends "spiele/_game_base.html" %}
+{% block game_topright %}<span class="g-score" id="score">0</span>{% endblock %}
+{% block game_style %}
+  #bbCanvas { display: block; margin: 0 auto; touch-action: none; }
+  .bb-tray { display: flex; justify-content: space-around; align-items: center; padding: 10px 6px 18px; }
+  .bb-tray canvas { touch-action: none; }
+{% endblock %}
+{% block game_body %}
+<canvas id="bbCanvas"></canvas>
+<div class="bb-tray" id="bbTray"></div>
+<div class="g-overlay" id="bbOver">
+    <h2 id="bbOverTitle">Game Over</h2>
+    <p>Punkte: <b id="bbFinal">0</b> &nbsp;·&nbsp; Best: <b id="bbBest">0</b></p>
+    <button class="g-btn" id="bbRestart">Nochmal</button>
+</div>
+{% endblock %}
+{% block game_script %}
+<script>
+(function () {
+  var N = 8, GAP = 3;
+  var COLORS = ["#ff2d95", "#7bd88f", "#ffd166", "#3a8bff", "#c58cff", "#ff8f5c"];
+  var SHAPES = [
+    [[0,0]],
+    [[0,0],[1,0]], [[0,0],[0,1]],
+    [[0,0],[1,0],[2,0]], [[0,0],[0,1],[0,2]],
+    [[0,0],[1,0],[2,0],[3,0]], [[0,0],[0,1],[0,2],[0,3]],
+    [[0,0],[1,0],[0,1],[1,1]],
+    [[0,0],[1,0],[2,0],[2,1]], [[0,0],[0,1],[0,2],[1,0]], [[0,0],[1,0],[2,0],[0,1]], [[1,0],[1,1],[1,2],[0,2]],
+    [[0,0],[1,0],[1,1],[2,1]], [[1,0],[0,1],[1,1],[0,2]],
+    [[1,0],[0,1],[1,1],[2,1]],
+    [[0,0],[1,0],[2,0],[1,1],[1,2]],
+    [[0,0],[0,1],[1,1],[2,1],[2,0]],
+  ];
+
+  var canvas = document.getElementById("bbCanvas"), ctx = canvas.getContext("2d");
+  var tray = document.getElementById("bbTray");
+  var scoreEl = document.getElementById("score");
+  var over = document.getElementById("bbOver");
+  var cell, grid, score = 0, pieces = [], drag = null;
+  var best = +(localStorage.getItem("bb_best") || 0);
+
+  function layout() {
+    var W = Math.min(window.innerWidth, 480) - 24;
+    var body = canvas.parentElement.clientHeight;
+    var size = Math.min(W, body - 130);
+    cell = Math.floor((size - GAP * (N + 1)) / N);
+    var px = cell * N + GAP * (N + 1);
+    canvas.style.width = px + "px"; canvas.style.height = px + "px";
+    canvas.width = px * devicePixelRatio; canvas.height = px * devicePixelRatio;
+    ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+    draw();
+  }
+
+  function newGrid() { grid = []; for (var i = 0; i < N * N; i++) grid.push(null); }
+
+  function roundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+  }
+
+  function draw() {
+    var px = cell * N + GAP * (N + 1);
+    ctx.clearRect(0, 0, px, px);
+    for (var r = 0; r < N; r++) for (var c = 0; c < N; c++) {
+      var x = GAP + c * (cell + GAP), y = GAP + r * (cell + GAP);
+      ctx.fillStyle = "#17171f"; roundRect(x, y, cell, cell, 6); ctx.fill();
+      var v = grid[r * N + c];
+      if (v) { ctx.fillStyle = v; roundRect(x, y, cell, cell, 6); ctx.fill(); }
+    }
+    if (drag && drag.gr != null) {
+      var ok = canPlace(drag.piece.shape, drag.gr, drag.gc);
+      ctx.globalAlpha = 0.5;
+      drag.piece.shape.forEach(function (b) {
+        var rr = drag.gr + b[1], cc = drag.gc + b[0];
+        if (rr < 0 || cc < 0 || rr >= N || cc >= N) return;
+        ctx.fillStyle = ok ? drag.piece.color : "#ff5a5a";
+        roundRect(GAP + cc * (cell + GAP), GAP + rr * (cell + GAP), cell, cell, 6); ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  function canPlace(shape, gr, gc) {
+    for (var i = 0; i < shape.length; i++) {
+      var rr = gr + shape[i][1], cc = gc + shape[i][0];
+      if (rr < 0 || cc < 0 || rr >= N || cc >= N) return false;
+      if (grid[rr * N + cc]) return false;
+    }
+    return true;
+  }
+
+  function place(piece, gr, gc) {
+    piece.shape.forEach(function (b) { grid[(gr + b[1]) * N + (gc + b[0])] = piece.color; });
+    score += piece.shape.length;
+    // clear full rows/cols
+    var fullR = [], fullC = [], r, c;
+    for (r = 0; r < N; r++) { var f = true; for (c = 0; c < N; c++) if (!grid[r * N + c]) f = false; if (f) fullR.push(r); }
+    for (c = 0; c < N; c++) { var f2 = true; for (r = 0; r < N; r++) if (!grid[r * N + c]) f2 = false; if (f2) fullC.push(c); }
+    fullR.forEach(function (rr) { for (var cc = 0; cc < N; cc++) grid[rr * N + cc] = null; });
+    fullC.forEach(function (cc) { for (var rr = 0; rr < N; rr++) grid[rr * N + cc] = null; });
+    var lines = fullR.length + fullC.length;
+    if (lines) score += lines * 10 * lines;
+    scoreEl.textContent = score;
+  }
+
+  function makePiece() {
+    var shape = SHAPES[(Math.random() * SHAPES.length) | 0];
+    var minx = Math.min.apply(null, shape.map(function (b) { return b[0]; }));
+    var miny = Math.min.apply(null, shape.map(function (b) { return b[1]; }));
+    shape = shape.map(function (b) { return [b[0] - minx, b[1] - miny]; });
+    return { shape: shape, color: COLORS[(Math.random() * COLORS.length) | 0], used: false };
+  }
+
+  function refillTray() {
+    if (pieces.every(function (p) { return p.used; })) {
+      pieces = [makePiece(), makePiece(), makePiece()];
+    }
+    tray.innerHTML = "";
+    pieces.forEach(function (p, idx) {
+      if (p.used) { var sp = document.createElement("div"); sp.style.width = "70px"; tray.appendChild(sp); return; }
+      var mc = document.createElement("canvas");
+      var w = Math.max.apply(null, p.shape.map(function (b) { return b[0]; })) + 1;
+      var h = Math.max.apply(null, p.shape.map(function (b) { return b[1]; })) + 1;
+      var s = 15;
+      mc.width = w * s * devicePixelRatio; mc.height = h * s * devicePixelRatio;
+      mc.style.width = w * s + "px"; mc.style.height = h * s + "px";
+      var mx = mc.getContext("2d"); mx.scale(devicePixelRatio, devicePixelRatio);
+      p.shape.forEach(function (b) { mx.fillStyle = p.color; mx.fillRect(b[0] * s + 1, b[1] * s + 1, s - 2, s - 2); });
+      mc.dataset.idx = idx;
+      mc.addEventListener("pointerdown", startDrag);
+      tray.appendChild(mc);
+    });
+    if (!anyMoveLeft()) endGame();
+  }
+
+  function anyMoveLeft() {
+    return pieces.some(function (p) {
+      if (p.used) return false;
+      for (var r = 0; r < N; r++) for (var c = 0; c < N; c++) if (canPlace(p.shape, r, c)) return true;
+      return false;
+    });
+  }
+
+  function startDrag(e) {
+    e.preventDefault();
+    var idx = +e.currentTarget.dataset.idx;
+    drag = { idx: idx, piece: pieces[idx], x: e.clientX, y: e.clientY, gr: null, gc: null };
+    document.addEventListener("pointermove", moveDrag);
+    document.addEventListener("pointerup", endDrag);
+    moveDrag(e);
+  }
+  function moveDrag(e) {
+    if (!drag) return;
+    var rect = canvas.getBoundingClientRect();
+    var lx = e.clientX - rect.left, ly = e.clientY - rect.top - cell; // lift above finger
+    drag.gc = Math.round((lx - GAP - cell / 2) / (cell + GAP));
+    drag.gr = Math.round((ly - GAP - cell / 2) / (cell + GAP));
+    if (e.clientX < rect.left - 40 || e.clientX > rect.right + 40 || e.clientY > rect.bottom + 60) { drag.gr = null; }
+    draw();
+  }
+  function endDrag() {
+    document.removeEventListener("pointermove", moveDrag);
+    document.removeEventListener("pointerup", endDrag);
+    if (drag && drag.gr != null && canPlace(drag.piece.shape, drag.gr, drag.gc)) {
+      place(drag.piece, drag.gr, drag.gc);
+      pieces[drag.idx].used = true;
+      drag = null;
+      refillTray();
+    } else {
+      drag = null;
+    }
+    draw();
+  }
+
+  function endGame() {
+    if (score > best) { best = score; localStorage.setItem("bb_best", best); }
+    document.getElementById("bbFinal").textContent = score;
+    document.getElementById("bbBest").textContent = best;
+    over.classList.add("show");
+  }
+
+  function restart() {
+    over.classList.remove("show");
+    newGrid(); score = 0; scoreEl.textContent = 0;
+    pieces = [makePiece(), makePiece(), makePiece()];
+    refillTray(); draw();
+  }
+  document.getElementById("bbRestart").addEventListener("click", restart);
+  window.addEventListener("resize", layout);
+
+  newGrid();
+  pieces = [makePiece(), makePiece(), makePiece()];
+  layout(); refillTray();
+})();
+</script>
+{% endblock %}

@@ -302,3 +302,24 @@ def test_nex7_chat_routes_persona_prompt(client, monkeypatch):
             break
         time.sleep(0.05)
     assert "Chaos" in seen["sp"]
+
+
+# ---------------- Spiele ----------------
+
+def test_spiele_hub_lists_all_six_games(client):
+    signup(client, "alice")
+    r = client.get("/spiele").data
+    for title in (b"Block Blast!", b"Dress up!", b"Help them!", b"Phone case builder", b"Subway Surfers", b"Triko Design"):
+        assert title in r
+
+
+@pytest.mark.parametrize("slug", ["block-blast", "dress-up", "help-them", "phone-case", "subway-surfers", "triko-design"])
+def test_each_game_page_loads(client, slug):
+    signup(client, "alice")
+    r = client.get(f"/spiele/{slug}")
+    assert r.status_code == 200 and b"g-back" in r.data
+
+
+def test_unknown_game_404s(client):
+    signup(client, "alice")
+    assert client.get("/spiele/nope").status_code == 404

@@ -1270,9 +1270,28 @@ def api_pl_nex7_persona():
     return jsonify({"ok": True, "persona": key, "project_type": NEX7_PROJECT_TYPE.get(key, "")})
 
 
+PL_GAMES = [
+    {"slug": "block-blast", "title": "Block Blast!", "sub": "Blöcke legen, Reihen sprengen", "tpl": "spiele/block_blast.html"},
+    {"slug": "dress-up", "title": "Dress up!", "sub": "Style dein Outfit", "tpl": "spiele/dress_up.html"},
+    {"slug": "help-them", "title": "Help them!", "sub": "Bring sie sicher ans Ziel", "tpl": "spiele/help_them.html"},
+    {"slug": "phone-case", "title": "Phone case builder", "sub": "Gestalte deine Hülle", "tpl": "spiele/phone_case.html"},
+    {"slug": "subway-surfers", "title": "Subway Surfers", "sub": "Renn, spring, sammel Münzen", "tpl": "spiele/runner.html"},
+    {"slug": "triko-design", "title": "Triko Design", "sub": "Entwirf dein Trikot", "tpl": "spiele/triko.html"},
+]
+_PL_GAMES_BY_SLUG = {g["slug"]: g for g in PL_GAMES}
+
+
 @app.route("/spiele")
 def pl_spiele():
-    return render_template("pl_spiele.html")
+    return render_template("pl_spiele.html", games=PL_GAMES)
+
+
+@app.route("/spiele/<slug>")
+def pl_game(slug):
+    game = _PL_GAMES_BY_SLUG.get(slug)
+    if game is None:
+        abort(404)
+    return render_template(game["tpl"], game=game)
 
 
 @app.route("/videos")

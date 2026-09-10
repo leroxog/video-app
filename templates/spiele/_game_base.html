@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0b0b0d">
+    <meta name="robots" content="noindex, nofollow">
+    <script>try { if (localStorage.getItem("pl_theme") === "light") document.documentElement.setAttribute("data-theme", "light"); } catch (e) {}</script>
+    <title>{{ game.title }} · pinklemon</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/pinklemon.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='img/pinklemon-mark.svg') }}" type="image/svg+xml">
+    <style>
+        html, body { height: 100%; overflow: hidden; touch-action: none; }
+        .g-wrap { max-width: 480px; margin: 0 auto; height: 100vh; height: 100dvh; display: flex; flex-direction: column;
+                  border-left: 1px solid var(--pl-border); border-right: 1px solid var(--pl-border); background: var(--pl-bg); }
+        .g-top { display: flex; align-items: center; gap: 10px; padding: 12px 14px; flex-shrink: 0; }
+        .g-back { background: none; border: none; color: var(--pl-text); font-size: 26px; line-height: 1; }
+        .g-title { font-weight: 900; font-size: 16px; flex: 1; }
+        .g-score { font-weight: 900; font-size: 15px; color: var(--pl-pink); }
+        .g-body { flex: 1; position: relative; overflow: hidden; }
+        .g-overlay {
+            position: absolute; inset: 0; background: rgba(10,10,13,0.86); backdrop-filter: blur(3px);
+            display: none; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+            text-align: center; padding: 30px; z-index: 20;
+        }
+        .g-overlay.show { display: flex; }
+        .g-overlay h2 { font-size: 24px; font-weight: 900; margin: 0; }
+        .g-overlay p { color: var(--pl-text-dim); font-size: 14px; margin: 0; }
+        .g-btn { background: var(--pl-pink); color: #fff; border: none; border-radius: 999px; padding: 14px 30px; font-size: 15px; font-weight: 900; }
+        .g-btn.ghost { background: var(--pl-surface-2); color: var(--pl-text); border: 1px solid var(--pl-border); }
+        {% block game_style %}{% endblock %}
+    </style>
+</head>
+<body>
+<div class="g-wrap">
+    <div class="g-top">
+        <button class="g-back" onclick="location.href='{{ url_for('pl_spiele') }}'" aria-label="Zurück">&#8592;</button>
+        <span class="g-title">{{ game.title }}</span>
+        {% block game_topright %}{% endblock %}
+    </div>
+    <div class="g-body">
+        {% block game_body %}{% endblock %}
+    </div>
+</div>
+{% block game_script %}{% endblock %}
+</body>
+</html>

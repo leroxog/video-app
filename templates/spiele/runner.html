@@ -1,0 +1,200 @@
+{% extends "spiele/_game_base.html" %}
+{% block game_topright %}<span class="g-score" id="score">0</span>{% endblock %}
+{% block game_style %}
+  #rnCanvas { display:block; width:100%; height:100%; touch-action:none; }
+  .rn-hint { position:absolute; left:0; right:0; bottom: 20px; text-align:center; color: var(--pl-text-faint); font-size: 12px; pointer-events:none; }
+{% endblock %}
+{% block game_body %}
+<canvas id="rnCanvas"></canvas>
+<div class="rn-hint" id="rnHint">Wischen: Spur wechseln &nbsp;·&nbsp; Tippen / hoch: springen</div>
+<div class="g-overlay" id="rnOver">
+    <h2>Erwischt!</h2>
+    <p>Score: <b id="rnFinal">0</b> &nbsp;·&nbsp; Best: <b id="rnBest">0</b></p>
+    <button class="g-btn" id="rnRestart">Nochmal</button>
+</div>
+{% endblock %}
+{% block game_script %}
+<script>
+(function () {
+  var canvas = document.getElementById("rnCanvas"), ctx = canvas.getContext("2d");
+  var W, H, laneX, best = +(localStorage.getItem("rn_best") || 0);
+  var state;
+
+  function reset() {
+    state = {
+      lane: 1, targetLane: 1, x: 0, y: 0, vy: 0, jumping: false,
+      speed: 6, dist: 0, coins: 0, obstacles: [], coinsArr: [], spawnT: 0, coinT: 0,
+      running: true, t: 0,
+    };
+    document.getElementById("score").textContent = 0;
+    document.getElementById("rnOver").classList.remove("show");
+    document.getElementById("rnHint").style.opacity = 1;
+    loop();
+  }
+
+  function resize() {
+    W = canvas.clientWidth; H = canvas.clientHeight;
+    canvas.width = W * devicePixelRatio; canvas.height = H * devicePixelRatio;
+    ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+    laneX = [W * 0.28, W * 0.5, W * 0.72];
+  }
+
+  function groundY() { return H * 0.82; }
+  function persp(z) { return 0.35 + 0.65 * (1 - z); } // z: 0 near .. 1 far -> scale
+
+  function spawnObstacle() {
+    var lane = (Math.random() * 3) | 0;
+    var kind = Math.random() < 0.35 ? "jump" : "train"; // jump = low barrier, train = must switch lane
+    state.obstacles.push({ lane: lane, z: 1, kind: kind });
+  }
+  function spawnCoin() {
+    var lane = (Math.random() * 3) | 0;
+    state.coinsArr.push({ lane: lane, z: 1, got: false });
+  }
+
+  function loop() {
+    if (!state.running) return;
+    state.t++;
+    state.dist += state.speed;
+    state.speed = 6 + state.dist / 2600;
+    // lane lerp
+    var tx = laneX[state.targetLane];
+    state.x = state.x ? state.x + (tx - state.x) * 0.25 : tx;
+    // jump
+    if (state.jumping) {
+      state.vy += 1.4; state.y += state.vy;
+      if (state.y >= 0) { state.y = 0; state.vy = 0; state.jumping = false; }
+    }
+    // spawns
+    state.spawnT -= 1;
+    if (state.spawnT <= 0) { spawnObstacle(); state.spawnT = Math.max(28, 70 - state.dist / 500); }
+    state.coinT -= 1;
+    if (state.coinT <= 0) { spawnCoin(); state.coinT = 40; }
+    // move + collide
+    var dz = state.speed / 900;
+    state.obstacles.forEach(function (o) { o.z -= dz; });
+    state.coinsArr.forEach(function (c) { c.z -= dz; });
+    state.obstacles.forEach(function (o) {
+      if (o.hit) return;
+      if (o.z < 0.06 && o.z > -0.04 && o.lane === state.targetLane) {
+        if (o.kind === "jump" && state.jumping && state.y < -30) { /* cleared */ }
+        else { o.hit = true; gameOver(); }
+      }
+    });
+    state.coinsArr.forEach(function (c) {
+      if (!c.got && c.z < 0.06 && c.z > -0.04 && c.lane === state.targetLane && !(state.jumping && state.y < -25)) {
+        c.got = true; state.coins++;
+      }
+    });
+    state.obstacles = state.obstacles.filter(function (o) { return o.z > -0.1; });
+    state.coinsArr = state.coinsArr.filter(function (c) { return c.z > -0.1 && !c.got; });
+
+    var sc = Math.floor(state.dist / 10) + state.coins * 5;
+    document.getElementById("score").textContent = sc;
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  function laneScreenX(lane, z) {
+    var vanish = W / 2;
+    var near = laneX[lane];
+    return vanish + (near - vanish) * persp(z);
+  }
+  function laneScreenY(z) {
+    return H * 0.32 + (groundY() - H * 0.32) * persp(z);
+  }
+
+  function draw() {
+    // bg
+    var g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, "#0f1b2e"); g.addColorStop(0.55, "#101827"); g.addColorStop(1, "#05070c");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    // rails
+    ctx.strokeStyle = "#2b3a52"; ctx.lineWidth = 3;
+    [0, 1, 2].forEach(function (l) {
+      ctx.beginPath();
+      ctx.moveTo(laneScreenX(l, 1), laneScreenY(1));
+      ctx.lineTo(laneScreenX(l, 0), laneScreenY(0));
+      ctx.stroke();
+    });
+    // ties
+    for (var z = 0.02; z < 1; z += 0.06) {
+      var yy = laneScreenY(z);
+      ctx.globalAlpha = 0.25 + 0.4 * (1 - z);
+      ctx.strokeStyle = "#3a4b66";
+      ctx.beginPath(); ctx.moveTo(laneScreenX(0, z) - 6, yy); ctx.lineTo(laneScreenX(2, z) + 6, yy); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    // coins + obstacles sorted far->near
+    var items = [];
+    state.coinsArr.forEach(function (c) { items.push({ z: c.z, kind: "coin", o: c }); });
+    state.obstacles.forEach(function (o) { items.push({ z: o.z, kind: o.kind, o: o }); });
+    items.sort(function (a, b) { return b.z - a.z; });
+    items.forEach(function (it) {
+      if (it.z <= 0 || it.z > 1) return;
+      var sx = laneScreenX(it.o.lane, it.z), sy = laneScreenY(it.z), s = persp(it.z);
+      if (it.kind === "coin") {
+        ctx.fillStyle = "#ffd166";
+        ctx.beginPath(); ctx.arc(sx, sy - 26 * s, 12 * s, 0, 7); ctx.fill();
+      } else if (it.kind === "jump") {
+        ctx.fillStyle = "#e23b3b";
+        ctx.fillRect(sx - 26 * s, sy - 20 * s, 52 * s, 16 * s);
+      } else {
+        ctx.fillStyle = "#8a6bd6";
+        ctx.fillRect(sx - 28 * s, sy - 78 * s, 56 * s, 78 * s);
+        ctx.fillStyle = "#b8a0e8"; ctx.fillRect(sx - 20 * s, sy - 66 * s, 40 * s, 18 * s);
+      }
+    });
+    // player
+    var px = state.x || laneX[1];
+    var py = groundY() + state.y;
+    var bob = Math.sin(state.t * 0.4) * 2;
+    ctx.fillStyle = "#ff2d95";
+    ctx.fillRect(px - 13, py - 44 + bob, 26, 34);
+    ctx.fillStyle = "#ffdcc2";
+    ctx.beginPath(); ctx.arc(px, py - 52 + bob, 10, 0, 7); ctx.fill();
+    ctx.fillStyle = "#333";
+    var legSwing = state.jumping ? 0 : Math.sin(state.t * 0.5) * 5;
+    ctx.fillRect(px - 10, py - 12, 7, 14 + legSwing);
+    ctx.fillRect(px + 3, py - 12, 7, 14 - legSwing);
+  }
+
+  function gameOver() {
+    state.running = false;
+    var sc = Math.floor(state.dist / 10) + state.coins * 5;
+    if (sc > best) { best = sc; localStorage.setItem("rn_best", best); }
+    document.getElementById("rnFinal").textContent = sc;
+    document.getElementById("rnBest").textContent = best;
+    document.getElementById("rnOver").classList.add("show");
+  }
+
+  // input
+  function move(dir) {
+    if (!state.running) return;
+    state.targetLane = Math.max(0, Math.min(2, state.targetLane + dir));
+    document.getElementById("rnHint").style.opacity = 0;
+  }
+  function jump() {
+    if (!state.running || state.jumping) return;
+    state.jumping = true; state.vy = -17;
+    document.getElementById("rnHint").style.opacity = 0;
+  }
+  var sx0 = 0, sy0 = 0;
+  canvas.addEventListener("pointerdown", function (e) { sx0 = e.clientX; sy0 = e.clientY; });
+  canvas.addEventListener("pointerup", function (e) {
+    var dx = e.clientX - sx0, dy = e.clientY - sy0;
+    if (Math.abs(dx) < 24 && Math.abs(dy) < 24) { jump(); return; }
+    if (Math.abs(dx) > Math.abs(dy)) move(dx > 0 ? 1 : -1);
+    else if (dy < 0) jump();
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "ArrowLeft") move(-1);
+    else if (e.key === "ArrowRight") move(1);
+    else if (e.key === "ArrowUp" || e.key === " ") jump();
+  });
+  document.getElementById("rnRestart").addEventListener("click", reset);
+  window.addEventListener("resize", resize);
+  resize(); reset();
+})();
+</script>
+{% endblock %}

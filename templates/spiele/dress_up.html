@@ -1,0 +1,111 @@
+{% extends "spiele/_game_base.html" %}
+{% block game_style %}
+  .du-stage { display: flex; align-items: center; justify-content: center; height: 58%; }
+  .du-stage svg { height: 100%; max-height: 340px; }
+  .du-controls { height: 42%; overflow-y: auto; padding: 8px 12px 16px; }
+  .du-cat { margin-bottom: 12px; }
+  .du-cat h3 { font-size: 12px; font-weight: 800; color: var(--pl-text-faint); text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 6px; }
+  .du-opts { display: flex; gap: 8px; flex-wrap: wrap; }
+  .du-opt { border: 1px solid var(--pl-border); background: var(--pl-surface-2); border-radius: 999px; padding: 8px 14px; font-size: 12px; font-weight: 700; color: var(--pl-text); }
+  .du-opt.on { background: var(--pl-pink); color: #fff; border-color: var(--pl-pink); }
+  .du-swatch { width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--pl-border); padding: 0; }
+  .du-swatch.on { border-color: #fff; box-shadow: 0 0 0 2px var(--pl-pink); }
+  .du-save { margin: 6px 0 0; }
+{% endblock %}
+{% block game_body %}
+<div class="du-stage" id="duStage"></div>
+<div class="du-controls" id="duControls"></div>
+<div class="g-overlay" id="duOver">
+    <h2>Sieht super aus!</h2>
+    <p>Dein Look ist gespeichert.</p>
+    <button class="g-btn" id="duAgain">Weiter stylen</button>
+</div>
+{% endblock %}
+{% block game_script %}
+<script>
+(function () {
+  var state = { skin: 0, hair: 0, hairCol: "#4b2e1e", top: 0, topCol: "#ff2d95", bottom: 0, bottomCol: "#2b6cff", shoes: 0, shoesCol: "#222" };
+  var SKIN = ["#ffdcc2", "#f1c27d", "#c68642", "#8d5524"];
+  var HAIRS = ["kurz", "lang", "Zopf", "Locken", "Glatze"];
+  var TOPS = ["T-Shirt", "Pulli", "Kleid", "Crop"];
+  var BOTTOMS = ["Jeans", "Rock", "Shorts", "—"];
+  var SHOES = ["Sneaker", "Stiefel", "Sandalen"];
+  var PALETTE = ["#ff2d95", "#2b6cff", "#7bd88f", "#ffd166", "#c58cff", "#ff8f5c", "#ffffff", "#222222", "#4b2e1e", "#e8b17a"];
+
+  var stage = document.getElementById("duStage");
+
+  function fig() {
+    var s = state;
+    var body = SKIN[s.skin];
+    var hair = "";
+    if (s.hair === 0) hair = '<path d="M74 40c4-22 48-22 52 0 3 16-4 22-4 22s-4-16-22-16-22 16-22 16-7-6-4-22z" fill="'+s.hairCol+'"/>';
+    else if (s.hair === 1) hair = '<path d="M70 40c4-24 56-24 60 0 4 30 0 70 0 70l-12 0c0-30 2-52-18-52s-18 22-18 52l-12 0s-4-40 0-70z" fill="'+s.hairCol+'"/>';
+    else if (s.hair === 2) hair = '<path d="M74 40c4-22 48-22 52 0 3 16-4 22-4 22s-4-16-22-16-22 16-22 16-7-6-4-22z" fill="'+s.hairCol+'"/><rect x="122" y="52" width="10" height="46" rx="5" fill="'+s.hairCol+'"/>';
+    else if (s.hair === 3) hair = '<g fill="'+s.hairCol+'"><circle cx="76" cy="46" r="12"/><circle cx="100" cy="36" r="13"/><circle cx="124" cy="46" r="12"/><circle cx="70" cy="64" r="10"/><circle cx="130" cy="64" r="10"/></g>';
+    var top = "", bottom = "", shoes = "";
+    if (s.top === 0) top = '<path d="M74 96 L100 104 L126 96 L140 118 L128 128 V176 H72 V128 L60 118 Z" fill="'+s.topCol+'"/>';
+    else if (s.top === 1) top = '<path d="M70 92 L100 104 L130 92 L146 120 L130 134 V182 H70 V134 L54 120 Z" fill="'+s.topCol+'"/>';
+    else if (s.top === 2) top = '<path d="M72 96 L100 104 L128 96 L138 116 L128 126 L120 210 H80 L72 126 L62 116 Z" fill="'+s.topCol+'"/>';
+    else top = '<path d="M76 98 L100 104 L124 98 L134 116 L126 126 V140 H74 V126 L66 116 Z" fill="'+s.topCol+'"/>';
+    if (s.bottom === 0) bottom = '<path d="M74 176 H126 L122 250 H104 L100 190 L96 250 H78 Z" fill="'+s.bottomCol+'"/>';
+    else if (s.bottom === 1) bottom = '<path d="M72 176 H128 L134 224 H66 Z" fill="'+s.bottomCol+'"/>';
+    else if (s.bottom === 2) bottom = '<path d="M74 176 H126 L124 210 H104 L100 188 L96 210 H76 Z" fill="'+s.bottomCol+'"/>';
+    if (s.shoes === 0) shoes = '<rect x="76" y="250" width="22" height="12" rx="5" fill="'+s.shoesCol+'"/><rect x="102" y="250" width="22" height="12" rx="5" fill="'+s.shoesCol+'"/>';
+    else if (s.shoes === 1) shoes = '<rect x="76" y="236" width="20" height="26" rx="5" fill="'+s.shoesCol+'"/><rect x="104" y="236" width="20" height="26" rx="5" fill="'+s.shoesCol+'"/>';
+    else shoes = '<path d="M76 252 h22 v8 h-22z M102 252 h22 v8 h-22z" fill="'+s.shoesCol+'"/>';
+    return '<svg viewBox="0 0 200 280" xmlns="http://www.w3.org/2000/svg">'
+      + '<rect width="200" height="280" fill="none"/>'
+      + '<rect x="90" y="78" width="20" height="26" fill="'+body+'"/>'
+      + '<circle cx="100" cy="56" r="26" fill="'+body+'"/>'
+      + bottom + top
+      + '<rect x="60" y="104" width="14" height="60" rx="7" fill="'+body+'" transform="rotate(6 67 134)"/>'
+      + '<rect x="126" y="104" width="14" height="60" rx="7" fill="'+body+'" transform="rotate(-6 133 134)"/>'
+      + shoes + hair
+      + '<circle cx="92" cy="54" r="2.5" fill="#222"/><circle cx="108" cy="54" r="2.5" fill="#222"/>'
+      + '<path d="M94 64 q6 5 12 0" stroke="#c86" stroke-width="2" fill="none" stroke-linecap="round"/>'
+      + '</svg>';
+  }
+
+  function render() {
+    stage.innerHTML = fig();
+    var C = document.getElementById("duControls");
+    function cat(title, opts, key, onPick) {
+      var h = '<div class="du-cat"><h3>' + title + '</h3><div class="du-opts">';
+      opts.forEach(function (o, i) {
+        h += '<button class="du-opt ' + (state[key] === i ? "on" : "") + '" data-k="' + key + '" data-i="' + i + '">' + o + '</button>';
+      });
+      h += '</div></div>';
+      return h;
+    }
+    function colors(title, key) {
+      var h = '<div class="du-cat"><h3>' + title + '</h3><div class="du-opts">';
+      PALETTE.forEach(function (c) {
+        h += '<button class="du-swatch ' + (state[key] === c ? "on" : "") + '" style="background:' + c + '" data-col="' + key + '" data-v="' + c + '"></button>';
+      });
+      h += '</div></div>';
+      return h;
+    }
+    C.innerHTML =
+      cat("Haut", ["1", "2", "3", "4"], "skin") +
+      cat("Haare", HAIRS, "hair") + colors("Haarfarbe", "hairCol") +
+      cat("Oberteil", TOPS, "top") + colors("Farbe Oberteil", "topCol") +
+      cat("Unterteil", BOTTOMS, "bottom") + colors("Farbe Unterteil", "bottomCol") +
+      cat("Schuhe", SHOES, "shoes") + colors("Farbe Schuhe", "shoesCol") +
+      '<button class="g-btn du-save" id="duSave" style="width:100%;">Look speichern</button>';
+    C.querySelectorAll("[data-k]").forEach(function (b) {
+      b.addEventListener("click", function () { state[b.dataset.k] = +b.dataset.i; render(); });
+    });
+    C.querySelectorAll("[data-col]").forEach(function (b) {
+      b.addEventListener("click", function () { state[b.dataset.col] = b.dataset.v; render(); });
+    });
+    C.querySelector("#duSave").addEventListener("click", function () {
+      try { localStorage.setItem("du_look", JSON.stringify(state)); } catch (e) {}
+      document.getElementById("duOver").classList.add("show");
+    });
+  }
+  document.getElementById("duAgain").addEventListener("click", function () { document.getElementById("duOver").classList.remove("show"); });
+  try { var saved = JSON.parse(localStorage.getItem("du_look")); if (saved) state = Object.assign(state, saved); } catch (e) {}
+  render();
+})();
+</script>
+{% endblock %}
