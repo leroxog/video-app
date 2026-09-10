@@ -660,24 +660,55 @@ img { max-width: 100%; display: block; }
 .pl-profile-actions button { flex: 1; }
 .pl-hint { font-size: 12px; color: var(--pl-text-faint); margin-top: 10px; }
 
-/* chat view */
-.pl-chat-screen { display: flex; flex-direction: column; height: 100vh; height: 100dvh; max-width: 480px; margin: 0 auto; border-left: 1px solid var(--pl-border); border-right: 1px solid var(--pl-border); }
+/* chat view (standalone page -- DM / group conversation) */
+.pl-chat-screen { display: flex; flex-direction: column; height: 100vh; height: 100dvh; background: transparent; position: relative; }
 .pl-chat-header {
-  display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+  display: flex; align-items: center; gap: 11px; padding: 12px 14px;
   border-bottom: 1px solid var(--pl-border); background: var(--pl-surface); flex-shrink: 0;
 }
-.pl-chat-header .pl-avatar { width: 36px; height: 36px; font-size: 14px; }
+.pl-chat-header .pl-avatar { width: 38px; height: 38px; font-size: 14px; flex-shrink: 0; }
 .pl-chat-header-title { font-weight: 800; font-size: 15px; }
-.pl-chat-header-sub { font-size: 11px; color: var(--pl-text-faint); }
-.pl-chat-back { background: none; border: none; color: var(--pl-text); font-size: 26px; line-height: 1; padding: 0 4px; }
-.pl-chat-msgs { flex: 1; overflow-y: auto; padding: 16px 14px; display: flex; flex-direction: column; gap: 8px; }
-.pl-msg { max-width: 78%; padding: 9px 13px; border-radius: var(--pl-r-md); font-size: 14px; line-height: 1.4; word-break: break-word; white-space: pre-wrap; }
+.pl-chat-header-sub { font-size: 11.5px; color: var(--pl-text-faint); display: flex; align-items: center; gap: 6px; }
+.pl-chat-back {
+  background: none; border: none; color: var(--pl-text); font-size: 22px; line-height: 1;
+  width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.pl-chat-back:active { background: var(--pl-surface-2); }
+/* stacked member avatars for groups */
+.pl-chat-members { display: flex; align-items: center; }
+.pl-chat-members span {
+  width: 18px; height: 18px; border-radius: 50%; background: var(--pl-pink-soft, var(--pl-surface-3));
+  border: 1.5px solid var(--pl-surface); margin-left: -6px; font-size: 9px; font-weight: 800;
+  display: flex; align-items: center; justify-content: center; color: var(--pl-text);
+}
+.pl-chat-members span:first-child { margin-left: 0; }
+
+.pl-chat-msgs {
+  flex: 1; overflow-y: auto; padding: 18px 16px; display: flex; flex-direction: column; gap: 8px;
+  -webkit-overflow-scrolling: touch;
+}
+.pl-msg { max-width: 74%; padding: 9px 13px; border-radius: var(--pl-r-md); font-size: 14px; line-height: 1.4; word-break: break-word; white-space: pre-wrap; box-shadow: var(--pl-shadow); }
 .pl-msg.them { align-self: flex-start; background: var(--pl-surface-2); border: 1px solid var(--pl-border); border-bottom-left-radius: 6px; }
 .pl-msg.me { align-self: flex-end; background: var(--pl-pink); color: #fff; border-bottom-right-radius: 6px; }
 .pl-msg-sender { font-size: 10.5px; font-weight: 800; color: var(--pl-pink); margin-bottom: 2px; }
 .pl-msg-time { font-size: 9.5px; opacity: 0.6; margin-top: 3px; text-align: right; }
+
+/* empty conversation */
+.pl-chat-empty {
+  margin: auto; text-align: center; padding: 30px 24px; max-width: 320px;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+}
+.pl-chat-empty-orb {
+  width: 74px; height: 74px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, var(--pl-pink), #7a3bd0 70%, #3a1c74);
+  box-shadow: 0 12px 40px rgba(255, 45, 149, 0.35);
+}
+.pl-chat-empty-title { font-weight: 800; font-size: 15px; }
+.pl-chat-empty-sub { font-size: 12.5px; color: var(--pl-text-faint); line-height: 1.5; }
+
 .pl-chat-compose {
-  display: flex; gap: 8px; padding: 10px 12px calc(12px + env(safe-area-inset-bottom, 0px));
+  display: flex; gap: 8px; align-items: flex-end; padding: 10px 12px calc(12px + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid var(--pl-border); background: var(--pl-surface); flex-shrink: 0;
 }
 .pl-chat-compose textarea {
@@ -713,26 +744,36 @@ img { max-width: 100%; display: block; }
   background: var(--pl-surface-2);
 }
 
-/* game shell + standalone chat page: also fill the viewport; content
-   inside stays readable/centred. */
-.g-wrap, .pl-chat-screen {
+/* game shell: fill the viewport */
+.g-wrap {
   background: var(--pl-bg); position: relative;
   max-width: none !important;
   border-left: none !important; border-right: none !important;
 }
-@media (min-width: 720px) {
-  .pl-chat-msgs { max-width: 760px; margin: 0 auto; width: 100%; }
-  .pl-chat-header, .pl-chat-compose { padding-left: max(16px, calc((100% - 760px) / 2)); padding-right: max(16px, calc((100% - 760px) / 2)); }
-  .bb-tray, #bbCanvas { }
-}
+/* ambient pink/purple glow behind the standalone chat + game pages, fixed
+   to the viewport so it fills the whole window, not just the panel */
 .g-wrap::before, .pl-chat-screen::before {
-  content: ""; position: absolute; inset: -20%; z-index: 0; pointer-events: none;
+  content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none;
   background:
-    radial-gradient(40% 34% at 20% 10%, rgba(255, 45, 149, 0.26), transparent 70%),
-    radial-gradient(44% 36% at 86% 40%, rgba(120, 90, 255, 0.20), transparent 72%);
-  filter: blur(30px);
+    radial-gradient(38% 30% at 16% 10%, rgba(255, 45, 149, 0.30), transparent 70%),
+    radial-gradient(42% 34% at 88% 32%, rgba(120, 90, 255, 0.26), transparent 72%),
+    radial-gradient(46% 40% at 55% 100%, rgba(255, 90, 160, 0.20), transparent 72%);
 }
-.g-top, .g-body, .pl-chat-header, .pl-chat-msgs, .pl-chat-compose { position: relative; z-index: 1; }
+.g-top, .g-body,
+.pl-chat-header, .pl-chat-msgs, .pl-chat-compose, .pl-chat-empty { position: relative; z-index: 1; }
+
+/* Desktop: the conversation becomes a centred chat panel instead of a
+   lonely column of text on a black void. */
+@media (min-width: 760px) {
+  .pl-chat-screen {
+    max-width: 900px; margin: 0 auto;
+    border-left: 1px solid var(--pl-border); border-right: 1px solid var(--pl-border);
+    box-shadow: 0 0 80px rgba(0, 0, 0, 0.45);
+  }
+  .pl-chat-header, .pl-chat-compose { padding-left: 22px; padding-right: 22px; }
+  .pl-chat-msgs { padding: 24px 22px; }
+  .pl-msg { max-width: 66%; }
+}
 
 /* ===================================================================
    Desktop (>=900px): bottom nav -> left sidebar, content fills the

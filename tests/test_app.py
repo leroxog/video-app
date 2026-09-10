@@ -250,6 +250,9 @@ def test_group_needs_name_and_mutual_members(client):
     assert j["ok"]
     view = client.get(f"/freunde/c/{j['chat_id']}")
     assert view.status_code == 200 and b"Crew" in view.data
+    # optimised group view: empty-state placeholder + stacked member avatars
+    assert b"pl-chat-empty" in view.data and b"pl-chat-members" in view.data
+    assert b"Noch keine Nachrichten" in view.data
 
 
 def test_mutuals_endpoint_lists_only_mutuals(client):

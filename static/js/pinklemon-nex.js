@@ -157,73 +157,107 @@
     return "";
   }
 
+  var micSrc = null, micWave = null;
   function getMic() {
-    if (micStream) return Promise.resolve(micStream);
+    if (micStream && audioCtx) {
+      if (audioCtx.state === "suspended") { try { audioCtx.resume(); } catch (e) {} }
+      return Promise.resolve(micStream);
+    }
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return Promise.reject("nogum");
-    return navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }).then(function (s) {
+    return navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    }).then(function (s) {
       micStream = s;
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      var src = audioCtx.createMediaStreamSource(s);
+      if (audioCtx.state === "suspended") { try { audioCtx.resume(); } catch (e) {} }
+      micSrc = audioCtx.createMediaStreamSource(s);
       analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 512;
-      src.connect(analyser);
+      analyser.fftSize = 1024;
+      analyser.smoothingTimeConstant = 0.4;
+      micSrc.connect(analyser);
       micData = new Uint8Array(analyser.frequencyBinCount);
+      micWave = new Uint8Array(analyser.fftSize);
       return s;
     });
   }
+  // Loudness 0..1 -- time-domain RMS (robust) blended with the voice band.
   function readMic() {
     if (!analyser) return 0;
+    analyser.getByteTimeDomainData(micWave);
+    var sq = 0;
+    for (var i = 0; i < micWave.length; i++) { var v = (micWave[i] - 128) / 128; sq += v * v; }
+    var rms = Math.sqrt(sq / micWave.length);          // ~0 silence, ~0.05-0.25 speech
     analyser.getByteFrequencyData(micData);
     var sum = 0;
-    for (var i = 2; i < 60; i++) sum += micData[i];   // voice band
-    return Math.min(1, (sum / 58) / 70);
+    for (var k = 4; k < 90; k++) sum += micData[k];    // ~170 Hz .. 4 kHz
+    var band = (sum / 86) / 90;
+    return Math.min(1, Math.max(rms * 4.2, band));
   }
   function releaseMic() {
     if (micStream) { micStream.getTracks().forEach(function (t) { t.stop(); }); micStream = null; }
     if (audioCtx) { try { audioCtx.close(); } catch (e) {} audioCtx = null; }
-    analyser = null; micData = null;
+    analyser = null; micData = null; micWave = null; micSrc = null;
   }
 
   // ===================== conversation loop ===============================
+  var manualStop = false;
+
   function startListening() {
-    if (state === "listening" || state === "recording") return;
+    if (state === "listening") return;
     hideHeard();
-    if (!window.MediaRecorder) { openTyping(); setStatus("Sprachaufnahme geht hier nicht — tipp"); return; }
-    setStatus("Erlaube das Mikrofon …");
+    if (!window.MediaRecorder || !(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) {
+      conversing = false; state = "idle";
+      setStatus("Sprachaufnahme geht auf diesem Gerät nicht — schreib Nex");
+      openTyping();
+      return;
+    }
+    setStatus("Mikrofon freigeben …");
     getMic().then(function (stream) {
       state = "listening";
+      manualStop = false;
       micBtn.classList.add("listening");
-      setStatus("Nex hört zu … (nochmal tippen zum Abschicken)");
+      setStatus("Sprich – tippen wenn du fertig bist");
       chunks = [];
       sawSpeech = false; silentFrames = 0;
       var mime = pickMime();
       try { mediaRec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream); }
-      catch (e) { mediaRec = new MediaRecorder(stream); }
+      catch (e) { try { mediaRec = new MediaRecorder(stream); } catch (e2) { mediaRec = null; } }
+      if (!mediaRec) {
+        conversing = false; state = "idle";
+        setStatus("Aufnahme nicht möglich — schreib Nex"); openTyping(); return;
+      }
       mediaRec.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
       mediaRec.onstop = onRecordingStopped;
-      mediaRec.start();
+      mediaRec.onerror = function () { finishListening(true); };
+      mediaRec.start(200);            // timeslice -> guaranteed periodic chunks
       recStartAt = Date.now();
-      // simple voice-activity auto-stop
       vadTimer = setInterval(function () {
         var lvl = readMic();
-        if (lvl > 0.10) { sawSpeech = true; silentFrames = 0; }
-        else if (sawSpeech) { silentFrames++; }
-        if (sawSpeech && silentFrames > 14) finishListening();   // ~1.5s of silence
-        if (Date.now() - recStartAt > 20000) finishListening();  // hard cap 20s
+        if (lvl > 0.055) { sawSpeech = true; silentFrames = 0; }
+        else { silentFrames++; }
+        var elapsed = Date.now() - recStartAt;
+        // spoke, then ~1.3s of silence -> auto-send
+        if (sawSpeech && silentFrames > 12 && elapsed > 1100) { finishListening(false); return; }
+        // never registered any sound after 9s -> send anyway (quiet mic)
+        if (!sawSpeech && elapsed > 9000) { finishListening(false); return; }
+        if (elapsed > 22000) { finishListening(false); }
       }, 110);
     }).catch(function (err) {
       micBtn.classList.remove("listening");
       permBlocked = true;
-      state = "idle"; conversing = false;
-      setStatus("Kein Mikro-Zugriff — nutz die Tastatur");
+      conversing = false; state = "idle";
+      setStatus("Kein Mikrofon-Zugriff — erlaub es im Browser, oder schreib Nex");
       openTyping();
     });
   }
 
-  function finishListening() {
+  // isManual === true  -> user tapped to finish; always send whatever we got
+  // isManual === false -> silence/timeout auto-stop
+  function finishListening(isManual) {
     if (vadTimer) { clearInterval(vadTimer); vadTimer = null; }
+    manualStop = !!isManual;
     micBtn.classList.remove("listening");
-    if (mediaRec && mediaRec.state !== "inactive") { try { mediaRec.stop(); } catch (e) {} }
+    if (mediaRec && mediaRec.state !== "inactive") { try { mediaRec.stop(); } catch (e) { onRecordingStopped(); } }
     else onRecordingStopped();
   }
 
@@ -241,15 +275,19 @@
   function onRecordingStopped() {
     var recorded = chunks.slice();
     chunks = [];
-    var tooShort = Date.now() - recStartAt < 400 || !recorded.length;
-    if (tooShort || !sawSpeech) {
-      if (conversing) startListening(); else { state = "idle"; setStatus("Tipp den Kreis und red mit Nex"); }
+    var dur = Date.now() - recStartAt;
+    var blob = recorded.length ? new Blob(recorded, { type: recorded[0].type || "audio/webm" }) : null;
+    // Only bail on a genuine non-recording (too short / no data). No speech-
+    // detection gate here -- let Whisper decide; the client VAD is unreliable
+    // across devices and used to silently swallow every turn.
+    if (!blob || dur < 350 || blob.size < 900) {
+      if (conversing && !manualStop) { setTimeout(startListening, 200); }
+      else { state = "idle"; setStatus("Tipp den Kreis und red mit Nex"); }
       return;
     }
-    var blob = new Blob(recorded, { type: recorded[0].type || "audio/webm" });
     var ext = (blob.type.indexOf("mp4") >= 0) ? "mp4" : (blob.type.indexOf("ogg") >= 0 ? "ogg" : "webm");
     state = "thinking";
-    setStatus("Nex versteht dich …");
+    setStatus("Nex hört sich das an …");
     var fd = new FormData();
     fd.append("audio", blob, "speech." + ext);
     fetch("/api/pl/nex/voice", { method: "POST", body: fd })
@@ -257,8 +295,8 @@
       .then(function (j) {
         var txt = (j && j.transcript || "").trim();
         if (!txt) {
-          setStatus("Hab dich nicht verstanden — nochmal");
-          if (conversing) setTimeout(startListening, 600);
+          setStatus("Nichts verstanden – nochmal, etwas lauter");
+          if (conversing) setTimeout(startListening, 500);
           else state = "idle";
           return;
         }
@@ -266,8 +304,8 @@
         askNex(txt);
       })
       .catch(function () {
-        setStatus("Verbindung weg");
-        if (conversing) setTimeout(startListening, 800); else state = "idle";
+        setStatus("Verbindung weg – nochmal tippen");
+        state = "idle";
       });
   }
 
@@ -309,40 +347,58 @@
     return null;
   }
 
+  var speakWatchdog = null;
   function speak(text) {
     hideHeard();
+    var clean = stripMd(text);
     if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) {
-      state = "idle"; setStatus("Sprachausgabe hier nicht verfügbar"); return;
+      state = "idle"; setStatus(clean.slice(0, 120)); return;
     }
     state = "speaking";
     setStatus("Nex spricht …");
-    var u = new SpeechSynthesisUtterance(stripMd(text));
+    var done = false;
+    function finishSpeaking() {
+      if (done) return;
+      done = true;
+      if (speakWatchdog) { clearInterval(speakWatchdog); speakWatchdog = null; }
+      if (conversing) startListening();
+      else { state = "idle"; setStatus("Tipp den Kreis, um weiterzureden"); }
+    }
+    var u = new SpeechSynthesisUtterance(clean);
     u.lang = "de-DE"; u.rate = 1.05; u.pitch = 0.95;
     var v = germanVoice(); if (v) u.voice = v;
     u.onstart = function () { kick(6); };
     u.onboundary = function () { kick(2.4 + Math.random() * 2.6); };
-    u.onend = function () {
-      if (conversing) startListening();
-      else { state = "idle"; setStatus("Tipp den Kreis, um weiterzureden"); }
-    };
-    u.onerror = u.onend;
-    try { window.speechSynthesis.cancel(); window.speechSynthesis.speak(u); } catch (e) { u.onend(); }
+    u.onend = finishSpeaking;
+    u.onerror = finishSpeaking;
+    try {
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(u);
+      // Chrome stalls on long utterances and sometimes never fires onend --
+      // nudge it, and hard-stop after a generous estimate so the loop lives.
+      var budget = 4000 + clean.length * 90;
+      speakWatchdog = setInterval(function () {
+        if (!window.speechSynthesis.speaking) { finishSpeaking(); return; }
+        try { window.speechSynthesis.pause(); window.speechSynthesis.resume(); } catch (e) {}
+        budget -= 3000;
+        if (budget <= 0) { try { window.speechSynthesis.cancel(); } catch (e) {} finishSpeaking(); }
+      }, 3000);
+    } catch (e) { finishSpeaking(); }
   }
 
   // ===================== interaction =====================================
   function tap() {
-    if (window.speechSynthesis && state === "speaking") { try { window.speechSynthesis.cancel(); } catch (e) {} }
-    if (state === "listening") { finishListening(); return; }        // send now
-    if (state === "thinking") return;
-    // start / resume a hands-free conversation
-    conversing = true;
+    if (state === "listening") { finishListening(true); return; }     // done talking -> send
+    if (state === "thinking") { stopConversation(); return; }         // abort a pending turn
+    if (state === "speaking") {                                       // barge in
+      if (window.speechSynthesis) { try { window.speechSynthesis.cancel(); } catch (e) {} }
+      conversing = true; startListening(); return;
+    }
+    conversing = true;                                                // idle -> start
     startListening();
   }
   micBtn.addEventListener("click", tap);
-  canvas.addEventListener("click", function () {
-    if (state === "idle" || state === "speaking" || state === "listening") tap();
-    else stopConversation();   // tapping the orb while thinking = abort
-  });
+  canvas.addEventListener("click", tap);
 
   function openTyping() { typeRow.classList.add("show"); setTimeout(function () { typeInput.focus(); }, 100); }
   kbBtn.addEventListener("click", function () {

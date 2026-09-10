@@ -2,12 +2,18 @@
   "use strict";
   var CHAT = window.PL_CHAT;
   var msgsEl = document.getElementById("plMsgs");
+  var emptyEl = document.getElementById("plChatEmpty");
   var input = document.getElementById("plMsgInput");
   var sendBtn = document.getElementById("plMsgSend");
   var lastId = 0;
   var polling = null;
 
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+
+  function updateEmpty() {
+    if (!emptyEl) return;
+    emptyEl.hidden = msgsEl.querySelector(".pl-msg") !== null;
+  }
 
   function atBottom() { return msgsEl.scrollHeight - msgsEl.scrollTop - msgsEl.clientHeight < 60; }
   function scrollDown() { msgsEl.scrollTop = msgsEl.scrollHeight; }
@@ -22,6 +28,7 @@
     div.innerHTML = html;
     msgsEl.appendChild(div);
     lastId = Math.max(lastId, m.id);
+    updateEmpty();
   }
 
   function poll() {
@@ -66,8 +73,10 @@
     .then(function (r) { return r.json(); })
     .then(function (j) {
       if (j.ok) { j.messages.forEach(addMsg); scrollDown(); }
+      updateEmpty();
       polling = setInterval(poll, 3000);
-    });
+    })
+    .catch(function () { updateEmpty(); polling = setInterval(poll, 3000); });
 
   document.addEventListener("visibilitychange", function () {
     if (document.hidden) { clearInterval(polling); }

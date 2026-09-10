@@ -18,11 +18,24 @@
         <div>
             <div class="pl-chat-header-title">{{ chat.title }}</div>
             <div class="pl-chat-header-sub">
-                {% if chat.is_group %}{{ chat.members | length }} Mitglieder{% else %}Einzelchat{% endif %}
+                {% if chat.is_group %}
+                    <span class="pl-chat-members">
+                        {% for m in chat.members[:5] %}<span>{{ (m or '?')[0]|upper }}</span>{% endfor %}
+                    </span>
+                    {{ chat.members | length }} Mitglieder
+                {% else %}Einzelchat{% endif %}
             </div>
         </div>
     </div>
-    <div class="pl-chat-msgs" id="plMsgs"></div>
+    <div class="pl-chat-msgs" id="plMsgs">
+        <div class="pl-chat-empty" id="plChatEmpty" hidden>
+            <div class="pl-chat-empty-orb"></div>
+            <div class="pl-chat-empty-title">{{ chat.title }}</div>
+            <div class="pl-chat-empty-sub">
+                {% if chat.is_group %}Noch keine Nachrichten in dieser Gruppe. Schreib die erste!{% else %}Noch keine Nachrichten. Sag Hallo!{% endif %}
+            </div>
+        </div>
+    </div>
     <div class="pl-chat-compose">
         <textarea id="plMsgInput" rows="1" maxlength="4000" placeholder="Nachricht"></textarea>
         <button id="plMsgSend" aria-label="Senden">
