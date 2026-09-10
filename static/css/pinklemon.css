@@ -105,10 +105,10 @@ img { max-width: 100%; display: block; }
 }
 /* content stays a readable width, centred; the pink glow fills the sides */
 .pl-screen > * { width: 100%; max-width: 640px; flex-shrink: 0; }
-.pl-screen > .pl-soon,
-.pl-screen > .nx-empty,
-.pl-screen.nex { flex: 1; }
-.pl-screen.nex { align-items: stretch; }
+.pl-screen > .pl-soon { flex: 1; }
+/* Nex voice orb: full-bleed, no width cap, no padding */
+.pl-screen.nex { padding: 0; align-items: stretch; }
+.pl-screen.nex > * { max-width: none; flex: 1; }
 
 @media (max-width: 360px) {
   .pl-screen { padding-left: 10px; padding-right: 10px; }

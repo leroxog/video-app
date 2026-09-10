@@ -171,7 +171,7 @@ def test_feed_is_shared_across_users(client):
 @pytest.mark.parametrize("path,label", [
     ("/", b"Posts & Videos suchen"),
     ("/freunde", b"Freunde"),
-    ("/nex", b"Nachricht an Nex"),
+    ("/nex", b"nxCanvas"),
     ("/spiele", b"Spiele"),
     ("/videos", b"Wir arbeiten dran!"),
 ])
@@ -272,11 +272,11 @@ def test_profile_page_shows_follow_button(client):
 
 # ---------------- Nex (single AI) ----------------
 
-def test_nex_page_renders(client):
+def test_nex_page_is_the_voice_orb(client):
     signup(client, "alice")
     r = client.get("/nex").data
-    assert b"Nachricht an Nex" in r and b"pinklemon-nex.js" in r
-    # no persona switcher anymore
+    assert b"nxCanvas" in r and b"pinklemon-nex.js" in r and b"three.min.js" in r
+    # voice-first: no visible text chat, no persona switcher
     assert b"Ehrgeizig" not in r and b"Chaos" not in r
 
 

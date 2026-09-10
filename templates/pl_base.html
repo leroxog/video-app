@@ -22,7 +22,7 @@
 </head>
 <body>
 <div class="pl-app">
-    <div class="pl-screen">
+    <div class="pl-screen {% block screen_class %}{% endblock %}">
         {% block screen %}{% endblock %}
     </div>
     {% include "partials/_pl_nav.html" %}
