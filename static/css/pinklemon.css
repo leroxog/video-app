@@ -8,21 +8,20 @@
 :root {
   /* rounded UI typeface -- covers letters, numbers, everything */
   --pl-font: "Nunito", "Segoe UI", -apple-system, system-ui, "Helvetica Neue", Arial, sans-serif;
-  --pl-bg: #08080a;
-  /* Glass surfaces: translucent, so a backdrop-filter blur picks up the
-     drifting pink glow behind .pl-app (see .pl-app::before). Solid brand
-     bits (.pl-pink buttons/avatars/pink chat bubbles) stay opaque. */
-  --pl-surface: rgba(255, 255, 255, 0.055);
-  --pl-surface-2: rgba(255, 255, 255, 0.085);
-  --pl-surface-3: rgba(255, 255, 255, 0.15);
-  --pl-border: rgba(255, 255, 255, 0.13);
-  --pl-text: #f3f3f5;
+  /* X-style: flat near-black, hairline borders, no ambient glow */
+  --pl-bg: #000000;
+  --pl-surface: rgba(255, 255, 255, 0.03);
+  --pl-surface-2: rgba(255, 255, 255, 0.07);
+  --pl-surface-3: rgba(255, 255, 255, 0.14);
+  --pl-border: rgba(255, 255, 255, 0.16);
+  --pl-hover: rgba(255, 255, 255, 0.03);
+  --pl-text: #e7e9ea;
   --pl-text-dim: #b4b4bd;
-  --pl-text-faint: #7f7f8a;
+  --pl-text-faint: #71767b;
   --pl-pink: #ff2d95;
   --pl-pink-soft: rgba(255, 45, 149, 0.16);
   --pl-danger: #ff5a5a;
-  --pl-blur: blur(16px) saturate(1.4);
+  --pl-blur: blur(12px) saturate(1.3);
   --pl-r-sm: 12px;
   --pl-r-md: 20px;
   --pl-r-lg: 30px;
@@ -31,14 +30,15 @@
 }
 
 :root[data-theme="light"] {
-  --pl-bg: #eef0f5;
-  --pl-surface: rgba(255, 255, 255, 0.62);
-  --pl-surface-2: rgba(255, 255, 255, 0.48);
-  --pl-surface-3: rgba(0, 0, 0, 0.07);
-  --pl-border: rgba(0, 0, 0, 0.09);
-  --pl-text: #16161a;
-  --pl-text-dim: #4c4c56;
-  --pl-text-faint: #8a8a95;
+  --pl-bg: #ffffff;
+  --pl-surface: rgba(0, 0, 0, 0.03);
+  --pl-surface-2: rgba(0, 0, 0, 0.06);
+  --pl-surface-3: rgba(0, 0, 0, 0.09);
+  --pl-border: rgba(0, 0, 0, 0.12);
+  --pl-hover: rgba(0, 0, 0, 0.03);
+  --pl-text: #0f1419;
+  --pl-text-dim: #3d4247;
+  --pl-text-faint: #536471;
   --pl-pink-soft: rgba(255, 45, 149, 0.12);
   --pl-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
 }
@@ -89,19 +89,8 @@ img { max-width: 100%; display: block; }
   overflow: hidden;
   background: var(--pl-bg);
 }
-/* drifting pink glow the glass surfaces blur through */
-.pl-app::before {
-  content: "";
-  position: absolute;
-  inset: -20%;
-  z-index: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(38% 32% at 18% 12%, rgba(255, 45, 149, 0.32), transparent 70%),
-    radial-gradient(42% 34% at 88% 30%, rgba(120, 90, 255, 0.26), transparent 72%),
-    radial-gradient(46% 40% at 55% 100%, rgba(255, 90, 160, 0.22), transparent 72%);
-}
-:root[data-theme="light"] .pl-app::before { opacity: 0.55; }
+/* X-style: no ambient glow */
+.pl-app::before { display: none; }
 
 .pl-screen {
   position: relative;
@@ -1289,3 +1278,68 @@ img { max-width: 100%; display: block; }
   position: absolute; right: -4px; bottom: -4px; padding: 8px; border-radius: 50%;
   background: var(--pl-pink);
 }
+
+/* ===================================================================
+   X-style v2 -- bordered centre column, sticky glassy headers, flat
+   surfaces, row hover. Pink stays the accent.
+   =================================================================== */
+
+/* flat: drop the blur on content surfaces (keep it only on sticky bars) */
+.pl-post, .pl-ps-card, .pl-comments, .pl-video-tile,
+.pl-search, .pl-topsearch-bar, .pl-att, .pl-comment-compose textarea {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+.pl-post-group:hover { background: var(--pl-hover); }
+.pl-comment:hover { background: var(--pl-hover); }
+
+/* the search pill + tab bar read as one X-style header */
+.pl-searchbar { margin-bottom: 0; padding: 8px 0 10px; }
+.pl-search { border-radius: 999px; }
+.pl-feedtabs { margin: 0 0 0; }
+.pl-feedtabs a { padding: 15px 6px; }
+
+/* sticky column headers, translucent black */
+.pl-feedtabs, .pl-screen-head, .pl-prof2-topbar {
+  position: sticky; top: 0; z-index: 20;
+  background: var(--pl-bg);
+  background: color-mix(in srgb, var(--pl-bg) 82%, transparent);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+}
+.pl-topbrand { padding: 8px 0; margin-bottom: 0; }
+.pl-screen-head { padding: 10px 0; margin-bottom: 10px; }
+.pl-prof2-topbar { margin: 0; }
+.pl-msg-filters { padding: 8px 0 10px; margin: 0; }
+
+/* Desktop: a real bordered timeline column next to the sidebar */
+@media (min-width: 900px) {
+  .pl-screen:not(.nex):not(.vid) {
+    flex: 1 1 auto;
+    max-width: 620px;
+    margin: 0;
+    padding: 0 0 60px;
+    align-items: stretch;
+    border-right: 1px solid var(--pl-border);
+  }
+  .pl-screen:not(.nex):not(.vid) > * { max-width: none; }
+  .pl-screen > *:not(.pl-soon):not(.nx-chat):not(.pl-vidfeed) { padding-left: 16px; padding-right: 16px; }
+  .pl-feed { padding-left: 0; padding-right: 0; }
+  .pl-feed > .pl-post-group { padding-left: 16px; padding-right: 16px; }
+  .pl-feed > .pl-post-group:hover { background: var(--pl-hover); }
+  .pl-prof2-banner { margin: 0; }
+  .pl-app { justify-content: flex-start; }
+  /* keep the sidebar a touch wider, X-like */
+  .pl-nav { width: 250px; }
+}
+
+/* action icons: hover-tint like X */
+.pl-post-stats .pl-stat-comment:hover { color: #1d9bf0; }
+.pl-post-stats .pl-stat-like:hover { color: var(--pl-pink); }
+.pl-post-stats span:last-child:hover { color: #00ba7c; }
+
+/* pill buttons a bit tighter */
+.pl-btn { border-radius: 999px; }
+.pl-share-btn, .pl-ps-add-btn, .pl-comments-btn, .pl-mini-btn { border-radius: 999px; }
+
+/* chat bubbles: keep pink for me, flat surface for them */
+.pl-msg.them { background: var(--pl-surface-2); }
