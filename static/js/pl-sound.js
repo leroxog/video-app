@@ -277,18 +277,6 @@
     }
   };
 
-  // --- small floating mute toggle ---
+  // no visible toggle button -- mute via window.plSound.toggle()
   var btn = null;
-  function mkBtn() {
-    if (btn || !document.body) return;
-    btn = document.createElement("button");
-    btn.className = "pl-soundtoggle";
-    btn.type = "button";
-    btn.setAttribute("aria-label", "Ton an/aus");
-    btn.textContent = muted ? "🔇" : "🔊";
-    btn.addEventListener("click", function (e) { e.stopPropagation(); window.plSound.toggle(); });
-    document.body.appendChild(btn);
-  }
-  if (document.readyState !== "loading") mkBtn();
-  else document.addEventListener("DOMContentLoaded", mkBtn);
 })();
