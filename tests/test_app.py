@@ -457,6 +457,60 @@ def test_bookmarks_and_views_are_gone(client):
     assert b"Aufrufe" not in client.get("/").data
 
 
+def test_delete_keeps_reposts_alive(client):
+    bob = make_user(client, "bob")
+    signup(client, "alice")
+    pid = client.post("/api/pl/posts", json={"heading": "bleibt erhalten"}).get_json()["post"]["id"]
+    # bob reposts it
+    assert bob.post(f"/api/pl/posts/{pid}/repost", json={}).get_json()["reposted"] is True
+    # alice deletes -> soft delete, row stays
+    d = client.delete(f"/api/pl/posts/{pid}").get_json()
+    assert d["ok"] is True and d["soft"] is True
+    # gone from alice's normal feed
+    assert b"bleibt erhalten" not in client.get("/?feed=neu").data
+    # but bob still sees it on his reposts profile tab
+    assert b"bleibt erhalten" in bob.get("/freunde/u/bob?tab=reposts").data
+    # bob can drop his own repost
+    assert bob.post(f"/api/pl/posts/{pid}/repost", json={}).get_json()["reposted"] is False
+
+
+def test_hide_comment_is_followers_only(client):
+    bob = make_user(client, "bob")
+    signup(client, "alice")
+    pid = client.post("/api/pl/posts", json={"heading": "p"}).get_json()["post"]["id"]
+    cid = client.post(f"/api/pl/posts/{pid}/comments", json={"body": "geheim"}).get_json()["comment"]["id"]
+    assert client.post(f"/api/pl/comments/{cid}/hide").get_json()["hidden"] is True
+    # bob (not a follower) can't see it
+    seen = bob.get(f"/api/pl/posts/{pid}/comments").get_json()["comments"]
+    assert all(c["body"] != "geheim" for c in seen)
+    # alice (author) still sees her own
+    mine = client.get(f"/api/pl/posts/{pid}/comments").get_json()["comments"]
+    assert any(c["body"] == "geheim" and c["hidden"] for c in mine)
+
+
+def test_profile_has_posts_reposts_likes_tabs(client):
+    signup(client, "alice")
+    client.post("/api/pl/posts", json={"heading": "meiner"})
+    body = client.get("/freunde/u/alice").data
+    assert b"Reposts" in body and b"Likes" in body
+    assert client.get("/freunde/u/alice?tab=likes").status_code == 200
+    assert client.get("/freunde/u/alice?tab=reposts").status_code == 200
+
+
+def test_not_interested_hides_post(client):
+    signup(client, "alice")
+    pid = client.post("/api/pl/posts", json={"heading": "nervt"}).get_json()["post"]["id"]
+    assert client.post(f"/api/pl/posts/{pid}/not-interested").get_json()["ok"] is True
+    assert b"nervt" not in client.get("/?feed=neu").data
+
+
+def test_urls_render_as_pink_preview_links(client):
+    signup(client, "alice")
+    client.post("/api/pl/posts", json={"heading": "link", "body": "schau https://example.com/x"})
+    body = client.get("/").data
+    assert b"pl-link" in body and b'data-pl-preview="https://example.com/x"' in body
+
+
 def test_new_feed_tab_and_pagination(client):
     signup(client, "alice")
     for i in range(3):

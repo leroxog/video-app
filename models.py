@@ -704,6 +704,11 @@ class FeedPost(db.Model):
     view_count = db.Column(db.Integer, nullable=False, default=0)
     is_sensitive = db.Column(db.Boolean, nullable=False, default=False)
     poll_json = db.Column(db.Text, nullable=True)              # JSON list of option strings
+    # Soft delete: when the author deletes a post that others have already
+    # reposted, the row stays so those reposts keep working -- it's just
+    # hidden from every normal feed/profile listing. Hard-deleted only when
+    # nobody reposted it.
+    author_deleted_at = db.Column(db.DateTime, nullable=True)
 
     author = db.relationship("User")
     likes = db.relationship("FeedLike", backref="post", lazy=True, cascade="all, delete-orphan")
@@ -763,6 +768,9 @@ class FeedComment(db.Model):
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     att_kind = db.Column(db.String(12), nullable=True)
     att_value = db.Column(db.String(255), nullable=True)
+    # "Verstecken": a hidden comment is only shown to its author and the
+    # people who follow the author.
+    hidden_at = db.Column(db.DateTime, nullable=True)
 
     author = db.relationship("User")
     likes = db.relationship("FeedCommentLike", backref="comment", lazy=True, cascade="all, delete-orphan")

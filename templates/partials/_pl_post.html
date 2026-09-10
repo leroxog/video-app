@@ -6,9 +6,10 @@
      data-reposted="{{ '1' if post.reposted_by_me else '0' }}">
 
   {% if post.repost %}
-  <div class="pl-repost-head">{{ plicon('share', 13) }} {{ post.repost.by.name if post.repost.by else 'Jemand' }} hat repostet &middot; {{ post.repost.ago }}</div>
+  <div class="pl-repost-head">{{ plicon('repost', 13) }} {{ post.repost.by.name if post.repost.by else 'Jemand' }} hat repostet &middot; {{ post.repost.ago }}</div>
   {% if post.repost.quote %}<div class="pl-quote-text">{{ post.repost.quote }}</div>{% endif %}
   {% endif %}
+  {% if post.author_deleted %}<div class="pl-repost-head pl-orig-gone">{{ plicon('trash', 12) }} Original vom Autor gel&ouml;scht</div>{% endif %}
 
   <article class="pl-post" data-post-id="{{ post.id }}"
            data-liked="{{ '1' if post.liked_by_me else '0' }}"
@@ -20,15 +21,29 @@
       </div>
 
       <button type="button" class="pl-post-kebab" data-kebab aria-label="Mehr">&#8942;</button>
-      <div class="pl-post-menu" hidden>
-        <button type="button" data-act="copy">Link kopieren</button>
+      <div class="pl-post-menu" data-menu="main" hidden>
         {% if post.is_mine %}
-        <button type="button" data-act="edit">Bearbeiten</button>
-        <button type="button" data-act="pin">{{ 'Losl&ouml;sen' if post.pinned else 'Anheften' }}</button>
-        <button type="button" data-act="delete" class="pl-danger">L&ouml;schen</button>
+        <button type="button" data-act="delete" class="pl-danger">{{ plicon('trash', 15) }} <span>L&ouml;schen</span></button>
         {% else %}
-        <button type="button" data-act="report" class="pl-danger">Melden</button>
+        <button type="button" data-act="report" class="pl-danger">{{ plicon('warn', 15) }} <span>Melden</span></button>
         {% endif %}
+        <button type="button" data-act="share-open">{{ plicon('share', 15) }} <span>Teilen</span></button>
+        <button type="button" data-act="copy-text">{{ plicon('copy', 15) }} <span>Kopieren</span></button>
+        {% if not post.is_mine %}
+        <button type="button" data-act="not-interested">{{ plicon('block', 15) }} <span>Nicht interessiert</span></button>
+        {% endif %}
+        {% if post.is_mine %}
+        <button type="button" data-act="edit">{{ plicon('edit', 15) }} <span>Bearbeiten</span></button>
+        <button type="button" data-act="pin">{{ plicon('pin', 15) }} <span>{{ 'L&ouml;sen' if post.pinned else 'Fixieren' }}</span></button>
+        {% endif %}
+      </div>
+      <div class="pl-post-menu pl-share-menu" data-menu="share" hidden>
+        <button type="button" data-act="share-back" class="pl-menu-back">&lsaquo; <span>Teilen</span></button>
+        <button type="button" data-act="copy-link">{{ plicon('link', 15) }} <span>Link kopieren</span></button>
+        <button type="button" data-act="share-wa">{{ plicon('whatsapp', 15) }} <span>WhatsApp</span></button>
+        <button type="button" data-act="share-fb">{{ plicon('facebook', 15) }} <span>Facebook</span></button>
+        <button type="button" data-act="share-ig">{{ plicon('instagram', 15) }} <span>Instagram</span></button>
+        <button type="button" data-act="share-tt">{{ plicon('tiktok', 15) }} <span>TikTok</span></button>
       </div>
 
       <div class="pl-post-head">

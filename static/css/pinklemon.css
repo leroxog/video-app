@@ -1560,3 +1560,152 @@ img { max-width: 100%; display: block; }
 .pl-who-name b { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pl-who-name span { font-size: 12px; color: var(--pl-text-faint); }
 
+
+/* ===================================================================
+   v3 -- rounded glass cards feed, restructured post/comment menus,
+   pink links + long-press preview, profile Posts/Reposts/Likes tabs.
+   This block is last on purpose: it re-cards the feed that the
+   earlier "X-style pass" had flattened.
+   =================================================================== */
+
+/* user-typed links: HEXAGONUM pink */
+.pl-link { color: var(--pl-pink); word-break: break-word; }
+.pl-link:hover { text-decoration: underline; }
+
+/* ambient glow so the frosted-glass cards have something to refract */
+body::before {
+  content: "";
+  position: fixed;
+  inset: -20% -10% auto -10%;
+  height: 90vh;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(46% 40% at 18% 12%, rgba(255, 45, 149, 0.16), transparent 70%),
+    radial-gradient(50% 42% at 88% 4%, rgba(124, 92, 255, 0.15), transparent 70%);
+}
+.pl-screen, .pl-nav, .pl-topbrand { position: relative; z-index: 1; }
+
+/* ---- feed cards ---- */
+.pl-feed { gap: 14px; display: flex; flex-direction: column; }
+.pl-feed .pl-post-group,
+#plFeed .pl-post-group { border: none; padding: 0; margin: 0; }
+.pl-feed .pl-post-group:hover,
+#plFeed .pl-post-group:hover { background: none; }
+.pl-feed .pl-post,
+#plFeed .pl-post {
+  background: rgba(58, 58, 62, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 22px;
+  padding: 16px 18px 12px;
+  box-shadow: 0 8px 26px rgba(0, 0, 0, .34);
+  -webkit-backdrop-filter: var(--pl-blur) !important;
+  backdrop-filter: var(--pl-blur) !important;
+}
+.pl-feed .pl-post:hover,
+#plFeed .pl-post:hover { border-color: rgba(255, 255, 255, 0.24); }
+
+/* repost / "original gone" line sits above the card */
+.pl-repost-head { padding-left: 6px; }
+.pl-orig-gone { color: var(--pl-text-faint); }
+.pl-orig-gone svg { width: 12px; height: 12px; }
+
+/* P.S. + comments: their own softer nested cards */
+.pl-ps-slot { margin-top: 8px; }
+.pl-ps-card {
+  background: var(--pl-surface-2);
+  background: color-mix(in srgb, var(--pl-surface-2) 85%, transparent);
+  border: 1px solid var(--pl-border);
+  border-radius: 18px;
+  padding: 12px 16px;
+  -webkit-backdrop-filter: var(--pl-blur) !important;
+  backdrop-filter: var(--pl-blur) !important;
+}
+.pl-comments:not([hidden]) {
+  margin-top: 8px;
+  background: var(--pl-surface);
+  background: color-mix(in srgb, var(--pl-surface) 80%, transparent);
+  border: 1px solid var(--pl-border);
+  border-radius: 18px;
+  padding: 10px 14px;
+}
+
+/* ---- kebab menu: icon rows + share submenu ---- */
+.pl-post-menu { min-width: 210px; }
+.pl-post-menu button {
+  display: flex; align-items: center; gap: 11px;
+  width: 100%; text-align: left;
+}
+.pl-post-menu button svg { width: 16px; height: 16px; flex: none; opacity: .9; }
+.pl-post-menu button.pl-danger { color: #f4212e; }
+.pl-post-menu button.pl-danger svg { color: #f4212e; opacity: 1; }
+.pl-menu-back { font-weight: 800 !important; color: var(--pl-text-faint) !important; }
+.pl-share-menu { min-width: 210px; }
+
+/* ---- comment kebab ---- */
+.pl-comment { position: relative; }
+.pl-comment-head { position: relative; padding-right: 22px; }
+.pl-comment-kebab {
+  position: absolute; top: -2px; right: -4px;
+  border: none; background: none; color: var(--pl-text-faint);
+  width: 24px; height: 24px; border-radius: 50%; font-size: 15px; line-height: 1;
+}
+.pl-comment-kebab:hover { background: var(--pl-hover); color: var(--pl-text); }
+.pl-comment-menu {
+  position: absolute; top: 20px; right: 0; z-index: 20;
+  min-width: 150px; background: var(--pl-surface); border: 1px solid var(--pl-border);
+  border-radius: 12px; padding: 5px; box-shadow: 0 10px 28px rgba(0,0,0,.4);
+}
+.pl-comment-menu button {
+  display: block; width: 100%; text-align: left; border: none; background: none;
+  color: var(--pl-text); font: inherit; font-size: 13px; font-weight: 600;
+  padding: 8px 9px; border-radius: 8px;
+}
+.pl-comment-menu button:hover { background: var(--pl-hover); }
+.pl-comment-menu button.pl-danger { color: #f4212e; }
+.pl-comment.is-hidden { opacity: .6; }
+.pl-comment-hidden-tag {
+  font-size: 10.5px; font-weight: 800; color: var(--pl-pink);
+  border: 1px solid currentColor; border-radius: 999px; padding: 1px 7px; margin-left: 4px;
+}
+
+/* ---- link long-press preview ---- */
+.pl-linkprev-back {
+  position: fixed; inset: 0; z-index: 500; background: rgba(0,0,0,.62);
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.pl-linkprev {
+  width: 100%; max-width: 680px; height: min(74vh, 640px);
+  display: flex; flex-direction: column;
+  background: var(--pl-bg);
+  border: 1px solid var(--pl-border); border-radius: 20px; overflow: hidden;
+  box-shadow: 0 26px 70px rgba(0,0,0,.55);
+}
+.pl-linkprev-bar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 12px; border-bottom: 1px solid var(--pl-border);
+}
+.pl-linkprev-url {
+  flex: 1; min-width: 0; font-size: 12.5px; color: var(--pl-text-dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pl-linkprev-open {
+  background: var(--pl-pink); color: #fff; font-weight: 800; font-size: 12.5px;
+  padding: 7px 15px; border-radius: 999px; flex: none;
+}
+.pl-linkprev-x {
+  border: none; background: none; color: var(--pl-text-dim); font-size: 15px;
+  width: 30px; height: 30px; border-radius: 50%; flex: none;
+}
+.pl-linkprev-x:hover { background: var(--pl-hover); color: var(--pl-text); }
+.pl-linkprev-frame { position: relative; flex: 1; background: #fff; }
+.pl-linkprev-frame iframe { width: 100%; height: 100%; border: 0; display: block; }
+.pl-linkprev-fallback {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 8px; text-align: center;
+  background: var(--pl-bg); color: var(--pl-text-dim); font-size: 13.5px; padding: 24px;
+}
+.pl-linkprev-fallback a { color: var(--pl-pink); font-weight: 700; }
+
+/* ---- profile Posts / Reposts / Likes tabs ---- */
+.pl-prof2-tabs a { cursor: pointer; }

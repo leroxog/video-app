@@ -671,8 +671,12 @@ def ensure_sqlite_columns_exist():
             ("view_count", "INTEGER NOT NULL DEFAULT 0"),
             ("is_sensitive", "BOOLEAN NOT NULL DEFAULT 0"),
             ("poll_json", "TEXT"),
+            ("author_deleted_at", "DATETIME"),
         ],
-        "feed_comment": [("att_kind", "VARCHAR(12)"), ("att_value", "VARCHAR(255)")],
+        "feed_comment": [
+            ("att_kind", "VARCHAR(12)"), ("att_value", "VARCHAR(255)"),
+            ("hidden_at", "DATETIME"),
+        ],
         "feed_ps": [("att_kind", "VARCHAR(12)"), ("att_value", "VARCHAR(255)")],
         "pl_message": [("att_kind", "VARCHAR(12)"), ("att_value", "VARCHAR(255)")],
         # 7Ai (2026-09-08, see ai_assistant.py's SEVENAI_SYSTEM_PROMPT) --
@@ -769,8 +773,10 @@ def ensure_columns_exist():
         'ALTER TABLE feed_post ADD COLUMN IF NOT EXISTS view_count INTEGER NOT NULL DEFAULT 0',
         'ALTER TABLE feed_post ADD COLUMN IF NOT EXISTS is_sensitive BOOLEAN NOT NULL DEFAULT FALSE',
         'ALTER TABLE feed_post ADD COLUMN IF NOT EXISTS poll_json TEXT',
+        'ALTER TABLE feed_post ADD COLUMN IF NOT EXISTS author_deleted_at TIMESTAMP',
         'ALTER TABLE feed_comment ADD COLUMN IF NOT EXISTS att_kind VARCHAR(12)',
         'ALTER TABLE feed_comment ADD COLUMN IF NOT EXISTS att_value VARCHAR(255)',
+        'ALTER TABLE feed_comment ADD COLUMN IF NOT EXISTS hidden_at TIMESTAMP',
         'ALTER TABLE feed_ps ADD COLUMN IF NOT EXISTS att_kind VARCHAR(12)',
         'ALTER TABLE feed_ps ADD COLUMN IF NOT EXISTS att_value VARCHAR(255)',
         'ALTER TABLE pl_message ADD COLUMN IF NOT EXISTS att_kind VARCHAR(12)',
@@ -1296,13 +1302,23 @@ _PL_MENTION_RE = re.compile(r"(?<![\w@])@([A-Za-z0-9_.]{3,30})")
 _PL_URL_RE = re.compile(r"(https?://[^\s<]+)")
 
 
+def _pl_pretty_url(url):
+    """Shorten a URL for display: drop the scheme and any trailing slash,
+    cap the length. The full URL stays in href / data-pl-preview."""
+    shown = re.sub(r"^https?://(www\.)?", "", url).rstrip("/")
+    return shown if len(shown) <= 42 else shown[:39] + "…"
+
+
 def _pl_linkify(text):
     """Escape user text, then turn #hashtags, @mentions and URLs into links.
     Returns HTML (mark |safe when rendering)."""
     import markupsafe
     out = str(markupsafe.escape(text or ""))
     out = _PL_URL_RE.sub(
-        lambda m: f'<a href="{m.group(1)}" target="_blank" rel="noopener nofollow" class="pl-link">{m.group(1)}</a>',
+        lambda m: (
+            f'<a href="{m.group(1)}" target="_blank" rel="noopener nofollow" '
+            f'class="pl-link" data-pl-preview="{m.group(1)}">{_pl_pretty_url(m.group(1))}</a>'
+        ),
         out,
     )
     out = _PL_TAG_RE.sub(
@@ -1358,6 +1374,7 @@ def serialize_pl_post(post, me, repost_meta=None):
         "is_mine": post.author_id == me.id,
         "edited": post.edited_at is not None,
         "pinned": post.pinned_at is not None,
+        "author_deleted": post.author_deleted_at is not None,
         "sensitive": bool(post.is_sensitive),
         "poll": _pl_poll_state(post, me),
         "author": _pl_user_brief(post.author),
@@ -1483,7 +1500,10 @@ def pl_home():
     fa = request.args.get("feed")
     feed = fa if fa in ("following", "neu") else "foryou"
     before = request.args.get("before", type=int)   # pagination cursor
-    base = FeedPost.query
+    uninterested = set(session.get("_pl_uninterested", []))
+    base = FeedPost.query.filter(FeedPost.author_deleted_at.is_(None))
+    if uninterested:
+        base = base.filter(FeedPost.id.notin_(uninterested))
     if before:
         base = base.filter(FeedPost.id < before)
 
@@ -1514,7 +1534,7 @@ def pl_home():
                   .order_by(FeedRepost.created_at.desc()).limit(15).all())
             for r in qr:
                 p = db.session.get(FeedPost, r.post_id)
-                if p is None or p.id in shown:
+                if p is None or p.id in shown or p.id in uninterested:
                     continue
                 by = db.session.get(User, r.user_id)
                 serialized.insert(0, serialize_pl_post(p, me, repost_meta={
@@ -1550,11 +1570,45 @@ def pl_profile(username):
         abort(404)
     i_follow = Subscription.query.filter_by(subscriber_id=me.id, channel_id=user.id).first() is not None
     follows_me = Subscription.query.filter_by(subscriber_id=user.id, channel_id=me.id).first() is not None
-    user_posts = (
-        FeedPost.query.filter_by(author_id=user.id)
-        .order_by(FeedPost.pinned_at.isnot(None).desc(), FeedPost.created_at.desc())
-        .limit(40).all()
-    )
+
+    tab = request.args.get("tab")
+    if tab not in ("reposts", "likes"):
+        tab = "posts"
+
+    post_count = FeedPost.query.filter_by(author_id=user.id).filter(
+        FeedPost.author_deleted_at.is_(None)).count()
+
+    if tab == "reposts":
+        rows = (FeedRepost.query.filter_by(user_id=user.id)
+                .order_by(FeedRepost.created_at.desc()).limit(40).all())
+        cards = []
+        for r in rows:
+            p = db.session.get(FeedPost, r.post_id)
+            if p is None:
+                continue
+            cards.append(serialize_pl_post(p, me, repost_meta={
+                "by": _pl_user_brief(user), "quote": r.quote, "ago": pl_ago(r.created_at),
+            }))
+        posts = cards
+    elif tab == "likes":
+        rows = (FeedLike.query.filter_by(user_id=user.id)
+                .order_by(FeedLike.id.desc()).limit(40).all())
+        cards = []
+        for lk in rows:
+            p = db.session.get(FeedPost, lk.post_id)
+            if p is None or p.author_deleted_at is not None:
+                continue
+            cards.append(serialize_pl_post(p, me))
+        posts = cards
+    else:
+        user_posts = (
+            FeedPost.query.filter_by(author_id=user.id)
+            .filter(FeedPost.author_deleted_at.is_(None))
+            .order_by(FeedPost.pinned_at.isnot(None).desc(), FeedPost.created_at.desc())
+            .limit(40).all()
+        )
+        posts = [serialize_pl_post(p, me) for p in user_posts]
+
     joined = None
     if user.created_at:
         joined = user.created_at.strftime("%B %Y")
@@ -1567,7 +1621,8 @@ def pl_profile(username):
         display_name=pl_display_name(user),
         avatar_url=_pl_media_url(user.pl_avatar_image),
         banner_url=_pl_media_url(user.pl_banner_image),
-        posts=[serialize_pl_post(p, me) for p in user_posts],
+        posts=posts, tab=tab, post_count=post_count,
+        me_json={"id": me.id, "username": me.username},
     )
 
 
@@ -1784,9 +1839,16 @@ def api_pl_delete_post(post_id):
     post, err = _pl_own_post(post_id, me)
     if err:
         return err
+    # If anyone has reposted this, keep the row so their reposts still work
+    # -- just soft-delete it out of every normal listing.
+    if FeedRepost.query.filter_by(post_id=post_id).count() > 0:
+        post.author_deleted_at = datetime.now(timezone.utc)
+        post.pinned_at = None
+        db.session.commit()
+        return jsonify({"ok": True, "soft": True})
     db.session.delete(post)
     db.session.commit()
-    return jsonify({"ok": True})
+    return jsonify({"ok": True, "soft": False})
 
 
 @app.route("/api/pl/posts/<int:post_id>/pin", methods=["POST"])
@@ -1941,9 +2003,19 @@ def _serialize_pl_comment(c, me):
         "created_at": (c.created_at.replace(tzinfo=timezone.utc) if c.created_at.tzinfo is None else c.created_at).isoformat(),
         "like_count": len(c.likes),
         "liked_by_me": me.id in liked_ids,
+        "is_mine": c.author_id == me.id,
+        "hidden": c.hidden_at is not None,
         "author": _pl_user_brief(c.author),
         "attachment": _pl_attachment(c),
     }
+
+
+def _pl_comment_visible(c, me, my_follows):
+    """A "versteckter" comment is only shown to its author and to people
+    who follow the author."""
+    if c.hidden_at is None or c.author_id == me.id:
+        return True
+    return c.author_id in my_follows
 
 
 @app.route("/api/pl/posts/<int:post_id>/comments")
@@ -1952,15 +2024,55 @@ def api_pl_list_comments(post_id):
     post = db.session.get(FeedPost, post_id)
     if post is None:
         return jsonify({"ok": False, "error": "not_found"}), 404
+    my_follows = {s.channel_id for s in Subscription.query.filter_by(subscriber_id=me.id)}
     # Top-level comments oldest-first, each followed by its replies.
     tops = [c for c in post.comments if c.parent_id is None]
     tops.sort(key=lambda c: c.created_at)
     out = []
     for top in tops:
+        if not _pl_comment_visible(top, me, my_follows):
+            continue
         out.append(_serialize_pl_comment(top, me))
         for r in sorted(top.replies, key=lambda c: c.created_at):
-            out.append(_serialize_pl_comment(r, me))
+            if _pl_comment_visible(r, me, my_follows):
+                out.append(_serialize_pl_comment(r, me))
     return jsonify({"ok": True, "comments": out})
+
+
+@app.route("/api/pl/comments/<int:comment_id>/report", methods=["POST"])
+def api_pl_report_comment(comment_id):
+    me = current_user()
+    c = db.session.get(FeedComment, comment_id)
+    if c is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    reason = ((request.get_json(silent=True) or {}).get("reason") or "").strip()[:180]
+    db.session.add(FeedReport(
+        post_id=c.post_id, user_id=me.id,
+        reason=f"[Kommentar #{comment_id}] {reason}"[:200] or None))
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/pl/comments/<int:comment_id>/hide", methods=["POST"])
+def api_pl_hide_comment(comment_id):
+    me = current_user()
+    c = db.session.get(FeedComment, comment_id)
+    if c is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    if c.author_id != me.id:
+        return jsonify({"ok": False, "error": "not_yours"}), 403
+    c.hidden_at = None if c.hidden_at else datetime.now(timezone.utc)
+    db.session.commit()
+    return jsonify({"ok": True, "hidden": c.hidden_at is not None})
+
+
+@app.route("/api/pl/posts/<int:post_id>/not-interested", methods=["POST"])
+def api_pl_not_interested(post_id):
+    seen = session.get("_pl_uninterested", [])
+    if post_id not in seen:
+        seen.append(post_id)
+        session["_pl_uninterested"] = seen[-300:]
+    return jsonify({"ok": True})
 
 
 @app.route("/api/pl/posts/<int:post_id>/comments", methods=["POST"])

@@ -24,6 +24,20 @@
 
   var S = window.plSound || { play: function () {} };
 
+  function copyText(text, okMsg) {
+    var done = function () { window.plToast(okMsg || "Kopiert."); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { window.plToast(text); });
+    } else {
+      try {
+        var ta = document.createElement("textarea");
+        ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+        document.body.appendChild(ta); ta.select();
+        document.execCommand("copy"); ta.remove(); done();
+      } catch (e) { window.plToast(text); }
+    }
+  }
+
   // ---------------- sheets ----------------
   function openSheet(el) { el.classList.add("open"); document.body.style.overflow = "hidden"; S.play("open"); }
   function closeSheet(el) { el.classList.remove("open"); document.body.style.overflow = ""; S.play("close"); }
@@ -191,14 +205,20 @@
 
   function commentHTML(c) {
     var liked = c.liked_by_me ? " liked" : "";
-    return '<div class="pl-comment' + (c.parent_id ? " reply" : "") + '" data-comment-id="' + c.id + '">'
+    var menu = c.is_mine
+      ? '<button type="button" data-cact="hide">' + (c.hidden ? "Einblenden" : "Verstecken") + '</button>'
+      : '<button type="button" data-cact="report" class="pl-danger">Melden</button>';
+    return '<div class="pl-comment' + (c.parent_id ? " reply" : "") + (c.hidden ? " is-hidden" : "") + '" data-comment-id="' + c.id + '" data-mine="' + (c.is_mine ? "1" : "0") + '">'
       + '<div class="pl-comment-head">'
       + '<div class="pl-avatar" style="width:22px;height:22px;font-size:10px;">'
       +   (c.author.avatar_url ? '<img src="' + esc(c.author.avatar_url) + '" alt="">' : esc(c.author.avatar_letter))
       + '</div>'
       + '<span class="pl-comment-user">' + esc(c.author.name || c.author.username) + '</span>'
       + '<span class="pl-comment-handle">@' + esc(c.author.username) + '</span>'
-      + '<span class="pl-comment-time">' + timeAgo(c.created_at) + '</span></div>'
+      + (c.hidden ? '<span class="pl-comment-hidden-tag">nur Follower</span>' : '')
+      + '<span class="pl-comment-time">' + timeAgo(c.created_at) + '</span>'
+      + '<button type="button" class="pl-comment-kebab" data-cmenu aria-label="Mehr">&#8942;</button>'
+      + '<div class="pl-comment-menu" hidden>' + menu + '</div></div>'
       + '<div class="pl-comment-body">' + (c.body_html || esc(c.body)) + '</div>'
       + A.html(c.attachment)
       + '<div class="pl-comment-actions">'
@@ -437,10 +457,11 @@
 
     var kb = e.target.closest("[data-kebab]");
     if (kb) {
-      var menu = kb.parentElement.querySelector(".pl-post-menu");
-      var wasHidden = menu.hidden;
+      var grpK = kb.closest(".pl-post-group");
+      var mainMenu = grpK.querySelector('.pl-post-menu[data-menu="main"]');
+      var wasHidden = mainMenu.hidden;
       $all(".pl-post-menu").forEach(function (m) { m.hidden = true; });
-      menu.hidden = !wasHidden;
+      mainMenu.hidden = wasHidden ? false : true;
       return;
     }
 
@@ -448,12 +469,40 @@
     if (act) {
       var grp = act.closest(".pl-post-group");
       var pid = grp.dataset.postId;
-      act.closest(".pl-post-menu").hidden = true;
       var a = act.dataset.act;
-      if (a === "copy") {
-        var link = location.origin + "/p/" + pid;
-        if (navigator.clipboard) navigator.clipboard.writeText(link).then(function () { window.plToast("Link kopiert."); });
-        else window.plToast(link);
+      var link = location.origin + "/p/" + pid;
+
+      if (a === "share-open") {
+        grp.querySelector('.pl-post-menu[data-menu="main"]').hidden = true;
+        grp.querySelector('.pl-post-menu[data-menu="share"]').hidden = false;
+        return;
+      }
+      if (a === "share-back") {
+        grp.querySelector('.pl-post-menu[data-menu="share"]').hidden = true;
+        grp.querySelector('.pl-post-menu[data-menu="main"]').hidden = false;
+        return;
+      }
+      act.closest(".pl-post-menu").hidden = true;
+
+      if (a === "copy-link") {
+        copyText(link, "Link kopiert.");
+      } else if (a === "copy-text") {
+        var h = (grp.querySelector(".pl-post-heading") || {}).textContent || "";
+        var b = (grp.querySelector(".pl-post-body") || {}).textContent || "";
+        copyText((h + "\n" + b).trim(), "Text kopiert.");
+      } else if (a === "share-wa") {
+        window.open("https://wa.me/?text=" + encodeURIComponent(link), "_blank", "noopener");
+      } else if (a === "share-fb") {
+        window.open("https://www.facebook.com/sharer/sharer.php?u=" + encodeURIComponent(link), "_blank", "noopener");
+      } else if (a === "share-ig") {
+        copyText(link, "Link kopiert – in Instagram einfügen.");
+      } else if (a === "share-tt") {
+        copyText(link, "Link kopiert – in TikTok einfügen.");
+      } else if (a === "not-interested") {
+        api("POST", "/api/pl/posts/" + pid + "/not-interested");
+        grp.style.transition = "opacity .2s"; grp.style.opacity = "0";
+        setTimeout(function () { grp.remove(); }, 200);
+        window.plToast("Weniger davon.");
       } else if (a === "edit") {
         var post = grp.querySelector(".pl-post");
         openNewPost({
@@ -463,16 +512,61 @@
         });
       } else if (a === "pin") {
         api("POST", "/api/pl/posts/" + pid + "/pin").then(function (j) {
-          if (j.ok) window.plToast(j.pinned ? "Angeheftet." : "Losgelöst.");
+          if (j.ok) window.plToast(j.pinned ? "Fixiert – oben im Profil." : "Nicht mehr fixiert.");
         });
       } else if (a === "delete") {
         if (!confirm("Diesen Post wirklich löschen?")) return;
         api("DELETE", "/api/pl/posts/" + pid).then(function (j) {
-          if (j.ok) { grp.style.transition = "opacity .2s"; grp.style.opacity = "0"; setTimeout(function () { grp.remove(); }, 200); window.plToast("Gelöscht."); }
+          if (j.ok) {
+            grp.style.transition = "opacity .2s"; grp.style.opacity = "0";
+            setTimeout(function () { grp.remove(); }, 200);
+            window.plToast(j.soft ? "Gelöscht – Reposts bleiben." : "Gelöscht.");
+          }
         });
       } else if (a === "report") {
         var reason = prompt("Warum meldest du diesen Post? (optional)") || "";
         api("POST", "/api/pl/posts/" + pid + "/report", { reason: reason }).then(function () { window.plToast("Danke, gemeldet."); });
+      }
+      return;
+    }
+
+    // comment kebab
+    var cmk = e.target.closest("[data-cmenu]");
+    if (cmk) {
+      var cm = cmk.parentElement.querySelector(".pl-comment-menu");
+      var cmWas = cm.hidden;
+      $all(".pl-comment-menu").forEach(function (m) { m.hidden = true; });
+      cm.hidden = cmWas ? false : true;
+      return;
+    }
+    if (!e.target.closest(".pl-comment-menu") && !e.target.closest("[data-cmenu]")) {
+      $all(".pl-comment-menu").forEach(function (m) { m.hidden = true; });
+    }
+    var cact = e.target.closest(".pl-comment-menu [data-cact]");
+    if (cact) {
+      var cel = cact.closest(".pl-comment");
+      var cid = cel.dataset.commentId;
+      cact.closest(".pl-comment-menu").hidden = true;
+      if (cact.dataset.cact === "hide") {
+        api("POST", "/api/pl/comments/" + cid + "/hide").then(function (j) {
+          if (!j.ok) return;
+          cel.classList.toggle("is-hidden", j.hidden);
+          var tagWrap = cel.querySelector(".pl-comment-head");
+          var tag = cel.querySelector(".pl-comment-hidden-tag");
+          if (j.hidden && !tag) {
+            tag = document.createElement("span");
+            tag.className = "pl-comment-hidden-tag";
+            tag.textContent = "nur Follower";
+            tagWrap.insertBefore(tag, cel.querySelector(".pl-comment-time"));
+          } else if (!j.hidden && tag) { tag.remove(); }
+          var mbtn = cel.querySelector('[data-cact="hide"]');
+          if (mbtn) mbtn.textContent = j.hidden ? "Einblenden" : "Verstecken";
+          window.plToast(j.hidden ? "Versteckt – nur für deine Follower." : "Wieder sichtbar.");
+        });
+      } else {
+        var r = prompt("Warum meldest du diesen Kommentar? (optional)") || "";
+        api("POST", "/api/pl/comments/" + cid + "/report", { reason: r }).catch(function () {});
+        window.plToast("Danke, gemeldet.");
       }
       return;
     }
@@ -600,4 +694,65 @@
   if (searchForm) searchForm.addEventListener("submit", function () {
     // native GET submit reloads with ?q= -- server renders the video row + posts
   });
+
+  // ---------------- link long-press preview ----------------
+  (function linkPreview() {
+    var timer = null, startX = 0, startY = 0, fired = false;
+
+    function openPreview(url) {
+      fired = true;
+      var back = document.createElement("div");
+      back.className = "pl-linkprev-back";
+      back.innerHTML =
+        '<div class="pl-linkprev" role="dialog" aria-modal="true">' +
+          '<div class="pl-linkprev-bar">' +
+            '<span class="pl-linkprev-url"></span>' +
+            '<a class="pl-linkprev-open" target="_blank" rel="noopener nofollow">Öffnen</a>' +
+            '<button type="button" class="pl-linkprev-x" aria-label="Schließen">✕</button>' +
+          '</div>' +
+          '<div class="pl-linkprev-frame"><iframe title="Vorschau" referrerpolicy="no-referrer" ' +
+            'sandbox="allow-scripts allow-forms allow-popups allow-same-origin"></iframe>' +
+            '<div class="pl-linkprev-fallback" hidden>Vorschau von dieser Seite nicht möglich.<br>' +
+            '<a target="_blank" rel="noopener nofollow">Im neuen Tab öffnen</a></div>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(back);
+      document.body.style.overflow = "hidden";
+      var frame = back.querySelector("iframe");
+      var fb = back.querySelector(".pl-linkprev-fallback");
+      back.querySelector(".pl-linkprev-url").textContent = url.replace(/^https?:\/\/(www\.)?/, "");
+      back.querySelector(".pl-linkprev-open").href = url;
+      fb.querySelector("a").href = url;
+      var settled = false;
+      var killT = setTimeout(function () { if (!settled) { settled = true; frame.hidden = true; fb.hidden = false; } }, 4000);
+      frame.addEventListener("load", function () { settled = true; clearTimeout(killT); });
+      frame.addEventListener("error", function () { settled = true; clearTimeout(killT); frame.hidden = true; fb.hidden = false; });
+      frame.src = url;
+      function close() { back.remove(); document.body.style.overflow = ""; }
+      back.querySelector(".pl-linkprev-x").addEventListener("click", close);
+      back.addEventListener("click", function (e) { if (e.target === back) close(); });
+      S.play("open");
+    }
+
+    document.addEventListener("pointerdown", function (e) {
+      var a = e.target.closest("a.pl-link[data-pl-preview]");
+      if (!a) return;
+      fired = false; startX = e.clientX; startY = e.clientY;
+      clearTimeout(timer);
+      timer = setTimeout(function () { openPreview(a.getAttribute("data-pl-preview")); }, 430);
+    });
+    document.addEventListener("pointermove", function (e) {
+      if (timer && (Math.abs(e.clientX - startX) > 10 || Math.abs(e.clientY - startY) > 10)) {
+        clearTimeout(timer); timer = null;
+      }
+    });
+    ["pointerup", "pointercancel", "pointerleave"].forEach(function (ev) {
+      document.addEventListener(ev, function () { clearTimeout(timer); timer = null; });
+    });
+    // block the normal navigation if the long-press just opened a preview
+    document.addEventListener("click", function (e) {
+      var a = e.target.closest("a.pl-link[data-pl-preview]");
+      if (a && fired) { e.preventDefault(); fired = false; }
+    }, true);
+  })();
 })();
