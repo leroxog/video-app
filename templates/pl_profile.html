@@ -4,9 +4,12 @@
 {% block title %}@{{ prof.username }} · HEXAGONUM{% endblock %}
 
 {% block screen %}
-<div class="pl-screen-head" style="margin-bottom:6px;">
-    <button class="pl-icon-btn" onclick="history.back()" aria-label="Zurück">&#8592;</button>
-    <h1 style="font-size:19px;">@{{ prof.username }}</h1>
+<div class="pl-prof2-topbar">
+    <button class="pl-prof2-back" onclick="history.back()" aria-label="Zurück">&#8592;</button>
+    <div class="pl-prof2-topinfo">
+        <div class="pl-prof2-topname">{{ prof.username }}</div>
+        <div class="pl-prof2-topsub">{{ posts|length }} Posts</div>
+    </div>
 </div>
 
 <div class="pl-prof2" data-username="{{ prof.username }}">

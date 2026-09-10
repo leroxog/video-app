@@ -1,9 +1,5 @@
 {%- from "partials/_pl_icons.html" import plicon -%}
 <nav class="pl-nav">
-    <a href="{{ url_for('pl_home') }}" class="pl-nav-brand" aria-label="HEXAGONUM">
-        <span class="pl-nav-brand-mark">{% include "partials/_pinklemon_logo.html" %}</span>
-        <span class="pl-nav-brand-name">HEXAGONUM</span>
-    </a>
     <a href="{{ url_for('pl_home') }}" class="{{ 'is-active' if active == 'home' }}" aria-label="Home">{{ plicon('home') }}<span class="pl-nav-label">Home</span></a>
     <a href="{{ url_for('pl_friends') }}" class="{{ 'is-active' if active == 'friends' }}" aria-label="Freunde">{{ plicon('friends') }}<span class="pl-nav-label">Freunde</span></a>
     <a href="{{ url_for('pl_nex') }}" class="{{ 'is-active' if active == 'nex' }}" aria-label="Nex">{{ plicon('nex7') }}<span class="pl-nav-label">Nex</span></a>
