@@ -14,11 +14,26 @@
     });
   });
 
-  // ---- find people ----
-  var findSheet = $("#plFindSheet");
+  // ---- find people (inline row that drops down from the top) ----
+  var topSearch = $("#plTopSearch");
   var userSearch = $("#plUserSearch");
   var userResults = $("#plUserResults");
-  $("#plFindBtn").addEventListener("click", function () { userSearch.value = ""; userResults.innerHTML = ""; openSheet(findSheet); setTimeout(function () { userSearch.focus(); }, 250); });
+
+  function openFind() {
+    topSearch.hidden = false;
+    userSearch.value = "";
+    userResults.innerHTML = "";
+    setTimeout(function () { userSearch.focus(); }, 60);
+  }
+  function closeFind() {
+    topSearch.hidden = true;
+    userResults.innerHTML = "";
+  }
+  $("#plFindBtn").addEventListener("click", function () {
+    if (topSearch.hidden) openFind(); else closeFind();
+  });
+  $("#plFindClose").addEventListener("click", closeFind);
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !topSearch.hidden) closeFind(); });
 
   var searchT = null;
   userSearch.addEventListener("input", function () {
@@ -28,7 +43,7 @@
       if (!q) { userResults.innerHTML = ""; return; }
       api("GET", "/api/pl/users/search?q=" + encodeURIComponent(q)).then(function (j) {
         if (!j.ok) return;
-        if (!j.users.length) { userResults.innerHTML = '<div class="pl-empty" style="padding:20px 0;">Niemand gefunden.</div>'; return; }
+        if (!j.users.length) { userResults.innerHTML = '<div class="pl-empty" style="padding:18px 0;background:none;border:none;">Niemand gefunden.</div>'; return; }
         userResults.innerHTML = j.users.map(function (u) {
           return '<div class="pl-userrow" data-u="' + esc(u.username) + '">'
             + '<a class="pl-avatar" href="/freunde/u/' + encodeURIComponent(u.username) + '">' + esc(u.avatar_letter) + '</a>'
@@ -39,7 +54,7 @@
             + '</div>';
         }).join("");
       });
-    }, 250);
+    }, 220);
   });
 
   userResults.addEventListener("click", function (e) {
@@ -68,14 +83,14 @@
   $("#plNewChatBtn").addEventListener("click", function () {
     $("#plGroupName").value = "";
     selected = {};
-    mutualList.innerHTML = '<div class="pl-empty" style="padding:16px 0;">Lädt …</div>';
+    mutualList.innerHTML = '<div class="pl-empty" style="padding:16px 0;background:none;border:none;">Lädt …</div>';
     openSheet(newChatSheet);
     api("GET", "/api/pl/mutuals").then(function (j) { renderMutuals(j.ok ? j.users : []); });
   });
 
   function renderMutuals(list) {
     if (!list.length) {
-      mutualList.innerHTML = '<div class="pl-empty" style="padding:16px 0;">Noch niemand folgt dir zurück. Nutze zuerst die Suche.</div>';
+      mutualList.innerHTML = '<div class="pl-empty" style="padding:16px 0;background:none;border:none;">Noch niemand folgt dir zurück. Nutze zuerst die Suche.</div>';
       return;
     }
     mutualList.innerHTML = list.map(function (u) {

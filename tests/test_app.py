@@ -178,8 +178,8 @@ def test_feed_is_shared_across_users(client):
 @pytest.mark.parametrize("path,label", [
     ("/", b"Posts & Videos suchen"),
     ("/freunde", b"Freunde"),
-    ("/nex", b"nxCanvas"),
-    ("/spiele", b"Spiele"),
+    ("/nex", b"nxMsgs"),
+    ("/spiele", b"Wir arbeiten dran!"),
     ("/videos", b"Wir arbeiten dran!"),
 ])
 def test_pages_render_for_logged_in_user(client, path, label):
@@ -285,11 +285,12 @@ def test_profile_page_shows_follow_button(client):
 
 # ---------------- Nex (single AI) ----------------
 
-def test_nex_page_is_the_voice_orb(client):
+def test_nex_page_is_a_text_chat(client):
     signup(client, "alice")
     r = client.get("/nex").data
-    assert b"nxCanvas" in r and b"pinklemon-nex.js" in r and b"three.min.js" in r
-    # voice-first: no visible text chat, no persona switcher
+    # ChatGPT-style text chat -- message list + composer, no voice orb
+    assert b"nxMsgs" in r and b"nxInput" in r and b"pinklemon-nex.js" in r
+    assert b"three.min.js" not in r and b"nxCanvas" not in r
     assert b"Ehrgeizig" not in r and b"Chaos" not in r
 
 
@@ -326,11 +327,10 @@ def test_nex_voice_endpoint_transcribes_with_whisper(client, monkeypatch):
 
 # ---------------- Spiele ----------------
 
-def test_spiele_hub_lists_all_six_games(client):
+def test_spiele_hub_shows_coming_soon(client):
     signup(client, "alice")
     r = client.get("/spiele").data
-    for title in (b"Block Blast!", b"Dress up!", b"Help them!", b"Phone case builder", b"Subway Surfers", b"Triko Design"):
-        assert title in r
+    assert b"Wir arbeiten dran!" in r
 
 
 @pytest.mark.parametrize("slug", ["block-blast", "dress-up", "help-them", "phone-case", "subway-surfers", "triko-design"])

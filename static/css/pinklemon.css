@@ -737,6 +737,32 @@ img { max-width: 100%; display: block; }
 }
 .pl-group-tag { font-size: 10px; font-weight: 800; color: var(--pl-text-faint); border: 1px solid var(--pl-border); border-radius: 999px; padding: 1px 6px; }
 
+/* inline "find people" row that drops down from the top of Freunde */
+.pl-topsearch {
+  margin: -4px 0 14px;
+  animation: plPostIn 0.18s ease;
+}
+.pl-topsearch-bar {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--pl-surface-2);
+  border: 1px solid var(--pl-border);
+  border-radius: 999px;
+  padding: 11px 16px;
+  -webkit-backdrop-filter: var(--pl-blur);
+  backdrop-filter: var(--pl-blur);
+}
+.pl-topsearch-bar svg { flex-shrink: 0; color: var(--pl-text-faint); }
+.pl-topsearch-bar input {
+  flex: 1; min-width: 0; border: none; background: transparent; outline: none;
+  font-size: 15px; color: var(--pl-text); font-family: inherit;
+}
+.pl-topsearch-bar input::placeholder { color: var(--pl-text-faint); }
+.pl-topsearch-bar button {
+  flex-shrink: 0; width: 24px; height: 24px; border: none; background: none;
+  color: var(--pl-text-faint); font-size: 20px; line-height: 1;
+}
+#plUserResults { margin-top: 6px; }
+
 /* user search results */
 .pl-userrow {
   display: flex; align-items: center; gap: 12px; padding: 10px 4px;

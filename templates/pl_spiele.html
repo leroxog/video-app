@@ -1,83 +1,10 @@
 {% extends "pl_base.html" %}
 {% set active = 'spiele' %}
 {% block title %}Spiele · pinklemon{% endblock %}
-
-{% block head_extra %}
-<style>
-  .pl-games { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .pl-game {
-    border-radius: var(--pl-r-lg); overflow: hidden; border: 1px solid var(--pl-border);
-    background: var(--pl-surface); display: flex; flex-direction: column;
-  }
-  .pl-game:active { transform: scale(0.97); }
-  .pl-game-art { aspect-ratio: 1 / 1; width: 100%; display: block; }
-  .pl-game-meta { padding: 10px 12px 12px; }
-  .pl-game-title { font-weight: 900; font-size: 14px; }
-  .pl-game-sub { font-size: 11px; color: var(--pl-text-dim); margin-top: 2px; }
-</style>
-{% endblock %}
-
 {% block screen %}
-<div class="pl-screen-head"><h1>Spiele</h1></div>
-<div class="pl-games">
-    {% for g in games %}
-    <a class="pl-game" href="{{ url_for('pl_game', slug=g.slug) }}">
-        <svg class="pl-game-art" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
-            {% if g.slug == 'block-blast' %}
-            <rect width="200" height="200" fill="#12121a"/>
-            <g>
-              <rect x="24" y="24" width="30" height="30" rx="7" fill="#ff2d95"/>
-              <rect x="58" y="24" width="30" height="30" rx="7" fill="#ff2d95"/>
-              <rect x="92" y="24" width="30" height="30" rx="7" fill="#ff8fc4"/>
-              <rect x="126" y="24" width="30" height="30" rx="7" fill="#3a3a4a"/>
-              <rect x="24" y="58" width="30" height="30" rx="7" fill="#3a3a4a"/>
-              <rect x="58" y="58" width="30" height="30" rx="7" fill="#7bd88f"/>
-              <rect x="92" y="58" width="30" height="30" rx="7" fill="#7bd88f"/>
-              <rect x="126" y="58" width="30" height="30" rx="7" fill="#7bd88f"/>
-              <rect x="126" y="92" width="30" height="30" rx="7" fill="#ffd166"/>
-              <rect x="126" y="126" width="30" height="30" rx="7" fill="#ffd166"/>
-            </g>
-            {% elif g.slug == 'dress-up' %}
-            <rect width="200" height="200" fill="#1b1220"/>
-            <circle cx="100" cy="66" r="24" fill="#ffdcc2"/>
-            <path d="M62 190c0-42 12-78 38-78s38 36 38 78z" fill="#ff2d95"/>
-            <path d="M74 44c6-20 46-20 52 0 4 14-4 24-4 24s-6-12-22-12-22 12-22 12-8-10-4-24z" fill="#6b3fa0"/>
-            <rect x="80" y="150" width="18" height="34" rx="4" fill="#2b6cff"/>
-            <rect x="102" y="150" width="18" height="34" rx="4" fill="#2b6cff"/>
-            {% elif g.slug == 'help-them' %}
-            <rect width="200" height="200" fill="#0f1a24"/>
-            <rect x="0" y="150" width="70" height="50" fill="#26415a"/>
-            <rect x="150" y="120" width="50" height="80" fill="#26415a"/>
-            <circle cx="34" cy="128" r="12" fill="#ffd166"/>
-            <rect x="80" y="96" width="46" height="12" rx="6" fill="#ff2d95"/>
-            <path d="M150 96l20-16v16z" fill="#7bd88f"/>
-            <circle cx="170" cy="104" r="6" fill="#7bd88f"/>
-            {% elif g.slug == 'phone-case' %}
-            <rect width="200" height="200" fill="#141420"/>
-            <rect x="62" y="30" width="76" height="140" rx="20" fill="#ff2d95"/>
-            <rect x="70" y="38" width="60" height="124" rx="14" fill="#1b1b28"/>
-            <circle cx="100" cy="58" r="7" fill="#ffd166"/>
-            <text x="100" y="120" font-size="34" text-anchor="middle">★</text>
-            {% elif g.slug == 'subway-surfers' %}
-            <rect width="200" height="200" fill="#101827"/>
-            <path d="M40 40 L20 190 M100 34 L100 190 M160 40 L180 190" stroke="#2b3a52" stroke-width="6"/>
-            <rect x="84" y="120" width="32" height="46" rx="8" fill="#ff2d95"/>
-            <circle cx="100" cy="108" r="12" fill="#ffdcc2"/>
-            <circle cx="60" cy="150" r="9" fill="#ffd166"/>
-            <circle cx="150" cy="90" r="9" fill="#ffd166"/>
-            <rect x="128" y="60" width="34" height="40" rx="6" fill="#c23b3b"/>
-            {% elif g.slug == 'triko-design' %}
-            <rect width="200" height="200" fill="#0d1524"/>
-            <path d="M70 46 L100 58 L130 46 L160 66 L146 96 L134 88 V170 H66 V88 L54 96 L40 66 Z" fill="#ff2d95"/>
-            <path d="M92 88 h16 V170 h-16 Z M116 88 h16 V170 h-16 Z" fill="#ffffff" opacity="0.25"/>
-            <text x="100" y="146" font-size="40" font-weight="900" fill="#fff" text-anchor="middle">7</text>
-            {% endif %}
-        </svg>
-        <div class="pl-game-meta">
-            <div class="pl-game-title">{{ g.title }}</div>
-            <div class="pl-game-sub">{{ g.sub }}</div>
-        </div>
-    </a>
-    {% endfor %}
+<div class="pl-soon">
+    <div class="pl-logo">{% include "partials/_pinklemon_logo.html" %}</div>
+    <h1>Wir arbeiten dran!</h1>
+    <p>Die Spiele sind gerade noch in Arbeit &ndash; schau bald wieder vorbei!</p>
 </div>
 {% endblock %}

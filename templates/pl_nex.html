@@ -5,92 +5,103 @@
 {% block head_extra %}
 <style>
   .pl-screen.nex { padding: 0; align-items: stretch; }
-  .nx-orb { flex: 1; position: relative; overflow: hidden; }
-  #nxCanvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: manipulation; }
+  .nx-chat { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 
-  .nx-heard {
-    position: absolute; left: 22px; right: 22px; top: 24px; z-index: 3; text-align: center;
-    font-size: 14.5px; font-style: italic; color: var(--pl-text);
-    opacity: 0; transform: translateY(-6px); transition: opacity .3s, transform .3s; pointer-events: none;
-  }
-  .nx-heard.show { opacity: .9; transform: none; }
-
-  .nx-status {
-    position: absolute; left: 0; right: 0; bottom: calc(172px + env(safe-area-inset-bottom, 0px));
-    z-index: 3; text-align: center; font-size: 13.5px; font-weight: 700; letter-spacing: .02em;
-    color: var(--pl-text-dim); pointer-events: none;
-  }
-
-  .nx-controls {
-    position: absolute; left: 0; right: 0; bottom: calc(92px + env(safe-area-inset-bottom, 0px));
-    z-index: 4; display: flex; align-items: center; justify-content: center; gap: 18px;
-  }
-  @media (min-width: 900px) {
-    .nx-status { bottom: 120px; }
-    .nx-controls { bottom: 34px; }
-  }
-  .nx-mic {
-    width: 74px; height: 74px; border-radius: 50%; border: none; background: var(--pl-pink); color: #fff;
-    display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 34px rgba(255, 45, 149, .5);
-    transition: transform .12s ease;
-  }
-  .nx-mic:active { transform: scale(.92); }
-  .nx-mic.listening { background: #fff; color: var(--pl-pink); animation: nxPulse 1.5s ease-out infinite; }
-  @keyframes nxPulse {
-    0% { box-shadow: 0 0 0 0 rgba(255, 45, 149, .55); }
-    70% { box-shadow: 0 0 0 22px rgba(255, 45, 149, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(255, 45, 149, 0); }
-  }
-  .nx-kb {
-    width: 50px; height: 50px; border-radius: 50%; border: 1px solid var(--pl-border);
-    background: var(--pl-surface-2); color: var(--pl-text); display: flex; align-items: center; justify-content: center;
+  .nx-top {
+    display: flex; align-items: center; gap: 10px;
+    padding: 14px 18px; border-bottom: 1px solid var(--pl-border);
+    background: var(--pl-surface); flex-shrink: 0;
     -webkit-backdrop-filter: var(--pl-blur); backdrop-filter: var(--pl-blur);
   }
-  .nx-kb:active { transform: scale(.9); }
+  .nx-top-logo { width: 30px; height: 30px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, var(--pl-pink), #7a3bd0 72%, #3a1c74); flex-shrink: 0; }
+  .nx-top-name { font-weight: 900; font-size: 15px; }
+  .nx-top-sub { font-size: 11.5px; color: var(--pl-text-faint); }
+  .nx-new { margin-left: auto; border: 1px solid var(--pl-border); background: var(--pl-surface-2); color: var(--pl-text); border-radius: 999px; padding: 7px 13px; font-size: 12px; font-weight: 700; }
+  .nx-new:active { transform: scale(0.95); }
 
-  .nx-typerow {
-    position: absolute; left: 12px; right: 12px; bottom: calc(92px + env(safe-area-inset-bottom, 0px));
-    z-index: 6; display: none; gap: 8px; align-items: center;
-    background: var(--pl-surface-2); border: 1px solid var(--pl-border); border-radius: 26px; padding: 7px 7px 7px 16px;
-    -webkit-backdrop-filter: var(--pl-blur); backdrop-filter: var(--pl-blur); box-shadow: var(--pl-shadow);
+  .nx-msgs { flex: 1; overflow-y: auto; padding: 20px 16px 8px; display: flex; flex-direction: column; gap: 12px; -webkit-overflow-scrolling: touch; }
+  .nx-msgs > * { width: 100%; max-width: 720px; margin: 0 auto; }
+
+  .nx-row { display: flex; }
+  .nx-row.me { justify-content: flex-end; }
+  .nx-bubble {
+    max-width: 82%; padding: 11px 15px; border-radius: 20px; font-size: 14.5px; line-height: 1.5;
+    white-space: pre-wrap; overflow-wrap: anywhere;
   }
-  .nx-typerow.show { display: flex; }
-  .nx-typerow input {
-    flex: 1; min-width: 0; border: none; background: transparent; outline: none; color: var(--pl-text); font-size: 14.5px;
+  .nx-row.them .nx-bubble { background: var(--pl-surface-2); border: 1px solid var(--pl-border); border-bottom-left-radius: 7px; }
+  .nx-row.me .nx-bubble { background: var(--pl-pink); color: #fff; border-bottom-right-radius: 7px; }
+  .nx-bubble pre { background: rgba(0,0,0,.28); border: 1px solid var(--pl-border); border-radius: 12px; padding: 10px 12px; overflow-x: auto; font-size: 12.5px; margin: 6px 0 0; font-family: "Consolas","SF Mono",monospace; }
+  .nx-bubble code { font-family: "Consolas","SF Mono",monospace; font-size: 0.92em; }
+
+  .nx-typing { display: inline-flex; gap: 4px; padding: 14px 16px; }
+  .nx-typing span { width: 7px; height: 7px; border-radius: 50%; background: var(--pl-text-faint); animation: nxBlink 1.2s infinite ease-in-out; }
+  .nx-typing span:nth-child(2) { animation-delay: .2s; }
+  .nx-typing span:nth-child(3) { animation-delay: .4s; }
+  @keyframes nxBlink { 0%,80%,100% { opacity: .25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+
+  .nx-empty { margin: auto; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 30px 24px; max-width: 340px; }
+  .nx-empty-orb { width: 78px; height: 78px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, var(--pl-pink), #7a3bd0 70%, #3a1c74); box-shadow: 0 14px 44px rgba(255,45,149,.35); }
+  .nx-empty h2 { margin: 0; font-size: 18px; font-weight: 900; }
+  .nx-empty p { margin: 0; font-size: 13px; color: var(--pl-text-faint); line-height: 1.5; }
+
+  .nx-compose {
+    display: flex; gap: 8px; align-items: flex-end;
+    padding: 10px 14px calc(12px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--pl-border); background: var(--pl-surface); flex-shrink: 0;
+    -webkit-backdrop-filter: var(--pl-blur); backdrop-filter: var(--pl-blur);
   }
-  .nx-typerow button {
-    flex-shrink: 0; width: 40px; height: 40px; border-radius: 50%; border: none; background: var(--pl-pink); color: #fff;
-    display: flex; align-items: center; justify-content: center;
+  .nx-compose-inner { width: 100%; max-width: 720px; margin: 0 auto; display: flex; gap: 8px; align-items: flex-end; }
+  .nx-compose textarea {
+    flex: 1; min-width: 0; background: var(--pl-surface-2); border: 1px solid var(--pl-border);
+    border-radius: 22px; padding: 12px 16px; font-size: 14.5px; color: var(--pl-text);
+    outline: none; resize: none; max-height: 140px; min-height: 46px; font-family: inherit;
   }
-  @media (min-width: 900px) { .nx-typerow { left: 254px; right: 24px; bottom: 28px; } }
+  .nx-compose textarea:focus { border-color: var(--pl-pink); }
+  .nx-send {
+    flex-shrink: 0; width: 46px; height: 46px; border-radius: 50%; border: none;
+    background: var(--pl-pink); color: #fff; display: flex; align-items: center; justify-content: center;
+  }
+  .nx-send:disabled { opacity: .5; }
+  .nx-send:active { transform: scale(0.92); }
+
+  @media (min-width: 900px) {
+    .nx-top { padding-left: 30px; padding-right: 30px; }
+  }
 </style>
 {% endblock %}
 
 {% block screen_class %}nex{% endblock %}
 {% block screen %}
-  <div class="nx-orb" id="nxOrb">
-    <canvas id="nxCanvas"></canvas>
-    <div class="nx-heard" id="nxHeard"></div>
-    <div class="nx-status" id="nxStatus">Tipp den Kreis und red mit Nex</div>
-    <div class="nx-controls">
-      <button class="nx-mic" id="nxMic" aria-label="Mit Nex reden">
-        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M12 19v3"/></svg>
-      </button>
-      <button class="nx-kb" id="nxKb" aria-label="Tippen">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="3"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8"/></svg>
-      </button>
+<div class="nx-chat">
+  <div class="nx-top">
+    <div class="nx-top-logo"></div>
+    <div>
+      <div class="nx-top-name">Nex</div>
+      <div class="nx-top-sub">Deine KI bei pinklemon</div>
     </div>
-    <div class="nx-typerow" id="nxTypeRow">
-      <input id="nxTypeInput" maxlength="2000" placeholder="An Nex schreiben" autocomplete="off">
-      <button id="nxTypeSend" aria-label="Senden">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
+    <button class="nx-new" id="nxNew">Neuer Chat</button>
+  </div>
+
+  <div class="nx-msgs" id="nxMsgs">
+    <div class="nx-empty" id="nxEmpty">
+      <div class="nx-empty-orb"></div>
+      <h2>Hey, ich bin Nex</h2>
+      <p>Frag mich was du willst &ndash; Ideen, Erklärungen, Code, oder einfach quatschen.</p>
+    </div>
+  </div>
+
+  <div class="nx-compose">
+    <div class="nx-compose-inner">
+      <textarea id="nxInput" rows="1" maxlength="4000" placeholder="Schreib Nex ..."></textarea>
+      <button class="nx-send" id="nxSend" aria-label="Senden">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
       </button>
     </div>
   </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
   window.PL_ME = {{ me_json | tojson }};
   window.NEX = { projectType: {{ project_type | tojson }}, character: {{ chat_character | tojson }} };

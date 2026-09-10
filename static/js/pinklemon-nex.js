@@ -1,435 +1,155 @@
 (function () {
   "use strict";
 
-  var canvas = document.getElementById("nxCanvas");
-  var statusEl = document.getElementById("nxStatus");
-  var heardEl = document.getElementById("nxHeard");
-  var micBtn = document.getElementById("nxMic");
-  var kbBtn = document.getElementById("nxKb");
-  var typeRow = document.getElementById("nxTypeRow");
-  var typeInput = document.getElementById("nxTypeInput");
-  var typeSend = document.getElementById("nxTypeSend");
+  var NEX = window.NEX || { projectType: "nexblunt", character: "nex7" };
+  var msgsEl = document.getElementById("nxMsgs");
+  var emptyEl = document.getElementById("nxEmpty");
+  var input = document.getElementById("nxInput");
+  var sendBtn = document.getElementById("nxSend");
+  var newBtn = document.getElementById("nxNew");
 
-  var state = "idle";        // idle | listening | thinking | speaking
-  var conversing = false;    // true while a hands-free session is running
   var chatId = null;
-  var permBlocked = false;
+  var busy = false;
 
-  function setStatus(t) { statusEl.textContent = t; }
-  function showHeard(t) { heardEl.textContent = "„" + t + "“"; heardEl.classList.add("show"); }
-  function hideHeard() { heardEl.classList.remove("show"); }
-
-  // ===================== 3D glass orb (raymarched purple smoke) =============
-  var THREE = window.THREE, renderer, scene, camera, uniforms, raf = 0, running = true;
-  var bounceP = 0, bounceV = 0, audioLvl = 0, audioTgt = 0, thinkLvl = 0, listenLvl = 0, lastT = 0;
-
-  var FRAG = [
-    "precision highp float;",
-    "uniform vec2 uRes; uniform float uTime,uAudio,uBounce,uThink,uListen;",
-    "float hash(vec3 p){ p=fract(p*0.3183099+0.1); p*=17.0; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }",
-    "float vn(vec3 x){ vec3 i=floor(x),f=fract(x); f=f*f*(3.0-2.0*f);",
-    " return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),",
-    "  mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z); }",
-    "float fbm(vec3 p){ float a=0.5,s=0.0; for(int i=0;i<4;i++){ s+=a*vn(p); p*=2.03; a*=0.5; } return s; }",
-    "void main(){",
-    " vec2 uv=(gl_FragCoord.xy-0.5*uRes)/uRes.y;",
-    " vec3 bg=mix(vec3(0.024,0.017,0.045),vec3(0.09,0.045,0.16),0.5+0.5*uv.y);",
-    " bg+=0.08*vec3(0.5,0.2,0.9)*(uAudio+0.15)*smoothstep(1.2,0.0,length(uv));",
-    " vec3 col=bg;",
-    " vec3 ro=vec3(0.0,0.0,3.4); vec3 rd=normalize(vec3(uv,-1.55));",
-    " vec3 ctr=vec3(0.0,uBounce,0.0);",
-    " float R=0.335+0.024*sin(uTime*2.1)+uAudio*0.085;",
-    " vec3 oc=ro-ctr; float b=dot(oc,rd); float c2=dot(oc,oc)-R*R; float disc=b*b-c2;",
-    " if(disc>0.0){ float sq=sqrt(disc); float tN=-b-sq; float tF=-b+sq;",
-    "  if(tF>0.0){",
-    "   vec3 pIn=ro+rd*max(tN,0.0); vec3 nrm=normalize(pIn-ctr);",
-    "   vec3 rr=refract(rd,nrm,0.70); float span=tF-max(tN,0.0);",
-    "   float dens=0.0; vec3 acc=vec3(0.0);",
-    "   for(int i=0;i<26;i++){",
-    "    float f=(float(i)+0.5)/26.0;",
-    "    vec3 sp=(pIn-ctr)+rr*f*span*1.18; float rl=length(sp);",
-    "    if(rl>R) continue;",
-    "    float tt=uTime*(0.24+0.18*uThink+0.12*uAudio);",
-    "    vec3 q=sp*3.2; q+=vec3(fbm(q*0.8+tt),fbm(q*0.7+4.0-tt),fbm(q*0.75+tt*1.3))*1.35;",
-    "    float d=fbm(q*1.7+vec3(0.0,-tt*1.4,0.0));",
-    "    d=smoothstep(0.36,0.66,d)*smoothstep(R*1.06,R*0.05,rl);",
-    "    d*=(1.9+uAudio*3.0+uThink*1.3+uListen*0.7);",
-    "    vec3 pc=mix(vec3(0.28,0.03,0.58),vec3(0.92,0.55,1.0),f*0.55+0.4*uAudio+0.2*sin(uTime*1.4+rl*5.0));",
-    "    acc+=(1.0-dens)*d*pc*0.34; dens+=(1.0-dens)*d*0.32;",
-    "    if(dens>0.985) break;",
-    "   }",
-    "   float ndv=max(dot(-rd,nrm),0.0);",
-    "   float fres=pow(1.0-ndv,3.5);",
-    "   vec3 refl=reflect(rd,nrm);",
-    "   float spec=pow(max(dot(refl,normalize(vec3(0.55,0.7,0.55))),0.0),70.0);",
-    "   float spec2=pow(max(dot(refl,normalize(vec3(-0.5,0.35,0.6))),0.0),22.0);",
-    "   vec3 glassTint=bg*0.55+vec3(0.05,0.02,0.10);",
-    "   col=mix(glassTint,acc+glassTint*0.10,clamp(dens,0.0,1.0));",
-    "   col+=vec3(0.58,0.42,0.95)*fres*0.4;",
-    "   col+=vec3(1.0)*spec*1.0;",
-    "   col+=vec3(0.8,0.6,1.0)*spec2*0.25;",
-    "   col+=vec3(0.55,0.28,0.95)*(1.0-fres)*0.16*(0.4+uAudio+0.4*uThink);",
-    "   col+=vec3(0.95,0.6,1.0)*pow(1.0-ndv,8.0)*0.6;",
-    "  }",
-    " }",
-    " col=pow(max(col,0.0),vec3(0.85));",
-    " col*=1.0-0.26*dot(uv,uv);",
-    " gl_FragColor=vec4(col,1.0);",
-    "}"
-  ].join("\n");
-
-  function initOrb() {
-    if (!THREE) return false;
-    try {
-      renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: false, alpha: false, powerPreference: "high-performance" });
-    } catch (e) { return false; }
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.4) * 0.64);
-    scene = new THREE.Scene();
-    camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-    uniforms = {
-      uRes: { value: new THREE.Vector2(1, 1) }, uTime: { value: 0 },
-      uAudio: { value: 0 }, uBounce: { value: 0 }, uThink: { value: 0 }, uListen: { value: 0 },
-    };
-    var mat = new THREE.ShaderMaterial({
-      uniforms: uniforms,
-      vertexShader: "void main(){ gl_Position=vec4(position.xy,0.0,1.0); }",
-      fragmentShader: FRAG,
-    });
-    scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat));
-    resize();
-    window.addEventListener("resize", resize);
-    lastT = performance.now();
-    raf = requestAnimationFrame(frame);
-    return true;
+  function esc(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
 
-  function resize() {
-    if (!renderer) return;
-    var w = canvas.clientWidth || window.innerWidth;
-    var h = canvas.clientHeight || window.innerHeight;
-    renderer.setSize(w, h, false);
-    var px = renderer.getPixelRatio();
-    uniforms.uRes.value.set(w * px, h * px);
-  }
-
-  function kick(strength) {
-    bounceV += strength;
-    audioTgt = Math.max(audioTgt, Math.min(1, strength * 0.16));
-  }
-
-  function frame(now) {
-    if (!running) { raf = 0; return; }
-    var dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
-    bounceV += (-26.0 * bounceP - 7.5 * bounceV) * dt;
-    bounceP += bounceV * dt;
-    audioTgt *= Math.pow(0.015, dt);
-    if (state === "listening" && analyser) audioTgt = Math.max(audioTgt, readMic());
-    if (state === "speaking") audioTgt = Math.max(audioTgt, 0.20 + 0.14 * Math.abs(Math.sin(now * 0.021)));
-    audioLvl += (audioTgt - audioLvl) * Math.min(1, dt * 14);
-    thinkLvl += ((state === "thinking" ? 1 : 0) - thinkLvl) * Math.min(1, dt * 4);
-    listenLvl += ((state === "listening" ? 1 : 0) - listenLvl) * Math.min(1, dt * 4);
-    uniforms.uTime.value = now * 0.001;
-    uniforms.uAudio.value = audioLvl;
-    uniforms.uBounce.value = bounceP * 0.30;
-    uniforms.uThink.value = thinkLvl;
-    uniforms.uListen.value = listenLvl;
-    renderer.render(scene, camera);
-    raf = requestAnimationFrame(frame);
-  }
-
-  function fallbackOrb() {
-    canvas.style.background =
-      "radial-gradient(circle at 50% 46%, rgba(190,95,255,.7), rgba(95,32,160,.35) 40%, rgba(8,6,14,1) 66%)";
-  }
-  if (!initOrb()) fallbackOrb();
-
-  // ===================== mic capture (recording + level) ==================
-  var micStream = null, audioCtx = null, analyser = null, micData = null;
-  var mediaRec = null, chunks = [], recStartAt = 0;
-  var vadTimer = null, sawSpeech = false, silentFrames = 0;
-
-  function pickMime() {
-    var t = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus", ""];
-    for (var i = 0; i < t.length; i++) {
-      if (!t[i]) return "";
-      if (window.MediaRecorder && MediaRecorder.isTypeSupported(t[i])) return t[i];
-    }
-    return "";
-  }
-
-  var micSrc = null, micWave = null;
-  function getMic() {
-    if (micStream && audioCtx) {
-      if (audioCtx.state === "suspended") { try { audioCtx.resume(); } catch (e) {} }
-      return Promise.resolve(micStream);
-    }
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return Promise.reject("nogum");
-    return navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-    }).then(function (s) {
-      micStream = s;
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      if (audioCtx.state === "suspended") { try { audioCtx.resume(); } catch (e) {} }
-      micSrc = audioCtx.createMediaStreamSource(s);
-      analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 1024;
-      analyser.smoothingTimeConstant = 0.4;
-      micSrc.connect(analyser);
-      micData = new Uint8Array(analyser.frequencyBinCount);
-      micWave = new Uint8Array(analyser.fftSize);
-      return s;
-    });
-  }
-  // Loudness 0..1 -- time-domain RMS (robust) blended with the voice band.
-  function readMic() {
-    if (!analyser) return 0;
-    analyser.getByteTimeDomainData(micWave);
-    var sq = 0;
-    for (var i = 0; i < micWave.length; i++) { var v = (micWave[i] - 128) / 128; sq += v * v; }
-    var rms = Math.sqrt(sq / micWave.length);          // ~0 silence, ~0.05-0.25 speech
-    analyser.getByteFrequencyData(micData);
-    var sum = 0;
-    for (var k = 4; k < 90; k++) sum += micData[k];    // ~170 Hz .. 4 kHz
-    var band = (sum / 86) / 90;
-    return Math.min(1, Math.max(rms * 4.2, band));
-  }
-  function releaseMic() {
-    if (micStream) { micStream.getTracks().forEach(function (t) { t.stop(); }); micStream = null; }
-    if (audioCtx) { try { audioCtx.close(); } catch (e) {} audioCtx = null; }
-    analyser = null; micData = null; micWave = null; micSrc = null;
-  }
-
-  // ===================== conversation loop ===============================
-  var manualStop = false;
-
-  function startListening() {
-    if (state === "listening") return;
-    hideHeard();
-    if (!window.MediaRecorder || !(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)) {
-      conversing = false; state = "idle";
-      setStatus("Sprachaufnahme geht auf diesem Gerät nicht — schreib Nex");
-      openTyping();
-      return;
-    }
-    setStatus("Mikrofon freigeben …");
-    getMic().then(function (stream) {
-      state = "listening";
-      manualStop = false;
-      micBtn.classList.add("listening");
-      setStatus("Sprich – tippen wenn du fertig bist");
-      chunks = [];
-      sawSpeech = false; silentFrames = 0;
-      var mime = pickMime();
-      try { mediaRec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream); }
-      catch (e) { try { mediaRec = new MediaRecorder(stream); } catch (e2) { mediaRec = null; } }
-      if (!mediaRec) {
-        conversing = false; state = "idle";
-        setStatus("Aufnahme nicht möglich — schreib Nex"); openTyping(); return;
+  // very small markdown: fenced code, inline code, **bold**, line breaks
+  function render(text) {
+    var parts = String(text).split(/```/);
+    var html = "";
+    for (var i = 0; i < parts.length; i++) {
+      if (i % 2 === 1) {
+        var body = parts[i].replace(/^[a-zA-Z0-9_-]*\n/, "");
+        html += "<pre>" + esc(body.replace(/\n$/, "")) + "</pre>";
+      } else {
+        var seg = esc(parts[i])
+          .replace(/`([^`]+)`/g, "<code>$1</code>")
+          .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+          .replace(/\n/g, "<br>");
+        html += seg;
       }
-      mediaRec.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
-      mediaRec.onstop = onRecordingStopped;
-      mediaRec.onerror = function () { finishListening(true); };
-      mediaRec.start(200);            // timeslice -> guaranteed periodic chunks
-      recStartAt = Date.now();
-      vadTimer = setInterval(function () {
-        var lvl = readMic();
-        if (lvl > 0.055) { sawSpeech = true; silentFrames = 0; }
-        else { silentFrames++; }
-        var elapsed = Date.now() - recStartAt;
-        // spoke, then ~1.3s of silence -> auto-send
-        if (sawSpeech && silentFrames > 12 && elapsed > 1100) { finishListening(false); return; }
-        // never registered any sound after 9s -> send anyway (quiet mic)
-        if (!sawSpeech && elapsed > 9000) { finishListening(false); return; }
-        if (elapsed > 22000) { finishListening(false); }
-      }, 110);
-    }).catch(function (err) {
-      micBtn.classList.remove("listening");
-      permBlocked = true;
-      conversing = false; state = "idle";
-      setStatus("Kein Mikrofon-Zugriff — erlaub es im Browser, oder schreib Nex");
-      openTyping();
-    });
-  }
-
-  // isManual === true  -> user tapped to finish; always send whatever we got
-  // isManual === false -> silence/timeout auto-stop
-  function finishListening(isManual) {
-    if (vadTimer) { clearInterval(vadTimer); vadTimer = null; }
-    manualStop = !!isManual;
-    micBtn.classList.remove("listening");
-    if (mediaRec && mediaRec.state !== "inactive") { try { mediaRec.stop(); } catch (e) { onRecordingStopped(); } }
-    else onRecordingStopped();
-  }
-
-  function stopConversation() {
-    conversing = false;
-    if (vadTimer) { clearInterval(vadTimer); vadTimer = null; }
-    if (mediaRec && mediaRec.state !== "inactive") { try { mediaRec.stop(); } catch (e) {} }
-    if (window.speechSynthesis) { try { window.speechSynthesis.cancel(); } catch (e) {} }
-    micBtn.classList.remove("listening");
-    releaseMic();
-    state = "idle";
-    setStatus("Tipp den Kreis und red mit Nex");
-  }
-
-  function onRecordingStopped() {
-    var recorded = chunks.slice();
-    chunks = [];
-    var dur = Date.now() - recStartAt;
-    var blob = recorded.length ? new Blob(recorded, { type: recorded[0].type || "audio/webm" }) : null;
-    // Only bail on a genuine non-recording (too short / no data). No speech-
-    // detection gate here -- let Whisper decide; the client VAD is unreliable
-    // across devices and used to silently swallow every turn.
-    if (!blob || dur < 350 || blob.size < 900) {
-      if (conversing && !manualStop) { setTimeout(startListening, 200); }
-      else { state = "idle"; setStatus("Tipp den Kreis und red mit Nex"); }
-      return;
     }
-    var ext = (blob.type.indexOf("mp4") >= 0) ? "mp4" : (blob.type.indexOf("ogg") >= 0 ? "ogg" : "webm");
-    state = "thinking";
-    setStatus("Nex hört sich das an …");
-    var fd = new FormData();
-    fd.append("audio", blob, "speech." + ext);
-    fetch("/api/pl/nex/voice", { method: "POST", body: fd })
-      .then(function (r) { return r.json(); })
-      .then(function (j) {
-        var txt = (j && j.transcript || "").trim();
-        if (!txt) {
-          setStatus("Nichts verstanden – nochmal, etwas lauter");
-          if (conversing) setTimeout(startListening, 500);
-          else state = "idle";
-          return;
-        }
-        showHeard(txt);
-        askNex(txt);
-      })
-      .catch(function () {
-        setStatus("Verbindung weg – nochmal tippen");
-        state = "idle";
-      });
+    return html;
   }
 
-  function askNex(text) {
-    state = "thinking";
-    setStatus("Nex denkt nach …");
-    var body = { message: text, character: window.NEX.character, project_type: window.NEX.projectType, via_voice: true };
+  function clearEmpty() { if (emptyEl) { emptyEl.remove(); emptyEl = null; } }
+
+  function addMsg(role, text) {
+    clearEmpty();
+    var row = document.createElement("div");
+    row.className = "nx-row " + (role === "user" ? "me" : "them");
+    var b = document.createElement("div");
+    b.className = "nx-bubble";
+    b.innerHTML = role === "user" ? esc(text).replace(/\n/g, "<br>") : render(text);
+    row.appendChild(b);
+    msgsEl.appendChild(row);
+    scrollDown();
+    return b;
+  }
+
+  var typingRow = null;
+  function showTyping() {
+    if (typingRow) return;
+    clearEmpty();
+    typingRow = document.createElement("div");
+    typingRow.className = "nx-row them";
+    typingRow.innerHTML = '<div class="nx-bubble" style="padding:0;"><div class="nx-typing"><span></span><span></span><span></span></div></div>';
+    msgsEl.appendChild(typingRow);
+    scrollDown();
+  }
+  function hideTyping() { if (typingRow) { typingRow.remove(); typingRow = null; } }
+
+  function scrollDown() { msgsEl.scrollTop = msgsEl.scrollHeight; }
+
+  function autoGrow() {
+    input.style.height = "auto";
+    input.style.height = Math.min(input.scrollHeight, 140) + "px";
+  }
+  input.addEventListener("input", autoGrow);
+
+  function setBusy(v) {
+    busy = v;
+    sendBtn.disabled = v;
+  }
+
+  function send() {
+    var text = input.value.trim();
+    if (!text || busy) return;
+    input.value = "";
+    autoGrow();
+    addMsg("user", text);
+    setBusy(true);
+    showTyping();
+
+    var body = { message: text, character: NEX.character, project_type: NEX.projectType };
     if (chatId) body.chat_id = chatId;
-    fetch("/api/ai/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+    fetch("/api/ai/chat", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    })
       .then(function (r) { return r.json(); })
       .then(function (j) {
-        if (!j.ok) { speak("Ging gerade nicht. Nochmal."); return; }
+        if (!j.ok) { hideTyping(); setBusy(false); addMsg("assistant", nice(j.error)); return; }
         chatId = j.chat_id;
-        pollJob(j.job_id);
+        poll(j.job_id);
       })
-      .catch(function () { speak("Verbindung ist weg."); });
-  }
-  function pollJob(id) {
-    fetch("/api/ai/chat/" + id).then(function (r) { return r.json(); }).then(function (j) {
-      if (j.status === "running") { setTimeout(function () { pollJob(id); }, 650); return; }
-      if (j.status === "done" && j.reply) speak(j.reply);
-      else speak("Ich bin grad nicht erreichbar.");
-    }).catch(function () { speak("Verbindungsfehler."); });
+      .catch(function () { hideTyping(); setBusy(false); addMsg("assistant", "Verbindung ist gerade weg. Nochmal?"); });
   }
 
-  function stripMd(t) {
-    return String(t)
-      .replace(/```[\s\S]*?```/g, " (Code) ")
-      .replace(/[*_`#>]/g, "")
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-      .replace(/\s+/g, " ").trim();
-  }
-  var voices = [];
-  function loadVoices() { try { voices = window.speechSynthesis.getVoices() || []; } catch (e) {} }
-  loadVoices();
-  if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = loadVoices;
-  function germanVoice() {
-    for (var i = 0; i < voices.length; i++) if (/^de([-_]|$)/i.test(voices[i].lang)) return voices[i];
-    return null;
+  function nice(err) {
+    if (err === "insufficient_tokens") return "Dir sind die KI-Token ausgegangen. Morgen gibt's neue.";
+    if (err === "rate") return "Kurz durchatmen – gleich wieder.";
+    return "Das hat gerade nicht geklappt. Nochmal versuchen?";
   }
 
-  var speakWatchdog = null;
-  function speak(text) {
-    hideHeard();
-    var clean = stripMd(text);
-    if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) {
-      state = "idle"; setStatus(clean.slice(0, 120)); return;
-    }
-    state = "speaking";
-    setStatus("Nex spricht …");
-    var done = false;
-    function finishSpeaking() {
-      if (done) return;
-      done = true;
-      if (speakWatchdog) { clearInterval(speakWatchdog); speakWatchdog = null; }
-      if (conversing) startListening();
-      else { state = "idle"; setStatus("Tipp den Kreis, um weiterzureden"); }
-    }
-    var u = new SpeechSynthesisUtterance(clean);
-    u.lang = "de-DE"; u.rate = 1.05; u.pitch = 0.95;
-    var v = germanVoice(); if (v) u.voice = v;
-    u.onstart = function () { kick(6); };
-    u.onboundary = function () { kick(2.4 + Math.random() * 2.6); };
-    u.onend = finishSpeaking;
-    u.onerror = finishSpeaking;
-    try {
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(u);
-      // Chrome stalls on long utterances and sometimes never fires onend --
-      // nudge it, and hard-stop after a generous estimate so the loop lives.
-      var budget = 4000 + clean.length * 90;
-      speakWatchdog = setInterval(function () {
-        if (!window.speechSynthesis.speaking) { finishSpeaking(); return; }
-        try { window.speechSynthesis.pause(); window.speechSynthesis.resume(); } catch (e) {}
-        budget -= 3000;
-        if (budget <= 0) { try { window.speechSynthesis.cancel(); } catch (e) {} finishSpeaking(); }
-      }, 3000);
-    } catch (e) { finishSpeaking(); }
+  function poll(jobId) {
+    fetch("/api/ai/chat/" + jobId)
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (j.status === "running") { setTimeout(function () { poll(jobId); }, 650); return; }
+        hideTyping();
+        setBusy(false);
+        if (j.status === "done" && j.reply) addMsg("assistant", j.reply);
+        else addMsg("assistant", "Ich bin gerade nicht erreichbar. Versuch's gleich nochmal.");
+      })
+      .catch(function () { hideTyping(); setBusy(false); addMsg("assistant", "Verbindungsfehler."); });
   }
 
-  // ===================== interaction =====================================
-  function tap() {
-    if (state === "listening") { finishListening(true); return; }     // done talking -> send
-    if (state === "thinking") { stopConversation(); return; }         // abort a pending turn
-    if (state === "speaking") {                                       // barge in
-      if (window.speechSynthesis) { try { window.speechSynthesis.cancel(); } catch (e) {} }
-      conversing = true; startListening(); return;
-    }
-    conversing = true;                                                // idle -> start
-    startListening();
-  }
-  micBtn.addEventListener("click", tap);
-  canvas.addEventListener("click", tap);
-
-  function openTyping() { typeRow.classList.add("show"); setTimeout(function () { typeInput.focus(); }, 100); }
-  kbBtn.addEventListener("click", function () {
-    if (typeRow.classList.contains("show")) typeRow.classList.remove("show");
-    else openTyping();
-  });
-  function sendTyped() {
-    var t = typeInput.value.trim();
-    if (!t) return;
-    typeInput.value = "";
-    typeRow.classList.remove("show");
-    conversing = false;          // typed -> don't auto-open the mic afterwards
-    showHeard(t);
-    askNex(t);
-  }
-  typeSend.addEventListener("click", sendTyped);
-  typeInput.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); sendTyped(); } });
-
-  // ===================== lifecycle ======================================
-  document.addEventListener("visibilitychange", function () {
-    if (document.hidden) {
-      running = false;
-      stopConversation();
-    } else if (!running) {
-      running = true; lastT = performance.now();
-      if (renderer) raf = requestAnimationFrame(frame);
-    }
+  sendBtn.addEventListener("click", send);
+  input.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
   });
 
-  fetch("/api/ai/chats?character=" + encodeURIComponent(window.NEX.character))
+  newBtn.addEventListener("click", function () {
+    chatId = null;
+    msgsEl.innerHTML = "";
+    emptyEl = document.createElement("div");
+    emptyEl.className = "nx-empty";
+    emptyEl.innerHTML = '<div class="nx-empty-orb"></div><h2>Neuer Chat</h2><p>Worüber willst du reden?</p>';
+    msgsEl.appendChild(emptyEl);
+    input.focus();
+  });
+
+  // load the most recent Nex chat, if any
+  fetch("/api/ai/chats?character=" + encodeURIComponent(NEX.character))
     .then(function (r) { return r.json(); })
-    .then(function (j) { if (j.ok && j.chats.length) chatId = j.chats[0].id; })
+    .then(function (j) {
+      if (!j.ok || !j.chats || !j.chats.length) return;
+      var c = j.chats[0];
+      return fetch("/api/ai/chats/" + c.id + "/messages")
+        .then(function (r) { return r.json(); })
+        .then(function (m) {
+          if (!m.ok || !m.messages.length) return;
+          chatId = c.id;
+          msgsEl.innerHTML = "";
+          emptyEl = null;
+          m.messages.forEach(function (msg) { addMsg(msg.role === "user" ? "user" : "assistant", msg.content); });
+          scrollDown();
+        });
+    })
     .catch(function () {});
+
+  setTimeout(function () { input.focus(); }, 200);
 })();

@@ -821,6 +821,16 @@ with app.app_context():
             admin_user.is_admin = True
             db.session.commit()
 
+# pinklemon fake community: ~1000 bot accounts that post/comment/argue, plus
+# a background daemon that keeps them writing. Off under pytest and when
+# PL_BOTS=0.
+if "pytest" not in sys.modules and os.environ.get("PL_BOTS", "1") != "0":
+    try:
+        import pl_bots
+        pl_bots.bootstrap(app)
+    except Exception:
+        logger.exception("pl_bots konnte nicht gestartet werden.")
+
 
 def allowed_image_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS
@@ -1181,9 +1191,22 @@ def _pl_rate_ok(uid, limit=8, window=120):
 # ==========================================================================
 # pinklemon -- pages
 # ==========================================================================
+def _pl_socialise(me):
+    """Best-effort: give this real user a populated feed/Freunde tab from
+    the bot community. No-op under pytest / when bots are disabled."""
+    if "pytest" in sys.modules:
+        return
+    try:
+        import pl_bots
+        pl_bots.ensure_social(me)
+    except Exception:
+        logger.exception("pl_bots.ensure_social")
+
+
 @app.route("/")
 def pl_home():
     me = current_user()
+    _pl_socialise(me)
     q = (request.args.get("q") or "").strip()
     query = FeedPost.query
     if q:
@@ -1200,6 +1223,7 @@ def pl_home():
 @app.route("/freunde")
 def pl_friends():
     me = current_user()
+    _pl_socialise(me)
     return render_template("pl_friends.html", chats=_pl_chat_list(me), me_json={"id": me.id, "username": me.username})
 
 

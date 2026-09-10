@@ -10,6 +10,16 @@
     <button class="pl-icon-btn pink" id="plNewChatBtn" aria-label="Neuer Chat">{{ plicon('plus', 20) }}</button>
 </div>
 
+<!-- inline search row that drops down from the top (no bottom sheet) -->
+<div class="pl-topsearch" id="plTopSearch" hidden>
+    <div class="pl-topsearch-bar">
+        {{ plicon('search', 18) }}
+        <input id="plUserSearch" placeholder="Benutzername suchen" autocomplete="off" autocapitalize="none">
+        <button type="button" id="plFindClose" aria-label="Schließen">&times;</button>
+    </div>
+    <div id="plUserResults"></div>
+</div>
+
 <div id="plChatList">
     {% for c in chats %}
     <a class="pl-chatrow" href="{{ url_for('pl_chat_view', chat_id=c.id) }}">
@@ -27,32 +37,25 @@
         {% if c.unread %}<span class="pl-chatrow-badge">{{ c.unread }}</span>{% endif %}
     </a>
     {% else %}
-    <div class="pl-empty">Noch keine Chats.<br>Tipp oben rechts auf <b>+</b>, folgt euch gegenseitig und schreibt los.</div>
+    <div class="pl-empty">Noch keine Chats.<br>Tipp oben auf die Lupe, folgt euch gegenseitig und schreibt los.</div>
     {% endfor %}
 </div>
 {% endblock %}
 
 {% block sheets %}
-<!-- find people -->
-<div class="pl-sheet-backdrop" id="plFindSheet">
-    <div class="pl-sheet">
-        <div class="pl-sheet-grip"></div>
-        <h2>Leute finden</h2>
-        <input class="pl-input" id="plUserSearch" placeholder="Benutzername" autocomplete="off" autocapitalize="none">
-        <div id="plUserResults" style="overflow-y:auto;"></div>
-    </div>
-</div>
-
 <!-- new chat / group -->
-<div class="pl-sheet-backdrop" id="plNewChatSheet">
+<div class="pl-sheet-backdrop pl-sheet-modal" id="plNewChatSheet">
     <div class="pl-sheet">
         <div class="pl-sheet-grip"></div>
-        <h2>Neuer Chat</h2>
-        <p style="color:var(--pl-text-dim);font-size:13px;margin:0 0 12px;">Du kannst nur mit Leuten schreiben, denen du folgst und die dir zurückfolgen.</p>
+        <div class="pl-sheet-bar">
+            <button class="pl-sheet-x" data-close-sheet aria-label="Schließen">&times;</button>
+            <h2>Neuer Chat</h2>
+            <button class="pl-btn pl-sheet-post" id="plCreateChatBtn">Starten</button>
+        </div>
+        <p style="color:var(--pl-text-dim);font-size:13px;margin:0 0 12px;">Du kannst nur mit Leuten schreiben, denen du folgst und die dir zur&uuml;ckfolgen.</p>
         <input class="pl-input" id="plGroupName" placeholder="Gruppenname (leer lassen = Einzelchat)" maxlength="80">
         <div class="pl-section-label" style="margin:6px 4px;">Gegenseitige Follows</div>
-        <div id="plMutualList" style="overflow-y:auto;max-height:40vh;"></div>
-        <button class="pl-btn" id="plCreateChatBtn" style="margin-top:12px;">Chat starten</button>
+        <div id="plMutualList" style="overflow-y:auto;max-height:44vh;"></div>
     </div>
 </div>
 {% endblock %}
