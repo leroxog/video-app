@@ -8,11 +8,12 @@
   .pl-screen.vid { padding: 0; align-items: stretch; }
   .pl-vidfeed {
     flex: 1; min-height: 0; overflow-y: auto; scroll-snap-type: y mandatory;
-    -webkit-overflow-scrolling: touch; background: #000; position: relative;
+    -webkit-overflow-scrolling: touch; background: var(--pl-bg); position: relative;
   }
   .pl-vid {
     position: relative; height: 100%; scroll-snap-align: start; scroll-snap-stop: always;
     display: flex; align-items: center; justify-content: center; overflow: hidden;
+    background: var(--pl-bg);
   }
   .pl-vid video {
     width: 100%; height: 100%; object-fit: contain; background: #000; display: block;
@@ -49,18 +50,12 @@
     width: 38px; height: 38px; border-radius: 50%; border: none; background: rgba(0,0,0,.4); color: #fff;
     display: flex; align-items: center; justify-content: center; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
   }
-  .pl-vid-add {
-    position: absolute; left: 50%; transform: translateX(-50%);
-    top: calc(14px + env(safe-area-inset-top, 0px)); z-index: 3;
-    border: none; background: var(--pl-pink); color: #fff; border-radius: 999px;
-    padding: 9px 18px; font-size: 13px; font-weight: 800; box-shadow: 0 6px 18px rgba(255,45,149,.4);
-  }
   .pl-vid-empty {
     height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 14px; text-align: center; color: #fff; padding: 30px;
+    gap: 14px; text-align: center; color: var(--pl-text); padding: 30px;
   }
   .pl-vid-empty h2 { margin: 0; font-size: 19px; font-weight: 900; }
-  .pl-vid-empty p { margin: 0; color: rgba(255,255,255,.6); font-size: 13.5px; line-height: 1.5; max-width: 300px; }
+  .pl-vid-empty p { margin: 0; color: var(--pl-text-faint); font-size: 13.5px; line-height: 1.5; max-width: 300px; }
   @media (min-width: 900px) {
     .pl-vid video { object-fit: contain; }
     .pl-vidfeed { max-width: 480px; margin: 0 auto; border-left: 1px solid var(--pl-border); border-right: 1px solid var(--pl-border); }
@@ -71,7 +66,6 @@
 {% block screen_class %}vid{% endblock %}
 {% block screen %}
 <div class="pl-vidfeed" id="plVidFeed">
-  <button class="pl-vid-add" id="plVidAdd">＋ Video</button>
   {% for v in videos %}
   <section class="pl-vid paused" data-post-id="{{ v.id }}" data-liked="{{ '1' if v.liked_by_me else '0' }}">
     <video src="{{ v.attachment.url }}" loop muted playsinline preload="metadata"></video>
@@ -79,7 +73,7 @@
     <button class="pl-vid-play" aria-label="Play/Pause">{{ plicon('videos', 66) }}</button>
     <button class="pl-vid-mute" aria-label="Ton">🔇</button>
     <div class="pl-vid-meta">
-      <span class="pl-vid-user"><span class="pl-avatar">{{ v.author.avatar_letter }}</span>@{{ v.author.username }}</span>
+      <span class="pl-vid-user"><span class="pl-avatar">{% if v.author.avatar_url %}<img src="{{ v.author.avatar_url }}" alt="">{% else %}{{ v.author.avatar_letter }}{% endif %}</span>{{ v.author.name }}</span>
       <div class="pl-vid-text">{{ v.heading }}{% if v.body %} — {{ v.body }}{% endif %}</div>
     </div>
     <div class="pl-vid-side">
@@ -91,11 +85,10 @@
   <div class="pl-vid-empty">
     <div class="pl-logo" style="width:64px;">{% include "partials/_pinklemon_logo.html" %}</div>
     <h2>Noch keine Videos</h2>
-    <p>Tipp oben auf „＋ Video" und lad das erste hoch.</p>
+    <p>Poste ein Video über den &bdquo;Posten&ldquo;-Button &ndash; es erscheint dann hier.</p>
   </div>
   {% endfor %}
 </div>
-<input type="file" id="plVidFile" accept="video/*" hidden>
 {% endblock %}
 
 {% block scripts %}

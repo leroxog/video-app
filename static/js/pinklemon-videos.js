@@ -67,35 +67,4 @@
         });
     });
   });
-
-  // upload a new video -> creates a video post
-  var addBtn = document.getElementById("plVidAdd");
-  var file = document.getElementById("plVidFile");
-  addBtn.addEventListener("click", function () { file.click(); });
-  file.addEventListener("change", function () {
-    var f = file.files && file.files[0];
-    if (!f) return;
-    addBtn.disabled = true;
-    addBtn.textContent = "… lädt";
-    var fd = new FormData();
-    fd.append("file", f);
-    fetch("/api/pl/upload", { method: "POST", body: fd })
-      .then(function (r) { return r.json(); })
-      .then(function (j) {
-        if (!j.ok || j.kind !== "video") throw new Error("upload");
-        return fetch("/api/pl/posts", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ heading: "Video", att_kind: "video", att_value: j.value }),
-        }).then(function (r) { return r.json(); });
-      })
-      .then(function (j) {
-        if (!j.ok) throw new Error("post");
-        location.reload();
-      })
-      .catch(function () {
-        addBtn.disabled = false;
-        addBtn.textContent = "＋ Video";
-        window.plToast("Video ging nicht.");
-      });
-  });
 })();
