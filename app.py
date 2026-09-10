@@ -2,6 +2,7 @@ import os
 import io
 import re
 import sys
+import json
 import math
 import random
 import uuid
@@ -44,6 +45,7 @@ from models import (
     AiVoiceProfile, AiPersonality, AiGeneratedMedia,
     AiTrainingExample, AiTrainingRun,
     FeedPost, FeedLike, FeedComment, FeedCommentLike, FeedPS,
+    FeedRepost, FeedBookmark, FeedReport, FeedPollVote,
     PlChat, PlChatMember, PlMessage,
 )
 import ai_assistant
@@ -663,7 +665,13 @@ def ensure_sqlite_columns_exist():
         "ai_generated_media": [("liked", "BOOLEAN NOT NULL DEFAULT 0")],
         # pinklemon attachments: photo / video / playable game under any
         # post, comment, P.S. or chat message.
-        "feed_post": [("att_kind", "VARCHAR(12)"), ("att_value", "VARCHAR(255)")],
+        "feed_post": [
+            ("att_kind", "VARCHAR(12)"), ("att_value", "VARCHAR(255)"),
+            ("edited_at", "DATETIME"), ("pinned_at", "DATETIME"),
+            ("view_count", "INTEGER NOT NULL DEFAULT 0"),
+            ("is_sensitive", "BOOLEAN NOT NULL DEFAULT 0"),
+            ("poll_json", "TEXT"),
+        ],
         "feed_comment": [("att_kind", "VARCHAR(12)"), ("att_value", "VARCHAR(255)")],
         "feed_ps": [("att_kind", "VARCHAR(12)"), ("att_value", "VARCHAR(255)")],
         "pl_message": [("att_kind", "VARCHAR(12)"), ("att_value", "VARCHAR(255)")],
@@ -756,6 +764,11 @@ def ensure_columns_exist():
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS pl_banner_image VARCHAR(255)',
         'ALTER TABLE feed_post ADD COLUMN IF NOT EXISTS att_kind VARCHAR(12)',
         'ALTER TABLE feed_post ADD COLUMN IF NOT EXISTS att_value VARCHAR(255)',
+        'ALTER TABLE feed_post ADD COLUMN IF NOT EXISTS edited_at TIMESTAMP',
+        'ALTER TABLE feed_post ADD COLUMN IF NOT EXISTS pinned_at TIMESTAMP',
+        'ALTER TABLE feed_post ADD COLUMN IF NOT EXISTS view_count INTEGER NOT NULL DEFAULT 0',
+        'ALTER TABLE feed_post ADD COLUMN IF NOT EXISTS is_sensitive BOOLEAN NOT NULL DEFAULT FALSE',
+        'ALTER TABLE feed_post ADD COLUMN IF NOT EXISTS poll_json TEXT',
         'ALTER TABLE feed_comment ADD COLUMN IF NOT EXISTS att_kind VARCHAR(12)',
         'ALTER TABLE feed_comment ADD COLUMN IF NOT EXISTS att_value VARCHAR(255)',
         'ALTER TABLE feed_ps ADD COLUMN IF NOT EXISTS att_kind VARCHAR(12)',
@@ -1278,21 +1291,82 @@ def _pl_user_activity_digest(user, max_chars=3600):
     return text[:max_chars]
 
 
-def serialize_pl_post(post, me):
+_PL_TAG_RE = re.compile(r"#([A-Za-z0-9_äöüÄÖÜß]{1,40})")
+_PL_MENTION_RE = re.compile(r"(?<![\w@])@([A-Za-z0-9_.]{3,30})")
+_PL_URL_RE = re.compile(r"(https?://[^\s<]+)")
+
+
+def _pl_linkify(text):
+    """Escape user text, then turn #hashtags, @mentions and URLs into links.
+    Returns HTML (mark |safe when rendering)."""
+    import markupsafe
+    out = str(markupsafe.escape(text or ""))
+    out = _PL_URL_RE.sub(
+        lambda m: f'<a href="{m.group(1)}" target="_blank" rel="noopener nofollow" class="pl-link">{m.group(1)}</a>',
+        out,
+    )
+    out = _PL_TAG_RE.sub(
+        lambda m: f'<a href="/?q=%23{m.group(1)}" class="pl-hashtag">#{m.group(1)}</a>', out,
+    )
+    out = _PL_MENTION_RE.sub(
+        lambda m: f'<a href="/freunde/u/{m.group(1)}" class="pl-mention">@{m.group(1)}</a>', out,
+    )
+    return out.replace("\n", "<br>")
+
+
+def _pl_poll_state(post, me):
+    if not post.poll_json:
+        return None
+    try:
+        options = json.loads(post.poll_json)
+    except Exception:
+        return None
+    if not isinstance(options, list) or len(options) < 2:
+        return None
+    votes = post.poll_votes
+    counts = [0] * len(options)
+    my_vote = None
+    for v in votes:
+        if 0 <= v.choice < len(options):
+            counts[v.choice] += 1
+        if v.user_id == me.id:
+            my_vote = v.choice
+    total = sum(counts)
+    return {
+        "options": options,
+        "counts": counts,
+        "total": total,
+        "my_vote": my_vote,
+        "percents": [round(100 * c / total) if total else 0 for c in counts],
+    }
+
+
+def serialize_pl_post(post, me, repost_meta=None):
     liked_ids = {pl.user_id for pl in post.likes}
     return {
         "id": post.id,
         "heading": post.heading,
         "body": post.body or "",
+        "body_html": _pl_linkify(post.body or ""),
         "created_ago": pl_ago(post.created_at),
         "share_count": post.share_count,
         "like_count": len(post.likes),
         "comment_count": len(post.comments),
+        "repost_count": len(post.reposts),
+        "view_count": post.view_count or 0,
         "liked_by_me": me.id in liked_ids,
+        "bookmarked_by_me": any(b.user_id == me.id for b in post.bookmarks),
+        "reposted_by_me": any(r.user_id == me.id and not r.quote for r in post.reposts),
         "is_mine": post.author_id == me.id,
+        "edited": post.edited_at is not None,
+        "pinned": post.pinned_at is not None,
+        "sensitive": bool(post.is_sensitive),
+        "poll": _pl_poll_state(post, me),
         "author": _pl_user_brief(post.author),
+        "repost": repost_meta,
         "ps": (
-            {"body": post.ps.body, "created_ago": pl_ago(post.ps.created_at),
+            {"body": post.ps.body, "body_html": _pl_linkify(post.ps.body or ""),
+             "created_ago": pl_ago(post.ps.created_at),
              "attachment": _pl_attachment(post.ps)}
             if post.ps else None
         ),
@@ -1392,28 +1466,87 @@ def _pl_rank_feed(me, pool):
     return out[:PL_POST_MAX]
 
 
+def _pl_trending():
+    """Top hashtags in recent post bodies."""
+    rows = FeedPost.query.order_by(FeedPost.created_at.desc()).limit(200).all()
+    counts = {}
+    for p in rows:
+        for tag in _PL_TAG_RE.findall(p.body or ""):
+            counts[tag] = counts.get(tag, 0) + 1
+    top = sorted(counts.items(), key=lambda kv: kv[1], reverse=True)[:6]
+    return [{"tag": t, "n": n} for t, n in top]
+
+
 @app.route("/")
 def pl_home():
     me = current_user()
     _pl_socialise(me)
     q = (request.args.get("q") or "").strip()
-    feed = "following" if request.args.get("feed") == "following" else "foryou"
+    fa = request.args.get("feed")
+    feed = fa if fa in ("following", "neu") else "foryou"
+    before = request.args.get("before", type=int)   # pagination cursor
+    base = FeedPost.query
+    if before:
+        base = base.filter(FeedPost.id < before)
+
     if q:
         like = f"%{q}%"
-        posts = (FeedPost.query
-                 .filter(db.or_(FeedPost.heading.ilike(like), FeedPost.body.ilike(like)))
+        posts = (base.filter(db.or_(FeedPost.heading.ilike(like), FeedPost.body.ilike(like)))
                  .order_by(FeedPost.created_at.desc()).limit(PL_POST_MAX).all())
     elif feed == "following":
         followed = {s.channel_id for s in Subscription.query.filter_by(subscriber_id=me.id)}
         followed.add(me.id)
-        posts = (FeedPost.query.filter(FeedPost.author_id.in_(followed))
+        posts = (base.filter(FeedPost.author_id.in_(followed))
                  .order_by(FeedPost.created_at.desc()).limit(PL_POST_MAX).all())
+    elif feed == "neu":
+        posts = base.order_by(FeedPost.created_at.desc()).limit(PL_POST_MAX).all()
     else:
-        pool = FeedPost.query.order_by(FeedPost.created_at.desc()).limit(PL_RANK_POOL).all()
+        pool = base.order_by(FeedPost.created_at.desc()).limit(PL_RANK_POOL).all()
         posts = _pl_rank_feed(me, pool)
+
     serialized = [serialize_pl_post(p, me) for p in posts]
+
+    # quote-reposts by people you follow, merged into the timeline
+    if not q and not before and feed in ("foryou", "following"):
+        followed = {s.channel_id for s in Subscription.query.filter_by(subscriber_id=me.id)}
+        followed.discard(me.id)
+        if followed:
+            shown = {s["id"] for s in serialized}
+            qr = (FeedRepost.query.filter(FeedRepost.user_id.in_(followed))
+                  .order_by(FeedRepost.created_at.desc()).limit(15).all())
+            for r in qr:
+                p = db.session.get(FeedPost, r.post_id)
+                if p is None or p.id in shown:
+                    continue
+                by = db.session.get(User, r.user_id)
+                serialized.insert(0, serialize_pl_post(p, me, repost_meta={
+                    "by": _pl_user_brief(by) if by else None,
+                    "quote": r.quote, "ago": pl_ago(r.created_at),
+                }))
+                shown.add(p.id)
+
+    next_cursor = posts[-1].id if len(posts) >= PL_POST_MAX else None
     return render_template(
         "pl_home.html", posts=serialized, q=q, feed=feed,
+        next_cursor=next_cursor,
+        who=[_pl_user_brief(u) for u in User.query.filter(
+            User.id.notin_({s.channel_id for s in Subscription.query.filter_by(subscriber_id=me.id)} | {me.id})
+        ).order_by(db.func.random()).limit(3).all()] if not before else [],
+        trending=_pl_trending() if not before else [],
+        me_json={"id": me.id, "username": me.username},
+    )
+
+
+@app.route("/lesezeichen")
+def pl_bookmarks():
+    me = current_user()
+    rows = (db.session.query(FeedPost)
+            .join(FeedBookmark, FeedBookmark.post_id == FeedPost.id)
+            .filter(FeedBookmark.user_id == me.id)
+            .order_by(FeedBookmark.id.desc()).limit(80).all())
+    return render_template(
+        "pl_bookmarks.html",
+        posts=[serialize_pl_post(p, me) for p in rows],
         me_json={"id": me.id, "username": me.username},
     )
 
@@ -1435,7 +1568,8 @@ def pl_profile(username):
     follows_me = Subscription.query.filter_by(subscriber_id=user.id, channel_id=me.id).first() is not None
     user_posts = (
         FeedPost.query.filter_by(author_id=user.id)
-        .order_by(FeedPost.created_at.desc()).limit(40).all()
+        .order_by(FeedPost.pinned_at.isnot(None).desc(), FeedPost.created_at.desc())
+        .limit(40).all()
     )
     joined = None
     if user.created_at:
@@ -1618,11 +1752,184 @@ def api_pl_create_post():
     if not heading:
         return jsonify({"ok": False, "error": "empty"}), 400
     att_kind, att_value = _pl_read_att(data)
+    poll_json = None
+    raw_poll = data.get("poll")
+    if isinstance(raw_poll, list):
+        opts = [str(o).strip()[:60] for o in raw_poll if str(o).strip()][:4]
+        if len(opts) >= 2:
+            poll_json = json.dumps(opts, ensure_ascii=False)
     post = FeedPost(author_id=me.id, heading=heading, body=body,
-                    att_kind=att_kind, att_value=att_value)
+                    att_kind=att_kind, att_value=att_value,
+                    poll_json=poll_json, is_sensitive=bool(data.get("sensitive")))
     db.session.add(post)
     db.session.commit()
     return jsonify({"ok": True, "post": serialize_pl_post(post, me), "html": render_pl_post(post, me)})
+
+
+def _pl_own_post(post_id, me):
+    post = db.session.get(FeedPost, post_id)
+    if post is None:
+        return None, (jsonify({"ok": False, "error": "not_found"}), 404)
+    if post.author_id != me.id:
+        return None, (jsonify({"ok": False, "error": "not_yours"}), 403)
+    return post, None
+
+
+@app.route("/api/pl/posts/<int:post_id>", methods=["PATCH"])
+def api_pl_edit_post(post_id):
+    me = current_user()
+    post, err = _pl_own_post(post_id, me)
+    if err:
+        return err
+    data = request.get_json(silent=True) or {}
+    if "heading" in data:
+        h = (data.get("heading") or "").strip()[:140]
+        if not h:
+            return jsonify({"ok": False, "error": "empty"}), 400
+        post.heading = h
+    if "body" in data:
+        post.body = (data.get("body") or "").strip()[:4000] or None
+    post.edited_at = datetime.now(timezone.utc)
+    db.session.commit()
+    return jsonify({"ok": True, "post": serialize_pl_post(post, me), "html": render_pl_post(post, me)})
+
+
+@app.route("/api/pl/posts/<int:post_id>", methods=["DELETE"])
+def api_pl_delete_post(post_id):
+    me = current_user()
+    post, err = _pl_own_post(post_id, me)
+    if err:
+        return err
+    db.session.delete(post)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/pl/posts/<int:post_id>/pin", methods=["POST"])
+def api_pl_pin_post(post_id):
+    me = current_user()
+    post, err = _pl_own_post(post_id, me)
+    if err:
+        return err
+    if post.pinned_at is None:
+        FeedPost.query.filter_by(author_id=me.id).filter(FeedPost.pinned_at.isnot(None)).update(
+            {"pinned_at": None}, synchronize_session=False)
+        post.pinned_at = datetime.now(timezone.utc)
+        pinned = True
+    else:
+        post.pinned_at = None
+        pinned = False
+    db.session.commit()
+    return jsonify({"ok": True, "pinned": pinned})
+
+
+@app.route("/api/pl/posts/<int:post_id>/bookmark", methods=["POST"])
+def api_pl_bookmark_post(post_id):
+    me = current_user()
+    post = db.session.get(FeedPost, post_id)
+    if post is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    existing = FeedBookmark.query.filter_by(post_id=post_id, user_id=me.id).first()
+    if existing:
+        db.session.delete(existing)
+        saved = False
+    else:
+        db.session.add(FeedBookmark(post_id=post_id, user_id=me.id))
+        saved = True
+    db.session.commit()
+    return jsonify({"ok": True, "bookmarked": saved})
+
+
+@app.route("/api/pl/posts/<int:post_id>/repost", methods=["POST"])
+def api_pl_repost(post_id):
+    me = current_user()
+    post = db.session.get(FeedPost, post_id)
+    if post is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    quote = ((request.get_json(silent=True) or {}).get("quote") or "").strip()[:2000] or None
+    existing = FeedRepost.query.filter_by(post_id=post_id, user_id=me.id).first()
+    if existing and not quote:
+        db.session.delete(existing)
+        db.session.commit()
+        return jsonify({"ok": True, "reposted": False, "repost_count": len(post.reposts)})
+    if existing:
+        existing.quote = quote
+    else:
+        db.session.add(FeedRepost(post_id=post_id, user_id=me.id, quote=quote))
+    db.session.commit()
+    return jsonify({"ok": True, "reposted": True, "quote": bool(quote),
+                    "repost_count": len(post.reposts)})
+
+
+@app.route("/api/pl/posts/<int:post_id>/report", methods=["POST"])
+def api_pl_report_post(post_id):
+    me = current_user()
+    if db.session.get(FeedPost, post_id) is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    reason = ((request.get_json(silent=True) or {}).get("reason") or "").strip()[:200]
+    db.session.add(FeedReport(post_id=post_id, user_id=me.id, reason=reason or None))
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/pl/posts/<int:post_id>/view", methods=["POST"])
+def api_pl_view_post(post_id):
+    seen = session.setdefault("_pl_viewed", [])
+    if post_id in seen:
+        return jsonify({"ok": True, "counted": False})
+    post = db.session.get(FeedPost, post_id)
+    if post is None:
+        return jsonify({"ok": False}), 404
+    post.view_count = (post.view_count or 0) + 1
+    seen.append(post_id)
+    session["_pl_viewed"] = seen[-400:]
+    db.session.commit()
+    return jsonify({"ok": True, "counted": True, "views": post.view_count})
+
+
+@app.route("/api/pl/posts/<int:post_id>/likes")
+def api_pl_post_likes(post_id):
+    post = db.session.get(FeedPost, post_id)
+    if post is None:
+        return jsonify({"ok": False}), 404
+    users = []
+    for l in sorted(post.likes, key=lambda x: x.id, reverse=True)[:100]:
+        u = db.session.get(User, l.user_id)
+        if u:
+            users.append(_pl_user_brief(u))
+    return jsonify({"ok": True, "users": users})
+
+
+@app.route("/api/pl/posts/<int:post_id>/poll-vote", methods=["POST"])
+def api_pl_poll_vote(post_id):
+    me = current_user()
+    post = db.session.get(FeedPost, post_id)
+    if post is None or not post.poll_json:
+        return jsonify({"ok": False, "error": "no_poll"}), 404
+    try:
+        options = json.loads(post.poll_json)
+    except Exception:
+        return jsonify({"ok": False, "error": "no_poll"}), 404
+    choice = (request.get_json(silent=True) or {}).get("choice")
+    if not isinstance(choice, int) or not (0 <= choice < len(options)):
+        return jsonify({"ok": False, "error": "bad_choice"}), 400
+    existing = FeedPollVote.query.filter_by(post_id=post_id, user_id=me.id).first()
+    if existing:
+        existing.choice = choice
+    else:
+        db.session.add(FeedPollVote(post_id=post_id, user_id=me.id, choice=choice))
+    db.session.commit()
+    return jsonify({"ok": True, "poll": _pl_poll_state(post, me)})
+
+
+@app.route("/api/pl/who-to-follow")
+def api_pl_who_to_follow():
+    me = current_user()
+    followed = {s.channel_id for s in Subscription.query.filter_by(subscriber_id=me.id)}
+    followed.add(me.id)
+    rows = (User.query.filter(User.id.notin_(followed))
+            .order_by(db.func.random()).limit(3).all())
+    return jsonify({"ok": True, "users": [_pl_user_brief(u) for u in rows]})
 
 
 @app.route("/api/pl/posts/<int:post_id>/like", methods=["POST"])
@@ -1678,6 +1985,7 @@ def _serialize_pl_comment(c, me):
         "id": c.id,
         "parent_id": c.parent_id,
         "body": c.body,
+        "body_html": _pl_linkify(c.body),
         "created_at": (c.created_at.replace(tzinfo=timezone.utc) if c.created_at.tzinfo is None else c.created_at).isoformat(),
         "like_count": len(c.likes),
         "liked_by_me": me.id in liked_ids,

@@ -1404,3 +1404,94 @@ img { max-width: 100%; display: block; }
   .pl-nav a.is-active svg { color: var(--pl-pink); }
   .pl-nav a.pl-nav-me:hover { background: var(--pl-hover); }
 }
+
+/* ===================================================================
+   Feed extras: linkify, kebab menu, repost/bookmark, polls, sensitive,
+   pin, views, side cards, load-more.
+   =================================================================== */
+.pl-hashtag, .pl-mention { color: var(--pl-pink); }
+.pl-link { color: #1d9bf0; word-break: break-all; }
+.pl-hashtag:hover, .pl-mention:hover, .pl-link:hover { text-decoration: underline; }
+
+.pl-repost-head { font-size: 12px; color: var(--pl-text-faint); font-weight: 700; padding: 2px 2px 6px; display: flex; align-items: center; gap: 6px; }
+.pl-repost-head svg { width: 13px; height: 13px; }
+.pl-quote-text { font-size: 14.5px; margin: 0 2px 8px; line-height: 1.5; }
+
+.pl-post-kebab {
+  position: absolute; top: 8px; right: 6px; z-index: 3;
+  border: none; background: none; color: var(--pl-text-faint);
+  width: 30px; height: 30px; border-radius: 50%; font-size: 18px; line-height: 1;
+}
+.pl-post-kebab:hover { background: var(--pl-hover); color: var(--pl-text); }
+.pl-post-menu {
+  position: absolute; top: 36px; right: 8px; z-index: 20;
+  min-width: 180px; background: var(--pl-surface); border: 1px solid var(--pl-border);
+  border-radius: 14px; padding: 6px; box-shadow: 0 10px 30px rgba(0,0,0,.4);
+}
+.pl-post-menu button {
+  display: block; width: 100%; text-align: left; border: none; background: none;
+  color: var(--pl-text); font: inherit; font-size: 13.5px; font-weight: 600;
+  padding: 9px 10px; border-radius: 9px;
+}
+.pl-post-menu button:hover { background: var(--pl-hover); }
+.pl-post-menu button.pl-danger { color: var(--pl-danger); }
+
+.pl-pinned-tag { font-size: 11px; font-weight: 800; color: var(--pl-text-faint); display: inline-flex; align-items: center; gap: 4px; margin: 2px 0 4px; }
+.pl-pinned-tag svg { width: 11px; height: 11px; }
+
+.pl-post-content.pl-sensitive { position: relative; }
+.pl-post-content.pl-sensitive > *:not(.pl-sensitive-show) { filter: blur(22px); pointer-events: none; user-select: none; }
+.pl-sensitive-show {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+  border: 1px solid var(--pl-border); background: var(--pl-surface-2); color: var(--pl-text);
+  border-radius: 999px; padding: 8px 18px; font-size: 13px; font-weight: 700;
+}
+
+.pl-poll { margin: 10px 0 2px; display: flex; flex-direction: column; gap: 7px; }
+.pl-poll-opt {
+  position: relative; overflow: hidden; text-align: left;
+  border: 1px solid var(--pl-border); background: var(--pl-surface); color: var(--pl-text);
+  border-radius: 12px; padding: 10px 14px; font: inherit; font-size: 13.5px; font-weight: 600;
+  display: flex; align-items: center; gap: 8px;
+}
+.pl-poll[data-voted="1"] .pl-poll-opt { cursor: default; }
+.pl-poll-bar { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--pl-pink-soft); z-index: 0; transition: width .3s ease; }
+.pl-poll[data-voted="0"] .pl-poll-bar { display: none; }
+.pl-poll-label { position: relative; z-index: 1; flex: 1; }
+.pl-poll-pct { position: relative; z-index: 1; color: var(--pl-text-faint); font-size: 12px; }
+.pl-poll[data-voted="0"] .pl-poll-pct { display: none; }
+.pl-poll-opt.chosen { border-color: var(--pl-pink); }
+.pl-poll-total { font-size: 11.5px; color: var(--pl-text-faint); margin-top: 2px; }
+
+.pl-repost-btn.on, .pl-bookmark-btn.on { color: var(--pl-pink); border-color: var(--pl-pink); }
+.pl-bookmark-btn { font-size: 13px; padding: 6px 10px; }
+.pl-stat-repost { display: inline-flex; align-items: center; gap: 3px; }
+.pl-post-views { font-size: 11.5px; color: var(--pl-text-faint); margin-top: 6px; }
+
+/* compose: poll builder + sensitive toggle */
+.pl-poll-build { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 8px; }
+.pl-poll-build .pl-input { margin-bottom: 0; border-radius: 12px; }
+.pl-check-inline { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--pl-text-dim); margin: 2px 0 6px; }
+.pl-check-inline input { width: 16px; height: 16px; accent-color: var(--pl-pink); }
+#plPollToggle.on { color: var(--pl-pink); }
+
+/* side cards (Trends / Wem folgen) */
+.pl-sidecard {
+  background: var(--pl-surface); border: 1px solid var(--pl-border);
+  border-radius: 16px; padding: 12px 14px; margin-bottom: 12px;
+}
+.pl-sidecard-title { font-weight: 900; font-size: 15px; margin-bottom: 6px; }
+.pl-trend-row { display: flex; justify-content: space-between; align-items: baseline; padding: 7px 0; border-bottom: 1px solid var(--pl-border); font-size: 13.5px; }
+.pl-trend-row:last-child { border-bottom: none; }
+.pl-trend-row span { color: var(--pl-text-faint); font-size: 12px; }
+.pl-who-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; }
+.pl-who-row .pl-avatar { width: 38px; height: 38px; font-size: 15px; }
+.pl-who-name { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
+.pl-who-name b { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-who-name span { font-size: 12px; color: var(--pl-text-faint); }
+
+/* sidebar-only Lesezeichen entry */
+.pl-nav a.pl-nav-bm { display: none; }
+@media (min-width: 900px) {
+  .pl-nav a.pl-nav-bm { display: flex; }
+}

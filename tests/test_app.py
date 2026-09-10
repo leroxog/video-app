@@ -403,3 +403,52 @@ def test_upload_rejects_non_media(client):
     data = {"file": (io.BytesIO(b"nope"), "note.txt")}
     r = client.post("/api/pl/upload", data=data, content_type="multipart/form-data")
     assert r.status_code == 400
+
+
+# ---------------- new feed features ----------------
+
+def test_hashtags_and_mentions_are_linked(client):
+    signup(client, "alice")
+    make_user(client, "bob")
+    client.post("/api/pl/posts", json={"heading": "T", "body": "hi @bob check #test"})
+    html = client.get("/").data
+    assert b'class="pl-hashtag"' in html and b'href="/?q=%23test"' in html
+    assert b'class="pl-mention"' in html and b'href="/freunde/u/bob"' in html
+
+
+def test_edit_and_delete_own_post(client):
+    signup(client, "alice")
+    pid = client.post("/api/pl/posts", json={"heading": "orig"}).get_json()["post"]["id"]
+    e = client.patch(f"/api/pl/posts/{pid}", json={"heading": "geändert"}).get_json()
+    assert e["ok"] and e["post"]["heading"] == "geändert" and e["post"]["edited"]
+    bob = make_user(client, "bob")
+    assert bob.patch(f"/api/pl/posts/{pid}", json={"heading": "x"}).status_code == 403
+    assert bob.delete(f"/api/pl/posts/{pid}").status_code == 403
+    assert client.delete(f"/api/pl/posts/{pid}").get_json()["ok"]
+    assert client.get(f"/p/{pid}").status_code == 404
+
+
+def test_repost_bookmark_pin_and_poll(client):
+    signup(client, "alice")
+    j = client.post("/api/pl/posts", json={
+        "heading": "Umfrage", "poll": ["Ja", "Nein", "Vielleicht"],
+    }).get_json()
+    pid = j["post"]["id"]
+    assert j["post"]["poll"]["options"] == ["Ja", "Nein", "Vielleicht"]
+    v = client.post(f"/api/pl/posts/{pid}/poll-vote", json={"choice": 1}).get_json()
+    assert v["ok"] and v["poll"]["counts"][1] == 1 and v["poll"]["my_vote"] == 1
+    assert client.post(f"/api/pl/posts/{pid}/repost", json={}).get_json()["reposted"] is True
+    assert client.post(f"/api/pl/posts/{pid}/bookmark").get_json()["bookmarked"] is True
+    assert client.post(f"/api/pl/posts/{pid}/pin").get_json()["pinned"] is True
+    assert b"Umfrage" in client.get("/lesezeichen").data
+
+
+def test_new_feed_tab_and_pagination(client):
+    signup(client, "alice")
+    for i in range(3):
+        client.post("/api/pl/posts", json={"heading": f"post {i}"})
+    body = client.get("/?feed=neu").data
+    assert b"post 2" in body and b'?feed=neu' in body
+    # ?before cursor filters to older ids
+    j2 = client.get("/?feed=neu&before=2").data
+    assert b"post 0" in j2 and b"post 2" not in j2

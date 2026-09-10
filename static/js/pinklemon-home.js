@@ -55,64 +55,105 @@
 
   var A = window.PlAttach || { mount: function () { return { get: function () { return {}; }, clear: function () {}, raw: function () { return null; } }; }, html: function () { return ""; } };
 
-  // ---------------- new post ----------------
+  // ---------------- new post (only where the compose sheet exists) ----------------
   var newPostSheet = $("#plNewPostSheet");
-  var postAtt = A.mount($("#plPostAtt"));
-  function openNewPost() {
-    $("#plPostHeading").value = "";
-    $("#plPostBody").value = "";
-    postAtt.clear();
-    if ($("#plPostHeading")._resetChar) $("#plPostHeading")._resetChar();
-    if ($("#plPostBody")._resetChar) $("#plPostBody")._resetChar();
-    openSheet(newPostSheet);
-    setTimeout(function () { $("#plPostHeading").focus(); }, 250);
-  }
-  $("#plNewPostBtn").addEventListener("click", openNewPost);
-  wireChar("#plPostHeading", "#plPostChar");
-  wireChar("#plPsBody", "#plPsChar");
-  // the desktop sidebar "POSTEN" button links here with ?compose=1
-  if (new URLSearchParams(location.search).get("compose")) {
-    openNewPost();
-    try { history.replaceState({}, "", location.pathname); } catch (e) {}
-  }
-  $("#plPostSubmit").addEventListener("click", function () {
-    var heading = $("#plPostHeading").value.trim();
-    var body = $("#plPostBody").value.trim();
-    if (!heading) { $("#plPostHeading").focus(); return; }
-    var btn = this; btn.disabled = true;
-    var payload = { heading: heading, body: body };
-    var a = postAtt.get(); for (var k in a) payload[k] = a[k];
-    api("POST", "/api/pl/posts", payload).then(function (j) {
-      btn.disabled = false;
-      if (!j.ok) { window.plToast(j.error === "rate" ? "Kurz warten." : "Ging nicht."); return; }
-      closeSheet(newPostSheet);
-      var feed = $("#plFeed");
-      var empty = feed.querySelector(".pl-empty");
-      if (empty) empty.remove();
-      var wrap = document.createElement("div");
-      wrap.innerHTML = j.html.trim();
-      var group = wrap.firstElementChild;
-      group.classList.add("is-new");
-      feed.insertBefore(group, feed.firstChild);
-      wirePost(group.querySelector(".pl-post"));
-      group.addEventListener("animationend", function () { group.classList.remove("is-new"); }, { once: true });
+  var openNewPost = function () {};
+  var openPs = function () {};
+
+  if (newPostSheet) {
+    var postAtt = A.mount($("#plPostAtt"));
+    var editingId = null;
+    var pollBuild = $("#plPollBuild"), pollToggle = $("#plPollToggle"), sensBox = $("#plPostSensitive");
+
+    openNewPost = function (opts) {
+      opts = opts || {};
+      editingId = opts.editId || null;
+      $("#plPostHeading").value = opts.heading || "";
+      $("#plPostBody").value = opts.body || "";
       postAtt.clear();
-      window.plToast("Gepostet!");
-    }).catch(function () { btn.disabled = false; window.plToast("Ging nicht."); });
-  });
+      if (pollBuild) { pollBuild.hidden = true; $all(".pl-poll-in", pollBuild).forEach(function (i) { i.value = ""; }); }
+      if (sensBox) sensBox.checked = !!opts.sensitive;
+      $(".pl-sheet-bar h2", newPostSheet).textContent = editingId ? "Post bearbeiten" : "Neuer Post";
+      $("#plPostSubmit").textContent = editingId ? "Speichern" : "Posten";
+      if ($("#plPostHeading")._resetChar) $("#plPostHeading")._resetChar();
+      if ($("#plPostBody")._resetChar) $("#plPostBody")._resetChar();
+      openSheet(newPostSheet);
+      setTimeout(function () { $("#plPostHeading").focus(); }, 250);
+    };
+    var nb = $("#plNewPostBtn");
+    if (nb) nb.addEventListener("click", function () { openNewPost(); });
+    wireChar("#plPostHeading", "#plPostChar");
+    wireChar("#plPsBody", "#plPsChar");
+    if (pollToggle && pollBuild) pollToggle.addEventListener("click", function () {
+      pollBuild.hidden = !pollBuild.hidden;
+      pollToggle.classList.toggle("on", !pollBuild.hidden);
+    });
+    if (new URLSearchParams(location.search).get("compose")) {
+      openNewPost();
+      try { history.replaceState({}, "", location.pathname); } catch (e) {}
+    }
+    $("#plPostSubmit").addEventListener("click", function () {
+      var heading = $("#plPostHeading").value.trim();
+      var body = $("#plPostBody").value.trim();
+      if (!heading) { $("#plPostHeading").focus(); return; }
+      var btn = this; btn.disabled = true;
+
+      if (editingId) {
+        api("PATCH", "/api/pl/posts/" + editingId, { heading: heading, body: body }).then(function (j) {
+          btn.disabled = false;
+          if (!j.ok) { window.plToast("Ging nicht."); return; }
+          var g = document.querySelector('.pl-post-group[data-post-id="' + editingId + '"]');
+          if (g && j.html) {
+            var w = document.createElement("div"); w.innerHTML = j.html.trim();
+            g.replaceWith(w.firstElementChild);
+            wirePost(w.firstElementChild.querySelector(".pl-post"));
+          }
+          closeSheet(newPostSheet);
+          window.plToast("Gespeichert.");
+        }).catch(function () { btn.disabled = false; });
+        return;
+      }
+
+      var payload = { heading: heading, body: body };
+      var a = postAtt.get(); for (var k in a) payload[k] = a[k];
+      if (sensBox && sensBox.checked) payload.sensitive = true;
+      if (pollBuild && !pollBuild.hidden) {
+        var opts = $all(".pl-poll-in", pollBuild).map(function (i) { return i.value.trim(); }).filter(Boolean);
+        if (opts.length >= 2) payload.poll = opts;
+      }
+      api("POST", "/api/pl/posts", payload).then(function (j) {
+        btn.disabled = false;
+        if (!j.ok) { window.plToast(j.error === "rate" ? "Kurz warten." : "Ging nicht."); return; }
+        closeSheet(newPostSheet);
+        var feed = $("#plFeed");
+        var empty = feed.querySelector(".pl-empty");
+        if (empty) empty.remove();
+        var wrap = document.createElement("div");
+        wrap.innerHTML = j.html.trim();
+        var group = wrap.firstElementChild;
+        group.classList.add("is-new");
+        feed.insertBefore(group, feed.firstChild);
+        wirePost(group.querySelector(".pl-post"));
+        group.addEventListener("animationend", function () { group.classList.remove("is-new"); }, { once: true });
+        postAtt.clear();
+        window.plToast("Gepostet!");
+      }).catch(function () { btn.disabled = false; window.plToast("Ging nicht."); });
+    });
+  }
 
   // ---------------- P.S. ----------------
   var psSheet = $("#plPsSheet");
+  if (psSheet) {
   var psAtt = A.mount($("#plPsAtt"));
   var psTargetId = null;
-  function openPs(postId) {
+  openPs = function (postId) {
     psTargetId = postId;
     $("#plPsBody").value = "";
     psAtt.clear();
     if ($("#plPsBody")._resetChar) $("#plPsBody")._resetChar();
     openSheet(psSheet);
     setTimeout(function () { $("#plPsBody").focus(); }, 250);
-  }
+  };
   $("#plPsSubmit").addEventListener("click", function () {
     var body = $("#plPsBody").value.trim();
     var pa = psAtt.get();
@@ -137,6 +178,7 @@
       window.plToast("P.S. gespeichert.");
     }).catch(function () { btn.disabled = false; });
   });
+  }
 
   // ---------------- comments (inline, per post) ----------------
   function timeAgo(iso) {
@@ -157,7 +199,7 @@
       + '<span class="pl-comment-user">' + esc(c.author.name || c.author.username) + '</span>'
       + '<span class="pl-comment-handle">@' + esc(c.author.username) + '</span>'
       + '<span class="pl-comment-time">' + timeAgo(c.created_at) + '</span></div>'
-      + '<div class="pl-comment-body">' + esc(c.body) + '</div>'
+      + '<div class="pl-comment-body">' + (c.body_html || esc(c.body)) + '</div>'
       + A.html(c.attachment)
       + '<div class="pl-comment-actions">'
       + '<button type="button" data-clike class="' + liked.trim() + '">&#9829; <b class="pl-clike-count">' + c.like_count + '</b></button>'
@@ -383,9 +425,165 @@
 
   $all(".pl-post").forEach(wirePost);
 
+  // ---------------- kebab menu + repost + bookmark + poll + sensitive ----------------
+  document.addEventListener("click", function (e) {
+    // close any open menu when clicking elsewhere
+    if (!e.target.closest(".pl-post-menu") && !e.target.closest("[data-kebab]")) {
+      $all(".pl-post-menu").forEach(function (m) { m.hidden = true; });
+    }
+
+    var kb = e.target.closest("[data-kebab]");
+    if (kb) {
+      var menu = kb.parentElement.querySelector(".pl-post-menu");
+      var wasHidden = menu.hidden;
+      $all(".pl-post-menu").forEach(function (m) { m.hidden = true; });
+      menu.hidden = !wasHidden;
+      return;
+    }
+
+    var act = e.target.closest(".pl-post-menu [data-act]");
+    if (act) {
+      var grp = act.closest(".pl-post-group");
+      var pid = grp.dataset.postId;
+      act.closest(".pl-post-menu").hidden = true;
+      var a = act.dataset.act;
+      if (a === "copy") {
+        var link = location.origin + "/p/" + pid;
+        if (navigator.clipboard) navigator.clipboard.writeText(link).then(function () { window.plToast("Link kopiert."); });
+        else window.plToast(link);
+      } else if (a === "bookmark") {
+        toggleBookmark(grp);
+      } else if (a === "edit") {
+        var post = grp.querySelector(".pl-post");
+        openNewPost({
+          editId: pid,
+          heading: post.querySelector(".pl-post-heading").textContent,
+          body: (post.querySelector(".pl-post-body") || {}).textContent || "",
+        });
+      } else if (a === "pin") {
+        api("POST", "/api/pl/posts/" + pid + "/pin").then(function (j) {
+          if (j.ok) window.plToast(j.pinned ? "Angeheftet." : "Losgelöst.");
+        });
+      } else if (a === "delete") {
+        if (!confirm("Diesen Post wirklich löschen?")) return;
+        api("DELETE", "/api/pl/posts/" + pid).then(function (j) {
+          if (j.ok) { grp.style.transition = "opacity .2s"; grp.style.opacity = "0"; setTimeout(function () { grp.remove(); }, 200); window.plToast("Gelöscht."); }
+        });
+      } else if (a === "report") {
+        var reason = prompt("Warum meldest du diesen Post? (optional)") || "";
+        api("POST", "/api/pl/posts/" + pid + "/report", { reason: reason }).then(function () { window.plToast("Danke, gemeldet."); });
+      }
+      return;
+    }
+
+    var rb = e.target.closest("[data-repost]");
+    if (rb) {
+      var g = rb.closest(".pl-post-group");
+      var on = g.dataset.reposted === "1";
+      var quote = null;
+      if (!on) {
+        var q = prompt("Repost mit Kommentar? (leer lassen für einfachen Repost)");
+        if (q === null) return;
+        quote = q.trim() || null;
+      }
+      api("POST", "/api/pl/posts/" + g.dataset.postId + "/repost", { quote: quote }).then(function (j) {
+        if (!j.ok) return;
+        g.dataset.reposted = j.reposted && !j.quote ? "1" : "0";
+        rb.classList.toggle("on", j.reposted && !j.quote);
+        var c = g.querySelector(".pl-repost-count"); if (c) c.textContent = j.repost_count;
+        S.play(j.reposted ? "like" : "close");
+        window.plToast(j.reposted ? (j.quote ? "Zitiert." : "Repostet.") : "Repost entfernt.");
+      });
+      return;
+    }
+
+    var bm = e.target.closest("[data-bookmark]");
+    if (bm) { toggleBookmark(bm.closest(".pl-post-group")); return; }
+
+    var sens = e.target.closest(".pl-sensitive-show");
+    if (sens) {
+      var wrap = sens.closest(".pl-post-content");
+      wrap.classList.remove("pl-sensitive");
+      sens.remove();
+      return;
+    }
+
+    var pollOpt = e.target.closest(".pl-poll-opt");
+    if (pollOpt) {
+      var poll = pollOpt.closest(".pl-poll");
+      var pg = pollOpt.closest(".pl-post-group");
+      api("POST", "/api/pl/posts/" + pg.dataset.postId + "/poll-vote",
+          { choice: Number(pollOpt.dataset.choice) }).then(function (j) {
+        if (!j.ok || !j.poll) return;
+        poll.dataset.voted = "1";
+        $all(".pl-poll-opt", poll).forEach(function (o, i) {
+          o.classList.toggle("chosen", j.poll.my_vote === i);
+          o.querySelector(".pl-poll-bar").style.width = j.poll.percents[i] + "%";
+          o.querySelector(".pl-poll-pct").textContent = j.poll.percents[i] + "%";
+        });
+        poll.querySelector(".pl-poll-total").textContent = j.poll.total + " Stimmen";
+      });
+      return;
+    }
+
+    var wf = e.target.closest("[data-who-follow]");
+    if (wf) {
+      var row = wf.closest(".pl-who-row");
+      wf.disabled = true;
+      api("POST", "/api/pl/follow/" + encodeURIComponent(row.dataset.u)).then(function (j) {
+        if (j.ok && j.following) { row.style.transition = "opacity .2s"; row.style.opacity = "0"; setTimeout(function () { row.remove(); }, 200); }
+        else wf.disabled = false;
+      });
+      return;
+    }
+  });
+
+  function toggleBookmark(grp) {
+    api("POST", "/api/pl/posts/" + grp.dataset.postId + "/bookmark").then(function (j) {
+      if (!j.ok) return;
+      grp.dataset.bookmarked = j.bookmarked ? "1" : "0";
+      var b = grp.querySelector("[data-bookmark]");
+      if (b) b.classList.toggle("on", j.bookmarked);
+      window.plToast(j.bookmarked ? "Gespeichert." : "Entfernt.");
+    });
+  }
+
+  // ---------------- load more ----------------
+  var loadMore = $("#plLoadMore");
+  if (loadMore) loadMore.addEventListener("click", function () {
+    var btn = this; btn.disabled = true; btn.textContent = "Lädt …";
+    var u = "/?before=" + btn.dataset.cursor;
+    if (btn.dataset.feed && btn.dataset.feed !== "foryou") u += "&feed=" + btn.dataset.feed;
+    if (btn.dataset.q) u += "&q=" + encodeURIComponent(btn.dataset.q);
+    fetch(u).then(function (r) { return r.text(); }).then(function (html) {
+      var doc = new DOMParser().parseFromString(html, "text/html");
+      var groups = doc.querySelectorAll("#plFeed .pl-post-group");
+      var feed = $("#plFeed");
+      groups.forEach(function (g) { feed.appendChild(g); wirePost(g.querySelector(".pl-post")); });
+      var nm = doc.querySelector("#plLoadMore");
+      if (nm) { btn.dataset.cursor = nm.dataset.cursor; btn.disabled = false; btn.textContent = "Ältere Posts laden"; }
+      else btn.remove();
+    }).catch(function () { btn.disabled = false; btn.textContent = "Ältere Posts laden"; });
+  });
+
+  // ---------------- view tracking ----------------
+  if ("IntersectionObserver" in window) {
+    var vio = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (en.isIntersecting && !en.target.dataset.viewed) {
+          en.target.dataset.viewed = "1";
+          var id = en.target.dataset.postId;
+          fetch("/api/pl/posts/" + id + "/view", { method: "POST" }).catch(function () {});
+          vio.unobserve(en.target);
+        }
+      });
+    }, { threshold: 0.6 });
+    $all(".pl-post-group").forEach(function (g) { vio.observe(g); });
+  }
+
   // ---------------- search ----------------
   var searchForm = $("#plSearchForm");
-  searchForm.addEventListener("submit", function () {
+  if (searchForm) searchForm.addEventListener("submit", function () {
     // native GET submit reloads with ?q= -- server renders the video row + posts
   });
 })();

@@ -2,7 +2,15 @@
 {%- from "partials/_pl_attachment.html" import pl_att -%}
 <div class="pl-post-group" data-post-id="{{ post.id }}"
      data-has-ps="{{ '1' if post.ps else '0' }}"
-     data-mine="{{ '1' if post.is_mine else '0' }}">
+     data-mine="{{ '1' if post.is_mine else '0' }}"
+     data-bookmarked="{{ '1' if post.bookmarked_by_me else '0' }}"
+     data-reposted="{{ '1' if post.reposted_by_me else '0' }}">
+
+  {% if post.repost %}
+  <div class="pl-repost-head">{{ plicon('share', 13) }} {{ post.repost.by.name if post.repost.by else 'Jemand' }} hat repostet &middot; {{ post.repost.ago }}</div>
+  {% if post.repost.quote %}<div class="pl-quote-text">{{ post.repost.quote }}</div>{% endif %}
+  {% endif %}
+
   <article class="pl-post" data-post-id="{{ post.id }}"
            data-liked="{{ '1' if post.liked_by_me else '0' }}"
            data-mine="{{ '1' if post.is_mine else '0' }}"
@@ -10,25 +18,61 @@
       <div class="pl-post-stats">
           <span class="pl-stat-like {{ 'pl-stat-liked' if post.liked_by_me }}">{{ plicon('heart', 13) }}<b class="pl-like-count">{{ post.like_count }}</b></span>
           <button type="button" class="pl-stat-comment" data-comments-toggle>{{ plicon('comment', 13) }}<b class="pl-comment-count">{{ post.comment_count }}</b></button>
-          <span>{{ plicon('share', 13) }}<b class="pl-share-count">{{ post.share_count }}</b></span>
+          <span class="pl-stat-repost"><b class="pl-repost-count">{{ post.repost_count }}</b></span>
       </div>
+
+      <button type="button" class="pl-post-kebab" data-kebab aria-label="Mehr">&#8942;</button>
+      <div class="pl-post-menu" hidden>
+        <button type="button" data-act="copy">Link kopieren</button>
+        <button type="button" data-act="bookmark">{{ 'Aus Lesezeichen' if post.bookmarked_by_me else 'Lesezeichen' }}</button>
+        {% if post.is_mine %}
+        <button type="button" data-act="edit">Bearbeiten</button>
+        <button type="button" data-act="pin">{{ 'Losl&ouml;sen' if post.pinned else 'Anheften' }}</button>
+        <button type="button" data-act="delete" class="pl-danger">L&ouml;schen</button>
+        {% else %}
+        <button type="button" data-act="report" class="pl-danger">Melden</button>
+        {% endif %}
+      </div>
+
       <div class="pl-post-head">
           <a class="pl-avatar" href="/freunde/u/{{ post.author.username }}">{% if post.author.avatar_url %}<img src="{{ post.author.avatar_url }}" alt="">{% else %}{{ post.author.avatar_letter }}{% endif %}</a>
           <a class="pl-post-user" href="/freunde/u/{{ post.author.username }}">{{ post.author.name }}</a>
           <a class="pl-post-handle" href="/freunde/u/{{ post.author.username }}">@{{ post.author.username }}</a>
-          <span class="pl-post-time">{{ post.created_ago }}</span>
+          <span class="pl-post-time">{{ post.created_ago }}{% if post.edited %} &middot; bearbeitet{% endif %}</span>
       </div>
+
+      {% if post.pinned %}<div class="pl-pinned-tag">{{ plicon('plus', 11) }} Angeheftet</div>{% endif %}
       <div class="pl-post-heading">{{ post.heading }}</div>
-      {% if post.body %}<div class="pl-post-body">{{ post.body }}</div>{% endif %}
-      {{ pl_att(post.attachment) }}
+
+      <div class="pl-post-content {{ 'pl-sensitive' if post.sensitive }}">
+        {% if post.body %}<div class="pl-post-body">{{ post.body_html | safe }}</div>{% endif %}
+        {{ pl_att(post.attachment) }}
+        {% if post.poll %}
+        <div class="pl-poll" data-total="{{ post.poll.total }}" data-voted="{{ '1' if post.poll.my_vote is not none else '0' }}">
+          {% for opt in post.poll.options %}
+          <button type="button" class="pl-poll-opt {{ 'chosen' if post.poll.my_vote == loop.index0 }}" data-choice="{{ loop.index0 }}">
+            <span class="pl-poll-bar" style="width:{{ post.poll.percents[loop.index0] }}%"></span>
+            <span class="pl-poll-label">{{ opt }}</span>
+            <span class="pl-poll-pct">{{ post.poll.percents[loop.index0] }}%</span>
+          </button>
+          {% endfor %}
+          <div class="pl-poll-total">{{ post.poll.total }} Stimmen</div>
+        </div>
+        {% endif %}
+        {% if post.sensitive %}<button type="button" class="pl-sensitive-show">Anzeigen</button>{% endif %}
+      </div>
 
       <div class="pl-post-actions">
           {% if post.is_mine and not post.ps %}
           <button class="pl-ps-add-btn" data-ps-add>{{ plicon('plus', 13) }} P.S.</button>
           {% endif %}
           <button class="pl-comments-btn" data-comments-toggle>{{ plicon('comment', 13) }} Kommentare</button>
+          <button class="pl-repost-btn {{ 'on' if post.reposted_by_me }}" data-repost>{{ plicon('share', 13) }} <span>Repost</span></button>
+          <button class="pl-bookmark-btn {{ 'on' if post.bookmarked_by_me }}" data-bookmark aria-label="Lesezeichen">&#128278;</button>
           <button class="pl-share-btn" data-share>{{ plicon('share', 13) }} Teilen</button>
       </div>
+
+      {% if post.view_count %}<div class="pl-post-views">{{ post.view_count }} Aufrufe</div>{% endif %}
 
       <div class="pl-like-burst">{{ plicon('heart', 84) }}</div>
       <div class="pl-longpress-hint"></div>
@@ -36,7 +80,7 @@
 
   <div class="pl-ps-slot">
   {% if post.ps %}
-      <div class="pl-ps-card">{% if post.ps.body %}{{ post.ps.body }}{% endif %}{{ pl_att(post.ps.attachment) }}</div>
+      <div class="pl-ps-card">{% if post.ps.body %}{{ post.ps.body_html | safe }}{% endif %}{{ pl_att(post.ps.attachment) }}</div>
   {% endif %}
   </div>
 

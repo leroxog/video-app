@@ -15,8 +15,30 @@
 
 {% if not q %}
 <div class="pl-feedtabs">
-    <a href="{{ url_for('pl_home') }}" class="{{ 'is-active' if feed != 'following' }}">Für dich</a>
+    <a href="{{ url_for('pl_home') }}" class="{{ 'is-active' if feed == 'foryou' }}">Für dich</a>
     <a href="{{ url_for('pl_home') }}?feed=following" class="{{ 'is-active' if feed == 'following' }}">Folge ich</a>
+    <a href="{{ url_for('pl_home') }}?feed=neu" class="{{ 'is-active' if feed == 'neu' }}">Neu</a>
+</div>
+{% endif %}
+
+{% if trending %}
+<div class="pl-sidecard">
+    <div class="pl-sidecard-title">Trends</div>
+    {% for t in trending %}
+    <a class="pl-trend-row" href="{{ url_for('pl_home') }}?q=%23{{ t.tag }}"><b>#{{ t.tag }}</b><span>{{ t.n }} Posts</span></a>
+    {% endfor %}
+</div>
+{% endif %}
+{% if who %}
+<div class="pl-sidecard" id="plWhoCard">
+    <div class="pl-sidecard-title">Wem folgen</div>
+    {% for u in who %}
+    <div class="pl-who-row" data-u="{{ u.username }}">
+        <a class="pl-avatar" href="/freunde/u/{{ u.username }}">{% if u.avatar_url %}<img src="{{ u.avatar_url }}" alt="">{% else %}{{ u.avatar_letter }}{% endif %}</a>
+        <a class="pl-who-name" href="/freunde/u/{{ u.username }}"><b>{{ u.name }}</b><span>@{{ u.username }}</span></a>
+        <button type="button" class="pl-mini-btn pink" data-who-follow>Folgen</button>
+    </div>
+    {% endfor %}
 </div>
 {% endif %}
 
@@ -41,6 +63,10 @@
         </div>
     {% endfor %}
 </div>
+{% if next_cursor %}
+<button class="pl-btn ghost" id="plLoadMore" data-cursor="{{ next_cursor }}"
+        data-feed="{{ feed }}" data-q="{{ q }}" style="margin:12px auto;width:auto;padding:10px 24px;">Ältere Posts laden</button>
+{% endif %}
 {% endblock %}
 
 {% block sheets %}
@@ -54,8 +80,19 @@
             <button class="pl-btn pl-sheet-post" id="plPostSubmit">Posten</button>
         </div>
         <input class="pl-input" id="plPostHeading" maxlength="140" placeholder="Überschrift" autocomplete="off">
-        <textarea class="pl-textarea" id="plPostBody" maxlength="4000" placeholder="Was gibt's?"></textarea>
-        <div class="pl-compose-foot"><span id="plPostAtt"></span><span class="pl-char" id="plPostChar">0 / 140</span></div>
+        <textarea class="pl-textarea" id="plPostBody" maxlength="4000" placeholder="Was gibt's? #hashtags und @erwähnungen werden verlinkt"></textarea>
+        <div class="pl-poll-build" id="plPollBuild" hidden>
+            <input class="pl-input pl-poll-in" maxlength="60" placeholder="Option 1">
+            <input class="pl-input pl-poll-in" maxlength="60" placeholder="Option 2">
+            <input class="pl-input pl-poll-in" maxlength="60" placeholder="Option 3 (optional)">
+            <input class="pl-input pl-poll-in" maxlength="60" placeholder="Option 4 (optional)">
+        </div>
+        <label class="pl-check-inline"><input type="checkbox" id="plPostSensitive"> Sensibler Inhalt (unscharf, „Anzeigen")</label>
+        <div class="pl-compose-foot">
+            <span id="plPostAtt"></span>
+            <button type="button" class="pl-attbtn" id="plPollToggle" title="Umfrage">📊</button>
+            <span class="pl-char" id="plPostChar">0 / 140</span>
+        </div>
     </div>
 </div>
 

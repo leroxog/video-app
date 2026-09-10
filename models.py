@@ -698,11 +698,58 @@ class FeedPost(db.Model):
     # is the stored filename; "game" -> att_value is a game slug.
     att_kind = db.Column(db.String(12), nullable=True)
     att_value = db.Column(db.String(255), nullable=True)
+    # extra feed features
+    edited_at = db.Column(db.DateTime, nullable=True)
+    pinned_at = db.Column(db.DateTime, nullable=True)          # pinned to the author's profile
+    view_count = db.Column(db.Integer, nullable=False, default=0)
+    is_sensitive = db.Column(db.Boolean, nullable=False, default=False)
+    poll_json = db.Column(db.Text, nullable=True)              # JSON list of option strings
 
     author = db.relationship("User")
     likes = db.relationship("FeedLike", backref="post", lazy=True, cascade="all, delete-orphan")
     comments = db.relationship("FeedComment", backref="post", lazy=True, cascade="all, delete-orphan")
     ps = db.relationship("FeedPS", backref="post", uselist=False, cascade="all, delete-orphan")
+    reposts = db.relationship("FeedRepost", backref="post", lazy=True, cascade="all, delete-orphan")
+    bookmarks = db.relationship("FeedBookmark", backref="post", lazy=True, cascade="all, delete-orphan")
+    poll_votes = db.relationship("FeedPollVote", backref="post", lazy=True, cascade="all, delete-orphan")
+
+
+class FeedRepost(db.Model):
+    __tablename__ = "feed_repost"
+    id = db.Column(db.Integer, primary_key=True)
+    post_id = db.Column(db.Integer, db.ForeignKey("feed_post.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    quote = db.Column(db.Text, nullable=True)                 # set -> it's a quote-post
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    user = db.relationship("User")
+    __table_args__ = (db.UniqueConstraint("post_id", "user_id", name="uq_feedrepost_post_user"),)
+
+
+class FeedBookmark(db.Model):
+    __tablename__ = "feed_bookmark"
+    id = db.Column(db.Integer, primary_key=True)
+    post_id = db.Column(db.Integer, db.ForeignKey("feed_post.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    __table_args__ = (db.UniqueConstraint("post_id", "user_id", name="uq_feedbookmark_post_user"),)
+
+
+class FeedReport(db.Model):
+    __tablename__ = "feed_report"
+    id = db.Column(db.Integer, primary_key=True)
+    post_id = db.Column(db.Integer, db.ForeignKey("feed_post.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    reason = db.Column(db.String(200), nullable=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+
+class FeedPollVote(db.Model):
+    __tablename__ = "feed_poll_vote"
+    id = db.Column(db.Integer, primary_key=True)
+    post_id = db.Column(db.Integer, db.ForeignKey("feed_post.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    choice = db.Column(db.Integer, nullable=False)
+    __table_args__ = (db.UniqueConstraint("post_id", "user_id", name="uq_feedpollvote_post_user"),)
 
 
 class FeedLike(db.Model):

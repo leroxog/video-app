@@ -1,0 +1,25 @@
+{% extends "pl_base.html" %}
+{%- from "partials/_pl_icons.html" import plicon -%}
+{% set active = 'bookmarks' %}
+{% block title %}Lesezeichen · HEXAGONUM{% endblock %}
+
+{% block screen %}
+<div class="pl-screen-head">
+    <button class="pl-icon-btn" onclick="history.back()" aria-label="Zurück">&#8592;</button>
+    <h1>Lesezeichen</h1>
+</div>
+
+<div class="pl-feed" id="plFeed">
+    {% for post in posts %}
+        {% include "partials/_pl_post.html" %}
+    {% else %}
+        <div class="pl-empty">Noch keine Lesezeichen.<br>Tipp bei einem Post auf 🔖.</div>
+    {% endfor %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>window.PL_ME = {{ me_json | tojson }};</script>
+<script src="{{ url_for('static', filename='js/pl-attach.js') }}"></script>
+<script src="{{ url_for('static', filename='js/pinklemon-home.js') }}"></script>
+{% endblock %}
