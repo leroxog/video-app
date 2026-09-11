@@ -573,6 +573,14 @@ def test_for_you_feed_ranks_followed_authors_up(client):
     assert "bob followed post" in foll and "cara 0" not in foll
 
 
+def test_nex_page_has_call_button_and_overlay(client):
+    signup(client, "alice")
+    r = client.get("/nex").data
+    assert b'id="nxCallBtn"' in r and b'id="nxCallOverlay"' in r and b'id="nxCallOrbWrap"' in r
+    # starts hidden behind the send arrow -- only shows once the composer is empty (JS)
+    assert b'id="nxCallBtn" type="button" aria-label="Nex anrufen" hidden' in r
+
+
 def test_nex_voice_endpoint_rejects_missing_audio(client):
     signup(client, "alice")
     r = client.post("/api/pl/nex/voice")

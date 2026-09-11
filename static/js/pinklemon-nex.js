@@ -7,6 +7,7 @@
   var emptyEl = document.getElementById("nxEmpty");
   var input = document.getElementById("nxInput");
   var sendBtn = document.getElementById("nxSend");
+  var callBtn = document.getElementById("nxCallBtn");
   var newBtn = document.getElementById("nxNew");
   var histBtn = document.getElementById("nxHistBtn");
   var histMenu = document.getElementById("nxHistMenu");
@@ -125,7 +126,12 @@
     input.style.height = Math.min(input.scrollHeight, 200) + "px";
   }
   function syncSend() {
-    sendBtn.disabled = busy || !input.value.trim();
+    var hasText = !!input.value.trim();
+    sendBtn.disabled = busy || !hasText;
+    // Empty composer: swap the send arrow for a phone icon (call Nex)
+    // instead of showing a disabled arrow that does nothing.
+    sendBtn.hidden = !hasText;
+    if (callBtn) callBtn.hidden = hasText;
   }
   input.addEventListener("input", function () { autoGrow(); syncSend(); renderSlashMenu(); });
   syncSend();
@@ -255,6 +261,237 @@
         if (window.plSound) window.plSound.play("receive");
       })
       .catch(function () { hideTyping(); setBusy(false); addMsg("assistant", "Verbindungsfehler."); });
+  }
+
+  // ---------------- call Nex: push-to-talk voice conversation ----------------
+  // Uses the existing /api/pl/nex/voice (server-side Whisper transcription,
+  // works on iOS Safari unlike webkitSpeechRecognition) for listening, and
+  // /api/voice-profile/<gender>/speak (falling back to the browser's own
+  // speechSynthesis on any failure) for Nex's spoken replies -- the same
+  // two building blocks the older assistant's voice orb (see base.html)
+  // already relies on, just driven from this chat instead.
+  var callOverlay = document.getElementById("nxCallOverlay");
+  var callStatusEl = document.getElementById("nxCallStatus");
+  var callTranscriptEl = document.getElementById("nxCallTranscript");
+  var callOrbWrap = document.getElementById("nxCallOrbWrap");
+  var callHangupBtn = document.getElementById("nxCallHangup");
+
+  var callActive = false;
+  var callRecorder = null;
+  var callStream = null;
+  var callAudioEl = null;
+
+  function setCallStatus(text) { if (callStatusEl) callStatusEl.textContent = text; }
+  function setOrbMode(mode) {
+    if (!callOrbWrap) return;
+    callOrbWrap.classList.remove("listening", "thinking", "speaking");
+    if (mode) callOrbWrap.classList.add(mode);
+  }
+  function addCallLine(role, text) {
+    if (callTranscriptEl) {
+      var line = document.createElement("div");
+      line.className = "nx-call-line " + (role === "user" ? "user" : "bot");
+      line.textContent = text;
+      callTranscriptEl.appendChild(line);
+      callTranscriptEl.scrollTop = callTranscriptEl.scrollHeight;
+    }
+    // Keep the normal chat view in sync too, so the call shows up as a
+    // real part of the conversation once you hang up, not a side channel.
+    addMsg(role, text);
+  }
+
+  function stopCallStream() {
+    if (callStream) { callStream.getTracks().forEach(function (t) { t.stop(); }); callStream = null; }
+    callRecorder = null;
+  }
+
+  function stopCallAudio() {
+    if (callAudioEl) { try { callAudioEl.pause(); } catch (e) {} callAudioEl = null; }
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+  }
+
+  function stripForSpeech(text) {
+    return String(text)
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
+      .replace(/!(?:audio|video)\[[^\]]*\]\([^)]*\)/g, "")
+      .replace(/```[\s\S]*?```/g, "")
+      .replace(/`([^`]+)`/g, "$1")
+      .replace(/\*\*([^*]+)\*\*/g, "$1")
+      .replace(/\n+/g, " ")
+      .trim();
+  }
+
+  function startCallRecording() {
+    if (!callActive) return;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === "undefined") {
+      setCallStatus("Dein Browser unterstützt leider keine Sprachaufnahme.");
+      return;
+    }
+    setOrbMode("listening");
+    setCallStatus("Ich höre zu … tipp auf den Kreis, wenn du fertig bist.");
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+      if (!callActive) { stream.getTracks().forEach(function (t) { t.stop(); }); return; }
+      callStream = stream;
+      var chunks = [];
+      var mime = (window.MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported("audio/webm"))
+        ? "audio/webm" : "";
+      callRecorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+      callRecorder.addEventListener("dataavailable", function (e) { if (e.data && e.data.size) chunks.push(e.data); });
+      callRecorder.addEventListener("stop", function () {
+        stopCallStream();
+        if (!callActive) return;
+        var blob = new Blob(chunks, { type: mime || "audio/webm" });
+        handleRecordedAudio(blob);
+      });
+      callRecorder.start();
+    }).catch(function () {
+      setCallStatus("Kein Zugriff aufs Mikrofon – bitte im Browser erlauben.");
+    });
+  }
+
+  function stopCallRecording() {
+    if (callRecorder && callRecorder.state !== "inactive") {
+      try { callRecorder.stop(); } catch (e) {}
+    }
+  }
+
+  function handleRecordedAudio(blob) {
+    setOrbMode("thinking");
+    setCallStatus("Einen Moment …");
+    var fd = new FormData();
+    fd.append("audio", blob, "speech.webm");
+    fetch("/api/pl/nex/voice", { method: "POST", body: fd })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (!callActive) return;
+        var text = (j.ok && j.transcript || "").trim();
+        if (!text) { startCallRecording(); return; }
+        addCallLine("user", text);
+        sendCallMessage(text);
+      })
+      .catch(function () {
+        if (!callActive) return;
+        setCallStatus("Kurze Störung – ich höre trotzdem weiter zu.");
+        startCallRecording();
+      });
+  }
+
+  function sendCallMessage(text) {
+    setOrbMode("thinking");
+    setCallStatus(NEX.name + " denkt nach …");
+    var body = { message: text, character: NEX.character, project_type: NEX.projectType, via_voice: true };
+    if (chatId) body.chat_id = chatId;
+    fetch("/api/ai/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (!callActive) return;
+        if (!j.ok) {
+          setCallStatus(j.error === "insufficient_tokens" ? "Keine KI-Token mehr übrig." : "Kurze Störung – ich höre trotzdem weiter zu.");
+          if (j.error !== "insufficient_tokens") startCallRecording();
+          return;
+        }
+        chatId = j.chat_id;
+        pollCallJob(j.job_id, 20);
+      })
+      .catch(function () {
+        if (!callActive) return;
+        setCallStatus("Kurze Störung – ich höre trotzdem weiter zu.");
+        startCallRecording();
+      });
+  }
+
+  function pollCallJob(jobId, retriesLeft) {
+    if (!callActive) return;
+    fetch("/api/ai/chat/" + jobId)
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (!callActive) return;
+        if (j.status === "running") { setTimeout(function () { pollCallJob(jobId, retriesLeft); }, 700); return; }
+        if (j.status === "done" && j.reply) {
+          addCallLine("bot", j.reply);
+          speakCallReply(j.reply);
+          if (window.plSound) window.plSound.play("receive");
+          return;
+        }
+        if (retriesLeft > 0) { setTimeout(function () { pollCallJob(jobId, retriesLeft - 1); }, 1200); return; }
+        setCallStatus("Kurze Störung – ich höre trotzdem weiter zu.");
+        startCallRecording();
+      })
+      .catch(function () {
+        if (!callActive) return;
+        if (retriesLeft > 0) { setTimeout(function () { pollCallJob(jobId, retriesLeft - 1); }, 1200); return; }
+        setCallStatus("Kurze Störung – ich höre trotzdem weiter zu.");
+        startCallRecording();
+      });
+  }
+
+  function speakCallReply(text) {
+    setOrbMode("speaking");
+    setCallStatus(NEX.name + " spricht …");
+    var spoken = stripForSpeech(text) || text;
+    fetch("/api/voice-profile/male/speak", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: spoken }),
+    })
+      .then(function (r) { if (!r.ok) throw new Error("no cloned voice"); return r.blob(); })
+      .then(function (blob) {
+        if (!callActive) return;
+        var audioEl = new Audio(URL.createObjectURL(blob));
+        callAudioEl = audioEl;
+        audioEl.addEventListener("ended", function () {
+          if (callAudioEl === audioEl) callAudioEl = null;
+          if (callActive) startCallRecording();
+        });
+        audioEl.play().catch(function () { if (callActive) startCallRecording(); });
+      })
+      .catch(function () { speakCallReplyWithBrowser(spoken); });
+  }
+
+  function speakCallReplyWithBrowser(text) {
+    if (!callActive) return;
+    if (!window.speechSynthesis) { startCallRecording(); return; }
+    window.speechSynthesis.cancel();
+    var utter = new SpeechSynthesisUtterance(text);
+    utter.lang = "de-DE";
+    utter.rate = 1.05;
+    utter.onend = function () { if (callActive) startCallRecording(); };
+    window.speechSynthesis.speak(utter);
+  }
+
+  function openCall() {
+    callActive = true;
+    if (callTranscriptEl) callTranscriptEl.innerHTML = "";
+    callOverlay.hidden = false;
+    setOrbMode(null);
+    setCallStatus("Verbinde …");
+    startCallRecording();
+  }
+
+  function closeCall() {
+    callActive = false;
+    stopCallRecording();
+    stopCallStream();
+    stopCallAudio();
+    callOverlay.hidden = true;
+  }
+
+  function callOrbTap() {
+    if (callAudioEl || (window.speechSynthesis && window.speechSynthesis.speaking)) {
+      // Interrupt Nex mid-reply, like cutting in on a real call.
+      stopCallAudio();
+      startCallRecording();
+      return;
+    }
+    if (callRecorder && callRecorder.state === "recording") { stopCallRecording(); return; }
+    startCallRecording();
+  }
+
+  if (callBtn) callBtn.addEventListener("click", openCall);
+  if (callHangupBtn) callHangupBtn.addEventListener("click", closeCall);
+  if (callOrbWrap) {
+    callOrbWrap.addEventListener("click", callOrbTap);
+    callOrbWrap.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); callOrbTap(); }
+    });
   }
 
   sendBtn.addEventListener("click", send);

@@ -141,7 +141,7 @@
   }
   .nx-compose-inner {
     width: 100%; max-width: 768px; margin: 0 auto;
-    display: flex; align-items: flex-end; gap: 8px;
+    display: flex; align-items: center; gap: 8px;
     background: #2f2f2f;
     border: 1px solid rgba(255,255,255,0.12);
     border-radius: 28px;
@@ -163,10 +163,61 @@
   .nx-send:disabled { background: #4b4b4b; color: #8e8e8e; }
   .nx-send:not(:disabled):active { transform: scale(0.92); }
   .nx-send svg { width: 18px; height: 18px; }
+  .nx-call-btn {
+    flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%; border: none;
+    background: #ececec; color: #0d0d0d;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .nx-call-btn:active { transform: scale(0.92); }
+  .nx-call-btn svg { width: 16px; height: 16px; }
   .nx-disclaimer {
     max-width: 768px; margin: 6px auto 0; text-align: center;
     font-size: 11px; color: #8e8e8e;
   }
+
+  /* ---------------- call Nex: voice conversation overlay ---------------- */
+  .nx-call-overlay {
+    position: fixed; inset: 0; z-index: 200; background: #171717;
+    display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+    padding: max(20px, env(safe-area-inset-top,0px)) 20px calc(30px + env(safe-area-inset-bottom, 0px));
+  }
+  .nx-call-overlay[hidden] { display: none; }
+  .nx-call-top { text-align: center; color: #ececec; }
+  .nx-call-top-name { font-size: 17px; font-weight: 800; }
+  .nx-call-status { font-size: 13.5px; color: #9a9a9a; margin-top: 4px; min-height: 18px; }
+  .nx-call-transcript {
+    flex: 1; width: 100%; max-width: 480px; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 12px; padding: 22px 4px;
+  }
+  .nx-call-line { font-size: 14.5px; line-height: 1.5; max-width: 90%; }
+  .nx-call-line.user { align-self: flex-end; color: #0d0d0d; background: #ececec; padding: 8px 14px; border-radius: 16px; }
+  .nx-call-line.bot { align-self: flex-start; color: #dcdcdc; }
+  .nx-call-orb-wrap {
+    flex-shrink: 0; width: 116px; height: 116px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+  }
+  .nx-call-orb {
+    --nx-orb-color: 255, 45, 149;
+    width: 100%; height: 100%; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #ff8ac0, var(--pl-pink, #ff2d95) 68%);
+    display: flex; align-items: center; justify-content: center; color: #fff;
+    box-shadow: 0 0 0 0 rgba(var(--nx-orb-color), .5);
+  }
+  .nx-call-orb svg { width: 42px; height: 42px; }
+  .nx-call-orb-wrap.listening .nx-call-orb { animation: nxOrbPulse 1.5s ease-in-out infinite; }
+  .nx-call-orb-wrap.thinking .nx-call-orb { --nx-orb-color: 154, 154, 154; animation: nxOrbPulse 1s ease-in-out infinite; opacity: .8; }
+  .nx-call-orb-wrap.speaking .nx-call-orb { animation: nxOrbPulse .7s ease-in-out infinite; }
+  @keyframes nxOrbPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(var(--nx-orb-color), .45); }
+    50% { box-shadow: 0 0 0 20px rgba(var(--nx-orb-color), 0); }
+  }
+  .nx-call-hangup {
+    flex-shrink: 0; width: 54px; height: 54px; border-radius: 50%; border: none;
+    background: #f4212e; color: #fff; display: flex; align-items: center; justify-content: center;
+    margin-top: 18px;
+  }
+  .nx-call-hangup:active { transform: scale(0.92); }
+  .nx-call-hangup svg { width: 22px; height: 22px; }
 
   .nx-me { flex: none; display: flex; align-items: center; }
   .nx-me .pl-avatar { width: 30px; height: 30px; font-size: 12.5px; }
@@ -218,8 +269,27 @@
       <button class="nx-send" id="nxSend" aria-label="Senden">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
       </button>
+      <button class="nx-call-btn" id="nxCallBtn" type="button" aria-label="{{ nex_name }} anrufen" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+      </button>
     </div>
     <div class="nx-disclaimer" id="nxDisclaimer">{{ nex_name }} kann Fehler machen. Wichtiges überprüfen.</div>
+  </div>
+
+  <div class="nx-call-overlay" id="nxCallOverlay" hidden>
+    <div class="nx-call-top">
+      <div class="nx-call-top-name">{{ nex_name }}</div>
+      <div class="nx-call-status" id="nxCallStatus">Verbinde &hellip;</div>
+    </div>
+    <div class="nx-call-transcript" id="nxCallTranscript"></div>
+    <div class="nx-call-orb-wrap" id="nxCallOrbWrap" role="button" tabindex="0" aria-label="Sprechen">
+      <div class="nx-call-orb">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+      </div>
+    </div>
+    <button type="button" class="nx-call-hangup" id="nxCallHangup" aria-label="Auflegen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+    </button>
   </div>
 </div>
 {% endblock %}
