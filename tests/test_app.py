@@ -393,6 +393,43 @@ def test_nex_prompt_includes_slash_overrides(client, monkeypatch):
     assert "ANWEISUNGEN VOM NUTZER" in seen["user"]
 
 
+def test_nex_code_question_heuristic():
+    import ai_assistant
+    assert ai_assistant._looks_like_code_question("wie schreibe ich eine funktion in python?")
+    assert ai_assistant._looks_like_code_question("ich hab einen bug in meinem javascript code")
+    assert ai_assistant._looks_like_code_question("```\nprint(1)\n```")
+    assert not ai_assistant._looks_like_code_question("hallo, wie geht's dir?")
+    assert not ai_assistant._looks_like_code_question("was hältst du von meinem neuen profilbild")
+
+
+def test_nex_uses_code_model_for_programming_questions(client, monkeypatch):
+    import ai_assistant
+    seen = {}
+    monkeypatch.setattr(ai_assistant, "_classify_tool", lambda *a, **k: (None, {}))
+    monkeypatch.setattr(ai_assistant, "_generate_groq",
+                        lambda messages, max_tokens, temperature=0.7, model=None:
+                            (seen.setdefault("calls", []).append(model), "Testantwort")[1])
+    signup(client, "alice")
+
+    client.post("/api/ai/chat", json={"message": "hallo", "character": "nex7", "project_type": "nexblunt"})
+    import time
+    for _ in range(40):
+        if seen.get("calls"):
+            break
+        time.sleep(0.05)
+    assert seen["calls"][-1] is None  # plain chat stays on the small default model
+
+    client.post("/api/ai/chat", json={
+        "message": "kannst du mir bei einem bug in meiner python funktion helfen?",
+        "character": "nex7", "project_type": "nexblunt",
+    })
+    for _ in range(40):
+        if len(seen.get("calls", [])) > 1:
+            break
+        time.sleep(0.05)
+    assert seen["calls"][-1] == ai_assistant.GROQ_CODE_MODEL
+
+
 def test_for_you_feed_ranks_followed_authors_up(client):
     signup(client, "alice")
     bob = make_user(client, "bob")

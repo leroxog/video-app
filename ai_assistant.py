@@ -858,6 +858,71 @@ CODE_CHAT_ADDENDUM = (
     "APIs, statt dir Details auszudenken."
 )
 
+# Nex (project_type "nexblunt") normally answers on the small/fast GROQ_MODEL
+# like any other general chat -- fine for chit-chat, not for real code. When
+# a Nex message looks programming-related (see _looks_like_code_question),
+# generate_reply switches that one turn to GROQ_CODE_MODEL with the bigger
+# reply budget/lower temperature and appends this addendum, so Nex is
+# genuinely as strong at coding as the standalone code chat -- same rigor as
+# CODE_CHAT_ADDENDUM, just layered on top of Nex's personality instead of
+# replacing it (kept as its own separate string, not built by slicing
+# CODE_CHAT_ADDENDUM, since "no attached project" framing there doesn't fit
+# here -- Nex already has the user's activity digest as context).
+NEX_CODE_BOOST_ADDENDUM = (
+    "\n\nWICHTIG: Der Nutzer fragt gerade etwas mit echtem Programmier-Bezug. Für DIESE "
+    "Antwort läufst du auf einem stärkeren Modell, extra dafür, dass du hier genauso gut bist "
+    "wie ein dedizierter Programmier-Assistent -- bleib dabei trotzdem du selbst (dein "
+    "frecher/direkter Ton ändert sich nicht), aber der Code muss wirklich stimmen, nicht nur "
+    "plausibel aussehen. Halte dich an diese Gewohnheiten:\n\n"
+    "1. Wenn Sprache, Framework oder Version nicht eindeutig hervorgehen und es einen echten "
+    "Unterschied macht, frag kurz nach statt zu raten -- aber nur bei echter Mehrdeutigkeit, "
+    "bei offensichtlichem Kontext direkt loslegen.\n"
+    "2. Liefere VOLLSTÄNDIGEN, direkt lauffähigen Code -- alle nötigen Imports, keine "
+    "abgeschnittenen Ausschnitte mit \"... Rest wie gehabt\", außer der Nutzer bittet "
+    "ausdrücklich nur um einen kleinen Diff/Ausschnitt.\n"
+    "3. Denk vor dem Schreiben kurz durch, welche Fälle schiefgehen könnten (leere Eingabe, "
+    "falscher Typ, Off-by-one, None/null, Grenzwerte) und lass das in den Code einfließen "
+    "(Validierung, sinnvolle Fehlermeldungen), nicht erst auf Nachfrage.\n"
+    "4. Fällt dir eine echte Schwachstelle auf (SQL-Injection, ungeprüfte Eingaben, "
+    "Klartext-Passwörter, fehlende Rechteprüfung), erwähne sie kurz und zeig die sichere "
+    "Variante, auch ungefragt.\n"
+    "5. Beim Debugging: nenn die wahrscheinlichste Ursache BEVOR du den Fix zeigst, und wenn "
+    "der Nutzer eigentlich mehr Infos (Stacktrace, Version, genaue Fehlermeldung) liefern "
+    "könnte, frag danach statt blind zu raten.\n"
+    "6. Folge den echten Idiomen der jeweiligen Sprache statt eines Einheitsstils.\n"
+    "7. Erklärungen kurz und konkret -- der Code steht im Vordergrund.\n"
+    "8. Bist du bei einer API/einem Sprachfeature nicht sicher, nutze search_docs statt zu "
+    "raten, oder sag ehrlich, dass du es nicht genau weißt -- erfinde nie eine Funktion oder "
+    "ein Package, das es nicht gibt.\n\n"
+    "Du hast Zugriff auf das Werkzeug search_docs (offizielle Dokumentation von "
+    f"{DOCS_LANGUAGES_TEXT}) -- nutze es bei konkreten Fragen zu echten Sprachfeatures oder "
+    "APIs, statt dir Details auszudenken."
+)
+
+_CODE_HINT_RE = re.compile(
+    r"```|"
+    r"\b("
+    r"code|coden|codes|programm(?:ier|iere|ieren|iert)?|skript|script|"
+    r"funktion|function|methode|method|klassen?|class|"
+    r"variable|array|liste|dictionary|hashmap|objekt|interface|"
+    r"bug|fehlermeldung|exception|traceback|stacktrace|debugg?(?:en|ing)?|"
+    r"compil\w*|syntax(?:fehler)?|"
+    r"python|javascript|typescript|java|c\+\+|c#|php|ruby|swift|kotlin|rust|golang|"
+    r"html|css|sql|json|xml|yaml|regex|regulärer ausdruck|"
+    r"api|endpoint|datenbank|database|algorithmus|algorithm|"
+    r"repo(?:sitory)?|git|github|framework|library|bibliothek|"
+    r"loop|schleife|frontend|backend|server(?:seitig)?|"
+    r"import|require\(|npm|pip install|docker|"
+    r"if\s*\(|def\s|for\s*\(|while\s*\(|const\s|let\s|var\s"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+def _looks_like_code_question(text):
+    return bool(_CODE_HINT_RE.search(text or ""))
+
+
 # Applied to every mode's system prompt -- the frontend (base.html's
 # renderMarkdown) renders standard markdown plus one custom extra: ==word==
 # for colored emphasis, since normal markdown has no syntax for that.
@@ -1699,7 +1764,7 @@ def _classify_tool(user_message, tools):
 
 
 def _call_model_with_router(messages, user_message, max_tokens, tools, captured, temperature,
-                             available_tokens=None, synthesize_audio_fn=None):
+                             available_tokens=None, synthesize_audio_fn=None, model=None):
     """General-mode counterpart to _call_model: tool selection runs as its
     own dedicated classification pass (_classify_tool) instead of being
     embedded in the same call as the actual reply. The model follows a
@@ -1720,7 +1785,9 @@ def _call_model_with_router(messages, user_message, max_tokens, tools, captured,
     `messages` is the full prompt (system + history + this turn) for the
     actual reply; `user_message` is just this turn's raw text, used only
     for classification (kept short and history-free on purpose, for the
-    same reliability reason)."""
+    same reliability reason). `model`, if given, overrides GROQ_MODEL for
+    the final reply call -- used by Nex to switch to GROQ_CODE_MODEL for a
+    programming-related message, see NEX_CODE_BOOST_ADDENDUM."""
     if captured is None:
         captured = {}
     captured.setdefault("proposed_change", None)
@@ -1777,7 +1844,7 @@ def _call_model_with_router(messages, user_message, max_tokens, tools, captured,
                     "einbezieht."
                 )
             final_messages = messages + [{"role": "system", "content": follow_up}]
-    content = _generate_groq(final_messages, max_tokens, temperature=temperature).strip()
+    content = _generate_groq(final_messages, max_tokens, temperature=temperature, model=model).strip()
     if forced_markdown and forced_markdown not in content:
         content = f"{content}\n\n{forced_markdown}" if content else forced_markdown
     return content, captured["proposed_change"]
@@ -1936,10 +2003,20 @@ def generate_reply(message, context=None, history=None, project_type=None, facts
         tools = SEVENAI_TOOLS
         temperature = GENERAL_TEMPERATURE
     elif project_type == "nexblunt":
-        # The single "Nex" AI -- same wiring as the sevenai branch.
+        # The single "Nex" AI -- same wiring as the sevenai branch. Normally
+        # the same small/fast general model as any other chat -- but if
+        # this particular message is programming-related, bump it to the
+        # same strong model + settings the standalone code chat gets (see
+        # NEX_CODE_BOOST_ADDENDUM's own comment) so Nex is genuinely just
+        # as good at code, not only at chit-chat.
         system_prompt = NEX_BLUNT_SYSTEM_PROMPT + SEVENAI_TOOLS_ADDENDUM
         tools = SEVENAI_TOOLS
         temperature = GENERAL_TEMPERATURE
+        if _looks_like_code_question(message):
+            system_prompt += NEX_CODE_BOOST_ADDENDUM
+            model = GROQ_CODE_MODEL
+            reply_tokens = CODE_CHAT_MAX_REPLY_TOKENS
+            temperature = CODE_TEMPERATURE
     else:
         system_prompt = GENERAL_SYSTEM_PROMPT + FRIEND_CHARACTER_ADDENDUM + GENERAL_TOOLS_ADDENDUM
         tools = AI_TOOLS
@@ -1994,7 +2071,7 @@ def generate_reply(message, context=None, history=None, project_type=None, facts
     if project_type in (None, "sevenai", "nexblunt"):
         return _call_model_with_router(
             messages, message, reply_tokens, tools, captured, temperature,
-            available_tokens=available_tokens, synthesize_audio_fn=synthesize_audio_fn,
+            available_tokens=available_tokens, synthesize_audio_fn=synthesize_audio_fn, model=model,
         )
     return _call_model(messages, reply_tokens, tools=tools, captured=captured, temperature=temperature, model=model)
 
