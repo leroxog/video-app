@@ -886,8 +886,23 @@ def allowed_image_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS
 
 
-def current_user():
+# Bumped once (2026-09-11) to force every existing session to log back in
+# -- a one-time global logout, not a recurring mechanism. A session's
+# user_id only counts if it also carries this epoch, so any cookie issued
+# before the bump is treated as logged out. Bump again only if another
+# blanket logout is ever needed.
+AUTH_EPOCH = 1
+
+
+def _pl_session_uid():
     uid = session.get("user_id")
+    if uid is None or session.get("auth_epoch") != AUTH_EPOCH:
+        return None
+    return uid
+
+
+def current_user():
+    uid = _pl_session_uid()
     return db.session.get(User, uid) if uid else None
 
 
@@ -1050,7 +1065,7 @@ def _compute_message_token_cost(message, via_voice, is_buddy):
 
 @app.before_request
 def update_last_seen():
-    user_id = session.get("user_id")
+    user_id = _pl_session_uid()
     if user_id is None:
         return
     now = datetime.now(timezone.utc)
@@ -1129,6 +1144,7 @@ def pl_login():
         if user is None or not user.check_password(password):
             return render_template("pl_auth.html", mode="login", error="Benutzername oder Passwort falsch.", username=username), 401
         session["user_id"] = user.id
+        session["auth_epoch"] = AUTH_EPOCH
         session.permanent = True
         return redirect(url_for("pl_home"))
     return render_template("pl_auth.html", mode="login")
@@ -1158,6 +1174,7 @@ def pl_signup():
         db.session.add(user)
         db.session.commit()
         session["user_id"] = user.id
+        session["auth_epoch"] = AUTH_EPOCH
         session.permanent = True
         return redirect(url_for("pl_home"))
     return render_template("pl_auth.html", mode="signup")
@@ -1166,6 +1183,7 @@ def pl_signup():
 @app.route("/logout", methods=["POST", "GET"])
 def pl_logout():
     session.pop("user_id", None)
+    session.pop("auth_epoch", None)
     return redirect(url_for("pl_login"))
 
 
