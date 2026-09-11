@@ -195,6 +195,25 @@ GROQ_FALLBACK_MODEL = os.environ.get("GROQ_FALLBACK_MODEL", "openai/gpt-oss-120b
 GROQ_CODE_MODEL = os.environ.get("GROQ_CODE_MODEL", GROQ_FALLBACK_MODEL)
 CHAT_REQUEST_TIMEOUT_SECONDS = 30
 
+# Nex "plugins" (2026-09-11, explicit user request): other real, already-
+# working Groq-hosted models a user can opt into per-account (see app.py's
+# /api/pl/nex/plugins) -- when 1+ are enabled, Nex also asks each of them
+# the same question and folds their answers into one final reply (see
+# _run_nex_plugin_council below), with a "contributors" list the frontend
+# shows as a byline. Deliberately NOT third-party AI accounts/logins --
+# embedding a real ChatGPT/Gemini/etc. login on our own domain is blocked
+# by every major provider's own frame-ancestors policy (anti-phishing) and
+# faking it would just be deceptive. llama-3.3-70b-versatile is Groq's
+# long-standing production-tier flagship (not preview-tier like the two
+# above, which Groq has swapped out with little notice before) -- picked
+# specifically to be a safer bet than adding a second preview model.
+NEX_PLUGIN_CATALOG = [
+    {"key": "qwen", "name": "Qwen", "desc": "Ein schnelles, kompaktes Modell -- kurze, direkte zweite Meinung.", "model": GROQ_MODEL},
+    {"key": "gptoss", "name": "GPT-OSS", "desc": "Größeres Modell, stärker bei kniffligen oder logischen Fragen.", "model": GROQ_FALLBACK_MODEL},
+    {"key": "llama", "name": "Llama", "desc": "Metas Modell -- oft eine andere Perspektive als die anderen beiden.", "model": "llama-3.3-70b-versatile"},
+]
+NEX_PLUGIN_BY_KEY = {p["key"]: p for p in NEX_PLUGIN_CATALOG}
+
 MAX_MESSAGE_CHARS = 2000
 MAX_CONTEXT_CHARS = 4000
 MAX_REPLY_TOKENS = 900
@@ -1909,9 +1928,65 @@ def _learned_facts_addendum(wikipedia_facts, user_facts, docs_facts=None, behavi
     return "".join(parts)
 
 
+def _run_nex_plugin_council(base_reply, message, model, reply_tokens, temperature, plugin_keys, captured):
+    """Asks each enabled plugin model (see NEX_PLUGIN_CATALOG) the same
+    question Nex just answered, then folds every answer that actually came
+    back into ONE final reply in Nex's own voice -- a real second opinion,
+    not multi-AI theatre: any plugin that errors is silently dropped (see
+    the try/except below) rather than blocking the whole reply, so one bad
+    model id degrades gracefully instead of breaking Nex entirely. Sets
+    captured["contributors"] to the list of models that actually answered
+    (None if none did), for the frontend's byline."""
+    contributors = ["Nex"]
+    other_answers = []
+    for key in plugin_keys or []:
+        plugin = NEX_PLUGIN_BY_KEY.get(key)
+        if plugin is None:
+            continue
+        try:
+            answer = _generate_groq(
+                [
+                    {"role": "system", "content": "Antworte kurz, direkt und in einfachem Deutsch auf die Nachricht des Nutzers."},
+                    {"role": "user", "content": message},
+                ],
+                350, temperature=0.6, model=plugin["model"],
+            ).strip()
+        except Exception:
+            logger.exception("Nex-Plugin '%s' hat nicht geantwortet.", plugin["name"])
+            continue
+        if answer:
+            other_answers.append(plugin["name"] + ": " + answer)
+            contributors.append(plugin["name"])
+    if not other_answers:
+        captured["contributors"] = None
+        return base_reply
+    synthesis_prompt = (
+        "Du bist Nex. Das ist deine eigene erste Antwort auf die letzte Nachricht des Nutzers:\n"
+        + base_reply
+        + "\n\nDiese anderen KI-Modelle wurden zur selben Nachricht befragt:\n"
+        + "\n".join(other_answers)
+        + "\n\nSchreib jetzt EINE finale Antwort in deinem eigenen (Nex') Ton, die die besten Punkte "
+        "aus allen Antworten zusammenführt, ohne die anderen Modelle namentlich zu erwähnen. Bleib "
+        "kurz und bleib du selbst."
+    )
+    try:
+        merged = _generate_groq(
+            [
+                {"role": "system", "content": synthesis_prompt},
+                {"role": "user", "content": message},
+            ],
+            reply_tokens, temperature=temperature, model=model,
+        ).strip()
+    except Exception:
+        logger.exception("Zusammenführung der Nex-Plugin-Antworten fehlgeschlagen.")
+        merged = ""
+    captured["contributors"] = contributors
+    return merged or base_reply
+
+
 def generate_reply(message, context=None, history=None, project_type=None, facts=None,
                     learned_facts=None, captured=None, behavior_note=None, personality=None,
-                    available_tokens=None, synthesize_audio_fn=None):
+                    available_tokens=None, synthesize_audio_fn=None, plugin_keys=None):
     """Runs one turn against Groq's hosted model (see _generate_groq). Not
     meant to be called directly from a request handler -- see start_chat_job().
     `history` is this same chat's own prior turns (a list of
@@ -2069,10 +2144,13 @@ def generate_reply(message, context=None, history=None, project_type=None, facts
     messages.append({"role": "user", "content": user_content})
 
     if project_type in (None, "sevenai", "nexblunt"):
-        return _call_model_with_router(
+        reply, proposed_change = _call_model_with_router(
             messages, message, reply_tokens, tools, captured, temperature,
             available_tokens=available_tokens, synthesize_audio_fn=synthesize_audio_fn, model=model,
         )
+        if project_type == "nexblunt" and plugin_keys and reply:
+            reply = _run_nex_plugin_council(reply, message, model, reply_tokens, temperature, plugin_keys, captured)
+        return reply, proposed_change
     return _call_model(messages, reply_tokens, tools=tools, captured=captured, temperature=temperature, model=model)
 
 
@@ -2105,7 +2183,7 @@ _jobs_lock = threading.Lock()
 
 def start_chat_job(message, context=None, history=None, project_type=None, facts=None,
                     learned_facts=None, on_done=None, behavior_note=None, personality=None,
-                    available_tokens=None, synthesize_audio_fn=None):
+                    available_tokens=None, synthesize_audio_fn=None, plugin_keys=None):
     """`on_done(reply, error, proposed_change, new_learned_facts)` --
     new_learned_facts is always a {"wikipedia": [...], "user": [...],
     "personality_adjustments": [...], "image_generated": {...} or None,
@@ -2115,10 +2193,14 @@ def start_chat_job(message, context=None, history=None, project_type=None, facts
     deductions. `synthesize_audio_fn(text, gender)`, if given, is called
     synchronously from inside the generate_audio tool handler and must
     return a playable URL (already generated *and* stored) or None on
-    failure/unavailability -- see app.py's _synthesize_and_store_audio."""
+    failure/unavailability -- see app.py's _synthesize_and_store_audio.
+    `plugin_keys`, Nex only: enabled NEX_PLUGIN_CATALOG keys to also
+    consult this turn (see _run_nex_plugin_council) -- surfaced live via
+    this job's "contributors" status field, same not-persisted-to-the-
+    database treatment as proposed_change below."""
     job_id = uuid.uuid4().hex
     with _jobs_lock:
-        _jobs[job_id] = {"status": "running", "reply": None, "error": None, "proposed_change": None}
+        _jobs[job_id] = {"status": "running", "reply": None, "error": None, "proposed_change": None, "contributors": None}
 
     def run():
         # on_done (persisting to the database) runs *before* the status
@@ -2133,7 +2215,7 @@ def start_chat_job(message, context=None, history=None, project_type=None, facts
             reply, proposed_change = generate_reply(
                 message, context, history, project_type, facts, learned_facts, captured,
                 behavior_note, personality, available_tokens,
-                synthesize_audio_fn=synthesize_audio_fn,
+                synthesize_audio_fn=synthesize_audio_fn, plugin_keys=plugin_keys,
             )
             new_learned_facts = {
                 "wikipedia": captured.get("wikipedia_facts") or [],
@@ -2148,13 +2230,14 @@ def start_chat_job(message, context=None, history=None, project_type=None, facts
             with _jobs_lock:
                 _jobs[job_id] = {
                     "status": "done", "reply": reply, "error": None, "proposed_change": proposed_change,
+                    "contributors": captured.get("contributors"),
                 }
         except Exception as exc:
             logger.exception("KI-Antwort fehlgeschlagen.")
             if on_done:
                 on_done(None, str(exc), None, {"wikipedia": [], "user": [], "personality_adjustments": []})
             with _jobs_lock:
-                _jobs[job_id] = {"status": "error", "reply": None, "error": str(exc), "proposed_change": None}
+                _jobs[job_id] = {"status": "error", "reply": None, "error": str(exc), "proposed_change": None, "contributors": None}
 
     threading.Thread(target=run, daemon=True).start()
     return job_id

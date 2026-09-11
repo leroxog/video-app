@@ -13,6 +13,9 @@
   var histMenu = document.getElementById("nxHistMenu");
   var histList = document.getElementById("nxHistList");
   var slashMenu = document.getElementById("nxSlashMenu");
+  var pluginsBtn = document.getElementById("nxPluginsBtn");
+  var pluginsMenu = document.getElementById("nxPluginsMenu");
+  var pluginsList = document.getElementById("nxPluginsList");
 
   var chatId = null;
   var busy = false;
@@ -94,7 +97,7 @@
 
   function clearEmpty() { if (emptyEl) { emptyEl.remove(); emptyEl = null; } }
 
-  function addMsg(role, text) {
+  function addMsg(role, text, contributors) {
     clearEmpty();
     var row = document.createElement("div");
     row.className = "nx-row " + (role === "user" ? "me" : "them");
@@ -102,6 +105,14 @@
     b.className = "nx-bubble";
     b.innerHTML = role === "user" ? esc(text).replace(/\n/g, "<br>") : render(text);
     row.appendChild(b);
+    // "Mit: Qwen, Llama" byline -- only when 1+ plugins actually answered
+    // alongside Nex this turn (see ai_assistant.py's _run_nex_plugin_council).
+    if (role !== "user" && contributors && contributors.length > 1) {
+      var by = document.createElement("div");
+      by.className = "nx-contributors";
+      by.textContent = "Mit: " + contributors.filter(function (c) { return c !== "Nex"; }).join(", ");
+      row.appendChild(by);
+    }
     msgsEl.appendChild(row);
     scrollDown();
     return b;
@@ -256,7 +267,7 @@
         if (j.status === "running") { setTimeout(function () { poll(jobId); }, 650); return; }
         hideTyping();
         setBusy(false);
-        if (j.status === "done" && j.reply) addMsg("assistant", j.reply);
+        if (j.status === "done" && j.reply) addMsg("assistant", j.reply, j.contributors);
         else addMsg("assistant", "Ich bin gerade nicht erreichbar. Versuch's gleich nochmal.");
         if (window.plSound) window.plSound.play("receive");
       })
@@ -287,7 +298,7 @@
     callOrbWrap.classList.remove("listening", "thinking", "speaking");
     if (mode) callOrbWrap.classList.add(mode);
   }
-  function addCallLine(role, text) {
+  function addCallLine(role, text, contributors) {
     if (callTranscriptEl) {
       var line = document.createElement("div");
       line.className = "nx-call-line " + (role === "user" ? "user" : "bot");
@@ -297,7 +308,7 @@
     }
     // Keep the normal chat view in sync too, so the call shows up as a
     // real part of the conversation once you hang up, not a side channel.
-    addMsg(role, text);
+    addMsg(role, text, contributors);
   }
 
   function stopCallStream() {
@@ -408,7 +419,7 @@
         if (!callActive) return;
         if (j.status === "running") { setTimeout(function () { pollCallJob(jobId, retriesLeft); }, 700); return; }
         if (j.status === "done" && j.reply) {
-          addCallLine("bot", j.reply);
+          addCallLine("bot", j.reply, j.contributors);
           speakCallReply(j.reply);
           if (window.plSound) window.plSound.play("receive");
           return;
@@ -559,6 +570,51 @@
         + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M6 6v14a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V6"/></svg>'
         + '</button></div>';
     }).join("");
+  }
+
+  // ---------------- plugins: other Groq models Nex can also consult ----------------
+  var TOGGLE_ON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l5 5L20 6"/></svg>';
+  var TOGGLE_OFF_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
+
+  function renderPluginsList(plugins) {
+    pluginsList.innerHTML = plugins.map(function (p) {
+      return '<div class="nx-plugin-row" data-key="' + esc(p.key) + '">'
+        + '<div class="nx-plugin-main"><div class="nx-plugin-name">' + esc(p.name) + '</div>'
+        + '<div class="nx-plugin-desc">' + esc(p.desc) + '</div></div>'
+        + '<button type="button" class="nx-plugin-toggle' + (p.enabled ? " is-on" : "") + '" data-toggle-plugin="' + esc(p.key) + '" aria-label="' + esc(p.name) + (p.enabled ? " deaktivieren" : " aktivieren") + '">'
+        + (p.enabled ? TOGGLE_ON_SVG : TOGGLE_OFF_SVG) + '</button></div>';
+    }).join("");
+  }
+
+  function openPluginsMenu() {
+    pluginsMenu.hidden = false;
+    pluginsList.innerHTML = '<div class="nx-hist-empty">L&auml;dt &hellip;</div>';
+    fetch("/api/pl/nex/plugins").then(function (r) { return r.json(); }).then(function (j) {
+      if (j.ok) renderPluginsList(j.plugins);
+    });
+  }
+  function closePluginsMenu() { pluginsMenu.hidden = true; }
+
+  if (pluginsBtn) {
+    pluginsBtn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      if (pluginsMenu.hidden) openPluginsMenu(); else closePluginsMenu();
+    });
+    document.addEventListener("click", function (e) {
+      if (!pluginsMenu.hidden && !e.target.closest(".nx-plugins-wrap")) closePluginsMenu();
+    });
+    pluginsList.addEventListener("click", function (e) {
+      var btn = e.target.closest("[data-toggle-plugin]");
+      if (!btn) return;
+      var key = btn.dataset.togglePlugin;
+      var nowOn = !btn.classList.contains("is-on");
+      fetch("/api/pl/nex/plugins", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: key, enabled: nowOn }),
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (j) { if (j.ok) renderPluginsList(j.plugins); });
+    });
   }
 
   function openHistMenu() {

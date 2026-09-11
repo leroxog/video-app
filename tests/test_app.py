@@ -573,6 +573,90 @@ def test_for_you_feed_ranks_followed_authors_up(client):
     assert "bob followed post" in foll and "cara 0" not in foll
 
 
+def test_nex_page_has_plugins_button(client):
+    signup(client, "alice")
+    r = client.get("/nex").data
+    assert b'id="nxPluginsBtn"' in r and b'id="nxPluginsMenu"' in r
+
+
+def test_nex_plugins_list_default_all_off(client):
+    signup(client, "alice")
+    j = client.get("/api/pl/nex/plugins").get_json()
+    assert j["ok"] is True
+    keys = {p["key"] for p in j["plugins"]}
+    assert keys == {"qwen", "gptoss", "llama"}
+    assert all(not p["enabled"] for p in j["plugins"])
+
+
+def test_nex_plugins_toggle_on_and_off(client):
+    signup(client, "alice")
+    r = client.post("/api/pl/nex/plugins", json={"key": "llama", "enabled": True})
+    j = r.get_json()
+    assert j["ok"] is True
+    assert {p["key"]: p["enabled"] for p in j["plugins"]}["llama"] is True
+    # persists across requests
+    j2 = client.get("/api/pl/nex/plugins").get_json()
+    assert {p["key"]: p["enabled"] for p in j2["plugins"]}["llama"] is True
+
+    r3 = client.post("/api/pl/nex/plugins", json={"key": "llama", "enabled": False})
+    j3 = r3.get_json()
+    assert {p["key"]: p["enabled"] for p in j3["plugins"]}["llama"] is False
+
+
+def test_nex_plugins_rejects_unknown_key(client):
+    signup(client, "alice")
+    r = client.post("/api/pl/nex/plugins", json={"key": "chatgpt", "enabled": True})
+    assert r.status_code == 400 and r.get_json()["ok"] is False
+
+
+def test_nex_plugin_council_merges_answers_and_lists_contributors(client, monkeypatch):
+    import ai_assistant
+
+    monkeypatch.setattr(ai_assistant, "_classify_tool", lambda *a, **k: (None, {}))
+
+    def fake_generate(messages, max_tokens, temperature=0.7, model=None):
+        if model == ai_assistant.GROQ_FALLBACK_MODEL:
+            return "GPT-OSS-Antwort"
+        if model == "llama-3.3-70b-versatile":
+            return "Llama-Antwort"
+        return "Finale Nex-Antwort"
+
+    monkeypatch.setattr(ai_assistant, "_generate_groq", fake_generate)
+    signup(client, "alice")
+    client.post("/api/pl/nex/plugins", json={"key": "gptoss", "enabled": True})
+    client.post("/api/pl/nex/plugins", json={"key": "llama", "enabled": True})
+
+    r = client.post("/api/ai/chat", json={"message": "was ist 2+2?", "character": "nex7", "project_type": "nexblunt"})
+    job_id = r.get_json()["job_id"]
+    import time
+    j = None
+    for _ in range(60):
+        j = client.get(f"/api/ai/chat/{job_id}").get_json()
+        if j["status"] != "running":
+            break
+        time.sleep(0.05)
+    assert j["status"] == "done"
+    assert j["reply"] == "Finale Nex-Antwort"
+    assert set(j["contributors"]) == {"Nex", "GPT-OSS", "Llama"}
+
+
+def test_nex_no_contributors_when_no_plugins_enabled(client, monkeypatch):
+    import ai_assistant
+    monkeypatch.setattr(ai_assistant, "_classify_tool", lambda *a, **k: (None, {}))
+    monkeypatch.setattr(ai_assistant, "_generate_groq", lambda *a, **k: "Nur Nex")
+    signup(client, "alice")
+    r = client.post("/api/ai/chat", json={"message": "hallo", "character": "nex7", "project_type": "nexblunt"})
+    job_id = r.get_json()["job_id"]
+    import time
+    j = None
+    for _ in range(60):
+        j = client.get(f"/api/ai/chat/{job_id}").get_json()
+        if j["status"] != "running":
+            break
+        time.sleep(0.05)
+    assert j["status"] == "done" and j["contributors"] is None
+
+
 def test_nex_page_has_call_button_and_overlay(client):
     signup(client, "alice")
     r = client.get("/nex").data

@@ -79,6 +79,9 @@ class User(db.Model):
     nex_custom_name = db.Column(db.String(40), nullable=True)
     nex_custom_personality = db.Column(db.Text, nullable=True)
     nex_custom_act = db.Column(db.Text, nullable=True)
+    # JSON list of NEX_PLUGIN_CATALOG keys (see ai_assistant.py) this user
+    # has switched on -- see app.py's /api/pl/nex/plugins.
+    nex_plugins = db.Column(db.Text, nullable=True)
     # city is free-text (e.g. "München-Pasing"). is_company/company_name/
     # company_address are legacy: the last real consumer (Chepal's company
     # offer-management, and briefly Mini Job's company job-postings) was

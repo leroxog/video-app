@@ -654,6 +654,7 @@ def ensure_sqlite_columns_exist():
             ("nex_custom_name", "VARCHAR(40)"),
             ("nex_custom_personality", "TEXT"),
             ("nex_custom_act", "TEXT"),
+            ("nex_plugins", "TEXT"),
             ("purpose_of_use", "VARCHAR(20)"),
             ("country", "VARCHAR(100)"),
             ("region", "VARCHAR(100)"),
@@ -786,6 +787,7 @@ def ensure_columns_exist():
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS nex_custom_name VARCHAR(40)',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS nex_custom_personality TEXT',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS nex_custom_act TEXT',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS nex_plugins TEXT',
         'ALTER TABLE feed_post ADD COLUMN IF NOT EXISTS att_kind VARCHAR(12)',
         'ALTER TABLE feed_post ADD COLUMN IF NOT EXISTS att_value VARCHAR(255)',
         'ALTER TABLE feed_post ADD COLUMN IF NOT EXISTS edited_at TIMESTAMP',
@@ -2029,6 +2031,58 @@ def api_pl_nex_settings():
     })
 
 
+def _pl_nex_enabled_plugin_keys(user):
+    """user.nex_plugins is a JSON list of NEX_PLUGIN_CATALOG keys -- always
+    re-validated against the current catalog (a key from a removed/renamed
+    plugin just silently drops out, no migration needed)."""
+    raw = user.nex_plugins
+    if not raw:
+        return []
+    try:
+        keys = json.loads(raw)
+    except Exception:
+        return []
+    if not isinstance(keys, list):
+        return []
+    return [k for k in keys if k in ai_assistant.NEX_PLUGIN_BY_KEY]
+
+
+def _pl_nex_plugins_state(user):
+    enabled = set(_pl_nex_enabled_plugin_keys(user))
+    return [
+        {"key": p["key"], "name": p["name"], "desc": p["desc"], "enabled": p["key"] in enabled}
+        for p in ai_assistant.NEX_PLUGIN_CATALOG
+    ]
+
+
+@app.route("/api/pl/nex/plugins")
+def api_pl_nex_plugins_list():
+    return jsonify({"ok": True, "plugins": _pl_nex_plugins_state(current_user())})
+
+
+@app.route("/api/pl/nex/plugins", methods=["POST"])
+def api_pl_nex_plugins_toggle():
+    """Turns one plugin AI on/off for this user's Nex chats (see
+    _run_nex_plugin_council in ai_assistant.py) -- these are our own
+    already-integrated Groq-hosted models, not third-party AI accounts:
+    embedding a real ChatGPT/Gemini/etc. login here isn't possible (every
+    major provider blocks its login page from being framed on someone
+    else's site, precisely to stop this kind of embedding)."""
+    me = current_user()
+    data = request.get_json(silent=True) or {}
+    key = data.get("key")
+    if key not in ai_assistant.NEX_PLUGIN_BY_KEY:
+        return jsonify({"ok": False, "error": "unknown_plugin"}), 400
+    enabled = set(_pl_nex_enabled_plugin_keys(me))
+    if data.get("enabled"):
+        enabled.add(key)
+    else:
+        enabled.discard(key)
+    me.nex_plugins = json.dumps(sorted(enabled)) if enabled else None
+    db.session.commit()
+    return jsonify({"ok": True, "plugins": _pl_nex_plugins_state(me)})
+
+
 @app.route("/api/pl/nex/voice", methods=["POST"])
 def api_pl_nex_voice():
     """Nex voice orb: the browser records the mic (MediaRecorder) and
@@ -2914,6 +2968,8 @@ def api_ai_chat():
         except Exception:
             logger.exception("Nex-Aktivitäts-Kontext fehlgeschlagen.")
 
+    plugin_keys = _pl_nex_enabled_plugin_keys(user) if (character == "nex7" and project_type == "nexblunt") else None
+
     # Only messages sent through the admin dashboard's dedicated "KI-Wissen"
     # chat become a global fact -- an admin's ordinary chats elsewhere are
     # unaffected, and a non-admin can never set save_as_fact regardless of
@@ -3120,7 +3176,7 @@ def api_ai_chat():
         message, context, history=history, project_type=project_type, facts=facts,
         learned_facts=learned_facts, on_done=on_done, behavior_note=behavior_note,
         personality=personality, available_tokens=None if is_unlimited_tokens else user.ai_tokens,
-        synthesize_audio_fn=_synthesize_and_store_audio,
+        synthesize_audio_fn=_synthesize_and_store_audio, plugin_keys=plugin_keys,
     )
     return jsonify({
         "ok": True, "job_id": job_id, "chat_id": chat.id, "tokens_remaining": user.ai_tokens,
