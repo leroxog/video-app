@@ -7,6 +7,9 @@
   var input = document.getElementById("nxInput");
   var sendBtn = document.getElementById("nxSend");
   var newBtn = document.getElementById("nxNew");
+  var histBtn = document.getElementById("nxHistBtn");
+  var histMenu = document.getElementById("nxHistMenu");
+  var histList = document.getElementById("nxHistList");
 
   var chatId = null;
   var busy = false;
@@ -176,35 +179,97 @@
 
   var EMPTY_MARK = '<span class="nx-empty-mark"><svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" rx="20" fill="#2f2f2f"/><g fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M50 19 L78.6 35.5 L78.6 68.5 L50 85 L21.4 68.5 L21.4 35.5 Z"/><path d="M50 52 L50 19 M50 52 L78.6 35.5 M50 52 L78.6 68.5 M50 52 L50 85 M50 52 L21.4 68.5 M50 52 L21.4 35.5"/></g><g fill="#2f2f2f" stroke="#fff" stroke-width="3"><circle cx="50" cy="19" r="7.5"/><circle cx="78.6" cy="35.5" r="7.5"/><circle cx="78.6" cy="68.5" r="7.5"/><circle cx="50" cy="85" r="7.5"/><circle cx="21.4" cy="68.5" r="7.5"/><circle cx="21.4" cy="35.5" r="7.5"/></g><circle cx="50" cy="52" r="4.6" fill="#fff"/></svg></span>';
 
-  newBtn.addEventListener("click", function () {
-    chatId = null;
+  function showEmpty() {
     msgsEl.innerHTML = "";
     emptyEl = document.createElement("div");
     emptyEl.className = "nx-empty";
     var g = greeting();
     emptyEl.innerHTML = EMPTY_MARK + '<h2>' + esc(g[0]) + '</h2><p>' + esc(g[1]) + '</p>';
     msgsEl.appendChild(emptyEl);
+  }
+
+  newBtn.addEventListener("click", function () {
+    chatId = null;
+    showEmpty();
     input.focus();
   });
 
+  // ---------------- chat history: switch between past Nex chats ----------------
+  function loadChat(id) {
+    return fetch("/api/ai/chats/" + id + "/messages")
+      .then(function (r) { return r.json(); })
+      .then(function (m) {
+        if (!m.ok) return;
+        chatId = id;
+        if (!m.messages.length) { showEmpty(); return; }
+        msgsEl.innerHTML = "";
+        emptyEl = null;
+        m.messages.forEach(function (msg) { addMsg(msg.role === "user" ? "user" : "assistant", msg.content); });
+        scrollDown();
+      });
+  }
+
+  function fetchChats() {
+    return fetch("/api/ai/chats?character=" + encodeURIComponent(NEX.character))
+      .then(function (r) { return r.json(); })
+      .then(function (j) { return (j.ok && j.chats) || []; })
+      .catch(function () { return []; });
+  }
+
+  function renderHistList(chats) {
+    if (!chats.length) {
+      histList.innerHTML = '<div class="nx-hist-empty">Noch keine Chats.</div>';
+      return;
+    }
+    histList.innerHTML = chats.map(function (c) {
+      return '<div class="nx-hist-row' + (c.id === chatId ? " is-active" : "") + '" data-chat-id="' + c.id + '">'
+        + '<div class="nx-hist-row-main"><div class="nx-hist-row-title">' + esc(c.title) + '</div>'
+        + '<div class="nx-hist-row-time">' + esc(c.updated_at) + '</div></div>'
+        + '<button type="button" class="nx-hist-del" data-del-chat="' + c.id + '" aria-label="L&ouml;schen">'
+        + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M6 6v14a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V6"/></svg>'
+        + '</button></div>';
+    }).join("");
+  }
+
+  function openHistMenu() {
+    histMenu.hidden = false;
+    histList.innerHTML = '<div class="nx-hist-empty">L&auml;dt &hellip;</div>';
+    fetchChats().then(renderHistList);
+  }
+  function closeHistMenu() { histMenu.hidden = true; }
+
+  histBtn.addEventListener("click", function (e) {
+    e.stopPropagation();
+    if (histMenu.hidden) openHistMenu(); else closeHistMenu();
+  });
+  document.addEventListener("click", function (e) {
+    if (!histMenu.hidden && !e.target.closest(".nx-hist-wrap")) closeHistMenu();
+  });
+  histList.addEventListener("click", function (e) {
+    var del = e.target.closest("[data-del-chat]");
+    if (del) {
+      e.stopPropagation();
+      var id = Number(del.dataset.delChat);
+      fetch("/api/ai/chats/" + id + "/delete", { method: "POST" }).then(function () {
+        if (id === chatId) { chatId = null; showEmpty(); }
+        fetchChats().then(renderHistList);
+      });
+      return;
+    }
+    var row = e.target.closest("[data-chat-id]");
+    if (row) {
+      loadChat(Number(row.dataset.chatId)).then(function () {
+        closeHistMenu();
+        input.focus();
+      });
+    }
+  });
+
   // load the most recent Nex chat, if any
-  fetch("/api/ai/chats?character=" + encodeURIComponent(NEX.character))
-    .then(function (r) { return r.json(); })
-    .then(function (j) {
-      if (!j.ok || !j.chats || !j.chats.length) return;
-      var c = j.chats[0];
-      return fetch("/api/ai/chats/" + c.id + "/messages")
-        .then(function (r) { return r.json(); })
-        .then(function (m) {
-          if (!m.ok || !m.messages.length) return;
-          chatId = c.id;
-          msgsEl.innerHTML = "";
-          emptyEl = null;
-          m.messages.forEach(function (msg) { addMsg(msg.role === "user" ? "user" : "assistant", msg.content); });
-          scrollDown();
-        });
-    })
-    .catch(function () {});
+  fetchChats().then(function (chats) {
+    if (!chats.length) return;
+    return loadChat(chats[0].id);
+  });
 
   setTimeout(function () { input.focus(); }, 200);
 })();
