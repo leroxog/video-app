@@ -347,4 +347,205 @@
       typingPolling = setInterval(pollTyping, 2500);
     }
   });
+
+  // ---------------- 1:1 voice calls (WebRTC) ----------------
+  // This file is only the *signaling* client (offer/answer/ICE candidates
+  // relayed through /api/pl/chats/<id>/call/*) -- once connected, audio
+  // flows peer-to-peer, never through the server. STUN-only (Google's
+  // free public server): works for most home/mobile networks, but there's
+  // no TURN relay configured, so a call between two people both behind a
+  // strict/symmetric NAT (some corporate networks) may fail to connect --
+  // a real limitation worth knowing about, not a bug to "fix" by retrying.
+  var callBtn = document.getElementById("plCallBtn");
+  if (callBtn && CHAT && !CHAT.isGroup) {
+    var callOverlay = document.getElementById("plCallOverlay");
+    var callStatusEl = document.getElementById("plCallStatus");
+    var incomingActions = document.getElementById("plCallIncomingActions");
+    var activeActions = document.getElementById("plCallActiveActions");
+    var acceptBtn = document.getElementById("plCallAcceptBtn");
+    var declineBtn = document.getElementById("plCallDeclineBtn");
+    var hangupBtn = document.getElementById("plCallHangupBtn");
+    var muteBtn = document.getElementById("plCallMuteBtn");
+    var remoteAudio = document.getElementById("plCallRemoteAudio");
+
+    var ICE_SERVERS = [{ urls: "stun:stun.l.google.com:19302" }];
+    var callState = "idle"; // idle | outgoing | incoming | active
+    var pc = null;
+    var localStream = null;
+    var pendingOffer = null;
+    var pendingIce = [];
+    var lastSignalId = 0;
+    var durationTimer = null;
+    var callStatePolling = null;
+
+    function fmtDuration(sec) {
+      var m = Math.floor(sec / 60), s = sec % 60;
+      return m + ":" + (s < 10 ? "0" : "") + s;
+    }
+
+    function startDurationTimer() {
+      var startedAt = Date.now();
+      clearInterval(durationTimer);
+      durationTimer = setInterval(function () {
+        callStatusEl.textContent = "Verbunden · " + fmtDuration(Math.floor((Date.now() - startedAt) / 1000));
+      }, 1000);
+    }
+
+    function resetCallUI() {
+      callState = "idle";
+      callOverlay.hidden = true;
+      incomingActions.hidden = true;
+      activeActions.hidden = true;
+      clearInterval(durationTimer);
+      pendingOffer = null;
+      pendingIce = [];
+      lastSignalId = 0;
+      if (muteBtn) muteBtn.classList.remove("is-muted");
+      if (localStream) { localStream.getTracks().forEach(function (t) { t.stop(); }); localStream = null; }
+      if (pc) { try { pc.close(); } catch (e) {} pc = null; }
+      if (remoteAudio) remoteAudio.srcObject = null;
+    }
+
+    function sendSignal(type, data) {
+      return fetch("/api/pl/chats/" + CHAT.id + "/call/signal", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: type, data: data }),
+      }).catch(function () {});
+    }
+
+    function newPeerConnection() {
+      var conn = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+      conn.onicecandidate = function (e) { if (e.candidate) sendSignal("ice", e.candidate); };
+      conn.ontrack = function (e) { if (remoteAudio) { remoteAudio.srcObject = e.streams[0]; remoteAudio.play().catch(function () {}); } };
+      conn.onconnectionstatechange = function () {
+        if (conn.connectionState === "connected" && callState !== "active") {
+          callState = "active";
+          incomingActions.hidden = true;
+          activeActions.hidden = false;
+          startDurationTimer();
+        } else if (["disconnected", "failed", "closed"].indexOf(conn.connectionState) !== -1 && callState !== "idle") {
+          window.plToast("Anruf beendet.");
+          resetCallUI();
+        }
+      };
+      return conn;
+    }
+
+    function startCall() {
+      if (callState !== "idle") return;
+      fetch("/api/pl/chats/" + CHAT.id + "/call/start", { method: "POST" })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          if (!j.ok) { window.plToast(j.error === "already_in_call" ? "Es läuft schon ein Anruf." : "Anruf ging nicht."); return; }
+          callState = "outgoing";
+          callOverlay.hidden = false;
+          callStatusEl.textContent = "Ruft an …";
+          navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+            localStream = stream;
+            pc = newPeerConnection();
+            stream.getTracks().forEach(function (t) { pc.addTrack(t, stream); });
+            return pc.createOffer();
+          }).then(function (offer) {
+            return pc.setLocalDescription(offer).then(function () { return offer; });
+          }).then(function (offer) {
+            sendSignal("offer", offer);
+          }).catch(function () {
+            window.plToast("Kein Zugriff aufs Mikrofon.");
+            sendSignal("hangup");
+            resetCallUI();
+          });
+        });
+    }
+
+    function showIncoming(callerName) {
+      callState = "incoming";
+      callOverlay.hidden = false;
+      document.querySelector(".pl-call-name").textContent = callerName || document.querySelector(".pl-call-name").textContent;
+      callStatusEl.textContent = "Ruft dich an …";
+      incomingActions.hidden = false;
+      if (window.plSound) window.plSound.play("receive");
+    }
+
+    function acceptCall() {
+      if (!pendingOffer) { window.plToast("Verbindung noch nicht da, kurz warten."); return; }
+      incomingActions.hidden = true;
+      callStatusEl.textContent = "Verbinde …";
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+        localStream = stream;
+        pc = newPeerConnection();
+        stream.getTracks().forEach(function (t) { pc.addTrack(t, stream); });
+        return pc.setRemoteDescription(new RTCSessionDescription(pendingOffer));
+      }).then(function () {
+        flushPendingIce();
+        return pc.createAnswer();
+      }).then(function (answer) {
+        return pc.setLocalDescription(answer).then(function () { return answer; });
+      }).then(function (answer) {
+        sendSignal("answer", answer);
+      }).catch(function () {
+        window.plToast("Kein Zugriff aufs Mikrofon.");
+        sendSignal("decline");
+        resetCallUI();
+      });
+    }
+
+    function declineCall() { sendSignal("decline"); resetCallUI(); }
+    function hangupCall() { sendSignal("hangup"); resetCallUI(); }
+
+    function flushPendingIce() {
+      if (!pc || !pc.remoteDescription) return;
+      pendingIce.forEach(function (c) { pc.addIceCandidate(new RTCIceCandidate(c)).catch(function () {}); });
+      pendingIce = [];
+    }
+
+    function handleSignal(sig) {
+      if (sig.type === "offer") {
+        pendingOffer = sig.data;
+      } else if (sig.type === "answer") {
+        if (pc) {
+          pc.setRemoteDescription(new RTCSessionDescription(sig.data)).then(flushPendingIce).catch(function () {});
+          callStatusEl.textContent = "Verbinde …";
+        }
+      } else if (sig.type === "ice") {
+        if (pc && pc.remoteDescription) pc.addIceCandidate(new RTCIceCandidate(sig.data)).catch(function () {});
+        else pendingIce.push(sig.data);
+      } else if (sig.type === "decline") {
+        window.plToast("Anruf abgelehnt.");
+        resetCallUI();
+      } else if (sig.type === "hangup") {
+        window.plToast("Anruf beendet.");
+        resetCallUI();
+      }
+    }
+
+    function pollCallState() {
+      fetch("/api/pl/chats/" + CHAT.id + "/call/state?after=" + lastSignalId)
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          if (!j.ok) return;
+          if (j.active && !j.is_caller && callState === "idle") showIncoming(j.caller_name);
+          if (!j.active && callState !== "idle") { resetCallUI(); }
+          (j.signals || []).forEach(function (sig) {
+            lastSignalId = Math.max(lastSignalId, sig.id);
+            handleSignal(sig);
+          });
+        })
+        .catch(function () {});
+    }
+
+    callBtn.addEventListener("click", startCall);
+    acceptBtn.addEventListener("click", acceptCall);
+    declineBtn.addEventListener("click", declineCall);
+    hangupBtn.addEventListener("click", hangupCall);
+    muteBtn.addEventListener("click", function () {
+      if (!localStream) return;
+      var track = localStream.getAudioTracks()[0];
+      if (!track) return;
+      track.enabled = !track.enabled;
+      muteBtn.classList.toggle("is-muted", !track.enabled);
+    });
+
+    callStatePolling = setInterval(pollCallState, 1500);
+    pollCallState();
+  }
 })();

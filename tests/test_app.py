@@ -21,6 +21,8 @@ def client():
     flask_app.config["PROFILE_PIC_FOLDER"] = tempfile.mkdtemp()
     flask_app.config["SOUND_FOLDER"] = tempfile.mkdtemp()
     app_module._PL_RATE.clear()  # module-level rate-limit state leaks across tests otherwise
+    app_module._pl_typing.clear()
+    app_module._pl_calls.clear()
     with flask_app.app_context():
         db.create_all()
         yield flask_app.test_client()
@@ -442,6 +444,78 @@ def test_chat_page_shows_online_presence(client):
     bob.get("/")  # touches bob's last_seen
     body = client.get(f"/freunde/c/{cid}").data
     assert b"pl-chat-presence" in body and b"Online" in body
+
+
+def test_call_start_rings_the_other_member(client):
+    signup(client, "alice")
+    bob = make_user(client, "bob")
+    cid = _dm(client, "bob", bob)
+    assert client.post(f"/api/pl/chats/{cid}/call/start").get_json()["ok"] is True
+
+    j = bob.get(f"/api/pl/chats/{cid}/call/state").get_json()
+    assert j["active"] is True and j["caller_name"] == "alice" and j["is_caller"] is False
+    # the caller's own poll also sees the call, but as the caller
+    j2 = client.get(f"/api/pl/chats/{cid}/call/state").get_json()
+    assert j2["active"] is True and j2["is_caller"] is True
+
+
+def test_call_signal_relayed_but_not_to_sender(client):
+    signup(client, "alice")
+    bob = make_user(client, "bob")
+    cid = _dm(client, "bob", bob)
+    client.post(f"/api/pl/chats/{cid}/call/start")
+    client.post(f"/api/pl/chats/{cid}/call/signal", json={"type": "offer", "data": {"sdp": "fake-offer"}})
+
+    # bob sees alice's offer
+    j = bob.get(f"/api/pl/chats/{cid}/call/state").get_json()
+    assert len(j["signals"]) == 1 and j["signals"][0]["type"] == "offer" and j["signals"][0]["data"]["sdp"] == "fake-offer"
+    # alice never sees her own signal echoed back
+    j2 = client.get(f"/api/pl/chats/{cid}/call/state").get_json()
+    assert j2["signals"] == []
+
+    bob.post(f"/api/pl/chats/{cid}/call/signal", json={"type": "answer", "data": {"sdp": "fake-answer"}})
+    after = j["signals"][0]["id"]
+    j3 = client.get(f"/api/pl/chats/{cid}/call/state?after={after}").get_json()
+    assert len(j3["signals"]) == 1 and j3["signals"][0]["type"] == "answer"
+
+
+def test_call_hangup_clears_state_for_both(client):
+    signup(client, "alice")
+    bob = make_user(client, "bob")
+    cid = _dm(client, "bob", bob)
+    client.post(f"/api/pl/chats/{cid}/call/start")
+    client.post(f"/api/pl/chats/{cid}/call/signal", json={"type": "hangup"})
+    assert client.get(f"/api/pl/chats/{cid}/call/state").get_json()["active"] is False
+    assert bob.get(f"/api/pl/chats/{cid}/call/state").get_json()["active"] is False
+
+
+def test_call_not_supported_in_groups(client):
+    signup(client, "alice")
+    bob = make_user(client, "bob")
+    client.post("/api/pl/follow/bob"); bob.post("/api/pl/follow/alice")
+    cid = client.post("/api/pl/chats/group", json={"name": "Gruppe", "members": ["bob"]}).get_json()["chat_id"]
+    r = client.post(f"/api/pl/chats/{cid}/call/start")
+    assert r.status_code == 400 and r.get_json()["error"] == "group_calls_not_supported"
+
+
+def test_call_cannot_start_while_one_is_active(client):
+    signup(client, "alice")
+    bob = make_user(client, "bob")
+    cid = _dm(client, "bob", bob)
+    client.post(f"/api/pl/chats/{cid}/call/start")
+    r = bob.post(f"/api/pl/chats/{cid}/call/start")
+    assert r.status_code == 409 and r.get_json()["error"] == "already_in_call"
+
+
+def test_call_signal_without_active_call(client):
+    signup(client, "alice")
+    bob = make_user(client, "bob")
+    cid = _dm(client, "bob", bob)
+    # a stray offer with nothing ringing is a real error ...
+    r = client.post(f"/api/pl/chats/{cid}/call/signal", json={"type": "offer"})
+    assert r.status_code == 404
+    # ... but hangup/decline are idempotent no-ops, never an error
+    assert client.post(f"/api/pl/chats/{cid}/call/signal", json={"type": "hangup"}).get_json()["ok"] is True
 
 
 def test_non_member_cannot_read_chat(client):

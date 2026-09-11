@@ -2922,6 +2922,96 @@ def api_pl_typing_list(chat_id):
     return jsonify({"ok": True, "typing": names})
 
 
+# ---------------------------------------------------------------------
+# 1:1 voice calls: WebRTC peer-to-peer, this backend is only the
+# signaling relay (offer/answer/ICE candidates get handed through it so
+# the two browsers can find each other) -- once connected, audio flows
+# directly browser-to-browser, never through this server. In-memory only
+# (like _pl_typing above): a call's signaling exchange is only ever
+# relevant while it's actively being set up, nothing worth persisting.
+# STUN-only (see pinklemon-chat.js's ICE server list) -- works for most
+# networks but has no TURN relay fallback for strict/symmetric NATs.
+# Group calls are out of scope for now: WebRTC mesh/SFU for 3+ people is
+# a materially bigger problem than a single peer connection.
+# ---------------------------------------------------------------------
+_pl_calls = {}  # chat_id -> {"caller_id": int, "started_at": datetime, "signals": [...]}
+_pl_call_signal_seq = {"n": 0}
+_PL_CALL_RING_TIMEOUT_SECONDS = 45
+
+
+def _pl_call_prune(chat_id):
+    call = _pl_calls.get(chat_id)
+    if call is None:
+        return None
+    if (datetime.now(timezone.utc) - call["started_at"]).total_seconds() > _PL_CALL_RING_TIMEOUT_SECONDS and not call.get("accepted"):
+        del _pl_calls[chat_id]
+        return None
+    return call
+
+
+@app.route("/api/pl/chats/<int:chat_id>/call/start", methods=["POST"])
+def api_pl_call_start(chat_id):
+    me = current_user()
+    chat = _pl_require_chat_member(chat_id, me)
+    if chat is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    if chat.is_group:
+        return jsonify({"ok": False, "error": "group_calls_not_supported"}), 400
+    if _pl_call_prune(chat_id) is not None:
+        return jsonify({"ok": False, "error": "already_in_call"}), 409
+    _pl_calls[chat_id] = {
+        "caller_id": me.id, "caller_name": pl_display_name(me),
+        "started_at": datetime.now(timezone.utc), "accepted": False, "signals": [],
+    }
+    return jsonify({"ok": True})
+
+
+@app.route("/api/pl/chats/<int:chat_id>/call/signal", methods=["POST"])
+def api_pl_call_signal(chat_id):
+    """type: 'offer' | 'answer' | 'ice' | 'decline' | 'hangup'. `data` is
+    forwarded to the other member verbatim (SDP or ICE candidate JSON)."""
+    me = current_user()
+    chat = _pl_require_chat_member(chat_id, me)
+    if chat is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    call = _pl_call_prune(chat_id)
+    payload = request.get_json(silent=True) or {}
+    sig_type = payload.get("type")
+    if sig_type not in ("offer", "answer", "ice", "decline", "hangup"):
+        return jsonify({"ok": False, "error": "bad_type"}), 400
+    if call is None:
+        if sig_type not in ("hangup", "decline"):
+            return jsonify({"ok": False, "error": "no_call"}), 404
+        return jsonify({"ok": True})
+    if sig_type == "answer":
+        call["accepted"] = True
+    _pl_call_signal_seq["n"] += 1
+    call["signals"].append({
+        "id": _pl_call_signal_seq["n"], "from_id": me.id, "type": sig_type,
+        "data": payload.get("data"),
+    })
+    if sig_type in ("hangup", "decline"):
+        del _pl_calls[chat_id]
+    return jsonify({"ok": True})
+
+
+@app.route("/api/pl/chats/<int:chat_id>/call/state")
+def api_pl_call_state(chat_id):
+    me = current_user()
+    chat = _pl_require_chat_member(chat_id, me)
+    if chat is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    call = _pl_call_prune(chat_id)
+    after = request.args.get("after", type=int) or 0
+    if call is None:
+        return jsonify({"ok": True, "active": False, "signals": []})
+    signals = [s for s in call["signals"] if s["id"] > after and s["from_id"] != me.id]
+    return jsonify({
+        "ok": True, "active": True, "caller_id": call["caller_id"], "caller_name": call["caller_name"],
+        "is_caller": call["caller_id"] == me.id, "signals": signals,
+    })
+
+
 @app.route("/assistant")
 def assistant_page():
     return render_template("assistant.html", user=current_user())
