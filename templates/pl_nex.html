@@ -96,6 +96,28 @@
   .nx-media { display: block; max-width: 100%; width: 420px; margin: 10px 0 4px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.10); }
   audio.nx-media { width: 320px; height: 40px; border-radius: 999px; }
 
+  /* system confirmation after a /command, e.g. "Ok, ich heiße jetzt Tom." */
+  .nx-row.them .nx-bubble.nx-sysmsg {
+    display: inline-flex; align-items: center; gap: 8px;
+    color: #b4b4b4; font-size: 13.5px; font-style: italic;
+    background: rgba(255,255,255,0.05); border-radius: 14px; padding: 8px 14px;
+  }
+
+  /* "/" command palette above the composer */
+  .nx-slash-menu {
+    width: 100%; max-width: 768px; margin: 0 auto 8px;
+    background: #2f2f2f; border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 16px; padding: 6px; box-shadow: 0 14px 34px rgba(0,0,0,.4);
+  }
+  .nx-slash-row {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+    width: 100%; text-align: left; border: none; background: none;
+    padding: 9px 12px; border-radius: 10px;
+  }
+  .nx-slash-row:hover, .nx-slash-row.is-active { background: rgba(255,255,255,0.08); }
+  .nx-slash-cmd { font-size: 13.5px; font-weight: 700; color: #ececec; font-family: "Consolas","SF Mono",ui-monospace,monospace; }
+  .nx-slash-desc { font-size: 12px; color: #8e8e8e; }
+
   .nx-typing { display: inline-flex; gap: 5px; padding: 6px 0; }
   .nx-typing span { width: 7px; height: 7px; border-radius: 50%; background: #8e8e8e; animation: nxBlink 1.2s infinite ease-in-out; }
   .nx-typing span:nth-child(2) { animation-delay: .2s; }
@@ -162,7 +184,7 @@
 <div class="nx-chat">
   <div class="nx-top">
     <span class="nx-top-mark">{% include "partials/_pinklemon_logo.html" %}</span>
-    <div class="nx-top-name">Nex</div>
+    <div class="nx-top-name">{{ nex_name }}</div>
     <div class="nx-hist-wrap">
       <button class="nx-hist" id="nxHistBtn" aria-label="Chats" aria-haspopup="true">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/></svg>
@@ -184,19 +206,20 @@
   <div class="nx-msgs" id="nxMsgs">
     <div class="nx-empty" id="nxEmpty">
       <span class="nx-empty-mark">{% include "partials/_pinklemon_logo.html" %}</span>
-      <h2>Hello, I'm Nex</h2>
+      <h2>Hello, I'm {{ nex_name }}</h2>
       <p>Your personal friend &mdash; ask me anything, I know everything!</p>
     </div>
   </div>
 
   <div class="nx-compose">
+    <div class="nx-slash-menu" id="nxSlashMenu" hidden></div>
     <div class="nx-compose-inner">
-      <textarea id="nxInput" rows="1" maxlength="4000" placeholder="Nachricht an Nex"></textarea>
+      <textarea id="nxInput" rows="1" maxlength="4000" placeholder="Nachricht an {{ nex_name }} &middot; / f&uuml;r Befehle"></textarea>
       <button class="nx-send" id="nxSend" aria-label="Senden">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
       </button>
     </div>
-    <div class="nx-disclaimer">Nex kann Fehler machen. Wichtiges überprüfen.</div>
+    <div class="nx-disclaimer" id="nxDisclaimer">{{ nex_name }} kann Fehler machen. Wichtiges überprüfen.</div>
   </div>
 </div>
 {% endblock %}
@@ -204,7 +227,7 @@
 {% block scripts %}
 <script>
   window.PL_ME = {{ me_json | tojson }};
-  window.NEX = { projectType: {{ project_type | tojson }}, character: {{ chat_character | tojson }} };
+  window.NEX = { projectType: {{ project_type | tojson }}, character: {{ chat_character | tojson }}, name: {{ nex_name | tojson }} };
 </script>
 <script src="{{ url_for('static', filename='js/pinklemon-nex.js') }}"></script>
 {% endblock %}

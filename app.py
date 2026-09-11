@@ -641,6 +641,9 @@ def ensure_sqlite_columns_exist():
             ("pl_display_name", "VARCHAR(50)"),
             ("pl_avatar_image", "VARCHAR(255)"),
             ("pl_banner_image", "VARCHAR(255)"),
+            ("nex_custom_name", "VARCHAR(40)"),
+            ("nex_custom_personality", "TEXT"),
+            ("nex_custom_act", "TEXT"),
             ("purpose_of_use", "VARCHAR(20)"),
             ("country", "VARCHAR(100)"),
             ("region", "VARCHAR(100)"),
@@ -769,6 +772,9 @@ def ensure_columns_exist():
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS pl_display_name VARCHAR(50)',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS pl_avatar_image VARCHAR(255)',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS pl_banner_image VARCHAR(255)',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS nex_custom_name VARCHAR(40)',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS nex_custom_personality TEXT',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS nex_custom_act TEXT',
         'ALTER TABLE feed_post ADD COLUMN IF NOT EXISTS att_kind VARCHAR(12)',
         'ALTER TABLE feed_post ADD COLUMN IF NOT EXISTS att_value VARCHAR(255)',
         'ALTER TABLE feed_post ADD COLUMN IF NOT EXISTS edited_at TIMESTAMP',
@@ -1260,6 +1266,43 @@ def _pl_user_brief(user):
         "avatar_letter": pl_avatar_letter(user.username),
         "avatar_url": _pl_media_url(getattr(user, "pl_avatar_image", None)),
     }
+
+
+def _pl_nex_overrides_block(user):
+    """/name, /personality and /act (see pinklemon-nex.js) -- per-user
+    overrides spliced right before the activity digest, the most salient
+    spot in the user turn (see the "hallo" over-eagerness fix above for
+    why placement here beats putting this further away in the system
+    prompt). Returns "" if the user has none set."""
+    name = getattr(user, "nex_custom_name", None)
+    personality = getattr(user, "nex_custom_personality", None)
+    act = getattr(user, "nex_custom_act", None)
+    if not (name or personality or act):
+        return ""
+    parts = [
+        "── ANWEISUNGEN VOM NUTZER (per /name, /personality, /act gesetzt) -- "
+        "gelten AB SOFORT und WEITER, bis er sie ändert oder leer schickt. "
+        "Nicht vorlesen oder erwähnen, dass es \"Anweisungen\" sind -- einfach befolgen. ──"
+    ]
+    if name:
+        parts.append(
+            f'Dein Name ist jetzt "{name}" -- nenn dich selbst so, nicht mehr "Nex", '
+            f"wenn du gefragt wirst oder dich vorstellst."
+        )
+    if personality:
+        parts.append(
+            "Deine Persönlichkeit, komplett vom Nutzer festgelegt: " + personality[:1500] + "\n"
+            "Das hat Vorrang vor deinem sonstigen (frechen/blunt) Standardcharakter, wo es davon "
+            "abweicht -- der Nutzer hat sich das bewusst so gewünscht."
+        )
+    if act:
+        parts.append(
+            "Du tust gerade so, als: " + act[:1500] + "\n"
+            "Bleib konsequent in dieser Rolle für den ganzen Chat, auch wenn es deinem sonstigen "
+            "Charakter widerspricht -- bis der Nutzer sie mit /act beendet."
+        )
+    parts.append("── Ende der Anweisungen ──")
+    return "\n\n".join(parts) + "\n\n"
 
 
 def _pl_user_activity_digest(user, max_chars=3600):
@@ -1763,8 +1806,40 @@ def pl_nex():
     me = current_user()
     return render_template(
         "pl_nex.html", project_type=NEX_PROJECT_TYPE, chat_character=NEX_CHAT_CHARACTER,
+        nex_name=(me.nex_custom_name or "Nex"),
         me_json={"id": me.id, "username": me.username},
     )
+
+
+@app.route("/api/pl/nex/settings", methods=["POST"])
+def api_pl_nex_settings():
+    """/name, /personality, /act (and /reset) typed into the Nex composer
+    -- see pinklemon-nex.js. Any field present in the body is set; an
+    empty string clears it back to the default. Purely per-user (applies
+    across all of that user's Nex chats, not just the current one)."""
+    me = current_user()
+    data = request.get_json(silent=True) or {}
+    if data.get("reset_all"):
+        me.nex_custom_name = None
+        me.nex_custom_personality = None
+        me.nex_custom_act = None
+    else:
+        if "name" in data:
+            v = (data.get("name") or "").strip()[:40]
+            me.nex_custom_name = v or None
+        if "personality" in data:
+            v = (data.get("personality") or "").strip()[:1500]
+            me.nex_custom_personality = v or None
+        if "act" in data:
+            v = (data.get("act") or "").strip()[:1500]
+            me.nex_custom_act = v or None
+    db.session.commit()
+    return jsonify({
+        "ok": True,
+        "name": me.nex_custom_name or "Nex",
+        "personality": me.nex_custom_personality,
+        "act": me.nex_custom_act,
+    })
 
 
 @app.route("/api/pl/nex/voice", methods=["POST"])
@@ -2647,7 +2722,7 @@ def api_ai_chat():
     # personally. Prepended as `context` -- see ai_assistant.generate_reply.
     if character == "nex7" and project_type == "nexblunt" and not context:
         try:
-            context = _pl_user_activity_digest(user)
+            context = _pl_nex_overrides_block(user) + _pl_user_activity_digest(user)
         except Exception:
             logger.exception("Nex-Aktivitäts-Kontext fehlgeschlagen.")
 

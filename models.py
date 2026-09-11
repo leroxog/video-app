@@ -69,6 +69,11 @@ class User(db.Model):
     pl_display_name = db.Column(db.String(50), nullable=True)
     pl_avatar_image = db.Column(db.String(255), nullable=True)
     pl_banner_image = db.Column(db.String(255), nullable=True)
+    # Nex slash commands (/name, /personality, /act) -- per-user overrides
+    # spliced into Nex's prompt context, see _pl_nex_overrides_block.
+    nex_custom_name = db.Column(db.String(40), nullable=True)
+    nex_custom_personality = db.Column(db.Text, nullable=True)
+    nex_custom_act = db.Column(db.Text, nullable=True)
     # city is free-text (e.g. "München-Pasing"). is_company/company_name/
     # company_address are legacy: the last real consumer (Chepal's company
     # offer-management, and briefly Mini Job's company job-postings) was

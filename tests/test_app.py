@@ -351,6 +351,48 @@ def test_nex_sees_the_users_activity(client, monkeypatch):
     assert "Aktivität von" in seen["user"]
 
 
+def test_nex_settings_set_and_clear(client):
+    signup(client, "alice")
+    r = client.post("/api/pl/nex/settings", json={
+        "name": "Tom", "personality": "sehr freundlich und hilfsbereit", "act": "ein Ritter im Mittelalter",
+    }).get_json()
+    assert r == {"ok": True, "name": "Tom", "personality": "sehr freundlich und hilfsbereit",
+                 "act": "ein Ritter im Mittelalter"}
+    # empty string clears a single field back to default
+    r2 = client.post("/api/pl/nex/settings", json={"act": ""}).get_json()
+    assert r2["name"] == "Tom" and r2["act"] is None
+    # reset_all clears everything at once
+    r3 = client.post("/api/pl/nex/settings", json={"reset_all": True}).get_json()
+    assert r3 == {"ok": True, "name": "Nex", "personality": None, "act": None}
+
+
+def test_nex_page_reflects_custom_name(client):
+    signup(client, "alice")
+    assert b">Nex<" in client.get("/nex").data
+    client.post("/api/pl/nex/settings", json={"name": "Tom"})
+    body = client.get("/nex").data
+    assert b">Tom<" in body and b"Hello, I'm Tom" in body
+
+
+def test_nex_prompt_includes_slash_overrides(client, monkeypatch):
+    import ai_assistant
+    seen = {}
+    monkeypatch.setattr(ai_assistant, "_call_model_with_router",
+                        lambda messages, *a, **k: (seen.setdefault("user", messages[-1]["content"]), None))
+    signup(client, "alice")
+    client.post("/api/pl/nex/settings", json={
+        "name": "Tom", "personality": "extrem hoeflich", "act": "ein Pirat",
+    })
+    client.post("/api/ai/chat", json={"message": "hi", "character": "nex7", "project_type": "nexblunt"})
+    import time
+    for _ in range(40):
+        if "user" in seen:
+            break
+        time.sleep(0.05)
+    assert 'Tom' in seen["user"] and "extrem hoeflich" in seen["user"] and "ein Pirat" in seen["user"]
+    assert "ANWEISUNGEN VOM NUTZER" in seen["user"]
+
+
 def test_for_you_feed_ranks_followed_authors_up(client):
     signup(client, "alice")
     bob = make_user(client, "bob")

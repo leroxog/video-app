@@ -1,7 +1,8 @@
 (function () {
   "use strict";
 
-  var NEX = window.NEX || { projectType: "nexblunt", character: "nex7" };
+  var NEX = window.NEX || { projectType: "nexblunt", character: "nex7", name: "Nex" };
+  if (!NEX.name) NEX.name = "Nex";
   var msgsEl = document.getElementById("nxMsgs");
   var emptyEl = document.getElementById("nxEmpty");
   var input = document.getElementById("nxInput");
@@ -10,6 +11,7 @@
   var histBtn = document.getElementById("nxHistBtn");
   var histMenu = document.getElementById("nxHistMenu");
   var histList = document.getElementById("nxHistList");
+  var slashMenu = document.getElementById("nxSlashMenu");
 
   var chatId = null;
   var busy = false;
@@ -30,7 +32,11 @@
   };
   function greeting() {
     var lang = (navigator.language || "en").slice(0, 2).toLowerCase();
-    return GREET[lang] || GREET.en;
+    var g = GREET[lang] || GREET.en;
+    if (NEX.name === "Nex") return g;
+    // every GREET entry spells the name as the literal Latin token "Nex",
+    // even the non-Latin-script ones -- swap it for a custom /name.
+    return [g[0].replace(/Nex/g, NEX.name), g[1]];
   }
   (function applyGreeting() {
     if (!emptyEl) return;
@@ -121,7 +127,7 @@
   function syncSend() {
     sendBtn.disabled = busy || !input.value.trim();
   }
-  input.addEventListener("input", function () { autoGrow(); syncSend(); });
+  input.addEventListener("input", function () { autoGrow(); syncSend(); renderSlashMenu(); });
   syncSend();
 
   function setBusy(v) {
@@ -129,11 +135,90 @@
     syncSend();
   }
 
+  // ---------------- /name, /personality, /act slash commands ----------------
+  var SLASH_COMMANDS = [
+    { cmd: "/name", desc: "Nennt sich ab jetzt so, z.B. „Tom“" },
+    { cmd: "/personality", desc: "Komplett eigene Persönlichkeit festlegen" },
+    { cmd: "/act", desc: "Tut für diesen Chat so, als ob …" },
+    { cmd: "/reset", desc: "Name, Persönlichkeit & Rolle zurücksetzen" },
+  ];
+  var CMD_RE = /^\/(name|personality|act|reset)\b[ \t]*([\s\S]*)$/i;
+
+  function renderSlashMenu() {
+    var v = input.value;
+    if (!/^\/[a-zA-Z]*$/.test(v)) { slashMenu.hidden = true; return; }
+    var matches = SLASH_COMMANDS.filter(function (c) { return c.cmd.indexOf(v.toLowerCase()) === 0; });
+    if (!matches.length) { slashMenu.hidden = true; return; }
+    slashMenu.innerHTML = matches.map(function (c, i) {
+      return '<button type="button" class="nx-slash-row' + (i === 0 ? " is-active" : "") + '" data-cmd="' + c.cmd + '">'
+        + '<span class="nx-slash-cmd">' + c.cmd + '</span><span class="nx-slash-desc">' + esc(c.desc) + '</span></button>';
+    }).join("");
+    slashMenu.hidden = false;
+  }
+  function pickSlashCmd(cmd) {
+    input.value = cmd + (cmd === "/reset" ? "" : " ");
+    slashMenu.hidden = true;
+    autoGrow(); syncSend();
+    input.focus();
+  }
+  slashMenu.addEventListener("click", function (e) {
+    var row = e.target.closest("[data-cmd]");
+    if (row) pickSlashCmd(row.dataset.cmd);
+  });
+  document.addEventListener("click", function (e) {
+    if (!slashMenu.hidden && !e.target.closest(".nx-compose")) slashMenu.hidden = true;
+  });
+
+  function setNexName(name) {
+    NEX.name = name || "Nex";
+    document.querySelectorAll(".nx-top-name").forEach(function (el) { el.textContent = NEX.name; });
+    document.title = NEX.name + " · HEXAGONUM";
+    input.placeholder = "Nachricht an " + NEX.name + " · / für Befehle";
+    var disc = document.getElementById("nxDisclaimer");
+    if (disc) disc.textContent = NEX.name + " kann Fehler machen. Wichtiges überprüfen.";
+    if (emptyEl) { var g = greeting(); var h = emptyEl.querySelector("h2"); if (h) h.textContent = g[0]; }
+  }
+
+  function addSysMsg(text) {
+    var b = addMsg("assistant", "");
+    b.className = "nx-bubble nx-sysmsg";
+    b.textContent = text;
+  }
+
+  function runSlashCommand(kind, arg) {
+    addMsg("user", "/" + kind + (arg ? " " + arg : ""));
+    var payload = kind === "reset" ? { reset_all: true } : (function () {
+      var p = {}; p[kind] = arg; return p;
+    })();
+    fetch("/api/pl/nex/settings", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (!j.ok) { addSysMsg("Ging gerade nicht. Nochmal versuchen?"); return; }
+        if (kind === "name") setNexName(j.name);
+        if (kind === "reset") setNexName(j.name);
+        if (kind === "name") addSysMsg(arg ? "Ok, ich heiße jetzt „" + j.name + "“." : "Name zurückgesetzt auf Nex.");
+        else if (kind === "personality") addSysMsg(arg ? "Persönlichkeit gespeichert." : "Persönlichkeit zurückgesetzt.");
+        else if (kind === "act") addSysMsg(arg ? "Ok, ich bin jetzt in der Rolle." : "Rolle beendet.");
+        else if (kind === "reset") addSysMsg("Alles zurückgesetzt.");
+        if (window.plSound) window.plSound.play("receive");
+      })
+      .catch(function () { addSysMsg("Verbindungsfehler."); });
+  }
+
   function send() {
     var text = input.value.trim();
     if (!text || busy) return;
+    var m = text.match(CMD_RE);
+    if (m) {
+      input.value = ""; autoGrow(); syncSend(); slashMenu.hidden = true;
+      runSlashCommand(m[1].toLowerCase(), m[2].trim());
+      return;
+    }
     input.value = "";
     autoGrow();
+    slashMenu.hidden = true;
     addMsg("user", text);
     setBusy(true);
     showTyping();
@@ -174,7 +259,15 @@
 
   sendBtn.addEventListener("click", send);
   input.addEventListener("keydown", function (e) {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
+    if (e.key === "Escape" && !slashMenu.hidden) { slashMenu.hidden = true; return; }
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      if (!slashMenu.hidden) {
+        var active = slashMenu.querySelector(".nx-slash-row");
+        if (active) { pickSlashCmd(active.dataset.cmd); return; }
+      }
+      send();
+    }
   });
 
   var EMPTY_MARK = '<span class="nx-empty-mark"><svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" rx="20" fill="#2f2f2f"/><g fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M50 19 L78.6 35.5 L78.6 68.5 L50 85 L21.4 68.5 L21.4 35.5 Z"/><path d="M50 52 L50 19 M50 52 L78.6 35.5 M50 52 L78.6 68.5 M50 52 L50 85 M50 52 L21.4 68.5 M50 52 L21.4 35.5"/></g><g fill="#2f2f2f" stroke="#fff" stroke-width="3"><circle cx="50" cy="19" r="7.5"/><circle cx="78.6" cy="35.5" r="7.5"/><circle cx="78.6" cy="68.5" r="7.5"/><circle cx="50" cy="85" r="7.5"/><circle cx="21.4" cy="68.5" r="7.5"/><circle cx="21.4" cy="35.5" r="7.5"/></g><circle cx="50" cy="52" r="4.6" fill="#fff"/></svg></span>';
