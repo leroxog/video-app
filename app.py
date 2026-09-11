@@ -1271,7 +1271,10 @@ def _pl_user_activity_digest(user, max_chars=3600):
     L = []
     name = pl_display_name(user)
     L.append(f"── Kontext: Aktivität von {name} (@{user.username}) auf HEXAGONUM. "
-             f"Intern, NICHT vorlesen. Nutze es, um konkret und persönlich zu antworten. ──")
+             f"Intern, NICHT vorlesen. Nur Hintergrundwissen -- in den allermeisten Antworten "
+             f"(z.B. auf ein einfaches 'hallo') erwähnst du NICHTS davon. Bring etwas Konkretes "
+             f"daraus nur, wenn der Nutzer direkt danach fragt oder es zu 100% zu seiner "
+             f"aktuellen Nachricht passt. ──")
 
     followers = Subscription.query.filter_by(channel_id=user.id).count()
     following_rows = Subscription.query.filter_by(subscriber_id=user.id).all()
