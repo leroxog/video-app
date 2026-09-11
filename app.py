@@ -244,6 +244,15 @@ app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
 # configures this env var actually gets gated.
 SITE_UNLOCK_CODE = os.environ.get("SITE_UNLOCK_CODE")
 
+# "Mit Google fortfahren" on the login/signup screen -- same reasoning as
+# SITE_UNLOCK_CODE above: real credentials only ever come from a Railway
+# env var, never hardcoded (this repo is public). Left unset, the button
+# still renders but pl_google_auth_start bounces back with a friendly
+# error instead of crashing, so local dev/tests need no Google setup at
+# all to run the rest of the app.
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
+
 UPLOAD_FOLDER = os.path.join(app.root_path, "static", "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
@@ -638,6 +647,7 @@ def ensure_sqlite_columns_exist():
         ],
         "studio_block": [("kind", "VARCHAR(20) NOT NULL DEFAULT 'normal'")],
         "user": [
+            ("google_sub", "VARCHAR(64)"),
             ("pl_display_name", "VARCHAR(50)"),
             ("pl_avatar_image", "VARCHAR(255)"),
             ("pl_banner_image", "VARCHAR(255)"),
@@ -769,6 +779,7 @@ def ensure_columns_exist():
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS bio VARCHAR(300)',
         'ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS age_rating INTEGER NOT NULL DEFAULT 0',
         'ALTER TABLE studio_project ADD COLUMN IF NOT EXISTS previous_web_code TEXT',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS google_sub VARCHAR(64)',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS pl_display_name VARCHAR(50)',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS pl_avatar_image VARCHAR(255)',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS pl_banner_image VARCHAR(255)',
@@ -1092,6 +1103,7 @@ def _make_session_permanent():
 
 _PUBLIC_ENDPOINTS = {
     "pl_login", "pl_signup", "static", "service_worker", "offline_page",
+    "pl_google_auth_start", "pl_google_auth_callback",
 }
 
 
@@ -1147,7 +1159,8 @@ def pl_login():
         session["auth_epoch"] = AUTH_EPOCH
         session.permanent = True
         return redirect(url_for("pl_home"))
-    return render_template("pl_auth.html", mode="login")
+    g_error = GOOGLE_AUTH_ERRORS.get(request.args.get("g_error"))
+    return render_template("pl_auth.html", mode="login", error=g_error)
 
 
 @app.route("/signup", methods=["GET", "POST"])
@@ -1185,6 +1198,127 @@ def pl_logout():
     session.pop("user_id", None)
     session.pop("auth_epoch", None)
     return redirect(url_for("pl_login"))
+
+
+GOOGLE_AUTH_ERRORS = {
+    "not_configured": "Google-Login ist auf diesem Server noch nicht eingerichtet.",
+    "state_mismatch": "Die Google-Anmeldung ist abgelaufen, bitte nochmal versuchen.",
+    "denied": "Google-Anmeldung abgebrochen.",
+    "failed": "Google-Anmeldung ist fehlgeschlagen, bitte nochmal versuchen.",
+}
+
+
+def _pl_username_from_google(seed):
+    """Turn a Google display name/email into a free HEXAGONUM username --
+    strip to the allowed charset, pad if too short, then suffix with
+    digits until it's actually free."""
+    base = re.sub(r"[^a-zA-Z0-9_.]", "", (seed.split("@")[0] if "@" in seed else seed))[:24]
+    if len(base) < 3:
+        base = (base + "user")[:24]
+    candidate = base
+    n = 0
+    while User.query.filter(db.func.lower(User.username) == candidate.lower()).first() is not None:
+        n += 1
+        candidate = f"{base}{n}"[:30]
+    return candidate
+
+
+@app.route("/auth/google")
+def pl_google_auth_start():
+    """Kicks off Google's OAuth authorization-code flow. GOOGLE_CLIENT_ID/
+    SECRET come only from Railway env vars (never hardcoded, see their
+    definitions above) -- if they're unset, this bounces back with a
+    friendly error instead of ever reaching Google."""
+    if current_user() is not None:
+        return redirect(url_for("pl_home"))
+    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+        return redirect(url_for("pl_login", g_error="not_configured"))
+    state = secrets.token_urlsafe(24)
+    session["google_oauth_state"] = state
+    params = {
+        "client_id": GOOGLE_CLIENT_ID,
+        "redirect_uri": url_for("pl_google_auth_callback", _external=True),
+        "response_type": "code",
+        "scope": "openid email profile",
+        "state": state,
+        "prompt": "select_account",
+    }
+    return redirect("https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode(params))
+
+
+@app.route("/auth/google/callback")
+def pl_google_auth_callback():
+    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+        return redirect(url_for("pl_login", g_error="not_configured"))
+    if request.args.get("error"):
+        return redirect(url_for("pl_login", g_error="denied"))
+    state = request.args.get("state")
+    expected_state = session.pop("google_oauth_state", None)
+    if not state or not expected_state or state != expected_state:
+        return redirect(url_for("pl_login", g_error="state_mismatch"))
+    code = request.args.get("code")
+    if not code:
+        return redirect(url_for("pl_login", g_error="failed"))
+
+    try:
+        token_res = requests.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "client_id": GOOGLE_CLIENT_ID,
+                "client_secret": GOOGLE_CLIENT_SECRET,
+                "code": code,
+                "redirect_uri": url_for("pl_google_auth_callback", _external=True),
+                "grant_type": "authorization_code",
+            },
+            timeout=10,
+        )
+        token_res.raise_for_status()
+        access_token = token_res.json()["access_token"]
+        # userinfo over the access_token rather than decoding the id_token
+        # ourselves -- the access_token only exists because Google already
+        # verified our client_secret during the code exchange above, so
+        # this call is just as trustworthy without needing a JWT library.
+        info_res = requests.get(
+            "https://openidconnect.googleapis.com/v1/userinfo",
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=10,
+        )
+        info_res.raise_for_status()
+        info = info_res.json()
+    except Exception:
+        logger.exception("Google-OAuth-Austausch fehlgeschlagen.")
+        return redirect(url_for("pl_login", g_error="failed"))
+
+    sub = info.get("sub")
+    email = (info.get("email") or "").strip().lower() or None
+    email_verified = bool(info.get("email_verified"))
+    name = (info.get("name") or info.get("given_name") or "").strip()
+    if not sub:
+        return redirect(url_for("pl_login", g_error="failed"))
+
+    user = User.query.filter_by(google_sub=sub).first()
+    if user is None and email and email_verified:
+        # Same verified email already has a password account -- link
+        # Google to it rather than creating a duplicate.
+        existing = User.query.filter(db.func.lower(User.email) == email).first()
+        if existing is not None:
+            existing.google_sub = sub
+            user = existing
+    if user is None:
+        user = User(
+            username=_pl_username_from_google(name or email or "user"),
+            purpose_of_use="private", google_sub=sub, email=email,
+        )
+        user.set_password(secrets.token_urlsafe(32))
+        if name:
+            user.pl_display_name = name[:50]
+        db.session.add(user)
+
+    db.session.commit()
+    session["user_id"] = user.id
+    session["auth_epoch"] = AUTH_EPOCH
+    session.permanent = True
+    return redirect(url_for("pl_home"))
 
 
 # ==========================================================================

@@ -759,6 +759,34 @@ img { max-width: 100%; display: block; }
 .pl-auth .pl-switch a { color: var(--pl-pink); font-weight: 700; }
 .pl-auth .pl-error { color: var(--pl-danger); font-size: 13px; font-weight: 600; min-height: 18px; text-align: center; }
 
+.pl-oauth-stack { width: 100%; display: flex; flex-direction: column; gap: 10px; }
+.pl-oauth-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--pl-surface-2);
+  color: var(--pl-text);
+  border: 1px solid var(--pl-border);
+  border-radius: 999px;
+  padding: 13px 18px;
+  font-size: 14.5px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: background 0.12s ease, transform 0.12s ease;
+}
+.pl-oauth-btn:active { transform: scale(0.98); }
+.pl-oauth-btn:hover { background: var(--pl-surface-3); }
+.pl-oauth-ic { flex-shrink: 0; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; }
+.pl-oauth-ic svg { display: block; }
+.pl-oauth-ic-hex svg { width: 20px; height: 20px; border-radius: 5px; }
+
+.pl-oauth-divider { width: 100%; display: flex; align-items: center; gap: 10px; color: var(--pl-text-faint); font-size: 11.5px; font-weight: 700; letter-spacing: 0.06em; }
+.pl-oauth-divider::before, .pl-oauth-divider::after { content: ""; flex: 1; height: 1px; background: var(--pl-border); }
+
+.pl-authform { width: 100%; margin-top: -6px; }
+.pl-authform[hidden] { display: none; }
+
 /* ---------- Simple "coming soon" ---------- */
 .pl-soon {
   flex: 1;

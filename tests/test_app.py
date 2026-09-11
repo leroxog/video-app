@@ -83,6 +83,100 @@ def test_api_returns_401_json_when_logged_out(client):
     assert r.status_code == 401 and r.get_json()["error"] == "not_logged_in"
 
 
+# ---------------- google login ----------------
+
+class _FakeGoogleResp:
+    def __init__(self, data, status=200):
+        self._data = data
+        self.status_code = status
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise Exception("http error")
+
+    def json(self):
+        return self._data
+
+
+def _mock_google(monkeypatch, userinfo):
+    monkeypatch.setattr(app_module, "GOOGLE_CLIENT_ID", "test-client-id")
+    monkeypatch.setattr(app_module, "GOOGLE_CLIENT_SECRET", "test-client-secret")
+    monkeypatch.setattr(app_module.requests, "post", lambda *a, **k: _FakeGoogleResp({"access_token": "tok123"}))
+    monkeypatch.setattr(app_module.requests, "get", lambda *a, **k: _FakeGoogleResp(userinfo))
+
+
+def _start_google_flow(client):
+    r = client.get("/auth/google", follow_redirects=False)
+    assert r.status_code == 302 and "accounts.google.com" in r.headers["Location"]
+    with client.session_transaction() as sess:
+        return sess["google_oauth_state"]
+
+
+def test_google_auth_start_without_config_redirects_with_error(client):
+    r = client.get("/auth/google", follow_redirects=False)
+    assert r.status_code == 302
+    assert "/login" in r.headers["Location"] and "g_error=not_configured" in r.headers["Location"]
+
+
+def test_google_auth_start_redirects_to_google_when_configured(client, monkeypatch):
+    monkeypatch.setattr(app_module, "GOOGLE_CLIENT_ID", "test-client-id")
+    monkeypatch.setattr(app_module, "GOOGLE_CLIENT_SECRET", "test-client-secret")
+    state = _start_google_flow(client)
+    assert state
+
+
+def test_google_auth_callback_creates_new_user(client, monkeypatch):
+    _mock_google(monkeypatch, {
+        "sub": "google-sub-1", "email": "newperson@example.com",
+        "email_verified": True, "name": "New Person",
+    })
+    state = _start_google_flow(client)
+    r = client.get(f"/auth/google/callback?state={state}&code=abc", follow_redirects=False)
+    assert r.status_code == 302 and r.headers["Location"].endswith("/")
+    with flask_app.app_context():
+        user = User.query.filter_by(google_sub="google-sub-1").first()
+        assert user is not None and user.email == "newperson@example.com"
+    assert client.get("/").status_code == 200
+
+
+def test_google_auth_callback_logs_in_returning_user(client, monkeypatch):
+    _mock_google(monkeypatch, {"sub": "google-sub-2", "email": "x@example.com", "email_verified": True})
+    state = _start_google_flow(client)
+    client.get(f"/auth/google/callback?state={state}&code=abc")
+    client.get("/logout")
+
+    state2 = _start_google_flow(client)
+    client.get(f"/auth/google/callback?state={state2}&code=abc")
+    assert client.get("/").status_code == 200
+    with flask_app.app_context():
+        assert User.query.filter_by(google_sub="google-sub-2").count() == 1
+
+
+def test_google_auth_callback_links_existing_password_account_by_email(client, monkeypatch):
+    signup(client, "bob")
+    with flask_app.app_context():
+        u = User.query.filter_by(username="bob").first()
+        u.email = "bob@example.com"
+        db.session.commit()
+    client.get("/logout")
+
+    _mock_google(monkeypatch, {"sub": "google-sub-3", "email": "bob@example.com", "email_verified": True})
+    state = _start_google_flow(client)
+    client.get(f"/auth/google/callback?state={state}&code=abc")
+
+    with flask_app.app_context():
+        assert User.query.count() == 1
+        assert User.query.filter_by(username="bob").first().google_sub == "google-sub-3"
+
+
+def test_google_auth_callback_rejects_bad_state(client, monkeypatch):
+    _mock_google(monkeypatch, {"sub": "google-sub-4", "email": "y@example.com", "email_verified": True})
+    _start_google_flow(client)
+    r = client.get("/auth/google/callback?state=wrong&code=abc", follow_redirects=False)
+    assert r.status_code == 302 and "g_error=state_mismatch" in r.headers["Location"]
+    assert client.get("/", follow_redirects=False).status_code == 302
+
+
 # ---------------- feed ----------------
 
 def test_create_post_appears_in_feed(client):

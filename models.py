@@ -12,6 +12,11 @@ class User(db.Model):
     username = db.Column(db.String(50), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
     email = db.Column(db.String(255), unique=True, nullable=True)
+    # Set only for accounts created/linked via "Mit Google fortfahren" --
+    # Google's stable per-user id (the id_token/userinfo "sub" claim), used
+    # to recognize a returning Google sign-in independent of the email
+    # address (which a user could change on Google's side).
+    google_sub = db.Column(db.String(64), unique=True, nullable=True)
     birthdate = db.Column(db.Date, nullable=True)
     gender = db.Column(db.String(20), nullable=True)
     purpose_of_use = db.Column(db.String(20), nullable=True)
