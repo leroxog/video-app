@@ -28,7 +28,7 @@
         </div>
         {% endif %}
 
-        <div class="pl-prof2-avatar" id="plProfAvatar">{% if avatar_url %}<img src="{{ avatar_url }}" alt="">{% else %}{{ avatar_letter }}{% endif %}</div>
+        <div class="pl-prof2-avatar" id="plProfAvatar" style="background:{{ pl_avatar_color(prof.username) }}">{% if avatar_url %}<img src="{{ avatar_url }}" alt="">{% else %}{{ avatar_letter }}{% endif %}</div>
         <h1 class="pl-prof2-name" id="plProfName">{{ display_name }}</h1>
         <div class="pl-prof2-handle">@{{ prof.username }}</div>
         {% if prof.bio %}<p class="pl-prof2-bio">{{ prof.bio }}</p>{% endif %}
@@ -84,7 +84,7 @@
         <div class="pl-editbanner" id="plEditBanner"{% if banner_url %} style="background-image:url('{{ banner_url }}')"{% endif %}>
             <button type="button" class="pl-editpic-btn" data-pick="banner">{{ plicon('plus', 18) }} Banner</button>
         </div>
-        <div class="pl-editavatar" id="plEditAvatar">
+        <div class="pl-editavatar" id="plEditAvatar" style="background:{{ pl_avatar_color(prof.username) }}">
             {% if avatar_url %}<img src="{{ avatar_url }}" alt="">{% else %}<span>{{ avatar_letter }}</span>{% endif %}
             <button type="button" class="pl-editpic-btn round" data-pick="avatar">{{ plicon('plus', 16) }}</button>
         </div>

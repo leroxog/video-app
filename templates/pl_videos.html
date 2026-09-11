@@ -73,7 +73,7 @@
     <button class="pl-vid-play" aria-label="Play/Pause">{{ plicon('videos', 66) }}</button>
     <button class="pl-vid-mute" aria-label="Ton">🔇</button>
     <div class="pl-vid-meta">
-      <span class="pl-vid-user"><span class="pl-avatar">{% if v.author.avatar_url %}<img src="{{ v.author.avatar_url }}" alt="">{% else %}{{ v.author.avatar_letter }}{% endif %}</span>{{ v.author.name }}</span>
+      <span class="pl-vid-user"><span class="pl-avatar" style="background:{{ pl_avatar_color(v.author.username) }}">{% if v.author.avatar_url %}<img src="{{ v.author.avatar_url }}" alt="">{% else %}{{ v.author.avatar_letter }}{% endif %}</span>{{ v.author.name }}</span>
       <div class="pl-vid-text">{{ v.heading }}{% if v.body %} — {{ v.body }}{% endif %}</div>
     </div>
     <div class="pl-vid-side">

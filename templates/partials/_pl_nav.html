@@ -8,7 +8,7 @@
     <a href="{{ url_for('pl_home') }}?compose=1" class="pl-nav-post" aria-label="Neuen Post erstellen">POSTEN</a>
     {% if user %}
     <a href="{{ url_for('pl_profile', username=user.username) }}" class="pl-nav-me" aria-label="Dein Profil">
-        <span class="pl-avatar">{% if user.pl_avatar_image %}<img src="{{ _pl_media_url(user.pl_avatar_image) }}" alt="">{% else %}{{ (user.username or '?')[0]|upper }}{% endif %}</span>
+        <span class="pl-avatar" style="background:{{ pl_avatar_color(user.username) }}">{% if user.pl_avatar_image %}<img src="{{ _pl_media_url(user.pl_avatar_image) }}" alt="">{% else %}{{ (user.username or '?')[0]|upper }}{% endif %}</span>
         <span class="pl-nav-me-lines">
             <span class="pl-nav-me-name">{{ user.pl_display_name or user.username }}</span>
             <span class="pl-nav-me-handle">@{{ user.username }}</span>

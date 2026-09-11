@@ -83,6 +83,22 @@ def test_api_returns_401_json_when_logged_out(client):
     assert r.status_code == 401 and r.get_json()["error"] == "not_logged_in"
 
 
+# ---------------- avatar colors ----------------
+
+def test_avatar_color_is_stable_and_in_palette(client):
+    assert app_module.pl_avatar_color("alice") == app_module.pl_avatar_color("alice")
+    assert app_module.pl_avatar_color("alice") in app_module.PL_AVATAR_PALETTE
+    # case-insensitive, so "Alice" and "alice" always match visually elsewhere too
+    assert app_module.pl_avatar_color("Alice") == app_module.pl_avatar_color("alice")
+
+
+def test_feed_avatar_uses_the_same_color_as_the_api(client):
+    signup(client, "alice")
+    client.post("/api/pl/posts", json={"heading": "hi"})
+    color = app_module.pl_avatar_color("alice")
+    assert f'background:{color}'.encode() in client.get("/").data
+
+
 # ---------------- google login ----------------
 
 class _FakeGoogleResp:

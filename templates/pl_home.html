@@ -34,7 +34,7 @@
     <div class="pl-sidecard-title">Wem folgen</div>
     {% for u in who %}
     <div class="pl-who-row" data-u="{{ u.username }}">
-        <a class="pl-avatar" href="/freunde/u/{{ u.username }}">{% if u.avatar_url %}<img src="{{ u.avatar_url }}" alt="">{% else %}{{ u.avatar_letter }}{% endif %}</a>
+        <a class="pl-avatar" href="/freunde/u/{{ u.username }}" style="background:{{ pl_avatar_color(u.username) }}">{% if u.avatar_url %}<img src="{{ u.avatar_url }}" alt="">{% else %}{{ u.avatar_letter }}{% endif %}</a>
         <a class="pl-who-name" href="/freunde/u/{{ u.username }}"><b>{{ u.name }}</b><span>@{{ u.username }}</span></a>
         <button type="button" class="pl-mini-btn pink" data-who-follow>Folgen</button>
     </div>

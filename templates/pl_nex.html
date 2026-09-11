@@ -198,7 +198,7 @@
     </button>
     {% if user %}
     <a class="nx-me" href="{{ url_for('pl_profile', username=user.username) }}" aria-label="Dein Profil">
-      <span class="pl-avatar">{% if user.pl_avatar_image %}<img src="{{ _pl_media_url(user.pl_avatar_image) }}" alt="">{% else %}{{ (user.username or '?')[0]|upper }}{% endif %}</span>
+      <span class="pl-avatar" style="background:{{ pl_avatar_color(user.username) }}">{% if user.pl_avatar_image %}<img src="{{ _pl_media_url(user.pl_avatar_image) }}" alt="">{% else %}{{ (user.username or '?')[0]|upper }}{% endif %}</span>
     </a>
     {% endif %}
   </div>

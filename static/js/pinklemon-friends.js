@@ -60,7 +60,7 @@
         if (!j.users.length) { userResults.innerHTML = '<div class="pl-empty" style="padding:18px 0;background:none;border:none;">Niemand gefunden.</div>'; return; }
         userResults.innerHTML = j.users.map(function (u) {
           return '<div class="pl-userrow" data-u="' + esc(u.username) + '">'
-            + '<a class="pl-avatar" href="/freunde/u/' + encodeURIComponent(u.username) + '">' + esc(u.avatar_letter) + '</a>'
+            + '<a class="pl-avatar" href="/freunde/u/' + encodeURIComponent(u.username) + '" style="background:' + esc(u.avatar_color) + ';">' + esc(u.avatar_letter) + '</a>'
             + '<a class="pl-userrow-name" href="/freunde/u/' + encodeURIComponent(u.username) + '">@' + esc(u.username) + '</a>'
             + (u.mutual
               ? '<button class="pl-mini-btn pink" data-dm>Schreiben</button>'
@@ -108,7 +108,7 @@
       return;
     }
     mutualList.innerHTML = list.map(function (u) {
-      return '<label class="pl-checkrow"><div class="pl-avatar">' + esc(u.avatar_letter) + '</div>'
+      return '<label class="pl-checkrow"><div class="pl-avatar" style="background:' + esc(u.avatar_color) + ';">' + esc(u.avatar_letter) + '</div>'
         + '<span class="pl-checkrow-name">@' + esc(u.username) + '</span>'
         + '<input type="checkbox" data-u="' + esc(u.username) + '"></label>';
     }).join("");

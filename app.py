@@ -1349,6 +1349,26 @@ def pl_avatar_letter(username):
     return (username or "?").lstrip("@")[:1].upper() or "?"
 
 
+# Default (no uploaded picture) avatars: a letter on a colour, one per
+# account. Picked once per identity via a stable hash of the same seed
+# used for the letter (username, or a group chat's title) -- every
+# existing account gets a colour the moment this ships (no backfill
+# needed), it never changes on its own, and it's identical across every
+# worker process (unlike Python's salted hash()).
+PL_AVATAR_PALETTE = [
+    "#ff6b6b", "#ff922b", "#f2994a", "#ffb703", "#94d82d",
+    "#20c997", "#12b886", "#22b8cf", "#4dabf7", "#5c7cfa",
+    "#748ffc", "#9775fa", "#cc5de8", "#da77f2", "#f06595",
+]
+
+
+@app.template_global()
+def pl_avatar_color(seed):
+    seed = (seed or "?").strip().lower() or "?"
+    idx = int(hashlib.md5(seed.encode("utf-8")).hexdigest(), 16) % len(PL_AVATAR_PALETTE)
+    return PL_AVATAR_PALETTE[idx]
+
+
 def pl_display_name(user):
     """The "Spitzname" -- what shows big everywhere. Falls back to the
     @username when unset."""
@@ -1417,6 +1437,7 @@ def _pl_user_brief(user):
         "name": pl_display_name(user),
         "avatar_letter": pl_avatar_letter(user.username),
         "avatar_url": _pl_media_url(getattr(user, "pl_avatar_image", None)),
+        "avatar_color": pl_avatar_color(user.username),
     }
 
 
@@ -2512,6 +2533,7 @@ def api_pl_user_search():
         {
             "username": u.username,
             "avatar_letter": pl_avatar_letter(u.username),
+            "avatar_color": pl_avatar_color(u.username),
             "i_follow": Subscription.query.filter_by(subscriber_id=me.id, channel_id=u.id).first() is not None,
             "mutual": _are_mutual(me.id, u.id),
         }
@@ -2549,7 +2571,7 @@ def api_pl_mutuals():
     mutual_ids = i_follow_ids & follow_me_ids
     users = User.query.filter(User.id.in_(mutual_ids)).order_by(User.username).all() if mutual_ids else []
     return jsonify({"ok": True, "users": [
-        {"username": u.username, "avatar_letter": pl_avatar_letter(u.username)} for u in users
+        {"username": u.username, "avatar_letter": pl_avatar_letter(u.username), "avatar_color": pl_avatar_color(u.username)} for u in users
     ]})
 
 

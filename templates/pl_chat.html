@@ -14,7 +14,7 @@
 <div class="pl-chat-screen">
     <div class="pl-chat-header">
         <button class="pl-chat-back" onclick="location.href='{{ url_for('pl_friends') }}'" aria-label="Zurück">&#8592;</button>
-        <div class="pl-avatar">{{ chat.avatar_letter }}</div>
+        <div class="pl-avatar" style="background:{{ pl_avatar_color(chat.other_username or chat.title) }}">{{ chat.avatar_letter }}</div>
         <div>
             <div class="pl-chat-header-title">{{ chat.title }}</div>
             <div class="pl-chat-header-sub">

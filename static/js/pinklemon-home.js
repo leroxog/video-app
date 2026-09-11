@@ -210,7 +210,7 @@
       : '<button type="button" data-cact="report" class="pl-danger">Melden</button>';
     return '<div class="pl-comment' + (c.parent_id ? " reply" : "") + (c.hidden ? " is-hidden" : "") + '" data-comment-id="' + c.id + '" data-mine="' + (c.is_mine ? "1" : "0") + '">'
       + '<div class="pl-comment-head">'
-      + '<div class="pl-avatar" style="width:22px;height:22px;font-size:10px;">'
+      + '<div class="pl-avatar" style="width:22px;height:22px;font-size:10px;background:' + esc(c.author.avatar_color) + ';">'
       +   (c.author.avatar_url ? '<img src="' + esc(c.author.avatar_url) + '" alt="">' : esc(c.author.avatar_letter))
       + '</div>'
       + '<span class="pl-comment-user">' + esc(c.author.name || c.author.username) + '</span>'
