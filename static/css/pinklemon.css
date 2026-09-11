@@ -259,7 +259,7 @@ img { max-width: 100%; display: block; }
 
 /* stats pill sits above the header on its own line visually */
 .pl-post { padding-top: 40px; }
-.pl-post-head { margin-top: 2px; }
+.pl-post-head { margin-top: 26px; }
 
 .pl-post-heading {
   font-size: 16px;
@@ -876,7 +876,14 @@ img { max-width: 100%; display: block; }
   border: 1px solid var(--pl-border); background: var(--pl-surface-2); color: var(--pl-text);
   border-radius: 999px; padding: 7px 14px; font-size: 12px; font-weight: 700;
 }
-.pl-mini-btn.pink { background: var(--pl-pink); color: #fff; border: none; }
+.pl-mini-btn.pink {
+  background: var(--pl-pink);
+  background: color-mix(in srgb, var(--pl-pink) 55%, transparent);
+  color: #fff;
+  border: 1px solid color-mix(in srgb, #fff 25%, transparent);
+  -webkit-backdrop-filter: var(--pl-blur);
+  backdrop-filter: var(--pl-blur);
+}
 .pl-mini-btn:active { transform: scale(0.95); }
 
 /* profile */
