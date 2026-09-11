@@ -527,10 +527,18 @@ def test_messages_list_every_mutual(client):
     client.post("/api/pl/follow/bob")
     bob.post("/api/pl/follow/alice")
     body = client.get("/freunde").data
-    assert b"bob" in body and b"Neuer Chat" in body
+    assert b"bob" in body and b"@bob" in body
     # the row opens (creates) the DM directly
     r = client.get("/freunde/dm/bob", follow_redirects=False)
     assert r.status_code == 302 and "/freunde/c/" in r.headers["Location"]
+    chat_id = int(r.headers["Location"].rsplit("/", 1)[-1])
+    # empty chat still shows the other person's @handle, not a generic label
+    assert b"@bob" in client.get("/freunde").data
+    # once someone writes, the preview becomes "Name: text" -- even for a
+    # 1:1 chat, and even when *you* wrote the last message
+    client.post(f"/api/pl/chats/{chat_id}/messages", json={"text": "hallo!"})
+    body2 = client.get("/freunde").data.decode("utf-8")
+    assert "alice: hallo!" in body2.lower()
 
 
 def test_profile_images_persist_in_db(client):

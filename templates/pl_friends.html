@@ -37,7 +37,7 @@
                 <span class="pl-chatrow-time">{{ c.last_ago }}</span>
             </div>
             <div class="pl-chatrow-preview">
-                {% if c.last_text %}{% if c.is_group and c.last_sender %}{{ c.last_sender }}: {% endif %}{{ c.last_text }}{% else %}Noch keine Nachrichten{% endif %}
+                {% if c.last_text %}{% if c.last_sender %}{{ c.last_sender }}: {% endif %}{{ c.last_text }}{% elif c.other_username %}@{{ c.other_username }}{% else %}Noch keine Nachrichten{% endif %}
             </div>
         </div>
         {% if c.unread %}<span class="pl-chatrow-badge">{{ c.unread }}</span>{% endif %}
@@ -51,7 +51,7 @@
             <div class="pl-chatrow-top">
                 <span class="pl-chatrow-title">{{ p.title }}</span>
             </div>
-            <div class="pl-chatrow-preview">Neuer Chat &mdash; sag Hallo</div>
+            <div class="pl-chatrow-preview">@{{ p.username }}</div>
         </div>
     </a>
     {% endfor %}

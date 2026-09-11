@@ -2237,6 +2237,7 @@ def _pl_chat_summary(chat, me):
         "title": title,
         "avatar_letter": pl_avatar_letter(title),
         "avatar_url": _pl_media_url(getattr(other, "pl_avatar_image", None)) if other else None,
+        "other_username": (other.username if other else None),
         "members": [pl_display_name(m.user) for m in chat.members],
         "last_text": (last.text[:80] if last else ""),
         "last_sender": (pl_display_name(last.sender) if last else ""),
