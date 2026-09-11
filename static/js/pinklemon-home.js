@@ -450,11 +450,18 @@
     $all(".pl-post-group").forEach(function (g) {
       var open = g.querySelector('.pl-post-menu:not([hidden]), .pl-repost-menu:not([hidden])');
       g.classList.toggle("menu-open", !!open);
-      if (open) {
-        var r = open.getBoundingClientRect();
-        // flip upward if the menu would collide with the bottom nav
-        open.classList.toggle("menu-up", r.bottom > window.innerHeight - 84 && r.top > 220);
-      }
+      if (!open) return;
+      // Measure the real content height (scrollHeight -- reliable now that
+      // it's unhidden and laid out) and the trigger button's own position,
+      // not the menu's own (possibly still-mid-flip) rect -- flip upward
+      // whenever it wouldn't otherwise fully fit below the trigger.
+      var trigger = open.classList.contains("pl-repost-menu")
+        ? g.querySelector("[data-repost-toggle]")
+        : g.querySelector("[data-kebab]");
+      var tr = (trigger || open).getBoundingClientRect();
+      var needed = open.scrollHeight || 260;
+      var spaceBelow = window.innerHeight - tr.bottom - 90; // stay clear of the bottom nav
+      open.classList.toggle("menu-up", spaceBelow < needed && tr.top > needed + 40);
     });
   }
 

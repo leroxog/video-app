@@ -1780,8 +1780,15 @@ body:has(.nx-app)::before { display: none; }
 /* ---- unclip the post kebab / share submenu ---- */
 .pl-feed, .pl-feed .pl-post-group, .pl-feed .pl-post { overflow: visible; }
 .pl-post-group.menu-open { position: relative; z-index: 60; }
-.pl-post-menu { z-index: 65; background: var(--pl-surface); }
-.pl-share-menu { max-height: none; }
+.pl-post-menu {
+  z-index: 65; background: var(--pl-surface);
+  /* safety net: if a menu is ever taller than fits on screen, it scrolls
+     inside itself instead of any ancestor silently cutting an item off */
+  max-height: min(360px, calc(100vh - 140px));
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.pl-share-menu { max-height: min(360px, calc(100vh - 140px)); }
 .pl-post-menu.menu-up { top: auto; bottom: 40px; }
 .pl-repost-menu.menu-up { top: auto; bottom: calc(100% + 6px); }
 
