@@ -1611,9 +1611,11 @@ body:has(.nx-app)::before { display: none; }
 .pl-orig-gone { color: var(--pl-text-faint); }
 .pl-orig-gone svg { width: 12px; height: 12px; }
 
-/* P.S. + comments: their own softer nested cards */
-.pl-ps-slot { margin-top: 8px; }
+/* P.S. + comments: their own softer nested cards -- kept close under the
+   post it belongs to (was floating 8px away, read as unrelated) */
+.pl-ps-slot { margin-top: 3px; }
 .pl-ps-card {
+  margin-top: 0;
   background: var(--pl-surface-2);
   background: color-mix(in srgb, var(--pl-surface-2) 85%, transparent);
   border: 1px solid var(--pl-border);
