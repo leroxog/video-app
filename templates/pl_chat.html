@@ -14,7 +14,7 @@
 {%- from "partials/_pl_icons.html" import plicon -%}
 <div class="pl-chat-screen">
     <div class="pl-chat-header">
-        <button class="pl-chat-back" onclick="location.href='{{ url_for('pl_friends') }}'" aria-label="Zurück">&#8592;</button>
+        <button class="pl-chat-back" id="plChatBackBtn" onclick="location.href='{{ url_for('pl_friends') }}'" aria-label="Zurück">&#8592;</button>
         <div class="pl-avatar" style="background:{{ pl_avatar_color(chat.other_username or chat.title) }}">{{ chat.avatar_letter }}</div>
         <div>
             <div class="pl-chat-header-title">{{ chat.title }}</div>
@@ -105,6 +105,14 @@
     window.plToast = function (m) { var t = document.getElementById("plToast"); if (!t) return; t.textContent = m; t.classList.add("show"); clearTimeout(window._plT); window._plT = setTimeout(function () { t.classList.remove("show"); }, 2200); };
     window.PL_CHAT = { id: {{ chat_id }}, isGroup: {{ 'true' if chat.is_group else 'false' }} };
     window.PL_ME = {{ me_json | tojson }};
+    // Embedded as a server channel's iframe (see pl_server.html) -- that
+    // page already has its own back navigation and channel-name header,
+    // so the standalone chat page's own "back to Nachrichten" button
+    // would just navigate the iframe itself and break the layout.
+    if (window.self !== window.top) {
+        var backBtn = document.getElementById("plChatBackBtn");
+        if (backBtn) backBtn.style.visibility = "hidden";
+    }
 </script>
 <script src="{{ url_for('static', filename='js/pl-sound.js') }}"></script>
 <script src="{{ url_for('static', filename='js/pl-attach.js') }}"></script>

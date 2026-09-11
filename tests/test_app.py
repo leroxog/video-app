@@ -518,6 +518,152 @@ def test_call_signal_without_active_call(client):
     assert client.post(f"/api/pl/chats/{cid}/call/signal", json={"type": "hangup"}).get_json()["ok"] is True
 
 
+# ---------------- servers: channels + roles/permissions ----------------
+
+def _make_server(client, name="Testserver"):
+    return client.post("/api/pl/servers", json={"name": name}).get_json()
+
+
+def test_create_server_sets_up_default_role_and_channel(client):
+    signup(client, "alice")
+    j = _make_server(client)
+    assert j["ok"] is True
+    sid = j["server"]["id"]
+    assert j["server"]["is_owner"] is True
+    assert sorted(j["server"]["my_permissions"]) == sorted(list(app_module.PL_SERVER_PERMISSIONS))
+
+    detail = client.get(f"/api/pl/servers/{sid}").get_json()
+    assert [c["name"] for c in detail["channels"]] == ["allgemein"]
+    assert len(detail["roles"]) == 1 and detail["roles"][0]["is_default"] is True
+    assert len(detail["members"]) == 1 and detail["members"][0]["username"] == "alice"
+
+    # the owner can immediately chat in the default channel via the normal message API
+    cid = detail["channels"][0]["id"]
+    r = client.post(f"/api/pl/chats/{cid}/messages", json={"text": "hallo server"})
+    assert r.get_json()["ok"] is True
+
+
+def test_server_channels_excluded_from_normal_chat_list(client):
+    signup(client, "alice")
+    _make_server(client)
+    assert client.get("/api/pl/chats").get_json()["chats"] == []
+
+
+def test_join_via_invite_code_grants_access_to_all_channels(client):
+    signup(client, "alice")
+    j = _make_server(client)
+    sid = j["server"]["id"]
+    code = j["server"]["invite_code"]
+    cid = client.get(f"/api/pl/servers/{sid}").get_json()["channels"][0]["id"]
+
+    bob = make_user(client, "bob")
+    jb = bob.post(f"/api/pl/servers/join/{code}").get_json()
+    assert jb["ok"] is True and jb["server"]["id"] == sid
+    assert bob.post(f"/api/pl/chats/{cid}/messages", json={"text": "hi"}).get_json()["ok"] is True
+
+    detail = client.get(f"/api/pl/servers/{sid}").get_json()
+    assert len(detail["members"]) == 2
+
+
+def test_new_channel_syncs_existing_members(client):
+    signup(client, "alice")
+    j = _make_server(client)
+    sid = j["server"]["id"]
+    code = j["server"]["invite_code"]
+    bob = make_user(client, "bob")
+    bob.post(f"/api/pl/servers/join/{code}")
+
+    r = client.post(f"/api/pl/servers/{sid}/channels", json={"name": "zweiter-kanal"})
+    assert r.get_json()["ok"] is True
+    new_cid = r.get_json()["channel"]["id"]
+    # bob (an existing member, not the creator) can post immediately
+    assert bob.post(f"/api/pl/chats/{new_cid}/messages", json={"text": "hi"}).get_json()["ok"] is True
+
+
+def test_non_owner_without_permission_cannot_create_channel(client):
+    signup(client, "alice")
+    j = _make_server(client)
+    code = j["server"]["invite_code"]
+    bob = make_user(client, "bob")
+    bob.post(f"/api/pl/servers/join/{code}")
+    r = bob.post(f"/api/pl/servers/{j['server']['id']}/channels", json={"name": "nope"})
+    assert r.status_code == 403
+
+
+def test_role_creation_and_permission_grant(client):
+    signup(client, "alice")
+    j = _make_server(client)
+    sid = j["server"]["id"]
+    code = j["server"]["invite_code"]
+    bob = make_user(client, "bob")
+    bob.post(f"/api/pl/servers/join/{code}")
+
+    role = client.post(f"/api/pl/servers/{sid}/roles", json={
+        "name": "Mods", "color": "#ff0000", "permissions": ["manage_channels", "kick_members"],
+    }).get_json()["role"]
+    # bob still can't manage channels without the role
+    assert bob.post(f"/api/pl/servers/{sid}/channels", json={"name": "x"}).status_code == 403
+
+    members = client.get(f"/api/pl/servers/{sid}").get_json()["members"]
+    bob_member = next(m for m in members if m["username"] == "bob")
+    r = client.post(f"/api/pl/servers/{sid}/members/{bob_member['user_id']}/roles", json={"role_id": role["id"], "assign": True})
+    assert r.get_json()["ok"] is True and role["id"] in r.get_json()["member"]["role_ids"]
+
+    # now bob can create a channel
+    assert bob.post(f"/api/pl/servers/{sid}/channels", json={"name": "x"}).get_json()["ok"] is True
+
+
+def test_default_role_cannot_be_deleted(client):
+    signup(client, "alice")
+    j = _make_server(client)
+    sid = j["server"]["id"]
+    default_role_id = client.get(f"/api/pl/servers/{sid}").get_json()["roles"][0]["id"]
+    r = client.delete(f"/api/pl/servers/{sid}/roles/{default_role_id}")
+    assert r.status_code == 400 and r.get_json()["error"] == "cannot_delete_default_role"
+
+
+def test_kick_removes_channel_access(client):
+    signup(client, "alice")
+    j = _make_server(client)
+    sid = j["server"]["id"]
+    code = j["server"]["invite_code"]
+    cid = client.get(f"/api/pl/servers/{sid}").get_json()["channels"][0]["id"]
+    bob = make_user(client, "bob")
+    bob.post(f"/api/pl/servers/join/{code}")
+    assert bob.post(f"/api/pl/chats/{cid}/messages", json={"text": "hi"}).get_json()["ok"] is True
+
+    bob_uid = next(m["user_id"] for m in client.get(f"/api/pl/servers/{sid}").get_json()["members"] if m["username"] == "bob")
+    assert client.post(f"/api/pl/servers/{sid}/members/{bob_uid}/kick").get_json()["ok"] is True
+    assert bob.post(f"/api/pl/chats/{cid}/messages", json={"text": "hi again"}).status_code == 404
+
+
+def test_owner_cannot_be_kicked_or_banned_or_leave(client):
+    signup(client, "alice")
+    j = _make_server(client)
+    sid = j["server"]["id"]
+    with flask_app.app_context():
+        alice_id = User.query.filter_by(username="alice").first().id
+    assert client.post(f"/api/pl/servers/{sid}/members/{alice_id}/kick").status_code == 400
+    assert client.post(f"/api/pl/servers/{sid}/members/{alice_id}/ban").status_code == 400
+    assert client.post(f"/api/pl/servers/{sid}/leave").get_json()["error"] == "owner_cannot_leave"
+
+
+def test_ban_prevents_rejoin_until_unbanned(client):
+    signup(client, "alice")
+    j = _make_server(client)
+    sid = j["server"]["id"]
+    code = j["server"]["invite_code"]
+    bob = make_user(client, "bob")
+    bob.post(f"/api/pl/servers/join/{code}")
+    bob_uid = next(m["user_id"] for m in client.get(f"/api/pl/servers/{sid}").get_json()["members"] if m["username"] == "bob")
+
+    assert client.post(f"/api/pl/servers/{sid}/members/{bob_uid}/ban").get_json()["ok"] is True
+    assert bob.post(f"/api/pl/servers/join/{code}").get_json()["error"] == "banned"
+
+    assert client.post(f"/api/pl/servers/{sid}/members/{bob_uid}/unban").get_json()["ok"] is True
+    assert bob.post(f"/api/pl/servers/join/{code}").get_json()["ok"] is True
+
+
 def test_non_member_cannot_read_chat(client):
     signup(client, "alice")
     bob = make_user(client, "bob")

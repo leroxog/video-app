@@ -47,6 +47,7 @@ from models import (
     FeedPost, FeedLike, FeedComment, FeedCommentLike, FeedPS,
     FeedRepost, FeedReport, FeedPollVote,
     PlChat, PlChatMember, PlMessage, PlMessageReaction, PlMedia,
+    PlServer, PlRole, PlServerMember, PlServerBan, PL_SERVER_PERMISSIONS,
 )
 import ai_assistant
 import local_ai
@@ -699,6 +700,10 @@ def ensure_sqlite_columns_exist():
             ("att_kind", "VARCHAR(12)"), ("att_value", "VARCHAR(255)"),
             ("reply_to_id", "INTEGER"), ("edited_at", "DATETIME"), ("pinned_at", "DATETIME"),
         ],
+        "pl_chat": [
+            ("server_id", "INTEGER"), ("topic", "VARCHAR(300)"),
+            ("position", "INTEGER NOT NULL DEFAULT 0"),
+        ],
         # 7Ai (2026-09-08, see ai_assistant.py's SEVENAI_SYSTEM_PROMPT) --
         # existing ai_chat rows predate this column and are all Nex chats,
         # so the default backfills them correctly with no extra code.
@@ -809,6 +814,9 @@ def ensure_columns_exist():
         'ALTER TABLE pl_message ADD COLUMN IF NOT EXISTS reply_to_id INTEGER',
         'ALTER TABLE pl_message ADD COLUMN IF NOT EXISTS edited_at TIMESTAMP',
         'ALTER TABLE pl_message ADD COLUMN IF NOT EXISTS pinned_at TIMESTAMP',
+        'ALTER TABLE pl_chat ADD COLUMN IF NOT EXISTS server_id INTEGER',
+        'ALTER TABLE pl_chat ADD COLUMN IF NOT EXISTS topic VARCHAR(300)',
+        'ALTER TABLE pl_chat ADD COLUMN IF NOT EXISTS position INTEGER NOT NULL DEFAULT 0',
         # Root cause confirmed live (psycopg2.errors.UndefinedColumn):
         # ai_personality was created by db.create_all() back when the
         # AiPersonality model first shipped (no mimic_user_style yet) --
@@ -1881,8 +1889,10 @@ def pl_friends():
         for u in sorted(mutuals, key=lambda x: pl_display_name(x).lower())
         if u.id not in existing_dm_uids
     ]
+    servers = [db.session.get(PlServer, r.server_id) for r in PlServerMember.query.filter_by(user_id=me.id)]
+    servers = [s for s in servers if s is not None]
     return render_template(
-        "pl_friends.html", chats=chats, pending=pending,
+        "pl_friends.html", chats=chats, pending=pending, servers=servers,
         me_json={"id": me.id, "username": me.username},
     )
 
@@ -2595,7 +2605,10 @@ def _pl_chat_summary(chat, me):
 def _pl_chat_list(me):
     memberships = PlChatMember.query.filter_by(user_id=me.id).all()
     chats = [db.session.get(PlChat, m.chat_id) for m in memberships]
-    chats = [c for c in chats if c is not None]
+    # server channels reuse PlChat/PlChatMember (see PlChat.server_id's own
+    # comment) but belong in that server's channel list, not the plain
+    # Nachrichten/Freunde DM+group list.
+    chats = [c for c in chats if c is not None and c.server_id is None]
     chats.sort(key=lambda c: c.last_activity or c.created_at, reverse=True)
     return [_pl_chat_summary(c, me) for c in chats]
 
@@ -3010,6 +3023,381 @@ def api_pl_call_state(chat_id):
         "ok": True, "active": True, "caller_id": call["caller_id"], "caller_name": call["caller_name"],
         "is_caller": call["caller_id"] == me.id, "signals": signals,
     })
+
+
+# ---------------------------------------------------------------------
+# Servers: persistent communities with channels + roles/permissions
+# (2026-09-11, "genau wie Discord"). Channels are PlChat rows with
+# server_id set -- see the model's own comment for why: every existing
+# message feature (reactions, replies, edit, pins, typing) just works on
+# them for free. Deliberately simpler than real Discord in two ways: (1)
+# server-wide role permissions only, no per-channel overwrites, and (2)
+# no voice channels -- multi-person voice needs a mesh/SFU, a materially
+# bigger problem than the 1:1 WebRTC calls already built.
+# ---------------------------------------------------------------------
+def _pl_gen_invite_code():
+    import secrets as _secrets
+    alphabet = "abcdefghijkmnpqrstuvwxyz23456789"  # no 0/O/1/l/I -- avoids misreads
+    while True:
+        code = "".join(_secrets.choice(alphabet) for _ in range(8))
+        if not PlServer.query.filter_by(invite_code=code).first():
+            return code
+
+
+def _pl_server_member_row(server_id, user):
+    if user is None:
+        return None
+    return PlServerMember.query.filter_by(server_id=server_id, user_id=user.id).first()
+
+
+def _pl_server_permissions(server, member):
+    if member is None:
+        return set()
+    if server.owner_id == member.user_id:
+        return set(PL_SERVER_PERMISSIONS)
+    perms = set()
+    for role in member.roles:
+        try:
+            perms.update(json.loads(role.permissions or "[]"))
+        except Exception:
+            pass
+    return perms & set(PL_SERVER_PERMISSIONS)
+
+
+def _pl_require_server_permission(server_id, me, perm=None):
+    """Returns (server, member) if `me` is a member (and has `perm`, when
+    given) -- (None, None) otherwise. `perm=None` just requires membership."""
+    server = db.session.get(PlServer, server_id)
+    if server is None:
+        return None, None
+    member = _pl_server_member_row(server_id, me)
+    if member is None:
+        return None, None
+    if perm is not None and perm not in _pl_server_permissions(server, member):
+        return None, None
+    return server, member
+
+
+def _pl_sync_new_member_into_channels(server, user):
+    for ch in server.channels:
+        if not any(m.user_id == user.id for m in ch.members):
+            db.session.add(PlChatMember(chat_id=ch.id, user_id=user.id))
+
+
+def _pl_sync_new_channel_members(channel, server):
+    for sm in server.members:
+        if not any(m.user_id == sm.user_id for m in channel.members):
+            db.session.add(PlChatMember(chat_id=channel.id, user_id=sm.user_id))
+
+
+def _pl_serialize_server(server, me):
+    member = _pl_server_member_row(server.id, me)
+    return {
+        "id": server.id, "name": server.name,
+        "icon_url": _pl_media_url(server.icon_image),
+        "owner_id": server.owner_id, "is_owner": server.owner_id == me.id,
+        "invite_code": server.invite_code,
+        "my_permissions": sorted(_pl_server_permissions(server, member)) if member else [],
+        "member_count": len(server.members),
+    }
+
+
+def _pl_serialize_channel(ch):
+    return {"id": ch.id, "name": ch.name, "topic": ch.topic, "position": ch.position}
+
+
+def _pl_serialize_role(role):
+    try:
+        perms = json.loads(role.permissions or "[]")
+    except Exception:
+        perms = []
+    return {
+        "id": role.id, "name": role.name, "color": role.color,
+        "permissions": perms, "position": role.position, "is_default": role.is_default,
+    }
+
+
+def _pl_serialize_server_member(server, sm):
+    return {
+        "user_id": sm.user_id, "username": sm.user.username,
+        "name": pl_display_name(sm.user), "nickname": sm.nickname,
+        "avatar_color": pl_avatar_color(sm.user.username),
+        "avatar_url": _pl_media_url(sm.user.pl_avatar_image),
+        "is_owner": server.owner_id == sm.user_id,
+        "role_ids": [r.id for r in sm.roles],
+        "online": _pl_is_online(sm.user),
+    }
+
+
+@app.route("/api/pl/servers", methods=["GET"])
+def api_pl_servers_list():
+    me = current_user()
+    rows = PlServerMember.query.filter_by(user_id=me.id).all()
+    servers = [db.session.get(PlServer, r.server_id) for r in rows]
+    return jsonify({"ok": True, "servers": [_pl_serialize_server(s, me) for s in servers if s is not None]})
+
+
+@app.route("/api/pl/servers", methods=["POST"])
+def api_pl_servers_create():
+    me = current_user()
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()[:80]
+    if not name:
+        return jsonify({"ok": False, "error": "no_name"}), 400
+    server = PlServer(name=name, owner_id=me.id, invite_code=_pl_gen_invite_code())
+    db.session.add(server)
+    db.session.flush()
+    default_role = PlRole(server_id=server.id, name="@everyone", color="#99aab5", permissions="[]",
+                           position=0, is_default=True)
+    db.session.add(default_role)
+    channel = PlChat(is_group=True, server_id=server.id, name="allgemein", position=0, created_by=me.id)
+    db.session.add(channel)
+    db.session.flush()
+    db.session.add(PlServerMember(server_id=server.id, user_id=me.id))
+    db.session.add(PlChatMember(chat_id=channel.id, user_id=me.id))
+    db.session.commit()
+    return jsonify({"ok": True, "server": _pl_serialize_server(server, me), "channel_id": channel.id})
+
+
+@app.route("/api/pl/servers/<int:server_id>")
+def api_pl_server_detail(server_id):
+    me = current_user()
+    server, member = _pl_require_server_permission(server_id, me)
+    if server is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    return jsonify({
+        "ok": True, "server": _pl_serialize_server(server, me),
+        "channels": [_pl_serialize_channel(c) for c in server.channels],
+        "roles": [_pl_serialize_role(r) for r in server.roles],
+        "members": [_pl_serialize_server_member(server, sm) for sm in server.members],
+    })
+
+
+@app.route("/api/pl/servers/<int:server_id>/channels", methods=["POST"])
+def api_pl_server_create_channel(server_id):
+    me = current_user()
+    server, member = _pl_require_server_permission(server_id, me, "manage_channels")
+    if server is None:
+        return jsonify({"ok": False, "error": "not_found_or_no_permission"}), 403
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()[:50]
+    if not name:
+        return jsonify({"ok": False, "error": "no_name"}), 400
+    topic = (data.get("topic") or "").strip()[:300] or None
+    channel = PlChat(is_group=True, server_id=server_id, name=name, topic=topic,
+                      position=len(server.channels), created_by=me.id)
+    db.session.add(channel)
+    db.session.flush()
+    _pl_sync_new_channel_members(channel, server)
+    db.session.commit()
+    return jsonify({"ok": True, "channel": _pl_serialize_channel(channel)})
+
+
+@app.route("/api/pl/servers/<int:server_id>/channels/<int:channel_id>", methods=["DELETE"])
+def api_pl_server_delete_channel(server_id, channel_id):
+    me = current_user()
+    server, member = _pl_require_server_permission(server_id, me, "manage_channels")
+    if server is None:
+        return jsonify({"ok": False, "error": "not_found_or_no_permission"}), 403
+    channel = db.session.get(PlChat, channel_id)
+    if channel is None or channel.server_id != server_id:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    db.session.delete(channel)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/pl/servers/join/<code>", methods=["POST"])
+def api_pl_server_join(code):
+    me = current_user()
+    server = PlServer.query.filter_by(invite_code=code).first()
+    if server is None:
+        return jsonify({"ok": False, "error": "invalid_invite"}), 404
+    if PlServerBan.query.filter_by(server_id=server.id, user_id=me.id).first():
+        return jsonify({"ok": False, "error": "banned"}), 403
+    existing = _pl_server_member_row(server.id, me)
+    if existing is None:
+        sm = PlServerMember(server_id=server.id, user_id=me.id)
+        db.session.add(sm)
+        db.session.flush()
+        default_role = next((r for r in server.roles if r.is_default), None)
+        if default_role is not None:
+            sm.roles.append(default_role)
+        _pl_sync_new_member_into_channels(server, me)
+        db.session.commit()
+    return jsonify({"ok": True, "server": _pl_serialize_server(server, me)})
+
+
+@app.route("/api/pl/servers/<int:server_id>/leave", methods=["POST"])
+def api_pl_server_leave(server_id):
+    me = current_user()
+    server, member = _pl_require_server_permission(server_id, me)
+    if server is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    if server.owner_id == me.id:
+        return jsonify({"ok": False, "error": "owner_cannot_leave"}), 400
+    for ch in server.channels:
+        cm = next((m for m in ch.members if m.user_id == me.id), None)
+        if cm is not None:
+            db.session.delete(cm)
+    db.session.delete(member)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/pl/servers/<int:server_id>/roles", methods=["POST"])
+def api_pl_server_create_role(server_id):
+    me = current_user()
+    server, member = _pl_require_server_permission(server_id, me, "manage_roles")
+    if server is None:
+        return jsonify({"ok": False, "error": "not_found_or_no_permission"}), 403
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()[:50]
+    if not name:
+        return jsonify({"ok": False, "error": "no_name"}), 400
+    color = data.get("color") if re.match(r"^#[0-9a-fA-F]{6}$", data.get("color") or "") else "#99aab5"
+    perms = [p for p in (data.get("permissions") or []) if p in PL_SERVER_PERMISSIONS]
+    role = PlRole(server_id=server_id, name=name, color=color, permissions=json.dumps(perms),
+                  position=len(server.roles))
+    db.session.add(role)
+    db.session.commit()
+    return jsonify({"ok": True, "role": _pl_serialize_role(role)})
+
+
+@app.route("/api/pl/servers/<int:server_id>/roles/<int:role_id>", methods=["PATCH"])
+def api_pl_server_edit_role(server_id, role_id):
+    me = current_user()
+    server, member = _pl_require_server_permission(server_id, me, "manage_roles")
+    if server is None:
+        return jsonify({"ok": False, "error": "not_found_or_no_permission"}), 403
+    role = db.session.get(PlRole, role_id)
+    if role is None or role.server_id != server_id:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    data = request.get_json(silent=True) or {}
+    if "name" in data and not role.is_default:
+        v = (data.get("name") or "").strip()[:50]
+        if v:
+            role.name = v
+    if "color" in data and re.match(r"^#[0-9a-fA-F]{6}$", data.get("color") or ""):
+        role.color = data["color"]
+    if "permissions" in data:
+        role.permissions = json.dumps([p for p in (data.get("permissions") or []) if p in PL_SERVER_PERMISSIONS])
+    db.session.commit()
+    return jsonify({"ok": True, "role": _pl_serialize_role(role)})
+
+
+@app.route("/api/pl/servers/<int:server_id>/roles/<int:role_id>", methods=["DELETE"])
+def api_pl_server_delete_role(server_id, role_id):
+    me = current_user()
+    server, member = _pl_require_server_permission(server_id, me, "manage_roles")
+    if server is None:
+        return jsonify({"ok": False, "error": "not_found_or_no_permission"}), 403
+    role = db.session.get(PlRole, role_id)
+    if role is None or role.server_id != server_id:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    if role.is_default:
+        return jsonify({"ok": False, "error": "cannot_delete_default_role"}), 400
+    db.session.delete(role)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/pl/servers/<int:server_id>/members/<int:user_id>/roles", methods=["POST"])
+def api_pl_server_toggle_member_role(server_id, user_id):
+    me = current_user()
+    server, member = _pl_require_server_permission(server_id, me, "manage_roles")
+    if server is None:
+        return jsonify({"ok": False, "error": "not_found_or_no_permission"}), 403
+    target = _pl_server_member_row(server_id, db.session.get(User, user_id))
+    role = db.session.get(PlRole, (request.get_json(silent=True) or {}).get("role_id"))
+    if target is None or role is None or role.server_id != server_id:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    assign = bool((request.get_json(silent=True) or {}).get("assign"))
+    if assign and role not in target.roles:
+        target.roles.append(role)
+    elif not assign and role in target.roles:
+        target.roles.remove(role)
+    db.session.commit()
+    return jsonify({"ok": True, "member": _pl_serialize_server_member(server, target)})
+
+
+@app.route("/api/pl/servers/<int:server_id>/members/<int:user_id>/kick", methods=["POST"])
+def api_pl_server_kick(server_id, user_id):
+    me = current_user()
+    server, member = _pl_require_server_permission(server_id, me, "kick_members")
+    if server is None:
+        return jsonify({"ok": False, "error": "not_found_or_no_permission"}), 403
+    if user_id == server.owner_id:
+        return jsonify({"ok": False, "error": "cannot_kick_owner"}), 400
+    target = _pl_server_member_row(server_id, db.session.get(User, user_id))
+    if target is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    for ch in server.channels:
+        cm = next((m for m in ch.members if m.user_id == user_id), None)
+        if cm is not None:
+            db.session.delete(cm)
+    db.session.delete(target)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/pl/servers/<int:server_id>/members/<int:user_id>/ban", methods=["POST"])
+def api_pl_server_ban(server_id, user_id):
+    me = current_user()
+    server, member = _pl_require_server_permission(server_id, me, "ban_members")
+    if server is None:
+        return jsonify({"ok": False, "error": "not_found_or_no_permission"}), 403
+    if user_id == server.owner_id:
+        return jsonify({"ok": False, "error": "cannot_ban_owner"}), 400
+    target = _pl_server_member_row(server_id, db.session.get(User, user_id))
+    if target is not None:
+        for ch in server.channels:
+            cm = next((m for m in ch.members if m.user_id == user_id), None)
+            if cm is not None:
+                db.session.delete(cm)
+        db.session.delete(target)
+    if not PlServerBan.query.filter_by(server_id=server_id, user_id=user_id).first():
+        db.session.add(PlServerBan(server_id=server_id, user_id=user_id))
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/pl/servers/<int:server_id>/members/<int:user_id>/unban", methods=["POST"])
+def api_pl_server_unban(server_id, user_id):
+    me = current_user()
+    server, member = _pl_require_server_permission(server_id, me, "ban_members")
+    if server is None:
+        return jsonify({"ok": False, "error": "not_found_or_no_permission"}), 403
+    ban = PlServerBan.query.filter_by(server_id=server_id, user_id=user_id).first()
+    if ban is not None:
+        db.session.delete(ban)
+        db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/pl/servers/<int:server_id>/bans")
+def api_pl_server_bans(server_id):
+    me = current_user()
+    server, member = _pl_require_server_permission(server_id, me, "ban_members")
+    if server is None:
+        return jsonify({"ok": False, "error": "not_found_or_no_permission"}), 403
+    bans = PlServerBan.query.filter_by(server_id=server_id).all()
+    users = {u.id: u for u in User.query.filter(User.id.in_([b.user_id for b in bans])).all()} if bans else {}
+    return jsonify({"ok": True, "bans": [
+        {"user_id": b.user_id, "username": users[b.user_id].username}
+        for b in bans if b.user_id in users
+    ]})
+
+
+@app.route("/freunde/server/<int:server_id>")
+def pl_server_view(server_id):
+    me = current_user()
+    server, member = _pl_require_server_permission(server_id, me)
+    if server is None:
+        abort(404)
+    return render_template(
+        "pl_server.html", server_id=server_id, me_json={"id": me.id, "username": me.username},
+    )
 
 
 @app.route("/assistant")

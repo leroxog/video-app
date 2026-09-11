@@ -827,12 +827,96 @@ class PlChat(db.Model):
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     last_activity = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    # A PlChat doubles as a server *channel* when server_id is set (2026-09-11)
+    # -- reuses every existing message feature (reactions, replies, edit,
+    # pins, typing) for free instead of building a parallel system. Access
+    # still goes through PlChatMember like any other chat: joining a server
+    # (or a channel being created) adds one PlChatMember row per member, see
+    # _pl_server_sync_channel_membership.
+    server_id = db.Column(db.Integer, db.ForeignKey("pl_server.id"), nullable=True)
+    topic = db.Column(db.String(300), nullable=True)
+    position = db.Column(db.Integer, nullable=False, default=0)
 
     members = db.relationship("PlChatMember", backref="chat", lazy=True, cascade="all, delete-orphan")
     messages = db.relationship(
         "PlMessage", backref="chat", lazy=True, cascade="all, delete-orphan",
         order_by="PlMessage.created_at",
     )
+
+
+class PlServer(db.Model):
+    """A Discord-style "server"/guild: a persistent community with its own
+    channels (see PlChat.server_id), roles and members. Kept deliberately
+    simple next to real Discord: server-wide role permissions only, no
+    per-channel permission overwrites -- that's a whole further layer of
+    complexity real Discord has that isn't attempted here."""
+    __tablename__ = "pl_server"
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(80), nullable=False)
+    icon_image = db.Column(db.String(255), nullable=True)
+    owner_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    invite_code = db.Column(db.String(12), unique=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    channels = db.relationship(
+        "PlChat", backref="server", lazy=True,
+        order_by="PlChat.position", primaryjoin="PlServer.id == PlChat.server_id",
+    )
+    roles = db.relationship(
+        "PlRole", backref="server", lazy=True, cascade="all, delete-orphan",
+        order_by="PlRole.position",
+    )
+    members = db.relationship("PlServerMember", backref="server", lazy=True, cascade="all, delete-orphan")
+    owner = db.relationship("User")
+
+
+# All permissions a role can grant. The server owner implicitly has every
+# permission regardless of roles, same as Discord.
+PL_SERVER_PERMISSIONS = (
+    "manage_server", "manage_channels", "manage_roles",
+    "manage_messages", "kick_members", "ban_members", "create_invite",
+)
+
+
+class PlRole(db.Model):
+    __tablename__ = "pl_role"
+    id = db.Column(db.Integer, primary_key=True)
+    server_id = db.Column(db.Integer, db.ForeignKey("pl_server.id"), nullable=False)
+    name = db.Column(db.String(50), nullable=False)
+    color = db.Column(db.String(7), nullable=False, default="#99aab5")
+    permissions = db.Column(db.Text, nullable=False, default="[]")  # JSON list of PL_SERVER_PERMISSIONS
+    position = db.Column(db.Integer, nullable=False, default=0)
+    # The auto-created role every member gets on joining (like @everyone) --
+    # exactly one per server, never deletable.
+    is_default = db.Column(db.Boolean, nullable=False, default=False)
+
+
+class PlServerMember(db.Model):
+    __tablename__ = "pl_server_member"
+    id = db.Column(db.Integer, primary_key=True)
+    server_id = db.Column(db.Integer, db.ForeignKey("pl_server.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    nickname = db.Column(db.String(50), nullable=True)
+    joined_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    user = db.relationship("User")
+    roles = db.relationship("PlRole", secondary="pl_server_member_role", lazy=True)
+    __table_args__ = (db.UniqueConstraint("server_id", "user_id", name="uq_plservermember"),)
+
+
+pl_server_member_role = db.Table(
+    "pl_server_member_role",
+    db.Column("member_id", db.Integer, db.ForeignKey("pl_server_member.id"), primary_key=True),
+    db.Column("role_id", db.Integer, db.ForeignKey("pl_role.id"), primary_key=True),
+)
+
+
+class PlServerBan(db.Model):
+    __tablename__ = "pl_server_ban"
+    id = db.Column(db.Integer, primary_key=True)
+    server_id = db.Column(db.Integer, db.ForeignKey("pl_server.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    banned_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    __table_args__ = (db.UniqueConstraint("server_id", "user_id", name="uq_plserverban"),)
 
 
 class PlChatMember(db.Model):

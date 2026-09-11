@@ -138,4 +138,27 @@
       else window.plToast("Ging nicht.");
     });
   });
+
+  // ---- servers: create / join by invite code ----
+  var serverSheet = $("#plServerSheet");
+  var serverAddBtn = $("#plServerAddBtn");
+  if (serverAddBtn && serverSheet) {
+    serverAddBtn.addEventListener("click", function () { openSheet(serverSheet); });
+    $("#plCreateServerBtn").addEventListener("click", function () {
+      var name = $("#plNewServerName").value.trim();
+      if (!name) { window.plToast("Gib deinem Server einen Namen."); return; }
+      api("POST", "/api/pl/servers", { name: name }).then(function (j) {
+        if (j.ok) location.href = "/freunde/server/" + j.server.id;
+        else window.plToast("Ging nicht.");
+      });
+    });
+    $("#plJoinServerBtn").addEventListener("click", function () {
+      var code = $("#plJoinServerCode").value.trim();
+      if (!code) { window.plToast("Gib einen Einladungscode ein."); return; }
+      api("POST", "/api/pl/servers/join/" + encodeURIComponent(code)).then(function (j) {
+        if (j.ok) location.href = "/freunde/server/" + j.server.id;
+        else window.plToast(j.error === "banned" ? "Du bist von diesem Server verbannt." : "Ungültiger Einladungscode.");
+      });
+    });
+  }
 })();

@@ -822,6 +822,15 @@ img { max-width: 100%; display: block; }
 .pl-icon-btn.pink { background: var(--pl-pink); color: #fff; border: none; }
 .pl-icon-btn:active { transform: scale(0.9); }
 
+.pl-server-rail { display: flex; align-items: center; gap: 10px; overflow-x: auto; padding: 4px 2px 14px; }
+.pl-server-icon {
+  flex-shrink: 0; width: 46px; height: 46px; border-radius: 16px; display: flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: 16px; color: #fff; overflow: hidden; border: none;
+}
+.pl-server-icon img { width: 100%; height: 100%; object-fit: cover; }
+.pl-server-add { background: var(--pl-surface-2); color: var(--pl-text-dim); border: 1px dashed var(--pl-border); }
+.pl-server-add:hover { background: var(--pl-surface-3); }
+
 .pl-chatrow {
   display: flex; align-items: center; gap: 12px; padding: 12px 6px;
   border-bottom: 1px solid var(--pl-border);
@@ -2009,4 +2018,75 @@ body:has(.nx-app)::before { display: none; }
 .pl-install-ok {
   border: none; background: var(--pl-pink); color: #fff; font: inherit; font-weight: 800;
   font-size: 13.5px; padding: 10px 22px; border-radius: 999px;
+}
+
+/* ---- servers: channels + roles/permissions (2026-09-11) ---- */
+.pl-srv-screen {
+  display: flex; height: 100vh; height: 100dvh; background: var(--pl-bg); color: var(--pl-text);
+}
+.pl-srv-channels, .pl-srv-members {
+  width: 240px; flex-shrink: 0; background: var(--pl-surface); border-right: 1px solid var(--pl-border);
+  display: flex; flex-direction: column; overflow-y: auto;
+}
+.pl-srv-members { border-right: none; border-left: 1px solid var(--pl-border); }
+.pl-srv-side-header { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--pl-border); flex-shrink: 0; }
+.pl-srv-name { font-weight: 800; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-srv-header-actions { display: flex; gap: 8px; padding: 10px 14px; }
+.pl-srv-header-actions button {
+  flex: 1; background: var(--pl-surface-2); border: 1px solid var(--pl-border); color: var(--pl-text-dim);
+  border-radius: 10px; padding: 7px; font-size: 12px; font-weight: 700;
+}
+.pl-srv-channel-list { flex: 1; padding: 4px 8px; }
+.pl-srv-channel-row {
+  display: flex; align-items: center; gap: 6px; padding: 8px 8px; border-radius: 8px; cursor: pointer;
+  color: var(--pl-text-dim); font-size: 14px; font-weight: 600;
+}
+.pl-srv-channel-row:hover { background: var(--pl-hover); }
+.pl-srv-channel-row.is-active { background: var(--pl-surface-2); color: var(--pl-text); }
+.pl-srv-channel-hash { color: var(--pl-text-faint); font-weight: 800; }
+.pl-srv-channel-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-srv-channel-del { flex-shrink: 0; background: none; border: none; color: var(--pl-text-faint); font-size: 16px; line-height: 1; }
+.pl-srv-channel-del:hover { color: var(--pl-danger); }
+.pl-srv-add-channel, .pl-srv-leave {
+  margin: 8px 14px; background: none; border: 1px dashed var(--pl-border); color: var(--pl-text-dim);
+  border-radius: 10px; padding: 8px; font-size: 12.5px; font-weight: 700;
+}
+.pl-srv-leave { border-style: solid; border-color: var(--pl-danger); color: var(--pl-danger); margin-top: auto; margin-bottom: 14px; }
+
+.pl-srv-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.pl-srv-main-header {
+  display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--pl-border);
+  background: var(--pl-surface); flex-shrink: 0; font-weight: 700;
+}
+.pl-srv-mobile-back { display: none; }
+.pl-srv-members-toggle { margin-left: auto; background: none; border: none; font-size: 18px; }
+.pl-srv-frame { flex: 1; border: none; width: 100%; }
+
+.pl-srv-member-list { padding: 6px 10px; }
+.pl-srv-member-row { display: flex; align-items: center; gap: 8px; padding: 7px 4px; position: relative; }
+.pl-srv-member-dot { position: absolute; left: 26px; top: 26px; width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--pl-surface); }
+.pl-srv-member-name { flex: 1; font-size: 13px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-srv-member-menu-btn { flex-shrink: 0; background: none; border: none; color: var(--pl-text-faint); font-size: 16px; }
+
+.pl-srv-invite-code {
+  background: var(--pl-surface-2); border: 1px solid var(--pl-border); border-radius: 10px; padding: 12px;
+  text-align: center; font-size: 17px; font-weight: 800; letter-spacing: 0.05em; margin-bottom: 12px;
+}
+.pl-srv-role-list { max-height: 40vh; overflow-y: auto; margin-bottom: 14px; }
+.pl-srv-role-row { display: flex; align-items: center; gap: 10px; padding: 10px 6px; border-bottom: 1px solid var(--pl-border); cursor: pointer; }
+.pl-srv-role-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+.pl-srv-role-name { font-size: 13.5px; font-weight: 700; }
+.pl-srv-new-role { display: flex; gap: 8px; }
+.pl-srv-new-role .pl-input { margin-bottom: 0; }
+.pl-srv-color-input { width: 100%; height: 42px; border: 1px solid var(--pl-border); border-radius: 10px; background: var(--pl-surface-2); margin-bottom: 6px; padding: 4px; }
+.pl-srv-perms { display: flex; flex-direction: column; gap: 6px; }
+
+@media (max-width: 899px) {
+  .pl-srv-channels, .pl-srv-main, .pl-srv-members { width: 100%; }
+  .pl-srv-main { display: none; }
+  .pl-srv-members { display: none; position: fixed; inset: 0; z-index: 60; }
+  .pl-srv-mobile-back { display: flex; }
+  .pl-srv-screen.show-main .pl-srv-channels { display: none; }
+  .pl-srv-screen.show-main .pl-srv-main { display: flex; }
+  .pl-srv-screen.show-members .pl-srv-members { display: flex; }
 }

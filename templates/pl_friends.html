@@ -11,6 +11,18 @@
     <button class="pl-icon-btn pink" id="plNewChatBtn" aria-label="Neuer Chat">{{ plicon('plus', 20) }}</button>
 </div>
 
+<div class="pl-server-rail" id="plServerRail">
+    {% for s in servers %}
+    <a class="pl-server-icon" href="{{ url_for('pl_server_view', server_id=s.id) }}" title="{{ s.name }}"
+       style="{% if not s.icon_image %}background:{{ pl_avatar_color(s.name) }}{% endif %}">
+        {% if s.icon_image %}<img src="{{ _pl_media_url(s.icon_image) }}" alt="">{% else %}{{ s.name[0]|upper }}{% endif %}
+    </a>
+    {% endfor %}
+    <button type="button" class="pl-server-icon pl-server-add" id="plServerAddBtn" aria-label="Server erstellen oder beitreten">
+        {{ plicon('plus', 18) }}
+    </button>
+</div>
+
 <div class="pl-msg-filters" id="plMsgFilters">
     <button type="button" class="is-active" data-filter="all">Alle</button>
     <button type="button" data-filter="group">Gruppen</button>
@@ -76,6 +88,24 @@
         <input class="pl-input" id="plGroupName" placeholder="Gruppenname (leer lassen = Einzelchat)" maxlength="80">
         <div class="pl-section-label" style="margin:6px 4px;">Gegenseitige Follows</div>
         <div id="plMutualList" style="overflow-y:auto;max-height:44vh;"></div>
+    </div>
+</div>
+
+<!-- server erstellen / beitreten -->
+<div class="pl-sheet-backdrop pl-sheet-modal" id="plServerSheet">
+    <div class="pl-sheet">
+        <div class="pl-sheet-grip"></div>
+        <div class="pl-sheet-bar">
+            <button class="pl-sheet-x" data-close-sheet aria-label="Schließen">&times;</button>
+            <h2>Server</h2>
+            <span></span>
+        </div>
+        <div class="pl-section-label" style="margin:6px 4px;">Neuen Server erstellen</div>
+        <input class="pl-input" id="plNewServerName" placeholder="Servername" maxlength="80">
+        <button class="pl-btn pink" id="plCreateServerBtn" style="margin-bottom:20px;">Erstellen</button>
+        <div class="pl-section-label" style="margin:6px 4px;">Mit Einladungscode beitreten</div>
+        <input class="pl-input" id="plJoinServerCode" placeholder="z.B. ab3xk9qz" maxlength="12" autocapitalize="none">
+        <button class="pl-btn ghost" id="plJoinServerBtn">Beitreten</button>
     </div>
 </div>
 {% endblock %}
