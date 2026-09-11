@@ -1,3 +1,10 @@
-<a class="pl-topbrand" href="{{ url_for('pl_home') }}" aria-label="HEXAGONUM">
-    {% include "partials/_pinklemon_logo.html" %}
-</a>
+<div class="pl-topbrand-row">
+    <a class="pl-topbrand" href="{{ url_for('pl_home') }}" aria-label="HEXAGONUM">
+        {% include "partials/_pinklemon_logo.html" %}
+    </a>
+    {% if user %}
+    <a class="pl-topbrand-me" href="{{ url_for('pl_profile', username=user.username) }}" aria-label="Dein Profil">
+        <span class="pl-avatar">{% if user.pl_avatar_image %}<img src="{{ _pl_media_url(user.pl_avatar_image) }}" alt="">{% else %}{{ (user.username or '?')[0]|upper }}{% endif %}</span>
+    </a>
+    {% endif %}
+</div>

@@ -1223,17 +1223,29 @@ img { max-width: 100%; display: block; }
   bottom: -1px; width: 46px; height: 3px; border-radius: 3px; background: var(--pl-pink);
 }
 
-/* centred HEXAGONUM mark at the top of the feed column (foto 1) */
-.pl-topbrand {
+/* centred HEXAGONUM mark at the top of the feed column (foto 1), plus a
+   small profile shortcut pinned to the right -- the bottom nav's own
+   profile row only shows up in the desktop sidebar (see .pl-nav-me),
+   so mobile had no way at all to reach your own profile from here. */
+.pl-topbrand-row {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 100%;
+  max-width: 640px;
   margin: 2px auto 12px;
 }
+.pl-topbrand { display: flex; align-items: center; justify-content: center; margin: 0; }
 .pl-topbrand svg { width: 34px; height: 34px; display: block; }
+.pl-topbrand-me {
+  position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+}
+.pl-topbrand-me .pl-avatar { width: 32px; height: 32px; font-size: 13px; }
 @media (min-width: 900px) {
-  .pl-topbrand { margin-top: 0; margin-bottom: 14px; }
+  .pl-topbrand-row { margin-top: 0; margin-bottom: 14px; }
   .pl-topbrand svg { width: 38px; height: 38px; }
+  .pl-topbrand-me { display: none; }
 }
 
 /* ===== editable display name / avatar / banner ===== */
@@ -1306,7 +1318,7 @@ img { max-width: 100%; display: block; }
   background: color-mix(in srgb, var(--pl-bg) 82%, transparent);
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
 }
-.pl-topbrand { padding: 8px 0; margin-bottom: 0; }
+.pl-topbrand-row { padding: 8px 0; margin-bottom: 0; }
 .pl-screen-head { padding: 10px 0; margin-bottom: 10px; }
 .pl-prof2-topbar { margin: 0; }
 .pl-msg-filters { padding: 8px 0 10px; margin: 0; }
@@ -1582,7 +1594,7 @@ body::before {
     radial-gradient(46% 40% at 18% 12%, rgba(255, 45, 149, 0.16), transparent 70%),
     radial-gradient(50% 42% at 88% 4%, rgba(124, 92, 255, 0.15), transparent 70%);
 }
-.pl-screen, .pl-nav, .pl-topbrand { position: relative; z-index: 1; }
+.pl-screen, .pl-nav, .pl-topbrand-row { position: relative; z-index: 1; }
 /* the standalone chat page already paints its own stronger glow */
 body:has(.pl-chat-screen)::before,
 body:has(.nx-app)::before { display: none; }
