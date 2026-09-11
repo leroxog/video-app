@@ -11,6 +11,7 @@
     <link rel="icon" href="{{ url_for('static', filename='img/pinklemon-mark.svg') }}" type="image/svg+xml">
 </head>
 <body>
+{%- from "partials/_pl_icons.html" import plicon -%}
 <div class="pl-chat-screen">
     <div class="pl-chat-header">
         <button class="pl-chat-back" onclick="location.href='{{ url_for('pl_friends') }}'" aria-label="Zurück">&#8592;</button>
@@ -23,9 +24,20 @@
                         {% for m in chat.members[:5] %}<span>{{ (m or '?')[0]|upper }}</span>{% endfor %}
                     </span>
                     {{ chat.members | length }} Mitglieder
-                {% else %}Einzelchat{% endif %}
+                {% else %}
+                    <span class="pl-chat-presence{{ ' online' if chat.other_online else '' }}" id="plChatPresence">
+                        <span class="pl-chat-presence-dot"></span>{{ chat.other_presence_text }}
+                    </span>
+                {% endif %}
             </div>
         </div>
+        <button type="button" class="pl-chat-pins-btn" id="plPinsBtn" hidden aria-label="Angeheftete Nachrichten">
+            {{ plicon('pin', 16) }}<span id="plPinsCount">0</span>
+        </button>
+    </div>
+    <div class="pl-chat-pins-panel" id="plPinsPanel" hidden>
+        <div class="pl-chat-pins-title">Angeheftete Nachrichten</div>
+        <div class="pl-chat-pins-list" id="plPinsList"></div>
     </div>
     <div class="pl-chat-msgs" id="plMsgs">
         <div class="pl-chat-empty" id="plChatEmpty" hidden>
@@ -36,7 +48,18 @@
             </div>
         </div>
     </div>
+    <div class="pl-chat-typing" id="plTyping" hidden></div>
+    <div class="pl-msg-menu" id="plMsgMenu" hidden></div>
+    <div class="pl-emoji-picker" id="plEmojiPicker" hidden></div>
     <div class="pl-chat-composewrap">
+        <div class="pl-reply-preview" id="plReplyPreview" hidden>
+            <div class="pl-reply-preview-bar"></div>
+            <div class="pl-reply-preview-body">
+                <div class="pl-reply-preview-name" id="plReplyPreviewName"></div>
+                <div class="pl-reply-preview-text" id="plReplyPreviewText"></div>
+            </div>
+            <button type="button" id="plReplyPreviewClose" aria-label="Antwort abbrechen">&times;</button>
+        </div>
         <div class="pl-chat-att" id="plMsgAtt"></div>
         <div class="pl-chat-compose">
             <textarea id="plMsgInput" rows="1" maxlength="4000" placeholder="Nachricht"></textarea>

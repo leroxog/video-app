@@ -46,7 +46,7 @@ from models import (
     AiTrainingExample, AiTrainingRun,
     FeedPost, FeedLike, FeedComment, FeedCommentLike, FeedPS,
     FeedRepost, FeedReport, FeedPollVote,
-    PlChat, PlChatMember, PlMessage, PlMedia,
+    PlChat, PlChatMember, PlMessage, PlMessageReaction, PlMedia,
 )
 import ai_assistant
 import local_ai
@@ -695,7 +695,10 @@ def ensure_sqlite_columns_exist():
             ("hidden_at", "DATETIME"),
         ],
         "feed_ps": [("att_kind", "VARCHAR(12)"), ("att_value", "VARCHAR(255)")],
-        "pl_message": [("att_kind", "VARCHAR(12)"), ("att_value", "VARCHAR(255)")],
+        "pl_message": [
+            ("att_kind", "VARCHAR(12)"), ("att_value", "VARCHAR(255)"),
+            ("reply_to_id", "INTEGER"), ("edited_at", "DATETIME"), ("pinned_at", "DATETIME"),
+        ],
         # 7Ai (2026-09-08, see ai_assistant.py's SEVENAI_SYSTEM_PROMPT) --
         # existing ai_chat rows predate this column and are all Nex chats,
         # so the default backfills them correctly with no extra code.
@@ -803,6 +806,9 @@ def ensure_columns_exist():
         'ALTER TABLE feed_ps ADD COLUMN IF NOT EXISTS att_value VARCHAR(255)',
         'ALTER TABLE pl_message ADD COLUMN IF NOT EXISTS att_kind VARCHAR(12)',
         'ALTER TABLE pl_message ADD COLUMN IF NOT EXISTS att_value VARCHAR(255)',
+        'ALTER TABLE pl_message ADD COLUMN IF NOT EXISTS reply_to_id INTEGER',
+        'ALTER TABLE pl_message ADD COLUMN IF NOT EXISTS edited_at TIMESTAMP',
+        'ALTER TABLE pl_message ADD COLUMN IF NOT EXISTS pinned_at TIMESTAMP',
         # Root cause confirmed live (psycopg2.errors.UndefinedColumn):
         # ai_personality was created by db.create_all() back when the
         # AiPersonality model first shipped (no mimic_user_style yet) --
@@ -1020,6 +1026,23 @@ def purge_expired_messages(conversation):
 
 ONLINE_THRESHOLD_SECONDS = 5 * 60
 LAST_SEEN_UPDATE_THROTTLE_SECONDS = 60
+
+
+def _pl_is_online(user):
+    if user is None or user.last_seen is None:
+        return False
+    last_seen = user.last_seen
+    if last_seen.tzinfo is None:
+        last_seen = last_seen.replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - last_seen).total_seconds() < ONLINE_THRESHOLD_SECONDS
+
+
+def _pl_presence_text(user):
+    if _pl_is_online(user):
+        return "Online"
+    if user is None or user.last_seen is None:
+        return "Zuletzt online unbekannt"
+    return "Zuletzt online " + pl_ago(user.last_seen)
 
 # AI tokens: a currency separate from total_score ("Punkte"), spent only on
 # AI actions (see TOKEN_COST_* below). STARTING_AI_TOKENS is the one-time
@@ -2559,6 +2582,8 @@ def _pl_chat_summary(chat, me):
         "avatar_letter": pl_avatar_letter(title),
         "avatar_url": _pl_media_url(getattr(other, "pl_avatar_image", None)) if other else None,
         "other_username": (other.username if other else None),
+        "other_online": (_pl_is_online(other) if other else False),
+        "other_presence_text": (_pl_presence_text(other) if other else None),
         "members": [pl_display_name(m.user) for m in chat.members],
         "last_text": (last.text[:80] if last else ""),
         "last_sender": (pl_display_name(last.sender) if last else ""),
@@ -2705,6 +2730,48 @@ def _pl_require_chat_member(chat_id, me):
     return chat
 
 
+def _pl_require_own_message(message_id, me):
+    """Returns (message, chat) if this message exists, the caller sent it,
+    and the caller is still a member of its chat -- None otherwise."""
+    msg = db.session.get(PlMessage, message_id)
+    if msg is None or msg.sender_id != me.id:
+        return None, None
+    chat = _pl_require_chat_member(msg.chat_id, me)
+    if chat is None:
+        return None, None
+    return msg, chat
+
+
+def _pl_serialize_message(m, me):
+    reply_to = None
+    if m.reply_to_id:
+        parent = m.reply_to
+        reply_to = (
+            {"id": m.reply_to_id, "deleted": True, "sender_name": None, "text": None}
+            if parent is None else
+            {"id": parent.id, "deleted": False, "sender_name": pl_display_name(parent.sender),
+             "text": (parent.text or "")[:140]}
+        )
+    reaction_groups = {}
+    for r in m.reactions:
+        g = reaction_groups.setdefault(r.emoji, {"emoji": r.emoji, "count": 0, "me": False})
+        g["count"] += 1
+        if r.user_id == me.id:
+            g["me"] = True
+    return {
+        "id": m.id, "text": m.text, "text_html": _pl_linkify(m.text),
+        "sender": m.sender.username, "sender_name": pl_display_name(m.sender),
+        "sender_avatar_color": pl_avatar_color(m.sender.username),
+        "is_mine": m.sender_id == me.id, "created_ago": pl_ago(m.created_at),
+        "created_at": (m.created_at.replace(tzinfo=timezone.utc) if m.created_at.tzinfo is None else m.created_at).isoformat(),
+        "edited": m.edited_at is not None,
+        "pinned": m.pinned_at is not None,
+        "attachment": _pl_attachment(m),
+        "reply_to": reply_to,
+        "reactions": list(reaction_groups.values()),
+    }
+
+
 @app.route("/api/pl/chats/<int:chat_id>/messages")
 def api_pl_chat_messages(chat_id):
     me = current_user()
@@ -2718,16 +2785,7 @@ def api_pl_chat_messages(chat_id):
         my_member = next(m for m in chat.members if m.user_id == me.id)
         my_member.last_read_id = max(my_member.last_read_id, chat.messages[-1].id)
         db.session.commit()
-    return jsonify({"ok": True, "messages": [
-        {
-            "id": m.id, "text": m.text,
-            "sender": m.sender.username, "sender_name": pl_display_name(m.sender),
-            "is_mine": m.sender_id == me.id, "created_ago": pl_ago(m.created_at),
-            "created_at": (m.created_at.replace(tzinfo=timezone.utc) if m.created_at.tzinfo is None else m.created_at).isoformat(),
-            "attachment": _pl_attachment(m),
-        }
-        for m in msgs
-    ]})
+    return jsonify({"ok": True, "messages": [_pl_serialize_message(m, me) for m in msgs]})
 
 
 @app.route("/api/pl/chats/<int:chat_id>/messages", methods=["POST"])
@@ -2746,19 +2804,122 @@ def api_pl_send_message(chat_id):
         other = next((m.user for m in chat.members if m.user_id != me.id), None)
         if other and not _are_mutual(me.id, other.id):
             return jsonify({"ok": False, "error": "not_mutual"}), 403
+    reply_to_id = data.get("reply_to_id")
+    if reply_to_id is not None:
+        parent = db.session.get(PlMessage, reply_to_id)
+        reply_to_id = parent.id if (parent is not None and parent.chat_id == chat_id) else None
     msg = PlMessage(chat_id=chat_id, sender_id=me.id, text=text,
-                    att_kind=att_kind, att_value=att_value)
+                    att_kind=att_kind, att_value=att_value, reply_to_id=reply_to_id)
     db.session.add(msg)
     chat.last_activity = datetime.now(timezone.utc)
     db.session.flush()
     my_member = next(m for m in chat.members if m.user_id == me.id)
     my_member.last_read_id = msg.id
     db.session.commit()
-    return jsonify({"ok": True, "message": {
-        "id": msg.id, "text": msg.text,
-        "sender": me.username, "sender_name": pl_display_name(me), "is_mine": True,
-        "created_ago": pl_ago(msg.created_at), "attachment": _pl_attachment(msg),
-    }})
+    return jsonify({"ok": True, "message": _pl_serialize_message(msg, me)})
+
+
+@app.route("/api/pl/messages/<int:message_id>", methods=["PATCH"])
+def api_pl_edit_message(message_id):
+    me = current_user()
+    msg, chat = _pl_require_own_message(message_id, me)
+    if msg is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    data = request.get_json(silent=True) or {}
+    text = (data.get("text") or "").strip()[:4000]
+    if not text:
+        return jsonify({"ok": False, "error": "empty"}), 400
+    msg.text = text
+    msg.edited_at = datetime.now(timezone.utc)
+    db.session.commit()
+    return jsonify({"ok": True, "message": _pl_serialize_message(msg, me)})
+
+
+@app.route("/api/pl/messages/<int:message_id>", methods=["DELETE"])
+def api_pl_delete_message(message_id):
+    me = current_user()
+    msg, chat = _pl_require_own_message(message_id, me)
+    if msg is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    db.session.delete(msg)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+PL_REACTION_EMOJI = {"👍", "❤️", "😂", "😮", "😢", "🔥", "🎉", "👎"}
+
+
+@app.route("/api/pl/messages/<int:message_id>/react", methods=["POST"])
+def api_pl_react_message(message_id):
+    """Toggling the same emoji twice removes it (like Discord) -- one
+    reaction per (message, user, emoji), no limit on how many *different*
+    emoji one person can put on the same message."""
+    me = current_user()
+    msg = db.session.get(PlMessage, message_id)
+    if msg is None or _pl_require_chat_member(msg.chat_id, me) is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    data = request.get_json(silent=True) or {}
+    emoji = data.get("emoji")
+    if emoji not in PL_REACTION_EMOJI:
+        return jsonify({"ok": False, "error": "bad_emoji"}), 400
+    existing = PlMessageReaction.query.filter_by(message_id=message_id, user_id=me.id, emoji=emoji).first()
+    if existing is not None:
+        db.session.delete(existing)
+    else:
+        db.session.add(PlMessageReaction(message_id=message_id, user_id=me.id, emoji=emoji))
+    db.session.commit()
+    db.session.refresh(msg)
+    return jsonify({"ok": True, "message": _pl_serialize_message(msg, me)})
+
+
+@app.route("/api/pl/messages/<int:message_id>/pin", methods=["POST"])
+def api_pl_pin_message(message_id):
+    me = current_user()
+    msg = db.session.get(PlMessage, message_id)
+    if msg is None or _pl_require_chat_member(msg.chat_id, me) is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    msg.pinned_at = None if msg.pinned_at else datetime.now(timezone.utc)
+    db.session.commit()
+    return jsonify({"ok": True, "message": _pl_serialize_message(msg, me)})
+
+
+@app.route("/api/pl/chats/<int:chat_id>/pinned")
+def api_pl_chat_pinned(chat_id):
+    me = current_user()
+    chat = _pl_require_chat_member(chat_id, me)
+    if chat is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    pinned = sorted((m for m in chat.messages if m.pinned_at is not None), key=lambda m: m.pinned_at)
+    return jsonify({"ok": True, "messages": [_pl_serialize_message(m, me) for m in pinned]})
+
+
+# In-memory "X is typing" state -- {chat_id: {user_id: last_ping_datetime}}.
+# Deliberately not a DB table: it's a few-seconds-TTL presence blip, not
+# data anyone needs to persist or query historically.
+_pl_typing = {}
+_PL_TYPING_TTL_SECONDS = 6
+
+
+@app.route("/api/pl/chats/<int:chat_id>/typing", methods=["POST"])
+def api_pl_typing_ping(chat_id):
+    me = current_user()
+    if _pl_require_chat_member(chat_id, me) is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    _pl_typing.setdefault(chat_id, {})[me.id] = datetime.now(timezone.utc)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/pl/chats/<int:chat_id>/typing")
+def api_pl_typing_list(chat_id):
+    me = current_user()
+    if _pl_require_chat_member(chat_id, me) is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    now = datetime.now(timezone.utc)
+    by_user = _pl_typing.get(chat_id, {})
+    active_ids = [uid for uid, ts in list(by_user.items())
+                  if uid != me.id and (now - ts).total_seconds() < _PL_TYPING_TTL_SECONDS]
+    names = [pl_display_name(u) for u in User.query.filter(User.id.in_(active_ids)).all()] if active_ids else []
+    return jsonify({"ok": True, "typing": names})
 
 
 @app.route("/assistant")

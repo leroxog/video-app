@@ -351,6 +351,99 @@ def test_send_and_receive_messages(client):
     assert got["messages"][0]["is_mine"] is False
 
 
+def _dm(client, other, other_client):
+    client.post(f"/api/pl/follow/{other}")
+    other_client.post("/api/pl/follow/alice")
+    return client.post(f"/api/pl/chats/dm/{other}").get_json()["chat_id"]
+
+
+def test_message_reply_shows_quoted_parent_and_survives_its_deletion(client):
+    signup(client, "alice")
+    bob = make_user(client, "bob")
+    cid = _dm(client, "bob", bob)
+    m1 = client.post(f"/api/pl/chats/{cid}/messages", json={"text": "erste Nachricht"}).get_json()["message"]
+    m2 = bob.post(f"/api/pl/chats/{cid}/messages", json={"text": "Antwort drauf", "reply_to_id": m1["id"]}).get_json()["message"]
+    assert m2["reply_to"] == {"id": m1["id"], "deleted": False, "sender_name": "alice", "text": "erste Nachricht"}
+
+    client.delete(f"/api/pl/messages/{m1['id']}")
+    got = bob.get(f"/api/pl/chats/{cid}/messages?after=0").get_json()["messages"]
+    reply = next(m for m in got if m["id"] == m2["id"])
+    assert reply["reply_to"]["deleted"] is True
+
+
+def test_edit_and_delete_own_message_only(client):
+    signup(client, "alice")
+    bob = make_user(client, "bob")
+    cid = _dm(client, "bob", bob)
+    msg = client.post(f"/api/pl/chats/{cid}/messages", json={"text": "tippo"}).get_json()["message"]
+
+    # bob can't edit or delete alice's message
+    assert bob.patch(f"/api/pl/messages/{msg['id']}", json={"text": "hack"}).status_code == 404
+    assert bob.delete(f"/api/pl/messages/{msg['id']}").status_code == 404
+
+    r = client.patch(f"/api/pl/messages/{msg['id']}", json={"text": "korrigiert"})
+    j = r.get_json()
+    assert j["ok"] and j["message"]["text"] == "korrigiert" and j["message"]["edited"] is True
+
+    assert client.delete(f"/api/pl/messages/{msg['id']}").get_json()["ok"] is True
+    remaining = client.get(f"/api/pl/chats/{cid}/messages?after=0").get_json()["messages"]
+    assert msg["id"] not in [m["id"] for m in remaining]
+
+
+def test_message_reactions_toggle(client):
+    signup(client, "alice")
+    bob = make_user(client, "bob")
+    cid = _dm(client, "bob", bob)
+    msg = client.post(f"/api/pl/chats/{cid}/messages", json={"text": "hi"}).get_json()["message"]
+
+    r1 = bob.post(f"/api/pl/messages/{msg['id']}/react", json={"emoji": "👍"}).get_json()
+    assert r1["message"]["reactions"] == [{"emoji": "👍", "count": 1, "me": True}]
+    r2 = client.post(f"/api/pl/messages/{msg['id']}/react", json={"emoji": "👍"}).get_json()
+    assert {"emoji": "👍", "count": 2, "me": True} in r2["message"]["reactions"]
+    # toggling the same emoji again removes just that user's (alice's) reaction
+    r3 = client.post(f"/api/pl/messages/{msg['id']}/react", json={"emoji": "👍"}).get_json()
+    assert r3["message"]["reactions"] == [{"emoji": "👍", "count": 1, "me": False}]
+    assert client.post(f"/api/pl/messages/{msg['id']}/react", json={"emoji": "🍕"}).status_code == 400
+
+
+def test_pin_and_unpin_message(client):
+    signup(client, "alice")
+    bob = make_user(client, "bob")
+    cid = _dm(client, "bob", bob)
+    msg = client.post(f"/api/pl/chats/{cid}/messages", json={"text": "wichtig"}).get_json()["message"]
+
+    assert bob.get(f"/api/pl/chats/{cid}/pinned").get_json()["messages"] == []
+    r = bob.post(f"/api/pl/messages/{msg['id']}/pin")
+    assert r.get_json()["message"]["pinned"] is True
+    pinned = client.get(f"/api/pl/chats/{cid}/pinned").get_json()["messages"]
+    assert [m["id"] for m in pinned] == [msg["id"]]
+
+    r2 = client.post(f"/api/pl/messages/{msg['id']}/pin")
+    assert r2.get_json()["message"]["pinned"] is False
+    assert client.get(f"/api/pl/chats/{cid}/pinned").get_json()["messages"] == []
+
+
+def test_typing_indicator(client):
+    signup(client, "alice")
+    bob = make_user(client, "bob")
+    cid = _dm(client, "bob", bob)
+    assert client.get(f"/api/pl/chats/{cid}/typing").get_json()["typing"] == []
+    bob.post(f"/api/pl/chats/{cid}/typing")
+    j = client.get(f"/api/pl/chats/{cid}/typing").get_json()
+    assert j["typing"] == ["bob"]
+    # you never see yourself in your own typing list
+    assert bob.get(f"/api/pl/chats/{cid}/typing").get_json()["typing"] == []
+
+
+def test_chat_page_shows_online_presence(client):
+    signup(client, "alice")
+    bob = make_user(client, "bob")
+    cid = _dm(client, "bob", bob)
+    bob.get("/")  # touches bob's last_seen
+    body = client.get(f"/freunde/c/{cid}").data
+    assert b"pl-chat-presence" in body and b"Online" in body
+
+
 def test_non_member_cannot_read_chat(client):
     signup(client, "alice")
     bob = make_user(client, "bob")

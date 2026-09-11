@@ -856,6 +856,25 @@ class PlMessage(db.Model):
     att_kind = db.Column(db.String(12), nullable=True)
     att_value = db.Column(db.String(255), nullable=True)
     sender = db.relationship("User")
+    # Discord-style extras (2026-09-11): reply-to, edit/delete, pinning.
+    # reply_to_id has no FK ondelete cascade -- a reply survives its parent
+    # being deleted, see _pl_serialize_message's "deleted" fallback text.
+    reply_to_id = db.Column(db.Integer, db.ForeignKey("pl_message.id"), nullable=True)
+    reply_to = db.relationship("PlMessage", remote_side=[id])
+    edited_at = db.Column(db.DateTime, nullable=True)
+    pinned_at = db.Column(db.DateTime, nullable=True)
+    reactions = db.relationship("PlMessageReaction", backref="message", lazy=True, cascade="all, delete-orphan")
+
+
+class PlMessageReaction(db.Model):
+    __tablename__ = "pl_message_reaction"
+    id = db.Column(db.Integer, primary_key=True)
+    message_id = db.Column(db.Integer, db.ForeignKey("pl_message.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    emoji = db.Column(db.String(16), nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    user = db.relationship("User")
+    __table_args__ = (db.UniqueConstraint("message_id", "user_id", "emoji", name="uq_plmsgreaction"),)
 
 
 class PlMedia(db.Model):
