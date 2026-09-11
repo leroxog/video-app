@@ -1820,6 +1820,14 @@ body:has(.nx-app)::before { display: none; }
 /* ---- unclip the post kebab / share submenu ---- */
 .pl-feed, .pl-feed .pl-post-group, .pl-feed .pl-post { overflow: visible; }
 .pl-post-group.menu-open { position: relative; z-index: 60; }
+/* .pl-post has its own backdrop-filter (see the feed-card glass rule
+   above), which makes it a stacking context of its own -- that traps the
+   menu's z-index:65 *inside* .pl-post, so it can't out-rank a later
+   sibling in the same post-group (the P.S. card, comments -- both also
+   backdrop-filtered) no matter how high the menu's z-index is. Lifting
+   .pl-post itself above them while a menu is open is what actually fixes
+   it: now the whole card, menu included, out-ranks those siblings. */
+.pl-post-group.menu-open .pl-post { z-index: 65; }
 .pl-post-menu {
   z-index: 65; background: var(--pl-surface);
   /* safety net: if a menu is ever taller than fits on screen, it scrolls
