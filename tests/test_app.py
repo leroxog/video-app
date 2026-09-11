@@ -477,6 +477,20 @@ def test_nex_sees_the_users_activity(client, monkeypatch):
     assert "Aktivität von" in seen["user"]
 
 
+def test_nex_never_volunteers_activity_unless_explicitly_asked(client):
+    """Regression: the digest/prompt used to also allow bringing up activity
+    when it "100% matched" the current message -- that loophole is what let
+    Nex greet a plain "moin" with an unsolicited rundown of the user's
+    recent posts. Only an explicit ask may trigger it now."""
+    import ai_assistant
+    signup(client, "alice")
+    with flask_app.app_context():
+        digest = app_module._pl_user_activity_digest(User.query.filter_by(username="alice").first())
+    assert "100%" not in digest and "passt" not in digest
+    assert "explizit" in digest
+    assert "100%" not in ai_assistant.NEX_BLUNT_SYSTEM_PROMPT
+
+
 def test_nex_settings_set_and_clear(client):
     signup(client, "alice")
     r = client.post("/api/pl/nex/settings", json={
