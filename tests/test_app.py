@@ -391,6 +391,22 @@ def test_display_name_editable_and_shown_instead_of_handle(client):
     assert b"Alice Wunder" in body and b"pl-post-handle" in body and b"@alice" in body
 
 
+def test_topbrand_shows_hexagonum_word_and_try_fallback(client):
+    signup(client, "alice")
+    body = client.get("/").data
+    assert b"HEXAGONUM" in body and b">TRY<" in body
+
+
+def test_origin_badge_settable_and_shown(client):
+    signup(client, "alice")
+    r = client.post("/api/pl/profile/origin", json={"origin": "de"})
+    assert r.get_json() == {"ok": True, "origin": "de"}
+    assert b">de<" in client.get("/").data
+    # clearing it falls back to TRY again
+    client.post("/api/pl/profile/origin", json={"origin": "  "})
+    assert b">TRY<" in client.get("/").data
+
+
 def test_dm_chat_title_uses_display_name(client):
     signup(client, "alice")
     bob = make_user(client, "bob")

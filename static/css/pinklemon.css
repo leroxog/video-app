@@ -1264,8 +1264,17 @@ img { max-width: 100%; display: block; }
   max-width: 640px;
   margin: 2px auto 12px;
 }
-.pl-topbrand { display: flex; align-items: center; justify-content: center; margin: 0; }
+.pl-topbrand-lockup { display: flex; align-items: flex-start; gap: 4px; }
+.pl-topbrand { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 0; text-decoration: none; color: var(--pl-text); }
 .pl-topbrand svg { width: 34px; height: 34px; display: block; }
+.pl-topbrand-word { font-size: 16px; font-weight: 900; letter-spacing: -0.01em; white-space: nowrap; }
+.pl-topbrand-origin {
+  position: relative; top: -1px;
+  background: var(--pl-surface-2); border: 1px solid var(--pl-border); color: var(--pl-text-faint);
+  font-size: 9.5px; font-weight: 800; letter-spacing: 0.02em;
+  padding: 1px 5px; border-radius: 5px; line-height: 1.5;
+}
+.pl-topbrand-origin:hover { color: var(--pl-text); border-color: var(--pl-text-faint); }
 .pl-topbrand-me {
   position: absolute; right: 0; top: 50%; transform: translateY(-50%);
 }
@@ -1273,6 +1282,7 @@ img { max-width: 100%; display: block; }
 @media (min-width: 900px) {
   .pl-topbrand-row { margin-top: 0; margin-bottom: 14px; }
   .pl-topbrand svg { width: 38px; height: 38px; }
+  .pl-topbrand-word { font-size: 18px; }
   .pl-topbrand-me { display: none; }
 }
 

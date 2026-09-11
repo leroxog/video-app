@@ -1903,6 +1903,20 @@ def pl_profile(username):
     )
 
 
+@app.route("/api/pl/profile/origin", methods=["POST"])
+def api_pl_update_origin():
+    """Where-you're-from badge next to the HEXAGONUM wordmark (see
+    _pl_topbrand.html) -- reuses the existing (until now unused) `country`
+    column rather than free text tied to a specific UI, so it's just
+    whatever short label the user wants shown, "TRY" if never set."""
+    me = current_user()
+    data = request.get_json(silent=True) or {}
+    origin = (data.get("origin") or "").strip()[:12]
+    me.country = origin or None
+    db.session.commit()
+    return jsonify({"ok": True, "origin": me.country})
+
+
 @app.route("/api/pl/profile", methods=["POST"])
 def api_pl_update_profile():
     """Edit your own HEXAGONUM profile: display name ("Spitzname"),
