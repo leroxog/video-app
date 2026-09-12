@@ -24,19 +24,23 @@
   var msgAtt = A.mount(document.getElementById("plMsgAtt"));
 
   var REACTION_EMOJI = ["👍", "❤️", "😂", "😮", "😢", "🔥", "🎉", "👎"];
+  // Discord-style message grouping: consecutive messages from the same
+  // sender within this window collapse into one block (avatar/name shown
+  // once), matching Discord's own ~7 minute threshold.
+  var GROUP_WINDOW_MS = 7 * 60 * 1000;
 
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
 
   function updateEmpty() {
     if (!emptyEl) return;
-    emptyEl.hidden = msgsEl.querySelector(".pl-msg-wrap") !== null;
+    emptyEl.hidden = msgsEl.querySelector(".pl-msgline") !== null;
   }
 
   function atBottom() { return msgsEl.scrollHeight - msgsEl.scrollTop - msgsEl.clientHeight < 60; }
   function scrollDown() { msgsEl.scrollTop = msgsEl.scrollHeight; }
 
   function closeAllActions() {
-    msgsEl.querySelectorAll(".pl-msg-wrap.actions-open").forEach(function (w) { w.classList.remove("actions-open"); });
+    msgsEl.querySelectorAll(".pl-msgline.actions-open").forEach(function (w) { w.classList.remove("actions-open"); });
   }
 
   function reactionsHTML(m) {
@@ -71,45 +75,85 @@
     return out + "</div>";
   }
 
-  function bubbleInnerHTML(m) {
-    var html = "";
-    if (CHAT.isGroup && !m.is_mine) html += '<div class="pl-msg-sender">' + esc(m.sender_name || m.sender) + "</div>";
+  function avatarHTML(m) {
+    return m.sender_avatar_url
+      ? '<img src="' + esc(m.sender_avatar_url) + '" alt="">'
+      : esc((m.sender_name || m.sender || "?")[0].toUpperCase());
+  }
+
+  function lineInnerHTML(m) {
+    var html = '<span class="pl-msgline-hovertime">' + esc(m.created_ago) + '</span>';
+    html += '<div class="pl-msgline-content">';
+    html += replyQuoteHTML(m);
     if (m.text) html += (m.text_html || esc(m.text).replace(/\n/g, "<br>"));
     if (m.attachment) html += A.html(m.attachment);
-    html += '<div class="pl-msg-meta">';
-    if (m.pinned) html += '<span class="pl-msg-pinned-tag"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 4h6l-1 5 3 3v2H7v-2l3-3-1-5z"/></svg></span>';
-    if (m.edited) html += '<span class="pl-msg-edited">bearbeitet</span>';
-    html += '<span class="pl-msg-time">' + esc(m.created_ago) + '</span></div>';
+    if (m.pinned || m.edited) {
+      html += '<span class="pl-msgline-tags">';
+      if (m.pinned) html += '<span class="pl-msg-pinned-tag"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 4h6l-1 5 3 3v2H7v-2l3-3-1-5z"/></svg></span>';
+      if (m.edited) html += '<span class="pl-msg-edited">(bearbeitet)</span>';
+      html += '</span>';
+    }
+    html += '</div>';
+    html += reactionsHTML(m) + actionsHTML(m);
     return html;
   }
 
-  function renderMsgWrap(wrap, m) {
-    wrap.dataset.msgId = m.id;
-    wrap.className = "pl-msg-wrap " + (m.is_mine ? "me" : "them");
-    wrap.innerHTML = replyQuoteHTML(m)
-      + '<div class="pl-msg ' + (m.is_mine ? "me" : "them") + '" data-msg-id="' + m.id + '">' + bubbleInnerHTML(m) + '</div>'
-      + reactionsHTML(m) + actionsHTML(m);
+  function lineHTML(m) {
+    return '<div class="pl-msgline" data-msg-id="' + m.id + '">' + lineInnerHTML(m) + '</div>';
+  }
+
+  function blockOpenHTML(m) {
+    return '<span class="pl-avatar pl-msgblock-avatar" style="background:' + esc(m.sender_avatar_color) + '">' + avatarHTML(m) + '</span>'
+      + '<div class="pl-msgblock-col">'
+      + '<div class="pl-msgblock-headrow"><b class="pl-msgblock-name">' + esc(m.sender_name || m.sender) + '</b>'
+      + '<span class="pl-msgblock-time">' + esc(m.created_ago) + '</span></div>';
+  }
+
+  function lastBlock() {
+    var blocks = msgsEl.querySelectorAll(".pl-msgblock");
+    return blocks.length ? blocks[blocks.length - 1] : null;
+  }
+
+  function blockMatches(block, m) {
+    if (!block) return false;
+    if (block.dataset.senderId !== String(m.sender_id)) return false;
+    var lastTs = Number(block.dataset.lastTs || 0);
+    var ts = new Date(m.created_at).getTime();
+    return ts >= lastTs && (ts - lastTs) < GROUP_WINDOW_MS;
   }
 
   function addMsg(m) {
     msgById[m.id] = m;
-    var wrap = document.createElement("div");
-    renderMsgWrap(wrap, m);
-    msgsEl.appendChild(wrap);
+    var ts = new Date(m.created_at).getTime();
+    var block = lastBlock();
+    if (blockMatches(block, m)) {
+      block.querySelector(".pl-msgblock-col").insertAdjacentHTML("beforeend", lineHTML(m));
+      block.dataset.lastTs = ts;
+    } else {
+      var wrap = document.createElement("div");
+      wrap.className = "pl-msgblock" + (m.is_mine ? " mine" : "");
+      wrap.dataset.senderId = m.sender_id;
+      wrap.dataset.lastTs = ts;
+      wrap.innerHTML = blockOpenHTML(m) + lineHTML(m) + "</div>";
+      msgsEl.appendChild(wrap);
+    }
     lastId = Math.max(lastId, m.id);
     updateEmpty();
   }
 
   function updateMsg(m) {
     msgById[m.id] = m;
-    var wrap = msgsEl.querySelector('.pl-msg-wrap[data-msg-id="' + m.id + '"]');
-    if (wrap) renderMsgWrap(wrap, m);
+    var line = msgsEl.querySelector('.pl-msgline[data-msg-id="' + m.id + '"]');
+    if (line) line.innerHTML = lineInnerHTML(m);
   }
 
   function removeMsg(id) {
     delete msgById[id];
-    var wrap = msgsEl.querySelector('.pl-msg-wrap[data-msg-id="' + id + '"]');
-    if (wrap) wrap.remove();
+    var line = msgsEl.querySelector('.pl-msgline[data-msg-id="' + id + '"]');
+    if (!line) return;
+    var block = line.closest(".pl-msgblock");
+    line.remove();
+    if (block && !block.querySelector(".pl-msgline")) block.remove();
     updateEmpty();
   }
 
@@ -230,23 +274,23 @@
       .then(function (j) { if (j.ok) { updateMsg(j.message); window.plToast(j.message.pinned ? "Angeheftet." : "Gelöst."); } });
   }
 
-  function startEdit(wrap, m) {
-    var bubble = wrap.querySelector(".pl-msg");
-    bubble.classList.add("pl-msg-editing");
-    bubble.innerHTML = '<textarea class="pl-msg-edit-input" rows="2">' + esc(m.text) + '</textarea>'
+  function startEdit(line, m) {
+    var content = line.querySelector(".pl-msgline-content");
+    content.classList.add("pl-msg-editing");
+    content.innerHTML = '<textarea class="pl-msg-edit-input" rows="2">' + esc(m.text) + '</textarea>'
       + '<div class="pl-msg-edit-actions"><button type="button" data-cancel>Abbrechen</button><button type="button" data-save>Speichern</button></div>';
-    var ta = bubble.querySelector("textarea");
+    var ta = content.querySelector("textarea");
     ta.focus(); ta.selectionStart = ta.value.length;
-    bubble.querySelector("[data-cancel]").addEventListener("click", function () { renderMsgWrap(wrap, m); });
-    bubble.querySelector("[data-save]").addEventListener("click", function () { saveEdit(m.id, ta.value.trim(), wrap, m); });
+    content.querySelector("[data-cancel]").addEventListener("click", function () { updateMsg(m); });
+    content.querySelector("[data-save]").addEventListener("click", function () { saveEdit(m.id, ta.value.trim(), m); });
   }
 
-  function saveEdit(msgId, text, wrap, original) {
+  function saveEdit(msgId, text, original) {
     if (!text) return;
     fetch("/api/pl/messages/" + msgId, {
       method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: text }),
     }).then(function (r) { return r.json(); }).then(function (j) {
-      if (j.ok) updateMsg(j.message); else renderMsgWrap(wrap, original);
+      if (j.ok) updateMsg(j.message); else updateMsg(original);
     });
   }
 
@@ -259,14 +303,14 @@
   msgsEl.addEventListener("click", function (e) {
     var scrollTarget = e.target.closest("[data-scroll-to]");
     if (scrollTarget) {
-      var target = msgsEl.querySelector('.pl-msg-wrap[data-msg-id="' + scrollTarget.dataset.scrollTo + '"]');
+      var target = msgsEl.querySelector('.pl-msgline[data-msg-id="' + scrollTarget.dataset.scrollTo + '"]');
       if (target) { target.scrollIntoView({ block: "center", behavior: "smooth" }); }
       return;
     }
     var actBtn = e.target.closest("[data-act]");
-    var wrap = e.target.closest(".pl-msg-wrap");
-    if (!wrap) return;
-    var msgId = Number(wrap.dataset.msgId);
+    var line = e.target.closest(".pl-msgline");
+    if (!line) return;
+    var msgId = Number(line.dataset.msgId);
     var m = msgById[msgId];
     if (actBtn) {
       e.stopPropagation();
@@ -274,7 +318,7 @@
       if (act === "react") openEmojiPicker(actBtn, msgId);
       else if (act === "reply") { setReply(msgId); closeAllActions(); }
       else if (act === "pin") { togglePin(msgId); closeAllActions(); }
-      else if (act === "edit") { startEdit(wrap, m); closeAllActions(); }
+      else if (act === "edit") { startEdit(line, m); closeAllActions(); }
       else if (act === "delete") { deleteMessage(msgId); closeAllActions(); }
       return;
     }
@@ -282,15 +326,15 @@
       react(msgId, e.target.closest(".pl-msg-reaction").dataset.reactEmoji);
       return;
     }
-    if (e.target.closest(".pl-msg")) {
-      var wasOpen = wrap.classList.contains("actions-open");
+    if (e.target.closest(".pl-msgline-content")) {
+      var wasOpen = line.classList.contains("actions-open");
       closeAllActions();
-      if (!wasOpen) wrap.classList.add("actions-open");
+      if (!wasOpen) line.classList.add("actions-open");
     }
   });
 
   document.addEventListener("click", function (e) {
-    if (!e.target.closest(".pl-msg-wrap")) closeAllActions();
+    if (!e.target.closest(".pl-msgline")) closeAllActions();
     if (!e.target.closest(".pl-emoji-picker") && !e.target.closest('[data-act="react"]')) closeEmojiPicker();
     if (!e.target.closest(".pl-chat-pins-panel") && !e.target.closest("#plPinsBtn")) pinsPanel.hidden = true;
   });
@@ -322,7 +366,7 @@
     var row = e.target.closest("[data-scroll-to]");
     if (!row) return;
     pinsPanel.hidden = true;
-    var target = msgsEl.querySelector('.pl-msg-wrap[data-msg-id="' + row.dataset.scrollTo + '"]');
+    var target = msgsEl.querySelector('.pl-msgline[data-msg-id="' + row.dataset.scrollTo + '"]');
     if (target) target.scrollIntoView({ block: "center", behavior: "smooth" });
     else window.plToast("Nachricht ist weiter oben im Verlauf.");
   });

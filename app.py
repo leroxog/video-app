@@ -2046,8 +2046,9 @@ def _pl_serialize_message(m, me):
             g["me"] = True
     return {
         "id": m.id, "text": m.text, "text_html": _pl_linkify(m.text),
-        "sender": m.sender.username, "sender_name": pl_display_name(m.sender),
+        "sender_id": m.sender_id, "sender": m.sender.username, "sender_name": pl_display_name(m.sender),
         "sender_avatar_color": pl_avatar_color(m.sender.username),
+        "sender_avatar_url": _pl_media_url(m.sender.pl_avatar_image),
         "is_mine": m.sender_id == me.id, "created_ago": pl_ago(m.created_at),
         "created_at": (m.created_at.replace(tzinfo=timezone.utc) if m.created_at.tzinfo is None else m.created_at).isoformat(),
         "edited": m.edited_at is not None,

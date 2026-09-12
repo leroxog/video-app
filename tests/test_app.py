@@ -355,6 +355,8 @@ def test_send_and_receive_messages(client):
     got = bob.get(f"/api/pl/chats/{cid}/messages").get_json()
     assert [m["text"] for m in got["messages"]] == ["hi bob"]
     assert got["messages"][0]["is_mine"] is False
+    assert got["messages"][0]["sender"] == "alice"
+    assert "sender_id" in got["messages"][0] and "sender_avatar_url" in got["messages"][0]
 
 
 def _dm(client, other, other_client):
