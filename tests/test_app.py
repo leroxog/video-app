@@ -538,12 +538,15 @@ def test_create_server_sets_up_default_role_and_channel(client):
     assert j["ok"] is True
     sid = j["server"]["id"]
     assert j["server"]["is_owner"] is True
-    assert sorted(j["server"]["my_permissions"]) == sorted(list(app_module.PL_SERVER_PERMISSIONS))
+    assert j["server"]["my_role"] == "admin"
+    expected_perms = set(app_module.PL_MODERATOR_PERMISSIONS) | {"manage_server", "manage_roles"}
+    assert set(j["server"]["my_permissions"]) == expected_perms
 
     detail = client.get(f"/api/pl/servers/{sid}").get_json()
     assert [c["name"] for c in detail["channels"]] == ["allgemein"]
-    assert len(detail["roles"]) == 1 and detail["roles"][0]["is_default"] is True
-    assert len(detail["members"]) == 1 and detail["members"][0]["username"] == "alice"
+    assert len(detail["members"]) == 1
+    assert detail["members"][0]["username"] == "alice"
+    assert detail["members"][0]["role"] == "admin"
 
     # the owner can immediately chat in the default channel via the normal message API
     cid = detail["channels"][0]["id"]
@@ -690,7 +693,7 @@ def test_non_owner_without_permission_cannot_create_channel(client):
     assert r.status_code == 403
 
 
-def test_role_creation_and_permission_grant(client):
+def test_promoting_to_moderator_grants_and_demoting_revokes_permissions(client):
     signup(client, "alice")
     j = _make_server(client)
     sid = j["server"]["id"]
@@ -698,28 +701,43 @@ def test_role_creation_and_permission_grant(client):
     bob = make_user(client, "bob")
     bob.post(f"/api/pl/servers/join/{code}")
 
-    role = client.post(f"/api/pl/servers/{sid}/roles", json={
-        "name": "Mods", "color": "#ff0000", "permissions": ["manage_channels", "kick_members"],
-    }).get_json()["role"]
-    # bob still can't manage channels without the role
+    # plain member: can't manage channels
     assert bob.post(f"/api/pl/servers/{sid}/channels", json={"name": "x"}).status_code == 403
 
     members = client.get(f"/api/pl/servers/{sid}").get_json()["members"]
     bob_member = next(m for m in members if m["username"] == "bob")
-    r = client.post(f"/api/pl/servers/{sid}/members/{bob_member['user_id']}/roles", json={"role_id": role["id"], "assign": True})
-    assert r.get_json()["ok"] is True and role["id"] in r.get_json()["member"]["role_ids"]
+    assert bob_member["role"] == "member"
 
-    # now bob can create a channel
+    r = client.post(f"/api/pl/servers/{sid}/members/{bob_member['user_id']}/role", json={"role": "moderator"})
+    assert r.get_json()["ok"] is True
+    assert r.get_json()["member"]["role"] == "moderator"
+
+    # now bob (moderator) can create a channel and kick
     assert bob.post(f"/api/pl/servers/{sid}/channels", json={"name": "x"}).get_json()["ok"] is True
 
+    # demote back to member
+    r = client.post(f"/api/pl/servers/{sid}/members/{bob_member['user_id']}/role", json={"role": "member"})
+    assert r.get_json()["member"]["role"] == "member"
+    assert bob.post(f"/api/pl/servers/{sid}/channels", json={"name": "y"}).status_code == 403
 
-def test_default_role_cannot_be_deleted(client):
+
+def test_only_admin_can_promote_and_owner_role_is_fixed(client):
     signup(client, "alice")
     j = _make_server(client)
     sid = j["server"]["id"]
-    default_role_id = client.get(f"/api/pl/servers/{sid}").get_json()["roles"][0]["id"]
-    r = client.delete(f"/api/pl/servers/{sid}/roles/{default_role_id}")
-    assert r.status_code == 400 and r.get_json()["error"] == "cannot_delete_default_role"
+    code = j["server"]["invite_code"]
+    bob = make_user(client, "bob")
+    bob.post(f"/api/pl/servers/join/{code}")
+    bob_uid = next(m for m in client.get(f"/api/pl/servers/{sid}").get_json()["members"] if m["username"] == "bob")["user_id"]
+
+    # bob (plain member) cannot promote himself
+    r = bob.post(f"/api/pl/servers/{sid}/members/{bob_uid}/role", json={"role": "moderator"})
+    assert r.status_code == 403
+
+    # the owner's role can't be changed via this endpoint
+    alice_uid = next(m for m in client.get(f"/api/pl/servers/{sid}").get_json()["members"] if m["username"] == "alice")["user_id"]
+    r2 = client.post(f"/api/pl/servers/{sid}/members/{alice_uid}/role", json={"role": "moderator"})
+    assert r2.get_json() == {"ok": False, "error": "owner_is_always_admin"}
 
 
 def test_kick_removes_channel_access(client):

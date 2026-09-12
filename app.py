@@ -41,7 +41,7 @@ from itsdangerous import URLSafeSerializer, BadSignature
 from models import (
     db, User, Subscription, ErrorLog,
     PlChat, PlChatMember, PlMessage, PlMessageReaction, PlMedia,
-    PlServer, PlRole, PlServerMember, PlServerBan, PL_SERVER_PERMISSIONS,
+    PlServer, PlServerMember, PlServerBan, PL_MODERATOR_PERMISSIONS,
     PlStory, PlStoryView,
 )
 
@@ -616,6 +616,7 @@ def ensure_sqlite_columns_exist():
             ("category", "VARCHAR(80)"), ("channel_type", "VARCHAR(10) NOT NULL DEFAULT 'text'"),
         ],
         "pl_server": [("is_public", "BOOLEAN NOT NULL DEFAULT 0")],
+        "pl_server_member": [("role", "VARCHAR(10) NOT NULL DEFAULT 'member'")],
         # 7Ai (2026-09-08, see ai_assistant.py's SEVENAI_SYSTEM_PROMPT) --
         # existing ai_chat rows predate this column and are all Nex chats,
         # so the default backfills them correctly with no extra code.
@@ -732,6 +733,7 @@ def ensure_columns_exist():
         'ALTER TABLE pl_chat ADD COLUMN IF NOT EXISTS category VARCHAR(80)',
         "ALTER TABLE pl_chat ADD COLUMN IF NOT EXISTS channel_type VARCHAR(10) NOT NULL DEFAULT 'text'",
         'ALTER TABLE pl_server ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT FALSE',
+        "ALTER TABLE pl_server_member ADD COLUMN IF NOT EXISTS role VARCHAR(10) NOT NULL DEFAULT 'member'",
         # Root cause confirmed live (psycopg2.errors.UndefinedColumn):
         # ai_personality was created by db.create_all() back when the
         # AiPersonality model first shipped (no mimic_user_style yet) --
@@ -2440,18 +2442,23 @@ def _pl_server_member_row(server_id, user):
     return PlServerMember.query.filter_by(server_id=server_id, user_id=user.id).first()
 
 
-def _pl_server_permissions(server, member):
+def _pl_server_role(server, member):
+    """"admin" | "moderator" | "member" -- admin is always the owner,
+    computed rather than stored (same as before the fixed 3-tier system)."""
     if member is None:
-        return set()
+        return None
     if server.owner_id == member.user_id:
-        return set(PL_SERVER_PERMISSIONS)
-    perms = set()
-    for role in member.roles:
-        try:
-            perms.update(json.loads(role.permissions or "[]"))
-        except Exception:
-            pass
-    return perms & set(PL_SERVER_PERMISSIONS)
+        return "admin"
+    return "moderator" if member.role == "moderator" else "member"
+
+
+def _pl_server_permissions(server, member):
+    role = _pl_server_role(server, member)
+    if role == "admin":
+        return set(PL_MODERATOR_PERMISSIONS) | {"manage_server", "manage_roles"}
+    if role == "moderator":
+        return set(PL_MODERATOR_PERMISSIONS)
+    return set()
 
 
 def _pl_require_server_permission(server_id, me, perm=None):
@@ -2487,6 +2494,7 @@ def _pl_serialize_server(server, me):
         "icon_url": _pl_media_url(server.icon_image),
         "owner_id": server.owner_id, "is_owner": server.owner_id == me.id,
         "invite_code": server.invite_code, "is_public": server.is_public,
+        "my_role": _pl_server_role(server, member),
         "my_permissions": sorted(_pl_server_permissions(server, member)) if member else [],
         "member_count": len(server.members),
     }
@@ -2499,17 +2507,6 @@ def _pl_serialize_channel(ch):
     }
 
 
-def _pl_serialize_role(role):
-    try:
-        perms = json.loads(role.permissions or "[]")
-    except Exception:
-        perms = []
-    return {
-        "id": role.id, "name": role.name, "color": role.color,
-        "permissions": perms, "position": role.position, "is_default": role.is_default,
-    }
-
-
 def _pl_serialize_server_member(server, sm):
     return {
         "user_id": sm.user_id, "username": sm.user.username,
@@ -2517,7 +2514,7 @@ def _pl_serialize_server_member(server, sm):
         "avatar_color": pl_avatar_color(sm.user.username),
         "avatar_url": _pl_media_url(sm.user.pl_avatar_image),
         "is_owner": server.owner_id == sm.user_id,
-        "role_ids": [r.id for r in sm.roles],
+        "role": _pl_server_role(server, sm),
         "online": _pl_is_online(sm.user),
     }
 
@@ -2540,9 +2537,6 @@ def api_pl_servers_create():
     server = PlServer(name=name, owner_id=me.id, invite_code=_pl_gen_invite_code())
     db.session.add(server)
     db.session.flush()
-    default_role = PlRole(server_id=server.id, name="@everyone", color="#99aab5", permissions="[]",
-                           position=0, is_default=True)
-    db.session.add(default_role)
     channel = PlChat(is_group=True, server_id=server.id, name="allgemein", position=0, created_by=me.id)
     db.session.add(channel)
     db.session.flush()
@@ -2561,7 +2555,6 @@ def api_pl_server_detail(server_id):
     return jsonify({
         "ok": True, "server": _pl_serialize_server(server, me),
         "channels": [_pl_serialize_channel(c) for c in server.channels],
-        "roles": [_pl_serialize_role(r) for r in server.roles],
         "members": [_pl_serialize_server_member(server, sm) for sm in server.members],
     })
 
@@ -2616,9 +2609,6 @@ def api_pl_server_join(code):
         sm = PlServerMember(server_id=server.id, user_id=me.id)
         db.session.add(sm)
         db.session.flush()
-        default_role = next((r for r in server.roles if r.is_default), None)
-        if default_role is not None:
-            sm.roles.append(default_role)
         _pl_sync_new_member_into_channels(server, me)
         db.session.commit()
     return jsonify({"ok": True, "server": _pl_serialize_server(server, me)})
@@ -2641,78 +2631,24 @@ def api_pl_server_leave(server_id):
     return jsonify({"ok": True})
 
 
-@app.route("/api/pl/servers/<int:server_id>/roles", methods=["POST"])
-def api_pl_server_create_role(server_id):
-    me = current_user()
-    server, member = _pl_require_server_permission(server_id, me, "manage_roles")
-    if server is None:
-        return jsonify({"ok": False, "error": "not_found_or_no_permission"}), 403
-    data = request.get_json(silent=True) or {}
-    name = (data.get("name") or "").strip()[:50]
-    if not name:
-        return jsonify({"ok": False, "error": "no_name"}), 400
-    color = data.get("color") if re.match(r"^#[0-9a-fA-F]{6}$", data.get("color") or "") else "#99aab5"
-    perms = [p for p in (data.get("permissions") or []) if p in PL_SERVER_PERMISSIONS]
-    role = PlRole(server_id=server_id, name=name, color=color, permissions=json.dumps(perms),
-                  position=len(server.roles))
-    db.session.add(role)
-    db.session.commit()
-    return jsonify({"ok": True, "role": _pl_serialize_role(role)})
-
-
-@app.route("/api/pl/servers/<int:server_id>/roles/<int:role_id>", methods=["PATCH"])
-def api_pl_server_edit_role(server_id, role_id):
-    me = current_user()
-    server, member = _pl_require_server_permission(server_id, me, "manage_roles")
-    if server is None:
-        return jsonify({"ok": False, "error": "not_found_or_no_permission"}), 403
-    role = db.session.get(PlRole, role_id)
-    if role is None or role.server_id != server_id:
-        return jsonify({"ok": False, "error": "not_found"}), 404
-    data = request.get_json(silent=True) or {}
-    if "name" in data and not role.is_default:
-        v = (data.get("name") or "").strip()[:50]
-        if v:
-            role.name = v
-    if "color" in data and re.match(r"^#[0-9a-fA-F]{6}$", data.get("color") or ""):
-        role.color = data["color"]
-    if "permissions" in data:
-        role.permissions = json.dumps([p for p in (data.get("permissions") or []) if p in PL_SERVER_PERMISSIONS])
-    db.session.commit()
-    return jsonify({"ok": True, "role": _pl_serialize_role(role)})
-
-
-@app.route("/api/pl/servers/<int:server_id>/roles/<int:role_id>", methods=["DELETE"])
-def api_pl_server_delete_role(server_id, role_id):
-    me = current_user()
-    server, member = _pl_require_server_permission(server_id, me, "manage_roles")
-    if server is None:
-        return jsonify({"ok": False, "error": "not_found_or_no_permission"}), 403
-    role = db.session.get(PlRole, role_id)
-    if role is None or role.server_id != server_id:
-        return jsonify({"ok": False, "error": "not_found"}), 404
-    if role.is_default:
-        return jsonify({"ok": False, "error": "cannot_delete_default_role"}), 400
-    db.session.delete(role)
-    db.session.commit()
-    return jsonify({"ok": True})
-
-
-@app.route("/api/pl/servers/<int:server_id>/members/<int:user_id>/roles", methods=["POST"])
-def api_pl_server_toggle_member_role(server_id, user_id):
+@app.route("/api/pl/servers/<int:server_id>/members/<int:user_id>/role", methods=["POST"])
+def api_pl_server_set_member_role(server_id, user_id):
+    """Promote to Moderator or demote back to Mitglied -- Admin-only
+    (manage_roles), and only the owner is ever Admin, so this can't be
+    used to hand out/take away ownership."""
     me = current_user()
     server, member = _pl_require_server_permission(server_id, me, "manage_roles")
     if server is None:
         return jsonify({"ok": False, "error": "not_found_or_no_permission"}), 403
     target = _pl_server_member_row(server_id, db.session.get(User, user_id))
-    role = db.session.get(PlRole, (request.get_json(silent=True) or {}).get("role_id"))
-    if target is None or role is None or role.server_id != server_id:
+    if target is None:
         return jsonify({"ok": False, "error": "not_found"}), 404
-    assign = bool((request.get_json(silent=True) or {}).get("assign"))
-    if assign and role not in target.roles:
-        target.roles.append(role)
-    elif not assign and role in target.roles:
-        target.roles.remove(role)
+    if target.user_id == server.owner_id:
+        return jsonify({"ok": False, "error": "owner_is_always_admin"}), 400
+    role = (request.get_json(silent=True) or {}).get("role")
+    if role not in ("member", "moderator"):
+        return jsonify({"ok": False, "error": "bad_role"}), 400
+    target.role = role
     db.session.commit()
     return jsonify({"ok": True, "member": _pl_serialize_server_member(server, target)})
 

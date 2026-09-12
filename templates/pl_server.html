@@ -56,23 +56,19 @@
     </div>
 </div>
 
-<!-- settings: roles + bans -->
+<!-- settings -->
 <div class="pl-sheet-backdrop pl-sheet-modal" id="plSrvSettingsSheet">
     <div class="pl-sheet">
         <div class="pl-sheet-grip"></div>
         <div class="pl-sheet-bar">
             <button class="pl-sheet-x" data-close-sheet aria-label="Schließen">&times;</button>
-            <h2>Rollen</h2>
+            <h2>Server</h2>
             <span></span>
         </div>
-        <label class="pl-check-inline" style="margin-bottom:14px;">
+        <label class="pl-check-inline" style="margin-bottom:6px;">
             <input type="checkbox" id="plSrvPublicToggle"> Server öffentlich (erscheint bei „Könntest du kennen?!“ für neue Accounts)
         </label>
-        <div class="pl-srv-role-list" id="plSrvRoleList"></div>
-        <div class="pl-srv-new-role">
-            <input class="pl-input" id="plSrvNewRoleName" placeholder="Neue Rolle: Name" maxlength="50">
-            <button class="pl-btn ghost" id="plSrvAddRoleBtn">Rolle hinzufügen</button>
-        </div>
+        <p style="color:var(--pl-text-dim);font-size:13px;margin:14px 0 0;">Moderator:innen ernennen, kicken oder bannen: Tippe rechts in der Mitgliederliste auf „⋮“ neben einer Person.</p>
     </div>
 </div>
 
@@ -91,23 +87,6 @@
         </div>
         <input class="pl-input" id="plSrvNewChannelName" placeholder="Kanalname" maxlength="50">
         <input class="pl-input" id="plSrvNewChannelCategory" placeholder="Kategorie (optional)" maxlength="80">
-    </div>
-</div>
-
-<!-- role editor -->
-<div class="pl-sheet-backdrop pl-sheet-modal" id="plSrvRoleEditSheet">
-    <div class="pl-sheet">
-        <div class="pl-sheet-grip"></div>
-        <div class="pl-sheet-bar">
-            <button class="pl-sheet-x" data-close-sheet aria-label="Schließen">&times;</button>
-            <h2 id="plSrvRoleEditTitle">Rolle</h2>
-            <button class="pl-danger" id="plSrvDeleteRoleBtn" style="background:none;border:none;">Löschen</button>
-        </div>
-        <input class="pl-input" id="plSrvRoleEditName" placeholder="Name" maxlength="50">
-        <input type="color" id="plSrvRoleEditColor" class="pl-srv-color-input">
-        <div class="pl-section-label" style="margin:10px 4px 4px;">Rechte</div>
-        <div class="pl-srv-perms" id="plSrvRoleEditPerms"></div>
-        <button class="pl-btn pink" id="plSrvSaveRoleBtn" style="margin-top:14px;">Speichern</button>
     </div>
 </div>
 
