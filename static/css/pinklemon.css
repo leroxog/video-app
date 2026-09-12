@@ -2164,10 +2164,11 @@ body:has(.nx-app)::before { display: none; }
 .pl-wheel-item.is-center { color: #fff; font-size: 19px; transform: scale(1.05); }
 .pl-wheel-center-line { position: absolute; left: 0; right: 0; top: 66px; height: 38px; border-top: 1px solid rgba(255, 255, 255, .18); border-bottom: 1px solid rgba(255, 255, 255, .18); pointer-events: none; z-index: 2; border-radius: 8px; }
 
-.pl-gender-row { display: flex; gap: 8px; margin-bottom: 14px; }
+.pl-gender-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
 .pl-gender-btn {
-  flex: 1; padding: 12px 4px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, .14);
+  padding: 12px 4px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, .14);
   background: rgba(255, 255, 255, .05); color: rgba(255, 255, 255, .75); font-size: 12.5px; font-weight: 700;
+  line-height: 1.3;
 }
 .pl-gender-btn.is-active { background: var(--pl-pink); border-color: var(--pl-pink); color: #fff; }
 
