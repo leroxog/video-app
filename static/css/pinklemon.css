@@ -1,47 +1,50 @@
 /* ===================================================================
-   pinklemon -- shared shell + Home feed. Very rounded, pink accent,
-   mobile-first phone frame. Dark by default (matches the rest of the
-   app); light is a data-theme override.
+   pinklemon -- shared shell + Home feed. Discord-matched palette
+   (blurple accent, tighter corners), mobile-first phone frame. Dark
+   by default (matches the rest of the app); light is a data-theme
+   override. Token NAMES are historical (--pl-pink etc.) but the
+   VALUES now follow Discord's actual theme colors throughout.
    =================================================================== */
 @import url('https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,700&display=swap');
 
 :root {
   /* rounded UI typeface -- covers letters, numbers, everything */
-  --pl-font: "Nunito", "Segoe UI", -apple-system, system-ui, "Helvetica Neue", Arial, sans-serif;
-  /* ChatGPT-style: soft dark greys, gentle borders */
-  --pl-bg: #212121;
-  --pl-bg-2: #171717;           /* sidebar / deeper surface */
-  --pl-surface: #2f2f2f;
-  --pl-surface-2: #373737;
-  --pl-surface-3: #4b4b4b;
-  --pl-border: rgba(255, 255, 255, 0.10);
-  --pl-hover: rgba(255, 255, 255, 0.055);
-  --pl-text: #ececec;
-  --pl-text-dim: #c4c4c4;
-  --pl-text-faint: #8e8e8e;
-  --pl-pink: #ff2d95;
-  --pl-pink-soft: rgba(255, 45, 149, 0.16);
-  --pl-danger: #ff5a5a;
+  --pl-font: "gg sans", "Noto Sans", "Segoe UI", -apple-system, system-ui, "Helvetica Neue", Arial, sans-serif;
+  /* Discord dark theme: layered near-black greys, blurple accent */
+  --pl-bg: #313338;
+  --pl-bg-2: #1e1f22;           /* sidebar / deeper surface */
+  --pl-surface: #2b2d31;
+  --pl-surface-2: #383a40;
+  --pl-surface-3: #404249;
+  --pl-border: rgba(255, 255, 255, 0.06);
+  --pl-hover: rgba(255, 255, 255, 0.045);
+  --pl-text: #f2f3f5;
+  --pl-text-dim: #b5bac1;
+  --pl-text-faint: #949ba4;
+  --pl-pink: #5865f2;
+  --pl-pink-soft: rgba(88, 101, 242, 0.16);
+  --pl-danger: #da373c;
+  --pl-online: #23a55a;
   --pl-blur: blur(12px) saturate(1.3);
-  --pl-r-sm: 12px;
-  --pl-r-md: 20px;
-  --pl-r-lg: 30px;
-  --pl-r-xl: 40px;
+  --pl-r-sm: 4px;
+  --pl-r-md: 8px;
+  --pl-r-lg: 8px;
+  --pl-r-xl: 12px;
   --pl-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
 }
 
 :root[data-theme="light"] {
   --pl-bg: #ffffff;
-  --pl-bg-2: #f9f9f9;
-  --pl-surface: #f4f4f4;
-  --pl-surface-2: #ececec;
-  --pl-surface-3: #dcdcdc;
-  --pl-border: rgba(0, 0, 0, 0.12);
-  --pl-hover: rgba(0, 0, 0, 0.04);
-  --pl-text: #0d0d0d;
-  --pl-text-dim: #3d3d3d;
-  --pl-text-faint: #676767;
-  --pl-pink-soft: rgba(255, 45, 149, 0.12);
+  --pl-bg-2: #f2f3f5;
+  --pl-surface: #f2f3f5;
+  --pl-surface-2: #e3e5e8;
+  --pl-surface-3: #d4d6da;
+  --pl-border: rgba(0, 0, 0, 0.08);
+  --pl-hover: rgba(0, 0, 0, 0.035);
+  --pl-text: #060607;
+  --pl-text-dim: #5c5e66;
+  --pl-text-faint: #6f7075;
+  --pl-pink-soft: rgba(88, 101, 242, 0.12);
   --pl-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
 }
 
@@ -951,8 +954,8 @@ img { max-width: 100%; display: block; }
 }
 .pl-chat-empty-orb {
   width: 74px; height: 74px; border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, var(--pl-pink), #7a3bd0 70%, #3a1c74);
-  box-shadow: 0 12px 40px rgba(255, 45, 149, 0.35);
+  background: radial-gradient(circle at 35% 30%, var(--pl-pink), #4752c4 70%, #2a3494);
+  box-shadow: 0 12px 40px rgba(88, 101, 242, 0.35);
 }
 .pl-chat-empty-title { font-weight: 800; font-size: 15px; }
 .pl-chat-empty-sub { font-size: 12.5px; color: var(--pl-text-faint); line-height: 1.5; }
@@ -1075,7 +1078,7 @@ img { max-width: 100%; display: block; }
 
 /* ---- 1:1 voice calls (WebRTC, see pinklemon-chat.js) ---- */
 .pl-call-overlay {
-  position: fixed; inset: 0; z-index: 200; background: #171717;
+  position: fixed; inset: 0; z-index: 200; background: #1e1f22;
   display: flex; flex-direction: column; align-items: center; justify-content: space-between;
   padding: max(40px, env(safe-area-inset-top,0px)) 20px calc(40px + env(safe-area-inset-bottom, 0px));
 }
@@ -1098,7 +1101,7 @@ img { max-width: 100%; display: block; }
   width: 54px; height: 54px; border-radius: 50%; border: 1px solid rgba(255,255,255,.2); background: rgba(255,255,255,.08); color: #fff;
   display: flex; align-items: center; justify-content: center;
 }
-.pl-call-mute.is-muted { background: #fff; color: #171717; }
+.pl-call-mute.is-muted { background: #fff; color: #1e1f22; }
 .pl-call-decline svg, .pl-call-accept svg, .pl-call-hangup svg, .pl-call-mute svg { width: 24px; height: 24px; }
 .pl-call-decline:active, .pl-call-accept:active, .pl-call-hangup:active, .pl-call-mute:active { transform: scale(0.92); }
 
@@ -1138,9 +1141,9 @@ img { max-width: 100%; display: block; }
 .g-wrap::before, .pl-chat-screen::before {
   content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none;
   background:
-    radial-gradient(38% 30% at 16% 10%, rgba(255, 45, 149, 0.30), transparent 70%),
-    radial-gradient(42% 34% at 88% 32%, rgba(120, 90, 255, 0.26), transparent 72%),
-    radial-gradient(46% 40% at 55% 100%, rgba(255, 90, 160, 0.20), transparent 72%);
+    radial-gradient(38% 30% at 16% 10%, rgba(88, 101, 242, 0.30), transparent 70%),
+    radial-gradient(42% 34% at 88% 32%, rgba(114, 137, 218, 0.26), transparent 72%),
+    radial-gradient(46% 40% at 55% 100%, rgba(71, 82, 196, 0.20), transparent 72%);
 }
 .g-top, .g-body,
 .pl-chat-header, .pl-chat-msgs, .pl-chat-compose, .pl-chat-empty { position: relative; z-index: 1; }
@@ -1780,8 +1783,8 @@ body::before {
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(46% 40% at 18% 12%, rgba(255, 45, 149, 0.16), transparent 70%),
-    radial-gradient(50% 42% at 88% 4%, rgba(124, 92, 255, 0.15), transparent 70%);
+    radial-gradient(46% 40% at 18% 12%, rgba(88, 101, 242, 0.16), transparent 70%),
+    radial-gradient(50% 42% at 88% 4%, rgba(114, 137, 218, 0.15), transparent 70%);
 }
 .pl-screen, .pl-nav, .pl-topbrand-row { position: relative; z-index: 1; }
 /* the standalone chat page already paints its own stronger glow */
@@ -1968,7 +1971,7 @@ body:has(.nx-app)::before { display: none; }
 .pl-promo:active .pl-promo-inner { transform: scale(.99); }
 .pl-promo-mark {
   flex: none; width: 40px; height: 40px; border-radius: 12px;
-  background: #2f2f2f url("/static/img/pinklemon-mark.svg") center/78% no-repeat;
+  background: #2b2d31 url("/static/img/pinklemon-mark.svg") center/78% no-repeat;
 }
 .pl-promo-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .pl-promo-text b { font-size: 15px; }
@@ -2013,7 +2016,7 @@ body:has(.nx-app)::before { display: none; }
 }
 .pl-install-mark {
   display: block; width: 56px; height: 56px; margin: 0 auto 12px; border-radius: 16px;
-  background: #2f2f2f url("/static/img/pinklemon-mark.svg") center/78% no-repeat;
+  background: #2b2d31 url("/static/img/pinklemon-mark.svg") center/78% no-repeat;
 }
 .pl-install-card h3 { margin: 0 0 6px; font-size: 17px; }
 .pl-install-card p { margin: 0 0 16px; font-size: 13.5px; color: var(--pl-text-dim); line-height: 1.55; }
@@ -2061,13 +2064,14 @@ body:has(.nx-app)::before { display: none; }
   background: var(--pl-surface); flex-shrink: 0; font-weight: 700;
 }
 .pl-srv-mobile-back { display: none; }
-.pl-srv-members-toggle { margin-left: auto; background: none; border: none; font-size: 18px; }
+.pl-srv-members-toggle { margin-left: auto; background: none; border: none; color: var(--pl-text-dim); display: flex; align-items: center; }
 .pl-srv-frame { flex: 1; border: none; width: 100%; }
 
 .pl-srv-member-list { padding: 6px 10px; }
 .pl-srv-member-row { display: flex; align-items: center; gap: 8px; padding: 7px 4px; position: relative; }
 .pl-srv-member-dot { position: absolute; left: 26px; top: 26px; width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--pl-surface); }
-.pl-srv-member-name { flex: 1; font-size: 13px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-srv-member-name { flex: 1; font-size: 13px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 5px; }
+.pl-srv-crown { flex-shrink: 0; color: #f0b232; }
 .pl-srv-member-menu-btn { flex-shrink: 0; background: none; border: none; color: var(--pl-text-faint); font-size: 16px; }
 
 .pl-srv-invite-code {
@@ -2097,9 +2101,9 @@ body:has(.nx-app)::before { display: none; }
 .pl-authbody { margin: 0; background: #0b0b0d; min-height: 100vh; overflow: hidden; color: #fff; }
 .pl-authbg { position: fixed; inset: 0; z-index: 0; overflow: hidden; }
 .pl-authlight { position: absolute; border-radius: 50%; filter: blur(80px); opacity: .55; }
-.pl-authlight.l1 { width: 480px; height: 480px; background: radial-gradient(circle, #ff2d95, transparent 70%); top: -120px; left: -100px; animation: plLightFloat1 18s ease-in-out infinite; }
-.pl-authlight.l2 { width: 420px; height: 420px; background: radial-gradient(circle, #ff6fb0, transparent 70%); bottom: -140px; right: -80px; animation: plLightFloat2 22s ease-in-out infinite; }
-.pl-authlight.l3 { width: 360px; height: 360px; background: radial-gradient(circle, #c13bd0, transparent 70%); top: 40%; left: 60%; animation: plLightFloat3 26s ease-in-out infinite; }
+.pl-authlight.l1 { width: 480px; height: 480px; background: radial-gradient(circle, #5865f2, transparent 70%); top: -120px; left: -100px; animation: plLightFloat1 18s ease-in-out infinite; }
+.pl-authlight.l2 { width: 420px; height: 420px; background: radial-gradient(circle, #7289da, transparent 70%); bottom: -140px; right: -80px; animation: plLightFloat2 22s ease-in-out infinite; }
+.pl-authlight.l3 { width: 360px; height: 360px; background: radial-gradient(circle, #404eed, transparent 70%); top: 40%; left: 60%; animation: plLightFloat3 26s ease-in-out infinite; }
 @keyframes plLightFloat1 { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(80px, 60px); } }
 @keyframes plLightFloat2 { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(-60px, -70px); } }
 @keyframes plLightFloat3 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-90px, 40px) scale(1.15); } }
@@ -2139,7 +2143,7 @@ body:has(.nx-app)::before { display: none; }
 .pl-authbtn {
   width: 100%; background: var(--pl-pink); color: #fff; border: none; border-radius: 999px;
   padding: 14px; font-size: 14.5px; font-weight: 800; margin-top: 8px;
-  box-shadow: 0 10px 26px rgba(255, 45, 149, .35);
+  box-shadow: 0 10px 26px rgba(88, 101, 242, .35);
   transition: transform .12s ease, opacity .12s ease, background .15s ease, box-shadow .15s ease;
 }
 .pl-authbtn:active { transform: scale(.97); }

@@ -59,8 +59,9 @@
       return '<div class="pl-srv-member-row" data-user-id="' + m.user_id + '">'
         + '<span class="pl-avatar" style="width:32px;height:32px;font-size:12px;background:' + esc(m.avatar_color) + '">'
         + (m.avatar_url ? '<img src="' + esc(m.avatar_url) + '" alt="">' : esc((m.name || "?")[0].toUpperCase())) + '</span>'
-        + '<span class="pl-srv-member-dot" style="background:' + (m.online ? "#23a55a" : "var(--pl-text-faint)") + '"></span>'
-        + '<span class="pl-srv-member-name" style="color:' + color + '">' + esc(m.nickname || m.name) + (m.is_owner ? " 👑" : "") + '</span>'
+        + '<span class="pl-srv-member-dot" style="background:' + (m.online ? "var(--pl-online)" : "var(--pl-text-faint)") + '"></span>'
+        + '<span class="pl-srv-member-name" style="color:' + color + '">' + esc(m.nickname || m.name)
+        + (m.is_owner ? ' <svg class="pl-srv-crown" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M3 8l4 3 5-6 5 6 4-3-2 11H5L3 8z"/></svg>' : "") + '</span>'
         + (has("manage_roles") || (has("kick_members") && !m.is_owner) ? '<button type="button" class="pl-srv-member-menu-btn" data-member-menu="' + m.user_id + '">&#8942;</button>' : '')
         + '</div>';
     }).join("");

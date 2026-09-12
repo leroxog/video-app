@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#0b0b0d">
+    <meta name="theme-color" content="#1e1f22">
     <meta name="robots" content="noindex, nofollow">
     <script>try { if (localStorage.getItem("pl_theme") === "light") document.documentElement.setAttribute("data-theme", "light"); } catch (e) {}</script>
     <title>Server · HEXAGONUM</title>
@@ -11,15 +11,16 @@
     <link rel="icon" href="{{ url_for('static', filename='img/pinklemon-mark.svg') }}" type="image/svg+xml">
 </head>
 <body>
+{%- from "partials/_pl_icons.html" import plicon -%}
 <div class="pl-srv-screen" id="plSrvScreen">
     <div class="pl-srv-channels" id="plSrvChannelsCol">
         <div class="pl-srv-side-header">
-            <button class="pl-chat-back" onclick="location.href='/freunde'" aria-label="Zurück">&#8592;</button>
+            <button class="pl-chat-back" onclick="location.href='/'" aria-label="Zurück">&#8592;</button>
             <div class="pl-srv-name" id="plSrvName">&nbsp;</div>
         </div>
         <div class="pl-srv-header-actions">
             <button type="button" id="plSrvInviteBtn">Einladen</button>
-            <button type="button" id="plSrvSettingsBtn" hidden>Einstellungen</button>
+            <button type="button" id="plSrvSettingsBtn" hidden>{{ plicon('gear', 15) }} Einstellungen</button>
         </div>
         <div class="pl-srv-channel-list" id="plSrvChannelList"></div>
         <button type="button" class="pl-srv-add-channel" id="plSrvAddChannelBtn" hidden>+ Kanal erstellen</button>
@@ -29,7 +30,7 @@
         <div class="pl-srv-main-header">
             <button class="pl-chat-back pl-srv-mobile-back" id="plSrvMobileBack" aria-label="Zurück">&#8592;</button>
             <span id="plSrvChannelName">#</span>
-            <button type="button" class="pl-srv-members-toggle" id="plSrvMembersToggleBtn" aria-label="Mitglieder">{{ '' }}👥</button>
+            <button type="button" class="pl-srv-members-toggle" id="plSrvMembersToggleBtn" aria-label="Mitglieder">{{ plicon('friends', 18) }}</button>
         </div>
         <iframe id="plSrvFrame" class="pl-srv-frame"></iframe>
     </div>
