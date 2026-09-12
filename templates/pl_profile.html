@@ -8,7 +8,7 @@
     <button class="pl-prof2-back" onclick="history.back()" aria-label="Zurück">&#8592;</button>
     <div class="pl-prof2-topinfo">
         <div class="pl-prof2-topname">{{ display_name }}</div>
-        <div class="pl-prof2-topsub">{{ post_count }} Posts</div>
+        <div class="pl-prof2-topsub">@{{ prof.username }}</div>
     </div>
 </div>
 
@@ -49,24 +49,6 @@
         {% endif %}
     </div>
 
-    <div class="pl-prof2-tabs">
-        <a href="?tab=posts" class="{{ 'is-active' if tab == 'posts' }}">Posts</a>
-        <a href="?tab=reposts" class="{{ 'is-active' if tab == 'reposts' }}">Reposts</a>
-        <a href="?tab=likes" class="{{ 'is-active' if tab == 'likes' }}">Likes</a>
-    </div>
-
-    <div class="pl-feed" id="plFeed">
-        {% for post in posts %}
-            {% include "partials/_pl_post.html" %}
-        {% else %}
-            <div class="pl-empty">
-            {% if tab == 'reposts' %}{% if is_me %}Du hast noch nichts repostet.{% else %}Noch keine Reposts.{% endif %}
-            {% elif tab == 'likes' %}{% if is_me %}Du hast noch nichts geliked.{% else %}Noch keine Likes.{% endif %}
-            {% else %}{% if is_me %}Du hast noch nichts gepostet.{% else %}{{ display_name }} hat noch nichts gepostet.{% endif %}
-            {% endif %}
-            </div>
-        {% endfor %}
-    </div>
 </div>
 {% endblock %}
 
@@ -102,8 +84,6 @@
 
 {% block scripts %}
 <script>window.PL_ME = {{ me_json | tojson }};</script>
-<script src="{{ url_for('static', filename='js/pl-attach.js') }}"></script>
-<script src="{{ url_for('static', filename='js/pinklemon-home.js') }}"></script>
 <script src="{{ url_for('static', filename='js/pl-cropper.js') }}"></script>
 <script src="{{ url_for('static', filename='js/pinklemon-profile.js') }}"></script>
 {% endblock %}

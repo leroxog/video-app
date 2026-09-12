@@ -1,8 +1,9 @@
 """pinklemon -- fake community.
 
-Seeds ~1000 bot accounts with real-looking names that post, comment and
-argue in the feed, plus a background daemon that keeps them writing so the
-app never looks empty. Bots are marked with User.purpose_of_use == "bot".
+Seeds ~1000 bot accounts with real-looking names; each real user gets a
+batch of them as mutual follows with an open DM each, so Chats never looks
+empty, plus a background daemon that keeps a few of those DMs alive. Bots
+are marked with User.purpose_of_use == "bot".
 
 Everything here is best-effort: any failure is logged and swallowed so a
 bad tick can never take the web process down. Bots are OFF by default --
@@ -19,7 +20,6 @@ from datetime import datetime, timedelta, timezone
 
 from models import (
     db, User, Subscription,
-    FeedPost, FeedComment, FeedLike, FeedCommentLike,
     PlChat, PlChatMember, PlMessage,
 )
 
@@ -186,57 +186,6 @@ def _seed_users(rng):
     return have + created
 
 
-def _seed_content(rng):
-    bots = User.query.filter_by(purpose_of_use=BOT_MARK).all()
-    if not bots:
-        return
-    bot_posts = (
-        db.session.query(FeedPost.id)
-        .join(User, User.id == FeedPost.author_id)
-        .filter(User.purpose_of_use == BOT_MARK).count()
-    )
-    if bot_posts >= MIN_SEED_POSTS:
-        return
-
-    want = MIN_SEED_POSTS - bot_posts
-    new_posts = []
-    for _ in range(want):
-        heading, body = rng.choice(_POSTS)
-        author = rng.choice(bots)
-        p = FeedPost(
-            author_id=author.id, heading=heading,
-            body=body if rng.random() < 0.85 else None,
-            share_count=rng.randint(0, 40),
-        )
-        p.created_at = _rand_past(rng, 12)
-        db.session.add(p)
-        new_posts.append(p)
-    db.session.flush()
-
-    # likes + a threaded discussion under most posts
-    for p in new_posts:
-        for liker in rng.sample(bots, k=min(len(bots), rng.randint(0, 25))):
-            db.session.add(FeedLike(post_id=p.id, user_id=liker.id))
-        n_top = rng.randint(0, 5)
-        for _ in range(n_top):
-            ca = rng.choice(bots)
-            pool = rng.choice([_COMMENTS_AGREE, _COMMENTS_DISAGREE, _COMMENTS_NEUTRAL, _COMMENTS_NEUTRAL])
-            top = FeedComment(post_id=p.id, author_id=ca.id, body=rng.choice(pool))
-            top.created_at = p.created_at + timedelta(minutes=rng.randint(2, 3000))
-            db.session.add(top)
-            db.session.flush()
-            for _ in range(rng.randint(0, 3)):
-                ra = rng.choice(bots)
-                rep = FeedComment(
-                    post_id=p.id, author_id=ra.id, parent_id=top.id,
-                    body=rng.choice(_REPLIES),
-                )
-                rep.created_at = top.created_at + timedelta(minutes=rng.randint(1, 800))
-                db.session.add(rep)
-        db.session.commit()
-    logger.info("pl_bots: seeded %d posts with discussion", len(new_posts))
-
-
 # --------------------------------------------------------------------------
 # per (real) user: make ~30 bots mutuals + open DM chats
 # --------------------------------------------------------------------------
@@ -314,52 +263,25 @@ def tick(app):
             bots = User.query.filter_by(purpose_of_use=BOT_MARK).order_by(db.func.random()).limit(40).all()
             if not bots:
                 return
-            roll = rng.random()
-            if roll < 0.34:
-                heading, body = rng.choice(_POSTS)
-                p = FeedPost(author_id=rng.choice(bots).id, heading=heading,
-                             body=body if rng.random() < 0.8 else None)
-                db.session.add(p)
+            # keep a DM alive
+            chats = (
+                PlChat.query.filter_by(is_group=False)
+                .order_by(PlChat.last_activity.asc()).limit(30).all()
+            )
+            rng.shuffle(chats)
+            for ch in chats:
+                members = ch.members
+                if len(members) != 2:
+                    continue
+                bot_m = next((m for m in members if _is_bot(m.user)), None)
+                human_m = next((m for m in members if not _is_bot(m.user)), None)
+                if not (bot_m and human_m):
+                    continue
+                msg = PlMessage(chat_id=ch.id, sender_id=bot_m.user_id, text=random.choice(_DM_LINES))
+                db.session.add(msg)
+                ch.last_activity = datetime.now(timezone.utc)
                 db.session.commit()
-            elif roll < 0.9:
-                recent = (
-                    FeedPost.query.order_by(FeedPost.created_at.desc()).limit(40).all()
-                )
-                if recent:
-                    target = rng.choice(recent)
-                    pool = rng.choice([_COMMENTS_AGREE, _COMMENTS_DISAGREE, _COMMENTS_NEUTRAL])
-                    parent = None
-                    tops = [c for c in target.comments if c.parent_id is None]
-                    if tops and rng.random() < 0.5:
-                        parent = rng.choice(tops)
-                        body = rng.choice(_REPLIES)
-                    else:
-                        body = rng.choice(pool)
-                    db.session.add(FeedComment(
-                        post_id=target.id, author_id=rng.choice(bots).id,
-                        parent_id=parent.id if parent else None, body=body,
-                    ))
-                    db.session.commit()
-            else:
-                # keep a DM alive
-                chats = (
-                    PlChat.query.filter_by(is_group=False)
-                    .order_by(PlChat.last_activity.asc()).limit(30).all()
-                )
-                rng.shuffle(chats)
-                for ch in chats:
-                    members = ch.members
-                    if len(members) != 2:
-                        continue
-                    bot_m = next((m for m in members if _is_bot(m.user)), None)
-                    human_m = next((m for m in members if not _is_bot(m.user)), None)
-                    if not (bot_m and human_m):
-                        continue
-                    msg = PlMessage(chat_id=ch.id, sender_id=bot_m.user_id, text=random.choice(_DM_LINES))
-                    db.session.add(msg)
-                    ch.last_activity = datetime.now(timezone.utc)
-                    db.session.commit()
-                    break
+                break
         except Exception:
             db.session.rollback()
             logger.exception("pl_bots.tick failed")
@@ -373,7 +295,6 @@ def _daemon(app):
         with app.app_context():
             rng = random.Random(20240501)
             _seed_users(rng)
-            _seed_content(rng)
     except Exception:
         logger.exception("pl_bots seeding failed")
 
@@ -385,24 +306,13 @@ def _daemon(app):
 
 
 def purge(app):
-    """Delete every bot account and everything it created -- posts,
-    comments, likes, chats/DMs, follows. Safe to run repeatedly."""
+    """Delete every bot account and everything it created -- chats/DMs,
+    follows. Safe to run repeatedly."""
     try:
         with app.app_context():
             bot_ids = [u.id for u in User.query.filter_by(purpose_of_use=BOT_MARK).all()]
             if not bot_ids:
                 return
-            # feed posts by bots -> ORM delete cascades their likes/comments/ps
-            for p in FeedPost.query.filter(FeedPost.author_id.in_(bot_ids)).all():
-                db.session.delete(p)
-            db.session.commit()
-            # bot comments / likes left on humans' posts
-            for c in FeedComment.query.filter(FeedComment.author_id.in_(bot_ids)).all():
-                db.session.delete(c)
-            db.session.commit()
-            FeedLike.query.filter(FeedLike.user_id.in_(bot_ids)).delete(synchronize_session=False)
-            FeedCommentLike.query.filter(FeedCommentLike.user_id.in_(bot_ids)).delete(synchronize_session=False)
-            db.session.commit()
             # any chat a bot is in -> drop the whole chat (cascades members + messages)
             chat_ids = {m.chat_id for m in PlChatMember.query.filter(PlChatMember.user_id.in_(bot_ids)).all()}
             for cid in chat_ids:

@@ -10,7 +10,7 @@ os.environ["DATABASE_URL"] = f"sqlite:///{tempfile.gettempdir()}/video_app_test_
 import pytest
 import app as app_module
 from app import app as flask_app, db
-from models import User, FeedPost, FeedLike, FeedComment, FeedPS
+from models import User
 
 
 @pytest.fixture
@@ -20,7 +20,6 @@ def client():
     flask_app.config["UPLOAD_FOLDER"] = tempfile.mkdtemp()
     flask_app.config["PROFILE_PIC_FOLDER"] = tempfile.mkdtemp()
     flask_app.config["SOUND_FOLDER"] = tempfile.mkdtemp()
-    app_module._PL_RATE.clear()  # module-level rate-limit state leaks across tests otherwise
     app_module._pl_typing.clear()
     app_module._pl_calls.clear()
     with flask_app.app_context():
@@ -81,7 +80,7 @@ def test_login_success(client):
 
 
 def test_api_returns_401_json_when_logged_out(client):
-    r = client.post("/api/pl/posts", json={"heading": "hi"})
+    r = client.get("/api/pl/mutuals")
     assert r.status_code == 401 and r.get_json()["error"] == "not_logged_in"
 
 
@@ -195,10 +194,14 @@ def test_avatar_color_is_stable_and_in_palette(client):
     assert app_module.pl_avatar_color("Alice") == app_module.pl_avatar_color("alice")
 
 
-def test_feed_avatar_uses_the_same_color_as_the_api(client):
+def test_pending_chat_avatar_uses_the_same_color_as_the_api(client):
     signup(client, "alice")
-    client.post("/api/pl/posts", json={"heading": "hi"})
-    color = app_module.pl_avatar_color("alice")
+    bob = make_user(client, "bob")
+    # mutual follow, no chat created yet -> bob shows up in the "pending" row
+    # on the home screen, using the same avatar-color helper as the API
+    client.post("/api/pl/follow/bob")
+    bob.post("/api/pl/follow/alice")
+    color = app_module.pl_avatar_color("bob")
     assert f'background:{color}'.encode() in client.get("/").data
 
 
@@ -296,125 +299,25 @@ def test_google_auth_callback_rejects_bad_state(client, monkeypatch):
     assert client.get("/", follow_redirects=False).status_code == 302
 
 
-# ---------------- feed ----------------
-
-def test_create_post_appears_in_feed(client):
-    signup(client, "alice")
-    r = client.post("/api/pl/posts", json={"heading": "Mein Post", "body": "Hallo Welt"})
-    j = r.get_json()
-    assert j["ok"] and j["post"]["heading"] == "Mein Post"
-    assert b"Mein Post" in client.get("/").data
-
-
-def test_create_post_requires_heading(client):
-    signup(client, "alice")
-    assert client.post("/api/pl/posts", json={"heading": "  "}).status_code == 400
-
-
-def test_like_toggles(client):
-    signup(client, "alice")
-    pid = client.post("/api/pl/posts", json={"heading": "P"}).get_json()["post"]["id"]
-    a = client.post(f"/api/pl/posts/{pid}/like").get_json()
-    assert a["liked"] is True and a["like_count"] == 1
-    b = client.post(f"/api/pl/posts/{pid}/like").get_json()
-    assert b["liked"] is False and b["like_count"] == 0
-
-
-def test_share_increments(client):
-    signup(client, "alice")
-    pid = client.post("/api/pl/posts", json={"heading": "P"}).get_json()["post"]["id"]
-    assert client.post(f"/api/pl/posts/{pid}/share").get_json()["share_count"] == 1
-    assert client.post(f"/api/pl/posts/{pid}/share").get_json()["share_count"] == 2
-
-
-def test_ps_only_once_and_only_own(client):
-    signup(client, "alice")
-    pid = client.post("/api/pl/posts", json={"heading": "P"}).get_json()["post"]["id"]
-    assert client.post(f"/api/pl/posts/{pid}/ps", json={"body": "Nachtrag"}).get_json()["ok"] is True
-    assert client.post(f"/api/pl/posts/{pid}/ps", json={"body": "noch was"}).status_code == 409
-    bob = make_user(client, "bob")
-    assert bob.post(f"/api/pl/posts/{pid}/ps", json={"body": "fremd"}).status_code == 403
-
-
-def test_ps_renders_on_post(client):
-    signup(client, "alice")
-    pid = client.post("/api/pl/posts", json={"heading": "P"}).get_json()["post"]["id"]
-    client.post(f"/api/pl/posts/{pid}/ps", json={"body": "Ein Nachtrag hier"})
-    body = client.get("/").data
-    assert b"Ein Nachtrag hier" in body
-    # P.S. is its own separate card, not inside the post article
-    assert b"pl-ps-card" in body
-    # inline comments panel (no bottom-sheet) + comment toggle button
-    assert b'class="pl-comments"' in body and b"data-comments-toggle" in body
-    assert b'id="plCommentsSheet"' not in body
-
-
-def test_comments_create_list_reply_and_like(client):
-    signup(client, "alice")
-    pid = client.post("/api/pl/posts", json={"heading": "P"}).get_json()["post"]["id"]
-    c1 = client.post(f"/api/pl/posts/{pid}/comments", json={"body": "top"}).get_json()["comment"]
-    client.post(f"/api/pl/posts/{pid}/comments", json={"body": "reply", "parent_id": c1["id"]})
-    lst = client.get(f"/api/pl/posts/{pid}/comments").get_json()["comments"]
-    assert [c["body"] for c in lst] == ["top", "reply"]
-    assert lst[1]["parent_id"] == c1["id"]
-    like = client.post(f"/api/pl/comments/{c1['id']}/like").get_json()
-    assert like["liked"] is True and like["like_count"] == 1
-
-
-def test_reply_to_reply_collapses_to_top_thread(client):
-    signup(client, "alice")
-    pid = client.post("/api/pl/posts", json={"heading": "P"}).get_json()["post"]["id"]
-    c1 = client.post(f"/api/pl/posts/{pid}/comments", json={"body": "top"}).get_json()["comment"]
-    r1 = client.post(f"/api/pl/posts/{pid}/comments", json={"body": "r1", "parent_id": c1["id"]}).get_json()["comment"]
-    r2 = client.post(f"/api/pl/posts/{pid}/comments", json={"body": "r2", "parent_id": r1["id"]}).get_json()["comment"]
-    assert r2["parent_id"] == c1["id"]
-
-
-def test_search_filters_feed(client):
-    signup(client, "alice")
-    client.post("/api/pl/posts", json={"heading": "Kuchen backen"})
-    client.post("/api/pl/posts", json={"heading": "Auto waschen"})
-    res = client.get("/?q=kuchen").data
-    assert b"Kuchen backen" in res and b"Auto waschen" not in res
-    assert "Videos zu „kuchen".encode() in res  # video placeholder row shows
-
-
-def test_feed_is_shared_across_users(client):
-    signup(client, "alice")
-    client.post("/api/pl/posts", json={"heading": "Alices Post"})
-    bob = make_user(client, "bob")
-    assert b"Alices Post" in bob.get("/").data
-
-
 # ---------------- shell / pages ----------------
 
-@pytest.mark.parametrize("path,label", [
-    ("/", b"Posts & Videos suchen"),
-    ("/freunde", b"Freunde"),
-    ("/nex", b"nxMsgs"),
-    ("/videos", b"plVidFeed"),
-])
-def test_pages_render_for_logged_in_user(client, path, label):
+def test_pages_render_for_logged_in_user(client):
     signup(client, "alice")
-    r = client.get(path)
-    assert r.status_code == 200 and label in r.data
-
-
-def test_bottom_nav_present_on_every_tab(client):
-    signup(client, "alice")
-    for path in ("/", "/freunde", "/nex", "/videos"):
-        data = client.get(path).data
-        assert b'class="pl-nav"' in data
-        # desktop-sidebar "POSTEN" pill (hidden on mobile via CSS)
-        assert b'pl-nav-post' in data and b'compose=1' in data
-
-
-def test_videos_tab_is_a_vertical_feed(client):
-    signup(client, "alice")
-    r = client.get("/videos").data
-    # TikTok-style vertical video feed (empty until someone uploads a video)
-    assert b"plVidFeed" in r and b"pinklemon-videos.js" in r
-    assert "Noch keine Videos".encode() in r
+    # home (chat list / server rail / pending mutuals)
+    home = client.get("/")
+    assert home.status_code == 200 and b'id="plChatList"' in home.data
+    # own profile
+    prof = client.get("/freunde/u/alice")
+    assert prof.status_code == 200 and b"plEditProfileBtn" in prof.data
+    # a real chat
+    bob = make_user(client, "bob")
+    client.post("/api/pl/follow/bob")
+    bob.post("/api/pl/follow/alice")
+    cid = client.post("/api/pl/chats/dm/bob").get_json()["chat_id"]
+    assert client.get(f"/freunde/c/{cid}").status_code == 200
+    # a real server
+    sid = _make_server(client)["server"]["id"]
+    assert client.get(f"/freunde/server/{sid}").status_code == 200
 
 
 # ---------------- Freunde ----------------
@@ -815,10 +718,9 @@ def test_display_name_editable_and_shown_instead_of_handle(client):
     r = client.post("/api/pl/profile", data={"display_name": "Alice Wunder"},
                     content_type="multipart/form-data")
     assert r.get_json()["display_name"] == "Alice Wunder"
-    # it now shows in the feed for her posts, @handle stays as the small handle
-    client.post("/api/pl/posts", json={"heading": "Hi"})
-    body = client.get("/").data
-    assert b"Alice Wunder" in body and b"pl-post-handle" in body and b"@alice" in body
+    # it now shows big on the profile page, @handle stays as the small handle
+    body = client.get("/freunde/u/alice").data
+    assert b"Alice Wunder" in body and b'id="plProfName"' in body and b"@alice" in body
 
 
 def test_topbrand_shows_hexagonum_word_and_try_fallback(client):
@@ -847,281 +749,7 @@ def test_dm_chat_title_uses_display_name(client):
     assert b"Bobby" in view and b"@bob" not in view.split(b"pl-chat-header")[1][:200]
 
 
-# ---------------- Nex (single AI) ----------------
-
-def test_nex_page_is_a_text_chat(client):
-    signup(client, "alice")
-    r = client.get("/nex").data
-    # ChatGPT-style text chat -- message list + composer, no voice orb
-    assert b"nxMsgs" in r and b"nxInput" in r and b"pinklemon-nex.js" in r
-    assert b"three.min.js" not in r and b"nxCanvas" not in r
-    assert b"Ehrgeizig" not in r and b"Chaos" not in r
-
-
-def test_nex_chat_uses_the_blunt_nex_prompt(client, monkeypatch):
-    import ai_assistant
-    seen = {}
-    monkeypatch.setattr(ai_assistant, "_call_model_with_router", lambda messages, *a, **k: (seen.setdefault("sp", messages[0]["content"]), None))
-    signup(client, "alice")
-    r = client.post("/api/ai/chat", json={"message": "wer bist du", "character": "nex7", "project_type": "nexblunt"})
-    assert r.get_json()["ok"] is True
-    import time
-    for _ in range(30):
-        if "sp" in seen:
-            break
-        time.sleep(0.05)
-    assert "Du bist Nex" in seen["sp"] and "7Ai" not in seen["sp"]
-
-
-def test_nex_sees_the_users_activity(client, monkeypatch):
-    import ai_assistant
-    seen = {}
-    monkeypatch.setattr(ai_assistant, "_call_model_with_router",
-                        lambda messages, *a, **k: (seen.setdefault("user", messages[-1]["content"]), None))
-    signup(client, "alice")
-    client.post("/api/pl/posts", json={"heading": "Mein geheimer Lieblingspost"})
-    client.post("/api/ai/chat", json={"message": "hi", "character": "nex7", "project_type": "nexblunt"})
-    import time
-    for _ in range(40):
-        if "user" in seen:
-            break
-        time.sleep(0.05)
-    # the activity digest (with the user's post) is prepended to the message Nex gets
-    assert "Mein geheimer Lieblingspost" in seen["user"]
-    assert "Aktivität von" in seen["user"]
-
-
-def test_nex_never_volunteers_activity_unless_explicitly_asked(client):
-    """Regression: the digest/prompt used to also allow bringing up activity
-    when it "100% matched" the current message -- that loophole is what let
-    Nex greet a plain "moin" with an unsolicited rundown of the user's
-    recent posts. Only an explicit ask may trigger it now."""
-    import ai_assistant
-    signup(client, "alice")
-    with flask_app.app_context():
-        digest = app_module._pl_user_activity_digest(User.query.filter_by(username="alice").first())
-    assert "100%" not in digest and "passt" not in digest
-    assert "explizit" in digest
-    assert "100%" not in ai_assistant.NEX_BLUNT_SYSTEM_PROMPT
-
-
-def test_nex_settings_set_and_clear(client):
-    signup(client, "alice")
-    r = client.post("/api/pl/nex/settings", json={
-        "name": "Tom", "personality": "sehr freundlich und hilfsbereit", "act": "ein Ritter im Mittelalter",
-    }).get_json()
-    assert r == {"ok": True, "name": "Tom", "personality": "sehr freundlich und hilfsbereit",
-                 "act": "ein Ritter im Mittelalter"}
-    # empty string clears a single field back to default
-    r2 = client.post("/api/pl/nex/settings", json={"act": ""}).get_json()
-    assert r2["name"] == "Tom" and r2["act"] is None
-    # reset_all clears everything at once
-    r3 = client.post("/api/pl/nex/settings", json={"reset_all": True}).get_json()
-    assert r3 == {"ok": True, "name": "Nex", "personality": None, "act": None}
-
-
-def test_nex_page_reflects_custom_name(client):
-    signup(client, "alice")
-    assert b">Nex<" in client.get("/nex").data
-    client.post("/api/pl/nex/settings", json={"name": "Tom"})
-    body = client.get("/nex").data
-    assert b">Tom<" in body and b"Hello, I'm Tom" in body
-
-
-def test_nex_prompt_includes_slash_overrides(client, monkeypatch):
-    import ai_assistant
-    seen = {}
-    monkeypatch.setattr(ai_assistant, "_call_model_with_router",
-                        lambda messages, *a, **k: (seen.setdefault("user", messages[-1]["content"]), None))
-    signup(client, "alice")
-    client.post("/api/pl/nex/settings", json={
-        "name": "Tom", "personality": "extrem hoeflich", "act": "ein Pirat",
-    })
-    client.post("/api/ai/chat", json={"message": "hi", "character": "nex7", "project_type": "nexblunt"})
-    import time
-    for _ in range(40):
-        if "user" in seen:
-            break
-        time.sleep(0.05)
-    assert 'Tom' in seen["user"] and "extrem hoeflich" in seen["user"] and "ein Pirat" in seen["user"]
-    assert "ANWEISUNGEN VOM NUTZER" in seen["user"]
-
-
-def test_nex_code_question_heuristic():
-    import ai_assistant
-    assert ai_assistant._looks_like_code_question("wie schreibe ich eine funktion in python?")
-    assert ai_assistant._looks_like_code_question("ich hab einen bug in meinem javascript code")
-    assert ai_assistant._looks_like_code_question("```\nprint(1)\n```")
-    assert not ai_assistant._looks_like_code_question("hallo, wie geht's dir?")
-    assert not ai_assistant._looks_like_code_question("was hältst du von meinem neuen profilbild")
-
-
-def test_nex_uses_code_model_for_programming_questions(client, monkeypatch):
-    import ai_assistant
-    seen = {}
-    monkeypatch.setattr(ai_assistant, "_classify_tool", lambda *a, **k: (None, {}))
-    monkeypatch.setattr(ai_assistant, "_generate_groq",
-                        lambda messages, max_tokens, temperature=0.7, model=None:
-                            (seen.setdefault("calls", []).append(model), "Testantwort")[1])
-    signup(client, "alice")
-
-    client.post("/api/ai/chat", json={"message": "hallo", "character": "nex7", "project_type": "nexblunt"})
-    import time
-    for _ in range(40):
-        if seen.get("calls"):
-            break
-        time.sleep(0.05)
-    assert seen["calls"][-1] is None  # plain chat stays on the small default model
-
-    client.post("/api/ai/chat", json={
-        "message": "kannst du mir bei einem bug in meiner python funktion helfen?",
-        "character": "nex7", "project_type": "nexblunt",
-    })
-    for _ in range(40):
-        if len(seen.get("calls", [])) > 1:
-            break
-        time.sleep(0.05)
-    assert seen["calls"][-1] == ai_assistant.GROQ_CODE_MODEL
-
-
-def test_for_you_feed_ranks_followed_authors_up(client):
-    signup(client, "alice")
-    bob = make_user(client, "bob")
-    cara = make_user(client, "cara")
-    # cara posts first (older), bob posts later; alice follows bob
-    for i in range(3):
-        cara.post("/api/pl/posts", json={"heading": f"cara {i}"})
-    client.post("/api/pl/follow/bob")
-    bob.post("/api/pl/posts", json={"heading": "bob followed post"})
-    html = client.get("/").data.decode()
-    # bob's post (followed) should land above the older cara posts
-    assert html.index("bob followed post") < html.index("cara 0")
-    # "Folge ich" is still plain chronological-from-follows
-    foll = client.get("/?feed=following").data.decode()
-    assert "bob followed post" in foll and "cara 0" not in foll
-
-
-def test_nex_page_has_plugins_button(client):
-    signup(client, "alice")
-    r = client.get("/nex").data
-    assert b'id="nxPluginsBtn"' in r and b'id="nxPluginsMenu"' in r
-
-
-def test_nex_plugins_list_default_all_off(client):
-    signup(client, "alice")
-    j = client.get("/api/pl/nex/plugins").get_json()
-    assert j["ok"] is True
-    keys = {p["key"] for p in j["plugins"]}
-    assert keys == {"qwen", "gptoss", "llama"}
-    assert all(not p["enabled"] for p in j["plugins"])
-
-
-def test_nex_plugins_toggle_on_and_off(client):
-    signup(client, "alice")
-    r = client.post("/api/pl/nex/plugins", json={"key": "llama", "enabled": True})
-    j = r.get_json()
-    assert j["ok"] is True
-    assert {p["key"]: p["enabled"] for p in j["plugins"]}["llama"] is True
-    # persists across requests
-    j2 = client.get("/api/pl/nex/plugins").get_json()
-    assert {p["key"]: p["enabled"] for p in j2["plugins"]}["llama"] is True
-
-    r3 = client.post("/api/pl/nex/plugins", json={"key": "llama", "enabled": False})
-    j3 = r3.get_json()
-    assert {p["key"]: p["enabled"] for p in j3["plugins"]}["llama"] is False
-
-
-def test_nex_plugins_rejects_unknown_key(client):
-    signup(client, "alice")
-    r = client.post("/api/pl/nex/plugins", json={"key": "chatgpt", "enabled": True})
-    assert r.status_code == 400 and r.get_json()["ok"] is False
-
-
-def test_nex_plugin_council_merges_answers_and_lists_contributors(client, monkeypatch):
-    import ai_assistant
-
-    monkeypatch.setattr(ai_assistant, "_classify_tool", lambda *a, **k: (None, {}))
-
-    def fake_generate(messages, max_tokens, temperature=0.7, model=None):
-        if model == ai_assistant.GROQ_FALLBACK_MODEL:
-            return "GPT-OSS-Antwort"
-        if model == "llama-3.3-70b-versatile":
-            return "Llama-Antwort"
-        return "Finale Nex-Antwort"
-
-    monkeypatch.setattr(ai_assistant, "_generate_groq", fake_generate)
-    signup(client, "alice")
-    client.post("/api/pl/nex/plugins", json={"key": "gptoss", "enabled": True})
-    client.post("/api/pl/nex/plugins", json={"key": "llama", "enabled": True})
-
-    r = client.post("/api/ai/chat", json={"message": "was ist 2+2?", "character": "nex7", "project_type": "nexblunt"})
-    job_id = r.get_json()["job_id"]
-    import time
-    j = None
-    for _ in range(60):
-        j = client.get(f"/api/ai/chat/{job_id}").get_json()
-        if j["status"] != "running":
-            break
-        time.sleep(0.05)
-    assert j["status"] == "done"
-    assert j["reply"] == "Finale Nex-Antwort"
-    assert set(j["contributors"]) == {"Nex", "GPT-OSS", "Llama"}
-
-
-def test_nex_no_contributors_when_no_plugins_enabled(client, monkeypatch):
-    import ai_assistant
-    monkeypatch.setattr(ai_assistant, "_classify_tool", lambda *a, **k: (None, {}))
-    monkeypatch.setattr(ai_assistant, "_generate_groq", lambda *a, **k: "Nur Nex")
-    signup(client, "alice")
-    r = client.post("/api/ai/chat", json={"message": "hallo", "character": "nex7", "project_type": "nexblunt"})
-    job_id = r.get_json()["job_id"]
-    import time
-    j = None
-    for _ in range(60):
-        j = client.get(f"/api/ai/chat/{job_id}").get_json()
-        if j["status"] != "running":
-            break
-        time.sleep(0.05)
-    assert j["status"] == "done" and j["contributors"] is None
-
-
-def test_nex_page_has_call_button_and_overlay(client):
-    signup(client, "alice")
-    r = client.get("/nex").data
-    assert b'id="nxCallBtn"' in r and b'id="nxCallOverlay"' in r and b'id="nxCallOrbWrap"' in r
-    # starts hidden behind the send arrow -- only shows once the composer is empty (JS)
-    assert b'id="nxCallBtn" type="button" aria-label="Nex anrufen" hidden' in r
-
-
-def test_nex_voice_endpoint_rejects_missing_audio(client):
-    signup(client, "alice")
-    r = client.post("/api/pl/nex/voice")
-    assert r.status_code == 400 and r.get_json()["ok"] is False
-
-
-def test_nex_voice_endpoint_transcribes_with_whisper(client, monkeypatch):
-    import ai_assistant
-    monkeypatch.setattr(ai_assistant, "transcribe_audio", lambda *a, **k: "hallo nex")
-    signup(client, "alice")
-    data = {"audio": (io.BytesIO(b"x" * 4000), "speech.webm")}
-    r = client.post("/api/pl/nex/voice", data=data, content_type="multipart/form-data")
-    j = r.get_json()
-    assert j["ok"] is True and j["transcript"] == "hallo nex"
-
-
 # ---------------- attachments (photo / video under any text) ----------------
-
-def test_games_are_gone(client):
-    signup(client, "alice")
-    # no Spiele tab, no game routes, no game attachments
-    assert client.get("/spiele").status_code == 404
-    assert client.get("/api/pl/games").status_code == 404
-    assert b'aria-label="Spiele"' not in client.get("/").data
-    j = client.post("/api/pl/posts", json={
-        "heading": "kein Spiel", "att_kind": "game", "att_value": "block-blast",
-    }).get_json()
-    assert j["ok"] and j["post"]["attachment"] is None
-
 
 def test_upload_rejects_non_media(client):
     signup(client, "alice")
@@ -1130,119 +758,27 @@ def test_upload_rejects_non_media(client):
     assert r.status_code == 400
 
 
-# ---------------- new feed features ----------------
+# ---------------- text linkification (hashtags / mentions / URLs) ----------------
 
 def test_hashtags_and_mentions_are_linked(client):
     signup(client, "alice")
-    make_user(client, "bob")
-    client.post("/api/pl/posts", json={"heading": "T", "body": "hi @bob check #test"})
-    html = client.get("/").data
-    assert b'class="pl-hashtag"' in html and b'href="/?q=%23test"' in html
-    assert b'class="pl-mention"' in html and b'href="/freunde/u/bob"' in html
-
-
-def test_edit_and_delete_own_post(client):
-    signup(client, "alice")
-    pid = client.post("/api/pl/posts", json={"heading": "orig"}).get_json()["post"]["id"]
-    e = client.patch(f"/api/pl/posts/{pid}", json={"heading": "geändert"}).get_json()
-    assert e["ok"] and e["post"]["heading"] == "geändert" and e["post"]["edited"]
     bob = make_user(client, "bob")
-    assert bob.patch(f"/api/pl/posts/{pid}", json={"heading": "x"}).status_code == 403
-    assert bob.delete(f"/api/pl/posts/{pid}").status_code == 403
-    assert client.delete(f"/api/pl/posts/{pid}").get_json()["ok"]
-    assert client.get(f"/p/{pid}").status_code == 404
-
-
-def test_repost_pin_and_poll(client):
-    signup(client, "alice")
-    j = client.post("/api/pl/posts", json={
-        "heading": "Umfrage", "poll": ["Ja", "Nein", "Vielleicht"],
-    }).get_json()
-    pid = j["post"]["id"]
-    assert j["post"]["poll"]["options"] == ["Ja", "Nein", "Vielleicht"]
-    v = client.post(f"/api/pl/posts/{pid}/poll-vote", json={"choice": 1}).get_json()
-    assert v["ok"] and v["poll"]["counts"][1] == 1 and v["poll"]["my_vote"] == 1
-    # plain repost toggles on, then off again
-    r1 = client.post(f"/api/pl/posts/{pid}/repost", json={}).get_json()
-    assert r1["reposted"] is True and r1["repost_count"] == 1
-    r2 = client.post(f"/api/pl/posts/{pid}/repost", json={}).get_json()
-    assert r2["reposted"] is False and r2["repost_count"] == 0
-    # quote repost keeps it on and records the quote
-    r3 = client.post(f"/api/pl/posts/{pid}/repost", json={"quote": "seht euch das an"}).get_json()
-    assert r3["reposted"] is True and r3["quote"] is True
-    assert client.post(f"/api/pl/posts/{pid}/pin").get_json()["pinned"] is True
-
-
-def test_bookmarks_and_views_are_gone(client):
-    signup(client, "alice")
-    pid = client.post("/api/pl/posts", json={"heading": "x"}).get_json()["post"]["id"]
-    assert client.get("/lesezeichen").status_code == 404
-    assert client.post(f"/api/pl/posts/{pid}/bookmark").status_code == 404
-    assert client.post(f"/api/pl/posts/{pid}/view").status_code == 404
-    assert b"Aufrufe" not in client.get("/").data
-
-
-def test_delete_keeps_reposts_alive(client):
-    bob = make_user(client, "bob")
-    signup(client, "alice")
-    pid = client.post("/api/pl/posts", json={"heading": "bleibt erhalten"}).get_json()["post"]["id"]
-    # bob reposts it
-    assert bob.post(f"/api/pl/posts/{pid}/repost", json={}).get_json()["reposted"] is True
-    # alice deletes -> soft delete, row stays
-    d = client.delete(f"/api/pl/posts/{pid}").get_json()
-    assert d["ok"] is True and d["soft"] is True
-    # gone from alice's normal feed
-    assert b"bleibt erhalten" not in client.get("/?feed=neu").data
-    # but bob still sees it on his reposts profile tab
-    assert b"bleibt erhalten" in bob.get("/freunde/u/bob?tab=reposts").data
-    # bob can drop his own repost
-    assert bob.post(f"/api/pl/posts/{pid}/repost", json={}).get_json()["reposted"] is False
-
-
-def test_hide_comment_is_followers_only(client):
-    bob = make_user(client, "bob")
-    signup(client, "alice")
-    pid = client.post("/api/pl/posts", json={"heading": "p"}).get_json()["post"]["id"]
-    cid = client.post(f"/api/pl/posts/{pid}/comments", json={"body": "geheim"}).get_json()["comment"]["id"]
-    assert client.post(f"/api/pl/comments/{cid}/hide").get_json()["hidden"] is True
-    # bob (not a follower) can't see it
-    seen = bob.get(f"/api/pl/posts/{pid}/comments").get_json()["comments"]
-    assert all(c["body"] != "geheim" for c in seen)
-    # alice (author) still sees her own
-    mine = client.get(f"/api/pl/posts/{pid}/comments").get_json()["comments"]
-    assert any(c["body"] == "geheim" and c["hidden"] for c in mine)
-
-
-def test_profile_has_posts_reposts_likes_tabs(client):
-    signup(client, "alice")
-    client.post("/api/pl/posts", json={"heading": "meiner"})
-    body = client.get("/freunde/u/alice").data
-    assert b"Reposts" in body and b"Likes" in body
-    assert client.get("/freunde/u/alice?tab=likes").status_code == 200
-    assert client.get("/freunde/u/alice?tab=reposts").status_code == 200
-
-
-def test_not_interested_hides_post(client):
-    signup(client, "alice")
-    pid = client.post("/api/pl/posts", json={"heading": "nervt"}).get_json()["post"]["id"]
-    assert client.post(f"/api/pl/posts/{pid}/not-interested").get_json()["ok"] is True
-    assert b"nervt" not in client.get("/?feed=neu").data
+    client.post("/api/pl/follow/bob"); bob.post("/api/pl/follow/alice")
+    cid = client.post("/api/pl/chats/dm/bob").get_json()["chat_id"]
+    r = client.post(f"/api/pl/chats/{cid}/messages", json={"text": "hi @bob check #test"})
+    html = r.get_json()["message"]["text_html"]
+    assert 'class="pl-hashtag"' in html and 'href="/?q=%23test"' in html
+    assert 'class="pl-mention"' in html and 'href="/freunde/u/bob"' in html
 
 
 def test_urls_render_as_pink_preview_links(client):
     signup(client, "alice")
-    client.post("/api/pl/posts", json={"heading": "link", "body": "schau https://example.com/x"})
-    body = client.get("/").data
-    assert b"pl-link" in body and b'data-pl-preview="https://example.com/x"' in body
-
-
-def test_app_install_promo_every_fifth_post(client):
-    signup(client, "alice")
-    for i in range(11):
-        client.post("/api/pl/posts", json={"heading": f"p{i}"})
-    body = client.get("/?feed=neu").data
-    assert b"Hohl dir unsere App" in body
-    assert body.count(b"pl-promo") >= 2  # at least two promo cards for 11 posts
+    bob = make_user(client, "bob")
+    client.post("/api/pl/follow/bob"); bob.post("/api/pl/follow/alice")
+    cid = client.post("/api/pl/chats/dm/bob").get_json()["chat_id"]
+    r = client.post(f"/api/pl/chats/{cid}/messages", json={"text": "schau https://example.com/x"})
+    html = r.get_json()["message"]["text_html"]
+    assert "pl-link" in html and 'data-pl-preview="https://example.com/x"' in html
 
 
 def test_messages_list_every_mutual(client):
@@ -1251,18 +787,18 @@ def test_messages_list_every_mutual(client):
     # alice <-> bob become mutuals, no chat created yet
     client.post("/api/pl/follow/bob")
     bob.post("/api/pl/follow/alice")
-    body = client.get("/freunde").data
+    body = client.get("/").data
     assert b"bob" in body and b"@bob" in body
     # the row opens (creates) the DM directly
     r = client.get("/freunde/dm/bob", follow_redirects=False)
     assert r.status_code == 302 and "/freunde/c/" in r.headers["Location"]
     chat_id = int(r.headers["Location"].rsplit("/", 1)[-1])
     # empty chat still shows the other person's @handle, not a generic label
-    assert b"@bob" in client.get("/freunde").data
+    assert b"@bob" in client.get("/").data
     # once someone writes, the preview becomes "Name: text" -- even for a
     # 1:1 chat, and even when *you* wrote the last message
     client.post(f"/api/pl/chats/{chat_id}/messages", json={"text": "hallo!"})
-    body2 = client.get("/freunde").data.decode("utf-8")
+    body2 = client.get("/").data.decode("utf-8")
     assert "alice: hallo!" in body2.lower()
 
 
@@ -1295,12 +831,130 @@ def test_pl_upload_is_served_from_store(client):
     assert client.get(r["url"]).status_code == 200
 
 
-def test_new_feed_tab_and_pagination(client):
+# ---------------- stories ----------------
+def _gif():
+    import io as _io
+    return _io.BytesIO(b"GIF89a" + b"\x00" * 32)
+
+
+def _post_story(client, caption=None):
+    data = {"media": (_gif(), "story.gif")}
+    if caption is not None:
+        data["caption"] = caption
+    return client.post("/api/pl/stories", data=data, content_type="multipart/form-data").get_json()
+
+
+def test_story_create_appears_for_self(client):
     signup(client, "alice")
-    for i in range(3):
-        client.post("/api/pl/posts", json={"heading": f"post {i}"})
-    body = client.get("/?feed=neu").data
-    assert b"post 2" in body and b'?feed=neu' in body
-    # ?before cursor filters to older ids
-    j2 = client.get("/?feed=neu&before=2").data
-    assert b"post 0" in j2 and b"post 2" not in j2
+    r = _post_story(client, caption="hi")
+    assert r["ok"] is True
+    assert r["story"]["caption"] == "hi"
+    assert r["story"]["is_mine"] is True
+    assert r["story"]["viewed_by_me"] is False
+
+    listing = client.get("/api/pl/stories").get_json()
+    assert listing["ok"] is True
+    assert listing["mine"]["username"] == "alice"
+    assert [s["caption"] for s in listing["mine"]["stories"]] == ["hi"]
+    assert listing["friends"] == []
+
+
+def test_story_requires_media_file(client):
+    signup(client, "alice")
+    r = client.post("/api/pl/stories", data={}, content_type="multipart/form-data").get_json()
+    assert r == {"ok": False, "error": "no_file"}
+
+
+def test_story_rejects_bad_file_type(client):
+    import io as _io
+    signup(client, "alice")
+    r = client.post("/api/pl/stories", data={
+        "media": (_io.BytesIO(b"not an image"), "x.txt"),
+    }, content_type="multipart/form-data").get_json()
+    assert r == {"ok": False, "error": "bad_type"}
+
+
+def test_story_not_visible_without_mutual_follow(client):
+    signup(client, "alice")
+    bob = make_user(client, "bob")
+    client.post("/api/pl/follow/bob")  # one-way only
+    _post_story(bob)
+    listing = client.get("/api/pl/stories").get_json()
+    assert listing["friends"] == []
+
+
+def test_story_visible_to_mutual_and_view_marks_seen(client):
+    signup(client, "alice")
+    bob = make_user(client, "bob")
+    client.post("/api/pl/follow/bob")
+    bob.post("/api/pl/follow/alice")
+    story = _post_story(bob)["story"]
+
+    listing = client.get("/api/pl/stories").get_json()
+    assert len(listing["friends"]) == 1
+    assert listing["friends"][0]["username"] == "bob"
+    assert listing["friends"][0]["all_seen"] is False
+    assert listing["friends"][0]["stories"][0]["viewed_by_me"] is False
+
+    r = client.post(f"/api/pl/stories/{story['id']}/view")
+    assert r.get_json()["ok"] is True
+
+    listing2 = client.get("/api/pl/stories").get_json()
+    assert listing2["friends"][0]["all_seen"] is True
+    assert listing2["friends"][0]["stories"][0]["viewed_by_me"] is True
+
+
+def test_story_view_is_idempotent(client):
+    signup(client, "alice")
+    bob = make_user(client, "bob")
+    client.post("/api/pl/follow/bob")
+    bob.post("/api/pl/follow/alice")
+    story = _post_story(bob)["story"]
+    client.post(f"/api/pl/stories/{story['id']}/view")
+    client.post(f"/api/pl/stories/{story['id']}/view")
+    from models import PlStoryView
+    with flask_app.app_context():
+        assert PlStoryView.query.filter_by(story_id=story["id"]).count() == 1
+
+
+def test_story_viewers_only_visible_to_owner(client):
+    signup(client, "alice")
+    bob = make_user(client, "bob")
+    client.post("/api/pl/follow/bob")
+    bob.post("/api/pl/follow/alice")
+    story = _post_story(client)["story"]
+    bob.post(f"/api/pl/stories/{story['id']}/view")
+
+    forbidden = bob.get(f"/api/pl/stories/{story['id']}/viewers").get_json()
+    assert forbidden == {"ok": False, "error": "forbidden"}
+
+    mine = client.get(f"/api/pl/stories/{story['id']}/viewers").get_json()
+    assert mine["ok"] is True
+    assert [v["username"] for v in mine["viewers"]] == ["bob"]
+
+
+def test_story_delete_only_by_owner(client):
+    signup(client, "alice")
+    bob = make_user(client, "bob")
+    client.post("/api/pl/follow/bob")
+    bob.post("/api/pl/follow/alice")
+    story = _post_story(client)["story"]
+
+    forbidden = bob.delete(f"/api/pl/stories/{story['id']}")
+    assert forbidden.get_json() == {"ok": False, "error": "forbidden"}
+
+    ok = client.delete(f"/api/pl/stories/{story['id']}")
+    assert ok.get_json() == {"ok": True}
+    assert client.get("/api/pl/stories").get_json()["mine"] is None
+
+
+def test_expired_story_is_excluded(client):
+    signup(client, "alice")
+    story = _post_story(client)["story"]
+    from datetime import datetime, timedelta, timezone
+    from models import PlStory
+    with flask_app.app_context():
+        row = db.session.get(PlStory, story["id"])
+        row.expires_at = datetime.now(timezone.utc) - timedelta(hours=1)
+        db.session.commit()
+    assert client.get("/api/pl/stories").get_json()["mine"] is None

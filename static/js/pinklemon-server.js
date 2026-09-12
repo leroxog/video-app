@@ -113,7 +113,7 @@
   $("#plSrvLeaveBtn").addEventListener("click", function () {
     if (!confirm("Diesen Server wirklich verlassen?")) return;
     api("POST", "/api/pl/servers/" + SID + "/leave").then(function (j) {
-      if (j.ok) location.href = "/freunde";
+      if (j.ok) location.href = "/";
       else window.plToast(j.error === "owner_cannot_leave" ? "Als Besitzer kannst du den Server nicht verlassen." : "Ging nicht.");
     });
   });

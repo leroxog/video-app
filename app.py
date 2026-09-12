@@ -39,18 +39,11 @@ from werkzeug.exceptions import HTTPException
 # normal `session` cookie.
 from itsdangerous import URLSafeSerializer, BadSignature
 from models import (
-    db, User, Subscription, UserCreatedCode, Conversation, ConversationMember, Message,
-    AiChatFeedback, AiChat, AiChatMessage, AiAdminFact, AiLearnedFact, PasswordResetCode,
-    AccountRecoveryRequest, ErrorLog,
-    AiVoiceProfile, AiPersonality, AiGeneratedMedia,
-    AiTrainingExample, AiTrainingRun,
-    FeedPost, FeedLike, FeedComment, FeedCommentLike, FeedPS,
-    FeedRepost, FeedReport, FeedPollVote,
+    db, User, Subscription, ErrorLog,
     PlChat, PlChatMember, PlMessage, PlMessageReaction, PlMedia,
     PlServer, PlRole, PlServerMember, PlServerBan, PL_SERVER_PERMISSIONS,
+    PlStory, PlStoryView,
 )
-import ai_assistant
-import local_ai
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -367,89 +360,6 @@ if not USE_ELEVENLABS:
         "HINWEIS: Kein ELEVENLABS_API_KEY gesetzt -- Sprachchat nutzt nur die eingebaute "
         "Text-zu-Sprache-Funktion des Browsers, keine echte geklonte Stimme."
     )
-
-
-def elevenlabs_clone_voice(name, audio_bytes, content_type):
-    if not USE_ELEVENLABS:
-        raise RuntimeError("ELEVENLABS_API_KEY ist nicht gesetzt.")
-    response = requests.post(
-        f"{ELEVENLABS_API_URL}/voices/add",
-        headers={"xi-api-key": ELEVENLABS_API_KEY},
-        data={"name": name},
-        files={"files": ("sample", audio_bytes, content_type or "audio/webm")},
-        timeout=30,
-    )
-    response.raise_for_status()
-    return response.json()["voice_id"]
-
-
-def elevenlabs_delete_voice(voice_id):
-    try:
-        requests.delete(
-            f"{ELEVENLABS_API_URL}/voices/{voice_id}",
-            headers={"xi-api-key": ELEVENLABS_API_KEY},
-            timeout=15,
-        )
-    except Exception:
-        logger.exception("ElevenLabs-Stimme %s konnte nicht gelöscht werden.", voice_id)
-
-
-def elevenlabs_text_to_speech(voice_id, text):
-    if not USE_ELEVENLABS:
-        raise RuntimeError("ELEVENLABS_API_KEY ist nicht gesetzt.")
-    response = requests.post(
-        f"{ELEVENLABS_API_URL}/text-to-speech/{voice_id}",
-        headers={"xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json"},
-        json={
-            "text": text,
-            "model_id": "eleven_multilingual_v2",
-            # Explicit settings (ElevenLabs' own defaults are more neutral/
-            # flat) -- some style lets the model vary delivery more
-            # naturally instead of a flat monotone read. stability raised
-            # back up from an earlier lower value: that made delivery more
-            # expressive but introduced noticeably long pauses between
-            # words, so this trades a little of that expressiveness back
-            # for steadier, more continuous pacing.
-            "voice_settings": {
-                "stability": 0.68, "similarity_boost": 0.8, "style": 0.15, "use_speaker_boost": True,
-            },
-        },
-        timeout=30,
-    )
-    response.raise_for_status()
-    return response.content
-
-
-def _synthesize_and_store_audio(text, gender=None):
-    """Real text-to-speech for the generate_audio AI tool (see
-    ai_assistant.py): tries the requested gender's cloned ElevenLabs voice
-    first, then any other gender that has one, and returns None -- never
-    fakes it -- if no cloned voice exists yet or the API call/storage
-    fails. Runs from the chat job's background thread (see
-    ai_assistant.start_chat_job), so it pushes its own app context for the
-    AiVoiceProfile query rather than relying on one already being active."""
-    with app.app_context():
-        genders_to_try = ([gender] if gender else []) + [g for g in VOICE_PROFILE_GENDERS if g != gender]
-        voice_id = None
-        for g in genders_to_try:
-            profile = AiVoiceProfile.query.filter_by(gender=g).first()
-            if profile is not None and profile.elevenlabs_voice_id:
-                voice_id = profile.elevenlabs_voice_id
-                break
-        if not voice_id:
-            return None
-        try:
-            audio_bytes = elevenlabs_text_to_speech(voice_id, text)
-        except Exception:
-            logger.exception("generate_audio: ElevenLabs-Synthese fehlgeschlagen.")
-            return None
-        stored_filename = f"{uuid.uuid4().hex}.mp3"
-        try:
-            save_media_bytes(audio_bytes, "generated_audio", stored_filename, "audio/mpeg")
-        except Exception:
-            logger.exception("generate_audio: Speichern fehlgeschlagen.")
-            return None
-        return media_url("generated_audio", stored_filename)
 
 
 LOCAL_MEDIA_FOLDERS = {
@@ -998,41 +908,6 @@ def handle_unexpected_error(exc):
         tb=traceback.format_exc(), user_id=user.id if user else None,
     )
     return render_template("500.html"), 500
-
-
-MESSAGE_VIEW_TTL_SECONDS = 15
-MIN_GROUP_MEMBERS = 2
-MAX_GROUP_MEMBERS = 99
-
-
-def mutual_follow_ids(user):
-    """IDs of users that `user` follows AND that follow `user` back."""
-    following = {
-        s.channel_id for s in Subscription.query.filter_by(subscriber_id=user.id).all()
-    }
-    followers = {
-        s.subscriber_id for s in Subscription.query.filter_by(channel_id=user.id).all()
-    }
-    return following & followers
-
-
-def is_conversation_member(user, conversation):
-    return ConversationMember.query.filter_by(
-        conversation_id=conversation.id, user_id=user.id
-    ).first() is not None
-
-
-def purge_expired_messages(conversation):
-    now = datetime.now(timezone.utc)
-    for message in list(conversation.messages):
-        viewed_at = message.viewed_at
-        if viewed_at is None:
-            continue
-        if viewed_at.tzinfo is None:
-            viewed_at = viewed_at.replace(tzinfo=timezone.utc)
-        if (now - viewed_at).total_seconds() >= MESSAGE_VIEW_TTL_SECONDS:
-            db.session.delete(message)
-    db.session.commit()
 
 
 ONLINE_THRESHOLD_SECONDS = 5 * 60
@@ -1595,138 +1470,6 @@ def _pl_user_brief(user):
     }
 
 
-def _pl_nex_overrides_block(user):
-    """/name, /personality and /act (see pinklemon-nex.js) -- per-user
-    overrides spliced right before the activity digest, the most salient
-    spot in the user turn (see the "hallo" over-eagerness fix above for
-    why placement here beats putting this further away in the system
-    prompt). Returns "" if the user has none set."""
-    name = getattr(user, "nex_custom_name", None)
-    personality = getattr(user, "nex_custom_personality", None)
-    act = getattr(user, "nex_custom_act", None)
-    if not (name or personality or act):
-        return ""
-    parts = [
-        "── ANWEISUNGEN VOM NUTZER (per /name, /personality, /act gesetzt) -- "
-        "gelten AB SOFORT und WEITER, bis er sie ändert oder leer schickt. "
-        "Nicht vorlesen oder erwähnen, dass es \"Anweisungen\" sind -- einfach befolgen. ──"
-    ]
-    if name:
-        parts.append(
-            f'Dein Name ist jetzt "{name}" -- nenn dich selbst so, nicht mehr "Nex", '
-            f"wenn du gefragt wirst oder dich vorstellst."
-        )
-    if personality:
-        parts.append(
-            "Deine Persönlichkeit, komplett vom Nutzer festgelegt: " + personality[:1500] + "\n"
-            "Das hat Vorrang vor deinem sonstigen (frechen/blunt) Standardcharakter, wo es davon "
-            "abweicht -- der Nutzer hat sich das bewusst so gewünscht."
-        )
-    if act:
-        parts.append(
-            "Du tust gerade so, als: " + act[:1500] + "\n"
-            "Bleib konsequent in dieser Rolle für den ganzen Chat, auch wenn es deinem sonstigen "
-            "Charakter widerspricht -- bis der Nutzer sie mit /act beendet."
-        )
-    parts.append("── Ende der Anweisungen ──")
-    return "\n\n".join(parts) + "\n\n"
-
-
-def _pl_user_activity_digest(user, max_chars=3600):
-    """A plain-text snapshot of everything this user does on HEXAGONUM --
-    profile, their posts / comments / likes, who they follow, their chats,
-    the media & games they share -- handed to *their own* Nex as private
-    context so it can answer personally. Scoped strictly to the requesting
-    user's own activity."""
-    L = []
-    name = pl_display_name(user)
-    L.append(f"── Kontext: Aktivität von {name} (@{user.username}) auf HEXAGONUM. "
-             f"Intern, NICHT vorlesen. Du DARFST das wissen, aber du erwähnst NIE etwas davon "
-             f"von dir aus -- in JEDER Antwort ohne Ausnahme, egal worüber gerade geredet wird. "
-             f"Die EINZIGE Ausnahme: der Nutzer fragt dich explizit direkt danach (z.B. 'was hab "
-             f"ich gepostet', 'kennst du mich', 'wie viele Follower hab ich'). Sonst absolut "
-             f"NICHTS davon, auch nicht andeutungsweise, auch nicht wenn es thematisch zu "
-             f"passen scheint. ──")
-
-    followers = Subscription.query.filter_by(channel_id=user.id).count()
-    following_rows = Subscription.query.filter_by(subscriber_id=user.id).all()
-    L.append(f"Profil: Spitzname \"{name}\", @{user.username}"
-             + (f", Bio: \"{user.bio}\"" if user.bio else "")
-             + (f", Ort: {user.city}" if user.city else "")
-             + f". {followers} Follower, folgt {len(following_rows)}.")
-    if user.created_at:
-        L.append(f"Dabei seit {user.created_at.strftime('%B %Y')}.")
-
-    now = datetime.now(timezone.utc)
-    def ago(dt):
-        return pl_ago(dt)
-
-    posts = (FeedPost.query.filter_by(author_id=user.id)
-             .order_by(FeedPost.created_at.desc()).limit(10).all())
-    if posts:
-        L.append("\nSeine letzten Posts:")
-        for p in posts:
-            body = (p.body or "").replace("\n", " ")
-            snip = (f" — {body[:120]}" if body else "")
-            media = f" [{p.att_kind}:{p.att_value}]" if p.att_kind else ""
-            L.append(f"• \"{p.heading}\"{snip} ({ago(p.created_at)}, {len(p.likes)}❤ {len(p.comments)}💬{media})")
-
-    comments = (FeedComment.query.filter_by(author_id=user.id)
-                .order_by(FeedComment.created_at.desc()).limit(10).all())
-    if comments:
-        L.append("\nSeine letzten Kommentare:")
-        for c in comments:
-            post = db.session.get(FeedPost, c.post_id)
-            on = f" (zu \"{post.heading}\" von @{post.author.username})" if post else ""
-            L.append(f"• \"{c.body[:140]}\"{on} ({ago(c.created_at)})")
-
-    liked = (db.session.query(FeedPost)
-             .join(FeedLike, FeedLike.post_id == FeedPost.id)
-             .filter(FeedLike.user_id == user.id)
-             .order_by(FeedLike.id.desc()).limit(10).all())
-    if liked:
-        L.append("\nZuletzt geliked:")
-        for p in liked:
-            L.append(f"• \"{p.heading}\" von @{p.author.username}")
-
-    if following_rows:
-        names = []
-        for s in following_rows[:20]:
-            u = db.session.get(User, s.channel_id)
-            if u:
-                names.append("@" + u.username)
-        if names:
-            L.append("\nFolgt: " + ", ".join(names))
-
-    memberships = PlChatMember.query.filter_by(user_id=user.id).all()
-    chats = [db.session.get(PlChat, m.chat_id) for m in memberships]
-    chats = [c for c in chats if c is not None]
-    chats.sort(key=lambda c: c.last_activity or c.created_at, reverse=True)
-    if chats:
-        L.append("\nChats:")
-        for c in chats[:8]:
-            if c.is_group:
-                who = f"Gruppe \"{c.name or 'Gruppe'}\" ({len(c.members)} Mitglieder)"
-            else:
-                other = next((m.user for m in c.members if m.user_id != user.id), None)
-                who = f"mit @{other.username}" if other else "Chat"
-            last = c.messages[-1] if c.messages else None
-            tail = ""
-            if last:
-                mine = "ich: " if last.sender_id == user.id else ""
-                tail = f" — zuletzt {mine}\"{(last.text or '')[:80]}\" ({ago(last.created_at)})"
-            L.append(f"• {who}{tail}")
-
-    today = now.date()
-    tp = sum(1 for p in posts if _aware(p.created_at).date() == today)
-    tc = sum(1 for c in comments if _aware(c.created_at).date() == today)
-    if tp or tc:
-        L.append(f"\nHeute: {tp} Posts, {tc} Kommentare.")
-
-    text = "\n".join(L)
-    return text[:max_chars]
-
-
 _PL_TAG_RE = re.compile(r"#([A-Za-z0-9_äöüÄÖÜß]{1,40})")
 _PL_MENTION_RE = re.compile(r"(?<![\w@])@([A-Za-z0-9_.]{3,30})")
 _PL_URL_RE = re.compile(r"(https?://[^\s<]+)")
@@ -1760,83 +1503,6 @@ def _pl_linkify(text):
     return out.replace("\n", "<br>")
 
 
-def _pl_poll_state(post, me):
-    if not post.poll_json:
-        return None
-    try:
-        options = json.loads(post.poll_json)
-    except Exception:
-        return None
-    if not isinstance(options, list) or len(options) < 2:
-        return None
-    votes = post.poll_votes
-    counts = [0] * len(options)
-    my_vote = None
-    for v in votes:
-        if 0 <= v.choice < len(options):
-            counts[v.choice] += 1
-        if v.user_id == me.id:
-            my_vote = v.choice
-    total = sum(counts)
-    return {
-        "options": options,
-        "counts": counts,
-        "total": total,
-        "my_vote": my_vote,
-        "percents": [round(100 * c / total) if total else 0 for c in counts],
-    }
-
-
-def serialize_pl_post(post, me, repost_meta=None):
-    liked_ids = {pl.user_id for pl in post.likes}
-    return {
-        "id": post.id,
-        "heading": post.heading,
-        "body": post.body or "",
-        "body_html": _pl_linkify(post.body or ""),
-        "created_ago": pl_ago(post.created_at),
-        "share_count": post.share_count,
-        "like_count": len(post.likes),
-        "comment_count": len(post.comments),
-        "repost_count": len(post.reposts),
-        "liked_by_me": me.id in liked_ids,
-        "reposted_by_me": any(r.user_id == me.id and not r.quote for r in post.reposts),
-        "is_mine": post.author_id == me.id,
-        "edited": post.edited_at is not None,
-        "pinned": post.pinned_at is not None,
-        "author_deleted": post.author_deleted_at is not None,
-        "sensitive": bool(post.is_sensitive),
-        "poll": _pl_poll_state(post, me),
-        "author": _pl_user_brief(post.author),
-        "repost": repost_meta,
-        "ps": (
-            {"body": post.ps.body, "body_html": _pl_linkify(post.ps.body or ""),
-             "created_ago": pl_ago(post.ps.created_at),
-             "attachment": _pl_attachment(post.ps)}
-            if post.ps else None
-        ),
-        "attachment": _pl_attachment(post),
-    }
-
-
-def render_pl_post(post, me):
-    return render_template("partials/_pl_post.html", post=serialize_pl_post(post, me))
-
-
-PL_POST_MAX = 60           # posts per feed page
-_PL_RATE = {}              # user_id -> [timestamps] of recent creates
-
-
-def _pl_rate_ok(uid, limit=8, window=120):
-    now = datetime.now(timezone.utc).timestamp()
-    recent = [t for t in _PL_RATE.get(uid, []) if now - t < window]
-    _PL_RATE[uid] = recent
-    if len(recent) >= limit:
-        return False
-    recent.append(now)
-    return True
-
-
 # ==========================================================================
 # pinklemon -- pages
 # ==========================================================================
@@ -1852,142 +1518,8 @@ def _pl_socialise(me):
         logger.exception("pl_bots.ensure_social")
 
 
-def _aware(dt):
-    return dt.replace(tzinfo=timezone.utc) if dt and dt.tzinfo is None else dt
-
-
-# how many recent posts the "Für dich" ranker considers as candidates
-PL_RANK_POOL = 300
-
-
-def _pl_rank_feed(me, pool):
-    """Score + rank the "Für dich" feed. Signals: freshness (time decay),
-    engagement (weighted likes/comments/shares), affinity (people you
-    follow / have liked / have replied to / yourself), a media bonus, a
-    small novelty jitter -- then a diversity pass so the same author never
-    stacks up. Chronological is still one click away as "Folge ich"."""
-    if not pool:
-        return []
-    now = datetime.now(timezone.utc)
-
-    followed = {s.channel_id for s in Subscription.query.filter_by(subscriber_id=me.id)}
-    liked_authors = {
-        a for (a,) in db.session.query(FeedPost.author_id)
-        .join(FeedLike, FeedLike.post_id == FeedPost.id)
-        .filter(FeedLike.user_id == me.id).distinct()
-    }
-    replied_authors = {
-        a for (a,) in db.session.query(FeedPost.author_id)
-        .join(FeedComment, FeedComment.post_id == FeedPost.id)
-        .filter(FeedComment.author_id == me.id, FeedComment.author_id != FeedPost.author_id).distinct()
-    }
-    my_liked_posts = {l.post_id for l in FeedLike.query.filter_by(user_id=me.id)}
-
-    def score(p):
-        age_h = max(0.15, (now - _aware(p.created_at)).total_seconds() / 3600.0)
-        recency = 1.0 / pow(age_h + 2.0, 0.55)
-        eng = math.log1p(len(p.likes) + 2.2 * len(p.comments) + 1.4 * (p.share_count or 0))
-        s = recency * 9.0 + eng * 1.7
-        if p.author_id in followed: s += 4.5
-        if p.author_id in liked_authors: s += 3.0
-        if p.author_id in replied_authors: s += 2.2
-        if p.author_id == me.id: s += 1.5
-        if p.att_kind: s += 1.3
-        if p.id in my_liked_posts: s -= 3.5          # already seen & liked
-        s += random.uniform(0.0, 0.9)                # novelty jitter
-        return s
-
-    ranked = sorted(pool, key=score, reverse=True)
-
-    # diversity: don't let the same author take two of the last three slots
-    out, order, leftovers = [], [], []
-    for p in ranked:
-        if p.author_id in order[-3:]:
-            leftovers.append(p)
-            continue
-        out.append(p)
-        order.append(p.author_id)
-    out.extend(leftovers)
-    return out[:PL_POST_MAX]
-
-
-def _pl_trending():
-    """Top hashtags in recent post bodies."""
-    rows = FeedPost.query.order_by(FeedPost.created_at.desc()).limit(200).all()
-    counts = {}
-    for p in rows:
-        for tag in _PL_TAG_RE.findall(p.body or ""):
-            counts[tag] = counts.get(tag, 0) + 1
-    top = sorted(counts.items(), key=lambda kv: kv[1], reverse=True)[:6]
-    return [{"tag": t, "n": n} for t, n in top]
-
-
 @app.route("/")
 def pl_home():
-    me = current_user()
-    _pl_socialise(me)
-    q = (request.args.get("q") or "").strip()
-    fa = request.args.get("feed")
-    feed = fa if fa in ("following", "neu") else "foryou"
-    before = request.args.get("before", type=int)   # pagination cursor
-    uninterested = set(session.get("_pl_uninterested", []))
-    base = FeedPost.query.filter(FeedPost.author_deleted_at.is_(None))
-    if uninterested:
-        base = base.filter(FeedPost.id.notin_(uninterested))
-    if before:
-        base = base.filter(FeedPost.id < before)
-
-    if q:
-        like = f"%{q}%"
-        posts = (base.filter(db.or_(FeedPost.heading.ilike(like), FeedPost.body.ilike(like)))
-                 .order_by(FeedPost.created_at.desc()).limit(PL_POST_MAX).all())
-    elif feed == "following":
-        followed = {s.channel_id for s in Subscription.query.filter_by(subscriber_id=me.id)}
-        followed.add(me.id)
-        posts = (base.filter(FeedPost.author_id.in_(followed))
-                 .order_by(FeedPost.created_at.desc()).limit(PL_POST_MAX).all())
-    elif feed == "neu":
-        posts = base.order_by(FeedPost.created_at.desc()).limit(PL_POST_MAX).all()
-    else:
-        pool = base.order_by(FeedPost.created_at.desc()).limit(PL_RANK_POOL).all()
-        posts = _pl_rank_feed(me, pool)
-
-    serialized = [serialize_pl_post(p, me) for p in posts]
-
-    # quote-reposts by people you follow, merged into the timeline
-    if not q and not before and feed in ("foryou", "following"):
-        followed = {s.channel_id for s in Subscription.query.filter_by(subscriber_id=me.id)}
-        followed.discard(me.id)
-        if followed:
-            shown = {s["id"] for s in serialized}
-            qr = (FeedRepost.query.filter(FeedRepost.user_id.in_(followed))
-                  .order_by(FeedRepost.created_at.desc()).limit(15).all())
-            for r in qr:
-                p = db.session.get(FeedPost, r.post_id)
-                if p is None or p.id in shown or p.id in uninterested:
-                    continue
-                by = db.session.get(User, r.user_id)
-                serialized.insert(0, serialize_pl_post(p, me, repost_meta={
-                    "by": _pl_user_brief(by) if by else None,
-                    "quote": r.quote, "ago": pl_ago(r.created_at),
-                }))
-                shown.add(p.id)
-
-    next_cursor = posts[-1].id if len(posts) >= PL_POST_MAX else None
-    return render_template(
-        "pl_home.html", posts=serialized, q=q, feed=feed,
-        next_cursor=next_cursor,
-        who=[_pl_user_brief(u) for u in User.query.filter(
-            User.id.notin_({s.channel_id for s in Subscription.query.filter_by(subscriber_id=me.id)} | {me.id}),
-            db.func.lower(User.username).notlike("anon\\_%", escape="\\"),
-        ).order_by(db.func.random()).limit(12).all()] if not before else [],
-        trending=_pl_trending() if not before else [],
-        me_json={"id": me.id, "username": me.username},
-    )
-
-
-@app.route("/freunde")
-def pl_friends():
     me = current_user()
     _pl_socialise(me)
     chats = _pl_chat_list(me)
@@ -2013,9 +1545,14 @@ def pl_friends():
     servers = [db.session.get(PlServer, r.server_id) for r in PlServerMember.query.filter_by(user_id=me.id)]
     servers = [s for s in servers if s is not None]
     return render_template(
-        "pl_friends.html", chats=chats, pending=pending, servers=servers,
+        "pl_home.html", chats=chats, pending=pending, servers=servers,
         me_json={"id": me.id, "username": me.username},
     )
+
+
+@app.route("/freunde")
+def pl_freunde_redirect():
+    return redirect(url_for("pl_home"))
 
 
 @app.route("/freunde/u/<username>")
@@ -2026,44 +1563,6 @@ def pl_profile(username):
         abort(404)
     i_follow = Subscription.query.filter_by(subscriber_id=me.id, channel_id=user.id).first() is not None
     follows_me = Subscription.query.filter_by(subscriber_id=user.id, channel_id=me.id).first() is not None
-
-    tab = request.args.get("tab")
-    if tab not in ("reposts", "likes"):
-        tab = "posts"
-
-    post_count = FeedPost.query.filter_by(author_id=user.id).filter(
-        FeedPost.author_deleted_at.is_(None)).count()
-
-    if tab == "reposts":
-        rows = (FeedRepost.query.filter_by(user_id=user.id)
-                .order_by(FeedRepost.created_at.desc()).limit(40).all())
-        cards = []
-        for r in rows:
-            p = db.session.get(FeedPost, r.post_id)
-            if p is None:
-                continue
-            cards.append(serialize_pl_post(p, me, repost_meta={
-                "by": _pl_user_brief(user), "quote": r.quote, "ago": pl_ago(r.created_at),
-            }))
-        posts = cards
-    elif tab == "likes":
-        rows = (FeedLike.query.filter_by(user_id=user.id)
-                .order_by(FeedLike.id.desc()).limit(40).all())
-        cards = []
-        for lk in rows:
-            p = db.session.get(FeedPost, lk.post_id)
-            if p is None or p.author_deleted_at is not None:
-                continue
-            cards.append(serialize_pl_post(p, me))
-        posts = cards
-    else:
-        user_posts = (
-            FeedPost.query.filter_by(author_id=user.id)
-            .filter(FeedPost.author_deleted_at.is_(None))
-            .order_by(FeedPost.pinned_at.isnot(None).desc(), FeedPost.created_at.desc())
-            .limit(40).all()
-        )
-        posts = [serialize_pl_post(p, me) for p in user_posts]
 
     joined = None
     if user.created_at:
@@ -2077,7 +1576,6 @@ def pl_profile(username):
         display_name=pl_display_name(user),
         avatar_url=_pl_media_url(user.pl_avatar_image),
         banner_url=_pl_media_url(user.pl_banner_image),
-        posts=posts, tab=tab, post_count=post_count,
         me_json={"id": me.id, "username": me.username},
     )
 
@@ -2138,125 +1636,6 @@ def pl_chat_view(chat_id):
     )
 
 
-# The one AI. Its blunt "7"-style personality lives in
-# ai_assistant.NEX_BLUNT_SYSTEM_PROMPT and is reached via project_type
-# "nexblunt". Chat history is scoped to character "nex7" (an internal
-# key, kept from when this tab had personas).
-NEX_PROJECT_TYPE = "nexblunt"
-NEX_CHAT_CHARACTER = "nex7"
-
-
-@app.route("/nex")
-def pl_nex():
-    me = current_user()
-    return render_template(
-        "pl_nex.html", project_type=NEX_PROJECT_TYPE, chat_character=NEX_CHAT_CHARACTER,
-        nex_name=(me.nex_custom_name or "Nex"),
-        me_json={"id": me.id, "username": me.username},
-    )
-
-
-@app.route("/api/pl/nex/settings", methods=["POST"])
-def api_pl_nex_settings():
-    """/name, /personality, /act (and /reset) typed into the Nex composer
-    -- see pinklemon-nex.js. Any field present in the body is set; an
-    empty string clears it back to the default. Purely per-user (applies
-    across all of that user's Nex chats, not just the current one)."""
-    me = current_user()
-    data = request.get_json(silent=True) or {}
-    if data.get("reset_all"):
-        me.nex_custom_name = None
-        me.nex_custom_personality = None
-        me.nex_custom_act = None
-    else:
-        if "name" in data:
-            v = (data.get("name") or "").strip()[:40]
-            me.nex_custom_name = v or None
-        if "personality" in data:
-            v = (data.get("personality") or "").strip()[:1500]
-            me.nex_custom_personality = v or None
-        if "act" in data:
-            v = (data.get("act") or "").strip()[:1500]
-            me.nex_custom_act = v or None
-    db.session.commit()
-    return jsonify({
-        "ok": True,
-        "name": me.nex_custom_name or "Nex",
-        "personality": me.nex_custom_personality,
-        "act": me.nex_custom_act,
-    })
-
-
-def _pl_nex_enabled_plugin_keys(user):
-    """user.nex_plugins is a JSON list of NEX_PLUGIN_CATALOG keys -- always
-    re-validated against the current catalog (a key from a removed/renamed
-    plugin just silently drops out, no migration needed)."""
-    raw = user.nex_plugins
-    if not raw:
-        return []
-    try:
-        keys = json.loads(raw)
-    except Exception:
-        return []
-    if not isinstance(keys, list):
-        return []
-    return [k for k in keys if k in ai_assistant.NEX_PLUGIN_BY_KEY]
-
-
-def _pl_nex_plugins_state(user):
-    enabled = set(_pl_nex_enabled_plugin_keys(user))
-    return [
-        {"key": p["key"], "name": p["name"], "desc": p["desc"], "enabled": p["key"] in enabled}
-        for p in ai_assistant.NEX_PLUGIN_CATALOG
-    ]
-
-
-@app.route("/api/pl/nex/plugins")
-def api_pl_nex_plugins_list():
-    return jsonify({"ok": True, "plugins": _pl_nex_plugins_state(current_user())})
-
-
-@app.route("/api/pl/nex/plugins", methods=["POST"])
-def api_pl_nex_plugins_toggle():
-    """Turns one plugin AI on/off for this user's Nex chats (see
-    _run_nex_plugin_council in ai_assistant.py) -- these are our own
-    already-integrated Groq-hosted models, not third-party AI accounts:
-    embedding a real ChatGPT/Gemini/etc. login here isn't possible (every
-    major provider blocks its login page from being framed on someone
-    else's site, precisely to stop this kind of embedding)."""
-    me = current_user()
-    data = request.get_json(silent=True) or {}
-    key = data.get("key")
-    if key not in ai_assistant.NEX_PLUGIN_BY_KEY:
-        return jsonify({"ok": False, "error": "unknown_plugin"}), 400
-    enabled = set(_pl_nex_enabled_plugin_keys(me))
-    if data.get("enabled"):
-        enabled.add(key)
-    else:
-        enabled.discard(key)
-    me.nex_plugins = json.dumps(sorted(enabled)) if enabled else None
-    db.session.commit()
-    return jsonify({"ok": True, "plugins": _pl_nex_plugins_state(me)})
-
-
-@app.route("/api/pl/nex/voice", methods=["POST"])
-def api_pl_nex_voice():
-    """Nex voice orb: the browser records the mic (MediaRecorder) and
-    posts the audio here; we transcribe it with Groq Whisper and hand the
-    text back. The frontend then sends that text through the normal
-    /api/ai/chat pipeline. Works on iOS Safari (no webkitSpeechRecognition
-    there)."""
-    current_user()  # require_login already gated this
-    f = request.files.get("audio")
-    if f is None:
-        return jsonify({"ok": False, "error": "no_audio"}), 400
-    audio = f.read()
-    if len(audio) < 1200:
-        return jsonify({"ok": True, "transcript": ""})  # basically silence
-    transcript = ai_assistant.transcribe_audio(audio, f.filename or "speech.webm")
-    return jsonify({"ok": bool(transcript), "transcript": transcript})
-
-
 # ---- attachments: photo / video under any text ----
 PL_MEDIA_DIR = os.path.join(app.root_path, "static", "uploads", "pl")
 os.makedirs(PL_MEDIA_DIR, exist_ok=True)
@@ -2312,373 +1691,6 @@ def api_pl_upload():
     return jsonify({"ok": True, "kind": kind, "value": name, "url": _pl_media_url(name)})
 
 
-
-
-@app.route("/videos")
-def pl_videos():
-    me = current_user()
-    vids = (
-        FeedPost.query.filter(FeedPost.att_kind == "video")
-        .order_by(FeedPost.created_at.desc()).limit(40).all()
-    )
-    return render_template(
-        "pl_videos.html",
-        videos=[serialize_pl_post(v, me) for v in vids],
-        me_json={"id": me.id, "username": me.username},
-    )
-
-
-@app.route("/p/<int:post_id>")
-def pl_post_page(post_id):
-    me = current_user()
-    post = db.session.get(FeedPost, post_id)
-    if post is None:
-        abort(404)
-    return render_template(
-        "pl_home.html", posts=[serialize_pl_post(post, me)], q="",
-        me_json={"id": me.id, "username": me.username},
-    )
-
-
-# ==========================================================================
-# pinklemon -- feed API
-# ==========================================================================
-@app.route("/api/pl/posts", methods=["POST"])
-def api_pl_create_post():
-    me = current_user()
-    if not _pl_rate_ok(me.id):
-        return jsonify({"ok": False, "error": "rate"}), 429
-    data = request.get_json(silent=True) or {}
-    heading = (data.get("heading") or "").strip()[:140]
-    body = (data.get("body") or "").strip()[:4000] or None
-    if not heading:
-        return jsonify({"ok": False, "error": "empty"}), 400
-    att_kind, att_value = _pl_read_att(data)
-    poll_json = None
-    raw_poll = data.get("poll")
-    if isinstance(raw_poll, list):
-        opts = [str(o).strip()[:60] for o in raw_poll if str(o).strip()][:4]
-        if len(opts) >= 2:
-            poll_json = json.dumps(opts, ensure_ascii=False)
-    post = FeedPost(author_id=me.id, heading=heading, body=body,
-                    att_kind=att_kind, att_value=att_value,
-                    poll_json=poll_json, is_sensitive=bool(data.get("sensitive")))
-    db.session.add(post)
-    db.session.commit()
-    return jsonify({"ok": True, "post": serialize_pl_post(post, me), "html": render_pl_post(post, me)})
-
-
-def _pl_own_post(post_id, me):
-    post = db.session.get(FeedPost, post_id)
-    if post is None:
-        return None, (jsonify({"ok": False, "error": "not_found"}), 404)
-    if post.author_id != me.id:
-        return None, (jsonify({"ok": False, "error": "not_yours"}), 403)
-    return post, None
-
-
-@app.route("/api/pl/posts/<int:post_id>", methods=["PATCH"])
-def api_pl_edit_post(post_id):
-    me = current_user()
-    post, err = _pl_own_post(post_id, me)
-    if err:
-        return err
-    data = request.get_json(silent=True) or {}
-    if "heading" in data:
-        h = (data.get("heading") or "").strip()[:140]
-        if not h:
-            return jsonify({"ok": False, "error": "empty"}), 400
-        post.heading = h
-    if "body" in data:
-        post.body = (data.get("body") or "").strip()[:4000] or None
-    post.edited_at = datetime.now(timezone.utc)
-    db.session.commit()
-    return jsonify({"ok": True, "post": serialize_pl_post(post, me), "html": render_pl_post(post, me)})
-
-
-@app.route("/api/pl/posts/<int:post_id>", methods=["DELETE"])
-def api_pl_delete_post(post_id):
-    me = current_user()
-    post, err = _pl_own_post(post_id, me)
-    if err:
-        return err
-    # If anyone has reposted this, keep the row so their reposts still work
-    # -- just soft-delete it out of every normal listing.
-    if FeedRepost.query.filter_by(post_id=post_id).count() > 0:
-        post.author_deleted_at = datetime.now(timezone.utc)
-        post.pinned_at = None
-        db.session.commit()
-        return jsonify({"ok": True, "soft": True})
-    db.session.delete(post)
-    db.session.commit()
-    return jsonify({"ok": True, "soft": False})
-
-
-@app.route("/api/pl/posts/<int:post_id>/pin", methods=["POST"])
-def api_pl_pin_post(post_id):
-    me = current_user()
-    post, err = _pl_own_post(post_id, me)
-    if err:
-        return err
-    if post.pinned_at is None:
-        FeedPost.query.filter_by(author_id=me.id).filter(FeedPost.pinned_at.isnot(None)).update(
-            {"pinned_at": None}, synchronize_session=False)
-        post.pinned_at = datetime.now(timezone.utc)
-        pinned = True
-    else:
-        post.pinned_at = None
-        pinned = False
-    db.session.commit()
-    return jsonify({"ok": True, "pinned": pinned})
-
-
-@app.route("/api/pl/posts/<int:post_id>/repost", methods=["POST"])
-def api_pl_repost(post_id):
-    me = current_user()
-    post = db.session.get(FeedPost, post_id)
-    if post is None:
-        return jsonify({"ok": False, "error": "not_found"}), 404
-    quote = ((request.get_json(silent=True) or {}).get("quote") or "").strip()[:2000] or None
-    existing = FeedRepost.query.filter_by(post_id=post_id, user_id=me.id).first()
-    if existing and not quote:
-        db.session.delete(existing)
-        db.session.commit()
-        return jsonify({"ok": True, "reposted": False, "repost_count": len(post.reposts)})
-    if existing:
-        existing.quote = quote
-    else:
-        db.session.add(FeedRepost(post_id=post_id, user_id=me.id, quote=quote))
-    db.session.commit()
-    return jsonify({"ok": True, "reposted": True, "quote": bool(quote),
-                    "repost_count": len(post.reposts)})
-
-
-@app.route("/api/pl/posts/<int:post_id>/report", methods=["POST"])
-def api_pl_report_post(post_id):
-    me = current_user()
-    if db.session.get(FeedPost, post_id) is None:
-        return jsonify({"ok": False, "error": "not_found"}), 404
-    reason = ((request.get_json(silent=True) or {}).get("reason") or "").strip()[:200]
-    db.session.add(FeedReport(post_id=post_id, user_id=me.id, reason=reason or None))
-    db.session.commit()
-    return jsonify({"ok": True})
-
-
-@app.route("/api/pl/posts/<int:post_id>/likes")
-def api_pl_post_likes(post_id):
-    post = db.session.get(FeedPost, post_id)
-    if post is None:
-        return jsonify({"ok": False}), 404
-    users = []
-    for l in sorted(post.likes, key=lambda x: x.id, reverse=True)[:100]:
-        u = db.session.get(User, l.user_id)
-        if u:
-            users.append(_pl_user_brief(u))
-    return jsonify({"ok": True, "users": users})
-
-
-@app.route("/api/pl/posts/<int:post_id>/poll-vote", methods=["POST"])
-def api_pl_poll_vote(post_id):
-    me = current_user()
-    post = db.session.get(FeedPost, post_id)
-    if post is None or not post.poll_json:
-        return jsonify({"ok": False, "error": "no_poll"}), 404
-    try:
-        options = json.loads(post.poll_json)
-    except Exception:
-        return jsonify({"ok": False, "error": "no_poll"}), 404
-    choice = (request.get_json(silent=True) or {}).get("choice")
-    if not isinstance(choice, int) or not (0 <= choice < len(options)):
-        return jsonify({"ok": False, "error": "bad_choice"}), 400
-    existing = FeedPollVote.query.filter_by(post_id=post_id, user_id=me.id).first()
-    if existing:
-        existing.choice = choice
-    else:
-        db.session.add(FeedPollVote(post_id=post_id, user_id=me.id, choice=choice))
-    db.session.commit()
-    return jsonify({"ok": True, "poll": _pl_poll_state(post, me)})
-
-
-@app.route("/api/pl/who-to-follow")
-def api_pl_who_to_follow():
-    me = current_user()
-    followed = {s.channel_id for s in Subscription.query.filter_by(subscriber_id=me.id)}
-    followed.add(me.id)
-    rows = (User.query.filter(User.id.notin_(followed))
-            .order_by(db.func.random()).limit(3).all())
-    return jsonify({"ok": True, "users": [_pl_user_brief(u) for u in rows]})
-
-
-@app.route("/api/pl/posts/<int:post_id>/like", methods=["POST"])
-def api_pl_like_post(post_id):
-    me = current_user()
-    post = db.session.get(FeedPost, post_id)
-    if post is None:
-        return jsonify({"ok": False, "error": "not_found"}), 404
-    existing = FeedLike.query.filter_by(post_id=post_id, user_id=me.id).first()
-    if existing:
-        db.session.delete(existing)
-        liked = False
-    else:
-        db.session.add(FeedLike(post_id=post_id, user_id=me.id))
-        liked = True
-    db.session.commit()
-    return jsonify({"ok": True, "liked": liked, "like_count": FeedLike.query.filter_by(post_id=post_id).count()})
-
-
-@app.route("/api/pl/posts/<int:post_id>/share", methods=["POST"])
-def api_pl_share_post(post_id):
-    post = db.session.get(FeedPost, post_id)
-    if post is None:
-        return jsonify({"ok": False, "error": "not_found"}), 404
-    post.share_count = (post.share_count or 0) + 1
-    db.session.commit()
-    return jsonify({"ok": True, "share_count": post.share_count})
-
-
-@app.route("/api/pl/posts/<int:post_id>/ps", methods=["POST"])
-def api_pl_add_ps(post_id):
-    me = current_user()
-    post = db.session.get(FeedPost, post_id)
-    if post is None:
-        return jsonify({"ok": False, "error": "not_found"}), 404
-    if post.author_id != me.id:
-        return jsonify({"ok": False, "error": "not_yours"}), 403
-    if post.ps is not None:
-        return jsonify({"ok": False, "error": "exists"}), 409
-    data = request.get_json(silent=True) or {}
-    body = (data.get("body") or "").strip()[:2000]
-    att_kind, att_value = _pl_read_att(data)
-    if not body and not att_kind:
-        return jsonify({"ok": False, "error": "empty"}), 400
-    db.session.add(FeedPS(post_id=post_id, body=body, att_kind=att_kind, att_value=att_value))
-    db.session.commit()
-    return jsonify({"ok": True})
-
-
-def _serialize_pl_comment(c, me):
-    liked_ids = {cl.user_id for cl in c.likes}
-    return {
-        "id": c.id,
-        "parent_id": c.parent_id,
-        "body": c.body,
-        "body_html": _pl_linkify(c.body),
-        "created_at": (c.created_at.replace(tzinfo=timezone.utc) if c.created_at.tzinfo is None else c.created_at).isoformat(),
-        "like_count": len(c.likes),
-        "liked_by_me": me.id in liked_ids,
-        "is_mine": c.author_id == me.id,
-        "hidden": c.hidden_at is not None,
-        "author": _pl_user_brief(c.author),
-        "attachment": _pl_attachment(c),
-    }
-
-
-def _pl_comment_visible(c, me, my_follows):
-    """A "versteckter" comment is only shown to its author and to people
-    who follow the author."""
-    if c.hidden_at is None or c.author_id == me.id:
-        return True
-    return c.author_id in my_follows
-
-
-@app.route("/api/pl/posts/<int:post_id>/comments")
-def api_pl_list_comments(post_id):
-    me = current_user()
-    post = db.session.get(FeedPost, post_id)
-    if post is None:
-        return jsonify({"ok": False, "error": "not_found"}), 404
-    my_follows = {s.channel_id for s in Subscription.query.filter_by(subscriber_id=me.id)}
-    # Top-level comments oldest-first, each followed by its replies.
-    tops = [c for c in post.comments if c.parent_id is None]
-    tops.sort(key=lambda c: c.created_at)
-    out = []
-    for top in tops:
-        if not _pl_comment_visible(top, me, my_follows):
-            continue
-        out.append(_serialize_pl_comment(top, me))
-        for r in sorted(top.replies, key=lambda c: c.created_at):
-            if _pl_comment_visible(r, me, my_follows):
-                out.append(_serialize_pl_comment(r, me))
-    return jsonify({"ok": True, "comments": out})
-
-
-@app.route("/api/pl/comments/<int:comment_id>/report", methods=["POST"])
-def api_pl_report_comment(comment_id):
-    me = current_user()
-    c = db.session.get(FeedComment, comment_id)
-    if c is None:
-        return jsonify({"ok": False, "error": "not_found"}), 404
-    reason = ((request.get_json(silent=True) or {}).get("reason") or "").strip()[:180]
-    db.session.add(FeedReport(
-        post_id=c.post_id, user_id=me.id,
-        reason=f"[Kommentar #{comment_id}] {reason}"[:200] or None))
-    db.session.commit()
-    return jsonify({"ok": True})
-
-
-@app.route("/api/pl/comments/<int:comment_id>/hide", methods=["POST"])
-def api_pl_hide_comment(comment_id):
-    me = current_user()
-    c = db.session.get(FeedComment, comment_id)
-    if c is None:
-        return jsonify({"ok": False, "error": "not_found"}), 404
-    if c.author_id != me.id:
-        return jsonify({"ok": False, "error": "not_yours"}), 403
-    c.hidden_at = None if c.hidden_at else datetime.now(timezone.utc)
-    db.session.commit()
-    return jsonify({"ok": True, "hidden": c.hidden_at is not None})
-
-
-@app.route("/api/pl/posts/<int:post_id>/not-interested", methods=["POST"])
-def api_pl_not_interested(post_id):
-    seen = session.get("_pl_uninterested", [])
-    if post_id not in seen:
-        seen.append(post_id)
-        session["_pl_uninterested"] = seen[-300:]
-    return jsonify({"ok": True})
-
-
-@app.route("/api/pl/posts/<int:post_id>/comments", methods=["POST"])
-def api_pl_add_comment(post_id):
-    me = current_user()
-    post = db.session.get(FeedPost, post_id)
-    if post is None:
-        return jsonify({"ok": False, "error": "not_found"}), 404
-    data = request.get_json(silent=True) or {}
-    body = (data.get("body") or "").strip()[:2000]
-    att_kind, att_value = _pl_read_att(data)
-    if not body and not att_kind:
-        return jsonify({"ok": False, "error": "empty"}), 400
-    parent_id = data.get("parent_id")
-    if parent_id is not None:
-        parent = db.session.get(FeedComment, parent_id)
-        if parent is None or parent.post_id != post_id:
-            return jsonify({"ok": False, "error": "bad_parent"}), 400
-        # collapse a reply-to-a-reply onto the same top-level thread
-        if parent.parent_id is not None:
-            parent_id = parent.parent_id
-    c = FeedComment(post_id=post_id, author_id=me.id, parent_id=parent_id, body=body,
-                    att_kind=att_kind, att_value=att_value)
-    db.session.add(c)
-    db.session.commit()
-    return jsonify({"ok": True, "comment": _serialize_pl_comment(c, me)})
-
-
-@app.route("/api/pl/comments/<int:comment_id>/like", methods=["POST"])
-def api_pl_like_comment(comment_id):
-    me = current_user()
-    c = db.session.get(FeedComment, comment_id)
-    if c is None:
-        return jsonify({"ok": False, "error": "not_found"}), 404
-    existing = FeedCommentLike.query.filter_by(comment_id=comment_id, user_id=me.id).first()
-    if existing:
-        db.session.delete(existing)
-        liked = False
-    else:
-        db.session.add(FeedCommentLike(comment_id=comment_id, user_id=me.id))
-        liked = True
-    db.session.commit()
-    return jsonify({"ok": True, "liked": liked, "like_count": FeedCommentLike.query.filter_by(comment_id=comment_id).count()})
 
 
 # ==========================================================================
@@ -2788,6 +1800,143 @@ def api_pl_mutuals():
     return jsonify({"ok": True, "users": [
         {"username": u.username, "avatar_letter": pl_avatar_letter(u.username), "avatar_color": pl_avatar_color(u.username)} for u in users
     ]})
+
+
+PL_STORY_TTL_HOURS = 24
+
+
+def _pl_mutual_ids(me):
+    i_follow_ids = {s.channel_id for s in Subscription.query.filter_by(subscriber_id=me.id)}
+    follow_me_ids = {s.subscriber_id for s in Subscription.query.filter_by(channel_id=me.id)}
+    return i_follow_ids & follow_me_ids
+
+
+def _pl_serialize_story(s, me):
+    return {
+        "id": s.id,
+        "media_kind": s.media_kind,
+        "url": _pl_media_url(s.media_name),
+        "caption": s.caption,
+        "created_ago": pl_ago(s.created_at),
+        "is_mine": s.user_id == me.id,
+        "viewed_by_me": any(v.viewer_id == me.id for v in s.views),
+    }
+
+
+@app.route("/api/pl/stories", methods=["GET"])
+def api_pl_stories_list():
+    me = current_user()
+    now = datetime.now(timezone.utc)
+    mutual_ids = _pl_mutual_ids(me)
+    rows = (
+        PlStory.query.filter(
+            PlStory.user_id.in_(mutual_ids | {me.id}),
+            PlStory.expires_at > now,
+        ).order_by(PlStory.created_at.asc()).all()
+    )
+    by_user = {}
+    for s in rows:
+        by_user.setdefault(s.user_id, []).append(s)
+
+    mine = None
+    if me.id in by_user:
+        mine = {
+            "username": me.username, "name": pl_display_name(me),
+            "avatar_letter": pl_avatar_letter(me.username), "avatar_color": pl_avatar_color(me.username),
+            "avatar_url": _pl_media_url(me.pl_avatar_image),
+            "stories": [_pl_serialize_story(s, me) for s in by_user[me.id]],
+        }
+
+    friends = []
+    for uid, stories in by_user.items():
+        if uid == me.id:
+            continue
+        u = db.session.get(User, uid)
+        if u is None:
+            continue
+        all_seen = all(any(v.viewer_id == me.id for v in s.views) for s in stories)
+        friends.append({
+            "username": u.username, "name": pl_display_name(u),
+            "avatar_letter": pl_avatar_letter(u.username), "avatar_color": pl_avatar_color(u.username),
+            "avatar_url": _pl_media_url(u.pl_avatar_image),
+            "all_seen": all_seen,
+            "stories": [_pl_serialize_story(s, me) for s in stories],
+        })
+    friends.sort(key=lambda f: (f["all_seen"], f["name"].lower()))
+
+    return jsonify({"ok": True, "mine": mine, "friends": friends})
+
+
+@app.route("/api/pl/stories", methods=["POST"])
+def api_pl_stories_create():
+    me = current_user()
+    f = request.files.get("media")
+    if f is None or not f.filename:
+        return jsonify({"ok": False, "error": "no_file"}), 400
+    ext = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else ""
+    if ext in PL_IMAGE_EXT:
+        kind = "image"
+    elif ext in PL_VIDEO_EXT:
+        kind = "video"
+    else:
+        return jsonify({"ok": False, "error": "bad_type"}), 400
+    name = f"{uuid.uuid4().hex}.{ext}"
+    _pl_store_media(f, name)
+    now = datetime.now(timezone.utc)
+    story = PlStory(
+        user_id=me.id, media_name=name, media_kind=kind,
+        caption=(request.form.get("caption") or "").strip()[:300] or None,
+        created_at=now, expires_at=now + timedelta(hours=PL_STORY_TTL_HOURS),
+    )
+    db.session.add(story)
+    db.session.commit()
+    return jsonify({"ok": True, "story": _pl_serialize_story(story, me)})
+
+
+@app.route("/api/pl/stories/<int:story_id>/view", methods=["POST"])
+def api_pl_story_view(story_id):
+    me = current_user()
+    story = db.session.get(PlStory, story_id)
+    if story is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    if not PlStoryView.query.filter_by(story_id=story_id, viewer_id=me.id).first():
+        db.session.add(PlStoryView(story_id=story_id, viewer_id=me.id))
+        db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/pl/stories/<int:story_id>/viewers")
+def api_pl_story_viewers(story_id):
+    me = current_user()
+    story = db.session.get(PlStory, story_id)
+    if story is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    if story.user_id != me.id:
+        return jsonify({"ok": False, "error": "forbidden"}), 403
+    views = sorted(story.views, key=lambda v: v.viewed_at, reverse=True)
+    return jsonify({"ok": True, "viewers": [
+        {
+            "username": v.viewer.username, "name": pl_display_name(v.viewer),
+            "avatar_letter": pl_avatar_letter(v.viewer.username), "avatar_color": pl_avatar_color(v.viewer.username),
+            "avatar_url": _pl_media_url(v.viewer.pl_avatar_image),
+            "viewed_ago": pl_ago(v.viewed_at),
+        }
+        for v in views
+    ]})
+
+
+@app.route("/api/pl/stories/<int:story_id>", methods=["DELETE"])
+def api_pl_story_delete(story_id):
+    me = current_user()
+    story = db.session.get(PlStory, story_id)
+    if story is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    if story.user_id != me.id:
+        return jsonify({"ok": False, "error": "forbidden"}), 403
+    _pl_delete_media(story.media_name)
+    db.session.delete(story)
+    db.session.commit()
+    return jsonify({"ok": True})
 
 
 @app.route("/api/pl/chats")
@@ -3519,564 +2668,6 @@ def pl_server_view(server_id):
     return render_template(
         "pl_server.html", server_id=server_id, me_json={"id": me.id, "username": me.username},
     )
-
-
-@app.route("/assistant")
-def assistant_page():
-    return render_template("assistant.html", user=current_user())
-
-
-@app.route("/7ai")
-def sevenai_page():
-    """7Ai's own full-page chat -- structurally identical to /assistant
-    (same shared chat widget in base.html), just with a different persona
-    server-side and its own chat history (see AiChat.character). See
-    templates/sevenai.html's data-ai-character attribute, which is what
-    tells base.html's script to send character "sevenai" instead of "nex"."""
-    return render_template("sevenai.html", user=current_user())
-
-
-def serialize_ai_chat(chat):
-    return {
-        "id": chat.id,
-        "title": chat.title or "Neuer Chat",
-        "mode": chat.mode,
-        "character": chat.character,
-        "specialize_prompted": chat.specialize_prompted,
-        "updated_at": chat.updated_at.strftime("%d.%m.%Y %H:%M"),
-    }
-
-
-@app.route("/api/ai/chats")
-def api_ai_list_chats():
-    user = current_user()
-    if user is None:
-        return jsonify({"ok": False, "error": "not_logged_in"}), 401
-    # Defaults to "nex" so old frontend code that never sends `character`
-    # (there is none anymore, but this keeps the endpoint itself backward-
-    # compatible) still only sees Nex chats -- see AiChat.character.
-    character = request.args.get("character") if request.args.get("character") in ("nex", "sevenai", "nex7") else "nex"
-    chats = (
-        AiChat.query.filter_by(user_id=user.id, character=character)
-        .order_by(AiChat.updated_at.desc()).all()
-    )
-    return jsonify({"ok": True, "chats": [serialize_ai_chat(c) for c in chats]})
-
-
-@app.route("/api/ai/chats", methods=["POST"])
-def api_ai_create_chat():
-    user = current_user()
-    if user is None:
-        return jsonify({"ok": False, "error": "not_logged_in"}), 401
-    data = request.get_json(silent=True) or {}
-    character = data.get("character") if data.get("character") in ("nex", "sevenai", "nex7") else "nex"
-    chat = AiChat(user_id=user.id, character=character)
-    db.session.add(chat)
-    db.session.commit()
-    return jsonify({"ok": True, "chat": serialize_ai_chat(chat)})
-
-
-@app.route("/api/ai/chats/<int:chat_id>/messages")
-def api_ai_chat_messages(chat_id):
-    user = current_user()
-    if user is None:
-        return jsonify({"ok": False, "error": "not_logged_in"}), 401
-    chat = AiChat.query.filter_by(id=chat_id, user_id=user.id).first_or_404()
-    messages = [{"role": m.role, "content": m.content} for m in chat.messages]
-    return jsonify({"ok": True, "chat": serialize_ai_chat(chat), "messages": messages})
-
-
-@app.route("/api/ai/chats/<int:chat_id>", methods=["PATCH"])
-def api_ai_update_chat(chat_id):
-    user = current_user()
-    if user is None:
-        return jsonify({"ok": False, "error": "not_logged_in"}), 401
-    chat = AiChat.query.filter_by(id=chat_id, user_id=user.id).first_or_404()
-
-    data = request.get_json(silent=True) or {}
-    if "title" in data:
-        title = (data.get("title") or "").strip()[:100]
-        if not title:
-            return jsonify({"ok": False, "error": "invalid_title"}), 400
-        chat.title = title
-    if "mode" in data and data["mode"] in ("general", "code"):
-        chat.mode = data["mode"]
-    if "specialize_prompted" in data:
-        chat.specialize_prompted = bool(data["specialize_prompted"])
-    db.session.commit()
-    return jsonify({"ok": True, "chat": serialize_ai_chat(chat)})
-
-
-@app.route("/api/ai/chats/<int:chat_id>/delete", methods=["POST"])
-def api_ai_delete_chat(chat_id):
-    user = current_user()
-    if user is None:
-        return jsonify({"ok": False, "error": "not_logged_in"}), 401
-    chat = AiChat.query.filter_by(id=chat_id, user_id=user.id).first_or_404()
-    db.session.delete(chat)
-    db.session.commit()
-    return jsonify({"ok": True})
-
-
-ADMIN_FACT_MAX_LENGTH = 500
-ADMIN_FACTS_PROMPT_LIMIT = 20
-LEARNED_FACTS_PROMPT_LIMIT = 15
-# The private per-user profile (source="user") gets a much larger budget
-# than the shared wikipedia/python_docs knowledge above -- it's meant to
-# grow into a large, detailed record of one specific person over many
-# conversations, not stay capped at a handful of entries. Each row is
-# short (a sentence, see remember_user_fact's arg cap), so even a few
-# hundred of them still comfortably fits Groq's context window alongside
-# everything else. Raised from 120 -> 240 so the profile stays precise
-# for long-running users instead of quietly dropping older detail once
-# they cross the old cap.
-USER_FACTS_PROMPT_LIMIT = 240
-
-# Typing-speed baseline: how many samples before we trust a user's average
-# enough to flag a single message as unusually fast/slow *for them*, and
-# how far a message's interval has to deviate to count as an anomaly. The
-# baseline itself uses a capped rolling weight (TYPING_BASELINE_MAX_WEIGHT)
-# so it keeps adapting to a person's current typing habits rather than
-# being frozen in by their first hundred messages forever.
-TYPING_BASELINE_MIN_SAMPLES = 5
-TYPING_BASELINE_MAX_WEIGHT = 100
-TYPING_ANOMALY_FAST_RATIO = 0.6
-TYPING_ANOMALY_SLOW_RATIO = 1.7
-TYPING_INTERVAL_MIN_MS = 15
-TYPING_INTERVAL_MAX_MS = 5000
-
-
-def _update_typing_baseline_and_get_note(user, interval_ms):
-    """Updates `user`'s rolling average typing interval with this message's
-    value (mutates in place, caller still needs to commit) and returns a
-    private, system-prompt-only note if this message's typing speed was
-    unusually fast/slow *compared to this same person's own baseline* --
-    or None if there's no reliable baseline yet or nothing stands out. See
-    ai_assistant.py's behavior_note handling: this is a raw observation,
-    never treated as a fact by itself, only ever fed to the model as
-    context it may choose to act on."""
-    note = None
-    if user.typing_sample_count >= TYPING_BASELINE_MIN_SAMPLES and user.avg_typing_interval_ms:
-        if interval_ms <= user.avg_typing_interval_ms * TYPING_ANOMALY_FAST_RATIO:
-            note = (
-                "Diese Nachricht wurde auffällig schnell getippt im Vergleich zum sonstigen "
-                "Tippverhalten dieser Person. Das ist nur ein Indiz (z.B. für Eile, Aufregung "
-                "oder Stress), keine Tatsache."
-            )
-        elif interval_ms >= user.avg_typing_interval_ms * TYPING_ANOMALY_SLOW_RATIO:
-            note = (
-                "Diese Nachricht wurde auffällig langsam getippt im Vergleich zum sonstigen "
-                "Tippverhalten dieser Person. Das ist nur ein Indiz (z.B. für Nachdenklichkeit, "
-                "Unsicherheit oder Ablenkung), keine Tatsache."
-            )
-    weight = min(user.typing_sample_count, TYPING_BASELINE_MAX_WEIGHT)
-    previous_avg = user.avg_typing_interval_ms or interval_ms
-    user.avg_typing_interval_ms = (previous_avg * weight + interval_ms) / (weight + 1)
-    user.typing_sample_count += 1
-    return note
-
-
-def _get_or_create_personality_row(user_id):
-    """Looks up (or creates) this user's AiPersonality row. Wrapped
-    defensively: AiPersonality is a brand-new table, and on at least one
-    deploy it turned out to not actually exist yet on the live Postgres
-    database despite db.create_all() running at startup (still
-    unexplained -- every other table added this same way, this session,
-    came up fine) -- rather than let that 500 the entire chat endpoint
-    again, this degrades to "no personality info this turn" and logs the
-    real error for the admin dashboard instead. session.rollback() is
-    required after a failed query or the whole request's DB session stays
-    unusable for anything that runs afterward."""
-    try:
-        row = AiPersonality.query.filter_by(user_id=user_id).first()
-        if row is None:
-            row = AiPersonality(user_id=user_id)
-            db.session.add(row)
-            db.session.commit()
-        return row
-    except Exception as exc:
-        db.session.rollback()
-        logger.exception("AiPersonality nicht verfügbar für user_id=%s.", user_id)
-        log_error(str(exc), path=request.path, method=request.method, user_id=user_id)
-        return None
-
-
-@app.route("/api/ai/chat", methods=["POST"])
-def api_ai_chat():
-    user = current_user()
-    if user is None:
-        return jsonify({"ok": False, "error": "not_logged_in"}), 401
-
-    data = request.get_json(silent=True) or {}
-    message = (data.get("message") or "").strip()
-    context = (data.get("context") or "").strip() or None
-    project_type = (
-        data.get("project_type")
-        if data.get("project_type") in ("game", "webapp", "general", "code", "sevenai", "nexblunt") else None
-    )
-    # Which AI character this message belongs to -- see AiChat.character
-    # and ai_assistant.py's SEVENAI_SYSTEM_PROMPT. Not trusted blindly for
-    # an existing chat (see below, once `chat` is resolved) -- an already-
-    # started chat keeps whatever character it was created with, since a
-    # chat's persona/history shouldn't be able to flip mid-conversation.
-    character = data.get("character") if data.get("character") in ("nex", "sevenai", "nex7") else "nex"
-
-    # The HEXAGONUM "Nex" tab: hand Nex a private snapshot of everything the
-    # user does on the app (their own activity only) so it can answer
-    # personally. Prepended as `context` -- see ai_assistant.generate_reply.
-    if character == "nex7" and project_type == "nexblunt" and not context:
-        try:
-            context = _pl_nex_overrides_block(user) + _pl_user_activity_digest(user)
-        except Exception:
-            logger.exception("Nex-Aktivitäts-Kontext fehlgeschlagen.")
-
-    plugin_keys = _pl_nex_enabled_plugin_keys(user) if (character == "nex7" and project_type == "nexblunt") else None
-
-    # Only messages sent through the admin dashboard's dedicated "KI-Wissen"
-    # chat become a global fact -- an admin's ordinary chats elsewhere are
-    # unaffected, and a non-admin can never set save_as_fact regardless of
-    # what the request body claims.
-    save_as_fact = bool(data.get("save_as_fact")) and user.is_admin
-    chat_id = data.get("chat_id")
-    via_voice = bool(data.get("via_voice"))
-    if not message:
-        return jsonify({"ok": False, "error": "empty_message"}), 400
-
-    # Token check happens before anything is written to the DB, so a
-    # rejected message never gets persisted or shows up in chat history.
-    is_buddy = False
-    if project_type in (None, "general"):
-        personality_row_precheck = _get_or_create_personality_row(user.id)
-        is_buddy = bool(personality_row_precheck and personality_row_precheck.mimic_user_style)
-    is_unlimited_tokens = user_has_unlimited_ai_tokens(user)
-    token_cost = _compute_message_token_cost(message, via_voice, is_buddy)
-    tokens_available = user.ai_tokens if user.ai_tokens is not None else STARTING_AI_TOKENS
-    if not is_unlimited_tokens and tokens_available < token_cost:
-        return jsonify({
-            "ok": False, "error": "insufficient_tokens",
-            "tokens_needed": token_cost, "tokens_available": tokens_available,
-        }), 402
-    if not is_unlimited_tokens:
-        user.ai_tokens = tokens_available - token_cost
-
-    # Optional real signal from the frontend: average ms between keystrokes
-    # while typing *this* message (see base.html's keydown tracking) --
-    # only used to compare against this same user's own rolling baseline,
-    # never against other users, see _update_typing_baseline_and_get_note.
-    behavior_note = None
-    typing_interval_raw = data.get("typing_avg_interval_ms")
-    if isinstance(typing_interval_raw, (int, float)) and TYPING_INTERVAL_MIN_MS <= typing_interval_raw <= TYPING_INTERVAL_MAX_MS:
-        behavior_note = _update_typing_baseline_and_get_note(user, float(typing_interval_raw))
-    # Set when the user clicked the orb to cut the AI's spoken reply short
-    # mid-sentence (see base.html's stopAiSpeaking) -- a one-off aside for
-    # this turn only, not a stored fact, so the model can react to actually
-    # being interrupted instead of just continuing as if nothing happened.
-    if data.get("was_interrupted"):
-        interrupted_note = (
-            "Der Nutzer hat deine letzte gesprochene Antwort unterbrochen, bevor sie fertig war -- "
-            "wie bei einem echten Gespräch: halt dich jetzt etwas kürzer, komm schneller auf den "
-            "Punkt, aber erwähne die Unterbrechung selbst nicht extra."
-        )
-        behavior_note = f"{behavior_note} {interrupted_note}" if behavior_note else interrupted_note
-
-    chat = None
-    if chat_id:
-        chat = AiChat.query.filter_by(id=chat_id, user_id=user.id).first()
-    if chat is None:
-        # A chat started via "Neuesten Code-Chat erstellen" (project_type
-        # "code", see api_ai_chat's project_type handling) is tagged
-        # mode="code" from creation, so reopening it later keeps sending
-        # project_type "code" on every message -- see openChat() in
-        # base.html, which reads chat.mode back into currentChatMode.
-        # `character` (see AiChat.character) is set once at creation from
-        # whichever page started the chat (/assistant sends "nex", /7ai
-        # sends "sevenai") and never changes afterwards.
-        chat = AiChat(user_id=user.id, mode="code" if project_type == "code" else "general", character=character)
-        db.session.add(chat)
-        db.session.flush()
-
-    is_first_message = len(chat.messages) == 0
-    history = [{"role": m.role, "content": m.content} for m in chat.messages]
-
-    db.session.add(AiChatMessage(chat_id=chat.id, role="user", content=message))
-    if save_as_fact:
-        db.session.add(AiAdminFact(admin_id=user.id, content=message[:ADMIN_FACT_MAX_LENGTH]))
-    chat.updated_at = datetime.now(timezone.utc)
-    db.session.commit()
-    chat_id_captured = chat.id
-    user_id_captured = user.id
-
-    facts = [
-        f.content for f in
-        AiAdminFact.query.order_by(AiAdminFact.created_at.desc()).limit(ADMIN_FACTS_PROMPT_LIMIT).all()
-    ]
-
-    # AiLearnedFact/AiPersonality only ever apply in general mode (see
-    # ai_assistant.py's module docstring) -- game/webapp DSL prompts stay
-    # protected from both, same reasoning as the tool split.
-    learned_facts = None
-    personality = None
-    if project_type in (None, "general"):
-        learned_facts = {
-            "wikipedia": [
-                f.content for f in AiLearnedFact.query.filter_by(source="wikipedia")
-                .order_by(AiLearnedFact.created_at.desc()).limit(LEARNED_FACTS_PROMPT_LIMIT).all()
-            ],
-            "user": [
-                f.content for f in AiLearnedFact.query.filter_by(source="user", user_id=user.id)
-                .order_by(AiLearnedFact.created_at.desc()).limit(USER_FACTS_PROMPT_LIMIT).all()
-            ],
-            "docs": [
-                f.content for f in AiLearnedFact.query.filter_by(source="python_docs")
-                .order_by(AiLearnedFact.created_at.desc()).limit(LEARNED_FACTS_PROMPT_LIMIT).all()
-            ],
-        }
-        personality_row = personality_row_precheck
-        if personality_row is not None:
-            personality = {
-                "intelligence": personality_row.intelligence, "humor": personality_row.humor,
-                "caution": personality_row.caution, "arrogance": personality_row.arrogance,
-                "mimic_user_style": personality_row.mimic_user_style,
-            }
-    else:
-        behavior_note = None
-
-    def on_done(reply, error, proposed_change, new_learned_facts):
-        with app.app_context():
-            if reply:
-                db.session.add(AiChatMessage(chat_id=chat_id_captured, role="assistant", content=reply))
-                for fact in (new_learned_facts or {}).get("wikipedia", []):
-                    db.session.add(AiLearnedFact(source="wikipedia", content=fact))
-                for fact in (new_learned_facts or {}).get("user", []):
-                    db.session.add(AiLearnedFact(source="user", content=fact, user_id=user_id_captured))
-                adjustments = (new_learned_facts or {}).get("personality_adjustments") or []
-                if adjustments:
-                    personality_row = _get_or_create_personality_row(user_id_captured)
-                    if personality_row is not None:
-                        for trait, step in adjustments:
-                            current = getattr(personality_row, trait)
-                            setattr(personality_row, trait, max(0, min(100, current + step * 3)))
-                        personality_row.updated_at = datetime.now(timezone.utc)
-                # Image generation is the AI's own tool-call decision made
-                # mid-reply, so its cost is only known/charged here, after
-                # the fact -- generate_image already refused if the balance
-                # (checked live via available_tokens) was too low, this is
-                # just applying the charge for one that actually ran.
-                image_generated = (new_learned_facts or {}).get("image_generated")
-                audio_generated = (new_learned_facts or {}).get("audio_generated")
-                video_generated = (new_learned_facts or {}).get("video_generated")
-                if image_generated and not is_unlimited_tokens:
-                    image_user_row = db.session.get(User, user_id_captured)
-                    if image_user_row is not None:
-                        image_user_row.ai_tokens = max(
-                            0, (image_user_row.ai_tokens or 0) - ai_assistant.IMAGE_TOKEN_COST,
-                        )
-                if audio_generated and not is_unlimited_tokens:
-                    audio_user_row = db.session.get(User, user_id_captured)
-                    if audio_user_row is not None:
-                        audio_user_row.ai_tokens = max(
-                            0, (audio_user_row.ai_tokens or 0) - ai_assistant.AUDIO_TOKEN_COST,
-                        )
-                if video_generated and not is_unlimited_tokens:
-                    video_user_row = db.session.get(User, user_id_captured)
-                    if video_user_row is not None:
-                        video_user_row.ai_tokens = max(
-                            0, (video_user_row.ai_tokens or 0) - ai_assistant.VIDEO_TOKEN_COST,
-                        )
-                # Kept as its own record (in addition to being embedded
-                # inline in the reply above) purely so the "Galerie" page
-                # can list everything generated without re-parsing chats.
-                if image_generated:
-                    db.session.add(AiGeneratedMedia(
-                        user_id=user_id_captured, kind="image",
-                        url=image_generated.get("url", ""), prompt=image_generated.get("prompt"),
-                    ))
-                if audio_generated:
-                    db.session.add(AiGeneratedMedia(
-                        user_id=user_id_captured, kind="audio",
-                        url=audio_generated.get("url", ""), prompt=audio_generated.get("text"),
-                    ))
-                if video_generated:
-                    db.session.add(AiGeneratedMedia(
-                        user_id=user_id_captured, kind="video",
-                        url=video_generated.get("url", ""), prompt=video_generated.get("prompt"),
-                    ))
-                db.session.commit()
-                if is_first_message:
-                    # Fired off as its own background thread rather than
-                    # awaited here -- generate_title() is a whole separate
-                    # model call, and with the local model (see
-                    # ai_assistant.py) that alone can take several seconds.
-                    # Blocking on it here would delay the job's "done"
-                    # status -- and therefore the reply the user is
-                    # actually waiting for -- by that same amount, even
-                    # though the reply itself was ready already. The title
-                    # just applies a moment later instead; nothing reads it
-                    # synchronously off this same request.
-                    def _apply_title():
-                        try:
-                            title = ai_assistant.generate_title(message)
-                            if title:
-                                with app.app_context():
-                                    chat_row = db.session.get(AiChat, chat_id_captured)
-                                    if chat_row is not None:
-                                        chat_row.title = title
-                                        db.session.commit()
-                        except Exception:
-                            logger.exception("Chat-Titel konnte im Hintergrund nicht gesetzt werden.")
-
-                    threading.Thread(target=_apply_title, daemon=True).start()
-            elif error:
-                # A Groq outage/rate limit/bad key fails silently from the
-                # user's perspective (they just see "KI gerade nicht
-                # verfügbar") -- this is the background-thread equivalent
-                # of the global error handler, since nothing here ever
-                # raises into a request handler for that to catch.
-                log_error(error, path="/api/ai/chat", method="POST", user_id=user_id_captured)
-
-    job_id = ai_assistant.start_chat_job(
-        message, context, history=history, project_type=project_type, facts=facts,
-        learned_facts=learned_facts, on_done=on_done, behavior_note=behavior_note,
-        personality=personality, available_tokens=None if is_unlimited_tokens else user.ai_tokens,
-        synthesize_audio_fn=_synthesize_and_store_audio, plugin_keys=plugin_keys,
-    )
-    return jsonify({
-        "ok": True, "job_id": job_id, "chat_id": chat.id, "tokens_remaining": user.ai_tokens,
-    })
-
-
-@app.route("/api/ai/chat/<job_id>")
-def api_ai_chat_status(job_id):
-    # No login check: job_id is a random uuid4, already an unguessable
-    # capability token on its own (this was true even before the guest
-    # chat existed -- get_job_status() never scoped by user either) -- so
-    # this same route can safely also serve /api/ai/guest-chat's polling.
-    job = ai_assistant.get_job_status(job_id)
-    if job is None:
-        return jsonify({"ok": False, "error": "not_found"}), 404
-    return jsonify({"ok": True, **job})
-
-
-@app.route("/api/ai/feedback", methods=["POST"])
-def api_ai_feedback():
-    user = current_user()
-    if user is None:
-        return jsonify({"ok": False, "error": "not_logged_in"}), 401
-
-    data = request.get_json(silent=True) or {}
-    message = (data.get("message") or "").strip()[:2000]
-    reply = (data.get("reply") or "").strip()[:4000]
-    rating = data.get("rating")
-    if rating not in (1, -1) or not message or not reply:
-        return jsonify({"ok": False, "error": "invalid_feedback"}), 400
-
-    db.session.add(AiChatFeedback(user_id=user.id, message=message, reply=reply, rating=rating))
-    db.session.commit()
-    return jsonify({"ok": True})
-
-
-@app.route("/api/ai/buddy-mode", methods=["POST"])
-def api_ai_buddy_mode():
-    """"Buddy"-Umschalter aus der Sidebar (siehe base.html's Bestätigungs-
-    Dialog) -- setzt AiPersonality.mimic_user_style für diesen Nutzer, kein
-    zurück-Schalten aus der UI vorgesehen (kann über "Mein KI-Profil
-    löschen" zurückgesetzt werden)."""
-    user = current_user()
-    if user is None:
-        return jsonify({"ok": False, "error": "not_logged_in"}), 401
-
-    personality_row = _get_or_create_personality_row(user.id)
-    if personality_row is None:
-        return jsonify({"ok": False, "error": "unavailable"}), 500
-    personality_row.mimic_user_style = True
-    db.session.commit()
-    return jsonify({"ok": True})
-
-
-@app.route("/api/voice-profile/status")
-def api_voice_profile_status():
-    profiles = AiVoiceProfile.query.all()
-    return jsonify({
-        "ok": True,
-        "profiles": {
-            p.gender: {
-                "cloned": bool(p.elevenlabs_voice_id),
-                "contributor": p.contributor.username if p.contributor else None,
-            }
-            for p in profiles
-        },
-    })
-
-
-@app.route("/api/voice-profile/<gender>/contribute", methods=["POST"])
-def api_voice_profile_contribute(gender):
-    user = current_user()
-    if user is None:
-        return jsonify({"ok": False, "error": "not_logged_in"}), 401
-    if gender not in VOICE_PROFILE_GENDERS:
-        return jsonify({"ok": False, "error": "invalid_gender"}), 400
-    if not USE_ELEVENLABS:
-        return jsonify({
-            "ok": False, "error": "not_configured",
-            "message": "Stimmen-Klonen ist auf dieser Seite gerade nicht eingerichtet.",
-        }), 400
-
-    file = request.files.get("sample")
-    if not file or not file.filename:
-        return jsonify({"ok": False, "error": "no_file", "message": "Keine Sprachaufnahme erhalten."}), 400
-
-    profile = AiVoiceProfile.query.filter_by(gender=gender).first()
-    old_voice_id = profile.elevenlabs_voice_id if profile else None
-
-    try:
-        new_voice_id = elevenlabs_clone_voice(
-            f"NexAI-{gender}-{user.username}", file.stream.read(), file.mimetype,
-        )
-    except Exception:
-        logger.exception("ElevenLabs-Stimmenklon fehlgeschlagen.")
-        return jsonify({
-            "ok": False, "error": "clone_failed",
-            "message": "Die Stimme konnte nicht geklont werden. Versuch es später erneut.",
-        }), 502
-
-    if profile is None:
-        profile = AiVoiceProfile(gender=gender)
-        db.session.add(profile)
-    profile.elevenlabs_voice_id = new_voice_id
-    profile.contributor_id = user.id
-    profile.updated_at = datetime.now(timezone.utc)
-    db.session.commit()
-
-    if old_voice_id:
-        elevenlabs_delete_voice(old_voice_id)
-
-    return jsonify({"ok": True})
-
-
-@app.route("/api/voice-profile/<gender>/speak", methods=["POST"])
-def api_voice_profile_speak(gender):
-    user = current_user()
-    if user is None:
-        return jsonify({"ok": False, "error": "not_logged_in"}), 401
-    if gender not in VOICE_PROFILE_GENDERS:
-        return jsonify({"ok": False, "error": "invalid_gender"}), 400
-
-    data = request.get_json(silent=True) or {}
-    text = (data.get("text") or "").strip()[:2000]
-    if not text:
-        return jsonify({"ok": False, "error": "empty_text"}), 400
-
-    profile = AiVoiceProfile.query.filter_by(gender=gender).first()
-    if profile is None or not profile.elevenlabs_voice_id:
-        return jsonify({"ok": False, "error": "no_cloned_voice"}), 404
-
-    try:
-        audio_bytes = elevenlabs_text_to_speech(profile.elevenlabs_voice_id, text)
-    except Exception:
-        logger.exception("ElevenLabs-Sprachausgabe fehlgeschlagen.")
-        return jsonify({"ok": False, "error": "speech_failed"}), 502
-
-    return Response(audio_bytes, mimetype="audio/mpeg")
 
 
 if __name__ == "__main__":

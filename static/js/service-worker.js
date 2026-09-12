@@ -1,4 +1,4 @@
-const CACHE_NAME = "hexagonum-shell-v2";
+const CACHE_NAME = "hexagonum-shell-v3";
 const APP_SHELL = [
     "/offline",
     "/static/css/pinklemon.css",
