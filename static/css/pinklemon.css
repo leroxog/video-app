@@ -392,6 +392,36 @@ img { max-width: 100%; display: block; }
 }
 .pl-attx { border: none; background: none; color: var(--pl-text-faint); font-size: 17px; line-height: 1; }
 
+/* ===== disappearing snap photos ===== */
+#plSnapToggle {
+  flex-shrink: 0; width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--pl-border);
+  background: var(--pl-surface-2); color: var(--pl-text-faint); display: flex; align-items: center; justify-content: center;
+}
+#plSnapToggle.active { background: var(--pl-pink); border-color: var(--pl-pink); color: #fff; }
+.pl-snap {
+  margin-top: 8px; display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 14px; border-radius: 14px; border: none; font-size: 13px; font-weight: 700;
+}
+.pl-snap-locked { background: var(--pl-pink); color: #fff; }
+.pl-snap-locked:active { transform: scale(0.97); }
+.pl-snap-opened { background: var(--pl-surface-2); color: var(--pl-text-faint); }
+.pl-snap svg { width: 18px; height: 18px; flex-shrink: 0; }
+
+.pl-snapview-back {
+  position: fixed; inset: 0; z-index: 940; background: #000;
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.pl-snapview-bar {
+  position: absolute; top: max(10px, env(safe-area-inset-top)); left: 10px; right: 10px;
+  height: 2.5px; border-radius: 2px; background: rgba(255,255,255,.35); z-index: 2; overflow: hidden;
+}
+.pl-snapview-bar-fill { display: block; height: 100%; width: 0%; background: #fff; }
+.pl-snapview-close {
+  position: absolute; top: max(20px, calc(env(safe-area-inset-top) + 10px)); right: 10px; z-index: 2;
+  background: none; border: none; color: #fff; font-size: 26px; padding: 4px;
+}
+.pl-snapview-img { max-width: 100%; max-height: 100%; object-fit: contain; }
+
 .pl-comment-att { margin-top: 6px; }
 .pl-chat-composewrap { flex-shrink: 0; background: var(--pl-surface); border-top: 1px solid var(--pl-border); }
 .pl-chat-composewrap .pl-chat-compose { border-top: none; background: none; }

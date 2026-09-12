@@ -22,6 +22,8 @@
   var msgById = {};
   var A = window.PlAttach || { mount: function () { return { get: function () { return {}; }, clear: function () {}, raw: function () { return null; } }; }, html: function () { return ""; } };
   var msgAtt = A.mount(document.getElementById("plMsgAtt"));
+  var snapToggle = document.getElementById("plSnapToggle");
+  var snapMode = false;
 
   var REACTION_EMOJI = ["👍", "❤️", "😂", "😮", "😢", "🔥", "🎉", "👎"];
   // Discord-style message grouping: consecutive messages from the same
@@ -81,12 +83,25 @@
       : esc((m.sender_name || m.sender || "?")[0].toUpperCase());
   }
 
+  var SNAP_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="13" rx="2"/><path d="M7 8V6a5 5 0 0 1 10 0v2"/></svg>';
+
+  function attachmentHTML(m) {
+    if (!m.attachment) return "";
+    if (m.attachment.kind === "snap_locked") {
+      return '<button type="button" class="pl-snap pl-snap-locked" data-snap-open="' + m.id + '">' + SNAP_ICON + '<span>Tippen zum Ansehen</span></button>';
+    }
+    if (m.attachment.kind === "snap_opened") {
+      return '<div class="pl-snap pl-snap-opened">' + SNAP_ICON + '<span>Snap geöffnet</span></div>';
+    }
+    return A.html(m.attachment);
+  }
+
   function lineInnerHTML(m) {
     var html = '<span class="pl-msgline-hovertime">' + esc(m.created_ago) + '</span>';
     html += '<div class="pl-msgline-content">';
     html += replyQuoteHTML(m);
     if (m.text) html += (m.text_html || esc(m.text).replace(/\n/g, "<br>"));
-    if (m.attachment) html += A.html(m.attachment);
+    html += attachmentHTML(m);
     if (m.pinned || m.edited) {
       html += '<span class="pl-msgline-tags">';
       if (m.pinned) html += '<span class="pl-msg-pinned-tag"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 4h6l-1 5 3 3v2H7v-2l3-3-1-5z"/></svg></span>';
@@ -195,10 +210,12 @@
     if (!text && !a.att_kind) return;
     var payload = { text: text };
     for (var k in a) payload[k] = a[k];
+    if (snapMode && a.att_kind === "image") payload.view_once = true;
     if (replyToId) payload.reply_to_id = replyToId;
     input.value = "";
     input.style.height = "auto";
     msgAtt.clear();
+    setSnapMode(false);
     clearReply();
     fetch("/api/pl/chats/" + CHAT.id + "/messages", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
@@ -213,6 +230,60 @@
   input.addEventListener("keydown", function (e) {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
   });
+
+  // ---------------- disappearing snap photos ----------------
+  function setSnapMode(on) {
+    snapMode = on;
+    snapToggle.classList.toggle("active", snapMode);
+  }
+
+  function updateSnapToggleVisibility() {
+    var raw = msgAtt.raw();
+    var show = !!(raw && raw.kind === "image");
+    snapToggle.hidden = !show;
+    if (!show) setSnapMode(false);
+  }
+
+  snapToggle.addEventListener("click", function () { setSnapMode(!snapMode); });
+
+  var attPrevEl = msgAtt.el && msgAtt.el.querySelector(".pl-attprev");
+  if (attPrevEl) {
+    new MutationObserver(updateSnapToggleVisibility).observe(attPrevEl, { attributes: true, attributeFilter: ["hidden"], childList: true });
+  }
+
+  function openSnap(msgId) {
+    fetch("/api/pl/messages/" + msgId + "/open", { method: "POST" })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (!j.ok) { window.plToast("Ging nicht."); return; }
+        var m = msgById[msgId];
+        if (m) { m.attachment = { kind: "snap_opened" }; updateMsg(m); }
+        showSnapViewer(j.url);
+      });
+  }
+
+  function showSnapViewer(url) {
+    var back = document.createElement("div");
+    back.className = "pl-snapview-back";
+    back.innerHTML = '<div class="pl-snapview-bar"><span class="pl-snapview-bar-fill"></span></div>'
+      + '<button type="button" class="pl-snapview-close" aria-label="Schließen">&times;</button>'
+      + '<img class="pl-snapview-img" src="' + esc(url) + '" alt="">';
+    document.body.appendChild(back);
+    document.body.style.overflow = "hidden";
+    var timer;
+    function close() {
+      back.remove();
+      document.body.style.overflow = "";
+      clearTimeout(timer);
+    }
+    back.addEventListener("click", close);
+    back.querySelector(".pl-snapview-close").addEventListener("click", function (e) { e.stopPropagation(); close(); });
+    var fill = back.querySelector(".pl-snapview-bar-fill");
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () { fill.style.transition = "width 5s linear"; fill.style.width = "100%"; });
+    });
+    timer = setTimeout(close, 5000);
+  }
 
   // ---------------- typing indicator ----------------
   var lastTypingPing = 0;
@@ -307,6 +378,8 @@
       if (target) { target.scrollIntoView({ block: "center", behavior: "smooth" }); }
       return;
     }
+    var snapBtn = e.target.closest("[data-snap-open]");
+    if (snapBtn) { openSnap(Number(snapBtn.dataset.snapOpen)); return; }
     var actBtn = e.target.closest("[data-act]");
     var line = e.target.closest(".pl-msgline");
     if (!line) return;

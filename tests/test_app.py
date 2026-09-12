@@ -416,6 +416,75 @@ def test_message_reactions_toggle(client):
     assert client.post(f"/api/pl/messages/{msg['id']}/react", json={"emoji": "🍕"}).status_code == 400
 
 
+def _upload_image(client, name="x.gif"):
+    import io as _io
+    r = client.post("/api/pl/upload", data={
+        "file": (_io.BytesIO(b"GIF89a" + b"\x00" * 32), name),
+    }, content_type="multipart/form-data").get_json()
+    return r["value"]
+
+
+def test_snap_message_is_locked_until_recipient_opens_it(client):
+    signup(client, "alice")
+    bob = make_user(client, "bob")
+    cid = _dm(client, "bob", bob)
+    att = _upload_image(client)
+    sent = client.post(f"/api/pl/chats/{cid}/messages", json={
+        "text": "", "att_kind": "image", "att_value": att, "view_once": True,
+    }).get_json()["message"]
+    assert sent["view_once"] is True
+    # the sender always sees their own snap normally
+    assert sent["attachment"]["kind"] == "image"
+
+    # the recipient sees a locked bubble, no URL, until they open it
+    bob_view = bob.get(f"/api/pl/chats/{cid}/messages").get_json()["messages"][0]
+    assert bob_view["attachment"] == {"kind": "snap_locked"}
+
+    opened = bob.post(f"/api/pl/messages/{sent['id']}/open").get_json()
+    assert opened["ok"] is True and opened["already_open"] is False
+    assert opened["url"].endswith(att)
+
+    # opening again is idempotent and flags it
+    reopened = bob.post(f"/api/pl/messages/{sent['id']}/open").get_json()
+    assert reopened["ok"] is True and reopened["already_open"] is True
+
+    # after opening, it's gone from the normal payload for the recipient
+    bob_after = bob.get(f"/api/pl/chats/{cid}/messages?after=0").get_json()["messages"][0]
+    assert bob_after["attachment"] == {"kind": "snap_opened"}
+    # ...but the sender can still see it normally
+    alice_after = client.get(f"/api/pl/chats/{cid}/messages?after=0").get_json()["messages"][0]
+    assert alice_after["attachment"]["kind"] == "image"
+
+
+def test_sender_cannot_open_own_snap(client):
+    signup(client, "alice")
+    bob = make_user(client, "bob")
+    cid = _dm(client, "bob", bob)
+    att = _upload_image(client)
+    sent = client.post(f"/api/pl/chats/{cid}/messages", json={
+        "att_kind": "image", "att_value": att, "view_once": True,
+    }).get_json()["message"]
+    r = client.post(f"/api/pl/messages/{sent['id']}/open")
+    assert r.get_json() == {"ok": False, "error": "cant_open_own_snap"}
+
+
+def test_view_once_ignored_without_an_image(client):
+    signup(client, "alice")
+    bob = make_user(client, "bob")
+    cid = _dm(client, "bob", bob)
+    sent = client.post(f"/api/pl/chats/{cid}/messages", json={"text": "hi", "view_once": True}).get_json()["message"]
+    assert sent["view_once"] is False
+
+
+def test_open_rejects_non_snap_message(client):
+    signup(client, "alice")
+    bob = make_user(client, "bob")
+    cid = _dm(client, "bob", bob)
+    msg = client.post(f"/api/pl/chats/{cid}/messages", json={"text": "hi"}).get_json()["message"]
+    r = bob.post(f"/api/pl/messages/{msg['id']}/open")
+    assert r.get_json() == {"ok": False, "error": "not_a_snap"}
+
+
 def test_pin_and_unpin_message(client):
     signup(client, "alice")
     bob = make_user(client, "bob")

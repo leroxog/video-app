@@ -267,6 +267,15 @@ class PlMessage(db.Model):
     reply_to = db.relationship("PlMessage", remote_side=[id])
     edited_at = db.Column(db.DateTime, nullable=True)
     pinned_at = db.Column(db.DateTime, nullable=True)
+    # Snapchat-style disappearing photo (2026-09-13): view_once messages
+    # show a locked bubble to everyone but the sender until the recipient
+    # opens it once (POST /api/pl/messages/<id>/open sets opened_at and
+    # hands back the real URL exactly that one time); after that the image
+    # is gone from the normal message payload for good. In a group chat
+    # "opened" is global -- whoever opens it first consumes it for
+    # everyone, a deliberate simplification over per-recipient tracking.
+    view_once = db.Column(db.Boolean, nullable=False, default=False)
+    opened_at = db.Column(db.DateTime, nullable=True)
     reactions = db.relationship("PlMessageReaction", backref="message", lazy=True, cascade="all, delete-orphan")
 
 

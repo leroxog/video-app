@@ -609,6 +609,7 @@ def ensure_sqlite_columns_exist():
         "pl_message": [
             ("att_kind", "VARCHAR(12)"), ("att_value", "VARCHAR(255)"),
             ("reply_to_id", "INTEGER"), ("edited_at", "DATETIME"), ("pinned_at", "DATETIME"),
+            ("view_once", "BOOLEAN NOT NULL DEFAULT 0"), ("opened_at", "DATETIME"),
         ],
         "pl_chat": [
             ("server_id", "INTEGER"), ("topic", "VARCHAR(300)"),
@@ -728,6 +729,8 @@ def ensure_columns_exist():
         'ALTER TABLE pl_message ADD COLUMN IF NOT EXISTS reply_to_id INTEGER',
         'ALTER TABLE pl_message ADD COLUMN IF NOT EXISTS edited_at TIMESTAMP',
         'ALTER TABLE pl_message ADD COLUMN IF NOT EXISTS pinned_at TIMESTAMP',
+        'ALTER TABLE pl_message ADD COLUMN IF NOT EXISTS view_once BOOLEAN NOT NULL DEFAULT FALSE',
+        'ALTER TABLE pl_message ADD COLUMN IF NOT EXISTS opened_at TIMESTAMP',
         'ALTER TABLE pl_chat ADD COLUMN IF NOT EXISTS server_id INTEGER',
         'ALTER TABLE pl_chat ADD COLUMN IF NOT EXISTS topic VARCHAR(300)',
         'ALTER TABLE pl_chat ADD COLUMN IF NOT EXISTS position INTEGER NOT NULL DEFAULT 0',
@@ -2128,16 +2131,22 @@ def _pl_serialize_message(m, me):
         g["count"] += 1
         if r.user_id == me.id:
             g["me"] = True
+    is_mine = m.sender_id == me.id
+    if m.view_once and m.att_kind == "image" and not is_mine:
+        attachment = {"kind": "snap_opened"} if m.opened_at is not None else {"kind": "snap_locked"}
+    else:
+        attachment = _pl_attachment(m)
     return {
         "id": m.id, "text": m.text, "text_html": _pl_linkify(m.text),
         "sender_id": m.sender_id, "sender": m.sender.username, "sender_name": pl_display_name(m.sender),
         "sender_avatar_color": pl_avatar_color(m.sender.username),
         "sender_avatar_url": _pl_media_url(m.sender.pl_avatar_image),
-        "is_mine": m.sender_id == me.id, "created_ago": pl_ago(m.created_at),
+        "is_mine": is_mine, "created_ago": pl_ago(m.created_at),
         "created_at": (m.created_at.replace(tzinfo=timezone.utc) if m.created_at.tzinfo is None else m.created_at).isoformat(),
         "edited": m.edited_at is not None,
         "pinned": m.pinned_at is not None,
-        "attachment": _pl_attachment(m),
+        "view_once": m.view_once,
+        "attachment": attachment,
         "reply_to": reply_to,
         "reactions": list(reaction_groups.values()),
     }
@@ -2179,8 +2188,10 @@ def api_pl_send_message(chat_id):
     if reply_to_id is not None:
         parent = db.session.get(PlMessage, reply_to_id)
         reply_to_id = parent.id if (parent is not None and parent.chat_id == chat_id) else None
+    view_once = bool(data.get("view_once")) and att_kind == "image"
     msg = PlMessage(chat_id=chat_id, sender_id=me.id, text=text,
-                    att_kind=att_kind, att_value=att_value, reply_to_id=reply_to_id)
+                    att_kind=att_kind, att_value=att_value, reply_to_id=reply_to_id,
+                    view_once=view_once)
     db.session.add(msg)
     chat.last_activity = datetime.now(timezone.utc)
     db.session.flush()
@@ -2252,6 +2263,31 @@ def api_pl_pin_message(message_id):
     msg.pinned_at = None if msg.pinned_at else datetime.now(timezone.utc)
     db.session.commit()
     return jsonify({"ok": True, "message": _pl_serialize_message(msg, me)})
+
+
+def _pl_record_snap_for_streak(sender_id, recipient_id, chat_id):
+    pass  # replaced with real streak tracking in the next phase
+
+
+@app.route("/api/pl/messages/<int:message_id>/open", methods=["POST"])
+def api_pl_open_snap(message_id):
+    """Consumes a view_once Snap: the real image URL is only ever handed
+    back in THIS response, never again in the normal message payload
+    (see _pl_serialize_message's snap_locked/snap_opened branching)."""
+    me = current_user()
+    msg = db.session.get(PlMessage, message_id)
+    if msg is None or _pl_require_chat_member(msg.chat_id, me) is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    if not msg.view_once or msg.att_kind != "image":
+        return jsonify({"ok": False, "error": "not_a_snap"}), 400
+    if msg.sender_id == me.id:
+        return jsonify({"ok": False, "error": "cant_open_own_snap"}), 400
+    already_open = msg.opened_at is not None
+    if not already_open:
+        msg.opened_at = datetime.now(timezone.utc)
+        db.session.commit()
+        _pl_record_snap_for_streak(msg.sender_id, me.id, msg.chat_id)
+    return jsonify({"ok": True, "url": _pl_media_url(msg.att_value), "already_open": already_open})
 
 
 @app.route("/api/pl/chats/<int:chat_id>/pinned")
