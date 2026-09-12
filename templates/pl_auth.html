@@ -12,86 +12,117 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/pinklemon.css') }}">
     <link rel="icon" href="{{ url_for('static', filename='img/pinklemon-mark.svg') }}" type="image/svg+xml">
 </head>
-<body>
+<body class="pl-authbody">
 {%- from "partials/_pl_icons.html" import plicon -%}
-<div class="pl-auth">
-    <div class="pl-logo">{% include "partials/_pinklemon_logo.html" %}</div>
-    <h1>HEXAGONUM</h1>
-    <p class="sub">{% if mode == 'signup' %}Erstell dir einen Account.{% else %}Willkommen zurück.{% endif %}</p>
+<div class="pl-authbg">
+    <div class="pl-authlight l1"></div>
+    <div class="pl-authlight l2"></div>
+    <div class="pl-authlight l3"></div>
+</div>
 
-    <div class="pl-oauth-stack">
-        <a class="pl-oauth-btn" href="{{ url_for('pl_google_auth_start') }}">
-            <span class="pl-oauth-ic">{{ plicon('google', 20) }}</span>
-            Mit Google fortfahren
-        </a>
-        <button type="button" class="pl-oauth-btn" data-soon="Apple-Login ist bald verfügbar.">
-            <span class="pl-oauth-ic">{{ plicon('apple', 20) }}</span>
-            Mit Apple fortfahren
-        </button>
-        <button type="button" class="pl-oauth-btn" data-soon="Login per Telefonnummer ist bald verfügbar.">
-            <span class="pl-oauth-ic">{{ plicon('phone', 20) }}</span>
-            Mit Telefonnummer fortfahren
-        </button>
-    </div>
+<div class="pl-authwrap">
+    <div class="pl-authcard" id="plAuthCard">
+        <div class="pl-authviewport" id="plAuthViewport">
+            <div class="pl-authtrack" id="plAuthTrack">
 
-    <div class="pl-oauth-divider"><span>ODER</span></div>
+                <!-- 0: login -->
+                <section class="pl-authstep" data-step="login">
+                    <div class="pl-authmark">{% include "partials/_pinklemon_logo.html" %}</div>
+                    <h1 id="plLoginHeading">Willkommen zurück!</h1>
+                    <div class="pl-authform" id="plLoginForm">
+                        <input class="pl-authinput" id="plLoginUsername" placeholder="@Benutzername" autocomplete="username" autocapitalize="none" spellcheck="false">
+                        <input class="pl-authinput" id="plLoginPassword" type="password" placeholder="Passwort" autocomplete="current-password">
+                    </div>
+                    <button class="pl-authbtn" id="plLoginBtn" hidden>Einloggen</button>
+                    <div class="pl-autherror" id="plLoginError"></div>
+                    <div class="pl-authfoot">Du hast noch kein Account?! <a href="#" id="plGoRegister">Registrieren</a></div>
+                    <div class="pl-authoverlay" hidden><div class="pl-authspinner"></div></div>
+                </section>
 
-    <button type="button" class="pl-oauth-btn pl-oauth-hex" id="plAuthRevealBtn">
-        <span class="pl-oauth-ic pl-oauth-ic-hex">{% include "partials/_pinklemon_logo.html" %}</span>
-        Mit HEXAGONUM fortfahren
-    </button>
+                <!-- 1: register step 1 -->
+                <section class="pl-authstep" data-step="register1">
+                    <h1>Registrierung</h1>
+                    <p class="pl-authsub">Erstelle deinen Namen, dieser darf nicht schon einmal verwendet sein</p>
+                    <div class="pl-authform">
+                        <input class="pl-authinput" id="plRegUsername" placeholder="@Name" autocomplete="username" autocapitalize="none" spellcheck="false">
+                        <input class="pl-authinput" id="plRegPassword" type="password" placeholder="Passwort" autocomplete="new-password">
+                        <input class="pl-authinput" id="plRegPassword2" type="password" placeholder="Passwort erneut eingeben" autocomplete="new-password">
+                    </div>
+                    <div class="pl-autherror" id="plReg1Error"></div>
+                    <button class="pl-authbtn" id="plReg1Next" hidden>Weiter</button>
+                    <div class="pl-authoverlay" hidden><div class="pl-authspinner"></div></div>
+                </section>
 
-    <form method="post" action="{{ url_for('pl_signup') if mode == 'signup' else url_for('pl_login') }}"
-          class="pl-authform" id="plAuthForm" {{ '' if username else 'hidden' }}>
-        <input class="pl-input" name="username" placeholder="Benutzername" maxlength="30" autocomplete="username"
-               autocapitalize="none" spellcheck="false" required value="{{ username or '' }}">
-        <input class="pl-input" name="password" type="password" placeholder="Passwort" autocomplete="{{ 'new-password' if mode == 'signup' else 'current-password' }}" required>
-        {% if mode == 'signup' %}
-        <input class="pl-input" name="password2" type="password" placeholder="Passwort wiederholen" autocomplete="new-password" required>
-        {% endif %}
-        <button class="pl-btn" type="submit">{% if mode == 'signup' %}Los geht's{% else %}Einloggen{% endif %}</button>
-    </form>
+                <!-- 2: register step 2 -->
+                <section class="pl-authstep" data-step="register2">
+                    <h1>Erzähle uns mehr von dir</h1>
+                    <p class="pl-authsub">Dein Geburtstag</p>
+                    <div class="pl-wheels">
+                        <div class="pl-wheel" id="plWheelDay"></div>
+                        <div class="pl-wheel" id="plWheelMonth"></div>
+                        <div class="pl-wheel" id="plWheelYear"></div>
+                        <div class="pl-wheel-center-line"></div>
+                    </div>
+                    <p class="pl-authsub">Geschlecht</p>
+                    <div class="pl-gender-row" id="plGenderRow">
+                        <button type="button" class="pl-gender-btn" data-gender="weiblich">Weiblich</button>
+                        <button type="button" class="pl-gender-btn" data-gender="männlich">Männlich</button>
+                        <button type="button" class="pl-gender-btn" data-gender="divers">Divers</button>
+                    </div>
+                    <input class="pl-authinput" id="plRegEmail" type="email" placeholder="E-Mail (optional)" autocomplete="email">
+                    <div class="pl-authoverlay" hidden><div class="pl-authspinner"></div></div>
+                </section>
 
-    <div class="pl-error">{{ error or '' }}</div>
+                <!-- 3: account bearbeiten -->
+                <section class="pl-authstep" data-step="register3">
+                    <h1>Account bearbeiten</h1>
+                    <div class="pl-authedit-banner" id="plEditBannerPreview">
+                        <button type="button" class="pl-authedit-pick" id="plPickBanner">{{ plicon('plus', 16) }} Banner</button>
+                    </div>
+                    <div class="pl-authedit-avatar" id="plEditAvatarPreview">
+                        <span id="plEditAvatarLetter">?</span>
+                        <button type="button" class="pl-authedit-pick round" id="plPickAvatar">{{ plicon('plus', 14) }}</button>
+                    </div>
+                    <input type="file" id="plAvatarFile" accept="image/*" hidden>
+                    <input type="file" id="plBannerFile" accept="image/*" hidden>
+                    <input class="pl-authinput" id="plRegDisplayName" placeholder="Spitzname" maxlength="50">
+                    <div class="pl-authfoot right"><a href="#" id="plSkip3">Überspringen</a></div>
+                    <button class="pl-authbtn" id="plReg3Next" disabled>Weiter</button>
+                    <div class="pl-authoverlay" hidden><div class="pl-authspinner"></div></div>
+                </section>
 
-    <div class="pl-switch">
-        {% if mode == 'signup' %}
-            Schon dabei? <a href="{{ url_for('pl_login') }}">Einloggen</a>
-        {% else %}
-            Neu hier? <a href="{{ url_for('pl_signup') }}">Account erstellen</a>
-        {% endif %}
+                <!-- 4: human check -->
+                <section class="pl-authstep" data-step="human">
+                    <h1>Bist du ein Mensch?</h1>
+                    <button type="button" class="pl-humancheck" id="plHumanCheck">
+                        <span class="pl-humancheck-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l5 5L20 6"/></svg></span>
+                        <span id="plHumanCheckLabel">Ich bin kein Roboter</span>
+                    </button>
+                    <div class="pl-authoverlay" hidden><div class="pl-authspinner"></div></div>
+                </section>
+
+                <!-- 5: creating -->
+                <section class="pl-authstep" data-step="creating">
+                    <div class="pl-authmark spin">{% include "partials/_pinklemon_logo.html" %}</div>
+                    <h1 id="plCreatingText">Account wird erstellt …</h1>
+                </section>
+
+                <!-- 6: suggested groups -->
+                <section class="pl-authstep" data-step="groups">
+                    <h1>Könntest du kennen?!</h1>
+                    <div class="pl-authgroups" id="plAuthGroups"></div>
+                    <div class="pl-authfoot"><a href="#" id="plSkipGroups">Überspringen</a></div>
+                </section>
+
+            </div>
+        </div>
     </div>
 </div>
-<div class="pl-toast" id="plAuthToast"></div>
+<div class="pl-toast" id="plToast"></div>
 <script>
-(function () {
-    var revealBtn = document.getElementById("plAuthRevealBtn");
-    var form = document.getElementById("plAuthForm");
-    var toast = document.getElementById("plAuthToast");
-    var toastTimer = null;
-
-    function showToast(text) {
-        toast.textContent = text;
-        toast.classList.add("show");
-        clearTimeout(toastTimer);
-        toastTimer = setTimeout(function () { toast.classList.remove("show"); }, 2600);
-    }
-
-    revealBtn.addEventListener("click", function () {
-        var opening = form.hasAttribute("hidden");
-        if (opening) {
-            form.removeAttribute("hidden");
-            var first = form.querySelector(".pl-input");
-            if (first) first.focus();
-        } else {
-            form.setAttribute("hidden", "");
-        }
-    });
-
-    document.querySelectorAll(".pl-oauth-btn[data-soon]").forEach(function (btn) {
-        btn.addEventListener("click", function () { showToast(btn.dataset.soon); });
-    });
-})();
+    window.plToast = function (m) { var t = document.getElementById("plToast"); if (!t) return; t.textContent = m; t.classList.add("show"); clearTimeout(window._plT); window._plT = setTimeout(function () { t.classList.remove("show"); }, 2200); };
+    window.PL_AUTH_MODE = {{ mode | tojson }};
 </script>
+<script src="{{ url_for('static', filename='js/pinklemon-auth.js') }}"></script>
 </body>
 </html>

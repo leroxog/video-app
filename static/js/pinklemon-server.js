@@ -173,7 +173,16 @@
     }).join("");
   }
 
-  settingsBtn.addEventListener("click", function () { renderRoleList(); openSheet(settingsSheet); });
+  settingsBtn.addEventListener("click", function () {
+    renderRoleList();
+    $("#plSrvPublicToggle").checked = !!(state.server && state.server.is_public);
+    openSheet(settingsSheet);
+  });
+  $("#plSrvPublicToggle").addEventListener("change", function (e) {
+    api("POST", "/api/pl/servers/" + SID + "/visibility", { is_public: e.target.checked }).then(function (j) {
+      if (j.ok) state.server.is_public = j.is_public; else e.target.checked = !e.target.checked;
+    });
+  });
 
   roleListEl.addEventListener("click", function (e) {
     var row = e.target.closest("[data-role-id]");

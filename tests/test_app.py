@@ -85,6 +85,107 @@ def test_api_returns_401_json_when_logged_out(client):
     assert r.status_code == 401 and r.get_json()["error"] == "not_logged_in"
 
 
+# ---------------- onboarding wizard (pinklemon-auth.js) ----------------
+
+def test_check_username_available_and_taken(client):
+    signup(client, "alice")
+    client.get("/logout")
+    assert client.post("/api/pl/register/check-username", json={"username": "brandnew"}).get_json()["available"] is True
+    assert client.post("/api/pl/register/check-username", json={"username": "ALICE"}).get_json()["available"] is False
+    assert client.post("/api/pl/register/check-username", json={"username": "a b"}).get_json()["available"] is False
+
+
+def test_register_complete_creates_full_account_and_logs_in(client):
+    r = client.post("/api/pl/register/complete", data={
+        "username": "newkid", "password": "secret123", "password2": "secret123",
+        "birth_day": "14", "birth_month": "6", "birth_year": "2001",
+        "gender": "weiblich", "email": "newkid@example.com", "display_name": "New Kid",
+    })
+    assert r.get_json()["ok"] is True
+    # logged in immediately -- no separate /login needed
+    home = client.get("/")
+    assert home.status_code == 200
+    with flask_app.app_context():
+        u = User.query.filter_by(username="newkid").first()
+        assert u is not None and u.gender == "weiblich" and u.email == "newkid@example.com"
+        assert u.pl_display_name == "New Kid" and u.birthdate.isoformat() == "2001-06-14"
+
+
+def test_register_complete_rejects_mismatched_password(client):
+    r = client.post("/api/pl/register/complete", data={
+        "username": "mismatch", "password": "secret123", "password2": "different",
+    })
+    assert r.status_code == 400 and r.get_json()["error"] == "password_mismatch"
+
+
+def test_register_complete_rejects_taken_username(client):
+    signup(client, "alice")
+    client.get("/logout")
+    r = client.post("/api/pl/register/complete", data={
+        "username": "alice", "password": "secret123", "password2": "secret123",
+    })
+    assert r.status_code == 409 and r.get_json()["error"] == "username_taken"
+
+
+def test_register_complete_future_birthdate_ignored(client):
+    r = client.post("/api/pl/register/complete", data={
+        "username": "futurekid", "password": "secret123", "password2": "secret123",
+        "birth_day": "1", "birth_month": "1", "birth_year": "2099",
+    })
+    assert r.get_json()["ok"] is True
+    with flask_app.app_context():
+        assert User.query.filter_by(username="futurekid").first().birthdate is None
+
+
+def test_register_complete_with_avatar_upload(client):
+    r = client.post("/api/pl/register/complete", data={
+        "username": "pictured", "password": "secret123", "password2": "secret123",
+        "avatar": (io.BytesIO(b"\x89PNG\r\n\x1a\n" + b"0" * 200), "pic.png"),
+    }, content_type="multipart/form-data")
+    assert r.get_json()["ok"] is True
+    with flask_app.app_context():
+        u = User.query.filter_by(username="pictured").first()
+        assert u.pl_avatar_image is not None
+
+
+def test_api_login_success_and_failure(client):
+    signup(client, "alice")
+    client.get("/logout")
+    bad = client.post("/api/pl/login", json={"username": "alice", "password": "nope"})
+    assert bad.status_code == 401 and bad.get_json()["error"] == "invalid_credentials"
+    good = client.post("/api/pl/login", json={"username": "alice", "password": "secret1"})
+    assert good.get_json()["ok"] is True
+    assert client.get("/").status_code == 200
+
+
+def test_suggested_servers_excludes_private_and_already_joined(client):
+    signup(client, "alice")
+    priv = _make_server(client, "Privat")
+    pub = _make_server(client, "Öffentlich")
+    client.post(f"/api/pl/servers/{pub['server']['id']}/visibility", json={"is_public": True})
+
+    bob = make_user(client, "bob")
+    suggested = bob.get("/api/pl/servers/suggested").get_json()["servers"]
+    names = [s["name"] for s in suggested]
+    assert "Öffentlich" in names and "Privat" not in names
+
+    code = pub["server"]["invite_code"]
+    bob.post(f"/api/pl/servers/join/{code}")
+    suggested_after = bob.get("/api/pl/servers/suggested").get_json()["servers"]
+    assert "Öffentlich" not in [s["name"] for s in suggested_after]
+
+
+def test_server_visibility_requires_manage_server_permission(client):
+    signup(client, "alice")
+    j = _make_server(client)
+    sid = j["server"]["id"]
+    code = j["server"]["invite_code"]
+    bob = make_user(client, "bob")
+    bob.post(f"/api/pl/servers/join/{code}")
+    r = bob.post(f"/api/pl/servers/{sid}/visibility", json={"is_public": True})
+    assert r.status_code == 403
+
+
 # ---------------- avatar colors ----------------
 
 def test_avatar_color_is_stable_and_in_palette(client):

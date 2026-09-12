@@ -704,6 +704,7 @@ def ensure_sqlite_columns_exist():
             ("server_id", "INTEGER"), ("topic", "VARCHAR(300)"),
             ("position", "INTEGER NOT NULL DEFAULT 0"),
         ],
+        "pl_server": [("is_public", "BOOLEAN NOT NULL DEFAULT 0")],
         # 7Ai (2026-09-08, see ai_assistant.py's SEVENAI_SYSTEM_PROMPT) --
         # existing ai_chat rows predate this column and are all Nex chats,
         # so the default backfills them correctly with no extra code.
@@ -817,6 +818,7 @@ def ensure_columns_exist():
         'ALTER TABLE pl_chat ADD COLUMN IF NOT EXISTS server_id INTEGER',
         'ALTER TABLE pl_chat ADD COLUMN IF NOT EXISTS topic VARCHAR(300)',
         'ALTER TABLE pl_chat ADD COLUMN IF NOT EXISTS position INTEGER NOT NULL DEFAULT 0',
+        'ALTER TABLE pl_server ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT FALSE',
         # Root cause confirmed live (psycopg2.errors.UndefinedColumn):
         # ai_personality was created by db.create_all() back when the
         # AiPersonality model first shipped (no mimic_user_style yet) --
@@ -913,12 +915,13 @@ def allowed_image_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS
 
 
-# Bumped once (2026-09-11) to force every existing session to log back in
-# -- a one-time global logout, not a recurring mechanism. A session's
-# user_id only counts if it also carries this epoch, so any cookie issued
-# before the bump is treated as logged out. Bump again only if another
-# blanket logout is ever needed.
-AUTH_EPOCH = 1
+# Bumped each time a one-time global logout is explicitly requested
+# (2026-09-11, then again 2026-09-12 for the new onboarding-wizard login
+# screen) -- not a recurring mechanism. A session's user_id only counts
+# if it also carries the current epoch, so any cookie issued before the
+# bump is treated as logged out. Bump again only if another blanket
+# logout is ever needed.
+AUTH_EPOCH = 2
 
 
 def _pl_session_uid():
@@ -1137,6 +1140,7 @@ def _make_session_permanent():
 _PUBLIC_ENDPOINTS = {
     "pl_login", "pl_signup", "static", "service_worker", "offline_page",
     "pl_google_auth_start", "pl_google_auth_callback",
+    "api_pl_login", "api_pl_register_check_username", "api_pl_register_complete",
 }
 
 
@@ -1231,6 +1235,123 @@ def pl_logout():
     session.pop("user_id", None)
     session.pop("auth_epoch", None)
     return redirect(url_for("pl_login"))
+
+
+def _pl_log_user_in(user):
+    session["user_id"] = user.id
+    session["auth_epoch"] = AUTH_EPOCH
+    session.permanent = True
+
+
+@app.route("/api/pl/login", methods=["POST"])
+def api_pl_login():
+    """JSON login for the new onboarding-wizard screen (see pinklemon-
+    auth.js) -- the classic form POST at /login above still works
+    unchanged, this is just the fetch-driven equivalent the animated
+    card uses so it can show its own loading/error state without a full
+    page reload."""
+    data = request.get_json(silent=True) or {}
+    username = (data.get("username") or "").strip()
+    password = data.get("password") or ""
+    user = User.query.filter(db.func.lower(User.username) == username.lower()).first()
+    if user is None or not user.check_password(password):
+        return jsonify({"ok": False, "error": "invalid_credentials"}), 401
+    _pl_log_user_in(user)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/pl/register/check-username", methods=["POST"])
+def api_pl_register_check_username():
+    data = request.get_json(silent=True) or {}
+    username = (data.get("username") or "").strip()
+    if not PL_USERNAME_RE.match(username):
+        return jsonify({"ok": True, "available": False, "error": "format"})
+    taken = User.query.filter(db.func.lower(User.username) == username.lower()).first() is not None
+    return jsonify({"ok": True, "available": not taken})
+
+
+@app.route("/api/pl/register/complete", methods=["POST"])
+def api_pl_register_complete():
+    """The final step of the onboarding wizard: this is the only point a
+    User row actually gets created -- everything collected across the
+    earlier steps (birthday, gender, email, nickname, avatar, banner)
+    arrives here in one multipart request and is applied atomically, so
+    a half-finished wizard never leaves a half-set-up account behind.
+    multipart/form-data (not JSON) because avatar/banner are real files."""
+    if current_user() is not None:
+        return jsonify({"ok": False, "error": "already_logged_in"}), 400
+    form = request.form
+    username = (form.get("username") or "").strip()
+    password = form.get("password") or ""
+    password2 = form.get("password2") or ""
+    if not PL_USERNAME_RE.match(username):
+        return jsonify({"ok": False, "error": "bad_username"}), 400
+    if password != password2:
+        return jsonify({"ok": False, "error": "password_mismatch"}), 400
+    if len(password) < 6:
+        return jsonify({"ok": False, "error": "password_too_short"}), 400
+    if User.query.filter(db.func.lower(User.username) == username.lower()).first():
+        return jsonify({"ok": False, "error": "username_taken"}), 409
+
+    birthdate = None
+    try:
+        y, m, d = int(form.get("birth_year")), int(form.get("birth_month")), int(form.get("birth_day"))
+        birthdate = date(y, m, d)
+        if birthdate > date.today():
+            birthdate = None
+    except (TypeError, ValueError):
+        birthdate = None
+
+    gender = (form.get("gender") or "").strip()[:20] or None
+    email = (form.get("email") or "").strip()[:255] or None
+    display_name = (form.get("display_name") or "").strip()[:50] or None
+
+    user = User(username=username, purpose_of_use="private", birthdate=birthdate,
+                gender=gender, email=email, pl_display_name=display_name)
+    user.set_password(password)
+    db.session.add(user)
+    db.session.flush()
+
+    for field, col in (("avatar", "pl_avatar_image"), ("banner", "pl_banner_image")):
+        f = request.files.get(field)
+        if f is None or not f.filename:
+            continue
+        ext = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else ""
+        if ext not in PL_IMAGE_EXT:
+            continue
+        name = f"{uuid.uuid4().hex}.{ext}"
+        _pl_store_media(f, name)
+        setattr(user, col, name)
+
+    db.session.commit()
+    _pl_log_user_in(user)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/pl/servers/suggested")
+def api_pl_servers_suggested():
+    me = current_user()
+    already_in = {r.server_id for r in PlServerMember.query.filter_by(user_id=me.id)}
+    rows = PlServer.query.filter_by(is_public=True).all()
+    candidates = [s for s in rows if s.id not in already_in]
+    random.shuffle(candidates)
+    picked = candidates[:6]
+    return jsonify({"ok": True, "servers": [
+        {"id": s.id, "name": s.name, "icon_url": _pl_media_url(s.icon_image),
+         "invite_code": s.invite_code, "member_count": len(s.members)}
+        for s in picked
+    ]})
+
+
+@app.route("/api/pl/servers/<int:server_id>/visibility", methods=["POST"])
+def api_pl_server_set_visibility(server_id):
+    me = current_user()
+    server, member = _pl_require_server_permission(server_id, me, "manage_server")
+    if server is None:
+        return jsonify({"ok": False, "error": "not_found_or_no_permission"}), 403
+    server.is_public = bool((request.get_json(silent=True) or {}).get("is_public"))
+    db.session.commit()
+    return jsonify({"ok": True, "is_public": server.is_public})
 
 
 GOOGLE_AUTH_ERRORS = {
@@ -3096,7 +3217,7 @@ def _pl_serialize_server(server, me):
         "id": server.id, "name": server.name,
         "icon_url": _pl_media_url(server.icon_image),
         "owner_id": server.owner_id, "is_owner": server.owner_id == me.id,
-        "invite_code": server.invite_code,
+        "invite_code": server.invite_code, "is_public": server.is_public,
         "my_permissions": sorted(_pl_server_permissions(server, member)) if member else [],
         "member_count": len(server.members),
     }

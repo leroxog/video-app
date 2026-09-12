@@ -857,6 +857,10 @@ class PlServer(db.Model):
     owner_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     invite_code = db.Column(db.String(12), unique=True, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    # Discoverable in the "Könntest du kennen?!" onboarding step (see
+    # app.py's /api/pl/servers/suggested) -- off by default, an owner opts
+    # a server in via /api/pl/servers/<id>/visibility.
+    is_public = db.Column(db.Boolean, nullable=False, default=False)
 
     channels = db.relationship(
         "PlChat", backref="server", lazy=True,
