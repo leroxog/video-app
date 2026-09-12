@@ -163,6 +163,12 @@ class PlChat(db.Model):
     server_id = db.Column(db.Integer, db.ForeignKey("pl_server.id"), nullable=True)
     topic = db.Column(db.String(300), nullable=True)
     position = db.Column(db.Integer, nullable=False, default=0)
+    # Server channels only: free-text category name channels are grouped
+    # under in the sidebar (None = ungrouped, shown above any category),
+    # and "text" vs "voice" -- a voice channel skips the iframe chat view
+    # for a join-a-room UI instead.
+    category = db.Column(db.String(80), nullable=True)
+    channel_type = db.Column(db.String(10), nullable=False, default="text")
 
     members = db.relationship("PlChatMember", backref="chat", lazy=True, cascade="all, delete-orphan")
     messages = db.relationship(

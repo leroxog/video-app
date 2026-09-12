@@ -613,6 +613,7 @@ def ensure_sqlite_columns_exist():
         "pl_chat": [
             ("server_id", "INTEGER"), ("topic", "VARCHAR(300)"),
             ("position", "INTEGER NOT NULL DEFAULT 0"),
+            ("category", "VARCHAR(80)"), ("channel_type", "VARCHAR(10) NOT NULL DEFAULT 'text'"),
         ],
         "pl_server": [("is_public", "BOOLEAN NOT NULL DEFAULT 0")],
         # 7Ai (2026-09-08, see ai_assistant.py's SEVENAI_SYSTEM_PROMPT) --
@@ -728,6 +729,8 @@ def ensure_columns_exist():
         'ALTER TABLE pl_chat ADD COLUMN IF NOT EXISTS server_id INTEGER',
         'ALTER TABLE pl_chat ADD COLUMN IF NOT EXISTS topic VARCHAR(300)',
         'ALTER TABLE pl_chat ADD COLUMN IF NOT EXISTS position INTEGER NOT NULL DEFAULT 0',
+        'ALTER TABLE pl_chat ADD COLUMN IF NOT EXISTS category VARCHAR(80)',
+        "ALTER TABLE pl_chat ADD COLUMN IF NOT EXISTS channel_type VARCHAR(10) NOT NULL DEFAULT 'text'",
         'ALTER TABLE pl_server ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT FALSE',
         # Root cause confirmed live (psycopg2.errors.UndefinedColumn):
         # ai_personality was created by db.create_all() back when the
@@ -2373,7 +2376,10 @@ def _pl_serialize_server(server, me):
 
 
 def _pl_serialize_channel(ch):
-    return {"id": ch.id, "name": ch.name, "topic": ch.topic, "position": ch.position}
+    return {
+        "id": ch.id, "name": ch.name, "topic": ch.topic, "position": ch.position,
+        "category": ch.category, "channel_type": ch.channel_type,
+    }
 
 
 def _pl_serialize_role(role):
@@ -2454,7 +2460,10 @@ def api_pl_server_create_channel(server_id):
     if not name:
         return jsonify({"ok": False, "error": "no_name"}), 400
     topic = (data.get("topic") or "").strip()[:300] or None
+    category = (data.get("category") or "").strip()[:80] or None
+    channel_type = data.get("channel_type") if data.get("channel_type") in ("text", "voice") else "text"
     channel = PlChat(is_group=True, server_id=server_id, name=name, topic=topic,
+                      category=category, channel_type=channel_type,
                       position=len(server.channels), created_by=me.id)
     db.session.add(channel)
     db.session.flush()

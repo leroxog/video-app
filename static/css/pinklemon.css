@@ -2048,10 +2048,31 @@ body:has(.nx-app)::before { display: none; }
 }
 .pl-srv-channel-row:hover { background: var(--pl-hover); }
 .pl-srv-channel-row.is-active { background: var(--pl-surface-2); color: var(--pl-text); }
-.pl-srv-channel-hash { color: var(--pl-text-faint); font-weight: 800; }
+.pl-srv-channel-hash { color: var(--pl-text-faint); font-weight: 800; display: flex; flex-shrink: 0; }
 .pl-srv-channel-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pl-srv-channel-del { flex-shrink: 0; background: none; border: none; color: var(--pl-text-faint); font-size: 16px; line-height: 1; }
 .pl-srv-channel-del:hover { color: var(--pl-danger); }
+
+.pl-srv-category {
+  display: flex; align-items: center; gap: 4px; padding: 14px 6px 4px; cursor: pointer;
+  color: var(--pl-text-faint); font-size: 11px; font-weight: 800; letter-spacing: .02em;
+}
+.pl-srv-category svg { transition: transform .12s ease; flex-shrink: 0; }
+.pl-srv-category.is-collapsed svg { transform: rotate(-90deg); }
+.pl-srv-category:hover { color: var(--pl-text-dim); }
+
+.pl-srv-chtype-row { display: flex; gap: 8px; margin-bottom: 14px; }
+.pl-srv-chtype {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 10px; border-radius: var(--pl-r-md); border: 1px solid var(--pl-border);
+  background: var(--pl-surface-2); color: var(--pl-text-dim); font-size: 13px; font-weight: 700;
+}
+.pl-srv-chtype.is-active { background: var(--pl-pink-soft); color: var(--pl-pink); border-color: var(--pl-pink); }
+
+.pl-srv-voicepane {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; color: var(--pl-text-faint); font-size: 13px;
+}
 .pl-srv-add-channel, .pl-srv-leave {
   margin: 8px 14px; background: none; border: 1px dashed var(--pl-border); color: var(--pl-text-dim);
   border-radius: 10px; padding: 8px; font-size: 12.5px; font-weight: 700;
@@ -2068,6 +2089,9 @@ body:has(.nx-app)::before { display: none; }
 .pl-srv-frame { flex: 1; border: none; width: 100%; }
 
 .pl-srv-member-list { padding: 6px 10px; }
+.pl-srv-member-group {
+  padding: 14px 4px 4px; color: var(--pl-text-faint); font-size: 11px; font-weight: 800; letter-spacing: .02em;
+}
 .pl-srv-member-row { display: flex; align-items: center; gap: 8px; padding: 7px 4px; position: relative; }
 .pl-srv-member-dot { position: absolute; left: 26px; top: 26px; width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--pl-surface); }
 .pl-srv-member-name { flex: 1; font-size: 13px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 5px; }

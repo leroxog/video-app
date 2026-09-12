@@ -33,6 +33,7 @@
             <button type="button" class="pl-srv-members-toggle" id="plSrvMembersToggleBtn" aria-label="Mitglieder">{{ plicon('friends', 18) }}</button>
         </div>
         <iframe id="plSrvFrame" class="pl-srv-frame"></iframe>
+        <div class="pl-srv-voicepane" id="plSrvVoicePane" hidden></div>
     </div>
     <div class="pl-srv-members" id="plSrvMembersCol">
         <div class="pl-srv-side-header"><div class="pl-srv-name">Mitglieder</div></div>
@@ -72,6 +73,24 @@
             <input class="pl-input" id="plSrvNewRoleName" placeholder="Neue Rolle: Name" maxlength="50">
             <button class="pl-btn ghost" id="plSrvAddRoleBtn">Rolle hinzufügen</button>
         </div>
+    </div>
+</div>
+
+<!-- new channel -->
+<div class="pl-sheet-backdrop pl-sheet-modal" id="plSrvNewChannelSheet">
+    <div class="pl-sheet">
+        <div class="pl-sheet-grip"></div>
+        <div class="pl-sheet-bar">
+            <button class="pl-sheet-x" data-close-sheet aria-label="Schließen">&times;</button>
+            <h2>Kanal erstellen</h2>
+            <button class="pl-btn pl-sheet-post" id="plSrvCreateChannelBtn">Erstellen</button>
+        </div>
+        <div class="pl-srv-chtype-row">
+            <button type="button" class="pl-srv-chtype is-active" data-chtype="text">{{ plicon('hashtag', 18) }} Text</button>
+            <button type="button" class="pl-srv-chtype" data-chtype="voice">{{ plicon('speaker', 18) }} Sprache</button>
+        </div>
+        <input class="pl-input" id="plSrvNewChannelName" placeholder="Kanalname" maxlength="50">
+        <input class="pl-input" id="plSrvNewChannelCategory" placeholder="Kategorie (optional)" maxlength="80">
     </div>
 </div>
 

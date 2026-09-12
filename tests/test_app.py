@@ -584,6 +584,34 @@ def test_new_channel_syncs_existing_members(client):
     assert bob.post(f"/api/pl/chats/{new_cid}/messages", json={"text": "hi"}).get_json()["ok"] is True
 
 
+def test_channel_defaults_to_text_type_and_no_category(client):
+    signup(client, "alice")
+    j = _make_server(client)
+    detail = client.get(f"/api/pl/servers/{j['server']['id']}").get_json()
+    assert detail["channels"][0]["channel_type"] == "text"
+    assert detail["channels"][0]["category"] is None
+
+
+def test_create_voice_channel_with_category(client):
+    signup(client, "alice")
+    j = _make_server(client)
+    sid = j["server"]["id"]
+    r = client.post(f"/api/pl/servers/{sid}/channels", json={
+        "name": "lounge", "channel_type": "voice", "category": "Sprachkanäle",
+    })
+    ch = r.get_json()["channel"]
+    assert ch["channel_type"] == "voice"
+    assert ch["category"] == "Sprachkanäle"
+
+
+def test_create_channel_rejects_bogus_channel_type(client):
+    signup(client, "alice")
+    j = _make_server(client)
+    sid = j["server"]["id"]
+    r = client.post(f"/api/pl/servers/{sid}/channels", json={"name": "x", "channel_type": "video"})
+    assert r.get_json()["channel"]["channel_type"] == "text"
+
+
 def test_non_owner_without_permission_cannot_create_channel(client):
     signup(client, "alice")
     j = _make_server(client)

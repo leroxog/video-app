@@ -28,6 +28,7 @@
   var channelListEl = $("#plSrvChannelList");
   var memberListEl = $("#plSrvMemberList");
   var frame = $("#plSrvFrame");
+  var voicePane = $("#plSrvVoicePane");
   var channelNameEl = $("#plSrvChannelName");
   var addChannelBtn = $("#plSrvAddChannelBtn");
   var settingsBtn = $("#plSrvSettingsBtn");
@@ -38,12 +39,45 @@
   function myPerms() { return (state.server && state.server.my_permissions) || []; }
   function has(perm) { return myPerms().indexOf(perm) !== -1; }
 
+  var ICON_HASHTAG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9h14M5 15h14M10 3 7 21M17 3l-3 18"/></svg>';
+  var ICON_SPEAKER = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 6a9 9 0 0 1 0 12"/></svg>';
+  var ICON_CHEVRON = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
+
+  function collapsedKey(cat) { return "plSrvCollapsed:" + SID + ":" + cat; }
+  function isCollapsed(cat) { try { return localStorage.getItem(collapsedKey(cat)) === "1"; } catch (e) { return false; } }
+  function setCollapsed(cat, v) { try { localStorage.setItem(collapsedKey(cat), v ? "1" : "0"); } catch (e) {} }
+
+  function groupChannels() {
+    var groups = {}, order = [];
+    state.channels.slice().sort(function (a, b) { return a.position - b.position; }).forEach(function (c) {
+      var key = c.category || "";
+      if (!(key in groups)) { groups[key] = []; order.push(key); }
+      groups[key].push(c);
+    });
+    order.sort(function (a, b) {
+      if (a === "") return -1;
+      if (b === "") return 1;
+      return a.localeCompare(b);
+    });
+    return { groups: groups, order: order };
+  }
+
+  function channelRowHTML(c) {
+    return '<div class="pl-srv-channel-row' + (c.id === state.activeChannelId ? " is-active" : "") + '" data-channel-id="' + c.id + '">'
+      + '<span class="pl-srv-channel-hash">' + (c.channel_type === "voice" ? ICON_SPEAKER : ICON_HASHTAG) + '</span>'
+      + '<span class="pl-srv-channel-name">' + esc(c.name) + '</span>'
+      + (has("manage_channels") ? '<button type="button" class="pl-srv-channel-del" data-del-channel="' + c.id + '" aria-label="L&ouml;schen">&times;</button>' : '')
+      + '</div>';
+  }
+
   function renderChannels() {
-    channelListEl.innerHTML = state.channels.map(function (c) {
-      return '<div class="pl-srv-channel-row' + (c.id === state.activeChannelId ? " is-active" : "") + '" data-channel-id="' + c.id + '">'
-        + '<span class="pl-srv-channel-hash">#</span><span class="pl-srv-channel-name">' + esc(c.name) + '</span>'
-        + (has("manage_channels") ? '<button type="button" class="pl-srv-channel-del" data-del-channel="' + c.id + '" aria-label="L&ouml;schen">&times;</button>' : '')
-        + '</div>';
+    var g = groupChannels();
+    channelListEl.innerHTML = g.order.map(function (cat) {
+      if (!cat) return g.groups[cat].map(channelRowHTML).join("");
+      var collapsed = isCollapsed(cat);
+      return '<div class="pl-srv-category' + (collapsed ? " is-collapsed" : "") + '" data-category="' + esc(cat) + '">'
+        + ICON_CHEVRON + '<span>' + esc(cat).toUpperCase() + '</span></div>'
+        + (collapsed ? "" : '<div class="pl-srv-category-channels">' + g.groups[cat].map(channelRowHTML).join("") + '</div>');
     }).join("");
   }
 
@@ -52,26 +86,46 @@
     return roles[0] || null;
   }
 
+  function memberRowHTML(m) {
+    var role = roleForMember(m);
+    var color = role ? role.color : "var(--pl-text-dim)";
+    return '<div class="pl-srv-member-row" data-user-id="' + m.user_id + '">'
+      + '<span class="pl-avatar" style="width:32px;height:32px;font-size:12px;background:' + esc(m.avatar_color) + '">'
+      + (m.avatar_url ? '<img src="' + esc(m.avatar_url) + '" alt="">' : esc((m.name || "?")[0].toUpperCase())) + '</span>'
+      + '<span class="pl-srv-member-dot" style="background:' + (m.online ? "var(--pl-online)" : "var(--pl-text-faint)") + '"></span>'
+      + '<span class="pl-srv-member-name" style="color:' + color + '">' + esc(m.nickname || m.name)
+      + (m.is_owner ? ' <svg class="pl-srv-crown" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M3 8l4 3 5-6 5 6 4-3-2 11H5L3 8z"/></svg>' : "") + '</span>'
+      + (has("manage_roles") || (has("kick_members") && !m.is_owner) ? '<button type="button" class="pl-srv-member-menu-btn" data-member-menu="' + m.user_id + '">&#8942;</button>' : '')
+      + '</div>';
+  }
+
   function renderMembers() {
-    memberListEl.innerHTML = state.members.map(function (m) {
-      var role = roleForMember(m);
-      var color = role ? role.color : "var(--pl-text-dim)";
-      return '<div class="pl-srv-member-row" data-user-id="' + m.user_id + '">'
-        + '<span class="pl-avatar" style="width:32px;height:32px;font-size:12px;background:' + esc(m.avatar_color) + '">'
-        + (m.avatar_url ? '<img src="' + esc(m.avatar_url) + '" alt="">' : esc((m.name || "?")[0].toUpperCase())) + '</span>'
-        + '<span class="pl-srv-member-dot" style="background:' + (m.online ? "var(--pl-online)" : "var(--pl-text-faint)") + '"></span>'
-        + '<span class="pl-srv-member-name" style="color:' + color + '">' + esc(m.nickname || m.name)
-        + (m.is_owner ? ' <svg class="pl-srv-crown" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M3 8l4 3 5-6 5 6 4-3-2 11H5L3 8z"/></svg>' : "") + '</span>'
-        + (has("manage_roles") || (has("kick_members") && !m.is_owner) ? '<button type="button" class="pl-srv-member-menu-btn" data-member-menu="' + m.user_id + '">&#8942;</button>' : '')
-        + '</div>';
-    }).join("");
+    var sorted = state.members.slice().sort(function (a, b) {
+      return (a.nickname || a.name).toLowerCase().localeCompare((b.nickname || b.name).toLowerCase());
+    });
+    var online = sorted.filter(function (m) { return m.online; });
+    var offline = sorted.filter(function (m) { return !m.online; });
+    var section = function (label, list) {
+      if (!list.length) return "";
+      return '<div class="pl-srv-member-group">' + esc(label) + ' — ' + list.length + '</div>'
+        + list.map(memberRowHTML).join("");
+    };
+    memberListEl.innerHTML = section("ONLINE", online) + section("OFFLINE", offline);
   }
 
   function selectChannel(id) {
     state.activeChannelId = id;
     var ch = state.channels.find(function (c) { return c.id === id; });
-    channelNameEl.textContent = ch ? "# " + ch.name : "";
-    frame.src = "/freunde/c/" + id;
+    channelNameEl.textContent = ch ? (ch.channel_type === "voice" ? "🔊 " : "# ") + ch.name : "";
+    if (ch && ch.channel_type === "voice") {
+      frame.hidden = true;
+      if (window.PlVoice) window.PlVoice.open(id, ch.name); else voicePane.hidden = false;
+    } else {
+      if (window.PlVoice) window.PlVoice.close();
+      voicePane.hidden = true;
+      frame.hidden = false;
+      frame.src = "/freunde/c/" + id;
+    }
     renderChannels();
     document.getElementById("plSrvScreen").classList.add("show-main");
   }
@@ -99,15 +153,45 @@
       });
       return;
     }
+    var cat = e.target.closest("[data-category]");
+    if (cat) {
+      var name = cat.dataset.category;
+      setCollapsed(name, !isCollapsed(name));
+      renderChannels();
+      return;
+    }
     var row = e.target.closest("[data-channel-id]");
     if (row) selectChannel(Number(row.dataset.channelId));
   });
 
+  // ---- new channel sheet (name + text/voice + optional category) ----
+  var newChannelSheet = $("#plSrvNewChannelSheet");
+  var newChannelType = "text";
   addChannelBtn.addEventListener("click", function () {
-    var name = prompt("Name des neuen Kanals:");
-    if (!name) return;
-    api("POST", "/api/pl/servers/" + SID + "/channels", { name: name.trim() }).then(function (j) {
-      if (j.ok) { load(); } else { window.plToast("Ging nicht."); }
+    $("#plSrvNewChannelName").value = "";
+    $("#plSrvNewChannelCategory").value = "";
+    newChannelType = "text";
+    document.querySelectorAll("#plSrvNewChannelSheet [data-chtype]").forEach(function (b) {
+      b.classList.toggle("is-active", b.dataset.chtype === newChannelType);
+    });
+    openSheet(newChannelSheet);
+  });
+  newChannelSheet.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-chtype]");
+    if (!b) return;
+    newChannelType = b.dataset.chtype;
+    document.querySelectorAll("#plSrvNewChannelSheet [data-chtype]").forEach(function (x) {
+      x.classList.toggle("is-active", x === b);
+    });
+  });
+  $("#plSrvCreateChannelBtn").addEventListener("click", function () {
+    var name = $("#plSrvNewChannelName").value.trim();
+    if (!name) { window.plToast("Name fehlt."); return; }
+    var category = $("#plSrvNewChannelCategory").value.trim();
+    api("POST", "/api/pl/servers/" + SID + "/channels", {
+      name: name, channel_type: newChannelType, category: category || null,
+    }).then(function (j) {
+      if (j.ok) { closeSheet(newChannelSheet); load(); } else { window.plToast("Ging nicht."); }
     });
   });
 
