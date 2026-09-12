@@ -2254,3 +2254,30 @@ body:has(.nx-app)::before { display: none; }
   .pl-friends-quickrow button:hover, .pl-friends-quickrow a:hover { background: var(--pl-surface-3); color: var(--pl-text); }
   .pl-friends-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: none; }
 }
+
+/* ---- image cropper (pl-cropper.js) ---- */
+.pl-crop-back {
+  position: fixed; inset: 0; z-index: 900; background: rgba(0, 0, 0, .78);
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+  -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+}
+.pl-crop-card {
+  background: var(--pl-surface); border: 1px solid var(--pl-border); border-radius: 22px;
+  padding: 22px; display: flex; flex-direction: column; align-items: center; gap: 16px;
+  max-width: calc(100vw - 40px); box-shadow: 0 30px 80px rgba(0, 0, 0, .5);
+}
+.pl-crop-card h3 { margin: 0; font-size: 16px; font-weight: 900; color: var(--pl-text); align-self: flex-start; }
+.pl-crop-viewport {
+  position: relative; overflow: hidden; border-radius: 14px; background: #000;
+  touch-action: none; cursor: grab; border: 1px solid var(--pl-border);
+}
+.pl-crop-viewport:active { cursor: grabbing; }
+.pl-crop-viewport.round { border-radius: 50%; }
+.pl-crop-img { position: absolute; top: 0; left: 0; max-width: none; user-select: none; -webkit-user-drag: none; }
+.pl-crop-zoom { width: 100%; accent-color: var(--pl-pink); }
+.pl-crop-actions { display: flex; gap: 10px; width: 100%; }
+.pl-crop-actions button {
+  flex: 1; border-radius: 999px; padding: 11px; font-size: 13.5px; font-weight: 800; border: none;
+}
+.pl-crop-cancel { background: var(--pl-surface-2); color: var(--pl-text-dim); border: 1px solid var(--pl-border) !important; }
+.pl-crop-ok { background: var(--pl-pink); color: #fff; }

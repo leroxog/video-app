@@ -125,6 +125,7 @@
     window.plToast = function (m) { var t = document.getElementById("plToast"); if (!t) return; t.textContent = m; t.classList.add("show"); clearTimeout(window._plT); window._plT = setTimeout(function () { t.classList.remove("show"); }, 2200); };
     window.PL_AUTH_MODE = {{ mode | tojson }};
 </script>
+<script src="{{ url_for('static', filename='js/pl-cropper.js') }}"></script>
 <script src="{{ url_for('static', filename='js/pinklemon-auth.js') }}"></script>
 </body>
 </html>

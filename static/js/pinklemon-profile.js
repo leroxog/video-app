@@ -57,16 +57,29 @@
       if (!b) return;
       (b.dataset.pick === "banner" ? bannerFile : avatarFile).click();
     });
+    var croppedAvatar = null, croppedBanner = null;
     avatarFile.addEventListener("change", function () {
       var f = avatarFile.files[0];
-      if (f) preview(avatarBox, f, true);
+      if (!f) return;
+      window.PlCropper.open(f, { aspect: 1, shape: "circle", title: "Profilbild zuschneiden" }).then(function (blob) {
+        avatarFile.value = "";
+        if (!blob) return;
+        croppedAvatar = blob;
+        preview(avatarBox, blob);
+      });
     });
     bannerFile.addEventListener("change", function () {
       var f = bannerFile.files[0];
-      if (f) { var u = URL.createObjectURL(f); bannerBox.style.backgroundImage = "url('" + u + "')"; }
+      if (!f) return;
+      window.PlCropper.open(f, { aspect: 3, shape: "rect", title: "Banner zuschneiden" }).then(function (blob) {
+        bannerFile.value = "";
+        if (!blob) return;
+        croppedBanner = blob;
+        bannerBox.style.backgroundImage = "url('" + URL.createObjectURL(blob) + "')";
+      });
     });
-    function preview(box, file, round) {
-      var u = URL.createObjectURL(file);
+    function preview(box, blobOrFile) {
+      var u = URL.createObjectURL(blobOrFile);
       box.querySelector("img") ? (box.querySelector("img").src = u)
         : box.insertAdjacentHTML("afterbegin", '<img src="' + u + '" alt="">');
       var span = box.querySelector("span"); if (span) span.remove();
@@ -76,8 +89,10 @@
       var btn = this; btn.disabled = true;
       var fd = new FormData();
       fd.append("display_name", document.getElementById("plEditName").value.trim());
-      if (avatarFile.files[0]) fd.append("avatar", avatarFile.files[0]);
-      if (bannerFile.files[0]) fd.append("banner", bannerFile.files[0]);
+      // cropper output is a plain Blob -- needs an explicit filename so
+      // the server's extension check (PL_IMAGE_EXT) has something to read.
+      if (croppedAvatar) fd.append("avatar", croppedAvatar, "avatar.jpg");
+      if (croppedBanner) fd.append("banner", croppedBanner, "banner.jpg");
       fetch("/api/pl/profile", { method: "POST", body: fd })
         .then(function (r) { return r.json(); })
         .then(function (j) {

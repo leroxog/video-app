@@ -215,14 +215,22 @@
   document.getElementById("plPickBanner").addEventListener("click", function (e) { e.stopPropagation(); bannerFile.click(); });
   avatarFile.addEventListener("change", function () {
     var f = avatarFile.files[0]; if (!f) return;
-    state.avatarFile = f;
-    avatarPreview.style.backgroundImage = "url(" + URL.createObjectURL(f) + ")";
-    avatarLetterEl.hidden = true;
+    window.PlCropper.open(f, { aspect: 1, shape: "circle", title: "Profilbild zuschneiden" }).then(function (blob) {
+      avatarFile.value = "";
+      if (!blob) return;
+      state.avatarFile = blob;
+      avatarPreview.style.backgroundImage = "url(" + URL.createObjectURL(blob) + ")";
+      avatarLetterEl.hidden = true;
+    });
   });
   bannerFile.addEventListener("change", function () {
     var f = bannerFile.files[0]; if (!f) return;
-    state.bannerFile = f;
-    bannerPreview.style.backgroundImage = "url(" + URL.createObjectURL(f) + ")";
+    window.PlCropper.open(f, { aspect: 3, shape: "rect", title: "Banner zuschneiden" }).then(function (blob) {
+      bannerFile.value = "";
+      if (!blob) return;
+      state.bannerFile = blob;
+      bannerPreview.style.backgroundImage = "url(" + URL.createObjectURL(blob) + ")";
+    });
   });
   displayNameInput.addEventListener("input", function () {
     var v = displayNameInput.value.trim();
@@ -270,8 +278,10 @@
     if (state.gender) fd.append("gender", state.gender);
     if (state.email) fd.append("email", state.email);
     if (state.display_name) fd.append("display_name", state.display_name);
-    if (state.avatarFile) fd.append("avatar", state.avatarFile);
-    if (state.bannerFile) fd.append("banner", state.bannerFile);
+    // cropper output is a plain Blob, not a File -- give it a filename
+    // explicitly so the server's extension check (PL_IMAGE_EXT) sees one.
+    if (state.avatarFile) fd.append("avatar", state.avatarFile, "avatar.jpg");
+    if (state.bannerFile) fd.append("banner", state.bannerFile, "banner.jpg");
 
     fetch("/api/pl/register/complete", { method: "POST", body: fd })
       .then(function (r) { return r.json(); })
