@@ -22,6 +22,8 @@ def client():
     flask_app.config["SOUND_FOLDER"] = tempfile.mkdtemp()
     app_module._pl_typing.clear()
     app_module._pl_calls.clear()
+    app_module._pl_voice_rooms.clear()
+    app_module._pl_voice_signals.clear()
     with flask_app.app_context():
         db.create_all()
         yield flask_app.test_client()
@@ -612,6 +614,70 @@ def test_create_channel_rejects_bogus_channel_type(client):
     sid = j["server"]["id"]
     r = client.post(f"/api/pl/servers/{sid}/channels", json={"name": "x", "channel_type": "video"})
     assert r.get_json()["channel"]["channel_type"] == "text"
+
+
+def _make_voice_channel(client, sid):
+    r = client.post(f"/api/pl/servers/{sid}/channels", json={"name": "lounge", "channel_type": "voice"})
+    return r.get_json()["channel"]["id"]
+
+
+def test_voice_join_and_leave_updates_roster(client):
+    signup(client, "alice")
+    sid = _make_server(client)["server"]["id"]
+    vid = _make_voice_channel(client, sid)
+
+    j = client.post(f"/api/pl/voice/{vid}/join").get_json()
+    assert j["ok"] is True
+    assert [p["user_id"] for p in j["participants"]] == [1]
+
+    state = client.get(f"/api/pl/voice/{vid}/state").get_json()
+    assert state["in_room"] is True
+    assert len(state["participants"]) == 1
+
+    client.post(f"/api/pl/voice/{vid}/leave")
+    state2 = client.get(f"/api/pl/voice/{vid}/state").get_json()
+    assert state2["in_room"] is False
+    assert state2["participants"] == []
+
+
+def test_voice_join_rejects_text_channel(client):
+    signup(client, "alice")
+    sid = _make_server(client)["server"]["id"]
+    text_cid = client.get(f"/api/pl/servers/{sid}").get_json()["channels"][0]["id"]
+    r = client.post(f"/api/pl/voice/{text_cid}/join")
+    assert r.get_json() == {"ok": False, "error": "not_found"}
+
+
+def test_voice_signal_relayed_only_to_addressed_peer(client):
+    signup(client, "alice")
+    sid = _make_server(client)["server"]["id"]
+    vid = _make_voice_channel(client, sid)
+    code = client.get(f"/api/pl/servers/{sid}").get_json()["server"]["invite_code"]
+    bob = make_user(client, "bob")
+    bob.post(f"/api/pl/servers/join/{code}")
+
+    client.post(f"/api/pl/voice/{vid}/join")
+    bob.post(f"/api/pl/voice/{vid}/join")
+
+    bob_uid = [p["user_id"] for p in bob.get(f"/api/pl/voice/{vid}/state").get_json()["participants"] if p["name"] != "alice"][0]
+    client.post(f"/api/pl/voice/{vid}/signal", json={"to_id": bob_uid, "type": "offer", "data": {"sdp": "x"}})
+
+    bob_state = bob.get(f"/api/pl/voice/{vid}/state").get_json()
+    assert len(bob_state["signals"]) == 1
+    assert bob_state["signals"][0]["type"] == "offer"
+    # draining is one-shot: polling again returns nothing more
+    assert bob.get(f"/api/pl/voice/{vid}/state").get_json()["signals"] == []
+
+
+def test_voice_mute_toggle(client):
+    signup(client, "alice")
+    sid = _make_server(client)["server"]["id"]
+    vid = _make_voice_channel(client, sid)
+    client.post(f"/api/pl/voice/{vid}/join")
+    r = client.post(f"/api/pl/voice/{vid}/mute", json={"muted": True})
+    assert r.get_json()["ok"] is True
+    state = client.get(f"/api/pl/voice/{vid}/state").get_json()
+    assert state["participants"][0]["muted"] is True
 
 
 def test_non_owner_without_permission_cannot_create_channel(client):

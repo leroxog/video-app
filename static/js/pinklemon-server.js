@@ -119,7 +119,8 @@
     channelNameEl.textContent = ch ? (ch.channel_type === "voice" ? "🔊 " : "# ") + ch.name : "";
     if (ch && ch.channel_type === "voice") {
       frame.hidden = true;
-      if (window.PlVoice) window.PlVoice.open(id, ch.name); else voicePane.hidden = false;
+      voicePane.hidden = false;
+      if (window.PlVoice) window.PlVoice.open(id, ch.name);
     } else {
       if (window.PlVoice) window.PlVoice.close();
       voicePane.hidden = true;

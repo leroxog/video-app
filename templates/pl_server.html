@@ -117,6 +117,7 @@
     window.PL_SERVER_ID = {{ server_id }};
     window.PL_ME = {{ me_json | tojson }};
 </script>
+<script src="{{ url_for('static', filename='js/pl-voice.js') }}"></script>
 <script src="{{ url_for('static', filename='js/pinklemon-server.js') }}"></script>
 </body>
 </html>

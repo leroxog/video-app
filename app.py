@@ -2300,14 +2300,130 @@ def api_pl_call_state(chat_id):
 
 
 # ---------------------------------------------------------------------
+# Server voice channels: persistent multi-person rooms (2026-09-12,
+# "genau wie Discord"). Unlike the 1:1 calls above, N participants means
+# a full mesh -- every pair holds its own RTCPeerConnection, so signals
+# here carry an explicit to_id instead of "whoever isn't me". Same
+# STUN-only limitation as the 1:1 calls (more likely to bite as the
+# room grows); a mesh gets impractical past roughly 6-8 simultaneous
+# participants (connection count grows O(n^2)) -- a real SFU is out of
+# scope here. Room membership + queued signals are in-memory only, like
+# _pl_calls/_pl_typing above -- nothing worth persisting past the call.
+# ---------------------------------------------------------------------
+_pl_voice_rooms = {}    # chat_id -> {user_id: {"name","avatar_color","avatar_url","muted","joined_at"}}
+_pl_voice_signals = {}  # chat_id -> [{"id","from_id","to_id","type","data"}]
+_pl_voice_signal_seq = {"n": 0}
+
+
+def _pl_require_voice_channel(chat_id, me):
+    chat = _pl_require_chat_member(chat_id, me)
+    if chat is None or chat.channel_type != "voice":
+        return None
+    return chat
+
+
+def _pl_voice_roster(chat_id):
+    room = _pl_voice_rooms.get(chat_id, {})
+    return [
+        {"user_id": uid, "name": p["name"], "avatar_color": p["avatar_color"],
+         "avatar_url": p["avatar_url"], "muted": p["muted"]}
+        for uid, p in room.items()
+    ]
+
+
+@app.route("/api/pl/voice/<int:chat_id>/join", methods=["POST"])
+def api_pl_voice_join(chat_id):
+    me = current_user()
+    chat = _pl_require_voice_channel(chat_id, me)
+    if chat is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    room = _pl_voice_rooms.setdefault(chat_id, {})
+    room[me.id] = {
+        "name": pl_display_name(me), "avatar_color": pl_avatar_color(me.username),
+        "avatar_url": _pl_media_url(me.pl_avatar_image), "muted": False,
+        "joined_at": datetime.now(timezone.utc),
+    }
+    return jsonify({"ok": True, "participants": _pl_voice_roster(chat_id)})
+
+
+@app.route("/api/pl/voice/<int:chat_id>/leave", methods=["POST"])
+def api_pl_voice_leave(chat_id):
+    me = current_user()
+    chat = _pl_require_chat_member(chat_id, me)
+    if chat is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    room = _pl_voice_rooms.get(chat_id)
+    if room is not None:
+        room.pop(me.id, None)
+        if not room:
+            del _pl_voice_rooms[chat_id]
+    if chat_id in _pl_voice_signals:
+        _pl_voice_signals[chat_id] = [
+            s for s in _pl_voice_signals[chat_id] if s["from_id"] != me.id and s["to_id"] != me.id
+        ]
+    return jsonify({"ok": True})
+
+
+@app.route("/api/pl/voice/<int:chat_id>/mute", methods=["POST"])
+def api_pl_voice_mute(chat_id):
+    me = current_user()
+    chat = _pl_require_chat_member(chat_id, me)
+    if chat is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    room = _pl_voice_rooms.get(chat_id)
+    if room is None or me.id not in room:
+        return jsonify({"ok": False, "error": "not_in_room"}), 400
+    data = request.get_json(silent=True) or {}
+    room[me.id]["muted"] = bool(data.get("muted"))
+    return jsonify({"ok": True})
+
+
+@app.route("/api/pl/voice/<int:chat_id>/signal", methods=["POST"])
+def api_pl_voice_signal(chat_id):
+    """type: 'offer' | 'answer' | 'ice', addressed to one specific peer
+    (to_id) -- a mesh needs a real destination, unlike the 1:1 call
+    signaling above where "not from me" was enough."""
+    me = current_user()
+    chat = _pl_require_chat_member(chat_id, me)
+    if chat is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    payload = request.get_json(silent=True) or {}
+    sig_type = payload.get("type")
+    to_id = payload.get("to_id")
+    if sig_type not in ("offer", "answer", "ice") or not isinstance(to_id, int):
+        return jsonify({"ok": False, "error": "bad_request"}), 400
+    _pl_voice_signal_seq["n"] += 1
+    _pl_voice_signals.setdefault(chat_id, []).append({
+        "id": _pl_voice_signal_seq["n"], "from_id": me.id, "to_id": to_id,
+        "type": sig_type, "data": payload.get("data"),
+    })
+    return jsonify({"ok": True})
+
+
+@app.route("/api/pl/voice/<int:chat_id>/state")
+def api_pl_voice_state(chat_id):
+    """Polled roster + a fully-drained inbox of signals addressed to me
+    (no `after` cursor needed -- each poll empties the queue)."""
+    me = current_user()
+    chat = _pl_require_chat_member(chat_id, me)
+    if chat is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    mine = [s for s in _pl_voice_signals.get(chat_id, []) if s["to_id"] == me.id]
+    if mine:
+        _pl_voice_signals[chat_id] = [s for s in _pl_voice_signals.get(chat_id, []) if s["to_id"] != me.id]
+    return jsonify({
+        "ok": True, "participants": _pl_voice_roster(chat_id), "signals": mine,
+        "in_room": me.id in _pl_voice_rooms.get(chat_id, {}),
+    })
+
+
+# ---------------------------------------------------------------------
 # Servers: persistent communities with channels + roles/permissions
 # (2026-09-11, "genau wie Discord"). Channels are PlChat rows with
 # server_id set -- see the model's own comment for why: every existing
 # message feature (reactions, replies, edit, pins, typing) just works on
-# them for free. Deliberately simpler than real Discord in two ways: (1)
-# server-wide role permissions only, no per-channel overwrites, and (2)
-# no voice channels -- multi-person voice needs a mesh/SFU, a materially
-# bigger problem than the 1:1 WebRTC calls already built.
+# them for free. Deliberately simpler than real Discord in one way:
+# server-wide role permissions only, no per-channel overwrites.
 # ---------------------------------------------------------------------
 def _pl_gen_invite_code():
     import secrets as _secrets
