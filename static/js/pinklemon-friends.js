@@ -14,7 +14,7 @@
     });
   });
 
-  // ---- Alle / Gruppen filter ----
+  // ---- Alle / Ungelesen / Gruppen filter ----
   var filters = $("#plMsgFilters");
   if (filters) {
     filters.addEventListener("click", function (e) {
@@ -23,31 +23,17 @@
       filters.querySelectorAll("button").forEach(function (x) { x.classList.toggle("is-active", x === b); });
       var f = b.dataset.filter;
       document.querySelectorAll("#plChatList .pl-chatrow").forEach(function (row) {
-        row.hidden = f === "group" && row.dataset.group !== "1";
+        if (f === "group") row.hidden = row.dataset.group !== "1";
+        else if (f === "unread") row.hidden = row.dataset.unread !== "1";
+        else row.hidden = false;
       });
     });
   }
 
-  // ---- find people (inline row that drops down from the top) ----
-  var topSearch = $("#plTopSearch");
+  // ---- find people: a single always-visible search pill (WhatsApp-style) ----
   var userSearch = $("#plUserSearch");
   var userResults = $("#plUserResults");
-
-  function openFind() {
-    topSearch.hidden = false;
-    userSearch.value = "";
-    userResults.innerHTML = "";
-    setTimeout(function () { userSearch.focus(); }, 60);
-  }
-  function closeFind() {
-    topSearch.hidden = true;
-    userResults.innerHTML = "";
-  }
-  $("#plFindBtn").addEventListener("click", function () {
-    if (topSearch.hidden) openFind(); else closeFind();
-  });
-  $("#plFindClose").addEventListener("click", closeFind);
-  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !topSearch.hidden) closeFind(); });
+  $("#plFindBtn").addEventListener("click", function () { userSearch.focus(); });
 
   var searchT = null;
   userSearch.addEventListener("input", function () {
@@ -161,4 +147,34 @@
       });
     });
   }
+
+  // ---- desktop split view: open a chat in the right pane instead of
+  // navigating away (WhatsApp Web-style) -- mobile just follows the link
+  // normally, there's no room for two panes there. ----
+  var detail = $("#plFriendsDetail");
+  var emptyEl = $("#plFriendsEmpty");
+  var frame = $("#plFriendsFrame");
+  var chatList = $("#plChatList");
+  var isDesktop = window.matchMedia("(min-width: 900px)");
+
+  function openInPane(id, rowEl) {
+    frame.src = "/freunde/c/" + id;
+    frame.hidden = false;
+    emptyEl.hidden = true;
+    document.querySelectorAll("#plChatList .pl-chatrow.is-active").forEach(function (r) { r.classList.remove("is-active"); });
+    if (rowEl) rowEl.classList.add("is-active");
+  }
+
+  if (chatList && detail) {
+    chatList.addEventListener("click", function (e) {
+      if (!isDesktop.matches) return; // mobile: let the <a> navigate normally
+      var row = e.target.closest(".pl-chatrow[data-chat-id]");
+      if (!row) return;
+      e.preventDefault();
+      openInPane(row.dataset.chatId, row);
+    });
+  }
+
+  document.querySelectorAll('[data-quick="newchat"]').forEach(function (b) { b.addEventListener("click", function () { $("#plNewChatBtn").click(); }); });
+  document.querySelectorAll('[data-quick="server"]').forEach(function (b) { b.addEventListener("click", function () { $("#plServerAddBtn").click(); }); });
 })();

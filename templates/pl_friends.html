@@ -3,7 +3,10 @@
 {% set active = 'friends' %}
 {% block title %}Freunde · HEXAGONUM{% endblock %}
 
+{% block screen_class %}friendspane{% endblock %}
 {% block screen %}
+<div class="pl-friends-wrap">
+<div class="pl-friends-list">
 {% include "partials/_pl_topbrand.html" %}
 <div class="pl-screen-head">
     <h1>Nachrichten</h1>
@@ -23,24 +26,22 @@
     </button>
 </div>
 
+<!-- WhatsApp-style search pill, always visible (not just a toggled row) -->
+<div class="pl-friends-search" id="plFriendsSearchBar">
+    {{ plicon('search', 17) }}
+    <input id="plUserSearch" placeholder="Suchen oder neuen Chat beginnen" autocomplete="off" autocapitalize="none">
+</div>
+<div id="plUserResults"></div>
+
 <div class="pl-msg-filters" id="plMsgFilters">
     <button type="button" class="is-active" data-filter="all">Alle</button>
+    <button type="button" data-filter="unread">Ungelesen</button>
     <button type="button" data-filter="group">Gruppen</button>
-</div>
-
-<!-- inline search row that drops down from the top (no bottom sheet) -->
-<div class="pl-topsearch" id="plTopSearch" hidden>
-    <div class="pl-topsearch-bar">
-        {{ plicon('search', 18) }}
-        <input id="plUserSearch" placeholder="Benutzername suchen" autocomplete="off" autocapitalize="none">
-        <button type="button" id="plFindClose" aria-label="Schließen">&times;</button>
-    </div>
-    <div id="plUserResults"></div>
 </div>
 
 <div id="plChatList">
     {% for c in chats %}
-    <a class="pl-chatrow" href="{{ url_for('pl_chat_view', chat_id=c.id) }}" data-group="{{ '1' if c.is_group else '0' }}">
+    <a class="pl-chatrow" href="{{ url_for('pl_chat_view', chat_id=c.id) }}" data-chat-id="{{ c.id }}" data-group="{{ '1' if c.is_group else '0' }}" data-unread="{{ '1' if c.unread else '0' }}">
         <div class="pl-avatar" style="background:{{ pl_avatar_color(c.other_username or c.title) }}">{% if c.avatar_url %}<img src="{{ c.avatar_url }}" alt="">{% else %}{{ c.avatar_letter }}{% endif %}</div>
         <div class="pl-chatrow-main">
             <div class="pl-chatrow-top">
@@ -71,6 +72,23 @@
     {% if not chats and not pending %}
     <div class="pl-empty">Noch niemand.<br>Folgt euch gegenseitig, dann taucht ihr hier auf.</div>
     {% endif %}
+</div>
+</div>
+
+<!-- desktop-only right pane: WhatsApp-style empty state / embedded chat -->
+<div class="pl-friends-detail" id="plFriendsDetail">
+    <div class="pl-friends-empty" id="plFriendsEmpty">
+        <div class="pl-friends-empty-mark">{% include "partials/_pinklemon_logo.html" %}</div>
+        <h2>HEXAGONUM</h2>
+        <p>Wähl links einen Chat aus, oder starte etwas Neues.</p>
+        <div class="pl-friends-quickrow">
+            <button type="button" data-quick="newchat">{{ plicon('edit', 20) }}<span>Neuer Chat</span></button>
+            <button type="button" data-quick="server">{{ plicon('friends', 20) }}<span>Server</span></button>
+            <a href="{{ url_for('pl_nex') }}">{{ plicon('nex7', 20) }}<span>Nex fragen</span></a>
+        </div>
+    </div>
+    <iframe id="plFriendsFrame" class="pl-friends-frame" hidden></iframe>
+</div>
 </div>
 {% endblock %}
 

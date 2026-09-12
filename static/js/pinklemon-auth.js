@@ -178,20 +178,28 @@
   monthWheel.onchange = function (v) { state.birth_month = v; };
   yearWheel.onchange = function (v) { state.birth_year = v; };
 
+  // Birthday (always has a default), gender and email are all genuinely
+  // optional here -- picking a gender only marks it selected, it does NOT
+  // by itself advance the step anymore (that felt like it forced an
+  // answer). "Weiter" is always clickable; whatever's been picked (or
+  // not) travels along in `state`.
   var reg2El = steps[stepIndex("register2")];
-  var reg2Advanced = false;
+  var reg2Advancing = false;
   document.querySelectorAll(".pl-gender-btn").forEach(function (btn) {
     btn.addEventListener("click", function () {
+      var already = btn.classList.contains("is-active");
       document.querySelectorAll(".pl-gender-btn").forEach(function (b) { b.classList.remove("is-active"); });
-      btn.classList.add("is-active");
-      state.gender = btn.dataset.gender;
-      if (reg2Advanced) return;
-      reg2Advanced = true;
-      state.email = document.getElementById("plRegEmail").value.trim();
-      withLoading(reg2El, function () { return true; }).then(function () { goTo("register3"); });
+      if (!already) { btn.classList.add("is-active"); state.gender = btn.dataset.gender; }
+      else { state.gender = null; }
     });
   });
   document.getElementById("plRegEmail").addEventListener("input", function (e) { state.email = e.target.value.trim(); });
+  document.getElementById("plReg2Next").addEventListener("click", function () {
+    if (reg2Advancing) return;
+    reg2Advancing = true;
+    state.email = document.getElementById("plRegEmail").value.trim();
+    withLoading(reg2El, function () { return true; }).then(function () { goTo("register3"); });
+  });
 
   // ================== register step 3: account bearbeiten ==================
   var reg3El = steps[stepIndex("register3")];
