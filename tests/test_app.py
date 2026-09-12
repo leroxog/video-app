@@ -485,6 +485,88 @@ def test_open_rejects_non_snap_message(client):
     assert r.get_json() == {"ok": False, "error": "not_a_snap"}
 
 
+def _find_streak_row(uid1, uid2):
+    from models import PlStreak
+    a, b = (uid1, uid2) if uid1 < uid2 else (uid2, uid1)
+    return PlStreak.query.filter_by(user_a_id=a, user_b_id=b).first()
+
+
+def _send_snap(sender, cid, other=None):
+    att = _upload_image(sender)
+    sender.post(f"/api/pl/chats/{cid}/messages", json={"att_kind": "image", "att_value": att, "view_once": True})
+
+
+def test_streak_counts_up_only_once_both_sides_snap_same_day(client):
+    signup(client, "alice")
+    bob = make_user(client, "bob")
+    cid = _dm(client, "bob", bob)
+    assert client.get("/api/pl/chats").get_json()["chats"][0]["streak"] == 0
+
+    _send_snap(client, cid)
+    # only alice has sent today -- no streak yet
+    assert client.get("/api/pl/chats").get_json()["chats"][0]["streak"] == 0
+
+    _send_snap(bob, cid)
+    # both sides sent today -- streak is now 1, visible to both
+    assert client.get("/api/pl/chats").get_json()["chats"][0]["streak"] == 1
+    assert bob.get("/api/pl/chats").get_json()["chats"][0]["streak"] == 1
+
+    # a third snap the same day doesn't double-count
+    _send_snap(client, cid)
+    assert client.get("/api/pl/chats").get_json()["chats"][0]["streak"] == 1
+
+
+def test_streak_increments_on_consecutive_days_and_resets_after_a_gap(client):
+    from datetime import date, timedelta
+    signup(client, "alice")
+    bob = make_user(client, "bob")
+    cid = _dm(client, "bob", bob)
+
+    _send_snap(client, cid)
+    _send_snap(bob, cid)
+    assert client.get("/api/pl/chats").get_json()["chats"][0]["streak"] == 1
+
+    with flask_app.app_context():
+        alice_id = User.query.filter_by(username="alice").first().id
+        bob_id = User.query.filter_by(username="bob").first().id
+        row = _find_streak_row(alice_id, bob_id)
+        yesterday = date.today() - timedelta(days=1)
+        row.user_a_last_snap_date = yesterday
+        row.user_b_last_snap_date = yesterday
+        row.streak_date = yesterday
+        db.session.commit()
+
+    # both sides snap again "today" -- consecutive day, count goes up
+    _send_snap(client, cid)
+    _send_snap(bob, cid)
+    assert client.get("/api/pl/chats").get_json()["chats"][0]["streak"] == 2
+
+    with flask_app.app_context():
+        row = _find_streak_row(alice_id, bob_id)
+        skipped = date.today() - timedelta(days=3)
+        row.user_a_last_snap_date = skipped
+        row.user_b_last_snap_date = skipped
+        row.streak_date = skipped
+        db.session.commit()
+
+    # a gap of more than one day resets the count back to 1
+    _send_snap(client, cid)
+    _send_snap(bob, cid)
+    assert client.get("/api/pl/chats").get_json()["chats"][0]["streak"] == 1
+
+
+def test_streak_not_tracked_in_group_chats(client):
+    signup(client, "alice")
+    bob = make_user(client, "bob")
+    client.post("/api/pl/follow/bob")
+    bob.post("/api/pl/follow/alice")
+    gid = client.post("/api/pl/chats/group", json={"name": "Gruppe", "members": ["bob"]}).get_json()["chat_id"]
+    _send_snap(client, gid)
+    _send_snap(bob, gid)
+    group = next(c for c in client.get("/api/pl/chats").get_json()["chats"] if c["id"] == gid)
+    assert group["streak"] == 0
+
+
 def test_pin_and_unpin_message(client):
     signup(client, "alice")
     bob = make_user(client, "bob")

@@ -279,6 +279,23 @@ class PlMessage(db.Model):
     reactions = db.relationship("PlMessageReaction", backref="message", lazy=True, cascade="all, delete-orphan")
 
 
+class PlStreak(db.Model):
+    """Snapchat-style 🔥 streak between two users (2026-09-13): counts up
+    once per calendar day both sides have sent each other a view_once Snap
+    in their 1:1 chat, and resets to 1 if a day gets skipped -- no cron
+    needed, it's only ever touched from _pl_record_snap_for_streak. user_a_id
+    is always the smaller of the two user ids so each pair has one row."""
+    __tablename__ = "pl_streak"
+    id = db.Column(db.Integer, primary_key=True)
+    user_a_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    user_b_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    count = db.Column(db.Integer, nullable=False, default=0)
+    user_a_last_snap_date = db.Column(db.Date, nullable=True)
+    user_b_last_snap_date = db.Column(db.Date, nullable=True)
+    streak_date = db.Column(db.Date, nullable=True)
+    __table_args__ = (db.UniqueConstraint("user_a_id", "user_b_id", name="uq_plstreak_pair"),)
+
+
 class PlMessageReaction(db.Model):
     __tablename__ = "pl_message_reaction"
     id = db.Column(db.Integer, primary_key=True)

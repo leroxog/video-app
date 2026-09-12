@@ -54,6 +54,7 @@
             <div class="pl-chatrow-top">
                 <span class="pl-chatrow-title">{{ c.title }}</span>
                 {% if c.is_group %}<span class="pl-group-tag">Gruppe</span>{% endif %}
+                {% if c.streak %}<span class="pl-streak">🔥 {{ c.streak }}</span>{% endif %}
                 <span class="pl-chatrow-time">{{ c.last_ago }}</span>
             </div>
             <div class="pl-chatrow-preview">

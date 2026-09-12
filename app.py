@@ -42,7 +42,7 @@ from models import (
     db, User, Subscription, ErrorLog,
     PlChat, PlChatMember, PlMessage, PlMessageReaction, PlMedia,
     PlServer, PlServerMember, PlServerBan, PL_MODERATOR_PERMISSIONS,
-    PlStory, PlStoryView,
+    PlStory, PlStoryView, PlStreak,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -1787,6 +1787,52 @@ def _pl_chat_title(chat, me):
     return pl_display_name(other) if other else "Chat"
 
 
+def _pl_streak_pair(uid1, uid2):
+    return (uid1, uid2) if uid1 < uid2 else (uid2, uid1)
+
+
+def _pl_record_snap_for_streak(sender_id, chat):
+    """Called right after a view_once Snap is sent in a 1:1 chat (never
+    groups/server channels): records today as the sender's side of the
+    pair's streak, then bumps the shared counter once both sides have sent
+    on the same calendar day -- resets to 1 if a day was skipped instead of
+    decaying gradually, see PlStreak's docstring."""
+    if chat.is_group or chat.server_id is not None:
+        return
+    other = next((m.user_id for m in chat.members if m.user_id != sender_id), None)
+    if other is None:
+        return
+    a_id, b_id = _pl_streak_pair(sender_id, other)
+    streak = PlStreak.query.filter_by(user_a_id=a_id, user_b_id=b_id).first()
+    if streak is None:
+        streak = PlStreak(user_a_id=a_id, user_b_id=b_id)
+        db.session.add(streak)
+    today = datetime.now(timezone.utc).date()
+    if sender_id == a_id:
+        streak.user_a_last_snap_date = today
+    else:
+        streak.user_b_last_snap_date = today
+    both_today = streak.user_a_last_snap_date == today and streak.user_b_last_snap_date == today
+    if both_today and streak.streak_date != today:
+        if streak.streak_date is not None and (today - streak.streak_date).days == 1:
+            streak.count += 1
+        else:
+            streak.count = 1
+        streak.streak_date = today
+    db.session.commit()
+
+
+def _pl_chat_streak_count(chat, me):
+    if chat.is_group or chat.server_id is not None:
+        return 0
+    other = next((m.user_id for m in chat.members if m.user_id != me.id), None)
+    if other is None:
+        return 0
+    a_id, b_id = _pl_streak_pair(me.id, other)
+    streak = PlStreak.query.filter_by(user_a_id=a_id, user_b_id=b_id).first()
+    return streak.count if streak else 0
+
+
 def _pl_chat_summary(chat, me):
     last = chat.messages[-1] if chat.messages else None
     my_member = next((m for m in chat.members if m.user_id == me.id), None)
@@ -1810,6 +1856,7 @@ def _pl_chat_summary(chat, me):
         "last_ago": (pl_ago(last.created_at) if last else ""),
         "unread": unread,
         "invite_code": chat.invite_code if chat.is_group else None,
+        "streak": _pl_chat_streak_count(chat, me),
     }
 
 
@@ -2198,6 +2245,8 @@ def api_pl_send_message(chat_id):
     my_member = next(m for m in chat.members if m.user_id == me.id)
     my_member.last_read_id = msg.id
     db.session.commit()
+    if view_once:
+        _pl_record_snap_for_streak(me.id, chat)
     return jsonify({"ok": True, "message": _pl_serialize_message(msg, me)})
 
 
@@ -2265,10 +2314,6 @@ def api_pl_pin_message(message_id):
     return jsonify({"ok": True, "message": _pl_serialize_message(msg, me)})
 
 
-def _pl_record_snap_for_streak(sender_id, recipient_id, chat_id):
-    pass  # replaced with real streak tracking in the next phase
-
-
 @app.route("/api/pl/messages/<int:message_id>/open", methods=["POST"])
 def api_pl_open_snap(message_id):
     """Consumes a view_once Snap: the real image URL is only ever handed
@@ -2286,7 +2331,6 @@ def api_pl_open_snap(message_id):
     if not already_open:
         msg.opened_at = datetime.now(timezone.utc)
         db.session.commit()
-        _pl_record_snap_for_streak(msg.sender_id, me.id, msg.chat_id)
     return jsonify({"ok": True, "url": _pl_media_url(msg.att_value), "already_open": already_open})
 
 
