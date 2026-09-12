@@ -821,6 +821,8 @@ img { max-width: 100%; display: block; }
 }
 .pl-icon-btn.pink { background: var(--pl-pink); color: #fff; border: none; }
 .pl-icon-btn:active { transform: scale(0.9); }
+.pl-icon-btn.pl-headavatar { background: none; border: none; padding: 0; }
+.pl-icon-btn.pl-headavatar .pl-avatar { width: 100%; height: 100%; }
 
 .pl-server-rail { display: flex; align-items: center; gap: 10px; overflow-x: auto; padding: 4px 2px 14px; }
 .pl-server-icon {

@@ -7,12 +7,16 @@
 {% block screen %}
 <div class="pl-friends-wrap">
 <div class="pl-friends-list">
-{% include "partials/_pl_topbrand.html" %}
 <div class="pl-screen-head">
     <h1>HEXAGONUM</h1>
     <button class="pl-icon-btn" id="plCameraBtn" aria-label="Story hinzufügen">{{ plicon('camera', 20) }}</button>
     <button class="pl-icon-btn" id="plFindBtn" aria-label="Leute finden">{{ plicon('search', 20) }}</button>
     <button class="pl-icon-btn pink" id="plNewChatBtn" aria-label="Neuer Chat">{{ plicon('plus', 20) }}</button>
+    {% if user %}
+    <a class="pl-icon-btn pl-headavatar" href="{{ url_for('pl_profile', username=user.username) }}" aria-label="Dein Profil">
+        <span class="pl-avatar" style="background:{{ pl_avatar_color(user.username) }}">{% if user.pl_avatar_image %}<img src="{{ _pl_media_url(user.pl_avatar_image) }}" alt="">{% else %}{{ (user.username or '?')[0]|upper }}{% endif %}</span>
+    </a>
+    {% endif %}
 </div>
 
 <div class="pl-stories-bar" id="plStoriesBar"></div>
