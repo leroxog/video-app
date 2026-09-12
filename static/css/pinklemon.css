@@ -816,7 +816,10 @@ img { max-width: 100%; display: block; }
   gap: 10px;
   margin-bottom: 14px;
 }
-.pl-screen-head h1 { font-size: 22px; font-weight: 900; margin: 0; flex: 1; letter-spacing: -0.02em; }
+.pl-screen-head h1 {
+  font-size: 22px; font-weight: 900; margin: 0; flex: 1; min-width: 0; letter-spacing: -0.02em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .pl-icon-btn {
   width: 42px; height: 42px; border-radius: 50%; border: 1px solid var(--pl-border);
   background: var(--pl-surface-2); color: var(--pl-text); display: flex;
