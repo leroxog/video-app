@@ -614,6 +614,7 @@ def ensure_sqlite_columns_exist():
             ("server_id", "INTEGER"), ("topic", "VARCHAR(300)"),
             ("position", "INTEGER NOT NULL DEFAULT 0"),
             ("category", "VARCHAR(80)"), ("channel_type", "VARCHAR(10) NOT NULL DEFAULT 'text'"),
+            ("invite_code", "VARCHAR(12)"),
         ],
         "pl_server": [("is_public", "BOOLEAN NOT NULL DEFAULT 0")],
         "pl_server_member": [("role", "VARCHAR(10) NOT NULL DEFAULT 'member'")],
@@ -732,6 +733,7 @@ def ensure_columns_exist():
         'ALTER TABLE pl_chat ADD COLUMN IF NOT EXISTS position INTEGER NOT NULL DEFAULT 0',
         'ALTER TABLE pl_chat ADD COLUMN IF NOT EXISTS category VARCHAR(80)',
         "ALTER TABLE pl_chat ADD COLUMN IF NOT EXISTS channel_type VARCHAR(10) NOT NULL DEFAULT 'text'",
+        'ALTER TABLE pl_chat ADD COLUMN IF NOT EXISTS invite_code VARCHAR(12)',
         'ALTER TABLE pl_server ADD COLUMN IF NOT EXISTS is_public BOOLEAN NOT NULL DEFAULT FALSE',
         "ALTER TABLE pl_server_member ADD COLUMN IF NOT EXISTS role VARCHAR(10) NOT NULL DEFAULT 'member'",
         # Root cause confirmed live (psycopg2.errors.UndefinedColumn):
@@ -1465,6 +1467,73 @@ def pl_media_file(name):
     abort(404)
 
 
+# ---------------------------------------------------------------------
+# QR codes (2026-09-13, "genauso einfach wie WhatsApp") -- generated
+# server-side (the `qrcode` package) rather than hand-rolling a JS
+# encoder client-side, so PNGs are always correct. Every code just
+# encodes one of this app's own URLs (an invite link or a profile page),
+# nothing external.
+# ---------------------------------------------------------------------
+def _pl_qr_png(data):
+    import io as _io
+    import qrcode as _qrcode
+    img = _qrcode.make(data, box_size=8, border=2)
+    buf = _io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+@app.route("/api/pl/servers/<int:server_id>/qr.png")
+def api_pl_server_qr(server_id):
+    me = current_user()
+    server, member = _pl_require_server_permission(server_id, me)
+    if server is None:
+        abort(404)
+    url = url_for("pl_invite_server", code=server.invite_code, _external=True)
+    return Response(_pl_qr_png(url), mimetype="image/png")
+
+
+@app.route("/api/pl/chats/<int:chat_id>/qr.png")
+def api_pl_chat_qr(chat_id):
+    me = current_user()
+    chat = _pl_require_chat_member(chat_id, me)
+    if chat is None or not chat.is_group or not chat.invite_code:
+        abort(404)
+    url = url_for("pl_invite_chat", code=chat.invite_code, _external=True)
+    return Response(_pl_qr_png(url), mimetype="image/png")
+
+
+@app.route("/api/pl/u/<username>/qr.png")
+def api_pl_profile_qr(username):
+    current_user()
+    user = User.query.filter(db.func.lower(User.username) == username.lower()).first()
+    if user is None:
+        abort(404)
+    url = url_for("pl_profile", username=user.username, _external=True)
+    return Response(_pl_qr_png(url), mimetype="image/png")
+
+
+@app.route("/invite/server/<code>")
+def pl_invite_server(code):
+    me = current_user()
+    server, error = _pl_join_server_by_code(code, me)
+    if error:
+        return redirect(url_for("pl_home", invite_error=error))
+    return redirect(url_for("pl_server_view", server_id=server.id))
+
+
+@app.route("/invite/chat/<code>")
+def pl_invite_chat(code):
+    me = current_user()
+    chat = PlChat.query.filter_by(invite_code=code, is_group=True).first()
+    if chat is None:
+        return redirect(url_for("pl_home", invite_error="invalid_invite"))
+    if not any(m.user_id == me.id for m in chat.members):
+        db.session.add(PlChatMember(chat_id=chat.id, user_id=me.id))
+        db.session.commit()
+    return redirect(url_for("pl_chat_view", chat_id=chat.id))
+
+
 def _pl_user_brief(user):
     return {
         "username": user.username,
@@ -1737,6 +1806,7 @@ def _pl_chat_summary(chat, me):
         "last_sender": (pl_display_name(last.sender) if last else ""),
         "last_ago": (pl_ago(last.created_at) if last else ""),
         "unread": unread,
+        "invite_code": chat.invite_code if chat.is_group else None,
     }
 
 
@@ -2001,13 +2071,25 @@ def api_pl_create_group():
             members.append(u)
     if not members:
         return jsonify({"ok": False, "error": "no_members"}), 400
-    chat = PlChat(is_group=True, name=name, created_by=me.id)
+    chat = PlChat(is_group=True, name=name, created_by=me.id, invite_code=_pl_gen_invite_code(PlChat))
     db.session.add(chat)
     db.session.flush()
     db.session.add(PlChatMember(chat_id=chat.id, user_id=me.id))
     for u in members:
         db.session.add(PlChatMember(chat_id=chat.id, user_id=u.id))
     db.session.commit()
+    return jsonify({"ok": True, "chat_id": chat.id})
+
+
+@app.route("/api/pl/chats/join/<code>", methods=["POST"])
+def api_pl_chat_join(code):
+    me = current_user()
+    chat = PlChat.query.filter_by(invite_code=code, is_group=True).first()
+    if chat is None:
+        return jsonify({"ok": False, "error": "invalid_invite"}), 404
+    if not any(m.user_id == me.id for m in chat.members):
+        db.session.add(PlChatMember(chat_id=chat.id, user_id=me.id))
+        db.session.commit()
     return jsonify({"ok": True, "chat_id": chat.id})
 
 
@@ -2427,12 +2509,12 @@ def api_pl_voice_state(chat_id):
 # them for free. Deliberately simpler than real Discord in one way:
 # server-wide role permissions only, no per-channel overwrites.
 # ---------------------------------------------------------------------
-def _pl_gen_invite_code():
+def _pl_gen_invite_code(model=PlServer):
     import secrets as _secrets
     alphabet = "abcdefghijkmnpqrstuvwxyz23456789"  # no 0/O/1/l/I -- avoids misreads
     while True:
         code = "".join(_secrets.choice(alphabet) for _ in range(8))
-        if not PlServer.query.filter_by(invite_code=code).first():
+        if not model.query.filter_by(invite_code=code).first():
             return code
 
 
@@ -2596,21 +2678,29 @@ def api_pl_server_delete_channel(server_id, channel_id):
     return jsonify({"ok": True})
 
 
-@app.route("/api/pl/servers/join/<code>", methods=["POST"])
-def api_pl_server_join(code):
-    me = current_user()
+def _pl_join_server_by_code(code, me):
+    """Returns (server, error) -- error is None on success (including
+    "already a member", which is a no-op success, not an error)."""
     server = PlServer.query.filter_by(invite_code=code).first()
     if server is None:
-        return jsonify({"ok": False, "error": "invalid_invite"}), 404
+        return None, "invalid_invite"
     if PlServerBan.query.filter_by(server_id=server.id, user_id=me.id).first():
-        return jsonify({"ok": False, "error": "banned"}), 403
-    existing = _pl_server_member_row(server.id, me)
-    if existing is None:
+        return None, "banned"
+    if _pl_server_member_row(server.id, me) is None:
         sm = PlServerMember(server_id=server.id, user_id=me.id)
         db.session.add(sm)
         db.session.flush()
         _pl_sync_new_member_into_channels(server, me)
         db.session.commit()
+    return server, None
+
+
+@app.route("/api/pl/servers/join/<code>", methods=["POST"])
+def api_pl_server_join(code):
+    me = current_user()
+    server, error = _pl_join_server_by_code(code, me)
+    if error:
+        return jsonify({"ok": False, "error": error}), (403 if error == "banned" else 404)
     return jsonify({"ok": True, "server": _pl_serialize_server(server, me)})
 
 

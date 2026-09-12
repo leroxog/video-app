@@ -36,6 +36,9 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
         </button>
         {% endif %}
+        {% if chat.invite_code %}
+        <button type="button" class="pl-chat-call-btn" id="plChatInviteBtn" aria-label="Einladen">{{ plicon('qrcode', 18) }}</button>
+        {% endif %}
         <button type="button" class="pl-chat-pins-btn" id="plPinsBtn" hidden aria-label="Angeheftete Nachrichten">
             {{ plicon('pin', 16) }}<span id="plPinsCount">0</span>
         </button>
@@ -100,6 +103,22 @@
     <audio id="plCallRemoteAudio" autoplay></audio>
 </div>
 {% endif %}
+{% if chat.invite_code %}
+<div class="pl-sheet-backdrop pl-sheet-modal" id="plChatInviteSheet">
+    <div class="pl-sheet">
+        <div class="pl-sheet-grip"></div>
+        <div class="pl-sheet-bar">
+            <button class="pl-sheet-x" data-close-sheet aria-label="Schließen">&times;</button>
+            <h2>Einladen</h2>
+            <span></span>
+        </div>
+        <p style="color:var(--pl-text-dim);font-size:13px;margin:0 0 10px;">Jeder mit diesem Code oder QR-Code kann beitreten.</p>
+        <div class="pl-srv-invite-code">{{ chat.invite_code }}</div>
+        <img class="pl-invite-qr" src="{{ url_for('api_pl_chat_qr', chat_id=chat_id) }}" alt="QR-Code">
+        <button class="pl-btn pink" id="plChatCopyInviteBtn" style="margin-top:12px;">Code kopieren</button>
+    </div>
+</div>
+{% endif %}
 <div class="pl-toast" id="plToast"></div>
 <script>
     window.plToast = function (m) { var t = document.getElementById("plToast"); if (!t) return; t.textContent = m; t.classList.add("show"); clearTimeout(window._plT); window._plT = setTimeout(function () { t.classList.remove("show"); }, 2200); };
@@ -113,6 +132,26 @@
         var backBtn = document.getElementById("plChatBackBtn");
         if (backBtn) backBtn.style.visibility = "hidden";
     }
+    (function () {
+        var inviteBtn = document.getElementById("plChatInviteBtn");
+        var inviteSheet = document.getElementById("plChatInviteSheet");
+        if (!inviteBtn || !inviteSheet) return;
+        inviteBtn.addEventListener("click", function () {
+            inviteSheet.classList.add("open");
+            document.body.style.overflow = "hidden";
+        });
+        inviteSheet.addEventListener("click", function (e) {
+            if (e.target === inviteSheet || e.target.classList.contains("pl-sheet-grip") || e.target.closest("[data-close-sheet]")) {
+                inviteSheet.classList.remove("open");
+                document.body.style.overflow = "";
+            }
+        });
+        var copyBtn = document.getElementById("plChatCopyInviteBtn");
+        if (copyBtn) copyBtn.addEventListener("click", function () {
+            var code = inviteSheet.querySelector(".pl-srv-invite-code").textContent.trim();
+            if (navigator.clipboard) navigator.clipboard.writeText(code).then(function () { window.plToast("Kopiert."); });
+        });
+    })();
 </script>
 <script src="{{ url_for('static', filename='js/pl-sound.js') }}"></script>
 <script src="{{ url_for('static', filename='js/pl-attach.js') }}"></script>

@@ -195,6 +195,7 @@
   var inviteSheet = $("#plSrvInviteSheet");
   $("#plSrvInviteBtn").addEventListener("click", function () {
     $("#plSrvInviteCode").textContent = (state.server && state.server.invite_code) || "…";
+    $("#plSrvInviteQr").src = "/api/pl/servers/" + SID + "/qr.png";
     openSheet(inviteSheet);
   });
   $("#plSrvCopyInviteBtn").addEventListener("click", function () {

@@ -36,6 +36,18 @@
       .then(function (j) { if (j.ok) location.href = "/freunde/c/" + j.chat_id; });
   });
 
+  // ---------------- QR code ----------------
+  var qrBtn = document.getElementById("plProfQrBtn");
+  var qrSheet = document.getElementById("plProfQrSheet");
+  if (qrBtn && qrSheet) {
+    qrBtn.addEventListener("click", function () { qrSheet.classList.add("open"); document.body.style.overflow = "hidden"; });
+    qrSheet.addEventListener("click", function (e) {
+      if (e.target === qrSheet || e.target.classList.contains("pl-sheet-grip") || e.target.closest("[data-close-sheet]")) {
+        qrSheet.classList.remove("open"); document.body.style.overflow = "";
+      }
+    });
+  }
+
   // ---------------- edit profile ----------------
   var editBtn = document.getElementById("plEditProfileBtn");
   var sheet = document.getElementById("plEditProfileSheet");

@@ -111,7 +111,17 @@
         <p style="color:var(--pl-text-dim);font-size:13px;margin:0 0 12px;">Du kannst nur mit Leuten schreiben, denen du folgst und die dir zur&uuml;ckfolgen.</p>
         <input class="pl-input" id="plGroupName" placeholder="Gruppenname (leer lassen = Einzelchat)" maxlength="80">
         <div class="pl-section-label" style="margin:6px 4px;">Gegenseitige Follows</div>
-        <div id="plMutualList" style="overflow-y:auto;max-height:44vh;"></div>
+        <div class="pl-friends-search" style="margin-bottom:8px;">
+            {{ plicon('search', 17) }}
+            <input id="plMutualSearch" placeholder="Suchen" autocomplete="off" autocapitalize="none">
+        </div>
+        <div id="plMutualList" style="overflow-y:auto;max-height:36vh;"></div>
+        <div class="pl-section-label" style="margin:14px 4px 6px;">Mit Einladungscode einer Gruppe beitreten</div>
+        <div class="pl-invite-join-row">
+            <input class="pl-input" id="plJoinChatCode" placeholder="z.B. ab3xk9qz" maxlength="12" autocapitalize="none">
+            <button class="pl-btn ghost" id="plJoinChatBtn">Beitreten</button>
+            <button type="button" class="pl-icon-btn" id="plScanChatBtn" aria-label="QR-Code scannen" hidden>{{ plicon('qrcode', 18) }}</button>
+        </div>
     </div>
 </div>
 
@@ -128,16 +138,30 @@
         <input class="pl-input" id="plNewServerName" placeholder="Servername" maxlength="80">
         <button class="pl-btn pink" id="plCreateServerBtn" style="margin-bottom:20px;">Erstellen</button>
         <div class="pl-section-label" style="margin:6px 4px;">Mit Einladungscode beitreten</div>
-        <input class="pl-input" id="plJoinServerCode" placeholder="z.B. ab3xk9qz" maxlength="12" autocapitalize="none">
-        <button class="pl-btn ghost" id="plJoinServerBtn">Beitreten</button>
+        <div class="pl-invite-join-row">
+            <input class="pl-input" id="plJoinServerCode" placeholder="z.B. ab3xk9qz" maxlength="12" autocapitalize="none">
+            <button class="pl-btn ghost" id="plJoinServerBtn">Beitreten</button>
+            <button type="button" class="pl-icon-btn" id="plScanServerBtn" aria-label="QR-Code scannen" hidden>{{ plicon('qrcode', 18) }}</button>
+        </div>
     </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
-<script>window.PL_ME = {{ me_json | tojson }};</script>
+<script>
+window.PL_ME = {{ me_json | tojson }};
+(function () {
+    var err = new URLSearchParams(location.search).get("invite_error");
+    if (!err) return;
+    history.replaceState(null, "", location.pathname);
+    document.addEventListener("DOMContentLoaded", function () {
+        window.plToast(err === "banned" ? "Du bist von diesem Server gebannt." : "Dieser Einladungslink ist ungültig.");
+    });
+})();
+</script>
 <script src="{{ url_for('static', filename='js/pl-cropper.js') }}"></script>
 <script src="{{ url_for('static', filename='js/pl-camera.js') }}"></script>
 <script src="{{ url_for('static', filename='js/pl-stories.js') }}"></script>
+<script src="{{ url_for('static', filename='js/pl-qrscan.js') }}"></script>
 <script src="{{ url_for('static', filename='js/pinklemon-friends.js') }}"></script>
 {% endblock %}

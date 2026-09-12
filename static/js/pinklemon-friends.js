@@ -79,26 +79,40 @@
   // ---- new chat / group ----
   var newChatSheet = $("#plNewChatSheet");
   var mutualList = $("#plMutualList");
+  var mutualSearch = $("#plMutualSearch");
   var selected = {};
+  var allMutuals = [];
   $("#plNewChatBtn").addEventListener("click", function () {
     $("#plGroupName").value = "";
+    $("#plJoinChatCode").value = "";
+    if (mutualSearch) mutualSearch.value = "";
     selected = {};
+    allMutuals = [];
     mutualList.innerHTML = '<div class="pl-empty" style="padding:16px 0;background:none;border:none;">Lädt …</div>';
     openSheet(newChatSheet);
-    api("GET", "/api/pl/mutuals").then(function (j) { renderMutuals(j.ok ? j.users : []); });
+    api("GET", "/api/pl/mutuals").then(function (j) { allMutuals = j.ok ? j.users : []; renderMutuals(allMutuals); });
   });
 
   function renderMutuals(list) {
-    if (!list.length) {
+    if (!allMutuals.length) {
       mutualList.innerHTML = '<div class="pl-empty" style="padding:16px 0;background:none;border:none;">Noch niemand folgt dir zurück. Nutze zuerst die Suche.</div>';
+      return;
+    }
+    if (!list.length) {
+      mutualList.innerHTML = '<div class="pl-empty" style="padding:16px 0;background:none;border:none;">Niemand gefunden.</div>';
       return;
     }
     mutualList.innerHTML = list.map(function (u) {
       return '<label class="pl-checkrow"><div class="pl-avatar" style="background:' + esc(u.avatar_color) + ';">' + esc(u.avatar_letter) + '</div>'
         + '<span class="pl-checkrow-name">@' + esc(u.username) + '</span>'
-        + '<input type="checkbox" data-u="' + esc(u.username) + '"></label>';
+        + '<input type="checkbox" data-u="' + esc(u.username) + '"' + (selected[u.username] ? " checked" : "") + '></label>';
     }).join("");
   }
+
+  if (mutualSearch) mutualSearch.addEventListener("input", function () {
+    var q = mutualSearch.value.trim().toLowerCase();
+    renderMutuals(q ? allMutuals.filter(function (u) { return u.username.toLowerCase().indexOf(q) !== -1; }) : allMutuals);
+  });
 
   mutualList.addEventListener("change", function (e) {
     if (e.target.matches("input[type=checkbox]")) {
@@ -125,6 +139,16 @@
     });
   });
 
+  // ---- join a group by invite code ----
+  $("#plJoinChatBtn").addEventListener("click", function () {
+    var code = $("#plJoinChatCode").value.trim();
+    if (!code) { window.plToast("Gib einen Einladungscode ein."); return; }
+    api("POST", "/api/pl/chats/join/" + encodeURIComponent(code)).then(function (j) {
+      if (j.ok) location.href = "/freunde/c/" + j.chat_id;
+      else window.plToast("Ungültiger Einladungscode.");
+    });
+  });
+
   // ---- servers: create / join by invite code ----
   var serverSheet = $("#plServerSheet");
   var serverAddBtn = $("#plServerAddBtn");
@@ -146,6 +170,22 @@
         else window.plToast(j.error === "banned" ? "Du bist von diesem Server verbannt." : "Ungültiger Einladungscode.");
       });
     });
+  }
+
+  // ---- QR scan: encoded value is always one of our own invite URLs, so
+  // just navigating to it lets the server-side /invite/* route do the
+  // actual join + redirect (same code path as scanning it with any
+  // camera app, not just from inside HEXAGONUM). ----
+  if (window.PlQrScan && window.PlQrScan.supported()) {
+    var scanServerBtn = $("#plScanServerBtn");
+    var scanChatBtn = $("#plScanChatBtn");
+    if (scanServerBtn) scanServerBtn.hidden = false;
+    if (scanChatBtn) scanChatBtn.hidden = false;
+    function scanAndGo() {
+      window.PlQrScan.open().then(function (raw) { if (raw) location.href = raw; });
+    }
+    if (scanServerBtn) scanServerBtn.addEventListener("click", scanAndGo);
+    if (scanChatBtn) scanChatBtn.addEventListener("click", scanAndGo);
   }
 
   // ---- desktop split view: open a chat in the right pane instead of

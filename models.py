@@ -169,6 +169,10 @@ class PlChat(db.Model):
     # for a join-a-room UI instead.
     category = db.Column(db.String(80), nullable=True)
     channel_type = db.Column(db.String(10), nullable=False, default="text")
+    # Groups only (2026-09-13, QR-Code-Beitritt): a joinable code, same idea
+    # as PlServer.invite_code. Null for DMs and server channels -- neither
+    # is something a stranger should be able to join via a shared code.
+    invite_code = db.Column(db.String(12), unique=True, nullable=True)
 
     members = db.relationship("PlChatMember", backref="chat", lazy=True, cascade="all, delete-orphan")
     messages = db.relationship(

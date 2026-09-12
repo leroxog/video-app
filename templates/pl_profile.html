@@ -18,6 +18,7 @@
         {% if is_me %}
         <div class="pl-prof2-actions">
             <button class="pl-btn ghost" id="plEditProfileBtn">Profil bearbeiten</button>
+            <button class="pl-icon-btn" id="plProfQrBtn" aria-label="Mein QR-Code">{{ plicon('qrcode', 18) }}</button>
         </div>
         {% else %}
         <div class="pl-prof2-actions">
@@ -25,6 +26,7 @@
             <button class="pl-btn {{ 'ghost' if i_follow }}" id="plFollowBtn" data-following="{{ '1' if i_follow else '0' }}">
                 {{ 'Entfolgen' if i_follow else 'Folgen' }}
             </button>
+            <button class="pl-icon-btn" id="plProfQrBtn" aria-label="QR-Code">{{ plicon('qrcode', 18) }}</button>
         </div>
         {% endif %}
 
@@ -53,6 +55,18 @@
 {% endblock %}
 
 {% block sheets %}
+<div class="pl-sheet-backdrop pl-sheet-modal" id="plProfQrSheet">
+    <div class="pl-sheet">
+        <div class="pl-sheet-grip"></div>
+        <div class="pl-sheet-bar">
+            <button class="pl-sheet-x" data-close-sheet aria-label="Schließen">&times;</button>
+            <h2>@{{ prof.username }}</h2>
+            <span></span>
+        </div>
+        <p style="color:var(--pl-text-dim);font-size:13px;margin:0 0 10px;">Scannen öffnet dieses Profil.</p>
+        <img class="pl-invite-qr" src="{{ url_for('api_pl_profile_qr', username=prof.username) }}" alt="QR-Code">
+    </div>
+</div>
 {% if is_me %}
 <div class="pl-sheet-backdrop pl-sheet-modal" id="plEditProfileSheet">
     <div class="pl-sheet">

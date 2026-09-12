@@ -2155,6 +2155,12 @@ body:has(.nx-app)::before { display: none; }
   background: var(--pl-surface-2); border: 1px solid var(--pl-border); border-radius: 10px; padding: 12px;
   text-align: center; font-size: 17px; font-weight: 800; letter-spacing: 0.05em; margin-bottom: 12px;
 }
+.pl-invite-qr {
+  display: block; width: 180px; height: 180px; margin: 0 auto 14px; border-radius: 12px;
+  background: #fff; padding: 10px;
+}
+.pl-invite-join-row { display: flex; gap: 8px; align-items: center; }
+.pl-invite-join-row .pl-input { margin-bottom: 0; flex: 1; }
 
 @media (max-width: 899px) {
   .pl-srv-channels, .pl-srv-main, .pl-srv-members { width: 100%; }
@@ -2401,6 +2407,18 @@ body:has(.nx-app)::before { display: none; }
   width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,.15); color: #fff; border: none;
   display: flex; align-items: center; justify-content: center;
 }
+
+/* ===== QR scanning (reuses .pl-cam-back/.pl-cam-video/.pl-cam-close) ===== */
+.pl-qrscan-frame {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: min(70vw, 260px); height: min(70vw, 260px); border: 3px solid #fff; border-radius: 20px;
+  box-shadow: 0 0 0 2000px rgba(0,0,0,.45);
+}
+.pl-qrscan-hint {
+  position: absolute; bottom: max(40px, env(safe-area-inset-bottom)); left: 0; right: 0;
+  text-align: center; color: #fff; font-size: 13.5px; font-weight: 600; text-shadow: 0 1px 4px rgba(0,0,0,.6);
+}
+.pl-cam-back:has(.pl-qrscan-frame) .pl-cam-video { transform: none; }
 
 /* ===== Story viewer (fullscreen) ===== */
 .pl-storyview-back {

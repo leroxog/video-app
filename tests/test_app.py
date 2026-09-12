@@ -805,6 +805,73 @@ def test_group_needs_name_and_mutual_members(client):
     assert b"Noch keine Nachrichten" in view.data
 
 
+def test_group_gets_invite_code_and_is_joinable_by_code(client):
+    signup(client, "alice")
+    bob = make_user(client, "bob")
+    client.post("/api/pl/follow/bob"); bob.post("/api/pl/follow/alice")
+    j = client.post("/api/pl/chats/group", json={"name": "Crew", "members": ["bob"]}).get_json()
+    cid = j["chat_id"]
+    code = client.get("/api/pl/chats").get_json()["chats"][0]["invite_code"]
+    assert code and len(code) == 8
+
+    carol = make_user(client, "carol")
+    r = carol.post(f"/api/pl/chats/join/{code}")
+    assert r.get_json() == {"ok": True, "chat_id": cid}
+    assert carol.post(f"/api/pl/chats/{cid}/messages", json={"text": "hi"}).get_json()["ok"] is True
+
+    # joining again is a harmless no-op
+    assert carol.post(f"/api/pl/chats/join/{code}").get_json()["ok"] is True
+
+
+def test_join_chat_rejects_bad_code(client):
+    signup(client, "alice")
+    r = client.post("/api/pl/chats/join/doesnotexist")
+    assert r.status_code == 404
+
+
+def test_server_qr_requires_membership(client):
+    signup(client, "alice")
+    sid = _make_server(client)["server"]["id"]
+    bob = make_user(client, "bob")
+    assert client.get(f"/api/pl/servers/{sid}/qr.png").status_code == 200
+    assert bob.get(f"/api/pl/servers/{sid}/qr.png").status_code == 404
+
+
+def test_chat_qr_requires_group_membership(client):
+    signup(client, "alice")
+    bob = make_user(client, "bob")
+    client.post("/api/pl/follow/bob"); bob.post("/api/pl/follow/alice")
+    cid = client.post("/api/pl/chats/group", json={"name": "Crew", "members": ["bob"]}).get_json()["chat_id"]
+    carol = make_user(client, "carol")
+    assert client.get(f"/api/pl/chats/{cid}/qr.png").status_code == 200
+    assert carol.get(f"/api/pl/chats/{cid}/qr.png").status_code == 404
+    # a DM (not a group) has no invite code, so its QR route 404s even for a member
+    dm_cid = client.post("/api/pl/chats/dm/bob").get_json()["chat_id"]
+    assert client.get(f"/api/pl/chats/{dm_cid}/qr.png").status_code == 404
+
+
+def test_profile_qr_is_a_png(client):
+    signup(client, "alice")
+    r = client.get("/api/pl/u/alice/qr.png")
+    assert r.status_code == 200 and r.content_type == "image/png"
+
+
+def test_invite_link_joins_server_and_redirects(client):
+    signup(client, "alice")
+    j = _make_server(client)
+    sid, code = j["server"]["id"], j["server"]["invite_code"]
+    bob = make_user(client, "bob")
+    r = bob.get(f"/invite/server/{code}", follow_redirects=False)
+    assert r.status_code == 302 and str(sid) in r.location
+    assert any(m["username"] == "bob" for m in client.get(f"/api/pl/servers/{sid}").get_json()["members"])
+
+
+def test_invite_link_bad_code_redirects_home_with_error(client):
+    signup(client, "alice")
+    r = client.get("/invite/server/doesnotexist", follow_redirects=False)
+    assert r.status_code == 302 and "invite_error" in r.location
+
+
 def test_mutuals_endpoint_lists_only_mutuals(client):
     signup(client, "alice")
     bob = make_user(client, "bob")
