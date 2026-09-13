@@ -74,7 +74,7 @@ def test_login_success(client):
 
 
 def test_api_returns_401_json_when_logged_out(client):
-    r = client.post("/api/ai/send", json={"message": "hi"})
+    r = client.post("/api/ai/chats/1/stream", json={"message": "hi"})
     assert r.status_code == 401 and r.get_json()["error"] == "not_logged_in"
 
 
@@ -279,8 +279,24 @@ def test_google_auth_callback_rejects_bad_state(client, monkeypatch):
 
 # ---------------- Nex AI chat ----------------
 
-def _mock_reply(monkeypatch, text="mocked reply"):
-    monkeypatch.setattr(app_module.ai_assistant, "generate_reply", lambda message, history=None: text)
+def _mock_stream(monkeypatch, chunks):
+    """chunks: a list of text pieces the fake Groq stream yields one at a
+    time, or a callable(message, history) -> iterable for tests that need
+    to inspect what was sent."""
+    if callable(chunks):
+        monkeypatch.setattr(app_module.ai_assistant, "generate_reply_stream", chunks)
+    else:
+        monkeypatch.setattr(app_module.ai_assistant, "generate_reply_stream", lambda message, history=None: iter(chunks))
+
+
+def _chat_id(client):
+    """GET / lazily creates the user's chat -- fetch its id for the
+    stream route, which (unlike / ) never auto-creates one."""
+    client.get("/")
+    with client.session_transaction() as sess:
+        uid = sess.get("user_id")
+    with flask_app.app_context():
+        return AiChat.query.filter_by(user_id=uid).order_by(AiChat.updated_at.desc()).first().id
 
 
 def test_root_creates_a_chat_and_shows_empty_state(client):
@@ -292,41 +308,51 @@ def test_root_creates_a_chat_and_shows_empty_state(client):
         assert AiChat.query.filter_by(user_id=User.query.filter_by(username="alice").first().id).count() == 1
 
 
-def test_send_message_requires_login(client):
-    r = client.post("/api/ai/send", json={"message": "hi"})
+def test_stream_requires_login(client):
+    r = client.post("/api/ai/chats/1/stream", json={"message": "hi"})
     assert r.status_code == 401
 
 
-def test_send_message_rejects_empty(client):
+def test_stream_rejects_empty(client):
     signup(client, "alice")
-    r = client.post("/api/ai/send", json={"message": "   "})
+    cid = _chat_id(client)
+    r = client.post(f"/api/ai/chats/{cid}/stream", json={"message": "   "})
     assert r.status_code == 400 and r.get_json()["error"] == "empty"
 
 
-def test_send_message_creates_chat_and_persists_both_messages(client, monkeypatch):
+def test_stream_rejects_a_chat_that_is_not_yours(client):
     signup(client, "alice")
-    _mock_reply(monkeypatch, "Hallo zurück!")
-    r = client.post("/api/ai/send", json={"message": "Hallo Nex"})
-    j = r.get_json()
-    assert j["ok"] is True and j["reply"] == "Hallo zurück!"
+    cid = _chat_id(client)
+    bob = make_user(client, "bob")
+    r = bob.post(f"/api/ai/chats/{cid}/stream", json={"message": "hi"})
+    assert r.status_code == 404
+
+
+def test_stream_returns_chunks_and_persists_both_messages(client, monkeypatch):
+    signup(client, "alice")
+    cid = _chat_id(client)
+    _mock_stream(monkeypatch, ["Hallo ", "zurück!"])
+    r = client.post(f"/api/ai/chats/{cid}/stream", json={"message": "Hallo Nex"})
+    assert r.get_data(as_text=True) == "Hallo zurück!"
     with flask_app.app_context():
-        alice = User.query.filter_by(username="alice").first()
-        chat = AiChat.query.filter_by(user_id=alice.id).first()
-        msgs = AiChatMessage.query.filter_by(chat_id=chat.id).order_by(AiChatMessage.created_at).all()
+        msgs = AiChatMessage.query.filter_by(chat_id=cid).order_by(AiChatMessage.created_at).all()
         assert [(m.role, m.content) for m in msgs] == [("user", "Hallo Nex"), ("assistant", "Hallo zurück!")]
+        chat = db.session.get(AiChat, cid)
+        assert chat.title == "Hallo Nex"
 
 
-def test_send_message_reuses_the_same_chat_and_sends_history(client, monkeypatch):
+def test_stream_reuses_the_same_chat_and_sends_history(client, monkeypatch):
     signup(client, "alice")
+    cid = _chat_id(client)
     seen_history = []
 
-    def fake_reply(message, history=None):
+    def fake_stream(message, history=None):
         seen_history.append(history)
-        return "reply " + str(len(seen_history))
+        yield "reply " + str(len(seen_history))
 
-    monkeypatch.setattr(app_module.ai_assistant, "generate_reply", fake_reply)
-    client.post("/api/ai/send", json={"message": "first"})
-    client.post("/api/ai/send", json={"message": "second"})
+    _mock_stream(monkeypatch, fake_stream)
+    client.post(f"/api/ai/chats/{cid}/stream", json={"message": "first"})
+    client.post(f"/api/ai/chats/{cid}/stream", json={"message": "second"})
 
     with flask_app.app_context():
         alice = User.query.filter_by(username="alice").first()
@@ -336,17 +362,18 @@ def test_send_message_reuses_the_same_chat_and_sends_history(client, monkeypatch
     assert seen_history[1] == [{"role": "user", "content": "first"}, {"role": "assistant", "content": "reply 1"}]
 
 
-def test_send_message_handles_ai_failure_gracefully(client, monkeypatch):
+def test_stream_handles_ai_failure_gracefully(client, monkeypatch):
     signup(client, "alice")
+    cid = _chat_id(client)
 
     def boom(message, history=None):
         raise RuntimeError("groq down")
+        yield  # pragma: no cover -- makes this a generator function
 
-    monkeypatch.setattr(app_module.ai_assistant, "generate_reply", boom)
-    r = client.post("/api/ai/send", json={"message": "hi"})
-    assert r.status_code == 502 and r.get_json()["error"] == "ai_failed"
+    _mock_stream(monkeypatch, boom)
+    r = client.post(f"/api/ai/chats/{cid}/stream", json={"message": "hi"})
+    assert r.get_data(as_text=True) == ""
     # the user's message is still saved even though the reply failed
     with flask_app.app_context():
-        alice = User.query.filter_by(username="alice").first()
-        chat = AiChat.query.filter_by(user_id=alice.id).first()
+        chat = db.session.get(AiChat, cid)
         assert [m.role for m in chat.messages] == ["user"]

@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 load_dotenv()
 from flask import (
     Flask, render_template, request, redirect, url_for,
-    session, send_from_directory, abort, jsonify, Response
+    session, send_from_directory, abort, jsonify, Response, stream_with_context
 )
 from sqlalchemy import text
 from werkzeug.exceptions import HTTPException
@@ -903,26 +903,49 @@ def pl_home():
     return render_template("pl_nex.html", messages=messages, chat_id=chat.id)
 
 
-@app.route("/api/ai/send", methods=["POST"])
-def api_ai_send():
+@app.route("/api/ai/chats/<int:chat_id>/stream", methods=["POST"])
+def api_ai_stream(chat_id):
+    """Streams Nex's reply to the browser as plain text chunks, token by
+    token, instead of one big JSON blob. The user's message is persisted
+    up front (so it survives even if streaming never starts); the
+    assistant's full reply is only persisted once in the generator's
+    `finally` block below, from a buffer this function accumulates as it
+    streams out -- that way a client that disconnects mid-reply still
+    ends up with the (partial) reply saved, and a message is never
+    double-written by both the client and the server racing each other."""
     me = current_user()
+    chat = AiChat.query.filter_by(id=chat_id, user_id=me.id).first()
+    if chat is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
     data = request.get_json(silent=True) or {}
     text_ = (data.get("message") or "").strip()[:4000]
     if not text_:
         return jsonify({"ok": False, "error": "empty"}), 400
-    chat = _ai_get_or_create_chat(me)
+
     history = [{"role": m.role, "content": m.content} for m in chat.messages]
     db.session.add(AiChatMessage(chat_id=chat.id, role="user", content=text_))
     chat.updated_at = datetime.now(timezone.utc)
+    is_first_message = chat.title is None
     db.session.commit()
-    try:
-        reply = ai_assistant.generate_reply(text_, history=history)
-    except Exception:
-        logger.exception("Nex-Antwort fehlgeschlagen")
-        return jsonify({"ok": False, "error": "ai_failed"}), 502
-    db.session.add(AiChatMessage(chat_id=chat.id, role="assistant", content=reply))
-    db.session.commit()
-    return jsonify({"ok": True, "reply": reply})
+
+    def generate():
+        full = []
+        try:
+            for token in ai_assistant.generate_reply_stream(text_, history=history):
+                full.append(token)
+                yield token
+        except Exception:
+            logger.exception("Nex-Streaming fehlgeschlagen")
+        finally:
+            reply_text = "".join(full)
+            if reply_text:
+                db.session.add(AiChatMessage(chat_id=chat.id, role="assistant", content=reply_text))
+            chat.updated_at = datetime.now(timezone.utc)
+            if is_first_message and reply_text:
+                chat.title = text_[:40]
+            db.session.commit()
+
+    return Response(stream_with_context(generate()), mimetype="text/plain")
 
 
 if __name__ == "__main__":

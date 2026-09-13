@@ -62,23 +62,39 @@
     syncSend();
     showTyping();
 
-    fetch("/api/ai/send", {
+    fetch("/api/ai/chats/" + window.NEX_CHAT_ID + "/stream", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: text }),
     })
-      .then(function (r) { return r.json(); })
-      .then(function (j) {
+      .then(function (res) {
+        var ct = res.headers.get("content-type") || "";
+        if (ct.indexOf("application/json") !== -1) {
+          return res.json().then(function (j) { throw new Error(nice(j.error)); });
+        }
         hideTyping();
-        busy = false;
-        syncSend();
-        if (!j.ok) { addMsg("assistant", nice(j.error)); return; }
-        addMsg("assistant", j.reply);
-        if (window.plSound) window.plSound.play("receive");
+        var bubble = addMsg("assistant", "");
+        var reader = res.body.getReader();
+        var decoder = new TextDecoder();
+        var full = "";
+        function pump() {
+          return reader.read().then(function (result) {
+            if (result.done) return;
+            full += decoder.decode(result.value, { stream: true });
+            bubble.textContent = full;
+            scrollDown();
+            return pump();
+          });
+        }
+        return pump().then(function () {
+          busy = false;
+          syncSend();
+          if (window.plSound) window.plSound.play("receive");
+        });
       })
-      .catch(function () {
+      .catch(function (err) {
         hideTyping();
         busy = false;
         syncSend();
-        addMsg("assistant", "Verbindungsfehler.");
+        addMsg("assistant", (err && err.message) || "Verbindungsfehler.");
       });
   }
 
