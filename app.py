@@ -892,6 +892,24 @@ def _ai_serialize_chat(chat):
     return {"id": chat.id, "title": chat.title or "Neuer Chat"}
 
 
+# In-memory sliding-window rate limit protecting the Groq key from a
+# runaway client (buggy or malicious) -- same non-persistent, per-process
+# dict pattern as the old chat feature's _pl_typing/_pl_calls, cleared in
+# the pytest client fixture for the same reason. Not a token/quota
+# economy (see user_has_unlimited_ai_tokens above, deliberately off).
+_ai_rate_hits = {}
+AI_RATE_LIMIT_MAX = 20
+AI_RATE_LIMIT_WINDOW_SECONDS = 300
+
+
+def _ai_rate_limited(user_id):
+    now = datetime.now(timezone.utc).timestamp()
+    hits = [t for t in _ai_rate_hits.get(user_id, []) if now - t < AI_RATE_LIMIT_WINDOW_SECONDS]
+    hits.append(now)
+    _ai_rate_hits[user_id] = hits
+    return len(hits) > AI_RATE_LIMIT_MAX
+
+
 @app.route("/")
 def pl_home():
     me = current_user()
@@ -975,6 +993,8 @@ def api_ai_stream(chat_id):
     chat = AiChat.query.filter_by(id=chat_id, user_id=me.id).first()
     if chat is None:
         return jsonify({"ok": False, "error": "not_found"}), 404
+    if _ai_rate_limited(me.id):
+        return jsonify({"ok": False, "error": "rate_limited"}), 429
     data = request.get_json(silent=True) or {}
     text_ = (data.get("message") or "").strip()[:4000]
     if not text_:

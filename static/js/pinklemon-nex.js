@@ -134,6 +134,7 @@
   function nice(err) {
     if (err === "empty") return "Schreib mir doch was.";
     if (err === "not_found") return "Dieser Chat existiert nicht mehr.";
+    if (err === "rate_limited") return "Kurz durchatmen -- gleich wieder.";
     return "Das hat gerade nicht geklappt. Nochmal versuchen?";
   }
 

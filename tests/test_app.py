@@ -16,6 +16,7 @@ from models import User, AiChat, AiChatMessage
 def client():
     flask_app.config["TESTING"] = True
     flask_app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
+    app_module._ai_rate_hits.clear()
     with flask_app.app_context():
         db.create_all()
         yield flask_app.test_client()
@@ -340,6 +341,31 @@ def test_stream_rejects_a_chat_that_is_not_yours(client):
     bob = make_user(client, "bob")
     r = bob.post(f"/api/ai/chats/{cid}/stream", json={"message": "hi"})
     assert r.status_code == 404
+
+
+def test_stream_rate_limits_after_too_many_messages(client, monkeypatch):
+    signup(client, "alice")
+    cid = _chat_id(client)
+    _mock_stream(monkeypatch, ["ok"])
+    for _ in range(app_module.AI_RATE_LIMIT_MAX):
+        r = client.post(f"/api/ai/chats/{cid}/stream", json={"message": "hi"})
+        assert r.status_code == 200
+        r.get_data()  # fully drain+close the streamed response before the next request
+    over = client.post(f"/api/ai/chats/{cid}/stream", json={"message": "hi"})
+    assert over.status_code == 429 and over.get_json()["error"] == "rate_limited"
+
+
+def test_stream_rate_limit_is_per_user(client, monkeypatch):
+    signup(client, "alice")
+    cid = _chat_id(client)
+    bob = make_user(client, "bob")
+    cid_bob = bob.post("/api/ai/chats").get_json()["chat"]["id"]
+    _mock_stream(monkeypatch, ["ok"])
+    for _ in range(app_module.AI_RATE_LIMIT_MAX):
+        client.post(f"/api/ai/chats/{cid}/stream", json={"message": "hi"}).get_data()
+    # alice is now rate-limited, but bob's own quota is untouched
+    r = bob.post(f"/api/ai/chats/{cid_bob}/stream", json={"message": "hi"})
+    assert r.status_code == 200
 
 
 def test_stream_returns_chunks_and_persists_both_messages(client, monkeypatch):
