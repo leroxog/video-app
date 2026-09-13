@@ -20,6 +20,68 @@
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
 
+  // marked doesn't sanitize its output (raw HTML in the source passes
+  // through unchanged by design -- see its own README), so a prompt that
+  // somehow gets Nex to echo back a <script>/onerror-bearing tag would
+  // otherwise execute. DOMPurify strips anything but plain markup before
+  // it ever reaches innerHTML.
+  function renderMarkdown(text) {
+    var html = window.marked ? window.marked.parse(text, { breaks: true, gfm: true }) : esc(text);
+    return window.DOMPurify ? window.DOMPurify.sanitize(html) : esc(text);
+  }
+
+  function addCopyButtons(container) {
+    container.querySelectorAll("pre").forEach(function (pre) {
+      if (pre.querySelector(".nx-copybtn")) return;
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "nx-copybtn";
+      btn.textContent = "Kopieren";
+      pre.appendChild(btn);
+    });
+  }
+
+  // The initial page load renders messages as plain escaped text
+  // server-side (fast first paint, no client round-trip) -- upgrade them
+  // to rendered markdown once marked/DOMPurify are available.
+  msgsEl.querySelectorAll(".nx-bubble").forEach(function (b) {
+    var text = b.textContent;
+    b.innerHTML = renderMarkdown(text);
+    addCopyButtons(b);
+  });
+
+  function legacyCopy(text) {
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    var ok = false;
+    try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+    document.body.removeChild(ta);
+    return ok;
+  }
+
+  msgsEl.addEventListener("click", function (e) {
+    var btn = e.target.closest(".nx-copybtn");
+    if (!btn) return;
+    var code = btn.parentElement.querySelector("code");
+    var text = code ? code.textContent : "";
+    var flash = function (ok) {
+      var orig = btn.textContent;
+      btn.textContent = ok ? "Kopiert!" : "Ging nicht";
+      btn.classList.toggle("copied", ok);
+      setTimeout(function () { btn.textContent = orig; btn.classList.remove("copied"); }, 1500);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { flash(true); }, function () { flash(legacyCopy(text)); });
+    } else {
+      flash(legacyCopy(text));
+    }
+  });
+
   // ---------------- message pane ----------------
   function clearEmpty() { if (emptyEl) { emptyEl.remove(); emptyEl = null; } }
 
@@ -38,7 +100,8 @@
     row.className = "nx-row " + (role === "user" ? "me" : "them");
     var b = document.createElement("div");
     b.className = "nx-bubble";
-    b.textContent = text;
+    b.innerHTML = renderMarkdown(text);
+    addCopyButtons(b);
     row.appendChild(b);
     msgsEl.appendChild(row);
     scrollDown();
@@ -229,9 +292,9 @@
       var full = "";
       function pump() {
         return reader.read().then(function (result) {
-          if (result.done) return;
+          if (result.done) { addCopyButtons(bubble); return; }
           full += decoder.decode(result.value, { stream: true });
-          bubble.textContent = full;
+          bubble.innerHTML = renderMarkdown(full);
           scrollDown();
           return pump();
         });
