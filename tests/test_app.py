@@ -1,7 +1,6 @@
 import os
 import sys
 import io
-import shutil
 import tempfile
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -10,20 +9,13 @@ os.environ["DATABASE_URL"] = f"sqlite:///{tempfile.gettempdir()}/video_app_test_
 import pytest
 import app as app_module
 from app import app as flask_app, db
-from models import User
+from models import User, AiChat, AiChatMessage
 
 
 @pytest.fixture
 def client():
     flask_app.config["TESTING"] = True
     flask_app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
-    flask_app.config["UPLOAD_FOLDER"] = tempfile.mkdtemp()
-    flask_app.config["PROFILE_PIC_FOLDER"] = tempfile.mkdtemp()
-    flask_app.config["SOUND_FOLDER"] = tempfile.mkdtemp()
-    app_module._pl_typing.clear()
-    app_module._pl_calls.clear()
-    app_module._pl_voice_rooms.clear()
-    app_module._pl_voice_signals.clear()
     with flask_app.app_context():
         db.create_all()
         yield flask_app.test_client()
@@ -49,7 +41,7 @@ def test_root_redirects_to_login_when_logged_out(client):
     assert "/login" in r.headers["Location"]
 
 
-def test_signup_then_land_on_feed(client):
+def test_signup_then_land_on_nex(client):
     r = signup(client, "alice")
     assert r.status_code in (302, 303)
     home = client.get("/")
@@ -82,7 +74,7 @@ def test_login_success(client):
 
 
 def test_api_returns_401_json_when_logged_out(client):
-    r = client.get("/api/pl/mutuals")
+    r = client.post("/api/ai/send", json={"message": "hi"})
     assert r.status_code == 401 and r.get_json()["error"] == "not_logged_in"
 
 
@@ -159,32 +151,27 @@ def test_api_login_success_and_failure(client):
     assert client.get("/").status_code == 200
 
 
-def test_suggested_servers_excludes_private_and_already_joined(client):
+# ---------------- own profile edit ----------------
+
+def test_update_profile_display_name_and_avatar(client):
     signup(client, "alice")
-    priv = _make_server(client, "Privat")
-    pub = _make_server(client, "Öffentlich")
-    client.post(f"/api/pl/servers/{pub['server']['id']}/visibility", json={"is_public": True})
-
-    bob = make_user(client, "bob")
-    suggested = bob.get("/api/pl/servers/suggested").get_json()["servers"]
-    names = [s["name"] for s in suggested]
-    assert "Öffentlich" in names and "Privat" not in names
-
-    code = pub["server"]["invite_code"]
-    bob.post(f"/api/pl/servers/join/{code}")
-    suggested_after = bob.get("/api/pl/servers/suggested").get_json()["servers"]
-    assert "Öffentlich" not in [s["name"] for s in suggested_after]
+    r = client.post("/api/pl/profile", data={
+        "display_name": "Alicia",
+        "avatar": (io.BytesIO(b"\x89PNG\r\n\x1a\n" + b"0" * 200), "pic.png"),
+    }, content_type="multipart/form-data")
+    j = r.get_json()
+    assert j["ok"] is True and j["display_name"] == "Alicia" and j["avatar_url"]
+    with flask_app.app_context():
+        u = User.query.filter_by(username="alice").first()
+        assert u.pl_display_name == "Alicia" and u.pl_avatar_image is not None
 
 
-def test_server_visibility_requires_manage_server_permission(client):
+def test_update_profile_rejects_bad_avatar_type(client):
     signup(client, "alice")
-    j = _make_server(client)
-    sid = j["server"]["id"]
-    code = j["server"]["invite_code"]
-    bob = make_user(client, "bob")
-    bob.post(f"/api/pl/servers/join/{code}")
-    r = bob.post(f"/api/pl/servers/{sid}/visibility", json={"is_public": True})
-    assert r.status_code == 403
+    r = client.post("/api/pl/profile", data={
+        "avatar": (io.BytesIO(b"not an image"), "pic.exe"),
+    }, content_type="multipart/form-data")
+    assert r.status_code == 400 and r.get_json()["error"] == "bad_type"
 
 
 # ---------------- avatar colors ----------------
@@ -194,17 +181,6 @@ def test_avatar_color_is_stable_and_in_palette(client):
     assert app_module.pl_avatar_color("alice") in app_module.PL_AVATAR_PALETTE
     # case-insensitive, so "Alice" and "alice" always match visually elsewhere too
     assert app_module.pl_avatar_color("Alice") == app_module.pl_avatar_color("alice")
-
-
-def test_pending_chat_avatar_uses_the_same_color_as_the_api(client):
-    signup(client, "alice")
-    bob = make_user(client, "bob")
-    # mutual follow, no chat created yet -> bob shows up in the "pending" row
-    # on the home screen, using the same avatar-color helper as the API
-    client.post("/api/pl/follow/bob")
-    bob.post("/api/pl/follow/alice")
-    color = app_module.pl_avatar_color("bob")
-    assert f'background:{color}'.encode() in client.get("/").data
 
 
 # ---------------- google login ----------------
@@ -301,987 +277,76 @@ def test_google_auth_callback_rejects_bad_state(client, monkeypatch):
     assert client.get("/", follow_redirects=False).status_code == 302
 
 
-# ---------------- shell / pages ----------------
+# ---------------- Nex AI chat ----------------
 
-def test_pages_render_for_logged_in_user(client):
+def _mock_reply(monkeypatch, text="mocked reply"):
+    monkeypatch.setattr(app_module.ai_assistant, "generate_reply", lambda message, history=None: text)
+
+
+def test_root_creates_a_chat_and_shows_empty_state(client):
     signup(client, "alice")
-    # home (chat list / server rail / pending mutuals)
     home = client.get("/")
-    assert home.status_code == 200 and b'id="plChatList"' in home.data
-    # own profile
-    prof = client.get("/freunde/u/alice")
-    assert prof.status_code == 200 and b"plEditProfileBtn" in prof.data
-    # a real chat
-    bob = make_user(client, "bob")
-    client.post("/api/pl/follow/bob")
-    bob.post("/api/pl/follow/alice")
-    cid = client.post("/api/pl/chats/dm/bob").get_json()["chat_id"]
-    assert client.get(f"/freunde/c/{cid}").status_code == 200
-    # a real server
-    sid = _make_server(client)["server"]["id"]
-    assert client.get(f"/freunde/server/{sid}").status_code == 200
+    assert home.status_code == 200
+    assert b"nxMsgs" in home.data
+    with flask_app.app_context():
+        assert AiChat.query.filter_by(user_id=User.query.filter_by(username="alice").first().id).count() == 1
 
 
-# ---------------- Freunde ----------------
+def test_send_message_requires_login(client):
+    r = client.post("/api/ai/send", json={"message": "hi"})
+    assert r.status_code == 401
 
-def test_dm_needs_mutual_follow(client):
+
+def test_send_message_rejects_empty(client):
     signup(client, "alice")
-    bob = make_user(client, "bob")
-    # alice -> bob only: not mutual yet
-    client.post("/api/pl/follow/bob")
-    assert client.post("/api/pl/chats/dm/bob").status_code == 403
-    # bob follows back -> mutual -> DM opens
-    bob.post("/api/pl/follow/alice")
-    j = client.post("/api/pl/chats/dm/bob").get_json()
-    assert j["ok"] and isinstance(j["chat_id"], int)
-    # re-opening returns the same chat
-    assert client.post("/api/pl/chats/dm/bob").get_json()["chat_id"] == j["chat_id"]
+    r = client.post("/api/ai/send", json={"message": "   "})
+    assert r.status_code == 400 and r.get_json()["error"] == "empty"
 
 
-def test_follow_toggles_and_reports_mutual(client):
+def test_send_message_creates_chat_and_persists_both_messages(client, monkeypatch):
     signup(client, "alice")
-    make_user(client, "bob")
-    a = client.post("/api/pl/follow/bob").get_json()
-    assert a["following"] is True and a["mutual"] is False
-    b = client.post("/api/pl/follow/bob").get_json()
-    assert b["following"] is False
-
-
-def test_send_and_receive_messages(client):
-    signup(client, "alice")
-    bob = make_user(client, "bob")
-    client.post("/api/pl/follow/bob")
-    bob.post("/api/pl/follow/alice")
-    cid = client.post("/api/pl/chats/dm/bob").get_json()["chat_id"]
-    client.post(f"/api/pl/chats/{cid}/messages", json={"text": "hi bob"})
-    got = bob.get(f"/api/pl/chats/{cid}/messages").get_json()
-    assert [m["text"] for m in got["messages"]] == ["hi bob"]
-    assert got["messages"][0]["is_mine"] is False
-    assert got["messages"][0]["sender"] == "alice"
-    assert "sender_id" in got["messages"][0] and "sender_avatar_url" in got["messages"][0]
-
-
-def _dm(client, other, other_client):
-    client.post(f"/api/pl/follow/{other}")
-    other_client.post("/api/pl/follow/alice")
-    return client.post(f"/api/pl/chats/dm/{other}").get_json()["chat_id"]
-
-
-def test_message_reply_shows_quoted_parent_and_survives_its_deletion(client):
-    signup(client, "alice")
-    bob = make_user(client, "bob")
-    cid = _dm(client, "bob", bob)
-    m1 = client.post(f"/api/pl/chats/{cid}/messages", json={"text": "erste Nachricht"}).get_json()["message"]
-    m2 = bob.post(f"/api/pl/chats/{cid}/messages", json={"text": "Antwort drauf", "reply_to_id": m1["id"]}).get_json()["message"]
-    assert m2["reply_to"] == {"id": m1["id"], "deleted": False, "sender_name": "alice", "text": "erste Nachricht"}
-
-    client.delete(f"/api/pl/messages/{m1['id']}")
-    got = bob.get(f"/api/pl/chats/{cid}/messages?after=0").get_json()["messages"]
-    reply = next(m for m in got if m["id"] == m2["id"])
-    assert reply["reply_to"]["deleted"] is True
-
-
-def test_edit_and_delete_own_message_only(client):
-    signup(client, "alice")
-    bob = make_user(client, "bob")
-    cid = _dm(client, "bob", bob)
-    msg = client.post(f"/api/pl/chats/{cid}/messages", json={"text": "tippo"}).get_json()["message"]
-
-    # bob can't edit or delete alice's message
-    assert bob.patch(f"/api/pl/messages/{msg['id']}", json={"text": "hack"}).status_code == 404
-    assert bob.delete(f"/api/pl/messages/{msg['id']}").status_code == 404
-
-    r = client.patch(f"/api/pl/messages/{msg['id']}", json={"text": "korrigiert"})
+    _mock_reply(monkeypatch, "Hallo zurück!")
+    r = client.post("/api/ai/send", json={"message": "Hallo Nex"})
     j = r.get_json()
-    assert j["ok"] and j["message"]["text"] == "korrigiert" and j["message"]["edited"] is True
+    assert j["ok"] is True and j["reply"] == "Hallo zurück!"
+    with flask_app.app_context():
+        alice = User.query.filter_by(username="alice").first()
+        chat = AiChat.query.filter_by(user_id=alice.id).first()
+        msgs = AiChatMessage.query.filter_by(chat_id=chat.id).order_by(AiChatMessage.created_at).all()
+        assert [(m.role, m.content) for m in msgs] == [("user", "Hallo Nex"), ("assistant", "Hallo zurück!")]
 
-    assert client.delete(f"/api/pl/messages/{msg['id']}").get_json()["ok"] is True
-    remaining = client.get(f"/api/pl/chats/{cid}/messages?after=0").get_json()["messages"]
-    assert msg["id"] not in [m["id"] for m in remaining]
 
-
-def test_message_reactions_toggle(client):
+def test_send_message_reuses_the_same_chat_and_sends_history(client, monkeypatch):
     signup(client, "alice")
-    bob = make_user(client, "bob")
-    cid = _dm(client, "bob", bob)
-    msg = client.post(f"/api/pl/chats/{cid}/messages", json={"text": "hi"}).get_json()["message"]
+    seen_history = []
 
-    r1 = bob.post(f"/api/pl/messages/{msg['id']}/react", json={"emoji": "👍"}).get_json()
-    assert r1["message"]["reactions"] == [{"emoji": "👍", "count": 1, "me": True}]
-    r2 = client.post(f"/api/pl/messages/{msg['id']}/react", json={"emoji": "👍"}).get_json()
-    assert {"emoji": "👍", "count": 2, "me": True} in r2["message"]["reactions"]
-    # toggling the same emoji again removes just that user's (alice's) reaction
-    r3 = client.post(f"/api/pl/messages/{msg['id']}/react", json={"emoji": "👍"}).get_json()
-    assert r3["message"]["reactions"] == [{"emoji": "👍", "count": 1, "me": False}]
-    assert client.post(f"/api/pl/messages/{msg['id']}/react", json={"emoji": "🍕"}).status_code == 400
+    def fake_reply(message, history=None):
+        seen_history.append(history)
+        return "reply " + str(len(seen_history))
 
-
-def _upload_image(client, name="x.gif"):
-    import io as _io
-    r = client.post("/api/pl/upload", data={
-        "file": (_io.BytesIO(b"GIF89a" + b"\x00" * 32), name),
-    }, content_type="multipart/form-data").get_json()
-    return r["value"]
-
-
-def test_snap_message_is_locked_until_recipient_opens_it(client):
-    signup(client, "alice")
-    bob = make_user(client, "bob")
-    cid = _dm(client, "bob", bob)
-    att = _upload_image(client)
-    sent = client.post(f"/api/pl/chats/{cid}/messages", json={
-        "text": "", "att_kind": "image", "att_value": att, "view_once": True,
-    }).get_json()["message"]
-    assert sent["view_once"] is True
-    # the sender always sees their own snap normally
-    assert sent["attachment"]["kind"] == "image"
-
-    # the recipient sees a locked bubble, no URL, until they open it
-    bob_view = bob.get(f"/api/pl/chats/{cid}/messages").get_json()["messages"][0]
-    assert bob_view["attachment"] == {"kind": "snap_locked"}
-
-    opened = bob.post(f"/api/pl/messages/{sent['id']}/open").get_json()
-    assert opened["ok"] is True and opened["already_open"] is False
-    assert opened["url"].endswith(att)
-
-    # opening again is idempotent and flags it
-    reopened = bob.post(f"/api/pl/messages/{sent['id']}/open").get_json()
-    assert reopened["ok"] is True and reopened["already_open"] is True
-
-    # after opening, it's gone from the normal payload for the recipient
-    bob_after = bob.get(f"/api/pl/chats/{cid}/messages?after=0").get_json()["messages"][0]
-    assert bob_after["attachment"] == {"kind": "snap_opened"}
-    # ...but the sender can still see it normally
-    alice_after = client.get(f"/api/pl/chats/{cid}/messages?after=0").get_json()["messages"][0]
-    assert alice_after["attachment"]["kind"] == "image"
-
-
-def test_sender_cannot_open_own_snap(client):
-    signup(client, "alice")
-    bob = make_user(client, "bob")
-    cid = _dm(client, "bob", bob)
-    att = _upload_image(client)
-    sent = client.post(f"/api/pl/chats/{cid}/messages", json={
-        "att_kind": "image", "att_value": att, "view_once": True,
-    }).get_json()["message"]
-    r = client.post(f"/api/pl/messages/{sent['id']}/open")
-    assert r.get_json() == {"ok": False, "error": "cant_open_own_snap"}
-
-
-def test_view_once_ignored_without_an_image(client):
-    signup(client, "alice")
-    bob = make_user(client, "bob")
-    cid = _dm(client, "bob", bob)
-    sent = client.post(f"/api/pl/chats/{cid}/messages", json={"text": "hi", "view_once": True}).get_json()["message"]
-    assert sent["view_once"] is False
-
-
-def test_open_rejects_non_snap_message(client):
-    signup(client, "alice")
-    bob = make_user(client, "bob")
-    cid = _dm(client, "bob", bob)
-    msg = client.post(f"/api/pl/chats/{cid}/messages", json={"text": "hi"}).get_json()["message"]
-    r = bob.post(f"/api/pl/messages/{msg['id']}/open")
-    assert r.get_json() == {"ok": False, "error": "not_a_snap"}
-
-
-def _find_streak_row(uid1, uid2):
-    from models import PlStreak
-    a, b = (uid1, uid2) if uid1 < uid2 else (uid2, uid1)
-    return PlStreak.query.filter_by(user_a_id=a, user_b_id=b).first()
-
-
-def _send_snap(sender, cid, other=None):
-    att = _upload_image(sender)
-    sender.post(f"/api/pl/chats/{cid}/messages", json={"att_kind": "image", "att_value": att, "view_once": True})
-
-
-def test_streak_counts_up_only_once_both_sides_snap_same_day(client):
-    signup(client, "alice")
-    bob = make_user(client, "bob")
-    cid = _dm(client, "bob", bob)
-    assert client.get("/api/pl/chats").get_json()["chats"][0]["streak"] == 0
-
-    _send_snap(client, cid)
-    # only alice has sent today -- no streak yet
-    assert client.get("/api/pl/chats").get_json()["chats"][0]["streak"] == 0
-
-    _send_snap(bob, cid)
-    # both sides sent today -- streak is now 1, visible to both
-    assert client.get("/api/pl/chats").get_json()["chats"][0]["streak"] == 1
-    assert bob.get("/api/pl/chats").get_json()["chats"][0]["streak"] == 1
-
-    # a third snap the same day doesn't double-count
-    _send_snap(client, cid)
-    assert client.get("/api/pl/chats").get_json()["chats"][0]["streak"] == 1
-
-
-def test_streak_increments_on_consecutive_days_and_resets_after_a_gap(client):
-    from datetime import date, timedelta
-    signup(client, "alice")
-    bob = make_user(client, "bob")
-    cid = _dm(client, "bob", bob)
-
-    _send_snap(client, cid)
-    _send_snap(bob, cid)
-    assert client.get("/api/pl/chats").get_json()["chats"][0]["streak"] == 1
+    monkeypatch.setattr(app_module.ai_assistant, "generate_reply", fake_reply)
+    client.post("/api/ai/send", json={"message": "first"})
+    client.post("/api/ai/send", json={"message": "second"})
 
     with flask_app.app_context():
-        alice_id = User.query.filter_by(username="alice").first().id
-        bob_id = User.query.filter_by(username="bob").first().id
-        row = _find_streak_row(alice_id, bob_id)
-        yesterday = date.today() - timedelta(days=1)
-        row.user_a_last_snap_date = yesterday
-        row.user_b_last_snap_date = yesterday
-        row.streak_date = yesterday
-        db.session.commit()
+        alice = User.query.filter_by(username="alice").first()
+        assert AiChat.query.filter_by(user_id=alice.id).count() == 1
 
-    # both sides snap again "today" -- consecutive day, count goes up
-    _send_snap(client, cid)
-    _send_snap(bob, cid)
-    assert client.get("/api/pl/chats").get_json()["chats"][0]["streak"] == 2
+    assert seen_history[0] == []
+    assert seen_history[1] == [{"role": "user", "content": "first"}, {"role": "assistant", "content": "reply 1"}]
 
+
+def test_send_message_handles_ai_failure_gracefully(client, monkeypatch):
+    signup(client, "alice")
+
+    def boom(message, history=None):
+        raise RuntimeError("groq down")
+
+    monkeypatch.setattr(app_module.ai_assistant, "generate_reply", boom)
+    r = client.post("/api/ai/send", json={"message": "hi"})
+    assert r.status_code == 502 and r.get_json()["error"] == "ai_failed"
+    # the user's message is still saved even though the reply failed
     with flask_app.app_context():
-        row = _find_streak_row(alice_id, bob_id)
-        skipped = date.today() - timedelta(days=3)
-        row.user_a_last_snap_date = skipped
-        row.user_b_last_snap_date = skipped
-        row.streak_date = skipped
-        db.session.commit()
-
-    # a gap of more than one day resets the count back to 1
-    _send_snap(client, cid)
-    _send_snap(bob, cid)
-    assert client.get("/api/pl/chats").get_json()["chats"][0]["streak"] == 1
-
-
-def test_streak_not_tracked_in_group_chats(client):
-    signup(client, "alice")
-    bob = make_user(client, "bob")
-    client.post("/api/pl/follow/bob")
-    bob.post("/api/pl/follow/alice")
-    gid = client.post("/api/pl/chats/group", json={"name": "Gruppe", "members": ["bob"]}).get_json()["chat_id"]
-    _send_snap(client, gid)
-    _send_snap(bob, gid)
-    group = next(c for c in client.get("/api/pl/chats").get_json()["chats"] if c["id"] == gid)
-    assert group["streak"] == 0
-
-
-def test_pin_and_unpin_message(client):
-    signup(client, "alice")
-    bob = make_user(client, "bob")
-    cid = _dm(client, "bob", bob)
-    msg = client.post(f"/api/pl/chats/{cid}/messages", json={"text": "wichtig"}).get_json()["message"]
-
-    assert bob.get(f"/api/pl/chats/{cid}/pinned").get_json()["messages"] == []
-    r = bob.post(f"/api/pl/messages/{msg['id']}/pin")
-    assert r.get_json()["message"]["pinned"] is True
-    pinned = client.get(f"/api/pl/chats/{cid}/pinned").get_json()["messages"]
-    assert [m["id"] for m in pinned] == [msg["id"]]
-
-    r2 = client.post(f"/api/pl/messages/{msg['id']}/pin")
-    assert r2.get_json()["message"]["pinned"] is False
-    assert client.get(f"/api/pl/chats/{cid}/pinned").get_json()["messages"] == []
-
-
-def test_typing_indicator(client):
-    signup(client, "alice")
-    bob = make_user(client, "bob")
-    cid = _dm(client, "bob", bob)
-    assert client.get(f"/api/pl/chats/{cid}/typing").get_json()["typing"] == []
-    bob.post(f"/api/pl/chats/{cid}/typing")
-    j = client.get(f"/api/pl/chats/{cid}/typing").get_json()
-    assert j["typing"] == ["bob"]
-    # you never see yourself in your own typing list
-    assert bob.get(f"/api/pl/chats/{cid}/typing").get_json()["typing"] == []
-
-
-def test_chat_page_shows_online_presence(client):
-    signup(client, "alice")
-    bob = make_user(client, "bob")
-    cid = _dm(client, "bob", bob)
-    bob.get("/")  # touches bob's last_seen
-    body = client.get(f"/freunde/c/{cid}").data
-    assert b"pl-chat-presence" in body and b"Online" in body
-
-
-def test_call_start_rings_the_other_member(client):
-    signup(client, "alice")
-    bob = make_user(client, "bob")
-    cid = _dm(client, "bob", bob)
-    assert client.post(f"/api/pl/chats/{cid}/call/start").get_json()["ok"] is True
-
-    j = bob.get(f"/api/pl/chats/{cid}/call/state").get_json()
-    assert j["active"] is True and j["caller_name"] == "alice" and j["is_caller"] is False
-    # the caller's own poll also sees the call, but as the caller
-    j2 = client.get(f"/api/pl/chats/{cid}/call/state").get_json()
-    assert j2["active"] is True and j2["is_caller"] is True
-
-
-def test_call_signal_relayed_but_not_to_sender(client):
-    signup(client, "alice")
-    bob = make_user(client, "bob")
-    cid = _dm(client, "bob", bob)
-    client.post(f"/api/pl/chats/{cid}/call/start")
-    client.post(f"/api/pl/chats/{cid}/call/signal", json={"type": "offer", "data": {"sdp": "fake-offer"}})
-
-    # bob sees alice's offer
-    j = bob.get(f"/api/pl/chats/{cid}/call/state").get_json()
-    assert len(j["signals"]) == 1 and j["signals"][0]["type"] == "offer" and j["signals"][0]["data"]["sdp"] == "fake-offer"
-    # alice never sees her own signal echoed back
-    j2 = client.get(f"/api/pl/chats/{cid}/call/state").get_json()
-    assert j2["signals"] == []
-
-    bob.post(f"/api/pl/chats/{cid}/call/signal", json={"type": "answer", "data": {"sdp": "fake-answer"}})
-    after = j["signals"][0]["id"]
-    j3 = client.get(f"/api/pl/chats/{cid}/call/state?after={after}").get_json()
-    assert len(j3["signals"]) == 1 and j3["signals"][0]["type"] == "answer"
-
-
-def test_call_hangup_clears_state_for_both(client):
-    signup(client, "alice")
-    bob = make_user(client, "bob")
-    cid = _dm(client, "bob", bob)
-    client.post(f"/api/pl/chats/{cid}/call/start")
-    client.post(f"/api/pl/chats/{cid}/call/signal", json={"type": "hangup"})
-    assert client.get(f"/api/pl/chats/{cid}/call/state").get_json()["active"] is False
-    assert bob.get(f"/api/pl/chats/{cid}/call/state").get_json()["active"] is False
-
-
-def test_call_not_supported_in_groups(client):
-    signup(client, "alice")
-    bob = make_user(client, "bob")
-    client.post("/api/pl/follow/bob"); bob.post("/api/pl/follow/alice")
-    cid = client.post("/api/pl/chats/group", json={"name": "Gruppe", "members": ["bob"]}).get_json()["chat_id"]
-    r = client.post(f"/api/pl/chats/{cid}/call/start")
-    assert r.status_code == 400 and r.get_json()["error"] == "group_calls_not_supported"
-
-
-def test_call_cannot_start_while_one_is_active(client):
-    signup(client, "alice")
-    bob = make_user(client, "bob")
-    cid = _dm(client, "bob", bob)
-    client.post(f"/api/pl/chats/{cid}/call/start")
-    r = bob.post(f"/api/pl/chats/{cid}/call/start")
-    assert r.status_code == 409 and r.get_json()["error"] == "already_in_call"
-
-
-def test_call_signal_without_active_call(client):
-    signup(client, "alice")
-    bob = make_user(client, "bob")
-    cid = _dm(client, "bob", bob)
-    # a stray offer with nothing ringing is a real error ...
-    r = client.post(f"/api/pl/chats/{cid}/call/signal", json={"type": "offer"})
-    assert r.status_code == 404
-    # ... but hangup/decline are idempotent no-ops, never an error
-    assert client.post(f"/api/pl/chats/{cid}/call/signal", json={"type": "hangup"}).get_json()["ok"] is True
-
-
-# ---------------- servers: channels + roles/permissions ----------------
-
-def _make_server(client, name="Testserver"):
-    return client.post("/api/pl/servers", json={"name": name}).get_json()
-
-
-def test_create_server_sets_up_default_role_and_channel(client):
-    signup(client, "alice")
-    j = _make_server(client)
-    assert j["ok"] is True
-    sid = j["server"]["id"]
-    assert j["server"]["is_owner"] is True
-    assert j["server"]["my_role"] == "admin"
-    expected_perms = set(app_module.PL_MODERATOR_PERMISSIONS) | {"manage_server", "manage_roles"}
-    assert set(j["server"]["my_permissions"]) == expected_perms
-
-    detail = client.get(f"/api/pl/servers/{sid}").get_json()
-    assert [c["name"] for c in detail["channels"]] == ["allgemein"]
-    assert len(detail["members"]) == 1
-    assert detail["members"][0]["username"] == "alice"
-    assert detail["members"][0]["role"] == "admin"
-
-    # the owner can immediately chat in the default channel via the normal message API
-    cid = detail["channels"][0]["id"]
-    r = client.post(f"/api/pl/chats/{cid}/messages", json={"text": "hallo server"})
-    assert r.get_json()["ok"] is True
-
-
-def test_server_channels_excluded_from_normal_chat_list(client):
-    signup(client, "alice")
-    _make_server(client)
-    assert client.get("/api/pl/chats").get_json()["chats"] == []
-
-
-def test_join_via_invite_code_grants_access_to_all_channels(client):
-    signup(client, "alice")
-    j = _make_server(client)
-    sid = j["server"]["id"]
-    code = j["server"]["invite_code"]
-    cid = client.get(f"/api/pl/servers/{sid}").get_json()["channels"][0]["id"]
-
-    bob = make_user(client, "bob")
-    jb = bob.post(f"/api/pl/servers/join/{code}").get_json()
-    assert jb["ok"] is True and jb["server"]["id"] == sid
-    assert bob.post(f"/api/pl/chats/{cid}/messages", json={"text": "hi"}).get_json()["ok"] is True
-
-    detail = client.get(f"/api/pl/servers/{sid}").get_json()
-    assert len(detail["members"]) == 2
-
-
-def test_new_channel_syncs_existing_members(client):
-    signup(client, "alice")
-    j = _make_server(client)
-    sid = j["server"]["id"]
-    code = j["server"]["invite_code"]
-    bob = make_user(client, "bob")
-    bob.post(f"/api/pl/servers/join/{code}")
-
-    r = client.post(f"/api/pl/servers/{sid}/channels", json={"name": "zweiter-kanal"})
-    assert r.get_json()["ok"] is True
-    new_cid = r.get_json()["channel"]["id"]
-    # bob (an existing member, not the creator) can post immediately
-    assert bob.post(f"/api/pl/chats/{new_cid}/messages", json={"text": "hi"}).get_json()["ok"] is True
-
-
-def test_channel_defaults_to_text_type_and_no_category(client):
-    signup(client, "alice")
-    j = _make_server(client)
-    detail = client.get(f"/api/pl/servers/{j['server']['id']}").get_json()
-    assert detail["channels"][0]["channel_type"] == "text"
-    assert detail["channels"][0]["category"] is None
-
-
-def test_create_voice_channel_with_category(client):
-    signup(client, "alice")
-    j = _make_server(client)
-    sid = j["server"]["id"]
-    r = client.post(f"/api/pl/servers/{sid}/channels", json={
-        "name": "lounge", "channel_type": "voice", "category": "Sprachkanäle",
-    })
-    ch = r.get_json()["channel"]
-    assert ch["channel_type"] == "voice"
-    assert ch["category"] == "Sprachkanäle"
-
-
-def test_create_channel_rejects_bogus_channel_type(client):
-    signup(client, "alice")
-    j = _make_server(client)
-    sid = j["server"]["id"]
-    r = client.post(f"/api/pl/servers/{sid}/channels", json={"name": "x", "channel_type": "video"})
-    assert r.get_json()["channel"]["channel_type"] == "text"
-
-
-def _make_voice_channel(client, sid):
-    r = client.post(f"/api/pl/servers/{sid}/channels", json={"name": "lounge", "channel_type": "voice"})
-    return r.get_json()["channel"]["id"]
-
-
-def test_voice_join_and_leave_updates_roster(client):
-    signup(client, "alice")
-    sid = _make_server(client)["server"]["id"]
-    vid = _make_voice_channel(client, sid)
-
-    j = client.post(f"/api/pl/voice/{vid}/join").get_json()
-    assert j["ok"] is True
-    assert [p["user_id"] for p in j["participants"]] == [1]
-
-    state = client.get(f"/api/pl/voice/{vid}/state").get_json()
-    assert state["in_room"] is True
-    assert len(state["participants"]) == 1
-
-    client.post(f"/api/pl/voice/{vid}/leave")
-    state2 = client.get(f"/api/pl/voice/{vid}/state").get_json()
-    assert state2["in_room"] is False
-    assert state2["participants"] == []
-
-
-def test_voice_join_rejects_text_channel(client):
-    signup(client, "alice")
-    sid = _make_server(client)["server"]["id"]
-    text_cid = client.get(f"/api/pl/servers/{sid}").get_json()["channels"][0]["id"]
-    r = client.post(f"/api/pl/voice/{text_cid}/join")
-    assert r.get_json() == {"ok": False, "error": "not_found"}
-
-
-def test_voice_signal_relayed_only_to_addressed_peer(client):
-    signup(client, "alice")
-    sid = _make_server(client)["server"]["id"]
-    vid = _make_voice_channel(client, sid)
-    code = client.get(f"/api/pl/servers/{sid}").get_json()["server"]["invite_code"]
-    bob = make_user(client, "bob")
-    bob.post(f"/api/pl/servers/join/{code}")
-
-    client.post(f"/api/pl/voice/{vid}/join")
-    bob.post(f"/api/pl/voice/{vid}/join")
-
-    bob_uid = [p["user_id"] for p in bob.get(f"/api/pl/voice/{vid}/state").get_json()["participants"] if p["name"] != "alice"][0]
-    client.post(f"/api/pl/voice/{vid}/signal", json={"to_id": bob_uid, "type": "offer", "data": {"sdp": "x"}})
-
-    bob_state = bob.get(f"/api/pl/voice/{vid}/state").get_json()
-    assert len(bob_state["signals"]) == 1
-    assert bob_state["signals"][0]["type"] == "offer"
-    # draining is one-shot: polling again returns nothing more
-    assert bob.get(f"/api/pl/voice/{vid}/state").get_json()["signals"] == []
-
-
-def test_voice_mute_toggle(client):
-    signup(client, "alice")
-    sid = _make_server(client)["server"]["id"]
-    vid = _make_voice_channel(client, sid)
-    client.post(f"/api/pl/voice/{vid}/join")
-    r = client.post(f"/api/pl/voice/{vid}/mute", json={"muted": True})
-    assert r.get_json()["ok"] is True
-    state = client.get(f"/api/pl/voice/{vid}/state").get_json()
-    assert state["participants"][0]["muted"] is True
-
-
-def test_non_owner_without_permission_cannot_create_channel(client):
-    signup(client, "alice")
-    j = _make_server(client)
-    code = j["server"]["invite_code"]
-    bob = make_user(client, "bob")
-    bob.post(f"/api/pl/servers/join/{code}")
-    r = bob.post(f"/api/pl/servers/{j['server']['id']}/channels", json={"name": "nope"})
-    assert r.status_code == 403
-
-
-def test_promoting_to_moderator_grants_and_demoting_revokes_permissions(client):
-    signup(client, "alice")
-    j = _make_server(client)
-    sid = j["server"]["id"]
-    code = j["server"]["invite_code"]
-    bob = make_user(client, "bob")
-    bob.post(f"/api/pl/servers/join/{code}")
-
-    # plain member: can't manage channels
-    assert bob.post(f"/api/pl/servers/{sid}/channels", json={"name": "x"}).status_code == 403
-
-    members = client.get(f"/api/pl/servers/{sid}").get_json()["members"]
-    bob_member = next(m for m in members if m["username"] == "bob")
-    assert bob_member["role"] == "member"
-
-    r = client.post(f"/api/pl/servers/{sid}/members/{bob_member['user_id']}/role", json={"role": "moderator"})
-    assert r.get_json()["ok"] is True
-    assert r.get_json()["member"]["role"] == "moderator"
-
-    # now bob (moderator) can create a channel and kick
-    assert bob.post(f"/api/pl/servers/{sid}/channels", json={"name": "x"}).get_json()["ok"] is True
-
-    # demote back to member
-    r = client.post(f"/api/pl/servers/{sid}/members/{bob_member['user_id']}/role", json={"role": "member"})
-    assert r.get_json()["member"]["role"] == "member"
-    assert bob.post(f"/api/pl/servers/{sid}/channels", json={"name": "y"}).status_code == 403
-
-
-def test_only_admin_can_promote_and_owner_role_is_fixed(client):
-    signup(client, "alice")
-    j = _make_server(client)
-    sid = j["server"]["id"]
-    code = j["server"]["invite_code"]
-    bob = make_user(client, "bob")
-    bob.post(f"/api/pl/servers/join/{code}")
-    bob_uid = next(m for m in client.get(f"/api/pl/servers/{sid}").get_json()["members"] if m["username"] == "bob")["user_id"]
-
-    # bob (plain member) cannot promote himself
-    r = bob.post(f"/api/pl/servers/{sid}/members/{bob_uid}/role", json={"role": "moderator"})
-    assert r.status_code == 403
-
-    # the owner's role can't be changed via this endpoint
-    alice_uid = next(m for m in client.get(f"/api/pl/servers/{sid}").get_json()["members"] if m["username"] == "alice")["user_id"]
-    r2 = client.post(f"/api/pl/servers/{sid}/members/{alice_uid}/role", json={"role": "moderator"})
-    assert r2.get_json() == {"ok": False, "error": "owner_is_always_admin"}
-
-
-def test_kick_removes_channel_access(client):
-    signup(client, "alice")
-    j = _make_server(client)
-    sid = j["server"]["id"]
-    code = j["server"]["invite_code"]
-    cid = client.get(f"/api/pl/servers/{sid}").get_json()["channels"][0]["id"]
-    bob = make_user(client, "bob")
-    bob.post(f"/api/pl/servers/join/{code}")
-    assert bob.post(f"/api/pl/chats/{cid}/messages", json={"text": "hi"}).get_json()["ok"] is True
-
-    bob_uid = next(m["user_id"] for m in client.get(f"/api/pl/servers/{sid}").get_json()["members"] if m["username"] == "bob")
-    assert client.post(f"/api/pl/servers/{sid}/members/{bob_uid}/kick").get_json()["ok"] is True
-    assert bob.post(f"/api/pl/chats/{cid}/messages", json={"text": "hi again"}).status_code == 404
-
-
-def test_owner_cannot_be_kicked_or_banned_or_leave(client):
-    signup(client, "alice")
-    j = _make_server(client)
-    sid = j["server"]["id"]
-    with flask_app.app_context():
-        alice_id = User.query.filter_by(username="alice").first().id
-    assert client.post(f"/api/pl/servers/{sid}/members/{alice_id}/kick").status_code == 400
-    assert client.post(f"/api/pl/servers/{sid}/members/{alice_id}/ban").status_code == 400
-    assert client.post(f"/api/pl/servers/{sid}/leave").get_json()["error"] == "owner_cannot_leave"
-
-
-def test_ban_prevents_rejoin_until_unbanned(client):
-    signup(client, "alice")
-    j = _make_server(client)
-    sid = j["server"]["id"]
-    code = j["server"]["invite_code"]
-    bob = make_user(client, "bob")
-    bob.post(f"/api/pl/servers/join/{code}")
-    bob_uid = next(m["user_id"] for m in client.get(f"/api/pl/servers/{sid}").get_json()["members"] if m["username"] == "bob")
-
-    assert client.post(f"/api/pl/servers/{sid}/members/{bob_uid}/ban").get_json()["ok"] is True
-    assert bob.post(f"/api/pl/servers/join/{code}").get_json()["error"] == "banned"
-
-    assert client.post(f"/api/pl/servers/{sid}/members/{bob_uid}/unban").get_json()["ok"] is True
-    assert bob.post(f"/api/pl/servers/join/{code}").get_json()["ok"] is True
-
-
-def test_non_member_cannot_read_chat(client):
-    signup(client, "alice")
-    bob = make_user(client, "bob")
-    client.post("/api/pl/follow/bob"); bob.post("/api/pl/follow/alice")
-    cid = client.post("/api/pl/chats/dm/bob").get_json()["chat_id"]
-    cara = make_user(client, "cara")
-    assert cara.get(f"/api/pl/chats/{cid}/messages").status_code == 404
-
-
-def test_group_needs_name_and_mutual_members(client):
-    signup(client, "alice")
-    bob = make_user(client, "bob")
-    client.post("/api/pl/follow/bob"); bob.post("/api/pl/follow/alice")
-    assert client.post("/api/pl/chats/group", json={"name": "", "members": ["bob"]}).status_code == 400
-    j = client.post("/api/pl/chats/group", json={"name": "Crew", "members": ["bob"]}).get_json()
-    assert j["ok"]
-    view = client.get(f"/freunde/c/{j['chat_id']}")
-    assert view.status_code == 200 and b"Crew" in view.data
-    # optimised group view: empty-state placeholder + stacked member avatars
-    assert b"pl-chat-empty" in view.data and b"pl-chat-members" in view.data
-    assert b"Noch keine Nachrichten" in view.data
-
-
-def test_group_gets_invite_code_and_is_joinable_by_code(client):
-    signup(client, "alice")
-    bob = make_user(client, "bob")
-    client.post("/api/pl/follow/bob"); bob.post("/api/pl/follow/alice")
-    j = client.post("/api/pl/chats/group", json={"name": "Crew", "members": ["bob"]}).get_json()
-    cid = j["chat_id"]
-    code = client.get("/api/pl/chats").get_json()["chats"][0]["invite_code"]
-    assert code and len(code) == 8
-
-    carol = make_user(client, "carol")
-    r = carol.post(f"/api/pl/chats/join/{code}")
-    assert r.get_json() == {"ok": True, "chat_id": cid}
-    assert carol.post(f"/api/pl/chats/{cid}/messages", json={"text": "hi"}).get_json()["ok"] is True
-
-    # joining again is a harmless no-op
-    assert carol.post(f"/api/pl/chats/join/{code}").get_json()["ok"] is True
-
-
-def test_join_chat_rejects_bad_code(client):
-    signup(client, "alice")
-    r = client.post("/api/pl/chats/join/doesnotexist")
-    assert r.status_code == 404
-
-
-def test_server_qr_requires_membership(client):
-    signup(client, "alice")
-    sid = _make_server(client)["server"]["id"]
-    bob = make_user(client, "bob")
-    assert client.get(f"/api/pl/servers/{sid}/qr.png").status_code == 200
-    assert bob.get(f"/api/pl/servers/{sid}/qr.png").status_code == 404
-
-
-def test_chat_qr_requires_group_membership(client):
-    signup(client, "alice")
-    bob = make_user(client, "bob")
-    client.post("/api/pl/follow/bob"); bob.post("/api/pl/follow/alice")
-    cid = client.post("/api/pl/chats/group", json={"name": "Crew", "members": ["bob"]}).get_json()["chat_id"]
-    carol = make_user(client, "carol")
-    assert client.get(f"/api/pl/chats/{cid}/qr.png").status_code == 200
-    assert carol.get(f"/api/pl/chats/{cid}/qr.png").status_code == 404
-    # a DM (not a group) has no invite code, so its QR route 404s even for a member
-    dm_cid = client.post("/api/pl/chats/dm/bob").get_json()["chat_id"]
-    assert client.get(f"/api/pl/chats/{dm_cid}/qr.png").status_code == 404
-
-
-def test_profile_qr_is_a_png(client):
-    signup(client, "alice")
-    r = client.get("/api/pl/u/alice/qr.png")
-    assert r.status_code == 200 and r.content_type == "image/png"
-
-
-def test_invite_link_joins_server_and_redirects(client):
-    signup(client, "alice")
-    j = _make_server(client)
-    sid, code = j["server"]["id"], j["server"]["invite_code"]
-    bob = make_user(client, "bob")
-    r = bob.get(f"/invite/server/{code}", follow_redirects=False)
-    assert r.status_code == 302 and str(sid) in r.location
-    assert any(m["username"] == "bob" for m in client.get(f"/api/pl/servers/{sid}").get_json()["members"])
-
-
-def test_invite_link_bad_code_redirects_home_with_error(client):
-    signup(client, "alice")
-    r = client.get("/invite/server/doesnotexist", follow_redirects=False)
-    assert r.status_code == 302 and "invite_error" in r.location
-
-
-def test_mutuals_endpoint_lists_only_mutuals(client):
-    signup(client, "alice")
-    bob = make_user(client, "bob")
-    make_user(client, "cara")
-    client.post("/api/pl/follow/bob")
-    client.post("/api/pl/follow/cara")
-    bob.post("/api/pl/follow/alice")  # only bob reciprocates
-    users = client.get("/api/pl/mutuals").get_json()["users"]
-    assert [u["username"] for u in users] == ["bob"]
-
-
-def test_profile_page_shows_follow_button(client):
-    signup(client, "alice")
-    make_user(client, "bob")
-    r = client.get("/freunde/u/bob")
-    assert r.status_code == 200 and b"plFollowBtn" in r.data
-    assert client.get("/freunde/u/ghost").status_code == 404
-
-
-def test_display_name_editable_and_shown_instead_of_handle(client):
-    signup(client, "alice")
-    # own profile has the edit sheet
-    assert b"plEditProfileSheet" in client.get("/freunde/u/alice").data
-    # set a Spitzname
-    r = client.post("/api/pl/profile", data={"display_name": "Alice Wunder"},
-                    content_type="multipart/form-data")
-    assert r.get_json()["display_name"] == "Alice Wunder"
-    # it now shows big on the profile page, @handle stays as the small handle
-    body = client.get("/freunde/u/alice").data
-    assert b"Alice Wunder" in body and b'id="plProfName"' in body and b"@alice" in body
-
-
-def test_home_page_shows_hexagonum_word(client):
-    signup(client, "alice")
-    assert b"HEXAGONUM" in client.get("/").data
-
-
-def test_origin_settable_via_api(client):
-    signup(client, "alice")
-    r = client.post("/api/pl/profile/origin", json={"origin": "de"})
-    assert r.get_json() == {"ok": True, "origin": "de"}
-
-
-def test_dm_chat_title_uses_display_name(client):
-    signup(client, "alice")
-    bob = make_user(client, "bob")
-    bob.post("/api/pl/profile", data={"display_name": "Bobby"}, content_type="multipart/form-data")
-    client.post("/api/pl/follow/bob"); bob.post("/api/pl/follow/alice")
-    cid = client.post("/api/pl/chats/dm/bob").get_json()["chat_id"]
-    view = client.get(f"/freunde/c/{cid}").data
-    assert b"Bobby" in view and b"@bob" not in view.split(b"pl-chat-header")[1][:200]
-
-
-# ---------------- attachments (photo / video under any text) ----------------
-
-def test_upload_rejects_non_media(client):
-    signup(client, "alice")
-    data = {"file": (io.BytesIO(b"nope"), "note.txt")}
-    r = client.post("/api/pl/upload", data=data, content_type="multipart/form-data")
-    assert r.status_code == 400
-
-
-# ---------------- text linkification (hashtags / mentions / URLs) ----------------
-
-def test_hashtags_and_mentions_are_linked(client):
-    signup(client, "alice")
-    bob = make_user(client, "bob")
-    client.post("/api/pl/follow/bob"); bob.post("/api/pl/follow/alice")
-    cid = client.post("/api/pl/chats/dm/bob").get_json()["chat_id"]
-    r = client.post(f"/api/pl/chats/{cid}/messages", json={"text": "hi @bob check #test"})
-    html = r.get_json()["message"]["text_html"]
-    assert 'class="pl-hashtag"' in html and 'href="/?q=%23test"' in html
-    assert 'class="pl-mention"' in html and 'href="/freunde/u/bob"' in html
-
-
-def test_urls_render_as_pink_preview_links(client):
-    signup(client, "alice")
-    bob = make_user(client, "bob")
-    client.post("/api/pl/follow/bob"); bob.post("/api/pl/follow/alice")
-    cid = client.post("/api/pl/chats/dm/bob").get_json()["chat_id"]
-    r = client.post(f"/api/pl/chats/{cid}/messages", json={"text": "schau https://example.com/x"})
-    html = r.get_json()["message"]["text_html"]
-    assert "pl-link" in html and 'data-pl-preview="https://example.com/x"' in html
-
-
-def test_messages_list_every_mutual(client):
-    bob = make_user(client, "bob")
-    signup(client, "alice")
-    # alice <-> bob become mutuals, no chat created yet
-    client.post("/api/pl/follow/bob")
-    bob.post("/api/pl/follow/alice")
-    body = client.get("/").data
-    assert b"bob" in body and b"@bob" in body
-    # the row opens (creates) the DM directly
-    r = client.get("/freunde/dm/bob", follow_redirects=False)
-    assert r.status_code == 302 and "/freunde/c/" in r.headers["Location"]
-    chat_id = int(r.headers["Location"].rsplit("/", 1)[-1])
-    # empty chat still shows the other person's @handle, not a generic label
-    assert b"@bob" in client.get("/").data
-    # once someone writes, the preview becomes "Name: text" -- even for a
-    # 1:1 chat, and even when *you* wrote the last message
-    client.post(f"/api/pl/chats/{chat_id}/messages", json={"text": "hallo!"})
-    body2 = client.get("/").data.decode("utf-8")
-    assert "alice: hallo!" in body2.lower()
-
-
-def test_profile_images_persist_in_db(client):
-    import io as _io
-    signup(client, "alice")
-    png = (b"\x89PNG\r\n\x1a\n" + b"\x00" * 64)
-    r = client.post("/api/pl/profile", data={
-        "avatar": (_io.BytesIO(png), "a.png"),
-        "banner": (_io.BytesIO(png), "b.png"),
-    }, content_type="multipart/form-data").get_json()
-    assert r["ok"] is True
-    assert r["avatar_url"].startswith("/plm/") and r["banner_url"].startswith("/plm/")
-    # the bytes come back from the persistent store, not local disk
-    got = client.get(r["avatar_url"])
-    assert got.status_code == 200 and got.data == png
-    # and a PlMedia row actually exists
-    from models import PlMedia
-    with flask_app.app_context():
-        assert PlMedia.query.count() >= 2
-
-
-def test_pl_upload_is_served_from_store(client):
-    import io as _io
-    signup(client, "alice")
-    r = client.post("/api/pl/upload", data={
-        "file": (_io.BytesIO(b"GIF89a" + b"\x00" * 32), "x.gif"),
-    }, content_type="multipart/form-data").get_json()
-    assert r["ok"] and r["kind"] == "image"
-    assert client.get(r["url"]).status_code == 200
-
-
-# ---------------- stories ----------------
-def _gif():
-    import io as _io
-    return _io.BytesIO(b"GIF89a" + b"\x00" * 32)
-
-
-def _post_story(client, caption=None):
-    data = {"media": (_gif(), "story.gif")}
-    if caption is not None:
-        data["caption"] = caption
-    return client.post("/api/pl/stories", data=data, content_type="multipart/form-data").get_json()
-
-
-def test_story_create_appears_for_self(client):
-    signup(client, "alice")
-    r = _post_story(client, caption="hi")
-    assert r["ok"] is True
-    assert r["story"]["caption"] == "hi"
-    assert r["story"]["is_mine"] is True
-    assert r["story"]["viewed_by_me"] is False
-
-    listing = client.get("/api/pl/stories").get_json()
-    assert listing["ok"] is True
-    assert listing["mine"]["username"] == "alice"
-    assert [s["caption"] for s in listing["mine"]["stories"]] == ["hi"]
-    assert listing["friends"] == []
-
-
-def test_story_requires_media_file(client):
-    signup(client, "alice")
-    r = client.post("/api/pl/stories", data={}, content_type="multipart/form-data").get_json()
-    assert r == {"ok": False, "error": "no_file"}
-
-
-def test_story_rejects_bad_file_type(client):
-    import io as _io
-    signup(client, "alice")
-    r = client.post("/api/pl/stories", data={
-        "media": (_io.BytesIO(b"not an image"), "x.txt"),
-    }, content_type="multipart/form-data").get_json()
-    assert r == {"ok": False, "error": "bad_type"}
-
-
-def test_story_not_visible_without_mutual_follow(client):
-    signup(client, "alice")
-    bob = make_user(client, "bob")
-    client.post("/api/pl/follow/bob")  # one-way only
-    _post_story(bob)
-    listing = client.get("/api/pl/stories").get_json()
-    assert listing["friends"] == []
-
-
-def test_story_visible_to_mutual_and_view_marks_seen(client):
-    signup(client, "alice")
-    bob = make_user(client, "bob")
-    client.post("/api/pl/follow/bob")
-    bob.post("/api/pl/follow/alice")
-    story = _post_story(bob)["story"]
-
-    listing = client.get("/api/pl/stories").get_json()
-    assert len(listing["friends"]) == 1
-    assert listing["friends"][0]["username"] == "bob"
-    assert listing["friends"][0]["all_seen"] is False
-    assert listing["friends"][0]["stories"][0]["viewed_by_me"] is False
-
-    r = client.post(f"/api/pl/stories/{story['id']}/view")
-    assert r.get_json()["ok"] is True
-
-    listing2 = client.get("/api/pl/stories").get_json()
-    assert listing2["friends"][0]["all_seen"] is True
-    assert listing2["friends"][0]["stories"][0]["viewed_by_me"] is True
-
-
-def test_story_view_is_idempotent(client):
-    signup(client, "alice")
-    bob = make_user(client, "bob")
-    client.post("/api/pl/follow/bob")
-    bob.post("/api/pl/follow/alice")
-    story = _post_story(bob)["story"]
-    client.post(f"/api/pl/stories/{story['id']}/view")
-    client.post(f"/api/pl/stories/{story['id']}/view")
-    from models import PlStoryView
-    with flask_app.app_context():
-        assert PlStoryView.query.filter_by(story_id=story["id"]).count() == 1
-
-
-def test_story_viewers_only_visible_to_owner(client):
-    signup(client, "alice")
-    bob = make_user(client, "bob")
-    client.post("/api/pl/follow/bob")
-    bob.post("/api/pl/follow/alice")
-    story = _post_story(client)["story"]
-    bob.post(f"/api/pl/stories/{story['id']}/view")
-
-    forbidden = bob.get(f"/api/pl/stories/{story['id']}/viewers").get_json()
-    assert forbidden == {"ok": False, "error": "forbidden"}
-
-    mine = client.get(f"/api/pl/stories/{story['id']}/viewers").get_json()
-    assert mine["ok"] is True
-    assert [v["username"] for v in mine["viewers"]] == ["bob"]
-
-
-def test_story_delete_only_by_owner(client):
-    signup(client, "alice")
-    bob = make_user(client, "bob")
-    client.post("/api/pl/follow/bob")
-    bob.post("/api/pl/follow/alice")
-    story = _post_story(client)["story"]
-
-    forbidden = bob.delete(f"/api/pl/stories/{story['id']}")
-    assert forbidden.get_json() == {"ok": False, "error": "forbidden"}
-
-    ok = client.delete(f"/api/pl/stories/{story['id']}")
-    assert ok.get_json() == {"ok": True}
-    assert client.get("/api/pl/stories").get_json()["mine"] is None
-
-
-def test_expired_story_is_excluded(client):
-    signup(client, "alice")
-    story = _post_story(client)["story"]
-    from datetime import datetime, timedelta, timezone
-    from models import PlStory
-    with flask_app.app_context():
-        row = db.session.get(PlStory, story["id"])
-        row.expires_at = datetime.now(timezone.utc) - timedelta(hours=1)
-        db.session.commit()
-    assert client.get("/api/pl/stories").get_json()["mine"] is None
+        alice = User.query.filter_by(username="alice").first()
+        chat = AiChat.query.filter_by(user_id=alice.id).first()
+        assert [m.role for m in chat.messages] == ["user"]

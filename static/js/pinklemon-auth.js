@@ -1,8 +1,6 @@
 (function () {
   "use strict";
 
-  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
-
   var track = document.getElementById("plAuthTrack");
   var viewport = document.getElementById("plAuthViewport");
   var steps = Array.prototype.slice.call(document.querySelectorAll(".pl-authstep"));
@@ -292,48 +290,13 @@
           return;
         }
         creatingText.textContent = "Account wurde erfolgreich erstellt";
-        setTimeout(function () { goTo("groups"); loadGroups(); }, 1200);
+        setTimeout(function () { location.href = "/"; }, 1200);
       })
       .catch(function () {
         window.plToast("Verbindungsfehler.");
         goTo("register1");
       });
   }
-
-  // ================== suggested groups ==================
-  var groupsEl = document.getElementById("plAuthGroups");
-  function loadGroups() {
-    fetch("/api/pl/servers/suggested").then(function (r) { return r.json(); }).then(function (j) {
-      if (!j.ok || !j.servers.length) {
-        groupsEl.innerHTML = '<div class="pl-authgroups-empty">Noch keine Vorschläge da.</div>';
-        resizeToStep(current);
-        return;
-      }
-      groupsEl.innerHTML = j.servers.map(function (s) {
-        return '<div class="pl-authgroup">'
-          + '<div class="pl-authgroup-icon"' + (s.icon_url ? ' style="background-image:url(\'' + esc(s.icon_url) + '\')"' : '') + '>'
-          + (s.icon_url ? '' : esc((s.name[0] || "?").toUpperCase())) + '</div>'
-          + '<div class="pl-authgroup-name">' + esc(s.name) + '</div>'
-          + '<button type="button" class="pl-authgroup-join" data-code="' + esc(s.invite_code) + '" data-id="' + s.id + '">Beitreten</button></div>';
-      }).join("");
-      resizeToStep(current);
-    }).catch(function () {
-      groupsEl.innerHTML = '<div class="pl-authgroups-empty">Konnte nicht geladen werden.</div>';
-      resizeToStep(current);
-    });
-  }
-  groupsEl.addEventListener("click", function (e) {
-    var btn = e.target.closest("[data-code]");
-    if (!btn) return;
-    btn.disabled = true;
-    fetch("/api/pl/servers/join/" + encodeURIComponent(btn.dataset.code), { method: "POST" })
-      .then(function (r) { return r.json(); })
-      .then(function (j) {
-        if (j.ok) location.href = "/freunde/server/" + btn.dataset.id;
-        else { window.plToast("Beitritt hat nicht geklappt."); btn.disabled = false; }
-      });
-  });
-  document.getElementById("plSkipGroups").addEventListener("click", function (e) { e.preventDefault(); location.href = "/"; });
 
   // ================== 3D tilt on the glass card ==================
   var card = document.getElementById("plAuthCard");

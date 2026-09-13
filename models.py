@@ -50,38 +50,32 @@ class User(db.Model):
     terms_accepted_version = db.Column(db.Integer, nullable=True)
     # Rolling average of ms between keystrokes across this user's own past
     # chat messages -- lets the AI notice when a single message was typed
-    # unusually fast/slow *for this specific person*, see api_ai_chat's
-    # typing_avg_interval_ms handling and AiLearnedFact's module docstring.
+    # unusually fast/slow *for this specific person*.
     avg_typing_interval_ms = db.Column(db.Float, nullable=True)
     typing_sample_count = db.Column(db.Integer, nullable=False, default=0)
-    # AI tokens (see app.py's TOKEN_COST_* / _grant_daily_tokens) -- a
-    # completely separate currency from total_score ("Punkte"): spent on
-    # AI actions (chat, voice, image generation), topped up +900 for every
-    # day the account is used, nullable so an existing account's first
-    # visit after this shipped can be told apart from someone who's
-    # genuinely already spent down to 0.
+    # AI tokens -- shown as a cosmetic balance in the Nex sidebar; no route
+    # currently deducts from it (see app.py's user_has_unlimited_ai_tokens),
+    # kept only so the number stays meaningful if gating is ever reinstated.
     ai_tokens = db.Column(db.Integer, nullable=True)
     ai_tokens_last_award_date = db.Column(db.Date, nullable=True)
-    # Which of the 5 Nex7 personalities this user's AI is currently set to
-    # (see app.py NEX7_PERSONAS): "nex", "seven", "ehrgeizig", "ruhig",
-    # "chaos". None == not chosen yet == treated as "nex".
+    # Vestigial -- from when Nex had multiple switchable personas. Nothing
+    # reads or writes these anymore (single blunt "Nex" persona today), kept
+    # only because dropping a column means a migration, not because they're
+    # used. See ai_assistant.py's single SYSTEM_PROMPT for the real behavior.
     nex7_persona = db.Column(db.String(20), nullable=True)
-    # Free-text short bio shown on the profile / next to posts.
-    bio = db.Column(db.String(300), nullable=True)
-    # HEXAGONUM profile: editable display name ("Spitzname", shown big
-    # everywhere instead of @username) + own avatar / banner images
-    # (filenames under static/uploads/pl).
-    pl_display_name = db.Column(db.String(50), nullable=True)
-    pl_avatar_image = db.Column(db.String(255), nullable=True)
-    pl_banner_image = db.Column(db.String(255), nullable=True)
-    # Nex slash commands (/name, /personality, /act) -- per-user overrides
-    # spliced into Nex's prompt context, see _pl_nex_overrides_block.
     nex_custom_name = db.Column(db.String(40), nullable=True)
     nex_custom_personality = db.Column(db.Text, nullable=True)
     nex_custom_act = db.Column(db.Text, nullable=True)
-    # JSON list of NEX_PLUGIN_CATALOG keys (see ai_assistant.py) this user
-    # has switched on -- see app.py's /api/pl/nex/plugins.
     nex_plugins = db.Column(db.Text, nullable=True)
+    # Free-text short bio -- vestigial now that there's no profile page.
+    bio = db.Column(db.String(300), nullable=True)
+    # Editable display name ("Spitzname") + avatar image (filename under
+    # static/uploads/pl, or a PlMedia row name -- see app.py's
+    # _pl_media_url). pl_banner_image is vestigial (no profile page shows
+    # it anymore) but kept so existing rows aren't silently orphaned.
+    pl_display_name = db.Column(db.String(50), nullable=True)
+    pl_avatar_image = db.Column(db.String(255), nullable=True)
+    pl_banner_image = db.Column(db.String(255), nullable=True)
     # city is free-text (e.g. "München-Pasing"). is_company/company_name/
     # company_address are legacy: the last real consumer (Chepal's company
     # offer-management, and briefly Mini Job's company job-postings) was
@@ -138,181 +132,11 @@ class Subscription(db.Model):
     __table_args__ = (db.UniqueConstraint("subscriber_id", "channel_id", name="uq_sub_subscriber_channel"),)
 
 
-# ==========================================================================
-# pinklemon "Freunde" -- WhatsApp-style chats. You can only DM someone once
-# you follow each other (Subscription both ways). Groups have no such rule
-# but members must be picked from your mutual follows. Own `pl_*` tables --
-# the legacy conversation/message tables carried disappearing-message
-# behaviour we don't want here.
-# ==========================================================================
-
-class PlChat(db.Model):
-    __tablename__ = "pl_chat"
-    id = db.Column(db.Integer, primary_key=True)
-    is_group = db.Column(db.Boolean, nullable=False, default=False)
-    name = db.Column(db.String(80), nullable=True)          # groups only
-    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    last_activity = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    # A PlChat doubles as a server *channel* when server_id is set (2026-09-11)
-    # -- reuses every existing message feature (reactions, replies, edit,
-    # pins, typing) for free instead of building a parallel system. Access
-    # still goes through PlChatMember like any other chat: joining a server
-    # (or a channel being created) adds one PlChatMember row per member, see
-    # _pl_server_sync_channel_membership.
-    server_id = db.Column(db.Integer, db.ForeignKey("pl_server.id"), nullable=True)
-    topic = db.Column(db.String(300), nullable=True)
-    position = db.Column(db.Integer, nullable=False, default=0)
-    # Server channels only: free-text category name channels are grouped
-    # under in the sidebar (None = ungrouped, shown above any category),
-    # and "text" vs "voice" -- a voice channel skips the iframe chat view
-    # for a join-a-room UI instead.
-    category = db.Column(db.String(80), nullable=True)
-    channel_type = db.Column(db.String(10), nullable=False, default="text")
-    # Groups only (2026-09-13, QR-Code-Beitritt): a joinable code, same idea
-    # as PlServer.invite_code. Null for DMs and server channels -- neither
-    # is something a stranger should be able to join via a shared code.
-    invite_code = db.Column(db.String(12), unique=True, nullable=True)
-
-    members = db.relationship("PlChatMember", backref="chat", lazy=True, cascade="all, delete-orphan")
-    messages = db.relationship(
-        "PlMessage", backref="chat", lazy=True, cascade="all, delete-orphan",
-        order_by="PlMessage.created_at",
-    )
-
-
-class PlServer(db.Model):
-    """A Discord-style "server"/guild: a persistent community with its own
-    channels (see PlChat.server_id) and members. Fixed 3-tier permissions
-    (2026-09-13, "mach es einfacher"): Admin (the owner, all permissions,
-    computed from owner_id -- never stored), Moderator (a promotable tier,
-    see PlServerMember.role), Mitglied (default, no special permissions).
-    Deliberately simpler than real Discord in two ways: no custom/
-    configurable roles, and server-wide permissions only, no per-channel
-    overwrites."""
-    __tablename__ = "pl_server"
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(80), nullable=False)
-    icon_image = db.Column(db.String(255), nullable=True)
-    owner_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    invite_code = db.Column(db.String(12), unique=True, nullable=False)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    # Discoverable in the "Könntest du kennen?!" onboarding step (see
-    # app.py's /api/pl/servers/suggested) -- off by default, an owner opts
-    # a server in via /api/pl/servers/<id>/visibility.
-    is_public = db.Column(db.Boolean, nullable=False, default=False)
-
-    channels = db.relationship(
-        "PlChat", backref="server", lazy=True,
-        order_by="PlChat.position", primaryjoin="PlServer.id == PlChat.server_id",
-    )
-    members = db.relationship("PlServerMember", backref="server", lazy=True, cascade="all, delete-orphan")
-    owner = db.relationship("User")
-
-
-# The only two things a Moderator can do beyond a plain Mitglied; the Admin
-# (owner) always has all of these plus manage_server/manage_roles, which
-# stay admin-exclusive (server settings, promoting/demoting people).
-PL_MODERATOR_PERMISSIONS = ("manage_channels", "kick_members", "ban_members", "manage_messages")
-
-
-class PlServerMember(db.Model):
-    __tablename__ = "pl_server_member"
-    id = db.Column(db.Integer, primary_key=True)
-    server_id = db.Column(db.Integer, db.ForeignKey("pl_server.id"), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    nickname = db.Column(db.String(50), nullable=True)
-    joined_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    # "member" (default) or "moderator" -- the owner is Admin implicitly via
-    # PlServer.owner_id and never stored here, same as before this column existed.
-    role = db.Column(db.String(10), nullable=False, default="member")
-    user = db.relationship("User")
-    __table_args__ = (db.UniqueConstraint("server_id", "user_id", name="uq_plservermember"),)
-
-
-class PlServerBan(db.Model):
-    __tablename__ = "pl_server_ban"
-    id = db.Column(db.Integer, primary_key=True)
-    server_id = db.Column(db.Integer, db.ForeignKey("pl_server.id"), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    banned_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    __table_args__ = (db.UniqueConstraint("server_id", "user_id", name="uq_plserverban"),)
-
-
-class PlChatMember(db.Model):
-    __tablename__ = "pl_chat_member"
-    id = db.Column(db.Integer, primary_key=True)
-    chat_id = db.Column(db.Integer, db.ForeignKey("pl_chat.id"), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    joined_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    last_read_id = db.Column(db.Integer, nullable=False, default=0)
-    user = db.relationship("User")
-    __table_args__ = (db.UniqueConstraint("chat_id", "user_id", name="uq_plchatmember"),)
-
-
-class PlMessage(db.Model):
-    __tablename__ = "pl_message"
-    id = db.Column(db.Integer, primary_key=True)
-    chat_id = db.Column(db.Integer, db.ForeignKey("pl_chat.id"), nullable=False)
-    sender_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    text = db.Column(db.Text, nullable=False)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
-    att_kind = db.Column(db.String(12), nullable=True)
-    att_value = db.Column(db.String(255), nullable=True)
-    sender = db.relationship("User")
-    # Discord-style extras (2026-09-11): reply-to, edit/delete, pinning.
-    # reply_to_id has no FK ondelete cascade -- a reply survives its parent
-    # being deleted, see _pl_serialize_message's "deleted" fallback text.
-    reply_to_id = db.Column(db.Integer, db.ForeignKey("pl_message.id"), nullable=True)
-    reply_to = db.relationship("PlMessage", remote_side=[id])
-    edited_at = db.Column(db.DateTime, nullable=True)
-    pinned_at = db.Column(db.DateTime, nullable=True)
-    # Snapchat-style disappearing photo (2026-09-13): view_once messages
-    # show a locked bubble to everyone but the sender until the recipient
-    # opens it once (POST /api/pl/messages/<id>/open sets opened_at and
-    # hands back the real URL exactly that one time); after that the image
-    # is gone from the normal message payload for good. In a group chat
-    # "opened" is global -- whoever opens it first consumes it for
-    # everyone, a deliberate simplification over per-recipient tracking.
-    view_once = db.Column(db.Boolean, nullable=False, default=False)
-    opened_at = db.Column(db.DateTime, nullable=True)
-    reactions = db.relationship("PlMessageReaction", backref="message", lazy=True, cascade="all, delete-orphan")
-
-
-class PlStreak(db.Model):
-    """Snapchat-style 🔥 streak between two users (2026-09-13): counts up
-    once per calendar day both sides have sent each other a view_once Snap
-    in their 1:1 chat, and resets to 1 if a day gets skipped -- no cron
-    needed, it's only ever touched from _pl_record_snap_for_streak. user_a_id
-    is always the smaller of the two user ids so each pair has one row."""
-    __tablename__ = "pl_streak"
-    id = db.Column(db.Integer, primary_key=True)
-    user_a_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    user_b_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    count = db.Column(db.Integer, nullable=False, default=0)
-    user_a_last_snap_date = db.Column(db.Date, nullable=True)
-    user_b_last_snap_date = db.Column(db.Date, nullable=True)
-    streak_date = db.Column(db.Date, nullable=True)
-    __table_args__ = (db.UniqueConstraint("user_a_id", "user_b_id", name="uq_plstreak_pair"),)
-
-
-class PlMessageReaction(db.Model):
-    __tablename__ = "pl_message_reaction"
-    id = db.Column(db.Integer, primary_key=True)
-    message_id = db.Column(db.Integer, db.ForeignKey("pl_message.id"), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    emoji = db.Column(db.String(16), nullable=False)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    user = db.relationship("User")
-    __table_args__ = (db.UniqueConstraint("message_id", "user_id", "emoji", name="uq_plmsgreaction"),)
-
-
 class PlMedia(db.Model):
-    """Persistent store for HEXAGONUM avatars / banners / attachments when
-    Cloudflare R2 is NOT configured. Railway's local disk is wiped on
-    every deploy, so without this the images vanish on each push; Postgres
-    survives. When R2 *is* configured, uploads go there instead and this
-    table stays empty."""
+    """Persistent store for HEXAGONUM avatars / attachments when Cloudflare
+    R2 is NOT configured. Railway's local disk is wiped on every deploy, so
+    without this the images vanish on each push; Postgres survives. When R2
+    *is* configured, uploads go there instead and this table stays empty."""
     __tablename__ = "pl_media"
     name = db.Column(db.String(64), primary_key=True)      # "<uuid>.<ext>"
     content_type = db.Column(db.String(90), nullable=False)
@@ -321,29 +145,38 @@ class PlMedia(db.Model):
 
 
 # ==========================================================================
-# pinklemon "Stories" -- Snapchat-style: one photo, visible to your mutual
-# follows for 24h, then simply excluded from queries (no cron needed).
+# Nex -- the app's single AI chat (ChatGPT-style: a sidebar of saved
+# conversations per user, each holding an ordered list of user/assistant
+# turns). See ai_assistant.py for the actual Groq call.
 # ==========================================================================
 
-class PlStory(db.Model):
-    __tablename__ = "pl_story"
+class AiChat(db.Model):
+    """One saved conversation with Nex. Only ever read back for the same
+    user who owns it -- never used to influence another user's replies."""
+    __tablename__ = "ai_chat"
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    media_name = db.Column(db.String(64), nullable=False)
-    media_kind = db.Column(db.String(10), nullable=False, default="image")
-    caption = db.Column(db.String(300), nullable=True)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
-    expires_at = db.Column(db.DateTime, nullable=False)
+    title = db.Column(db.String(100), nullable=True)
+    # Vestigial (from when this table also served code-chat/persona modes
+    # that no longer exist) -- kept with a DB-level default only so inserts
+    # against the still-existing production column keep succeeding; nothing
+    # reads or writes these anymore.
+    mode = db.Column(db.String(20), nullable=False, default="general")
+    character = db.Column(db.String(20), nullable=False, default="nex")
+    specialize_prompted = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     user = db.relationship("User")
-    views = db.relationship("PlStoryView", backref="story", cascade="all, delete-orphan")
+    messages = db.relationship(
+        "AiChatMessage", backref="chat", lazy=True, cascade="all, delete-orphan",
+        order_by="AiChatMessage.created_at",
+    )
 
 
-class PlStoryView(db.Model):
-    __tablename__ = "pl_story_view"
+class AiChatMessage(db.Model):
+    __tablename__ = "ai_chat_message"
     id = db.Column(db.Integer, primary_key=True)
-    story_id = db.Column(db.Integer, db.ForeignKey("pl_story.id"), nullable=False)
-    viewer_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    viewed_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
-    viewer = db.relationship("User")
-    __table_args__ = (db.UniqueConstraint("story_id", "viewer_id", name="uq_plstoryview_story_viewer"),)
-
+    chat_id = db.Column(db.Integer, db.ForeignKey("ai_chat.id"), nullable=False)
+    role = db.Column(db.String(20), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))

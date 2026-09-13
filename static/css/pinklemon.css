@@ -1380,6 +1380,7 @@ img { max-width: 100%; display: block; }
   color: var(--pl-bg);
   border-color: var(--pl-text);
 }
+
 .pl-chatrow {
   gap: 13px;
   padding: 12px 4px;
