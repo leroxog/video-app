@@ -41,13 +41,101 @@
     });
   }
 
+  // ---------------- Nex Browser: artifact preview panel ----------------
+  // See ai_assistant.py's SYSTEM_PROMPT for the model-side half of this
+  // convention: a complete, self-contained HTML/CSS/JS artifact comes
+  // back wrapped in a FOUR-backtick fence tagged "nexpreview:<title>".
+  // Four backticks (not three) specifically so an ordinary ``` that
+  // happens to occur inside the generated code (a JS template literal, a
+  // comment) can never close the block early -- CommonMark's own rule
+  // for exactly this problem.
+  var NEXPREVIEW_RE = /````nexpreview[:\s]*([^\n]*)\n([\s\S]*?)\n````/g;
+
+  // Strips every complete nexpreview block out of `full` (never just the
+  // first -- the model is told to send only one, but if it ever sends
+  // more, none of them may leak into the chat) and returns the first as
+  // `artifact`. Also holds back a *possibly still-forming* nexpreview
+  // opening fence at the very end of the string so a partial marker
+  // (e.g. "```` nexpr") never flashes into the chat as a wrongly-parsed
+  // plain code block while it's still streaming in character by
+  // character -- a *confirmed* 3-backtick run can never become a
+  // nexpreview fence (which strictly requires 4), so those are left
+  // alone and keep rendering progressively exactly as before.
+  function splitPreview(full) {
+    var artifact = null;
+    var text = full.replace(NEXPREVIEW_RE, function (_m, title, code) {
+      if (!artifact) artifact = { title: (title || "").trim() || "Vorschau", code: code };
+      return "";
+    });
+
+    var runs = text.match(/`{3,}/g) || [];
+    if (runs.length % 2 === 1) {
+      var lastRun = runs[runs.length - 1];
+      var openIdx = text.lastIndexOf(lastRun);
+      var after = text.slice(openIdx + lastRun.length);
+      var newlineIdx = after.indexOf("\n");
+      var settled = newlineIdx !== -1;
+      var infoSoFar = (settled ? after.slice(0, newlineIdx) : after).replace(/^[:\s]*/, "");
+      var stillAmbiguousLength = lastRun.length === 3 && after === "";
+      var couldBeNexpreview =
+        stillAmbiguousLength ||
+        (lastRun.length >= 4 && (settled ? /^nexpreview\b/.test(infoSoFar) : "nexpreview".indexOf(infoSoFar.split(":")[0]) === 0));
+      if (couldBeNexpreview) text = text.slice(0, openIdx);
+    }
+
+    return { text: text.trim(), artifact: artifact };
+  }
+
+  var previewPanel = document.getElementById("nxPreview");
+  var previewFrame = document.getElementById("nxPreviewFrame");
+  var previewCode = document.getElementById("nxPreviewCode");
+  var previewCodeText = document.getElementById("nxPreviewCodeText");
+  var previewTitle = document.getElementById("nxPreviewTitle");
+  var previewToggle = document.getElementById("nxPreviewToggle");
+  var previewClose = document.getElementById("nxPreviewClose");
+  var showingPreviewCode = false;
+
+  function openPreviewPanel(artifact) {
+    previewTitle.textContent = artifact.title || "Vorschau";
+    previewFrame.srcdoc = artifact.code;
+    previewCodeText.textContent = artifact.code;
+    showingPreviewCode = false;
+    previewFrame.hidden = false;
+    previewCode.hidden = true;
+    previewToggle.textContent = "Code anzeigen";
+    previewToggle.classList.remove("is-active");
+    previewPanel.hidden = false;
+  }
+  previewClose.addEventListener("click", function () { previewPanel.hidden = true; });
+  previewToggle.addEventListener("click", function () {
+    showingPreviewCode = !showingPreviewCode;
+    previewFrame.hidden = showingPreviewCode;
+    previewCode.hidden = !showingPreviewCode;
+    previewToggle.textContent = showingPreviewCode ? "Vorschau" : "Code anzeigen";
+    previewToggle.classList.toggle("is-active", showingPreviewCode);
+  });
+
+  function appendPreviewChip(bubble, artifact) {
+    bubble._nexArtifact = artifact;
+    var chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "nx-preview-chip";
+    chip.innerHTML =
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>'
+      + "<span>" + esc(artifact.title) + "</span>";
+    chip.addEventListener("click", function () { openPreviewPanel(artifact); });
+    bubble.appendChild(chip);
+  }
+
   // The initial page load renders messages as plain escaped text
   // server-side (fast first paint, no client round-trip) -- upgrade them
-  // to rendered markdown once marked/DOMPurify are available.
+  // to rendered markdown (and extract any artifact into a chip) once
+  // marked/DOMPurify are available.
   msgsEl.querySelectorAll(".nx-bubble").forEach(function (b) {
-    var text = b.textContent;
-    b.innerHTML = renderMarkdown(text);
+    var split = splitPreview(b.textContent);
+    b.innerHTML = renderMarkdown(split.text);
     addCopyButtons(b);
+    if (split.artifact) appendPreviewChip(b, split.artifact);
   });
 
   function legacyCopy(text) {
@@ -100,8 +188,10 @@
     row.className = "nx-row " + (role === "user" ? "me" : "them");
     var b = document.createElement("div");
     b.className = "nx-bubble";
-    b.innerHTML = renderMarkdown(text);
+    var split = splitPreview(text);
+    b.innerHTML = renderMarkdown(split.text);
     addCopyButtons(b);
+    if (split.artifact) appendPreviewChip(b, split.artifact);
     row.appendChild(b);
     msgsEl.appendChild(row);
     scrollDown();
@@ -293,9 +383,15 @@
       var full = "";
       function pump() {
         return reader.read().then(function (result) {
-          if (result.done) { addCopyButtons(bubble); return; }
+          if (result.done) {
+            var split = splitPreview(full);
+            bubble.innerHTML = renderMarkdown(split.text);
+            addCopyButtons(bubble);
+            if (split.artifact) appendPreviewChip(bubble, split.artifact);
+            return;
+          }
           full += decoder.decode(result.value, { stream: true });
-          bubble.innerHTML = renderMarkdown(full);
+          bubble.innerHTML = renderMarkdown(splitPreview(full).text);
           scrollDown();
           return pump();
         });

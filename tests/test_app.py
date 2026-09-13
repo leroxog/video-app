@@ -387,6 +387,26 @@ def test_stream_returns_chunks_and_persists_both_messages(client, monkeypatch):
         assert chat.title == "Hallo Nex"
 
 
+def test_system_prompt_documents_the_nexpreview_artifact_convention():
+    assert "nexpreview" in app_module.ai_assistant.SYSTEM_PROMPT
+    assert app_module.ai_assistant.MAX_REPLY_TOKENS == 3000
+
+
+def test_stream_persists_nexpreview_blocks_verbatim(client, monkeypatch):
+    """The raw fence text is stored unchanged -- extraction/hiding the
+    artifact from the chat bubble is purely a client-side concern, see
+    pinklemon-nex.js's splitPreview()."""
+    signup(client, "alice")
+    cid = _chat_id(client)
+    raw = "Hier ist deine Seite.\n\n````nexpreview:Test\n<html><body>Hi</body></html>\n````"
+    _mock_stream(monkeypatch, [raw])
+    r = client.post(f"/api/ai/chats/{cid}/stream", json={"message": "baue mir was"})
+    assert r.get_data(as_text=True) == raw
+    with flask_app.app_context():
+        chat = db.session.get(AiChat, cid)
+        assert chat.messages[-1].content == raw
+
+
 def test_stream_reuses_the_same_chat_and_sends_history(client, monkeypatch):
     signup(client, "alice")
     cid = _chat_id(client)
