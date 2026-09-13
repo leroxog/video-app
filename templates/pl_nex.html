@@ -80,6 +80,26 @@
   .nx-top-mark svg { width: 100%; height: 100%; }
   .nx-top-name { font-weight: 700; font-size: 16px; letter-spacing: 0.01em; }
 
+  .nx-version-wrap { position: relative; }
+  .nx-version-btn {
+    display: flex; align-items: center; gap: 4px; border: none; background: transparent;
+    color: var(--pl-text); font-weight: 700; font-size: 16px; letter-spacing: 0.01em;
+    padding: 6px 8px; border-radius: 8px;
+  }
+  .nx-version-btn:hover { background: var(--pl-hover); }
+  .nx-version-btn svg { width: 15px; height: 15px; color: var(--pl-text-faint); margin-top: 1px; }
+  .nx-version-menu {
+    position: absolute; top: calc(100% + 6px); left: 0; z-index: 50;
+    min-width: 200px; background: var(--pl-surface); border: 1px solid var(--pl-border);
+    border-radius: 12px; padding: 4px; box-shadow: var(--pl-shadow);
+  }
+  .nx-version-menu button {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; text-align: left;
+    border: none; background: none; color: var(--pl-text); font-size: 13.5px; font-weight: 600; padding: 9px 10px; border-radius: 8px;
+  }
+  .nx-version-menu button:hover { background: var(--pl-hover); }
+  .nx-version-menu button svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--pl-pink); }
+
   .nx-msgs {
     flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
     display: flex; flex-direction: column; gap: 26px;
@@ -215,7 +235,18 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/></svg>
       </button>
       <span class="nx-top-mark">{% include "partials/_pinklemon_logo.html" %}</span>
-      <div class="nx-top-name">Nex</div>
+      <div class="nx-version-wrap">
+        <button type="button" class="nx-version-btn" id="nxVersionBtn" aria-haspopup="true">
+          Nex
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="nx-version-menu" id="nxVersionMenu" hidden>
+          <button type="button" data-version="0.1">
+            NexAi 0.1 (Beta)
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l5 5L20 6"/></svg>
+          </button>
+        </div>
+      </div>
       {% if user %}
       <span class="nx-me">
         <button type="button" class="pl-avatar" id="nxAccountBtn" aria-label="Dein Konto" style="background:{{ pl_avatar_color(user.username) }}; border:none; padding:0;">

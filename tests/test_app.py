@@ -305,6 +305,12 @@ def test_root_shows_empty_state_with_no_chats_yet(client):
         assert AiChat.query.filter_by(user_id=User.query.filter_by(username="alice").first().id).count() == 0
 
 
+def test_root_shows_version_picker(client):
+    signup(client, "alice")
+    home = client.get("/")
+    assert "NexAi 0.1 (Beta)".encode() in home.data
+
+
 def test_root_shows_most_recently_active_chat_by_default(client, monkeypatch):
     signup(client, "alice")
     _chat_id(client)

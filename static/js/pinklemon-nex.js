@@ -349,6 +349,25 @@
 
   sendBtn.addEventListener("click", send);
 
+  // ---------------- version picker ----------------
+  // Only one version exists so picking it is a no-op -- this is forward-
+  // looking UI scaffolding (ChatGPT-style model switcher), not a real
+  // multi-backend feature.
+  var versionBtn = document.getElementById("nxVersionBtn");
+  if (versionBtn) {
+    var versionMenu = document.getElementById("nxVersionMenu");
+    versionBtn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      versionMenu.hidden = !versionMenu.hidden;
+    });
+    versionMenu.addEventListener("click", function (e) {
+      if (e.target.closest("[data-version]")) versionMenu.hidden = true;
+    });
+    document.addEventListener("click", function (e) {
+      if (!versionMenu.hidden && !e.target.closest(".nx-version-wrap")) versionMenu.hidden = true;
+    });
+  }
+
   // ---------------- account corner: theme / avatar / logout ----------------
   var accountBtn = document.getElementById("nxAccountBtn");
   if (accountBtn) {
