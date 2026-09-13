@@ -68,6 +68,14 @@
       return "";
     });
 
+    // `pending`: set once we're confidently inside a still-streaming
+    // nexpreview block (info line has settled to "nexpreview..."), so
+    // the panel can open live and grow the code view chunk by chunk --
+    // see Phase B wiring in streamInto()'s pump(). Left null while the
+    // fence is merely ambiguous (could still turn out to be a plain
+    // fence or something else) or once it has fully closed (handled by
+    // the artifact branch above instead).
+    var pending = null;
     var runs = text.match(/`{3,}/g) || [];
     if (runs.length % 2 === 1) {
       var lastRun = runs[runs.length - 1];
@@ -77,13 +85,23 @@
       var settled = newlineIdx !== -1;
       var infoSoFar = (settled ? after.slice(0, newlineIdx) : after).replace(/^[:\s]*/, "");
       var stillAmbiguousLength = lastRun.length === 3 && after === "";
+      var isNexpreview = lastRun.length >= 4 && settled && /^nexpreview\b/.test(infoSoFar);
       var couldBeNexpreview =
         stillAmbiguousLength ||
-        (lastRun.length >= 4 && (settled ? /^nexpreview\b/.test(infoSoFar) : "nexpreview".indexOf(infoSoFar.split(":")[0]) === 0));
-      if (couldBeNexpreview) text = text.slice(0, openIdx);
+        isNexpreview ||
+        (lastRun.length >= 4 && !settled && "nexpreview".indexOf(infoSoFar.split(":")[0]) === 0);
+      if (couldBeNexpreview) {
+        text = text.slice(0, openIdx);
+        if (isNexpreview) {
+          var titlePart = infoSoFar.replace(/^nexpreview[:\s]*/, "").trim();
+          pending = { title: titlePart || null, code: after.slice(newlineIdx + 1) };
+        } else {
+          pending = { title: null, code: "" };
+        }
+      }
     }
 
-    return { text: text.trim(), artifact: artifact };
+    return { text: text.trim(), artifact: artifact, pending: pending };
   }
 
   var previewPanel = document.getElementById("nxPreview");
@@ -102,10 +120,26 @@
     showingPreviewCode = false;
     previewFrame.hidden = false;
     previewCode.hidden = true;
+    previewToggle.hidden = false;
     previewToggle.textContent = "Code anzeigen";
     previewToggle.classList.remove("is-active");
     previewPanel.hidden = false;
   }
+
+  // Live-streaming state (Phase B): while an artifact is still being
+  // generated, show its growing source instead of a dead iframe (there's
+  // no complete document to render yet) -- no preview/code toggle while
+  // this is going on, there's nothing to preview.
+  function openPreviewLoading(pending) {
+    previewTitle.textContent = pending.title || "Wird erstellt …";
+    previewCodeText.textContent = pending.code;
+    previewFrame.hidden = true;
+    previewCode.hidden = false;
+    previewToggle.hidden = true;
+    previewPanel.hidden = false;
+    previewCode.scrollTop = previewCode.scrollHeight;
+  }
+
   previewClose.addEventListener("click", function () { previewPanel.hidden = true; });
   previewToggle.addEventListener("click", function () {
     showingPreviewCode = !showingPreviewCode;
@@ -381,17 +415,34 @@
       var reader = res.body.getReader();
       var decoder = new TextDecoder();
       var full = "";
+      var lastPending = null;
       function pump() {
         return reader.read().then(function (result) {
           if (result.done) {
             var split = splitPreview(full);
             bubble.innerHTML = renderMarkdown(split.text);
             addCopyButtons(bubble);
-            if (split.artifact) appendPreviewChip(bubble, split.artifact);
+            if (split.artifact) {
+              appendPreviewChip(bubble, split.artifact);
+              openPreviewPanel(split.artifact);
+            } else if (lastPending) {
+              // the stream ended (e.g. MAX_REPLY_TOKENS hit) before the
+              // fence ever closed -- still swap to a best-effort iframe
+              // with whatever code arrived instead of leaving the panel
+              // stuck on "Wird erstellt ..." forever.
+              var truncated = { title: lastPending.title || "Vorschau", code: lastPending.code };
+              appendPreviewChip(bubble, truncated);
+              openPreviewPanel(truncated);
+            }
             return;
           }
           full += decoder.decode(result.value, { stream: true });
-          bubble.innerHTML = renderMarkdown(splitPreview(full).text);
+          var split = splitPreview(full);
+          bubble.innerHTML = renderMarkdown(split.text);
+          if (split.pending) {
+            lastPending = split.pending;
+            openPreviewLoading(split.pending);
+          }
           scrollDown();
           return pump();
         });
