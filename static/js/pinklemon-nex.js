@@ -419,6 +419,16 @@
       function pump() {
         return reader.read().then(function (result) {
           if (result.done) {
+            if (!full) {
+              // the stream opened (200, text/plain) but ended without a
+              // single token ever arriving -- e.g. Groq itself failed
+              // after api_ai_stream had already started responding, so
+              // the error never became a JSON {ok:false} the catch above
+              // could show. Without this, the bubble would just stay
+              // silently empty with no sign anything went wrong.
+              bubble.innerHTML = renderMarkdown("Da ist gerade etwas schiefgelaufen. Nochmal versuchen?");
+              return;
+            }
             var split = splitPreview(full);
             bubble.innerHTML = renderMarkdown(split.text);
             addCopyButtons(bubble);
