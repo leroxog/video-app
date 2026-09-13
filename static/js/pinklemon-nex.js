@@ -347,4 +347,60 @@
   }
 
   sendBtn.addEventListener("click", send);
+
+  // ---------------- account corner: theme / avatar / logout ----------------
+  var accountBtn = document.getElementById("nxAccountBtn");
+  if (accountBtn) {
+    var accountMenu = document.getElementById("nxAccountMenu");
+    var themeToggle = document.getElementById("nxThemeToggle");
+    var themeLabel = document.getElementById("nxThemeToggleLabel");
+    var avatarChangeBtn = document.getElementById("nxAvatarChangeBtn");
+    var avatarFile = document.getElementById("nxAvatarFile");
+    var logoutBtn = document.getElementById("nxLogoutBtn");
+
+    function isLight() { return document.documentElement.getAttribute("data-theme") === "light"; }
+    function syncThemeLabel() { themeLabel.textContent = isLight() ? "Dunkles Design" : "Helles Design"; }
+    syncThemeLabel();
+
+    function closeAccountMenu() { accountMenu.hidden = true; }
+    accountBtn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      accountMenu.hidden = !accountMenu.hidden;
+    });
+    document.addEventListener("click", function (e) {
+      if (!accountMenu.hidden && !e.target.closest(".nx-me")) closeAccountMenu();
+    });
+
+    themeToggle.addEventListener("click", function () {
+      var next = isLight() ? "dark" : "light";
+      if (next === "light") document.documentElement.setAttribute("data-theme", "light");
+      else document.documentElement.removeAttribute("data-theme");
+      try { localStorage.setItem("pl_theme", next); } catch (e) {}
+      syncThemeLabel();
+    });
+
+    avatarChangeBtn.addEventListener("click", function () {
+      closeAccountMenu();
+      avatarFile.click();
+    });
+    avatarFile.addEventListener("change", function () {
+      var f = avatarFile.files[0];
+      avatarFile.value = "";
+      if (!f || !window.PlCropper) return;
+      window.PlCropper.open(f, { aspect: 1, shape: "circle", title: "Profilbild zuschneiden" }).then(function (blob) {
+        if (!blob) return;
+        var fd = new FormData();
+        fd.append("avatar", blob, "avatar.jpg");
+        fetch("/api/pl/profile", { method: "POST", body: fd })
+          .then(function (r) { return r.json(); })
+          .then(function (j) {
+            if (!j.ok) { window.plToast && window.plToast("Ging nicht."); return; }
+            accountBtn.innerHTML = '<img src="' + j.avatar_url + '" alt="">';
+          })
+          .catch(function () { window.plToast && window.plToast("Ging nicht."); });
+      });
+    });
+
+    logoutBtn.addEventListener("click", function () { location.href = "/logout"; });
+  }
 })();

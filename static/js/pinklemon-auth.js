@@ -11,7 +11,7 @@
     username: "", password: "",
     birth_day: null, birth_month: null, birth_year: null,
     gender: null, email: "",
-    display_name: "", avatarFile: null, bannerFile: null,
+    display_name: "", avatarFile: null,
   };
 
   function stepIndex(name) { return stepNames.indexOf(name); }
@@ -204,13 +204,10 @@
   var displayNameInput = document.getElementById("plRegDisplayName");
   var reg3Next = document.getElementById("plReg3Next");
   var avatarFile = document.getElementById("plAvatarFile");
-  var bannerFile = document.getElementById("plBannerFile");
   var avatarPreview = document.getElementById("plEditAvatarPreview");
-  var bannerPreview = document.getElementById("plEditBannerPreview");
   var avatarLetterEl = document.getElementById("plEditAvatarLetter");
 
   document.getElementById("plPickAvatar").addEventListener("click", function (e) { e.stopPropagation(); avatarFile.click(); });
-  document.getElementById("plPickBanner").addEventListener("click", function (e) { e.stopPropagation(); bannerFile.click(); });
   avatarFile.addEventListener("change", function () {
     var f = avatarFile.files[0]; if (!f) return;
     window.PlCropper.open(f, { aspect: 1, shape: "circle", title: "Profilbild zuschneiden" }).then(function (blob) {
@@ -219,15 +216,6 @@
       state.avatarFile = blob;
       avatarPreview.style.backgroundImage = "url(" + URL.createObjectURL(blob) + ")";
       avatarLetterEl.hidden = true;
-    });
-  });
-  bannerFile.addEventListener("change", function () {
-    var f = bannerFile.files[0]; if (!f) return;
-    window.PlCropper.open(f, { aspect: 3, shape: "rect", title: "Banner zuschneiden" }).then(function (blob) {
-      bannerFile.value = "";
-      if (!blob) return;
-      state.bannerFile = blob;
-      bannerPreview.style.backgroundImage = "url(" + URL.createObjectURL(blob) + ")";
     });
   });
   displayNameInput.addEventListener("input", function () {
@@ -279,7 +267,6 @@
     // cropper output is a plain Blob, not a File -- give it a filename
     // explicitly so the server's extension check (PL_IMAGE_EXT) sees one.
     if (state.avatarFile) fd.append("avatar", state.avatarFile, "avatar.jpg");
-    if (state.bannerFile) fd.append("banner", state.bannerFile, "banner.jpg");
 
     fetch("/api/pl/register/complete", { method: "POST", body: fd })
       .then(function (r) { return r.json(); })

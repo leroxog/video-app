@@ -78,15 +78,11 @@
                 <!-- 3: account bearbeiten -->
                 <section class="pl-authstep" data-step="register3">
                     <h1>Account bearbeiten</h1>
-                    <div class="pl-authedit-banner" id="plEditBannerPreview">
-                        <button type="button" class="pl-authedit-pick" id="plPickBanner">{{ plicon('plus', 16) }} Banner</button>
-                    </div>
                     <div class="pl-authedit-avatar" id="plEditAvatarPreview">
                         <span id="plEditAvatarLetter">?</span>
                         <button type="button" class="pl-authedit-pick round" id="plPickAvatar">{{ plicon('plus', 14) }}</button>
                     </div>
                     <input type="file" id="plAvatarFile" accept="image/*" hidden>
-                    <input type="file" id="plBannerFile" accept="image/*" hidden>
                     <input class="pl-authinput" id="plRegDisplayName" placeholder="Spitzname" maxlength="50">
                     <div class="pl-authfoot right"><a href="#" id="plSkip3">Überspringen</a></div>
                     <button class="pl-authbtn" id="plReg3Next" disabled>Weiter</button>

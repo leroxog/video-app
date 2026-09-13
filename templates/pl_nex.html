@@ -3,11 +3,11 @@
 
 {% block head_extra %}
 <style>
-  .pl-screen.nex { padding: 0; align-items: stretch; background: #212121; }
+  .pl-screen.nex { padding: 0; align-items: stretch; background: var(--pl-bg); }
   .nx-layout { display: flex; flex: 1; min-height: 0; }
 
   .nx-sidebar {
-    width: 260px; flex-shrink: 0; background: #171717; color: #ececec;
+    width: 260px; flex-shrink: 0; background: var(--pl-bg-2); color: var(--pl-text);
     display: flex; flex-direction: column; padding: 8px;
     position: fixed; inset: 0 auto 0 0; z-index: 40;
     transform: translateX(-100%); transition: transform .2s ease;
@@ -19,62 +19,62 @@
   }
   .nx-sidebar-backdrop.open { opacity: 1; pointer-events: auto; }
   .nx-menu-btn {
-    border: none; background: transparent; color: #b4b4b4;
+    border: none; background: transparent; color: var(--pl-text-dim);
     border-radius: 8px; padding: 8px; display: flex; align-items: center; justify-content: center;
   }
-  .nx-menu-btn:hover { background: rgba(255,255,255,0.08); color: #ececec; }
+  .nx-menu-btn:hover { background: var(--pl-hover); color: var(--pl-text); }
   .nx-menu-btn svg { width: 20px; height: 20px; }
 
   .nx-sidebar-new {
     display: flex; align-items: center; gap: 10px; width: 100%;
-    border: 1px solid rgba(255,255,255,0.15); background: transparent; color: #ececec;
+    border: 1px solid var(--pl-border); background: transparent; color: var(--pl-text);
     border-radius: 12px; padding: 10px 12px; font-size: 14px; font-weight: 600; margin-bottom: 10px;
   }
-  .nx-sidebar-new:hover { background: rgba(255,255,255,0.06); }
+  .nx-sidebar-new:hover { background: var(--pl-hover); }
   .nx-sidebar-new svg { width: 17px; height: 17px; flex-shrink: 0; }
 
   .nx-sidebar-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
   .nx-sidebar-row {
     position: relative; display: flex; align-items: center; gap: 8px;
-    padding: 9px 10px; border-radius: 10px; cursor: pointer; color: #d6d6d6;
+    padding: 9px 10px; border-radius: 10px; cursor: pointer; color: var(--pl-text-dim);
   }
-  .nx-sidebar-row:hover, .nx-sidebar-row.is-open-menu { background: rgba(255,255,255,0.07); }
-  .nx-sidebar-row.is-active { background: rgba(255,255,255,0.1); color: #fff; }
+  .nx-sidebar-row:hover, .nx-sidebar-row.is-open-menu { background: var(--pl-hover); }
+  .nx-sidebar-row.is-active { background: var(--pl-surface-2); color: var(--pl-text); }
   .nx-sidebar-row-title {
     flex: 1; min-width: 0; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .nx-sidebar-row-title input {
-    width: 100%; background: #2f2f2f; border: 1px solid rgba(255,255,255,.25); border-radius: 6px;
-    color: #fff; font-size: 13.5px; padding: 2px 6px; outline: none;
+    width: 100%; background: var(--pl-surface); border: 1px solid var(--pl-border); border-radius: 6px;
+    color: var(--pl-text); font-size: 13.5px; padding: 2px 6px; outline: none;
   }
   .nx-sidebar-row-more {
-    flex-shrink: 0; border: none; background: none; color: #9a9a9a; opacity: 0;
+    flex-shrink: 0; border: none; background: none; color: var(--pl-text-faint); opacity: 0;
     width: 24px; height: 24px; border-radius: 6px; display: flex; align-items: center; justify-content: center;
   }
   .nx-sidebar-row:hover .nx-sidebar-row-more, .nx-sidebar-row.is-open-menu .nx-sidebar-row-more { opacity: 1; }
-  .nx-sidebar-row-more:hover { background: rgba(255,255,255,0.12); color: #fff; }
+  .nx-sidebar-row-more:hover { background: var(--pl-surface-3); color: var(--pl-text); }
   .nx-sidebar-row-more svg { width: 15px; height: 15px; }
-  .nx-sidebar-empty { padding: 14px 10px; color: #8e8e8e; font-size: 12.5px; }
+  .nx-sidebar-empty { padding: 14px 10px; color: var(--pl-text-faint); font-size: 12.5px; }
 
   .nx-row-menu {
     position: absolute; left: 8px; top: calc(100% + 2px); z-index: 50;
-    min-width: 150px; background: #2f2f2f; border: 1px solid rgba(255,255,255,0.12);
-    border-radius: 10px; padding: 4px; box-shadow: 0 12px 30px rgba(0,0,0,.5);
+    min-width: 150px; background: var(--pl-surface); border: 1px solid var(--pl-border);
+    border-radius: 10px; padding: 4px; box-shadow: var(--pl-shadow);
   }
   .nx-row-menu button {
     display: block; width: 100%; text-align: left; border: none; background: none;
-    color: #ececec; font-size: 13px; padding: 8px 10px; border-radius: 7px;
+    color: var(--pl-text); font-size: 13px; padding: 8px 10px; border-radius: 7px;
   }
-  .nx-row-menu button:hover { background: rgba(255,255,255,0.08); }
-  .nx-row-menu button.danger { color: #f66; }
+  .nx-row-menu button:hover { background: var(--pl-hover); }
+  .nx-row-menu button.danger { color: var(--pl-danger); }
 
-  .nx-chat { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; background: #212121; color: #ececec; }
+  .nx-chat { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; background: var(--pl-bg); color: var(--pl-text); }
 
   .nx-top {
     display: flex; align-items: center; gap: 6px;
     padding: 12px 16px; flex-shrink: 0;
-    border-bottom: 1px solid rgba(255,255,255,0.08);
-    background: #212121;
+    border-bottom: 1px solid var(--pl-border);
+    background: var(--pl-bg);
   }
   .nx-top-mark { width: 26px; height: 26px; flex-shrink: 0; margin-left: 4px; }
   .nx-top-mark svg { width: 100%; height: 100%; }
@@ -91,44 +91,44 @@
   .nx-row.me { justify-content: flex-end; }
   .nx-row.them { justify-content: flex-start; }
   .nx-bubble { font-size: 15.5px; line-height: 1.72; overflow-wrap: anywhere; }
-  .nx-row.me .nx-bubble { max-width: 75%; background: #2f2f2f; border-radius: 22px; padding: 10px 18px; }
-  .nx-row.them .nx-bubble { max-width: 100%; background: none; padding: 0; color: #ececec; }
+  .nx-row.me .nx-bubble { max-width: 75%; background: var(--pl-surface); border-radius: 22px; padding: 10px 18px; }
+  .nx-row.them .nx-bubble { max-width: 100%; background: none; padding: 0; color: var(--pl-text); }
 
   .nx-bubble p { margin: 0 0 12px; }
   .nx-bubble p:last-child { margin-bottom: 0; }
   .nx-bubble ul, .nx-bubble ol { margin: 0 0 12px; padding-left: 22px; }
   .nx-bubble li { margin: 3px 0; }
-  .nx-bubble a { color: #7ab7ff; }
+  .nx-bubble a { color: var(--pl-pink); }
   .nx-bubble blockquote {
-    margin: 0 0 12px; padding: 2px 14px; border-left: 3px solid rgba(255,255,255,0.2); color: #b4b4b4;
+    margin: 0 0 12px; padding: 2px 14px; border-left: 3px solid var(--pl-border); color: var(--pl-text-dim);
   }
   .nx-bubble h1, .nx-bubble h2, .nx-bubble h3, .nx-bubble h4 { margin: 18px 0 8px; line-height: 1.35; }
   .nx-bubble h1:first-child, .nx-bubble h2:first-child, .nx-bubble h3:first-child, .nx-bubble h4:first-child { margin-top: 0; }
-  .nx-bubble hr { border: none; border-top: 1px solid rgba(255,255,255,0.12); margin: 14px 0; }
+  .nx-bubble hr { border: none; border-top: 1px solid var(--pl-border); margin: 14px 0; }
   .nx-bubble table { border-collapse: collapse; margin: 0 0 12px; font-size: 14px; }
-  .nx-bubble th, .nx-bubble td { border: 1px solid rgba(255,255,255,0.15); padding: 6px 10px; }
+  .nx-bubble th, .nx-bubble td { border: 1px solid var(--pl-border); padding: 6px 10px; }
   .nx-bubble :not(pre) > code {
     font-family: "Consolas","SF Mono",ui-monospace,monospace; font-size: 0.88em;
-    background: rgba(255,255,255,0.1); padding: 2px 5px; border-radius: 5px;
+    background: var(--pl-surface-2); padding: 2px 5px; border-radius: 5px;
   }
   .nx-bubble pre {
-    position: relative; background: #0d0d0d; border: 1px solid rgba(255,255,255,0.1);
+    position: relative; background: var(--pl-bg-2); border: 1px solid var(--pl-border);
     border-radius: 10px; padding: 14px; margin: 0 0 12px; overflow-x: auto;
   }
   .nx-bubble pre code {
     font-family: "Consolas","SF Mono",ui-monospace,monospace; font-size: 13px; line-height: 1.55;
-    color: #e6e6e6; background: none; padding: 0; white-space: pre;
+    color: var(--pl-text); background: none; padding: 0; white-space: pre;
   }
   .nx-copybtn {
-    position: absolute; top: 8px; right: 8px; border: 1px solid rgba(255,255,255,0.15);
-    background: #2f2f2f; color: #b4b4b4; font-size: 11.5px; font-weight: 600;
+    position: absolute; top: 8px; right: 8px; border: 1px solid var(--pl-border);
+    background: var(--pl-surface); color: var(--pl-text-dim); font-size: 11.5px; font-weight: 600;
     border-radius: 6px; padding: 4px 9px;
   }
-  .nx-copybtn:hover { background: #3a3a3a; color: #ececec; }
+  .nx-copybtn:hover { background: var(--pl-surface-2); color: var(--pl-text); }
   .nx-copybtn.copied { color: #6adf8f; border-color: #6adf8f; }
 
   .nx-typing { display: inline-flex; gap: 5px; padding: 6px 0; }
-  .nx-typing span { width: 7px; height: 7px; border-radius: 50%; background: #8e8e8e; animation: nxBlink 1.2s infinite ease-in-out; }
+  .nx-typing span { width: 7px; height: 7px; border-radius: 50%; background: var(--pl-text-faint); animation: nxBlink 1.2s infinite ease-in-out; }
   .nx-typing span:nth-child(2) { animation-delay: .2s; }
   .nx-typing span:nth-child(3) { animation-delay: .4s; }
   @keyframes nxBlink { 0%,80%,100% { opacity: .25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
@@ -140,39 +140,52 @@
   }
   .nx-empty-mark { width: 56px; height: 56px; }
   .nx-empty-mark svg { width: 100%; height: 100%; }
-  .nx-empty h2 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.01em; color: #ececec; }
-  .nx-empty p { margin: 0; font-size: 15px; color: #b4b4b4; line-height: 1.55; }
+  .nx-empty h2 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.01em; color: var(--pl-text); }
+  .nx-empty p { margin: 0; font-size: 15px; color: var(--pl-text-dim); line-height: 1.55; }
 
   .nx-compose {
-    flex-shrink: 0; background: #212121;
+    flex-shrink: 0; background: var(--pl-bg);
     padding: 8px 16px calc(84px + env(safe-area-inset-bottom, 0px));
   }
   .nx-compose-inner {
     width: 100%; max-width: 768px; margin: 0 auto;
     display: flex; align-items: center; gap: 8px;
-    background: #2f2f2f; border: 1px solid rgba(255,255,255,0.12);
+    background: var(--pl-surface); border: 1px solid var(--pl-border);
     border-radius: 28px; padding: 9px 9px 9px 20px;
   }
-  .nx-compose-inner:focus-within { border-color: rgba(255,255,255,0.24); }
+  .nx-compose-inner:focus-within { border-color: var(--pl-text-faint); }
   .nx-compose textarea {
     flex: 1; min-width: 0; background: transparent; border: none;
-    padding: 8px 0; font-size: 15.5px; line-height: 1.5; color: #ececec;
+    padding: 8px 0; font-size: 15.5px; line-height: 1.5; color: var(--pl-text);
     outline: none; resize: none; max-height: 200px; min-height: 24px; font-family: inherit;
   }
-  .nx-compose textarea::placeholder { color: #8e8e8e; }
+  .nx-compose textarea::placeholder { color: var(--pl-text-faint); }
   .nx-send {
     flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%; border: none;
-    background: #ececec; color: #0d0d0d;
+    background: var(--pl-text); color: var(--pl-bg);
     display: flex; align-items: center; justify-content: center;
     transition: background .12s ease, opacity .12s ease;
   }
-  .nx-send:disabled { background: #4b4b4b; color: #8e8e8e; }
+  .nx-send:disabled { background: var(--pl-surface-3); color: var(--pl-text-faint); }
   .nx-send:not(:disabled):active { transform: scale(0.92); }
   .nx-send svg { width: 18px; height: 18px; }
-  .nx-disclaimer { max-width: 768px; margin: 6px auto 0; text-align: center; font-size: 11px; color: #8e8e8e; }
+  .nx-disclaimer { max-width: 768px; margin: 6px auto 0; text-align: center; font-size: 11px; color: var(--pl-text-faint); }
 
-  .nx-me { flex: none; display: flex; align-items: center; margin-left: auto; }
-  .nx-me .pl-avatar { width: 30px; height: 30px; font-size: 12.5px; }
+  .nx-me { flex: none; display: flex; align-items: center; margin-left: auto; position: relative; }
+  .nx-me .pl-avatar { width: 30px; height: 30px; font-size: 12.5px; cursor: pointer; }
+
+  .nx-account-menu {
+    position: absolute; top: calc(100% + 8px); right: 0; z-index: 50;
+    min-width: 190px; background: var(--pl-surface); border: 1px solid var(--pl-border);
+    border-radius: 12px; padding: 4px; box-shadow: var(--pl-shadow);
+  }
+  .nx-account-menu button {
+    display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+    border: none; background: none; color: var(--pl-text); font-size: 13.5px; padding: 9px 10px; border-radius: 8px;
+  }
+  .nx-account-menu button:hover { background: var(--pl-hover); }
+  .nx-account-menu button svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--pl-text-faint); }
+  .nx-account-menu hr { border: none; border-top: 1px solid var(--pl-border); margin: 4px 6px; }
 
   @media (min-width: 900px) {
     .nx-sidebar { position: static; transform: none; }
@@ -204,8 +217,26 @@
       <span class="nx-top-mark">{% include "partials/_pinklemon_logo.html" %}</span>
       <div class="nx-top-name">Nex</div>
       {% if user %}
-      <span class="nx-me" aria-label="Dein Konto">
-        <span class="pl-avatar" style="background:{{ pl_avatar_color(user.username) }}">{% if user.pl_avatar_image %}<img src="{{ _pl_media_url(user.pl_avatar_image) }}" alt="">{% else %}{{ (user.username or '?')[0]|upper }}{% endif %}</span>
+      <span class="nx-me">
+        <button type="button" class="pl-avatar" id="nxAccountBtn" aria-label="Dein Konto" style="background:{{ pl_avatar_color(user.username) }}; border:none; padding:0;">
+          {% if user.pl_avatar_image %}<img src="{{ _pl_media_url(user.pl_avatar_image) }}" alt="">{% else %}{{ (user.username or '?')[0]|upper }}{% endif %}
+        </button>
+        <div class="nx-account-menu" id="nxAccountMenu" hidden>
+          <button type="button" id="nxThemeToggle">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>
+          <span id="nxThemeToggleLabel">Helles Design</span>
+          </button>
+          <button type="button" id="nxAvatarChangeBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg>
+            Avatar ändern
+          </button>
+          <hr>
+          <button type="button" id="nxLogoutBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
+            Abmelden
+          </button>
+        </div>
+        <input type="file" id="nxAvatarFile" accept="image/*" hidden>
       </span>
       {% endif %}
     </div>
@@ -243,5 +274,6 @@
 </script>
 <script src="{{ url_for('static', filename='js/vendor/marked.min.js') }}"></script>
 <script src="{{ url_for('static', filename='js/vendor/purify.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/pl-cropper.js') }}"></script>
 <script src="{{ url_for('static', filename='js/pinklemon-nex.js') }}"></script>
 {% endblock %}
