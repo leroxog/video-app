@@ -407,6 +407,33 @@ def test_stream_persists_nexpreview_blocks_verbatim(client, monkeypatch):
         assert chat.messages[-1].content == raw
 
 
+def test_stream_collapses_prior_artifacts_before_sending_as_history(client, monkeypatch):
+    """The DB/UI keep the full artifact; only what's sent back to Groq on
+    the NEXT turn gets collapsed to a placeholder (see
+    _collapse_artifacts_for_history in app.py)."""
+    signup(client, "alice")
+    cid = _chat_id(client)
+    raw = "Hier ist deine Seite.\n\n````nexpreview:Test-Titel\n<html><body>Hi</body></html>\n````"
+    _mock_stream(monkeypatch, [raw])
+    client.post(f"/api/ai/chats/{cid}/stream", json={"message": "baue mir was"})
+
+    seen_history = []
+
+    def fake_stream(message, history=None):
+        seen_history.append(history)
+        yield "ok"
+
+    _mock_stream(monkeypatch, fake_stream)
+    client.post(f"/api/ai/chats/{cid}/stream", json={"message": "danke"})
+
+    assistant_turn = seen_history[0][1]
+    assert assistant_turn["content"] == "Hier ist deine Seite.\n\n[Vorschau-Code: Test-Titel]"
+    with flask_app.app_context():
+        # the stored/rendered message itself is untouched
+        chat = db.session.get(AiChat, cid)
+        assert "````nexpreview" in chat.messages[1].content
+
+
 def test_stream_reuses_the_same_chat_and_sends_history(client, monkeypatch):
     signup(client, "alice")
     cid = _chat_id(client)

@@ -979,6 +979,26 @@ def api_ai_chat_delete(chat_id):
     return jsonify({"ok": True})
 
 
+# Matches the same 4-backtick nexpreview fence the client extracts into
+# the preview panel (see pinklemon-nex.js's splitPreview/NEXPREVIEW_RE) --
+# kept in sync deliberately, not shared code, since one lives in Python
+# and the other in JS.
+_NEXPREVIEW_HISTORY_RE = re.compile(r"````nexpreview[:\s]*([^\n]*)\n[\s\S]*?\n````")
+
+
+def _collapse_artifacts_for_history(content):
+    """A generated artifact is 2000-3000+ tokens of raw HTML sitting in a
+    message's content -- fine to keep in full in the database/UI, but
+    re-sending it verbatim as conversation history on every later turn in
+    the same chat would compound fast (a chat with two or three artifacts
+    would re-send 5-10k extra tokens on every unrelated follow-up).
+    Collapse it to a short placeholder for what actually goes back to
+    Groq; the stored message and what the UI renders are untouched."""
+    return _NEXPREVIEW_HISTORY_RE.sub(
+        lambda m: f"[Vorschau-Code: {(m.group(1) or '').strip() or 'Vorschau'}]", content,
+    )
+
+
 @app.route("/api/ai/chats/<int:chat_id>/stream", methods=["POST"])
 def api_ai_stream(chat_id):
     """Streams Nex's reply to the browser as plain text chunks, token by
@@ -1000,7 +1020,7 @@ def api_ai_stream(chat_id):
     if not text_:
         return jsonify({"ok": False, "error": "empty"}), 400
 
-    history = [{"role": m.role, "content": m.content} for m in chat.messages]
+    history = [{"role": m.role, "content": _collapse_artifacts_for_history(m.content)} for m in chat.messages]
     db.session.add(AiChatMessage(chat_id=chat.id, role="user", content=text_))
     chat.updated_at = datetime.now(timezone.utc)
     is_first_message = chat.title is None
