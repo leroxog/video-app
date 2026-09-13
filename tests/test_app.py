@@ -290,22 +290,36 @@ def _mock_stream(monkeypatch, chunks):
 
 
 def _chat_id(client):
-    """GET / lazily creates the user's chat -- fetch its id for the
-    stream route, which (unlike / ) never auto-creates one."""
-    client.get("/")
-    with client.session_transaction() as sess:
-        uid = sess.get("user_id")
-    with flask_app.app_context():
-        return AiChat.query.filter_by(user_id=uid).order_by(AiChat.updated_at.desc()).first().id
+    """Create a chat via the API (mirrors what the frontend does lazily on
+    first send) and return its id."""
+    return client.post("/api/ai/chats").get_json()["chat"]["id"]
 
 
-def test_root_creates_a_chat_and_shows_empty_state(client):
+def test_root_shows_empty_state_with_no_chats_yet(client):
     signup(client, "alice")
     home = client.get("/")
     assert home.status_code == 200
-    assert b"nxMsgs" in home.data
+    assert b"nxMsgs" in home.data and b"nxEmpty" in home.data
     with flask_app.app_context():
-        assert AiChat.query.filter_by(user_id=User.query.filter_by(username="alice").first().id).count() == 1
+        assert AiChat.query.filter_by(user_id=User.query.filter_by(username="alice").first().id).count() == 0
+
+
+def test_root_shows_most_recently_active_chat_by_default(client, monkeypatch):
+    signup(client, "alice")
+    _chat_id(client)
+    cid2 = _chat_id(client)
+    _mock_stream(monkeypatch, ["hi"])
+    client.post(f"/api/ai/chats/{cid2}/stream", json={"message": "hallo"})
+    home = client.get("/")
+    assert f"window.NEX_CHAT_ID = {cid2};".encode() in home.data
+
+
+def test_root_honors_chat_query_param(client):
+    signup(client, "alice")
+    cid1 = _chat_id(client)
+    _chat_id(client)
+    home = client.get(f"/?chat={cid1}")
+    assert f"window.NEX_CHAT_ID = {cid1};".encode() in home.data
 
 
 def test_stream_requires_login(client):
@@ -377,3 +391,96 @@ def test_stream_handles_ai_failure_gracefully(client, monkeypatch):
     with flask_app.app_context():
         chat = db.session.get(AiChat, cid)
         assert [m.role for m in chat.messages] == ["user"]
+
+
+# ---------------- Nex chat sidebar (list / create / rename / delete) ----------------
+
+def test_chats_endpoints_require_login(client):
+    assert client.get("/api/ai/chats").status_code == 401
+    assert client.post("/api/ai/chats").status_code == 401
+    assert client.get("/api/ai/chats/1/messages").status_code == 401
+    assert client.patch("/api/ai/chats/1", json={"title": "x"}).status_code == 401
+    assert client.post("/api/ai/chats/1/delete").status_code == 401
+
+
+def test_create_chat_returns_default_title(client):
+    signup(client, "alice")
+    j = client.post("/api/ai/chats").get_json()
+    assert j["ok"] is True and j["chat"]["title"] == "Neuer Chat"
+
+
+def test_list_chats_returns_only_own_chats_sorted_by_updated_at(client, monkeypatch):
+    signup(client, "alice")
+    cid1 = _chat_id(client)
+    cid2 = _chat_id(client)
+    bob = make_user(client, "bob")
+    bob.post("/api/ai/chats")
+
+    # touch cid1 more recently by sending a message in it
+    _mock_stream(monkeypatch, ["ok"])
+    client.post(f"/api/ai/chats/{cid1}/stream", json={"message": "hi"})
+
+    listed = client.get("/api/ai/chats").get_json()["chats"]
+    assert [c["id"] for c in listed] == [cid1, cid2]
+
+
+def test_get_chat_messages(client, monkeypatch):
+    signup(client, "alice")
+    cid = _chat_id(client)
+    _mock_stream(monkeypatch, ["Hi!"])
+    client.post(f"/api/ai/chats/{cid}/stream", json={"message": "Hallo"})
+    j = client.get(f"/api/ai/chats/{cid}/messages").get_json()
+    assert j["ok"] is True
+    assert [(m["role"], m["content"]) for m in j["messages"]] == [("user", "Hallo"), ("assistant", "Hi!")]
+
+
+def test_get_chat_messages_rejects_a_chat_that_is_not_yours(client):
+    signup(client, "alice")
+    cid = _chat_id(client)
+    bob = make_user(client, "bob")
+    assert bob.get(f"/api/ai/chats/{cid}/messages").status_code == 404
+
+
+def test_rename_chat(client):
+    signup(client, "alice")
+    cid = _chat_id(client)
+    r = client.patch(f"/api/ai/chats/{cid}", json={"title": "Mein Chat"})
+    assert r.get_json()["chat"]["title"] == "Mein Chat"
+    with flask_app.app_context():
+        assert db.session.get(AiChat, cid).title == "Mein Chat"
+
+
+def test_rename_chat_rejects_empty_title(client):
+    signup(client, "alice")
+    cid = _chat_id(client)
+    r = client.patch(f"/api/ai/chats/{cid}", json={"title": "   "})
+    assert r.status_code == 400 and r.get_json()["error"] == "empty"
+
+
+def test_rename_chat_rejects_a_chat_that_is_not_yours(client):
+    signup(client, "alice")
+    cid = _chat_id(client)
+    bob = make_user(client, "bob")
+    assert bob.patch(f"/api/ai/chats/{cid}", json={"title": "hijack"}).status_code == 404
+
+
+def test_delete_chat_removes_its_messages(client, monkeypatch):
+    signup(client, "alice")
+    cid = _chat_id(client)
+    _mock_stream(monkeypatch, ["ok"])
+    client.post(f"/api/ai/chats/{cid}/stream", json={"message": "hi"})
+
+    r = client.post(f"/api/ai/chats/{cid}/delete")
+    assert r.get_json()["ok"] is True
+    with flask_app.app_context():
+        assert db.session.get(AiChat, cid) is None
+        assert AiChatMessage.query.filter_by(chat_id=cid).count() == 0
+
+
+def test_delete_chat_rejects_a_chat_that_is_not_yours(client):
+    signup(client, "alice")
+    cid = _chat_id(client)
+    bob = make_user(client, "bob")
+    assert bob.post(f"/api/ai/chats/{cid}/delete").status_code == 404
+    with flask_app.app_context():
+        assert db.session.get(AiChat, cid) is not None

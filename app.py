@@ -883,24 +883,82 @@ def api_pl_update_profile():
 
 # ==========================================================================
 # Nex -- the app's single AI chat (see ai_assistant.py for the Groq call).
-# One conversation shown at a time (the most recently active one); a real
-# sidebar with multiple switchable chats lands in a later phase.
+# A user can hold several named conversations at once, listed in the
+# sidebar; nothing is written to the database until the first message is
+# actually sent (see api_ai_stream) or "Neuer Chat" is explicitly used, so
+# opening the app fresh never leaves behind an empty untitled row.
 # ==========================================================================
-def _ai_get_or_create_chat(me):
-    chat = AiChat.query.filter_by(user_id=me.id).order_by(AiChat.updated_at.desc()).first()
-    if chat is None:
-        chat = AiChat(user_id=me.id)
-        db.session.add(chat)
-        db.session.commit()
-    return chat
+def _ai_serialize_chat(chat):
+    return {"id": chat.id, "title": chat.title or "Neuer Chat"}
 
 
 @app.route("/")
 def pl_home():
     me = current_user()
-    chat = _ai_get_or_create_chat(me)
-    messages = [{"role": m.role, "content": m.content} for m in chat.messages]
-    return render_template("pl_nex.html", messages=messages, chat_id=chat.id)
+    chats = AiChat.query.filter_by(user_id=me.id).order_by(AiChat.updated_at.desc()).all()
+    wanted_id = request.args.get("chat", type=int)
+    chat = next((c for c in chats if c.id == wanted_id), None) if wanted_id else None
+    if chat is None:
+        chat = chats[0] if chats else None
+    messages = [{"role": m.role, "content": m.content} for m in chat.messages] if chat else []
+    return render_template(
+        "pl_nex.html", messages=messages, chat_id=(chat.id if chat else None),
+        chats=[_ai_serialize_chat(c) for c in chats],
+    )
+
+
+@app.route("/api/ai/chats")
+def api_ai_chats_list():
+    me = current_user()
+    chats = AiChat.query.filter_by(user_id=me.id).order_by(AiChat.updated_at.desc()).all()
+    return jsonify({"ok": True, "chats": [_ai_serialize_chat(c) for c in chats]})
+
+
+@app.route("/api/ai/chats", methods=["POST"])
+def api_ai_chats_create():
+    me = current_user()
+    chat = AiChat(user_id=me.id)
+    db.session.add(chat)
+    db.session.commit()
+    return jsonify({"ok": True, "chat": _ai_serialize_chat(chat)})
+
+
+@app.route("/api/ai/chats/<int:chat_id>/messages")
+def api_ai_chat_messages(chat_id):
+    me = current_user()
+    chat = AiChat.query.filter_by(id=chat_id, user_id=me.id).first()
+    if chat is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    return jsonify({
+        "ok": True, "chat": _ai_serialize_chat(chat),
+        "messages": [{"role": m.role, "content": m.content} for m in chat.messages],
+    })
+
+
+@app.route("/api/ai/chats/<int:chat_id>", methods=["PATCH"])
+def api_ai_chat_rename(chat_id):
+    me = current_user()
+    chat = AiChat.query.filter_by(id=chat_id, user_id=me.id).first()
+    if chat is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    data = request.get_json(silent=True) or {}
+    title = (data.get("title") or "").strip()[:100]
+    if not title:
+        return jsonify({"ok": False, "error": "empty"}), 400
+    chat.title = title
+    db.session.commit()
+    return jsonify({"ok": True, "chat": _ai_serialize_chat(chat)})
+
+
+@app.route("/api/ai/chats/<int:chat_id>/delete", methods=["POST"])
+def api_ai_chat_delete(chat_id):
+    me = current_user()
+    chat = AiChat.query.filter_by(id=chat_id, user_id=me.id).first()
+    if chat is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    db.session.delete(chat)
+    db.session.commit()
+    return jsonify({"ok": True})
 
 
 @app.route("/api/ai/chats/<int:chat_id>/stream", methods=["POST"])
