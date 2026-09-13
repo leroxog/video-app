@@ -285,22 +285,22 @@
   }
   renderSidebar();
 
-  function setActive(id) {
+  function setActive(id, skipPush) {
     activeChatId = id;
     window.NEX_CHAT_ID = id;
     sidebarList.querySelectorAll(".nx-sidebar-row").forEach(function (row) {
       row.classList.toggle("is-active", Number(row.dataset.chatId) === id);
     });
-    history.pushState(null, "", id ? "/?chat=" + id : "/");
+    if (!skipPush) history.pushState(null, "", id ? "/?chat=" + id : "/");
   }
 
-  function switchToChat(id) {
+  function switchToChat(id, skipPush) {
     if (id === activeChatId) { closeSidebar(); return; }
     fetch("/api/ai/chats/" + id + "/messages")
       .then(function (r) { return r.json(); })
       .then(function (j) {
         if (!j.ok) { window.plToast && window.plToast(nice(j.error)); return; }
-        setActive(id);
+        setActive(id, skipPush);
         if (!j.messages.length) { showEmptyPane(); }
         else {
           msgsEl.innerHTML = "";
@@ -311,12 +311,12 @@
       });
   }
 
-  function newChat() {
-    setActive(null);
+  function newChat(skipPush) {
+    setActive(null, skipPush);
     showEmptyPane();
     closeSidebar();
   }
-  newChatBtn.addEventListener("click", newChat);
+  newChatBtn.addEventListener("click", function () { newChat(); });
 
   function renameChat(id, row) {
     closeRowMenu();
@@ -398,7 +398,7 @@
   window.addEventListener("popstate", function () {
     var params = new URLSearchParams(location.search);
     var id = params.get("chat") ? Number(params.get("chat")) : null;
-    if (id !== activeChatId) { if (id) switchToChat(id); else newChat(); }
+    if (id !== activeChatId) { if (id) switchToChat(id, true); else newChat(true); }
   });
 
   // ---------------- send ----------------
