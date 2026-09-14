@@ -9,7 +9,7 @@ os.environ["DATABASE_URL"] = f"sqlite:///{tempfile.gettempdir()}/video_app_test_
 import pytest
 import app as app_module
 from app import app as flask_app, db
-from models import User, AiChat, AiChatMessage, Team, TeamMember, TeamMessage
+from models import User, AiChat, AiChatMessage, Team, TeamMember, TeamMessage, UserIntegration
 
 
 @pytest.fixture
@@ -622,6 +622,81 @@ def test_non_member_cannot_view_or_post_team_messages(client):
     bob = make_user(client, "bob")
     assert bob.get(f"/api/teams/{team['id']}/messages").status_code == 404
     assert bob.post(f"/api/teams/{team['id']}/messages", json={"message": "hi"}).status_code == 404
+
+
+# ---------------- Plugins ----------------
+
+def test_plugins_google_connect_bounces_when_not_configured(client):
+    signup(client, "alice")
+    r = client.get("/plugins/google/connect", follow_redirects=False)
+    assert r.status_code == 302
+    assert "plugin_error=not_configured" in r.headers["Location"]
+
+
+def test_list_plugins_default_state(client):
+    signup(client, "alice")
+    r = client.get("/api/plugins")
+    google = next(p for p in r.get_json()["plugins"] if p["service"] == "google")
+    assert google["connected"] is False
+
+
+def test_list_plugins_shows_connected_once_a_token_row_exists(client):
+    signup(client, "alice")
+    with flask_app.app_context():
+        user = User.query.filter_by(username="alice").first()
+        db.session.add(UserIntegration(user_id=user.id, service="google", access_token="tok"))
+        db.session.commit()
+    r = client.get("/api/plugins")
+    google = next(p for p in r.get_json()["plugins"] if p["service"] == "google")
+    assert google["connected"] is True
+
+
+def test_disconnect_plugin_removes_row(client):
+    signup(client, "alice")
+    with flask_app.app_context():
+        user = User.query.filter_by(username="alice").first()
+        db.session.add(UserIntegration(user_id=user.id, service="google", access_token="tok"))
+        db.session.commit()
+    r = client.post("/api/plugins/google/disconnect")
+    assert r.get_json()["ok"] is True
+    with flask_app.app_context():
+        assert UserIntegration.query.filter_by(service="google").count() == 0
+
+
+def test_calendar_context_not_fetched_without_calendar_keyword(client, monkeypatch):
+    signup(client, "alice")
+    cid = _chat_id(client)
+    with flask_app.app_context():
+        user = User.query.filter_by(username="alice").first()
+        db.session.add(UserIntegration(user_id=user.id, service="google", access_token="tok"))
+        db.session.commit()
+    called = []
+    monkeypatch.setattr(app_module.integrations, "get_upcoming_google_events", lambda *a, **k: called.append(1) or [])
+    _mock_stream(monkeypatch, ["Hallo!"])
+    client.post(f"/api/ai/chats/{cid}/stream", json={"message": "Wie geht's dir?"})
+    assert not called
+
+
+def test_calendar_context_injected_when_message_mentions_calendar(client, monkeypatch):
+    signup(client, "alice")
+    cid = _chat_id(client)
+    with flask_app.app_context():
+        user = User.query.filter_by(username="alice").first()
+        db.session.add(UserIntegration(user_id=user.id, service="google", access_token="tok"))
+        db.session.commit()
+    monkeypatch.setattr(
+        app_module.integrations, "get_upcoming_google_events",
+        lambda user, client_id, client_secret, max_results=5: [{"summary": "Zahnarzt", "start": "2026-09-15T10:00:00"}],
+    )
+    seen = {}
+
+    def fake_stream(message, history=None, persona=None):
+        seen["history"] = history
+        yield "Klar, hier ist dein Termin."
+
+    _mock_stream(monkeypatch, fake_stream)
+    client.post(f"/api/ai/chats/{cid}/stream", json={"message": "Was steht heute in meinem Kalender?"})
+    assert any("Zahnarzt" in (m.get("content") or "") for m in seen["history"])
 
 
 def test_system_prompt_documents_the_nexpreview_artifact_convention():

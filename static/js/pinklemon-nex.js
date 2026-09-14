@@ -245,15 +245,17 @@
     previewToggle.classList.remove("is-active");
     renderVersionTabs(allVersions, activeIndex);
     previewPanel.hidden = false;
-    // Only one full-screen overlay panel at a time on mobile (both this
-    // and #nxTeams go position:fixed;inset:0 below 900px). teamsPollTimer
-    // is declared with `var` further down but hoisted to this same
-    // function scope, so it's already been initialized by the time any
-    // click handler (including this one) can actually run.
+    // Only one full-screen overlay panel at a time on mobile (this,
+    // #nxTeams and #nxPlugins all go position:fixed;inset:0 below
+    // 900px). teamsPanel/teamsPollTimer/pluginsPanel are declared with
+    // `var` further down but hoisted to this same function scope, so
+    // they're already initialized by the time any click handler
+    // (including this one) can actually run.
     if (teamsPanel && !teamsPanel.hidden) {
       teamsPanel.hidden = true;
       if (teamsPollTimer) { clearInterval(teamsPollTimer); teamsPollTimer = null; }
     }
+    if (pluginsPanel && !pluginsPanel.hidden) pluginsPanel.hidden = true;
   }
 
   // Live-streaming state (Phase B): while an artifact is still being
@@ -1085,6 +1087,7 @@
     teamsBtn.addEventListener("click", function () {
       if (teamsPanel.hidden) {
         previewPanel.hidden = true;
+        if (pluginsPanel) pluginsPanel.hidden = true;
         teamsPanel.hidden = false;
         teamsLoadList();
       } else {
@@ -1097,6 +1100,85 @@
       teamsStopPolling();
     });
   }
+
+  // ---------------- Plugins -- third-party accounts a user connects so
+  // Nex can actually read from them (Google Calendar, for now -- see
+  // app.py's /plugins/google/... routes and integrations.py). No fake
+  // "connected" checkmark without a real backend behind it: this panel
+  // only shows a service as connected once /api/plugins says so, and
+  // "Verbinden" is a real full-page redirect into Google's own OAuth
+  // consent screen (a fetch can't do that -- OAuth needs a navigation).
+  var pluginsPanel = document.getElementById("nxPlugins");
+  var pluginsBtn = document.getElementById("nxToolsPluginsBtn");
+  if (pluginsPanel && pluginsBtn) {
+    var pluginsClose = document.getElementById("nxPluginsClose");
+    var pluginsBody = document.getElementById("nxPluginsBody");
+
+    function pluginsLoad() {
+      pluginsBody.innerHTML = '<div class="nx-teams-empty">Lädt …</div>';
+      fetch("/api/plugins").then(function (r) { return r.json(); }).then(function (j) {
+        if (!j.ok) return;
+        var html = '<div class="nx-plugins-hint">Verbundene Dienste kann Nex im Chat mitlesen, wenn '
+          + 'es zur Frage passt -- z.B. "was steht heute in meinem Kalender?".</div>';
+        j.plugins.forEach(function (p) {
+          html += '<div class="nx-plugin-row"><div>'
+            + '<div class="nx-plugin-row-name">' + esc(p.label) + '</div>'
+            + '<div class="nx-plugin-row-status' + (p.connected ? " is-connected" : "") + '">'
+            + (p.connected ? "Verbunden" : "Nicht verbunden") + '</div></div>'
+            + (p.connected
+              ? '<button type="button" class="nx-plugin-btn" data-disconnect="' + esc(p.service) + '">Trennen</button>'
+              : '<a class="nx-plugin-btn is-connect" href="/plugins/' + esc(p.service) + '/connect">Verbinden</a>')
+            + '</div>';
+        });
+        pluginsBody.innerHTML = html;
+        pluginsBody.querySelectorAll("[data-disconnect]").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            btn.disabled = true;
+            fetch("/api/plugins/" + btn.dataset.disconnect + "/disconnect", { method: "POST" })
+              .then(function () { pluginsLoad(); });
+          });
+        });
+      });
+    }
+
+    pluginsBtn.addEventListener("click", function () {
+      if (pluginsPanel.hidden) {
+        previewPanel.hidden = true;
+        if (teamsPanel && !teamsPanel.hidden) {
+          teamsPanel.hidden = true;
+          if (teamsPollTimer) { clearInterval(teamsPollTimer); teamsPollTimer = null; }
+        }
+        pluginsPanel.hidden = false;
+        pluginsLoad();
+      } else {
+        pluginsPanel.hidden = true;
+      }
+    });
+    pluginsClose.addEventListener("click", function () { pluginsPanel.hidden = true; });
+  }
+
+  // Query params from the OAuth redirect back (/plugins/google/callback)
+  // land here on the next page load -- surface a toast and, on success,
+  // open the panel so the new connection is visible immediately instead
+  // of silently landing back on the chat with no feedback.
+  (function () {
+    var params = new URLSearchParams(window.location.search);
+    var connected = params.get("plugin_connected");
+    var error = params.get("plugin_error");
+    if (!connected && !error) return;
+    if (connected) {
+      window.plToast && window.plToast("Verbunden!");
+      if (pluginsBtn) pluginsBtn.click();
+    } else if (error === "not_configured") {
+      window.plToast && window.plToast("Plugins sind auf diesem Server noch nicht eingerichtet.");
+    } else {
+      window.plToast && window.plToast("Verbindung hat nicht geklappt. Nochmal versuchen?");
+    }
+    params.delete("plugin_connected");
+    params.delete("plugin_error");
+    var newUrl = window.location.pathname + (params.toString() ? "?" + params.toString() : "");
+    window.history.replaceState({}, "", newUrl);
+  })();
 
   // ---------------- voice mode ----------------
   // Native Web Speech API only -- no key, no external service, matches

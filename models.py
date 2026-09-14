@@ -226,3 +226,26 @@ class TeamMessage(db.Model):
     role = db.Column(db.String(20), nullable=False, default="user")
     content = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class UserIntegration(db.Model):
+    """One third-party account a user has connected via OAuth (see
+    app.py's /plugins/<service>/... routes) -- Nex can read from it (a
+    Google Calendar lookup, for now) when the user's message plausibly
+    calls for it. `service` is a short key ("google" for now, room for
+    more once a user provides credentials for another provider's OAuth
+    app -- see ai_assistant.py/app.py for why those can't be added
+    without that). Tokens sit in the same trust boundary as the rest of
+    this DB (password hashes, session data) -- never serialized back to
+    any API response, only used server-side, and dropped entirely on
+    disconnect."""
+    __tablename__ = "user_integration"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    service = db.Column(db.String(30), nullable=False)
+    access_token = db.Column(db.Text, nullable=False)
+    refresh_token = db.Column(db.Text, nullable=True)
+    token_expires_at = db.Column(db.DateTime, nullable=True)
+    scopes = db.Column(db.Text, nullable=True)
+    connected_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    __table_args__ = (db.UniqueConstraint("user_id", "service", name="uq_user_integration_user_service"),)

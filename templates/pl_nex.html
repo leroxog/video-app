@@ -436,11 +436,34 @@
     background: var(--nx-pink); color: #fff; display: flex; align-items: center; justify-content: center;
   }
   @media (min-width: 900px) {
-    .nx-teams { flex: 0 0 380px; max-width: 380px; }
+    .nx-teams, .nx-plugins { flex: 0 0 380px; max-width: 380px; }
   }
   @media (max-width: 899px) {
-    .nx-teams { position: fixed; inset: 0; z-index: 60; }
+    .nx-teams, .nx-plugins { position: fixed; inset: 0; z-index: 60; }
   }
+
+  /* ---------------- Plugins panel -- reuses .nx-teams' shell (top bar,
+     glass background, responsive breakpoints above); only the row
+     content is specific to a connectable service. ---------------- */
+  .nx-plugin-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    border: 1px solid var(--pl-border); background: var(--pl-surface);
+    border-radius: 12px; padding: 12px 14px; margin-bottom: 10px;
+  }
+  .nx-plugin-row-name { font-size: 13.5px; font-weight: 700; color: var(--pl-text); }
+  .nx-plugin-row-status { font-size: 12px; color: var(--pl-text-dim); margin-top: 2px; }
+  .nx-plugin-row-status.is-connected { color: var(--pl-online); }
+  .nx-plugin-btn {
+    flex-shrink: 0; border: 1px solid var(--pl-border); background: var(--pl-surface-2);
+    color: var(--pl-text); font-size: 12.5px; font-weight: 700; padding: 7px 14px; border-radius: 999px;
+  }
+  .nx-plugin-btn.is-connect { background: var(--nx-pink); color: #fff; border-color: var(--nx-pink); }
+  .nx-plugin-check {
+    flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; background: var(--pl-online);
+    color: #fff; display: flex; align-items: center; justify-content: center;
+  }
+  .nx-plugin-check svg { width: 13px; height: 13px; }
+  .nx-plugins-hint { color: var(--pl-text-faint); font-size: 12.5px; line-height: 1.5; margin-top: 4px; }
 
   /* ---------------- right-hand tools rail (Codex/Bilder/3D/Sprachchat) ---------------- */
   .nx-tools-rail { display: none; }
@@ -605,6 +628,16 @@
     <div class="nx-teams-body" id="nxTeamsBody"></div>
   </aside>
 
+  <aside class="nx-teams nx-plugins" id="nxPlugins" hidden>
+    <div class="nx-teams-top">
+      <div class="nx-teams-title">Plugins</div>
+      <button type="button" class="nx-menu-btn" id="nxPluginsClose" aria-label="Schließen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18 18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="nx-teams-body" id="nxPluginsBody"></div>
+  </aside>
+
   <aside class="nx-tools-rail" id="nxToolsRail">
     <button type="button" class="nx-tools-btn" data-prompt="Programmiere mir ">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
@@ -622,7 +655,7 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
       <span>Teams</span>
     </button>
-    <button type="button" class="nx-tools-btn" data-prompt="Ich möchte folgenden Dienst mit Nex verbinden: ">
+    <button type="button" class="nx-tools-btn" id="nxToolsPluginsBtn">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></svg>
       <span>Plugins</span>
     </button>

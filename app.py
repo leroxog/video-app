@@ -22,8 +22,12 @@ from flask import (
 )
 from sqlalchemy import text
 from werkzeug.exceptions import HTTPException
-from models import db, User, Subscription, ErrorLog, PlMedia, AiChat, AiChatMessage, Team, TeamMember, TeamMessage
+from models import (
+    db, User, Subscription, ErrorLog, PlMedia, AiChat, AiChatMessage,
+    Team, TeamMember, TeamMessage, UserIntegration,
+)
 import ai_assistant
+import integrations
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -789,6 +793,113 @@ def pl_google_auth_callback():
     return redirect(url_for("pl_home"))
 
 
+# ==========================================================================
+# Plugins -- third-party accounts a user connects so Nex can read from
+# them (a Google Calendar lookup, for now -- see integrations.py). This
+# is a SEPARATE OAuth flow from /auth/google above: that one is for
+# logged-out login/signup, this one only runs for an already-logged-in
+# user and requests an additional scope plus access_type=offline so
+# Google actually returns a refresh_token (the login flow never needed
+# one, since it doesn't call back into Google's API afterwards).
+# ==========================================================================
+
+@app.route("/plugins/google/connect")
+def pl_plugins_google_connect():
+    if current_user() is None:
+        return redirect(url_for("pl_login"))
+    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+        return redirect(url_for("pl_home", plugin_error="not_configured"))
+    state = secrets.token_urlsafe(24)
+    session["google_plugin_oauth_state"] = state
+    params = {
+        "client_id": GOOGLE_CLIENT_ID,
+        "redirect_uri": url_for("pl_plugins_google_callback", _external=True),
+        "response_type": "code",
+        "scope": "openid email " + integrations.GOOGLE_CALENDAR_SCOPE,
+        "state": state,
+        "access_type": "offline",
+        "prompt": "consent",
+    }
+    return redirect("https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode(params))
+
+
+@app.route("/plugins/google/callback")
+def pl_plugins_google_callback():
+    me = current_user()
+    if me is None:
+        return redirect(url_for("pl_login"))
+    if request.args.get("error"):
+        return redirect(url_for("pl_home", plugin_error="denied"))
+    state = request.args.get("state")
+    expected_state = session.pop("google_plugin_oauth_state", None)
+    if not state or not expected_state or state != expected_state:
+        return redirect(url_for("pl_home", plugin_error="state_mismatch"))
+    code = request.args.get("code")
+    if not code:
+        return redirect(url_for("pl_home", plugin_error="failed"))
+
+    try:
+        token_res = requests.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "client_id": GOOGLE_CLIENT_ID,
+                "client_secret": GOOGLE_CLIENT_SECRET,
+                "code": code,
+                "redirect_uri": url_for("pl_plugins_google_callback", _external=True),
+                "grant_type": "authorization_code",
+            },
+            timeout=10,
+        )
+        token_res.raise_for_status()
+        token_data = token_res.json()
+    except Exception:
+        logger.exception("Google-Plugin-OAuth-Austausch fehlgeschlagen.")
+        return redirect(url_for("pl_home", plugin_error="failed"))
+
+    access_token = token_data.get("access_token")
+    refresh_token = token_data.get("refresh_token")
+    if not access_token:
+        return redirect(url_for("pl_home", plugin_error="failed"))
+
+    integration = UserIntegration.query.filter_by(user_id=me.id, service="google").first()
+    if integration is None:
+        integration = UserIntegration(user_id=me.id, service="google", access_token=access_token)
+        db.session.add(integration)
+    integration.access_token = access_token
+    # Google only returns a refresh_token on first consent, or when
+    # prompt=consent forces re-consent -- which the connect route above
+    # always sets, but keep any previous one if this response somehow
+    # lacks it rather than silently losing offline access.
+    if refresh_token:
+        integration.refresh_token = refresh_token
+    integration.token_expires_at = datetime.utcnow() + timedelta(seconds=token_data.get("expires_in", 3600))
+    integration.scopes = token_data.get("scope", "")
+    db.session.commit()
+    return redirect(url_for("pl_home", plugin_connected="google"))
+
+
+@app.route("/api/plugins")
+def api_plugins_list():
+    me = current_user()
+    connected = {row.service for row in UserIntegration.query.filter_by(user_id=me.id).all()}
+    return jsonify({
+        "ok": True,
+        "plugins": [
+            {"service": "google", "label": "Google Kalender", "connected": "google" in connected},
+        ],
+    })
+
+
+@app.route("/api/plugins/<service>/disconnect", methods=["POST"])
+def api_plugins_disconnect(service):
+    me = current_user()
+    integration = UserIntegration.query.filter_by(user_id=me.id, service=service).first()
+    if integration is not None:
+        db.session.delete(integration)
+        db.session.commit()
+    return jsonify({"ok": True})
+
+
 def pl_display_name(user):
     """The "Spitzname" -- what shows big everywhere. Falls back to the
     @username when unset."""
@@ -1027,6 +1138,25 @@ def _collapse_artifacts_for_history(content):
     return content
 
 
+_CALENDAR_KEYWORDS = ("kalender", "termin", "meeting", "verabredung", "agenda")
+
+
+def _maybe_google_calendar_context(user, text_):
+    """If the user has Google Calendar connected (see the /plugins/
+    google/... routes) AND this message plausibly asks about it, fetch
+    a few upcoming events and return them as a ready-to-inject system
+    message -- else None, so a plain unrelated message never pays for a
+    Google API round-trip. Real, live data, not a hardcoded connected
+    checkmark: this is what actually makes Plugins do something."""
+    if not any(kw in text_.lower() for kw in _CALENDAR_KEYWORDS):
+        return None
+    events = integrations.get_upcoming_google_events(user, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET)
+    if not events:
+        return None
+    lines = "\n".join(f"- {e['summary']} ({e['start']})" for e in events)
+    return {"role": "system", "content": f"Nächste Termine im Google-Kalender des Nutzers:\n{lines}"}
+
+
 @app.route("/api/ai/chats/<int:chat_id>/stream", methods=["POST"])
 def api_ai_stream(chat_id):
     """Streams Nex's reply to the browser as plain text chunks, token by
@@ -1049,6 +1179,9 @@ def api_ai_stream(chat_id):
         return jsonify({"ok": False, "error": "empty"}), 400
 
     history = [{"role": m.role, "content": _collapse_artifacts_for_history(m.content)} for m in chat.messages]
+    calendar_context = _maybe_google_calendar_context(me, text_)
+    if calendar_context:
+        history = history + [calendar_context]
     db.session.add(AiChatMessage(chat_id=chat.id, role="user", content=text_))
     chat.updated_at = datetime.now(timezone.utc)
     db.session.commit()
