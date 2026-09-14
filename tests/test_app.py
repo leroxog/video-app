@@ -9,7 +9,7 @@ os.environ["DATABASE_URL"] = f"sqlite:///{tempfile.gettempdir()}/video_app_test_
 import pytest
 import app as app_module
 from app import app as flask_app, db
-from models import User, AiChat, AiChatMessage
+from models import User, AiChat, AiChatMessage, Team, TeamMember, TeamMessage
 
 
 @pytest.fixture
@@ -530,6 +530,98 @@ def test_chat_messages_endpoint_returns_next_suggestion(client, monkeypatch):
         db.session.commit()
     resp = client.get(f"/api/ai/chats/{cid}/messages")
     assert resp.get_json()["chat"]["next_suggestion"] == "Erzähl mir mehr"
+
+
+# ---------------- Teams ----------------
+
+def test_create_team_adds_creator_as_member(client):
+    signup(client, "alice")
+    r = client.post("/api/teams", json={"name": "Projekt X"})
+    j = r.get_json()
+    assert j["ok"] and j["team"]["name"] == "Projekt X" and j["team"]["member_count"] == 1
+    assert len(j["team"]["invite_code"]) > 0
+
+
+def test_create_team_rejects_empty_name(client):
+    signup(client, "alice")
+    assert client.post("/api/teams", json={"name": "  "}).status_code == 400
+
+
+def test_join_team_via_invite_code(client):
+    signup(client, "alice")
+    team = client.post("/api/teams", json={"name": "Projekt X"}).get_json()["team"]
+
+    bob = make_user(client, "bob")
+    r = bob.post("/api/teams/join", json={"invite_code": team["invite_code"]})
+    j = r.get_json()
+    assert j["ok"] and j["team"]["id"] == team["id"] and j["team"]["member_count"] == 2
+
+
+def test_join_team_rejects_invalid_code(client):
+    signup(client, "alice")
+    r = client.post("/api/teams/join", json={"invite_code": "does-not-exist"})
+    assert r.status_code == 404 and r.get_json()["error"] == "not_found"
+
+
+def test_list_teams_only_shows_teams_user_belongs_to(client):
+    signup(client, "alice")
+    client.post("/api/teams", json={"name": "Alices Team"})
+
+    bob = make_user(client, "bob")
+    bob.post("/api/teams", json={"name": "Bobs Team"})
+
+    names = [t["name"] for t in client.get("/api/teams").get_json()["teams"]]
+    assert names == ["Alices Team"]
+
+
+def test_team_message_without_mention_does_not_trigger_nex(client, monkeypatch):
+    signup(client, "alice")
+    team = client.post("/api/teams", json={"name": "Projekt X"}).get_json()["team"]
+    called = []
+    monkeypatch.setattr(app_module.ai_assistant, "generate_reply", lambda *a, **k: called.append(1) or "sollte nie laufen")
+
+    r = client.post(f"/api/teams/{team['id']}/messages", json={"message": "Hallo zusammen"})
+    j = r.get_json()
+    assert j["ok"] and len(j["messages"]) == 1 and j["messages"][0]["content"] == "Hallo zusammen"
+    assert not called
+
+
+def test_team_message_with_nex_mention_triggers_ai_reply(client, monkeypatch):
+    signup(client, "alice")
+    team = client.post("/api/teams", json={"name": "Projekt X"}).get_json()["team"]
+    monkeypatch.setattr(app_module.ai_assistant, "generate_reply", lambda message, history=None, persona=None: "Klar, hier ist ein Vorschlag.")
+
+    r = client.post(f"/api/teams/{team['id']}/messages", json={"message": "@nex was meinst du?"})
+    j = r.get_json()
+    assert j["ok"] and len(j["messages"]) == 2
+    assert j["messages"][0]["role"] == "user" and j["messages"][0]["is_me"] is True
+    assert j["messages"][1]["role"] == "assistant" and j["messages"][1]["content"] == "Klar, hier ist ein Vorschlag."
+    assert j["messages"][1]["author"] is None
+
+    with flask_app.app_context():
+        stored = TeamMessage.query.filter_by(team_id=team["id"]).all()
+        assert [m.role for m in stored] == ["user", "assistant"]
+        assert stored[1].user_id is None
+
+
+def test_team_messages_poll_returns_only_messages_after_given_id(client):
+    signup(client, "alice")
+    team = client.post("/api/teams", json={"name": "Projekt X"}).get_json()["team"]
+    client.post(f"/api/teams/{team['id']}/messages", json={"message": "eins"})
+    second = client.post(f"/api/teams/{team['id']}/messages", json={"message": "zwei"}).get_json()["messages"][0]
+
+    r = client.get(f"/api/teams/{team['id']}/messages?after={second['id'] - 1}")
+    contents = [m["content"] for m in r.get_json()["messages"]]
+    assert contents == ["zwei"]
+
+
+def test_non_member_cannot_view_or_post_team_messages(client):
+    signup(client, "alice")
+    team = client.post("/api/teams", json={"name": "Projekt X"}).get_json()["team"]
+
+    bob = make_user(client, "bob")
+    assert bob.get(f"/api/teams/{team['id']}/messages").status_code == 404
+    assert bob.post(f"/api/teams/{team['id']}/messages", json={"message": "hi"}).status_code == 404
 
 
 def test_system_prompt_documents_the_nexpreview_artifact_convention():

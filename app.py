@@ -22,7 +22,7 @@ from flask import (
 )
 from sqlalchemy import text
 from werkzeug.exceptions import HTTPException
-from models import db, User, Subscription, ErrorLog, PlMedia, AiChat, AiChatMessage
+from models import db, User, Subscription, ErrorLog, PlMedia, AiChat, AiChatMessage, Team, TeamMember, TeamMessage
 import ai_assistant
 
 logging.basicConfig(level=logging.INFO)
@@ -1092,6 +1092,140 @@ def api_ai_stream(chat_id):
             db.session.commit()
 
     return Response(stream_with_context(generate()), mimetype="text/plain")
+
+
+# ==========================================================================
+# Teams -- several people writing together with Nex in the same shared
+# chat. Kept in sync across members by short polling (GET .../messages
+# ?after=<id>) instead of websockets, see models.py's Team docstring for
+# why. Nex only replies when a message @-mentions it, so a team can also
+# just be a normal human group chat without Nex interjecting on every line.
+# ==========================================================================
+
+def _team_serialize(team):
+    member_count = TeamMember.query.filter_by(team_id=team.id).count()
+    return {
+        "id": team.id, "name": team.name, "invite_code": team.invite_code,
+        "member_count": member_count,
+    }
+
+
+def _team_serialize_message(msg, me_id):
+    author = None
+    if msg.user_id:
+        u = db.session.get(User, msg.user_id)
+        author = (u.pl_display_name or u.username) if u else "Unbekannt"
+    return {
+        "id": msg.id, "role": msg.role, "author": author, "is_me": msg.user_id == me_id,
+        "content": msg.content, "created_at": msg.created_at.isoformat(),
+    }
+
+
+@app.route("/api/teams")
+def api_teams_list():
+    me = current_user()
+    team_ids = [m.team_id for m in TeamMember.query.filter_by(user_id=me.id).all()]
+    teams = Team.query.filter(Team.id.in_(team_ids)).order_by(Team.created_at.desc()).all() if team_ids else []
+    return jsonify({"ok": True, "teams": [_team_serialize(t) for t in teams]})
+
+
+@app.route("/api/teams", methods=["POST"])
+def api_teams_create():
+    me = current_user()
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()[:60]
+    if not name:
+        return jsonify({"ok": False, "error": "empty"}), 400
+    team = Team(name=name, invite_code=secrets.token_hex(4), created_by=me.id)
+    db.session.add(team)
+    db.session.flush()
+    db.session.add(TeamMember(team_id=team.id, user_id=me.id))
+    db.session.commit()
+    return jsonify({"ok": True, "team": _team_serialize(team)})
+
+
+@app.route("/api/teams/join", methods=["POST"])
+def api_teams_join():
+    me = current_user()
+    data = request.get_json(silent=True) or {}
+    code = (data.get("invite_code") or "").strip().lower()
+    team = Team.query.filter_by(invite_code=code).first() if code else None
+    if team is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    if TeamMember.query.filter_by(team_id=team.id, user_id=me.id).first() is None:
+        db.session.add(TeamMember(team_id=team.id, user_id=me.id))
+        db.session.commit()
+    return jsonify({"ok": True, "team": _team_serialize(team)})
+
+
+@app.route("/api/teams/<int:team_id>/messages")
+def api_team_messages(team_id):
+    me = current_user()
+    if TeamMember.query.filter_by(team_id=team_id, user_id=me.id).first() is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    team = db.session.get(Team, team_id)
+    after = request.args.get("after", type=int) or 0
+    q = TeamMessage.query.filter_by(team_id=team_id)
+    if after:
+        q = q.filter(TeamMessage.id > after)
+    msgs = q.order_by(TeamMessage.id.asc()).all()
+    members = TeamMember.query.filter_by(team_id=team_id).all()
+    member_names = []
+    for m in members:
+        u = db.session.get(User, m.user_id)
+        if u:
+            member_names.append(u.pl_display_name or u.username)
+    return jsonify({
+        "ok": True, "team": _team_serialize(team), "members": member_names,
+        "messages": [_team_serialize_message(m, me.id) for m in msgs],
+    })
+
+
+@app.route("/api/teams/<int:team_id>/messages", methods=["POST"])
+def api_team_send(team_id):
+    me = current_user()
+    if TeamMember.query.filter_by(team_id=team_id, user_id=me.id).first() is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    if _ai_rate_limited(me.id):
+        return jsonify({"ok": False, "error": "rate_limited"}), 429
+    data = request.get_json(silent=True) or {}
+    text_ = (data.get("message") or "").strip()[:4000]
+    if not text_:
+        return jsonify({"ok": False, "error": "empty"}), 400
+
+    author_name = me.pl_display_name or me.username
+    user_msg = TeamMessage(team_id=team_id, user_id=me.id, role="user", content=text_)
+    db.session.add(user_msg)
+    db.session.commit()
+    new_messages = [_team_serialize_message(user_msg, me.id)]
+
+    if "@nex" in text_.lower():
+        prior_rows = (
+            TeamMessage.query.filter(TeamMessage.team_id == team_id, TeamMessage.id < user_msg.id)
+            .order_by(TeamMessage.id.desc()).limit(30).all()
+        )[::-1]
+        history = []
+        for row in prior_rows:
+            if row.role == "assistant":
+                history.append({"role": "assistant", "content": row.content})
+            else:
+                author = db.session.get(User, row.user_id)
+                label = (author.pl_display_name or author.username) if author else "Jemand"
+                history.append({"role": "user", "content": f"{label}: {row.content}"})
+        try:
+            reply_text = ai_assistant.generate_reply(
+                f"(Team-Chat, mehrere Personen schreiben mit) {author_name}: {text_}", history=history,
+            )
+        except Exception:
+            logger.exception("Team-Nex-Antwort fehlgeschlagen")
+            reply_text = ""
+        if reply_text:
+            ai_msg = TeamMessage(team_id=team_id, user_id=None, role="assistant", content=reply_text)
+            db.session.add(ai_msg)
+            db.session.commit()
+            new_messages.append(_team_serialize_message(ai_msg, me.id))
+
+    return jsonify({"ok": True, "messages": new_messages})
 
 
 if __name__ == "__main__":

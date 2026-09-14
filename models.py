@@ -187,3 +187,42 @@ class AiChatMessage(db.Model):
     role = db.Column(db.String(20), nullable=False)
     content = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+# ==========================================================================
+# Teams -- a shared space where several people write together, with Nex
+# joining in whenever someone @-mentions it (see app.py's /api/teams
+# routes). Kept live in sync across members by short polling
+# (GET .../messages?after=<id>) rather than websockets -- simple, and
+# safe on Railway's default multi-worker gunicorn setup without needing
+# a shared message broker for cross-worker pub/sub.
+# ==========================================================================
+
+class Team(db.Model):
+    __tablename__ = "team"
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(60), nullable=False)
+    invite_code = db.Column(db.String(16), unique=True, nullable=False)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class TeamMember(db.Model):
+    __tablename__ = "team_member"
+    id = db.Column(db.Integer, primary_key=True)
+    team_id = db.Column(db.Integer, db.ForeignKey("team.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    joined_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    __table_args__ = (db.UniqueConstraint("team_id", "user_id", name="uq_team_member_team_user"),)
+
+
+class TeamMessage(db.Model):
+    __tablename__ = "team_message"
+    id = db.Column(db.Integer, primary_key=True)
+    team_id = db.Column(db.Integer, db.ForeignKey("team.id"), nullable=False)
+    # NULL for a Nex/assistant message (role="assistant" marks those too --
+    # both together so a serializer can tell the author without a join).
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    role = db.Column(db.String(20), nullable=False, default="user")
+    content = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))

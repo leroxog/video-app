@@ -245,6 +245,15 @@
     previewToggle.classList.remove("is-active");
     renderVersionTabs(allVersions, activeIndex);
     previewPanel.hidden = false;
+    // Only one full-screen overlay panel at a time on mobile (both this
+    // and #nxTeams go position:fixed;inset:0 below 900px). teamsPollTimer
+    // is declared with `var` further down but hoisted to this same
+    // function scope, so it's already been initialized by the time any
+    // click handler (including this one) can actually run.
+    if (teamsPanel && !teamsPanel.hidden) {
+      teamsPanel.hidden = true;
+      if (teamsPollTimer) { clearInterval(teamsPollTimer); teamsPollTimer = null; }
+    }
   }
 
   // Live-streaming state (Phase B): while an artifact is still being
@@ -909,6 +918,183 @@
     toolsVoiceBtn.addEventListener("click", function () {
       var mic = document.getElementById("nxMicBtn");
       if (mic) mic.click();
+    });
+  }
+
+  // ---------------- Teams -- several people + Nex writing together in
+  // one shared chat (see app.py's /api/teams routes). Kept live by short
+  // polling (every 3s while a team is open) instead of websockets -- see
+  // models.py's Team docstring for why. Nex only replies when a message
+  // @-mentions it, so a team doubles as a plain human group chat. One
+  // panel, two views swapped by re-rendering #nxTeamsBody: the team
+  // list/create/join form, and a single open team's message thread.
+  var teamsPanel = document.getElementById("nxTeams");
+  var teamsBtn = document.getElementById("nxToolsTeamsBtn");
+  if (teamsPanel && teamsBtn) {
+    var teamsClose = document.getElementById("nxTeamsClose");
+    var teamsTitle = document.getElementById("nxTeamsTitle");
+    var teamsBody = document.getElementById("nxTeamsBody");
+    var teamsPollTimer = null;
+    var teamsOpenId = null;
+    var teamsLastMsgId = 0;
+
+    function teamsStopPolling() {
+      if (teamsPollTimer) { clearInterval(teamsPollTimer); teamsPollTimer = null; }
+    }
+
+    function teamsRenderList(teams) {
+      teamsTitle.textContent = "Teams";
+      var html = "";
+      if (teams.length) {
+        html += '<div class="nx-teams-section-label">Deine Teams</div>';
+        teams.forEach(function (t) {
+          html += '<button type="button" class="nx-team-row" data-open-team="' + t.id + '">'
+            + '<span>' + esc(t.name) + '</span>'
+            + '<span class="nx-team-row-meta">' + t.member_count + (t.member_count === 1 ? " Mitglied" : " Mitglieder") + '</span>'
+            + '</button>';
+        });
+      } else {
+        html += '<div class="nx-teams-empty">Noch kein Team -- erstelle eins oder tritt mit einem '
+          + 'Einladungscode bei, um mit anderen zusammen mit Nex zu schreiben.</div>';
+      }
+      html += '<div class="nx-teams-section-label">Neues Team</div>'
+        + '<div class="nx-teams-form"><input type="text" id="nxTeamCreateName" placeholder="Teamname" maxlength="60">'
+        + '<button type="button" id="nxTeamCreateBtn">Erstellen</button></div>'
+        + '<div class="nx-teams-section-label">Team beitreten</div>'
+        + '<div class="nx-teams-form"><input type="text" id="nxTeamJoinCode" placeholder="Einladungscode" maxlength="16">'
+        + '<button type="button" id="nxTeamJoinBtn">Beitreten</button></div>';
+      teamsBody.innerHTML = html;
+
+      teamsBody.querySelectorAll("[data-open-team]").forEach(function (btn) {
+        btn.addEventListener("click", function () { teamsOpen(Number(btn.dataset.openTeam)); });
+      });
+      var createBtn = document.getElementById("nxTeamCreateBtn");
+      var createInput = document.getElementById("nxTeamCreateName");
+      function submitCreate() {
+        var name = createInput.value.trim();
+        if (!name) return;
+        createBtn.disabled = true;
+        fetch("/api/teams", {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: name }),
+        }).then(function (r) { return r.json(); }).then(function (j) {
+          createBtn.disabled = false;
+          if (j.ok) teamsOpen(j.team.id);
+        }).catch(function () { createBtn.disabled = false; });
+      }
+      createBtn.addEventListener("click", submitCreate);
+      createInput.addEventListener("keydown", function (e) { if (e.key === "Enter") submitCreate(); });
+      var joinBtn = document.getElementById("nxTeamJoinBtn");
+      var joinInput = document.getElementById("nxTeamJoinCode");
+      function submitJoin() {
+        var code = joinInput.value.trim();
+        if (!code) return;
+        joinBtn.disabled = true;
+        fetch("/api/teams/join", {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ invite_code: code }),
+        }).then(function (r) { return r.json(); }).then(function (j) {
+          joinBtn.disabled = false;
+          if (j.ok) teamsOpen(j.team.id);
+          else window.plToast && window.plToast("Dieser Einladungscode ist ungültig.");
+        }).catch(function () { joinBtn.disabled = false; });
+      }
+      joinBtn.addEventListener("click", submitJoin);
+      joinInput.addEventListener("keydown", function (e) { if (e.key === "Enter") submitJoin(); });
+    }
+
+    function teamsLoadList() {
+      teamsOpenId = null;
+      teamsStopPolling();
+      fetch("/api/teams").then(function (r) { return r.json(); }).then(function (j) {
+        if (j.ok) teamsRenderList(j.teams);
+      });
+    }
+
+    function teamsAppendMessages(container, messages) {
+      // A poll tick and a just-sent message's own response can race: the
+      // poll reads teamsLastMsgId into its `after` query param at fetch
+      // time, so a poll already in flight when a send resolves (and
+      // bumps teamsLastMsgId) still comes back with the *old* `after`
+      // value once it lands -- including a message this function already
+      // appended a moment earlier. Skip anything already in the DOM.
+      messages.forEach(function (m) {
+        if (container.querySelector('[data-msg-id="' + m.id + '"]')) return;
+        var cls = m.role === "assistant" ? "assistant" : (m.is_me ? "mine" : "other");
+        var div = document.createElement("div");
+        div.className = "nx-team-msg " + cls;
+        div.dataset.msgId = m.id;
+        var authorLabel = m.role === "assistant" ? "Nex" : (m.is_me ? "" : (m.author || "Jemand"));
+        var body = m.role === "assistant" ? renderMarkdown(m.content) : esc(m.content);
+        div.innerHTML = (authorLabel ? '<div class="nx-team-msg-author">' + esc(authorLabel) + '</div>' : "")
+          + '<div>' + body + '</div>';
+        container.appendChild(div);
+        if (m.id > teamsLastMsgId) teamsLastMsgId = m.id;
+      });
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function teamsOpen(teamId) {
+      teamsOpenId = teamId;
+      teamsLastMsgId = 0;
+      teamsStopPolling();
+      teamsTitle.innerHTML = '<button type="button" class="nx-menu-btn" id="nxTeamsBackBtn" aria-label="Zurück" '
+        + 'style="margin-right:4px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+        + 'stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>Team';
+      document.getElementById("nxTeamsBackBtn").addEventListener("click", teamsLoadList);
+      teamsBody.innerHTML = '<div class="nx-teams-empty">Lädt …</div>';
+
+      function poll() {
+        fetch("/api/teams/" + teamId + "/messages?after=" + teamsLastMsgId)
+          .then(function (r) { return r.json(); })
+          .then(function (j) {
+            if (!j.ok || teamsOpenId !== teamId) return;
+            if (teamsBody.querySelector(".nx-teams-msgs") == null) {
+              teamsTitle.lastChild.textContent = " " + j.team.name;
+              teamsBody.innerHTML = '<div class="nx-teams-chat">'
+                + '<div class="nx-teams-invite">Einladungscode: <b>' + esc(j.team.invite_code) + '</b> -- teilen, '
+                + 'um andere beitreten zu lassen. Nex antwortet, wenn du "@nex" in deiner Nachricht erwähnst.</div>'
+                + '<div class="nx-teams-msgs" id="nxTeamsMsgs"></div>'
+                + '<div class="nx-teams-compose"><input type="text" id="nxTeamComposeInput" placeholder="Nachricht ans Team …" maxlength="4000">'
+                + '<button type="button" id="nxTeamComposeSend" aria-label="Senden"><svg viewBox="0 0 24 24" fill="none" '
+                + 'stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">'
+                + '<path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg></button></div></div>';
+              var composeInput = document.getElementById("nxTeamComposeInput");
+              var composeSend = document.getElementById("nxTeamComposeSend");
+              function submitTeamMessage() {
+                var text = composeInput.value.trim();
+                if (!text) return;
+                composeInput.value = "";
+                composeSend.disabled = true;
+                fetch("/api/teams/" + teamId + "/messages", {
+                  method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: text }),
+                }).then(function (r) { return r.json(); }).then(function (j2) {
+                  composeSend.disabled = false;
+                  if (j2.ok) teamsAppendMessages(document.getElementById("nxTeamsMsgs"), j2.messages);
+                  else window.plToast && window.plToast(nice(j2.error));
+                }).catch(function () { composeSend.disabled = false; });
+              }
+              composeSend.addEventListener("click", submitTeamMessage);
+              composeInput.addEventListener("keydown", function (e) { if (e.key === "Enter") submitTeamMessage(); });
+            }
+            teamsAppendMessages(document.getElementById("nxTeamsMsgs"), j.messages);
+          });
+      }
+      poll();
+      teamsPollTimer = setInterval(poll, 3000);
+    }
+
+    teamsBtn.addEventListener("click", function () {
+      if (teamsPanel.hidden) {
+        previewPanel.hidden = true;
+        teamsPanel.hidden = false;
+        teamsLoadList();
+      } else {
+        teamsPanel.hidden = true;
+        teamsStopPolling();
+      }
+    });
+    teamsClose.addEventListener("click", function () {
+      teamsPanel.hidden = true;
+      teamsStopPolling();
     });
   }
 
