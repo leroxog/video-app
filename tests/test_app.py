@@ -540,6 +540,10 @@ def test_system_prompt_requires_clean_code_style():
     assert "aussagekräftige Namen" in app_module.ai_assistant.SYSTEM_PROMPT
 
 
+def test_system_prompt_requires_polished_visual_design_for_artifacts():
+    assert "wie von einem echten Designer gebaut" in app_module.ai_assistant.SYSTEM_PROMPT
+
+
 def test_system_prompt_documents_the_tfjs_exception():
     prompt = app_module.ai_assistant.SYSTEM_PROMPT
     assert "cdn.jsdelivr.net" in prompt and "tf.min.js" in prompt
