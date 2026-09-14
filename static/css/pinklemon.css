@@ -5,11 +5,14 @@
    override. Token NAMES are historical (--pl-pink etc.) but the VALUES
    now follow ChatGPT's own theme colors throughout.
    =================================================================== */
-@import url('https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,500;0,600;0,700;0,900;1,400;1,600&display=swap');
 
 :root {
-  /* rounded UI typeface -- covers letters, numbers, everything */
-  --pl-font: "gg sans", "Noto Sans", "Segoe UI", -apple-system, system-ui, "Helvetica Neue", Arial, sans-serif;
+  /* Editorial serif app-wide, per the user's reference sample ("TT Nooks
+     Script" -- a paid TypeType font, not licensable here) -- Fraunces is
+     the closest free/Google Fonts equivalent: same soft, slightly wonky
+     literary display-serif character. */
+  --pl-font: "Fraunces", "Iowan Old Style", "Georgia", "Times New Roman", serif;
   --pl-bg: #212121;
   --pl-bg-2: #171717;           /* sidebar / deeper surface */
   --pl-surface: #2f2f2f;

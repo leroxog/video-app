@@ -8,11 +8,28 @@
      (its NAME just stuck around) -- send/voice want the app's original,
      literally pink brand color specifically, so that's its own token
      here rather than touching --pl-pink globally. */
-  .pl-screen.nex { padding: 0; align-items: stretch; background: var(--pl-bg); --nx-pink: #ff2d95; }
-  .nx-layout { display: flex; flex: 1; min-height: 0; }
+  .pl-screen.nex {
+    padding: 0; align-items: stretch; position: relative; overflow: hidden;
+    background:
+      radial-gradient(ellipse 620px 520px at 12% -8%, rgba(255, 45, 149, .12), transparent 60%),
+      radial-gradient(ellipse 620px 520px at 100% 108%, rgba(16, 163, 127, .16), transparent 60%),
+      var(--pl-bg);
+    --nx-pink: #ff2d95;
+    /* one shared "frosted glass" look, reused on every floating surface
+       below (sidebar, top bar, compose, preview panel, tools rail) --
+       same recipe as the login card's own glass (color-mix + blur), so
+       the whole app now shares one consistent glass language instead of
+       flat opaque panels. */
+    --nx-glass: color-mix(in srgb, var(--pl-bg-2) 68%, transparent);
+    --nx-glass-blur: blur(20px) saturate(1.4);
+  }
+  .nx-layout { display: flex; flex: 1; min-height: 0; position: relative; z-index: 1; }
 
   .nx-sidebar {
-    width: 260px; flex-shrink: 0; background: var(--pl-bg-2); color: var(--pl-text);
+    width: 260px; flex-shrink: 0; color: var(--pl-text);
+    background: var(--nx-glass);
+    -webkit-backdrop-filter: var(--nx-glass-blur); backdrop-filter: var(--nx-glass-blur);
+    border-right: 1px solid var(--pl-border);
     display: flex; flex-direction: column; padding: 8px;
     position: fixed; inset: 0 auto 0 0; z-index: 40;
     transform: translateX(-100%); transition: transform .2s ease;
@@ -73,13 +90,20 @@
   .nx-row-menu button:hover { background: var(--pl-hover); }
   .nx-row-menu button.danger { color: var(--pl-danger); }
 
-  .nx-chat { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; background: var(--pl-bg); color: var(--pl-text); }
+  .nx-chat {
+    display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; color: var(--pl-text);
+    /* faintly translucent, not full glass -- this is the main reading
+       surface, so the ambient gradient should just barely show through
+       rather than compete with message text. */
+    background: color-mix(in srgb, var(--pl-bg) 92%, transparent);
+  }
 
   .nx-top {
     display: flex; align-items: center; gap: 6px;
     padding: 12px 16px; flex-shrink: 0;
     border-bottom: 1px solid var(--pl-border);
-    background: var(--pl-bg);
+    background: var(--nx-glass);
+    -webkit-backdrop-filter: var(--nx-glass-blur); backdrop-filter: var(--nx-glass-blur);
   }
   .nx-top-mark { width: 26px; height: 26px; flex-shrink: 0; margin-left: 4px; }
   .nx-top-mark svg { width: 100%; height: 100%; }
@@ -117,7 +141,12 @@
   .nx-row.me { justify-content: flex-end; }
   .nx-row.them { justify-content: flex-start; }
   .nx-bubble { font-size: 15.5px; line-height: 1.72; overflow-wrap: anywhere; }
-  .nx-row.me .nx-bubble { max-width: 75%; background: var(--pl-surface); border-radius: 22px; padding: 10px 18px; }
+  .nx-row.me .nx-bubble {
+    max-width: 75%; border-radius: 22px; padding: 10px 18px;
+    background: var(--nx-glass);
+    -webkit-backdrop-filter: var(--nx-glass-blur); backdrop-filter: var(--nx-glass-blur);
+    border: 1px solid var(--pl-border);
+  }
   .nx-row.them .nx-bubble { max-width: 100%; background: none; padding: 0; color: var(--pl-text); }
 
   .nx-bubble p { margin: 0 0 12px; }
@@ -181,14 +210,17 @@
   .nx-empty p { margin: 0; font-size: 15px; color: var(--pl-text-dim); line-height: 1.55; }
 
   .nx-compose {
-    flex-shrink: 0; background: var(--pl-bg);
+    flex-shrink: 0;
     padding: 8px 16px calc(84px + env(safe-area-inset-bottom, 0px));
   }
   .nx-compose-inner {
     width: 100%; max-width: 768px; margin: 0 auto;
     display: flex; align-items: center; gap: 8px;
-    background: var(--pl-surface); border: 1px solid var(--pl-border);
+    background: var(--nx-glass);
+    -webkit-backdrop-filter: var(--nx-glass-blur); backdrop-filter: var(--nx-glass-blur);
+    border: 1px solid var(--pl-border);
     border-radius: 28px; padding: 9px 9px 9px 20px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .18);
   }
   .nx-compose-inner:focus-within { border-color: var(--pl-text-faint); }
   .nx-input-wrap { flex: 1; min-width: 0; position: relative; }
@@ -269,7 +301,9 @@
   .nx-preview-chip svg { width: 16px; height: 16px; color: var(--pl-pink); flex-shrink: 0; }
 
   .nx-preview {
-    display: flex; flex-direction: column; background: var(--pl-bg); border-left: 1px solid var(--pl-border);
+    display: flex; flex-direction: column; border-left: 1px solid var(--pl-border);
+    background: var(--nx-glass);
+    -webkit-backdrop-filter: var(--nx-glass-blur); backdrop-filter: var(--nx-glass-blur);
   }
   .nx-preview-top {
     display: flex; align-items: center; gap: 8px; padding: 10px 12px; flex-shrink: 0;
@@ -313,7 +347,9 @@
     .nx-tools-rail {
       display: flex; flex-direction: column; align-items: center; gap: 14px;
       flex: 0 0 84px; width: 84px; padding: 22px 8px; overflow-y: auto;
-      background: var(--pl-bg); border-left: 1px solid var(--pl-border);
+      background: var(--nx-glass);
+      -webkit-backdrop-filter: var(--nx-glass-blur); backdrop-filter: var(--nx-glass-blur);
+      border-left: 1px solid var(--pl-border);
     }
   }
   .nx-tools-btn {
