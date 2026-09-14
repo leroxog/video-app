@@ -85,7 +85,18 @@ _ARTIFACT_PROTOCOL = (
     "trainieren kann -- das ist ein optionales Extra, das automatische erste Training ist "
     "Pflicht. Sag im kurzen Einleitungssatz ehrlich, dass die Genauigkeit mit den generierten "
     "Beispielen begrenzt ist -- tu nie so, als sei das Modell auf einem großen echten Datensatz "
-    "vortrainiert."
+    "vortrainiert.\n\n"
+    "Bei wirklich komplexen, vielschichtigen oder mehrteiligen Anfragen (ein Problem mit "
+    "mehreren Aspekten, eine Abwägung zwischen Optionen, eine Erklärung mit mehreren "
+    "Teilschritten) -- nimm dir sichtbar die Zeit, gründlich zu arbeiten, statt oberflächlich zu "
+    "antworten: beginne mit einem kurzen Satz, der zeigt, wie du die Aufgabe angehst (z.B. 'Ich "
+    "gehe das in drei Teilen an: erst X, dann Y, zuletzt Z.'), und gliedere die eigentliche "
+    "Antwort sichtbar in diese Teile (kurze Zwischenüberschriften oder 'Schritt 1/2/3', je "
+    "nachdem was passt), gehst dabei auf Zusammenhänge und mögliche Stolpersteine ein statt nur "
+    "die erstbeste oberflächliche Antwort hinzuwerfen. Bei einfachen, klaren Fragen bleibt es "
+    "dagegen bei der gewohnten kurzen, direkten Antwort ohne dieses Vorgehen -- nicht jede Frage "
+    "braucht diese Tiefe, und eine simple Frage mit unnötigem Vorgeplänkel einzuleiten wirkt nur "
+    "aufgesetzt."
 )
 
 _NEX_PERSONA = (

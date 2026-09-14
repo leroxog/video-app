@@ -483,6 +483,14 @@ def test_system_prompt_requires_autonomous_first_training_run():
     assert "SOFORT automatisch" in app_module.ai_assistant.SYSTEM_PROMPT
 
 
+def test_system_prompt_asks_for_visible_thorough_work_on_complex_questions():
+    prompt = app_module.ai_assistant.SYSTEM_PROMPT
+    assert "Ich gehe das in drei Teilen an" in prompt
+    # must stay scoped to genuinely complex questions, not become a
+    # blanket instruction to pad every reply
+    assert "nicht jede Frage braucht diese Tiefe" in prompt
+
+
 def test_system_prompt_requires_cpu_backend_and_float32_labels_for_training():
     # Found via live testing: WebGL backend can hang forever on .fit() for
     # these tiny models without ever throwing, and int32 label tensors
