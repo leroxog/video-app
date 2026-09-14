@@ -407,6 +407,31 @@ def test_system_prompt_documents_the_tfjs_exception():
     assert "keine externen Abhängigkeiten/CDN-Links" in prompt
 
 
+def test_system_prompt_requires_autonomous_first_training_run():
+    assert "SOFORT automatisch" in app_module.ai_assistant.SYSTEM_PROMPT
+
+
+def test_system_prompt_requires_cpu_backend_and_float32_labels_for_training():
+    # Found via live testing: WebGL backend can hang forever on .fit() for
+    # these tiny models without ever throwing, and int32 label tensors
+    # throw a real dtype error with some loss functions (sparseCategorical-
+    # Crossentropy's internal floor op requires float32). Both silently
+    # broke every training artifact, so both must stay pinned in the prompt.
+    prompt = app_module.ai_assistant.SYSTEM_PROMPT
+    assert 'tf.setBackend("cpu")' in prompt
+    assert "'float32'" in prompt and "NIE 'int32'" in prompt
+
+
+def test_system_prompt_documents_the_threejs_exception():
+    prompt = app_module.ai_assistant.SYSTEM_PROMPT
+    assert "three.min.js" in prompt
+    # OrbitControls no longer ships as a plain <script src> for this Three.js
+    # version (ES-module only) -- the prompt must steer away from it, not
+    # tell Nex to load a URL that 404s and leaves the whole scene blank.
+    assert "OrbitControls.js" not in prompt
+    assert "ES-Modul" in prompt
+
+
 def test_max_reply_tokens_raised_for_ml_artifacts():
     assert app_module.ai_assistant.MAX_REPLY_TOKENS == 4000
 
