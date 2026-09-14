@@ -19,6 +19,15 @@
   var versionMenu = document.getElementById("nxVersionMenu");
   var pendingPersona = null;
   var PERSONA_LABELS = { nex: "Nex", neo: "Neo" };
+  // Every nexpreview artifact seen so far in the currently open chat, in
+  // chronological order -- reset whenever a different chat's messages load
+  // (see setChatArtifacts below). Powers the preview panel's version tabs:
+  // a flat timeline across the whole chat, not semantic "same artifact,
+  // revised" grouping (that would need the model to track a stable
+  // artifact identity across turns -- unnecessary complexity for what the
+  // user actually asked for: "click back to see how it looked before").
+  var chatArtifacts = [];
+  function resetChatArtifacts() { chatArtifacts = []; }
 
   function esc(s) {
     return String(s == null ? "" : s)
@@ -116,9 +125,30 @@
   var previewTitle = document.getElementById("nxPreviewTitle");
   var previewToggle = document.getElementById("nxPreviewToggle");
   var previewClose = document.getElementById("nxPreviewClose");
+  var previewTabs = document.getElementById("nxPreviewTabs");
   var showingPreviewCode = false;
+  var currentPreviewVersions = [];
 
-  function openPreviewPanel(artifact) {
+  // Shown only when the open artifact has earlier versions in this chat
+  // (e.g. "build me a game" followed later by "make it better") -- one
+  // pill per version, click reopens it without losing any other version.
+  function renderVersionTabs(versions, activeIndex) {
+    currentPreviewVersions = versions || [];
+    if (!previewTabs) return;
+    if (currentPreviewVersions.length <= 1) {
+      previewTabs.hidden = true;
+      previewTabs.innerHTML = "";
+      return;
+    }
+    previewTabs.hidden = false;
+    previewTabs.innerHTML = currentPreviewVersions.map(function (v, i) {
+      return '<button type="button" class="nx-preview-tab' + (i === activeIndex ? " is-active" : "") + '" data-index="' + i + '">V' + (i + 1) + "</button>";
+    }).join("");
+  }
+
+  function openPreviewPanel(artifact, versions, index) {
+    var allVersions = versions || chatArtifacts;
+    var activeIndex = index != null ? index : allVersions.indexOf(artifact);
     previewTitle.textContent = artifact.title || "Vorschau";
     previewFrame.srcdoc = artifact.code;
     previewCodeText.textContent = artifact.code;
@@ -128,19 +158,21 @@
     previewToggle.hidden = false;
     previewToggle.textContent = "Code anzeigen";
     previewToggle.classList.remove("is-active");
+    renderVersionTabs(allVersions, activeIndex);
     previewPanel.hidden = false;
   }
 
   // Live-streaming state (Phase B): while an artifact is still being
   // generated, show its growing source instead of a dead iframe (there's
-  // no complete document to render yet) -- no preview/code toggle while
-  // this is going on, there's nothing to preview.
+  // no complete document to render yet) -- no preview/code toggle or
+  // version tabs while this is going on, there's nothing to preview yet.
   function openPreviewLoading(pending) {
     previewTitle.textContent = pending.title || "Wird erstellt …";
     previewCodeText.textContent = pending.code;
     previewFrame.hidden = true;
     previewCode.hidden = false;
     previewToggle.hidden = true;
+    if (previewTabs) previewTabs.hidden = true;
     previewPanel.hidden = false;
     previewCode.scrollTop = previewCode.scrollHeight;
   }
@@ -153,16 +185,26 @@
     previewToggle.textContent = showingPreviewCode ? "Vorschau" : "Code anzeigen";
     previewToggle.classList.toggle("is-active", showingPreviewCode);
   });
+  if (previewTabs) {
+    previewTabs.addEventListener("click", function (e) {
+      var btn = e.target.closest("[data-index]");
+      if (!btn) return;
+      var i = Number(btn.dataset.index);
+      openPreviewPanel(currentPreviewVersions[i], currentPreviewVersions, i);
+    });
+  }
 
   function appendPreviewChip(bubble, artifact) {
     bubble._nexArtifact = artifact;
+    chatArtifacts.push(artifact);
+    var index = chatArtifacts.length - 1;
     var chip = document.createElement("button");
     chip.type = "button";
     chip.className = "nx-preview-chip";
     chip.innerHTML =
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>'
       + "<span>" + esc(artifact.title) + "</span>";
-    chip.addEventListener("click", function () { openPreviewPanel(artifact); });
+    chip.addEventListener("click", function () { openPreviewPanel(artifact, chatArtifacts, index); });
     bubble.appendChild(chip);
   }
 
@@ -170,6 +212,7 @@
   // server-side (fast first paint, no client round-trip) -- upgrade them
   // to rendered markdown (and extract any artifact into a chip) once
   // marked/DOMPurify are available.
+  resetChatArtifacts();
   msgsEl.querySelectorAll(".nx-bubble").forEach(function (b) {
     var split = splitPreview(b.textContent);
     b.innerHTML = renderMarkdown(split.text);
@@ -321,6 +364,7 @@
         var c = chats.find(function (c) { return c.id === id; });
         if (c) c.character = j.chat.character;
         setActive(id, skipPush);
+        resetChatArtifacts();
         if (!j.messages.length) { showEmptyPane(); }
         else {
           msgsEl.innerHTML = "";
@@ -333,6 +377,7 @@
 
   function newChat(skipPush) {
     setActive(null, skipPush);
+    resetChatArtifacts();
     showEmptyPane();
     closeSidebar();
   }

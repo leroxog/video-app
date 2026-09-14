@@ -566,6 +566,24 @@ def test_get_chat_messages(client, monkeypatch):
     assert [(m["role"], m["content"]) for m in j["messages"]] == [("user", "Hallo"), ("assistant", "Hi!")]
 
 
+def test_get_chat_messages_preserves_multiple_nexpreview_blocks(client, monkeypatch):
+    """The version-tabs UI in the preview panel is built entirely from this
+    endpoint's history -- if a chat has several nexpreview artifacts across
+    turns, all of them must come back verbatim, not just the latest."""
+    signup(client, "alice")
+    cid = _chat_id(client)
+    _mock_stream(monkeypatch, ["Erste Version.\n\n````nexpreview:V1\n<html>1</html>\n````"])
+    client.post(f"/api/ai/chats/{cid}/stream", json={"message": "baue ein spiel"})
+    _mock_stream(monkeypatch, ["Zweite Version.\n\n````nexpreview:V2\n<html>2</html>\n````"])
+    client.post(f"/api/ai/chats/{cid}/stream", json={"message": "mach es besser"})
+
+    messages = client.get(f"/api/ai/chats/{cid}/messages").get_json()["messages"]
+    assistant_replies = [m["content"] for m in messages if m["role"] == "assistant"]
+    assert len(assistant_replies) == 2
+    assert "````nexpreview:V1" in assistant_replies[0]
+    assert "````nexpreview:V2" in assistant_replies[1]
+
+
 def test_get_chat_messages_rejects_a_chat_that_is_not_yours(client):
     signup(client, "alice")
     cid = _chat_id(client)
