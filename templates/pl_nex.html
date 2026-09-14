@@ -97,6 +97,13 @@
        rather than compete with message text. */
     background: color-mix(in srgb, var(--pl-bg) 92%, transparent);
   }
+  /* New/empty chat: greeting + compose float centered as one group
+     instead of the usual scrollable-log-above/bar-pinned-below layout --
+     .nx-msgs stops flex-growing (its content is just the short greeting
+     here) so justify-content:center centers the two of them together. */
+  .nx-chat.is-empty { justify-content: center; }
+  .nx-chat.is-empty .nx-msgs { flex: 0 0 auto; overflow: visible; }
+  .nx-chat.is-empty .nx-compose { padding-bottom: 8px; }
 
   .nx-top {
     display: flex; align-items: center; gap: 6px;
@@ -200,14 +207,16 @@
   @keyframes nxBlink { 0%,80%,100% { opacity: .25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
 
   .nx-empty {
-    margin: auto; text-align: center;
+    margin: auto; text-align: center; width: 100%; box-sizing: border-box;
     display: flex; flex-direction: column; align-items: center; gap: 16px;
     padding: 30px 24px; max-width: 460px;
   }
-  .nx-empty-mark { width: 56px; height: 56px; }
+  .nx-empty-mark { width: 44px; height: 44px; }
   .nx-empty-mark svg { width: 100%; height: 100%; }
-  .nx-empty h2 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.01em; color: var(--pl-text); }
-  .nx-empty p { margin: 0; font-size: 15px; color: var(--pl-text-dim); line-height: 1.55; }
+  .nx-empty h2 {
+    margin: 0; font-size: 32px; font-weight: 700; letter-spacing: -0.01em; color: var(--pl-text);
+    max-width: 100%; overflow-wrap: anywhere;
+  }
 
   .nx-compose {
     flex-shrink: 0;
@@ -256,6 +265,40 @@
   .nx-mic-btn svg { width: 17px; height: 17px; }
   .nx-mic-btn.is-listening { animation: nxMicPulse 1.4s ease-in-out infinite; }
   @keyframes nxMicPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(230,60,130,.4); } 50% { box-shadow: 0 0 0 6px rgba(230,60,130,0); } }
+  /* Dictate-only: same shape as the voice-mode call button, but neutral
+     (no pink) -- it just transcribes into the input, Nex never speaks
+     back, so it shouldn't visually read as "the same feature". */
+  .nx-dictate-btn {
+    flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--pl-border);
+    background: var(--pl-surface); color: var(--pl-text-dim);
+    display: flex; align-items: center; justify-content: center;
+    transition: background .12s ease, color .12s ease;
+  }
+  .nx-dictate-btn:hover { background: var(--pl-surface-2); color: var(--pl-text); }
+  .nx-dictate-btn:disabled { opacity: .35; }
+  .nx-dictate-btn:not(:disabled):active { transform: scale(0.92); }
+  .nx-dictate-btn svg { width: 16px; height: 16px; }
+  .nx-dictate-btn.is-listening { background: var(--pl-surface-3); color: var(--pl-text); animation: nxDictatePulse 1.4s ease-in-out infinite; }
+  @keyframes nxDictatePulse { 0%,100% { box-shadow: 0 0 0 0 rgba(255,255,255,.14); } 50% { box-shadow: 0 0 0 6px rgba(255,255,255,0); } }
+
+  .nx-compose-modes {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    max-width: 768px; margin: 10px auto 0;
+  }
+  .nx-mode-toggle {
+    display: flex; background: var(--pl-surface); border: 1px solid var(--pl-border); border-radius: 999px; padding: 3px;
+  }
+  .nx-mode-btn {
+    border: none; background: none; color: var(--pl-text-dim); font-size: 13px; font-weight: 600;
+    padding: 7px 16px; border-radius: 999px;
+  }
+  .nx-mode-btn.is-active { background: var(--pl-surface-2); color: var(--pl-text); }
+  .nx-mode-version {
+    display: flex; align-items: center; gap: 4px; border: 1px solid var(--pl-border); background: var(--pl-surface);
+    color: var(--pl-text-dim); font-size: 13px; font-weight: 600; padding: 8px 14px; border-radius: 999px;
+  }
+  .nx-mode-version:hover { background: var(--pl-surface-2); color: var(--pl-text); }
+  .nx-mode-version svg { width: 13px; height: 13px; }
   .nx-voice-status {
     max-width: 768px; margin: 6px auto 0; text-align: center; font-size: 12px; color: var(--pl-pink); font-weight: 600;
   }
@@ -381,7 +424,7 @@
     <div class="nx-sidebar-list" id="nxSidebarList"></div>
   </aside>
 
-  <div class="nx-chat">
+  <div class="nx-chat{% if not messages %} is-empty{% endif %}" id="nxChat">
     <div class="nx-top">
       <button type="button" class="nx-menu-btn" id="nxMenuBtn" aria-label="Chats">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/></svg>
@@ -440,8 +483,7 @@
       {% if not messages %}
       <div class="nx-empty" id="nxEmpty">
         <span class="nx-empty-mark">{% include "partials/_pinklemon_logo.html" %}</span>
-        <h2>Hallo, ich bin Nex</h2>
-        <p>Frag mich einfach irgendwas.</p>
+        <h2 id="nxGreeting">Hallo</h2>
       </div>
       {% endif %}
       {% for m in messages %}
@@ -455,11 +497,24 @@
           <textarea id="nxInput" rows="1" maxlength="4000"></textarea>
           <div class="nx-input-suggestion" id="nxInputSuggestion" title="Doppelklick zum Übernehmen"></div>
         </div>
-        <button type="button" class="nx-mic-btn" id="nxMicBtn" aria-label="Sprachmodus" title="Sprachmodus">
+        <button type="button" class="nx-dictate-btn" id="nxDictateBtn" aria-label="Diktieren" title="Diktieren (nur zuhören, Nex spricht nicht)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><path d="M12 18v4M8 22h8"/></svg>
+        </button>
+        <button type="button" class="nx-mic-btn" id="nxMicBtn" aria-label="Sprachmodus" title="Sprachmodus (Nex hört zu und antwortet auch per Sprache)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384"/></svg>
         </button>
         <button class="nx-send" id="nxSend" aria-label="Senden" disabled>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
+        </button>
+      </div>
+      <div class="nx-compose-modes" id="nxComposeModes" hidden>
+        <div class="nx-mode-toggle" id="nxModeToggle">
+          <button type="button" class="nx-mode-btn is-active" data-mode="chat">Chat</button>
+          <button type="button" class="nx-mode-btn" data-mode="code">Code</button>
+        </div>
+        <button type="button" class="nx-mode-version" id="nxModeVersionBtn">
+          <span id="nxModeVersionLabel">Nex</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
         </button>
       </div>
       <div class="nx-voice-status" id="nxVoiceStatus" hidden></div>
@@ -503,6 +558,7 @@
 <script>
   window.NEX_CHAT_ID = {{ chat_id | tojson }};
   window.NEX_CHATS = {{ chats | tojson }};
+  window.NEX_USER_NAME = {{ (user.pl_display_name or user.username if user else None) | tojson }};
 </script>
 <script src="{{ url_for('static', filename='js/vendor/marked.min.js') }}"></script>
 <script src="{{ url_for('static', filename='js/vendor/purify.min.js') }}"></script>

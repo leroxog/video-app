@@ -3,9 +3,15 @@
 
   var msgsEl = document.getElementById("nxMsgs");
   var emptyEl = document.getElementById("nxEmpty");
+  var chatEl = document.getElementById("nxChat");
   var input = document.getElementById("nxInput");
   var sendBtn = document.getElementById("nxSend");
   var inputSuggestion = document.getElementById("nxInputSuggestion");
+  var dictateBtn = document.getElementById("nxDictateBtn");
+  var composeModes = document.getElementById("nxComposeModes");
+  var modeToggle = document.getElementById("nxModeToggle");
+  var modeVersionBtn = document.getElementById("nxModeVersionBtn");
+  var modeVersionLabel = document.getElementById("nxModeVersionLabel");
   var sidebar = document.getElementById("nxSidebar");
   var sidebarBackdrop = document.getElementById("nxSidebarBackdrop");
   var sidebarList = document.getElementById("nxSidebarList");
@@ -299,6 +305,13 @@
     wireGeneratedImages(b);
     if (split.artifact) appendPreviewChip(b, split.artifact);
   });
+  // Server-rendered the empty state with a placeholder greeting (no
+  // access to the visitor's local time/clock) -- fill in the real one
+  // and reveal the mode/version row that goes with it.
+  if (document.getElementById("nxGreeting")) {
+    document.getElementById("nxGreeting").textContent = greetingText();
+    if (composeModes) composeModes.hidden = false;
+  }
 
   function legacyCopy(text) {
     var ta = document.createElement("textarea");
@@ -333,15 +346,28 @@
   });
 
   // ---------------- message pane ----------------
-  function clearEmpty() { if (emptyEl) { emptyEl.remove(); emptyEl = null; } }
+  function greetingText() {
+    var h = new Date().getHours();
+    var g = h < 5 ? "Gute Nacht" : h < 11 ? "Guten Morgen" : h < 18 ? "Guten Tag" : h < 23 ? "Guten Abend" : "Gute Nacht";
+    return window.NEX_USER_NAME ? g + ", " + window.NEX_USER_NAME : g;
+  }
+
+  function clearEmpty() {
+    if (emptyEl) { emptyEl.remove(); emptyEl = null; }
+    if (chatEl) chatEl.classList.remove("is-empty");
+    if (composeModes) composeModes.hidden = true;
+  }
 
   function scrollDown() { msgsEl.scrollTop = msgsEl.scrollHeight; }
 
   function showEmptyPane() {
     msgsEl.innerHTML = '<div class="nx-empty" id="nxEmpty">'
       + document.querySelector(".nx-top-mark").outerHTML.replace('class="nx-top-mark"', 'class="nx-empty-mark"')
-      + "<h2>Hallo, ich bin Nex</h2><p>Frag mich einfach irgendwas.</p></div>";
+      + '<h2 id="nxGreeting"></h2></div>';
     emptyEl = document.getElementById("nxEmpty");
+    document.getElementById("nxGreeting").textContent = greetingText();
+    if (chatEl) chatEl.classList.add("is-empty");
+    if (composeModes) composeModes.hidden = false;
   }
 
   function addMsg(role, text) {
@@ -405,6 +431,10 @@
       micBtn.hidden = hasText;
       if (!micUnsupported) micBtn.disabled = busy;
     }
+    if (dictateBtn) {
+      dictateBtn.hidden = hasText;
+      if (!micUnsupported) dictateBtn.disabled = busy;
+    }
     if (inputSuggestion) {
       inputSuggestion.hidden = hasText;
       if (!hasText) inputSuggestion.textContent = currentSuggestion;
@@ -457,12 +487,33 @@
   renderSidebar();
 
   function syncVersionLabel(character) {
-    if (!versionLabel) return;
-    versionLabel.textContent = PERSONA_LABELS[character] || PERSONA_LABELS.nex;
+    var label = PERSONA_LABELS[character] || PERSONA_LABELS.nex;
+    if (versionLabel) versionLabel.textContent = label;
+    if (modeVersionLabel) modeVersionLabel.textContent = label;
     if (versionMenu) {
       versionMenu.querySelectorAll("[data-character]").forEach(function (btn) {
         btn.classList.toggle("is-active", btn.dataset.character === character);
       });
+    }
+  }
+
+  // Shared by both the top-bar version dropdown and the inline cycle
+  // button under a fresh/empty chat's centered compose bar -- PATCHes
+  // the active chat's persona, or just remembers the pick for the next
+  // chat send() creates if there's no chat yet.
+  function applyPersonaChoice(character) {
+    if (activeChatId) {
+      fetch("/api/ai/chats/" + activeChatId, {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ character: character }),
+      }).then(function (r) { return r.json(); }).then(function (j) {
+        if (!j.ok) { window.plToast && window.plToast("Ging nicht."); return; }
+        var c = chats.find(function (c) { return c.id === activeChatId; });
+        if (c) c.character = character;
+        syncVersionLabel(character);
+      }).catch(function () { window.plToast && window.plToast("Ging nicht."); });
+    } else {
+      pendingPersona = character;
+      syncVersionLabel(character);
     }
   }
 
@@ -731,20 +782,7 @@
       var btn = e.target.closest("[data-character]");
       if (!btn) return;
       versionMenu.hidden = true;
-      var character = btn.dataset.character;
-      if (activeChatId) {
-        fetch("/api/ai/chats/" + activeChatId, {
-          method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ character: character }),
-        }).then(function (r) { return r.json(); }).then(function (j) {
-          if (!j.ok) { window.plToast && window.plToast("Ging nicht."); return; }
-          var c = chats.find(function (c) { return c.id === activeChatId; });
-          if (c) c.character = character;
-          syncVersionLabel(character);
-        }).catch(function () { window.plToast && window.plToast("Ging nicht."); });
-      } else {
-        pendingPersona = character;
-        syncVersionLabel(character);
-      }
+      applyPersonaChoice(btn.dataset.character);
     });
     document.addEventListener("click", function (e) {
       if (!versionMenu.hidden && !e.target.closest(".nx-version-wrap")) versionMenu.hidden = true;
@@ -752,7 +790,34 @@
     syncVersionLabel((chats.find(function (c) { return c.id === activeChatId; }) || {}).character || "nex");
   }
 
-  // ---------------- account corner: theme / avatar / logout ----------------
+  // ---------------- new-chat compose row: Chat/Code + version cycle ----------------
+  // Only visible while the centered empty-chat view is showing (see
+  // showEmptyPane/clearEmpty). "Code" is a shortcut, not a separate
+  // backend mode -- it drops the same starter phrase into the input as
+  // the Codex entry in the right-hand tools rail. The version button
+  // cycles through PERSONAS on each click instead of opening a menu,
+  // reusing applyPersonaChoice() so it stays in sync with the top-bar
+  // picker either way.
+  if (modeToggle) {
+    modeToggle.addEventListener("click", function (e) {
+      var btn = e.target.closest("[data-mode]");
+      if (!btn) return;
+      modeToggle.querySelectorAll(".nx-mode-btn").forEach(function (b) { b.classList.toggle("is-active", b === btn); });
+      if (btn.dataset.mode === "code") {
+        input.value = "Programmiere mir ";
+        autoGrow();
+        syncSend();
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+      }
+    });
+  }
+  if (modeVersionBtn) {
+    modeVersionBtn.addEventListener("click", function () {
+      var current = (chats.find(function (c) { return c.id === activeChatId; }) || {}).character || pendingPersona || "nex";
+      applyPersonaChoice(current === "nex" ? "neo" : "nex");
+    });
+  }
   var accountBtn = document.getElementById("nxAccountBtn");
   if (accountBtn) {
     var accountMenu = document.getElementById("nxAccountMenu");
@@ -953,6 +1018,10 @@
       micBtn.disabled = true;
       micBtn.title = "Spracherkennung wird von diesem Browser nicht unterstützt";
     }
+    if (dictateBtn) {
+      dictateBtn.disabled = true;
+      dictateBtn.title = "Spracherkennung wird von diesem Browser nicht unterstützt";
+    }
   } else if (micBtn) {
     recognition = new SR();
     recognition.lang = "de-DE";
@@ -978,12 +1047,14 @@
     recognition.onstart = function () {
       finalTranscript = "";
       micBtn.classList.add("is-listening");
+      if (dictateBtn) dictateBtn.classList.add("is-listening");
       if (toolsVoiceBtn) toolsVoiceBtn.classList.add("is-active");
       setVoiceStatus("Hört zu …");
     };
     var micErrorShown = false;
     recognition.onend = function () {
       micBtn.classList.remove("is-listening");
+      if (dictateBtn) dictateBtn.classList.remove("is-listening");
       if (toolsVoiceBtn) toolsVoiceBtn.classList.remove("is-active");
       clearSilenceTimer();
       if (wantListening && !busy) {
@@ -1016,24 +1087,43 @@
         voiceModeOn = false;
         micErrorShown = true;
         micBtn.classList.remove("is-listening");
+        if (dictateBtn) dictateBtn.classList.remove("is-listening");
         setVoiceStatus("Mikrofon-Zugriff verweigert.");
       }
     };
 
+    function stopListeningFromUi() {
+      wantListening = false;
+      voiceModeOn = false;
+      clearSilenceTimer();
+      finalTranscript = "";
+      pauseListening();
+      setVoiceStatus("");
+    }
     micBtn.addEventListener("click", function () {
       if (wantListening) {
-        wantListening = false;
-        voiceModeOn = false;
-        clearSilenceTimer();
-        finalTranscript = "";
-        pauseListening();
-        setVoiceStatus("");
+        stopListeningFromUi();
       } else {
         wantListening = true;
         voiceModeOn = true;
         startListeningSafely();
       }
     });
+    // Dictate-only: same continuous-listening/silence-timer/auto-send
+    // machinery, but voiceModeOn stays false -- speakReply() already
+    // skips speaking whenever voiceModeOn is false, so this is "just
+    // listen" for free, no separate flag needed.
+    if (dictateBtn) {
+      dictateBtn.addEventListener("click", function () {
+        if (wantListening) {
+          stopListeningFromUi();
+        } else {
+          wantListening = true;
+          voiceModeOn = false;
+          startListeningSafely();
+        }
+      });
+    }
   }
   // micBtn only just got assigned above -- run once more now so its
   // hidden state (toggled together with sendBtn's, see syncSend()) is
