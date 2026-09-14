@@ -398,17 +398,47 @@
     return b;
   }
 
+  // Shown while Nex is still silently generating -- covers the real gap
+  // between "the request was sent" and "the first visible token arrived"
+  // (the reasoning-model fallback burns a chunk of hidden "reasoning"
+  // tokens server-side before any visible content streams out at all, see
+  // ai_assistant.py's generate_chat_title comment for the same discovery).
+  // Previously the plain 3-dot version disappeared the instant the HTTP
+  // response opened, well before that -- leaving an empty bubble with no
+  // feedback for however long the silent phase took.
+  var WORKING_PHRASES = ["Denkt nach …", "Plant die Antwort …", "Prüft die Details …", "Fast fertig …"];
   var typingRow = null;
+  var workingPhraseTimer = null;
+  var workingClockTimer = null;
   function showTyping() {
     if (typingRow) return;
     clearEmpty();
     typingRow = document.createElement("div");
     typingRow.className = "nx-row them";
-    typingRow.innerHTML = '<div class="nx-bubble" style="padding:0;"><div class="nx-typing"><span></span><span></span><span></span></div></div>';
+    typingRow.innerHTML = '<div class="nx-bubble" style="padding:0;"><div class="nx-working">'
+      + '<video class="nx-working-video" src="/static/videos/nx-working.mp4" autoplay loop muted playsinline></video>'
+      + '<div class="nx-working-text"><span class="nx-working-status" id="nxWorkingStatus">' + WORKING_PHRASES[0] + '</span>'
+      + '<span class="nx-working-meta" id="nxWorkingMeta">0s</span></div>'
+      + '</div></div>';
     msgsEl.appendChild(typingRow);
     scrollDown();
+    var statusEl = document.getElementById("nxWorkingStatus");
+    var metaEl = document.getElementById("nxWorkingMeta");
+    var phraseIndex = 0;
+    workingPhraseTimer = setInterval(function () {
+      phraseIndex = (phraseIndex + 1) % WORKING_PHRASES.length;
+      if (statusEl) statusEl.textContent = WORKING_PHRASES[phraseIndex];
+    }, 2600);
+    var startedAt = Date.now();
+    workingClockTimer = setInterval(function () {
+      if (metaEl) metaEl.textContent = Math.round((Date.now() - startedAt) / 1000) + "s";
+    }, 1000);
   }
-  function hideTyping() { if (typingRow) { typingRow.remove(); typingRow = null; } }
+  function hideTyping() {
+    if (workingPhraseTimer) { clearInterval(workingPhraseTimer); workingPhraseTimer = null; }
+    if (workingClockTimer) { clearInterval(workingClockTimer); workingClockTimer = null; }
+    if (typingRow) { typingRow.remove(); typingRow = null; }
+  }
 
   function autoGrow() {
     input.style.height = "auto";
@@ -676,8 +706,17 @@
       if (ct.indexOf("application/json") !== -1) {
         return res.json().then(function (j) { throw new Error(nice(j.error)); });
       }
-      hideTyping();
-      var bubble = addMsg("assistant", "");
+      // The working indicator (see showTyping()) stays up until the
+      // FIRST visible token actually arrives, not just when the HTTP
+      // response opens -- there can be a real silent gap between the two
+      // (the reasoning-model fallback's hidden "reasoning" phase), during
+      // which an empty bubble would otherwise show nothing at all.
+      var bubble = null;
+      function ensureBubble() {
+        if (bubble) return;
+        hideTyping();
+        bubble = addMsg("assistant", "");
+      }
       var reader = res.body.getReader();
       var decoder = new TextDecoder();
       var full = "";
@@ -685,6 +724,7 @@
       function pump() {
         return reader.read().then(function (result) {
           if (result.done) {
+            ensureBubble();
             if (!full) {
               // the stream opened (200, text/plain) but ended without a
               // single token ever arriving -- e.g. Groq itself failed
@@ -726,6 +766,7 @@
             return;
           }
           full += decoder.decode(result.value, { stream: true });
+          ensureBubble();
           var split = splitPreview(full);
           bubble.innerHTML = renderMarkdown(split.text);
           if (split.pending) {
@@ -743,6 +784,9 @@
   function send() {
     var text = input.value.trim();
     if (!text || busy) return;
+    if (composeMode === "code" && !/programmier/i.test(text)) {
+      text = "Programmiere mir: " + text;
+    }
     input.value = "";
     autoGrow();
     addMsg("user", text);
@@ -826,18 +870,17 @@
   // cycles through PERSONAS on each click instead of opening a menu,
   // reusing applyPersonaChoice() so it stays in sync with the top-bar
   // picker either way.
+  // "Code" no longer pre-fills the input (that meant clearing boilerplate
+  // text before typing anything else) -- it's a real mode now, applied
+  // silently at send() time (see there) so the compose line always shows
+  // exactly what the user typed, nothing more.
+  var composeMode = "chat";
   if (modeToggle) {
     modeToggle.addEventListener("click", function (e) {
       var btn = e.target.closest("[data-mode]");
       if (!btn) return;
+      composeMode = btn.dataset.mode;
       modeToggle.querySelectorAll(".nx-mode-btn").forEach(function (b) { b.classList.toggle("is-active", b === btn); });
-      if (btn.dataset.mode === "code") {
-        input.value = "Programmiere mir ";
-        autoGrow();
-        syncSend();
-        input.focus();
-        input.setSelectionRange(input.value.length, input.value.length);
-      }
     });
   }
   if (modeVersionBtn) {
