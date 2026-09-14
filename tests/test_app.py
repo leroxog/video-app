@@ -31,6 +31,7 @@ def _no_real_title_generation(monkeypatch):
     title-update behavior monkeypatch it again to a real value, which
     simply overrides this default within that same test."""
     monkeypatch.setattr(app_module.ai_assistant, "generate_chat_title", lambda history: "")
+    monkeypatch.setattr(app_module.ai_assistant, "generate_next_suggestion", lambda history: "")
 
 
 def signup(client, username="alice", password="secret1"):
@@ -461,6 +462,74 @@ def test_stream_falls_back_to_truncated_title_if_generation_fails_on_first_messa
     client.post(f"/api/ai/chats/{cid}/stream", json={"message": "Hallo Nex"})
     with flask_app.app_context():
         assert db.session.get(AiChat, cid).title == "Hallo Nex"
+
+
+def test_generate_next_suggestion_uses_a_large_enough_token_budget(monkeypatch):
+    # Same reasoning-model token-starvation risk as generate_chat_title --
+    # this call shares the same generous budget for the same reason.
+    monkeypatch.undo()  # this test targets the real generate_next_suggestion, not the autouse no-op mock
+    seen = {}
+
+    def fake_generate_groq(messages, max_tokens, temperature=0.7):
+        seen["max_tokens"] = max_tokens
+        return "Wie mache ich das noch besser?"
+
+    monkeypatch.setattr(app_module.ai_assistant, "_generate_groq", fake_generate_groq)
+    suggestion = app_module.ai_assistant.generate_next_suggestion(
+        [{"role": "user", "content": "Hallo"}, {"role": "assistant", "content": "Hi!"}]
+    )
+    assert suggestion == "Wie mache ich das noch besser?"
+    assert seen["max_tokens"] >= 200
+
+
+def test_generate_next_suggestion_returns_empty_string_for_empty_history():
+    assert app_module.ai_assistant.generate_next_suggestion([]) == ""
+
+
+def test_stream_regenerates_suggestion_from_the_whole_conversation_every_turn(client, monkeypatch):
+    signup(client, "alice")
+    cid = _chat_id(client)
+    seen_histories = []
+
+    def fake_suggestion(history):
+        seen_histories.append(history)
+        return "Vorschlag " + str(len(seen_histories))
+
+    monkeypatch.setattr(app_module.ai_assistant, "generate_next_suggestion", fake_suggestion)
+    _mock_stream(monkeypatch, ["erste Antwort"])
+    client.post(f"/api/ai/chats/{cid}/stream", json={"message": "erste Frage"})
+    with flask_app.app_context():
+        assert db.session.get(AiChat, cid).next_suggestion == "Vorschlag 1"
+
+    _mock_stream(monkeypatch, ["zweite Antwort"])
+    client.post(f"/api/ai/chats/{cid}/stream", json={"message": "zweite Frage"})
+    with flask_app.app_context():
+        assert db.session.get(AiChat, cid).next_suggestion == "Vorschlag 2"
+
+
+def test_stream_keeps_previous_suggestion_if_generation_fails(client, monkeypatch):
+    signup(client, "alice")
+    cid = _chat_id(client)
+    with flask_app.app_context():
+        chat = db.session.get(AiChat, cid)
+        chat.next_suggestion = "Alter Vorschlag"
+        db.session.commit()
+    _mock_stream(monkeypatch, ["Hallo zurück!"])
+    # the autouse fixture already mocks generate_next_suggestion to return ""
+    client.post(f"/api/ai/chats/{cid}/stream", json={"message": "Hallo Nex"})
+    with flask_app.app_context():
+        assert db.session.get(AiChat, cid).next_suggestion == "Alter Vorschlag"
+
+
+def test_chat_messages_endpoint_returns_next_suggestion(client, monkeypatch):
+    signup(client, "alice")
+    cid = _chat_id(client)
+    with flask_app.app_context():
+        chat = db.session.get(AiChat, cid)
+        chat.next_suggestion = "Erzähl mir mehr"
+        db.session.commit()
+    resp = client.get(f"/api/ai/chats/{cid}/messages")
+    assert resp.get_json()["chat"]["next_suggestion"] == "Erzähl mir mehr"
 
 
 def test_system_prompt_documents_the_nexpreview_artifact_convention():

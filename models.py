@@ -165,6 +165,11 @@ class AiChat(db.Model):
     # switchable via PATCH /api/ai/chats/<id>.
     mode = db.Column(db.String(20), nullable=False, default="general")
     character = db.Column(db.String(20), nullable=False, default="nex")
+    # AI-generated guess at what the user will probably type next, re-
+    # generated after every turn (see ai_assistant.generate_next_suggestion)
+    # -- shown as ghost text in the empty compose line instead of a random
+    # static example once a chat actually has content to read.
+    next_suggestion = db.Column(db.String(200), nullable=True)
     specialize_prompted = db.Column(db.Boolean, nullable=False, default=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))

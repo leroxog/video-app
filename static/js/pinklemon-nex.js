@@ -404,12 +404,14 @@
     input.style.height = Math.min(input.scrollHeight, 200) + "px";
   }
 
-  // A handful of good example prompts -- one is picked at random per page
-  // load and shown ghosted inside the empty input line (like a smarter
-  // placeholder), so someone with no idea what to ask sees something
-  // concrete instead of a blank box. Double-click commits it into the
-  // textarea; a single click just focuses the field like empty space
-  // would, so it never gets in the way of just clicking in to type.
+  // Generic fallback examples for a chat with no history yet to read --
+  // shown ghosted inside the empty input line (like a smarter
+  // placeholder). Once a chat has messages, the server reads the whole
+  // conversation and generates a real suggestion for what the user will
+  // probably type next (AiChat.next_suggestion, refreshed after every
+  // turn -- see applySuggestion() below), which takes priority over
+  // these. Double-click commits whichever is showing into the textarea;
+  // a single click just focuses the field like empty space would.
   var SUGGESTIONS = [
     "Erkläre mir kurz, wie Photosynthese funktioniert",
     "Baue mir ein kleines Browser-Spiel",
@@ -418,7 +420,19 @@
     "Was kannst du alles für mich tun?",
     "Trainiere ein kleines KI-Modell, das gerade und ungerade Zahlen unterscheidet",
   ];
-  var currentSuggestion = SUGGESTIONS[Math.floor(Math.random() * SUGGESTIONS.length)];
+  var currentSuggestion = (function () {
+    var active = chats.find(function (c) { return c.id === activeChatId; });
+    return (active && active.next_suggestion) || SUGGESTIONS[Math.floor(Math.random() * SUGGESTIONS.length)];
+  })();
+
+  // Called with a chat's stored next_suggestion (or null/undefined for a
+  // fresh chat) whenever the active chat changes or a reply completes --
+  // re-syncs the ghost text immediately if the input happens to be empty
+  // right now.
+  function applySuggestion(nextSuggestion) {
+    currentSuggestion = nextSuggestion || SUGGESTIONS[Math.floor(Math.random() * SUGGESTIONS.length)];
+    syncSend();
+  }
 
   function syncSend() {
     var hasText = !!input.value.trim();
@@ -537,6 +551,7 @@
         if (!j.ok) { window.plToast && window.plToast(nice(j.error)); return; }
         var c = chats.find(function (c) { return c.id === id; });
         if (c) c.character = j.chat.character;
+        applySuggestion(j.chat.next_suggestion);
         setActive(id, skipPush);
         resetChatArtifacts();
         if (!j.messages.length) { showEmptyPane(); }
@@ -552,6 +567,7 @@
   function newChat(skipPush) {
     setActive(null, skipPush);
     resetChatArtifacts();
+    applySuggestion(null);
     showEmptyPane();
     closeSidebar();
   }
@@ -748,6 +764,7 @@
               if (!j.ok) return;
               var c = chats.find(function (c) { return c.id === chatId; });
               if (c && j.chat.title) { c.title = j.chat.title; renderSidebar(); }
+              if (chatId === activeChatId) applySuggestion(j.chat.next_suggestion);
             })
             .catch(function () {});
         });

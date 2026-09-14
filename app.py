@@ -245,7 +245,10 @@ def ensure_sqlite_columns_exist():
             ("nex7_persona", "VARCHAR(20)"),
             ("bio", "VARCHAR(300)"),
         ],
-        "ai_chat": [("character", "VARCHAR(20) NOT NULL DEFAULT 'nex'")],
+        "ai_chat": [
+            ("character", "VARCHAR(20) NOT NULL DEFAULT 'nex'"),
+            ("next_suggestion", "VARCHAR(200)"),
+        ],
     }
     with db.engine.connect() as conn:
         for table, columns in wanted.items():
@@ -324,6 +327,7 @@ def ensure_columns_exist():
         # 7Ai (2026-09-08) -- existing ai_chat rows predate this column and
         # are all Nex chats, so the default backfills them correctly.
         "ALTER TABLE ai_chat ADD COLUMN IF NOT EXISTS character VARCHAR(20) NOT NULL DEFAULT 'nex'",
+        "ALTER TABLE ai_chat ADD COLUMN IF NOT EXISTS next_suggestion VARCHAR(200)",
     ]
     with db.engine.connect() as conn:
         for statement in statements:
@@ -889,7 +893,10 @@ def api_pl_update_profile():
 # opening the app fresh never leaves behind an empty untitled row.
 # ==========================================================================
 def _ai_serialize_chat(chat):
-    return {"id": chat.id, "title": chat.title or "Neuer Chat", "character": chat.character}
+    return {
+        "id": chat.id, "title": chat.title or "Neuer Chat", "character": chat.character,
+        "next_suggestion": chat.next_suggestion,
+    }
 
 
 # In-memory sliding-window rate limit protecting the Groq key from a
@@ -1075,6 +1082,13 @@ def api_ai_stream(chat_id):
                     chat.title = new_title
                 elif chat.title is None:
                     chat.title = text_[:40]
+                # Same idea for the compose-line suggestion shown on this
+                # chat's next visit -- read the whole conversation, guess
+                # what the user will probably type next. Keeps the
+                # previous suggestion (or none) if generation fails.
+                new_suggestion = ai_assistant.generate_next_suggestion(title_history)
+                if new_suggestion:
+                    chat.next_suggestion = new_suggestion
             db.session.commit()
 
     return Response(stream_with_context(generate()), mimetype="text/plain")

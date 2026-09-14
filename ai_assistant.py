@@ -213,6 +213,15 @@ _TITLE_SYSTEM_PROMPT = (
     "NUR mit dem Titel, sonst nichts."
 )
 
+_SUGGESTION_SYSTEM_PROMPT = (
+    "Du liest das folgende Gespräch zwischen einem Nutzer und einer KI. Überlege, was der "
+    "Nutzer als NÄCHSTE Nachricht wahrscheinlich schreiben möchte -- eine naheliegende "
+    "Rückfrage, ein logischer nächster Schritt, eine Vertiefung eines gerade besprochenen "
+    "Punkts. Antworte NUR mit genau EINEM kurzen Beispiel-Satz, den der Nutzer als nächstes "
+    "selbst tippen könnte, aus der Ich-Perspektive des Nutzers (nicht der KI), maximal 12 "
+    "Wörter, ohne Anführungszeichen. Kein anderer Text, keine Erklärung."
+)
+
 
 def generate_chat_title(history):
     """Summarizes `history` (same {"role","content"} shape as
@@ -244,6 +253,31 @@ def generate_chat_title(history):
         logger.exception("Chat-Titel-Generierung fehlgeschlagen")
         return ""
     return title.strip().strip('"').strip("'")[:100]
+
+
+def generate_next_suggestion(history):
+    """Guesses what the user will probably type next, from `history`
+    (same shape/collapsing as generate_chat_title). Shown as ghost text
+    in the empty compose line so it reflects this specific conversation
+    instead of a generic static example. Same reasoning-model token-
+    starvation risk as generate_chat_title (see its comment), but this
+    prompt asks the model to actually infer intent rather than just
+    summarize, which empirically burns noticeably more hidden
+    "reasoning" tokens before the visible answer -- 300 was observed
+    live cutting the answer off mid-word, so this uses a larger budget.
+    Same "return '' on failure, caller keeps the previous value"
+    contract as generate_chat_title."""
+    if not history:
+        return ""
+    messages = [{"role": "system", "content": _SUGGESTION_SYSTEM_PROMPT}]
+    messages.extend(history)
+    messages.append({"role": "user", "content": "Wahrscheinliche nächste Nachricht des Nutzers:"})
+    try:
+        suggestion = _generate_groq(messages, max_tokens=600, temperature=0.6)
+    except Exception:
+        logger.exception("Vorschlags-Generierung fehlgeschlagen")
+        return ""
+    return suggestion.strip().strip('"').strip("'")[:200]
 
 
 def generate_reply(message, history=None, persona=DEFAULT_PERSONA):
