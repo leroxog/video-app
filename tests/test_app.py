@@ -615,6 +615,46 @@ def test_team_messages_poll_returns_only_messages_after_given_id(client):
     assert contents == ["zwei"]
 
 
+def test_typing_shows_up_for_other_members_but_not_yourself(client):
+    signup(client, "alice")
+    team = client.post("/api/teams", json={"name": "Projekt X"}).get_json()["team"]
+    bob = make_user(client, "bob")
+    bob.post("/api/teams/join", json={"invite_code": team["invite_code"]})
+
+    bob.post(f"/api/teams/{team['id']}/typing")
+    alice_view = client.get(f"/api/teams/{team['id']}/messages").get_json()
+    assert alice_view["typing"] == ["bob"]
+
+    client.post(f"/api/teams/{team['id']}/typing")
+    bob_view = bob.get(f"/api/teams/{team['id']}/messages").get_json()
+    assert bob_view["typing"] == ["alice"]
+    assert "bob" not in bob_view["typing"]
+
+
+def test_typing_expires_after_the_window(client, monkeypatch):
+    signup(client, "alice")
+    team = client.post("/api/teams", json={"name": "Projekt X"}).get_json()["team"]
+    bob = make_user(client, "bob")
+    bob.post("/api/teams/join", json={"invite_code": team["invite_code"]})
+    bob.post(f"/api/teams/{team['id']}/typing")
+
+    monkeypatch.setattr(app_module, "_TYPING_WINDOW_SECONDS", -1)
+    j = client.get(f"/api/teams/{team['id']}/messages").get_json()
+    assert j["typing"] == []
+
+
+def test_sending_a_message_clears_typing_status(client):
+    signup(client, "alice")
+    team = client.post("/api/teams", json={"name": "Projekt X"}).get_json()["team"]
+    bob = make_user(client, "bob")
+    bob.post("/api/teams/join", json={"invite_code": team["invite_code"]})
+    bob.post(f"/api/teams/{team['id']}/typing")
+    bob.post(f"/api/teams/{team['id']}/messages", json={"message": "fertig gedacht"})
+
+    j = client.get(f"/api/teams/{team['id']}/messages").get_json()
+    assert j["typing"] == []
+
+
 def test_non_member_cannot_view_or_post_team_messages(client):
     signup(client, "alice")
     team = client.post("/api/teams", json={"name": "Projekt X"}).get_json()["team"]

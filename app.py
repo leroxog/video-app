@@ -253,6 +253,7 @@ def ensure_sqlite_columns_exist():
             ("character", "VARCHAR(20) NOT NULL DEFAULT 'nex'"),
             ("next_suggestion", "VARCHAR(200)"),
         ],
+        "team_member": [("typing_at", "DATETIME")],
     }
     with db.engine.connect() as conn:
         for table, columns in wanted.items():
@@ -332,6 +333,7 @@ def ensure_columns_exist():
         # are all Nex chats, so the default backfills them correctly.
         "ALTER TABLE ai_chat ADD COLUMN IF NOT EXISTS character VARCHAR(20) NOT NULL DEFAULT 'nex'",
         "ALTER TABLE ai_chat ADD COLUMN IF NOT EXISTS next_suggestion VARCHAR(200)",
+        "ALTER TABLE team_member ADD COLUMN IF NOT EXISTS typing_at TIMESTAMP",
     ]
     with db.engine.connect() as conn:
         for statement in statements:
@@ -1291,6 +1293,9 @@ def api_teams_join():
     return jsonify({"ok": True, "team": _team_serialize(team)})
 
 
+_TYPING_WINDOW_SECONDS = 5
+
+
 @app.route("/api/teams/<int:team_id>/messages")
 def api_team_messages(team_id):
     me = current_user()
@@ -1304,20 +1309,37 @@ def api_team_messages(team_id):
     msgs = q.order_by(TeamMessage.id.asc()).all()
     members = TeamMember.query.filter_by(team_id=team_id).all()
     member_names = []
+    typing_names = []
+    typing_cutoff = datetime.utcnow() - timedelta(seconds=_TYPING_WINDOW_SECONDS)
     for m in members:
         u = db.session.get(User, m.user_id)
-        if u:
-            member_names.append(u.pl_display_name or u.username)
+        if not u:
+            continue
+        member_names.append(u.pl_display_name or u.username)
+        if m.user_id != me.id and m.typing_at and m.typing_at >= typing_cutoff:
+            typing_names.append(u.pl_display_name or u.username)
     return jsonify({
-        "ok": True, "team": _team_serialize(team), "members": member_names,
+        "ok": True, "team": _team_serialize(team), "members": member_names, "typing": typing_names,
         "messages": [_team_serialize_message(m, me.id) for m in msgs],
     })
+
+
+@app.route("/api/teams/<int:team_id>/typing", methods=["POST"])
+def api_team_typing(team_id):
+    me = current_user()
+    member = TeamMember.query.filter_by(team_id=team_id, user_id=me.id).first()
+    if member is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    member.typing_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify({"ok": True})
 
 
 @app.route("/api/teams/<int:team_id>/messages", methods=["POST"])
 def api_team_send(team_id):
     me = current_user()
-    if TeamMember.query.filter_by(team_id=team_id, user_id=me.id).first() is None:
+    member = TeamMember.query.filter_by(team_id=team_id, user_id=me.id).first()
+    if member is None:
         return jsonify({"ok": False, "error": "not_found"}), 404
     if _ai_rate_limited(me.id):
         return jsonify({"ok": False, "error": "rate_limited"}), 429
@@ -1326,6 +1348,9 @@ def api_team_send(team_id):
     if not text_:
         return jsonify({"ok": False, "error": "empty"}), 400
 
+    # The message itself is proof positive typing has stopped -- no need
+    # to wait out _TYPING_WINDOW_SECONDS for the "X tippt …" line to clear.
+    member.typing_at = None
     author_name = me.pl_display_name or me.username
     user_msg = TeamMessage(team_id=team_id, user_id=me.id, role="user", content=text_)
     db.session.add(user_msg)

@@ -1098,12 +1098,23 @@
                 + '<div class="nx-teams-invite">Einladungscode: <b>' + esc(j.team.invite_code) + '</b> -- teilen, '
                 + 'um andere beitreten zu lassen. Nex antwortet, wenn du "@nex" in deiner Nachricht erwähnst.</div>'
                 + '<div class="nx-teams-msgs" id="nxTeamsMsgs"></div>'
+                + '<div class="nx-teams-typing" id="nxTeamsTyping" hidden></div>'
                 + '<div class="nx-teams-compose"><input type="text" id="nxTeamComposeInput" placeholder="Nachricht ans Team …" maxlength="4000">'
                 + '<button type="button" id="nxTeamComposeSend" aria-label="Senden"><svg viewBox="0 0 24 24" fill="none" '
                 + 'stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">'
                 + '<path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg></button></div></div>';
               var composeInput = document.getElementById("nxTeamComposeInput");
               var composeSend = document.getElementById("nxTeamComposeSend");
+              // Broadcasts "I'm typing" at most once every 2s while the
+              // user has text in the box -- POSTs are cheap and this is
+              // ephemeral, no need to debounce on trailing edge too.
+              var lastTypingPing = 0;
+              composeInput.addEventListener("input", function () {
+                var now = Date.now();
+                if (!composeInput.value.trim() || now - lastTypingPing < 2000) return;
+                lastTypingPing = now;
+                fetch("/api/teams/" + teamId + "/typing", { method: "POST" }).catch(function () {});
+              });
               function submitTeamMessage() {
                 var text = composeInput.value.trim();
                 if (!text) return;
@@ -1121,6 +1132,16 @@
               composeInput.addEventListener("keydown", function (e) { if (e.key === "Enter") submitTeamMessage(); });
             }
             teamsAppendMessages(document.getElementById("nxTeamsMsgs"), j.messages);
+            var typingEl = document.getElementById("nxTeamsTyping");
+            if (typingEl) {
+              var typing = j.typing || [];
+              if (typing.length) {
+                typingEl.hidden = false;
+                typingEl.textContent = (typing.length === 1 ? typing[0] + " tippt …" : typing.join(", ") + " tippen …");
+              } else {
+                typingEl.hidden = true;
+              }
+            }
           });
       }
       poll();

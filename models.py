@@ -213,6 +213,12 @@ class TeamMember(db.Model):
     team_id = db.Column(db.Integer, db.ForeignKey("team.id"), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     joined_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    # Bumped by POST /api/teams/<id>/typing while this member has text in
+    # the compose box; a poll response reports a member as "typing" only
+    # while this is within the last few seconds (see app.py's
+    # _TYPING_WINDOW_SECONDS) -- naive UTC like integrations.py's
+    # token_expires_at, for the same SQLite-vs-aware-datetime reason.
+    typing_at = db.Column(db.DateTime, nullable=True)
     __table_args__ = (db.UniqueConstraint("team_id", "user_id", name="uq_team_member_team_user"),)
 
 
