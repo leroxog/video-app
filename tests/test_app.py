@@ -23,6 +23,16 @@ def client():
         db.drop_all()
 
 
+@pytest.fixture(autouse=True)
+def _no_real_title_generation(monkeypatch):
+    """generate_chat_title is a real Groq call, separate from
+    generate_reply_stream -- mocked to a no-op by default so no test
+    accidentally hits the network; tests that care about the actual
+    title-update behavior monkeypatch it again to a real value, which
+    simply overrides this default within that same test."""
+    monkeypatch.setattr(app_module.ai_assistant, "generate_chat_title", lambda history: "")
+
+
 def signup(client, username="alice", password="secret1"):
     return client.post("/signup", data={"username": username, "password": password, "password2": password})
 
@@ -389,6 +399,68 @@ def test_stream_returns_chunks_and_persists_both_messages(client, monkeypatch):
         assert [(m.role, m.content) for m in msgs] == [("user", "Hallo Nex"), ("assistant", "Hallo zurück!")]
         chat = db.session.get(AiChat, cid)
         assert chat.title == "Hallo Nex"
+
+
+def test_generate_chat_title_uses_a_large_enough_token_budget(monkeypatch):
+    # Found via live debugging: GROQ_FALLBACK_MODEL is a reasoning model
+    # that spends ~150-180 tokens of hidden "reasoning" before emitting
+    # the actual short title -- a small max_tokens budget (tuned for a
+    # plain non-reasoning model) left no room for the real answer and
+    # silently came back empty every time. Guard against regressing back
+    # to a too-small budget.
+    monkeypatch.undo()  # this test targets the real generate_chat_title, not the autouse no-op mock
+    seen = {}
+
+    def fake_generate_groq(messages, max_tokens, temperature=0.7):
+        seen["max_tokens"] = max_tokens
+        return "Ein Titel"
+
+    monkeypatch.setattr(app_module.ai_assistant, "_generate_groq", fake_generate_groq)
+    title = app_module.ai_assistant.generate_chat_title(
+        [{"role": "user", "content": "Hallo"}, {"role": "assistant", "content": "Hi!"}]
+    )
+    assert title == "Ein Titel"
+    assert seen["max_tokens"] >= 200
+
+
+def test_stream_regenerates_title_from_the_whole_conversation_every_turn(client, monkeypatch):
+    signup(client, "alice")
+    cid = _chat_id(client)
+    seen_histories = []
+
+    def fake_title(history):
+        seen_histories.append(history)
+        return "Titel " + str(len(seen_histories))
+
+    monkeypatch.setattr(app_module.ai_assistant, "generate_chat_title", fake_title)
+    _mock_stream(monkeypatch, ["erste Antwort"])
+    client.post(f"/api/ai/chats/{cid}/stream", json={"message": "erste Frage"})
+    with flask_app.app_context():
+        assert db.session.get(AiChat, cid).title == "Titel 1"
+
+    _mock_stream(monkeypatch, ["zweite Antwort"])
+    client.post(f"/api/ai/chats/{cid}/stream", json={"message": "zweite Frage"})
+    with flask_app.app_context():
+        # regenerated again on the second turn, not left at "Titel 1"
+        assert db.session.get(AiChat, cid).title == "Titel 2"
+
+    # the second call's history includes the first full exchange too
+    assert seen_histories[1] == [
+        {"role": "user", "content": "erste Frage"},
+        {"role": "assistant", "content": "erste Antwort"},
+        {"role": "user", "content": "zweite Frage"},
+        {"role": "assistant", "content": "zweite Antwort"},
+    ]
+
+
+def test_stream_falls_back_to_truncated_title_if_generation_fails_on_first_message(client, monkeypatch):
+    signup(client, "alice")
+    cid = _chat_id(client)
+    _mock_stream(monkeypatch, ["Hallo zurück!"])
+    # the autouse fixture already mocks generate_chat_title to return ""
+    client.post(f"/api/ai/chats/{cid}/stream", json={"message": "Hallo Nex"})
+    with flask_app.app_context():
+        assert db.session.get(AiChat, cid).title == "Hallo Nex"
 
 
 def test_system_prompt_documents_the_nexpreview_artifact_convention():

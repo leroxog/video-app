@@ -1044,7 +1044,6 @@ def api_ai_stream(chat_id):
     history = [{"role": m.role, "content": _collapse_artifacts_for_history(m.content)} for m in chat.messages]
     db.session.add(AiChatMessage(chat_id=chat.id, role="user", content=text_))
     chat.updated_at = datetime.now(timezone.utc)
-    is_first_message = chat.title is None
     db.session.commit()
 
     def generate():
@@ -1060,8 +1059,22 @@ def api_ai_stream(chat_id):
             if reply_text:
                 db.session.add(AiChatMessage(chat_id=chat.id, role="assistant", content=reply_text))
             chat.updated_at = datetime.now(timezone.utc)
-            if is_first_message and reply_text:
-                chat.title = text_[:40]
+            if reply_text:
+                # Re-summarize the WHOLE conversation into a fresh title on
+                # every turn (not just the first message) so the sidebar
+                # row stays representative as the topic evolves -- a
+                # small, separate, low-token Groq call. Falls back to the
+                # old first-message truncation only if title generation
+                # itself fails and the chat has no title yet at all.
+                title_history = history + [
+                    {"role": "user", "content": _collapse_artifacts_for_history(text_)},
+                    {"role": "assistant", "content": _collapse_artifacts_for_history(reply_text)},
+                ]
+                new_title = ai_assistant.generate_chat_title(title_history)
+                if new_title:
+                    chat.title = new_title
+                elif chat.title is None:
+                    chat.title = text_[:40]
             db.session.commit()
 
     return Response(stream_with_context(generate()), mimetype="text/plain")

@@ -686,13 +686,19 @@
 
     ensureChat
       .then(function (chatId) {
-        var isNewTitle = !(chats.find(function (c) { return c.id === chatId; }) || {}).title
-          || (chats.find(function (c) { return c.id === chatId; }) || {}).title === "Neuer Chat";
         return streamInto(chatId, text).then(function () {
-          if (isNewTitle) {
-            var c = chats.find(function (c) { return c.id === chatId; });
-            if (c) { c.title = text.slice(0, 40); renderSidebar(); }
-          }
+          // The server re-summarizes the whole conversation into a fresh
+          // title after every turn now (not just the first message), so
+          // pull the current one back instead of guessing from the raw
+          // text client-side.
+          return fetch("/api/ai/chats/" + chatId + "/messages")
+            .then(function (r) { return r.json(); })
+            .then(function (j) {
+              if (!j.ok) return;
+              var c = chats.find(function (c) { return c.id === chatId; });
+              if (c && j.chat.title) { c.title = j.chat.title; renderSidebar(); }
+            })
+            .catch(function () {});
         });
       })
       .then(function () {

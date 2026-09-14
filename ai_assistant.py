@@ -196,6 +196,45 @@ def _generate_groq(messages, max_tokens, temperature=0.7):
         return _generate_groq_with_model(GROQ_FALLBACK_MODEL, messages, max_tokens, temperature, api_key)
 
 
+_TITLE_SYSTEM_PROMPT = (
+    "Fasse das folgende Gespräch in einem sehr kurzen Titel zusammen -- 2 bis 5 Wörter, wie ein "
+    "Kapitelname, kein ganzer Satz, ohne Anführungszeichen oder Satzzeichen am Ende. Antworte "
+    "NUR mit dem Titel, sonst nichts."
+)
+
+
+def generate_chat_title(history):
+    """Summarizes `history` (same {"role","content"} shape as
+    generate_reply's own `history` param -- the caller collapses any
+    nexpreview/neximage blocks first, same as it does before a normal
+    reply) into a short title for the sidebar row. A separate, small,
+    low-token Groq call from the actual reply, run after each turn so
+    the title stays representative of the whole conversation rather
+    than just its first message. Returns "" on any failure so a title
+    hiccup never breaks the chat itself -- callers should keep the
+    previous title when this comes back empty."""
+    if not history:
+        return ""
+    messages = [{"role": "system", "content": _TITLE_SYSTEM_PROMPT}]
+    messages.extend(history)
+    messages.append({"role": "user", "content": "Titel für dieses Gespräch:"})
+    try:
+        # GROQ_MODEL (llama-3.3-70b-versatile) currently 404s on Groq's
+        # side, so this -- like every other call in this module right
+        # now -- actually runs on GROQ_FALLBACK_MODEL (a reasoning
+        # model). Reasoning models spend a chunk of max_tokens on their
+        # own hidden "reasoning" field before ever emitting the real
+        # answer -- verified live at ~150-180 tokens of reasoning for
+        # this exact prompt/history shape, so a tiny budget (originally
+        # 20, tuned for a plain non-reasoning model) left zero room for
+        # the actual title and silently came back empty every time.
+        title = _generate_groq(messages, max_tokens=300, temperature=0.4)
+    except Exception:
+        logger.exception("Chat-Titel-Generierung fehlgeschlagen")
+        return ""
+    return title.strip().strip('"').strip("'")[:100]
+
+
 def generate_reply(message, history=None, persona=DEFAULT_PERSONA):
     """Runs one turn against Groq. `history` is this chat's own prior
     turns (a list of {"role": "user"|"assistant", "content": str} dicts,
