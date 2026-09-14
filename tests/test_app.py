@@ -392,6 +392,10 @@ def test_system_prompt_documents_the_nexpreview_artifact_convention():
     assert app_module.ai_assistant.MAX_REPLY_TOKENS == 3000
 
 
+def test_system_prompt_requires_clean_code_style():
+    assert "aussagekräftige Namen" in app_module.ai_assistant.SYSTEM_PROMPT
+
+
 def test_stream_persists_nexpreview_blocks_verbatim(client, monkeypatch):
     """The raw fence text is stored unchanged -- extraction/hiding the
     artifact from the chat bubble is purely a client-side concern, see

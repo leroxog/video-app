@@ -44,7 +44,12 @@ SYSTEM_PROMPT = (
     "laufen (Python etc.), Hilfestellung zu bestehendem Code -- nutze ganz normale Code-Blöcke "
     "mit drei Backticks wie gewohnt, sichtbar im Chat. Der nexpreview-Block mit vier Backticks "
     "ist ausschließlich für vollständige, direkt lauffähige Browser-Seiten/Apps reserviert, "
-    "die der Nutzer explizit gebaut haben möchte."
+    "die der Nutzer explizit gebaut haben möchte.\n\n"
+    "Schreibe jeden Code -- ob im nexpreview-Block oder in einem normalen Code-Beispiel -- in "
+    "wirklich gutem Stil, nicht nur lauffähig: aussagekräftige Namen für Variablen/Funktionen, "
+    "sinnvoll in kleine Funktionen aufgeteilt statt einem großen Block, kein toter Code und "
+    "keine unbenutzten Variablen. Das steht nicht im Widerspruch zur Kompaktheit oben -- sauber "
+    "heißt gut strukturiert, nicht aufgebläht mit unnötigen Kommentaren oder Leerzeilen."
 )
 
 
