@@ -18,10 +18,14 @@ GROQ_FALLBACK_MODEL = os.environ.get("GROQ_FALLBACK_MODEL", "openai/gpt-oss-120b
 CHAT_REQUEST_TIMEOUT_SECONDS = 30
 # A plain reply is a few hundred tokens; a self-contained HTML/CSS/JS
 # artifact (see the nexpreview convention below) can easily run to
-# 2000-3000, so the budget is sized for that worst case, not the common
-# case -- there's no cheap way to know in advance which one a given
-# reply will be before generation starts.
-MAX_REPLY_TOKENS = 3000
+# 2000-3000, and a real in-browser ML-training artifact (TensorFlow.js,
+# see the exception in _ARTIFACT_PROTOCOL) tends to run larger still --
+# the budget is sized for that worst case, not the common case, since
+# there's no cheap way to know in advance which one a given reply will
+# be before generation starts. This is a hard cap on Groq's side, not a
+# pre-paid cost, so raising it doesn't slow down or cost more for the
+# common short-reply case.
+MAX_REPLY_TOKENS = 4000
 MAX_MESSAGE_CHARS = 4000
 
 # Shared with every persona below: the nexpreview artifact convention and
@@ -55,7 +59,20 @@ _ARTIFACT_PROTOCOL = (
     "Backticks und der Sprachmarkierung 'neximage:Kurzer Titel', dessen Inhalt NUR eine kurze, "
     "detaillierte Bildbeschreibung auf Englisch ist (kein Markdown, keine URL, kein anderer "
     "Text) -- sie wird automatisch an einen Bildgenerator geschickt und im Chat angezeigt. Nie "
-    "einen nexpreview- und einen neximage-Block in derselben Antwort mischen."
+    "einen nexpreview- und einen neximage-Block in derselben Antwort mischen.\n\n"
+    "Wenn dich jemand bittet, eine echte KI zu bauen/zu trainieren (nicht nur eine App, die wie "
+    "KI aussieht, sondern ein Modell, das tatsächlich aus Beispielen lernt) -- baue das als "
+    "nexpreview-Artefakt, aber mit EINER gezielten Ausnahme von der 'keine externen "
+    "Abhängigkeiten'-Regel: du darfst genau ein "
+    "<script src=\"https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4/dist/tf.min.js\"></script> "
+    "einbinden, sonst keinen weiteren CDN-Link, und auch nur wenn wirklich trainiert wird. Baue "
+    "ein kleines tf.sequential()-Netz, eine Oberfläche, über die der Nutzer selbst ein paar "
+    "Trainingsbeispiele eingibt (Formularfelder für Zahlen/Kategorien, oder Bild-Uploads mit "
+    "Verkleinerung/Normalisierung auf ein Canvas für Bilderkennung), model.fit() mit einem "
+    "onEpochEnd-Callback, der Loss/Genauigkeit live sichtbar aktualisiert, danach einen Bereich "
+    "zum Ausprobieren mit neuer Eingabe. Sag im kurzen Einleitungssatz ehrlich, dass die "
+    "Genauigkeit mit wenigen Beispielen begrenzt ist -- tu nie so, als sei das Modell bereits "
+    "vortrainiert."
 )
 
 _NEX_PERSONA = (

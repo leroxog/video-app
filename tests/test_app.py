@@ -393,11 +393,22 @@ def test_stream_returns_chunks_and_persists_both_messages(client, monkeypatch):
 
 def test_system_prompt_documents_the_nexpreview_artifact_convention():
     assert "nexpreview" in app_module.ai_assistant.SYSTEM_PROMPT
-    assert app_module.ai_assistant.MAX_REPLY_TOKENS == 3000
 
 
 def test_system_prompt_requires_clean_code_style():
     assert "aussagekräftige Namen" in app_module.ai_assistant.SYSTEM_PROMPT
+
+
+def test_system_prompt_documents_the_tfjs_exception():
+    prompt = app_module.ai_assistant.SYSTEM_PROMPT
+    assert "cdn.jsdelivr.net" in prompt and "tf.min.js" in prompt
+    # the exception must stay additive: the base "no external deps" rule
+    # for ordinary nexpreview artifacts is still there, unmodified
+    assert "keine externen Abhängigkeiten/CDN-Links" in prompt
+
+
+def test_max_reply_tokens_raised_for_ml_artifacts():
+    assert app_module.ai_assistant.MAX_REPLY_TOKENS == 4000
 
 
 def test_neo_persona_shares_artifact_protocol():
