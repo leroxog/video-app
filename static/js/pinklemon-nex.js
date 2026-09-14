@@ -5,6 +5,7 @@
   var emptyEl = document.getElementById("nxEmpty");
   var input = document.getElementById("nxInput");
   var sendBtn = document.getElementById("nxSend");
+  var inputSuggestion = document.getElementById("nxInputSuggestion");
   var sidebar = document.getElementById("nxSidebar");
   var sidebarBackdrop = document.getElementById("nxSidebarBackdrop");
   var sidebarList = document.getElementById("nxSidebarList");
@@ -376,6 +377,23 @@
     input.style.height = "auto";
     input.style.height = Math.min(input.scrollHeight, 200) + "px";
   }
+
+  // A handful of good example prompts -- one is picked at random per page
+  // load and shown ghosted inside the empty input line (like a smarter
+  // placeholder), so someone with no idea what to ask sees something
+  // concrete instead of a blank box. Double-click commits it into the
+  // textarea; a single click just focuses the field like empty space
+  // would, so it never gets in the way of just clicking in to type.
+  var SUGGESTIONS = [
+    "Erkläre mir kurz, wie Photosynthese funktioniert",
+    "Baue mir ein kleines Browser-Spiel",
+    "Erstelle mir ein Bild von einer Berglandschaft bei Sonnenuntergang",
+    "Hilf mir, eine höfliche Absage-E-Mail zu formulieren",
+    "Was kannst du alles für mich tun?",
+    "Trainiere ein kleines KI-Modell, das gerade und ungerade Zahlen unterscheidet",
+  ];
+  var currentSuggestion = SUGGESTIONS[Math.floor(Math.random() * SUGGESTIONS.length)];
+
   function syncSend() {
     var hasText = !!input.value.trim();
     sendBtn.disabled = busy || !hasText;
@@ -387,11 +405,25 @@
       micBtn.hidden = hasText;
       if (!micUnsupported) micBtn.disabled = busy;
     }
+    if (inputSuggestion) {
+      inputSuggestion.hidden = hasText;
+      if (!hasText) inputSuggestion.textContent = currentSuggestion;
+    }
   }
   input.addEventListener("input", function () { autoGrow(); syncSend(); });
   input.addEventListener("keydown", function (e) {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
   });
+  if (inputSuggestion) {
+    inputSuggestion.addEventListener("click", function () { input.focus(); });
+    inputSuggestion.addEventListener("dblclick", function () {
+      input.value = currentSuggestion;
+      autoGrow();
+      syncSend();
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+    });
+  }
   syncSend();
 
   function nice(err) {

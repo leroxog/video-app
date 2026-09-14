@@ -191,12 +191,18 @@
     border-radius: 28px; padding: 9px 9px 9px 20px;
   }
   .nx-compose-inner:focus-within { border-color: var(--pl-text-faint); }
+  .nx-input-wrap { flex: 1; min-width: 0; position: relative; }
   .nx-compose textarea {
-    flex: 1; min-width: 0; background: transparent; border: none;
+    width: 100%; background: transparent; border: none;
     padding: 8px 0; font-size: 15.5px; line-height: 1.5; color: var(--pl-text);
     outline: none; resize: none; max-height: 200px; min-height: 24px; font-family: inherit;
   }
-  .nx-compose textarea::placeholder { color: var(--pl-text-faint); }
+  .nx-input-suggestion {
+    position: absolute; left: 0; top: 8px; right: 0;
+    font-size: 15.5px; line-height: 1.5; color: var(--pl-text-faint);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: text;
+  }
+  .nx-input-suggestion[hidden] { display: none; }
   .nx-send {
     flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%; border: none;
     background: var(--nx-pink); color: #fff;
@@ -409,7 +415,10 @@
 
     <div class="nx-compose">
       <div class="nx-compose-inner">
-        <textarea id="nxInput" rows="1" maxlength="4000" placeholder="Nachricht an Nex"></textarea>
+        <div class="nx-input-wrap">
+          <textarea id="nxInput" rows="1" maxlength="4000"></textarea>
+          <div class="nx-input-suggestion" id="nxInputSuggestion" title="Doppelklick zum Übernehmen"></div>
+        </div>
         <button type="button" class="nx-mic-btn" id="nxMicBtn" aria-label="Sprachmodus" title="Sprachmodus">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384"/></svg>
         </button>
