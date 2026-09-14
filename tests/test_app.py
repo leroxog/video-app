@@ -427,6 +427,45 @@ def test_stream_persists_nexpreview_blocks_verbatim(client, monkeypatch):
         assert chat.messages[-1].content == raw
 
 
+def test_system_prompt_documents_the_neximage_convention():
+    assert "neximage" in app_module.ai_assistant.SYSTEM_PROMPT
+
+
+def test_stream_persists_neximage_blocks_verbatim(client, monkeypatch):
+    signup(client, "alice")
+    cid = _chat_id(client)
+    raw = "Hier ist dein Bild.\n\n````neximage:Test\na small red circle on white background\n````"
+    _mock_stream(monkeypatch, [raw])
+    r = client.post(f"/api/ai/chats/{cid}/stream", json={"message": "mal mir was"})
+    assert r.get_data(as_text=True) == raw
+    with flask_app.app_context():
+        chat = db.session.get(AiChat, cid)
+        assert chat.messages[-1].content == raw
+
+
+def test_stream_collapses_prior_neximage_blocks_before_sending_as_history(client, monkeypatch):
+    signup(client, "alice")
+    cid = _chat_id(client)
+    raw = "Hier ist dein Bild.\n\n````neximage:Test-Titel\na small red circle\n````"
+    _mock_stream(monkeypatch, [raw])
+    client.post(f"/api/ai/chats/{cid}/stream", json={"message": "mal mir was"})
+
+    seen_history = []
+
+    def fake_stream(message, history=None, persona=None):
+        seen_history.append(history)
+        yield "ok"
+
+    _mock_stream(monkeypatch, fake_stream)
+    client.post(f"/api/ai/chats/{cid}/stream", json={"message": "danke"})
+
+    assistant_turn = seen_history[0][1]
+    assert assistant_turn["content"] == "Hier ist dein Bild.\n\n[Bild-Prompt: Test-Titel]"
+    with flask_app.app_context():
+        chat = db.session.get(AiChat, cid)
+        assert "````neximage" in chat.messages[1].content
+
+
 def test_stream_collapses_prior_artifacts_before_sending_as_history(client, monkeypatch):
     """The DB/UI keep the full artifact; only what's sent back to Groq on
     the NEXT turn gets collapsed to a placeholder (see

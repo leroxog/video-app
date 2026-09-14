@@ -991,11 +991,12 @@ def api_ai_chat_delete(chat_id):
     return jsonify({"ok": True})
 
 
-# Matches the same 4-backtick nexpreview fence the client extracts into
-# the preview panel (see pinklemon-nex.js's splitPreview/NEXPREVIEW_RE) --
-# kept in sync deliberately, not shared code, since one lives in Python
-# and the other in JS.
+# Matches the same 4-backtick fences the client extracts into the preview
+# panel / an inline image (see pinklemon-nex.js's splitPreview, NEXPREVIEW_RE
+# and NEXIMAGE_RE) -- kept in sync deliberately, not shared code, since one
+# lives in Python and the other in JS.
 _NEXPREVIEW_HISTORY_RE = re.compile(r"````nexpreview[:\s]*([^\n]*)\n[\s\S]*?\n````")
+_NEXIMAGE_HISTORY_RE = re.compile(r"````neximage[:\s]*([^\n]*)\n[\s\S]*?\n````")
 
 
 def _collapse_artifacts_for_history(content):
@@ -1003,12 +1004,18 @@ def _collapse_artifacts_for_history(content):
     message's content -- fine to keep in full in the database/UI, but
     re-sending it verbatim as conversation history on every later turn in
     the same chat would compound fast (a chat with two or three artifacts
-    would re-send 5-10k extra tokens on every unrelated follow-up).
-    Collapse it to a short placeholder for what actually goes back to
+    would re-send 5-10k extra tokens on every unrelated follow-up). Same
+    idea for a neximage prompt, though it's small -- the raw fence syntax
+    in history is still just noise the model doesn't need to see again.
+    Collapse both to short placeholders for what actually goes back to
     Groq; the stored message and what the UI renders are untouched."""
-    return _NEXPREVIEW_HISTORY_RE.sub(
+    content = _NEXPREVIEW_HISTORY_RE.sub(
         lambda m: f"[Vorschau-Code: {(m.group(1) or '').strip() or 'Vorschau'}]", content,
     )
+    content = _NEXIMAGE_HISTORY_RE.sub(
+        lambda m: f"[Bild-Prompt: {(m.group(1) or '').strip() or 'Bild'}]", content,
+    )
+    return content
 
 
 @app.route("/api/ai/chats/<int:chat_id>/stream", methods=["POST"])

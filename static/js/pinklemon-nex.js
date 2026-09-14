@@ -55,25 +55,84 @@
     });
   }
 
+  // Wires load/error handling for inline generated images (see
+  // nexImageTag() above) -- attached via addEventListener, not inline
+  // onerror=, since DOMPurify strips inline event-handler attributes.
+  // On error (e.g. Pollinations' ~1 request/15s anonymous throttle), adds
+  // a retry button that re-fetches with a cache-busting param.
+  function wireGeneratedImages(container) {
+    container.querySelectorAll(".nx-gen-image").forEach(function (img) {
+      if (img._nxWired) return;
+      img._nxWired = true;
+      var baseSrc = img.src;
+      img.addEventListener("load", function () {
+        img.classList.remove("is-error");
+        var retry = img.nextElementSibling;
+        if (retry && retry.classList.contains("nx-gen-image-retry")) retry.remove();
+      });
+      img.addEventListener("error", function () {
+        img.classList.add("is-error");
+        if (img.nextElementSibling && img.nextElementSibling.classList.contains("nx-gen-image-retry")) return;
+        var retry = document.createElement("button");
+        retry.type = "button";
+        retry.className = "nx-gen-image-retry";
+        retry.textContent = "Bild konnte nicht geladen werden -- erneut versuchen";
+        retry.addEventListener("click", function () {
+          img.classList.remove("is-error");
+          img.src = baseSrc + (baseSrc.indexOf("?") === -1 ? "?" : "&") + "retry=" + Date.now();
+        });
+        img.insertAdjacentElement("afterend", retry);
+      });
+    });
+  }
+
   // ---------------- Nex Browser: artifact preview panel ----------------
-  // See ai_assistant.py's SYSTEM_PROMPT for the model-side half of this
-  // convention: a complete, self-contained HTML/CSS/JS artifact comes
-  // back wrapped in a FOUR-backtick fence tagged "nexpreview:<title>".
-  // Four backticks (not three) specifically so an ordinary ``` that
-  // happens to occur inside the generated code (a JS template literal, a
-  // comment) can never close the block early -- CommonMark's own rule
-  // for exactly this problem.
+  // See ai_assistant.py's _ARTIFACT_PROTOCOL for the model-side half of
+  // this convention: a complete, self-contained HTML/CSS/JS artifact
+  // comes back wrapped in a FOUR-backtick fence tagged
+  // "nexpreview:<title>"; a generated-image request comes back the same
+  // way tagged "neximage:<title>", its content just a short English image
+  // prompt. Four backticks (not three) specifically so an ordinary ```
+  // that happens to occur inside generated code (a JS template literal, a
+  // comment) can never close the block early -- CommonMark's own rule for
+  // exactly this problem.
   var NEXPREVIEW_RE = /````nexpreview[:\s]*([^\n]*)\n([\s\S]*?)\n````/g;
+  var NEXIMAGE_RE = /````neximage[:\s]*([^\n]*)\n([\s\S]*?)\n````/g;
+  var FENCE_KINDS = ["nexpreview", "neximage"];
+
+  // Deterministic small hash so the same stored message always requests
+  // the same image from Pollinations on every reload (its own seed
+  // otherwise defaults to random per request).
+  function stableSeed(str) {
+    var h = 0;
+    for (var i = 0; i < str.length; i++) { h = (h * 31 + str.charCodeAt(i)) >>> 0; }
+    return h;
+  }
+
+  // Unlike a nexpreview artifact (always hidden behind the panel/chip),
+  // a generated image is visible content like any other -- it renders
+  // straight into the chat bubble. Built as a raw <img> tag spliced into
+  // the markdown source (marked passes raw HTML through, DOMPurify then
+  // sanitizes it -- same pipeline as any other message). Loading/error
+  // handling is wired separately via wireGeneratedImages() using
+  // addEventListener, since DOMPurify strips inline onerror= attributes.
+  function nexImageTag(title, prompt) {
+    var seed = stableSeed(title + "|" + prompt);
+    var src = "https://image.pollinations.ai/prompt/" + encodeURIComponent(prompt)
+      + "?width=1024&height=1024&nologo=true&seed=" + seed;
+    return '<img class="nx-gen-image" src="' + src + '" alt="' + esc(title) + '">';
+  }
 
   // Strips every complete nexpreview block out of `full` (never just the
   // first -- the model is told to send only one, but if it ever sends
   // more, none of them may leak into the chat) and returns the first as
-  // `artifact`. Also holds back a *possibly still-forming* nexpreview
-  // opening fence at the very end of the string so a partial marker
-  // (e.g. "```` nexpr") never flashes into the chat as a wrongly-parsed
-  // plain code block while it's still streaming in character by
-  // character -- a *confirmed* 3-backtick run can never become a
-  // nexpreview fence (which strictly requires 4), so those are left
+  // `artifact`; replaces every complete neximage block with an inline
+  // <img> tag. Also holds back a *possibly still-forming* nexpreview/
+  // neximage opening fence at the very end of the string so a partial
+  // marker (e.g. "```` nexpr") never flashes into the chat as a
+  // wrongly-parsed plain code block while it's still streaming in
+  // character by character -- a *confirmed* 3-backtick run can never
+  // become either fence (which strictly requires 4), so those are left
   // alone and keep rendering progressively exactly as before.
   function splitPreview(full) {
     var artifact = null;
@@ -81,14 +140,21 @@
       if (!artifact) artifact = { title: (title || "").trim() || "Vorschau", code: code };
       return "";
     });
+    text = text.replace(NEXIMAGE_RE, function (_m, title, prompt) {
+      var t = (title || "").trim() || "Bild";
+      return nexImageTag(t, prompt.trim());
+    });
 
     // `pending`: set once we're confidently inside a still-streaming
-    // nexpreview block (info line has settled to "nexpreview..."), so
-    // the panel can open live and grow the code view chunk by chunk --
-    // see Phase B wiring in streamInto()'s pump(). Left null while the
-    // fence is merely ambiguous (could still turn out to be a plain
-    // fence or something else) or once it has fully closed (handled by
-    // the artifact branch above instead).
+    // nexpreview/neximage block (info line has settled), so the panel can
+    // open live and grow the code view chunk by chunk for a nexpreview
+    // block -- see Phase B wiring in streamInto()'s pump(). A neximage
+    // block's pending state has no panel to feed (images render inline
+    // once complete, not in the side panel); it exists purely so the
+    // still-forming fence stays held back from `text`. Left null while
+    // the fence is merely ambiguous (could still turn out to be a plain
+    // fence or something else) or once it has fully closed (handled
+    // above instead).
     var pending = null;
     var runs = text.match(/`{3,}/g) || [];
     if (runs.length % 2 === 1) {
@@ -99,18 +165,20 @@
       var settled = newlineIdx !== -1;
       var infoSoFar = (settled ? after.slice(0, newlineIdx) : after).replace(/^[:\s]*/, "");
       var stillAmbiguousLength = lastRun.length === 3 && after === "";
-      var isNexpreview = lastRun.length >= 4 && settled && /^nexpreview\b/.test(infoSoFar);
-      var couldBeNexpreview =
-        stillAmbiguousLength ||
-        isNexpreview ||
-        (lastRun.length >= 4 && !settled && "nexpreview".indexOf(infoSoFar.split(":")[0]) === 0);
-      if (couldBeNexpreview) {
+      var settledKind = lastRun.length >= 4 && settled
+        ? FENCE_KINDS.filter(function (k) { return new RegExp("^" + k + "\\b").test(infoSoFar); })[0]
+        : null;
+      var couldStillMatch = lastRun.length >= 4 && !settled
+        && FENCE_KINDS.some(function (k) { return k.indexOf(infoSoFar.split(":")[0]) === 0; });
+      if (stillAmbiguousLength || settledKind || couldStillMatch) {
         text = text.slice(0, openIdx);
-        if (isNexpreview) {
+        if (settledKind === "nexpreview") {
           var titlePart = infoSoFar.replace(/^nexpreview[:\s]*/, "").trim();
-          pending = { title: titlePart || null, code: after.slice(newlineIdx + 1) };
+          pending = { kind: "nexpreview", title: titlePart || null, code: after.slice(newlineIdx + 1) };
+        } else if (settledKind === "neximage") {
+          pending = { kind: "neximage" };
         } else {
-          pending = { title: null, code: "" };
+          pending = { kind: null, title: null, code: "" };
         }
       }
     }
@@ -217,6 +285,7 @@
     var split = splitPreview(b.textContent);
     b.innerHTML = renderMarkdown(split.text);
     addCopyButtons(b);
+    wireGeneratedImages(b);
     if (split.artifact) appendPreviewChip(b, split.artifact);
   });
 
@@ -273,6 +342,7 @@
     var split = splitPreview(text);
     b.innerHTML = renderMarkdown(split.text);
     addCopyButtons(b);
+    wireGeneratedImages(b);
     if (split.artifact) appendPreviewChip(b, split.artifact);
     row.appendChild(b);
     msgsEl.appendChild(row);
@@ -497,14 +567,18 @@
             var split = splitPreview(full);
             bubble.innerHTML = renderMarkdown(split.text);
             addCopyButtons(bubble);
+            wireGeneratedImages(bubble);
             if (split.artifact) {
               appendPreviewChip(bubble, split.artifact);
               openPreviewPanel(split.artifact);
-            } else if (lastPending) {
+            } else if (lastPending && lastPending.kind === "nexpreview") {
               // the stream ended (e.g. MAX_REPLY_TOKENS hit) before the
               // fence ever closed -- still swap to a best-effort iframe
               // with whatever code arrived instead of leaving the panel
-              // stuck on "Wird erstellt ..." forever.
+              // stuck on "Wird erstellt ..." forever. (A neximage prompt
+              // cut off mid-stream has no panel to fall back into -- the
+              // incomplete fence was already excluded from split.text, so
+              // the bubble just shows whatever prose came before it.)
               var truncated = { title: lastPending.title || "Vorschau", code: lastPending.code };
               appendPreviewChip(bubble, truncated);
               openPreviewPanel(truncated);
@@ -516,7 +590,7 @@
           bubble.innerHTML = renderMarkdown(split.text);
           if (split.pending) {
             lastPending = split.pending;
-            openPreviewLoading(split.pending);
+            if (split.pending.kind === "nexpreview") openPreviewLoading(split.pending);
           }
           scrollDown();
           return pump();

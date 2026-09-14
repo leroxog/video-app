@@ -49,7 +49,13 @@ _ARTIFACT_PROTOCOL = (
     "wirklich gutem Stil, nicht nur lauffähig: aussagekräftige Namen für Variablen/Funktionen, "
     "sinnvoll in kleine Funktionen aufgeteilt statt einem großen Block, kein toter Code und "
     "keine unbenutzten Variablen. Das steht nicht im Widerspruch zur Kompaktheit oben -- sauber "
-    "heißt gut strukturiert, nicht aufgebläht mit unnötigen Kommentaren oder Leerzeilen."
+    "heißt gut strukturiert, nicht aufgebläht mit unnötigen Kommentaren oder Leerzeilen.\n\n"
+    "Wenn dich jemand bittet, ein Bild zu erstellen/zu malen/zu generieren -- antworte NUR mit "
+    "einem kurzen Satz darüber, was du zeichnest, gefolgt von genau einem Code-Block mit VIER "
+    "Backticks und der Sprachmarkierung 'neximage:Kurzer Titel', dessen Inhalt NUR eine kurze, "
+    "detaillierte Bildbeschreibung auf Englisch ist (kein Markdown, keine URL, kein anderer "
+    "Text) -- sie wird automatisch an einen Bildgenerator geschickt und im Chat angezeigt. Nie "
+    "einen nexpreview- und einen neximage-Block in derselben Antwort mischen."
 )
 
 _NEX_PERSONA = (
