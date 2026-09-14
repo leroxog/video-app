@@ -3,7 +3,12 @@
 
 {% block head_extra %}
 <style>
-  .pl-screen.nex { padding: 0; align-items: stretch; background: var(--pl-bg); }
+  /* The app's shared --pl-pink token was deliberately repointed to
+     ChatGPT's teal-green in the "Whole app to ChatGPT-style greys" pass
+     (its NAME just stuck around) -- send/voice want the app's original,
+     literally pink brand color specifically, so that's its own token
+     here rather than touching --pl-pink globally. */
+  .pl-screen.nex { padding: 0; align-items: stretch; background: var(--pl-bg); --nx-pink: #ff2d95; }
   .nx-layout { display: flex; flex: 1; min-height: 0; }
 
   .nx-sidebar {
@@ -194,7 +199,7 @@
   .nx-compose textarea::placeholder { color: var(--pl-text-faint); }
   .nx-send {
     flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%; border: none;
-    background: var(--pl-text); color: var(--pl-bg);
+    background: var(--nx-pink); color: #fff;
     display: flex; align-items: center; justify-content: center;
     transition: background .12s ease, opacity .12s ease;
   }
@@ -203,13 +208,15 @@
   .nx-send svg { width: 18px; height: 18px; }
   .nx-mic-btn {
     flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%; border: none;
-    background: transparent; color: var(--pl-text-dim);
+    background: var(--nx-pink); color: #fff;
     display: flex; align-items: center; justify-content: center;
+    transition: opacity .12s ease;
   }
-  .nx-mic-btn:hover { background: var(--pl-hover); color: var(--pl-text); }
-  .nx-mic-btn:disabled { opacity: .35; }
-  .nx-mic-btn svg { width: 18px; height: 18px; }
-  .nx-mic-btn.is-listening { background: var(--pl-pink); color: #fff; animation: nxMicPulse 1.4s ease-in-out infinite; }
+  .nx-mic-btn:hover { opacity: .88; }
+  .nx-mic-btn:disabled { opacity: .35; background: var(--pl-surface-3); color: var(--pl-text-faint); }
+  .nx-mic-btn:not(:disabled):active { transform: scale(0.92); }
+  .nx-mic-btn svg { width: 17px; height: 17px; }
+  .nx-mic-btn.is-listening { animation: nxMicPulse 1.4s ease-in-out infinite; }
   @keyframes nxMicPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(230,60,130,.4); } 50% { box-shadow: 0 0 0 6px rgba(230,60,130,0); } }
   .nx-voice-status {
     max-width: 768px; margin: 6px auto 0; text-align: center; font-size: 12px; color: var(--pl-pink); font-weight: 600;
@@ -293,6 +300,24 @@
   @media (max-width: 899px) {
     .nx-preview { position: fixed; inset: 0; z-index: 60; }
   }
+
+  /* ---------------- right-hand tools rail (Codex/Bilder/3D/Sprachchat) ---------------- */
+  .nx-tools-rail { display: none; }
+  @media (min-width: 900px) {
+    .nx-tools-rail {
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      flex: 0 0 72px; width: 72px; padding: 18px 8px; overflow-y: auto;
+      background: var(--pl-bg); border-left: 1px solid var(--pl-border);
+    }
+  }
+  .nx-tools-btn {
+    display: flex; flex-direction: column; align-items: center; gap: 5px; width: 100%; flex-shrink: 0;
+    border: none; background: transparent; color: var(--pl-text-dim);
+    padding: 11px 4px; border-radius: 12px; font-size: 10.5px; font-weight: 600;
+  }
+  .nx-tools-btn:hover { background: var(--pl-hover); color: var(--pl-text); }
+  .nx-tools-btn svg { width: 20px; height: 20px; }
+  .nx-tools-btn.is-active { background: var(--pl-pink); color: #fff; }
 </style>
 {% endblock %}
 
@@ -380,7 +405,7 @@
       <div class="nx-compose-inner">
         <textarea id="nxInput" rows="1" maxlength="4000" placeholder="Nachricht an Nex"></textarea>
         <button type="button" class="nx-mic-btn" id="nxMicBtn" aria-label="Sprachmodus" title="Sprachmodus">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><path d="M12 18v4M8 22h8"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384"/></svg>
         </button>
         <button class="nx-send" id="nxSend" aria-label="Senden" disabled>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
@@ -404,6 +429,25 @@
       <iframe id="nxPreviewFrame" sandbox="allow-scripts allow-modals allow-forms allow-downloads" title="Nex Vorschau"></iframe>
       <pre class="nx-preview-code" id="nxPreviewCode" hidden><code id="nxPreviewCodeText"></code></pre>
     </div>
+  </aside>
+
+  <aside class="nx-tools-rail" id="nxToolsRail">
+    <button type="button" class="nx-tools-btn" data-prompt="Programmiere mir ">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+      <span>Codex</span>
+    </button>
+    <button type="button" class="nx-tools-btn" data-prompt="Erstelle mir ein Bild von ">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg>
+      <span>Bilder</span>
+    </button>
+    <button type="button" class="nx-tools-btn" data-prompt="Baue mir ein 3D-Modell von ">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.73Z"/><path d="M3.3 7 12 12l8.7-5"/><path d="M12 22V12"/></svg>
+      <span>3D</span>
+    </button>
+    <button type="button" class="nx-tools-btn" id="nxToolsVoiceBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384"/></svg>
+      <span>Sprachchat</span>
+    </button>
   </aside>
 </div>
 {% endblock %}

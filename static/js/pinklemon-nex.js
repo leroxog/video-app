@@ -366,7 +366,18 @@
     input.style.height = "auto";
     input.style.height = Math.min(input.scrollHeight, 200) + "px";
   }
-  function syncSend() { sendBtn.disabled = busy || !input.value.trim(); }
+  function syncSend() {
+    var hasText = !!input.value.trim();
+    sendBtn.disabled = busy || !hasText;
+    sendBtn.hidden = !hasText;
+    // #nxMicBtn is assigned further down (voice-mode section) -- undefined
+    // here on the very first call at script init, fine since that section
+    // calls syncSend() again once it exists to set the initial state.
+    if (micBtn) {
+      micBtn.hidden = hasText;
+      if (!micUnsupported) micBtn.disabled = busy;
+    }
+  }
   input.addEventListener("input", function () { autoGrow(); syncSend(); });
   input.addEventListener("keydown", function (e) {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
@@ -743,6 +754,28 @@
     logoutBtn.addEventListener("click", function () { location.href = "/logout"; });
   }
 
+  // ---------------- right-hand tools rail ----------------
+  // Codex/Bilder/3D just drop a starter phrase into the compose box and
+  // focus it -- the actual capability lives entirely in Nex's system
+  // prompt (nexpreview/neximage conventions, the TensorFlow.js/Three.js
+  // exceptions), this is purely a shortcut, not a separate code path.
+  document.querySelectorAll(".nx-tools-btn[data-prompt]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      input.value = btn.dataset.prompt;
+      autoGrow();
+      syncSend();
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+    });
+  });
+  var toolsVoiceBtn = document.getElementById("nxToolsVoiceBtn");
+  if (toolsVoiceBtn) {
+    toolsVoiceBtn.addEventListener("click", function () {
+      var mic = document.getElementById("nxMicBtn");
+      if (mic) mic.click();
+    });
+  }
+
   // ---------------- voice mode ----------------
   // Native Web Speech API only -- no key, no external service, matches
   // "kostenlos" better than any API would. Mic button is the sole on/off
@@ -859,8 +892,9 @@
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
   var isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+  var micUnsupported = !SR || (isIOS && isSafari);
 
-  if (!SR || (isIOS && isSafari)) {
+  if (micUnsupported) {
     if (micBtn) {
       micBtn.disabled = true;
       micBtn.title = "Spracherkennung wird von diesem Browser nicht unterstützt";
@@ -890,11 +924,13 @@
     recognition.onstart = function () {
       finalTranscript = "";
       micBtn.classList.add("is-listening");
+      if (toolsVoiceBtn) toolsVoiceBtn.classList.add("is-active");
       setVoiceStatus("Hört zu …");
     };
     var micErrorShown = false;
     recognition.onend = function () {
       micBtn.classList.remove("is-listening");
+      if (toolsVoiceBtn) toolsVoiceBtn.classList.remove("is-active");
       clearSilenceTimer();
       if (wantListening && !busy) {
         setTimeout(function () { if (wantListening) startListeningSafely(); }, 300);
@@ -945,4 +981,9 @@
       }
     });
   }
+  // micBtn only just got assigned above -- run once more now so its
+  // hidden state (toggled together with sendBtn's, see syncSend()) is
+  // correct on first paint instead of staying unset from the earlier
+  // call at script init, before this element existed.
+  syncSend();
 })();
