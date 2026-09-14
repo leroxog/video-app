@@ -157,10 +157,12 @@ class AiChat(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     title = db.Column(db.String(100), nullable=True)
-    # Vestigial (from when this table also served code-chat/persona modes
-    # that no longer exist) -- kept with a DB-level default only so inserts
-    # against the still-existing production column keep succeeding; nothing
-    # reads or writes these anymore.
+    # `mode` is vestigial (from an earlier code-chat setup that no longer
+    # exists) -- kept with a DB-level default only so inserts against the
+    # still-existing production column keep succeeding, nothing reads or
+    # writes it anymore. `character` is live again: the persona key this
+    # chat talks to (see ai_assistant.PERSONAS), set on chat creation and
+    # switchable via PATCH /api/ai/chats/<id>.
     mode = db.Column(db.String(20), nullable=False, default="general")
     character = db.Column(db.String(20), nullable=False, default="nex")
     specialize_prompted = db.Column(db.Boolean, nullable=False, default=False)

@@ -14,6 +14,11 @@
   var activeChatId = window.NEX_CHAT_ID || null;
   var chats = window.NEX_CHATS || [];
   var openRowMenu = null;
+  var versionBtn = document.getElementById("nxVersionBtn");
+  var versionLabel = document.getElementById("nxVersionLabel");
+  var versionMenu = document.getElementById("nxVersionMenu");
+  var pendingPersona = null;
+  var PERSONA_LABELS = { nex: "Nex", neo: "Neo" };
 
   function esc(s) {
     return String(s == null ? "" : s)
@@ -285,6 +290,16 @@
   }
   renderSidebar();
 
+  function syncVersionLabel(character) {
+    if (!versionLabel) return;
+    versionLabel.textContent = PERSONA_LABELS[character] || PERSONA_LABELS.nex;
+    if (versionMenu) {
+      versionMenu.querySelectorAll("[data-character]").forEach(function (btn) {
+        btn.classList.toggle("is-active", btn.dataset.character === character);
+      });
+    }
+  }
+
   function setActive(id, skipPush) {
     activeChatId = id;
     window.NEX_CHAT_ID = id;
@@ -292,6 +307,9 @@
       row.classList.toggle("is-active", Number(row.dataset.chatId) === id);
     });
     if (!skipPush) history.pushState(null, "", id ? "/?chat=" + id : "/");
+    var chat = chats.find(function (c) { return c.id === id; });
+    pendingPersona = null;
+    syncVersionLabel(chat ? chat.character : "nex");
   }
 
   function switchToChat(id, skipPush) {
@@ -300,6 +318,8 @@
       .then(function (r) { return r.json(); })
       .then(function (j) {
         if (!j.ok) { window.plToast && window.plToast(nice(j.error)); return; }
+        var c = chats.find(function (c) { return c.id === id; });
+        if (c) c.character = j.chat.character;
         setActive(id, skipPush);
         if (!j.messages.length) { showEmptyPane(); }
         else {
@@ -473,7 +493,10 @@
 
     var ensureChat = activeChatId
       ? Promise.resolve(activeChatId)
-      : fetch("/api/ai/chats", { method: "POST" }).then(function (r) { return r.json(); }).then(function (j) {
+      : fetch("/api/ai/chats", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ character: pendingPersona || undefined }),
+        }).then(function (r) { return r.json(); }).then(function (j) {
           chats.unshift(j.chat);
           setActive(j.chat.id);
           renderSidebar();
@@ -507,22 +530,37 @@
   sendBtn.addEventListener("click", send);
 
   // ---------------- version picker ----------------
-  // Only one version exists so picking it is a no-op -- this is forward-
-  // looking UI scaffolding (ChatGPT-style model switcher), not a real
-  // multi-backend feature.
-  var versionBtn = document.getElementById("nxVersionBtn");
+  // Picking an entry switches the active chat's persona (AiChat.character)
+  // -- an existing chat is PATCHed immediately, a not-yet-created one just
+  // remembers the choice in `pendingPersona` until send() creates it.
   if (versionBtn) {
-    var versionMenu = document.getElementById("nxVersionMenu");
     versionBtn.addEventListener("click", function (e) {
       e.stopPropagation();
       versionMenu.hidden = !versionMenu.hidden;
     });
     versionMenu.addEventListener("click", function (e) {
-      if (e.target.closest("[data-version]")) versionMenu.hidden = true;
+      var btn = e.target.closest("[data-character]");
+      if (!btn) return;
+      versionMenu.hidden = true;
+      var character = btn.dataset.character;
+      if (activeChatId) {
+        fetch("/api/ai/chats/" + activeChatId, {
+          method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ character: character }),
+        }).then(function (r) { return r.json(); }).then(function (j) {
+          if (!j.ok) { window.plToast && window.plToast("Ging nicht."); return; }
+          var c = chats.find(function (c) { return c.id === activeChatId; });
+          if (c) c.character = character;
+          syncVersionLabel(character);
+        }).catch(function () { window.plToast && window.plToast("Ging nicht."); });
+      } else {
+        pendingPersona = character;
+        syncVersionLabel(character);
+      }
     });
     document.addEventListener("click", function (e) {
       if (!versionMenu.hidden && !e.target.closest(".nx-version-wrap")) versionMenu.hidden = true;
     });
+    syncVersionLabel((chats.find(function (c) { return c.id === activeChatId; }) || {}).character || "nex");
   }
 
   // ---------------- account corner: theme / avatar / logout ----------------

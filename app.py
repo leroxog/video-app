@@ -889,7 +889,7 @@ def api_pl_update_profile():
 # opening the app fresh never leaves behind an empty untitled row.
 # ==========================================================================
 def _ai_serialize_chat(chat):
-    return {"id": chat.id, "title": chat.title or "Neuer Chat"}
+    return {"id": chat.id, "title": chat.title or "Neuer Chat", "character": chat.character}
 
 
 # In-memory sliding-window rate limit protecting the Groq key from a
@@ -935,7 +935,11 @@ def api_ai_chats_list():
 @app.route("/api/ai/chats", methods=["POST"])
 def api_ai_chats_create():
     me = current_user()
-    chat = AiChat(user_id=me.id)
+    data = request.get_json(silent=True) or {}
+    character = data.get("character")
+    if character is not None and character not in ai_assistant.PERSONAS:
+        return jsonify({"ok": False, "error": "invalid_character"}), 400
+    chat = AiChat(user_id=me.id, character=character or "nex")
     db.session.add(chat)
     db.session.commit()
     return jsonify({"ok": True, "chat": _ai_serialize_chat(chat)})
@@ -960,10 +964,18 @@ def api_ai_chat_rename(chat_id):
     if chat is None:
         return jsonify({"ok": False, "error": "not_found"}), 404
     data = request.get_json(silent=True) or {}
-    title = (data.get("title") or "").strip()[:100]
-    if not title:
+    title = (data.get("title") or "").strip()[:100] if "title" in data else None
+    character = data.get("character") if "character" in data else None
+    if "title" in data and not title:
         return jsonify({"ok": False, "error": "empty"}), 400
-    chat.title = title
+    if character is not None and character not in ai_assistant.PERSONAS:
+        return jsonify({"ok": False, "error": "invalid_character"}), 400
+    if title is None and character is None:
+        return jsonify({"ok": False, "error": "empty"}), 400
+    if title is not None:
+        chat.title = title
+    if character is not None:
+        chat.character = character
     db.session.commit()
     return jsonify({"ok": True, "chat": _ai_serialize_chat(chat)})
 
@@ -1029,7 +1041,7 @@ def api_ai_stream(chat_id):
     def generate():
         full = []
         try:
-            for token in ai_assistant.generate_reply_stream(text_, history=history):
+            for token in ai_assistant.generate_reply_stream(text_, history=history, persona=chat.character):
                 full.append(token)
                 yield token
         except Exception:

@@ -287,7 +287,10 @@ def _mock_stream(monkeypatch, chunks):
     if callable(chunks):
         monkeypatch.setattr(app_module.ai_assistant, "generate_reply_stream", chunks)
     else:
-        monkeypatch.setattr(app_module.ai_assistant, "generate_reply_stream", lambda message, history=None: iter(chunks))
+        monkeypatch.setattr(
+            app_module.ai_assistant, "generate_reply_stream",
+            lambda message, history=None, persona=None: iter(chunks),
+        )
 
 
 def _chat_id(client):
@@ -309,6 +312,7 @@ def test_root_shows_version_picker(client):
     signup(client, "alice")
     home = client.get("/")
     assert "NexAi 0.1 (Beta)".encode() in home.data
+    assert "Neo AI".encode() in home.data
 
 
 def test_root_shows_most_recently_active_chat_by_default(client, monkeypatch):
@@ -396,6 +400,18 @@ def test_system_prompt_requires_clean_code_style():
     assert "aussagekräftige Namen" in app_module.ai_assistant.SYSTEM_PROMPT
 
 
+def test_neo_persona_shares_artifact_protocol():
+    assert "nexpreview" in app_module.ai_assistant.PERSONAS["neo"]["prompt"]
+
+
+def test_neo_persona_excludes_admin_credentials_and_theme():
+    for persona in app_module.ai_assistant.PERSONAS.values():
+        prompt = persona["prompt"]
+        assert "ADMIN_PASSWORD" not in prompt
+        assert "f0b64d" not in prompt
+        assert "Administrator" not in prompt
+
+
 def test_stream_persists_nexpreview_blocks_verbatim(client, monkeypatch):
     """The raw fence text is stored unchanged -- extraction/hiding the
     artifact from the chat bubble is purely a client-side concern, see
@@ -423,7 +439,7 @@ def test_stream_collapses_prior_artifacts_before_sending_as_history(client, monk
 
     seen_history = []
 
-    def fake_stream(message, history=None):
+    def fake_stream(message, history=None, persona=None):
         seen_history.append(history)
         yield "ok"
 
@@ -443,7 +459,7 @@ def test_stream_reuses_the_same_chat_and_sends_history(client, monkeypatch):
     cid = _chat_id(client)
     seen_history = []
 
-    def fake_stream(message, history=None):
+    def fake_stream(message, history=None, persona=None):
         seen_history.append(history)
         yield "reply " + str(len(seen_history))
 
@@ -459,11 +475,26 @@ def test_stream_reuses_the_same_chat_and_sends_history(client, monkeypatch):
     assert seen_history[1] == [{"role": "user", "content": "first"}, {"role": "assistant", "content": "reply 1"}]
 
 
+def test_stream_uses_chat_persona(client, monkeypatch):
+    signup(client, "alice")
+    cid = _chat_id(client)
+    client.patch(f"/api/ai/chats/{cid}", json={"character": "neo"})
+    seen_personas = []
+
+    def fake_stream(message, history=None, persona=None):
+        seen_personas.append(persona)
+        yield "ok"
+
+    _mock_stream(monkeypatch, fake_stream)
+    client.post(f"/api/ai/chats/{cid}/stream", json={"message": "hi"})
+    assert seen_personas == ["neo"]
+
+
 def test_stream_handles_ai_failure_gracefully(client, monkeypatch):
     signup(client, "alice")
     cid = _chat_id(client)
 
-    def boom(message, history=None):
+    def boom(message, history=None, persona=None):
         raise RuntimeError("groq down")
         yield  # pragma: no cover -- makes this a generator function
 
@@ -490,6 +521,24 @@ def test_create_chat_returns_default_title(client):
     signup(client, "alice")
     j = client.post("/api/ai/chats").get_json()
     assert j["ok"] is True and j["chat"]["title"] == "Neuer Chat"
+
+
+def test_create_chat_defaults_to_nex_persona(client):
+    signup(client, "alice")
+    j = client.post("/api/ai/chats").get_json()
+    assert j["chat"]["character"] == "nex"
+
+
+def test_create_chat_accepts_character(client):
+    signup(client, "alice")
+    j = client.post("/api/ai/chats", json={"character": "neo"}).get_json()
+    assert j["ok"] is True and j["chat"]["character"] == "neo"
+
+
+def test_create_chat_rejects_invalid_character(client):
+    signup(client, "alice")
+    r = client.post("/api/ai/chats", json={"character": "not-a-persona"})
+    assert r.status_code == 400 and r.get_json()["error"] == "invalid_character"
 
 
 def test_list_chats_returns_only_own_chats_sorted_by_updated_at(client, monkeypatch):
@@ -545,6 +594,40 @@ def test_rename_chat_rejects_a_chat_that_is_not_yours(client):
     cid = _chat_id(client)
     bob = make_user(client, "bob")
     assert bob.patch(f"/api/ai/chats/{cid}", json={"title": "hijack"}).status_code == 404
+
+
+def test_patch_chat_updates_character(client):
+    signup(client, "alice")
+    cid = _chat_id(client)
+    r = client.patch(f"/api/ai/chats/{cid}", json={"character": "neo"})
+    assert r.get_json()["chat"]["character"] == "neo"
+    with flask_app.app_context():
+        assert db.session.get(AiChat, cid).character == "neo"
+
+
+def test_patch_chat_rejects_invalid_character(client):
+    signup(client, "alice")
+    cid = _chat_id(client)
+    r = client.patch(f"/api/ai/chats/{cid}", json={"character": "not-a-persona"})
+    assert r.status_code == 400 and r.get_json()["error"] == "invalid_character"
+    with flask_app.app_context():
+        assert db.session.get(AiChat, cid).character == "nex"
+
+
+def test_patch_chat_rejects_empty_body(client):
+    signup(client, "alice")
+    cid = _chat_id(client)
+    r = client.patch(f"/api/ai/chats/{cid}", json={})
+    assert r.status_code == 400 and r.get_json()["error"] == "empty"
+
+
+def test_patch_chat_rejects_character_on_a_chat_that_is_not_yours(client):
+    signup(client, "alice")
+    cid = _chat_id(client)
+    bob = make_user(client, "bob")
+    assert bob.patch(f"/api/ai/chats/{cid}", json={"character": "neo"}).status_code == 404
+    with flask_app.app_context():
+        assert db.session.get(AiChat, cid).character == "nex"
 
 
 def test_delete_chat_removes_its_messages(client, monkeypatch):
