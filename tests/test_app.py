@@ -429,7 +429,23 @@ def test_system_prompt_documents_the_threejs_exception():
     # version (ES-module only) -- the prompt must steer away from it, not
     # tell Nex to load a URL that 404s and leaves the whole scene blank.
     assert "OrbitControls.js" not in prompt
-    assert "ES-Modul" in prompt
+
+
+def test_system_prompt_requires_high_quality_3d_rendering():
+    prompt = app_module.ai_assistant.SYSTEM_PROMPT
+    assert "MeshStandardMaterial" in prompt
+    assert "shadowMap.enabled" in prompt
+    assert "ACESFilmicToneMapping" in prompt
+
+
+def test_system_prompt_warns_against_the_broken_shadow_camera_set_call():
+    # Found via live testing: a generated artifact called
+    # dir.shadow.camera.set(...) -- OrthographicCamera has no .set()
+    # method, so this threw a TypeError that halted the whole IIFE before
+    # animate() ever ran, leaving a permanently blank canvas with no
+    # console-visible symptom in the parent page. The prompt must steer
+    # away from touching the shadow camera at all.
+    assert "KEINE .set()-Methode" in app_module.ai_assistant.SYSTEM_PROMPT
 
 
 def test_max_reply_tokens_raised_for_ml_artifacts():
