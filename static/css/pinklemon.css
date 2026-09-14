@@ -2215,7 +2215,24 @@ body:has(.nx-app)::before { display: none; }
 @keyframes plLightFloat2 { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(-60px, -70px); } }
 @keyframes plLightFloat3 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-90px, 40px) scale(1.15); } }
 
-.pl-authwrap { position: relative; z-index: 1; min-height: 100vh; min-height: 100dvh; display: flex; align-items: center; justify-content: center; padding: 24px; perspective: 1400px; }
+.pl-authwrap {
+  position: relative; z-index: 1; min-height: 100vh; min-height: 100dvh;
+  display: flex; align-items: stretch; perspective: 1400px;
+}
+.pl-authleft {
+  flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; padding: 24px;
+}
+.pl-authpitch { width: 100%; max-width: 420px; margin: 0 auto 28px; }
+.pl-authpitch h2 { margin: 0 0 10px; font-size: 30px; font-weight: 900; line-height: 1.15; letter-spacing: -.02em; color: #fff; }
+.pl-authpitch p { margin: 0; font-size: 14.5px; color: rgba(255, 255, 255, .62); line-height: 1.55; }
+.pl-authhero { display: none; position: relative; flex: 1 1 46%; max-width: 720px; overflow: hidden; }
+.pl-authhero img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.pl-authhero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(120deg, rgba(11, 11, 13, .35), transparent 55%); }
+@media (min-width: 980px) {
+  .pl-authhero { display: block; }
+  .pl-authleft { padding: 40px; }
+}
 .pl-authcard {
   width: 100%; max-width: 420px;
   background: color-mix(in srgb, #1c1c1f 60%, transparent);
