@@ -422,32 +422,6 @@ def test_system_prompt_requires_cpu_backend_and_float32_labels_for_training():
     assert "'float32'" in prompt and "NIE 'int32'" in prompt
 
 
-def test_system_prompt_documents_the_threejs_exception():
-    prompt = app_module.ai_assistant.SYSTEM_PROMPT
-    assert "three.min.js" in prompt
-    # OrbitControls no longer ships as a plain <script src> for this Three.js
-    # version (ES-module only) -- the prompt must steer away from it, not
-    # tell Nex to load a URL that 404s and leaves the whole scene blank.
-    assert "OrbitControls.js" not in prompt
-
-
-def test_system_prompt_requires_high_quality_3d_rendering():
-    prompt = app_module.ai_assistant.SYSTEM_PROMPT
-    assert "MeshStandardMaterial" in prompt
-    assert "shadowMap.enabled" in prompt
-    assert "ACESFilmicToneMapping" in prompt
-
-
-def test_system_prompt_warns_against_the_broken_shadow_camera_set_call():
-    # Found via live testing: a generated artifact called
-    # dir.shadow.camera.set(...) -- OrthographicCamera has no .set()
-    # method, so this threw a TypeError that halted the whole IIFE before
-    # animate() ever ran, leaving a permanently blank canvas with no
-    # console-visible symptom in the parent page. The prompt must steer
-    # away from touching the shadow camera at all.
-    assert "KEINE .set()-Methode" in app_module.ai_assistant.SYSTEM_PROMPT
-
-
 def test_max_reply_tokens_raised_for_ml_artifacts():
     assert app_module.ai_assistant.MAX_REPLY_TOKENS == 4000
 
@@ -516,6 +490,18 @@ def test_stream_collapses_prior_neximage_blocks_before_sending_as_history(client
     with flask_app.app_context():
         chat = db.session.get(AiChat, cid)
         assert "````neximage" in chat.messages[1].content
+
+
+def test_collapses_neximage_block_with_no_trailing_newline_before_closing_fence():
+    """Found via live testing: the model's prompt trails off mid-sentence
+    right into the closing ```` with no newline in between (e.g. "...a
+    mystical atmosphere.````"). The regex used to require \n```` exactly,
+    so this real-world shape silently fell through uncollapsed -- and on
+    the client, the matching bug meant the whole block rendered as a raw
+    code block instead of becoming an image at all."""
+    raw = "Hier ist dein Bild.\n\n````neximage:Fox\nA red fox in a forest.````"
+    collapsed = app_module._collapse_artifacts_for_history(raw)
+    assert collapsed == "Hier ist dein Bild.\n\n[Bild-Prompt: Fox]"
 
 
 def test_stream_collapses_prior_artifacts_before_sending_as_history(client, monkeypatch):

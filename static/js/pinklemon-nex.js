@@ -96,8 +96,14 @@
   // that happens to occur inside generated code (a JS template literal, a
   // comment) can never close the block early -- CommonMark's own rule for
   // exactly this problem.
-  var NEXPREVIEW_RE = /````nexpreview[:\s]*([^\n]*)\n([\s\S]*?)\n````/g;
-  var NEXIMAGE_RE = /````neximage[:\s]*([^\n]*)\n([\s\S]*?)\n````/g;
+  // No \n required right before the closing fence (only after the opening
+  // info line) -- the model doesn't always end its content with a trailing
+  // newline before typing the closing ````, especially for a neximage
+  // prompt that just trails off mid-sentence. Requiring one there meant
+  // the whole block silently fell through to a plain code block instead
+  // of becoming an artifact/image -- found by live testing.
+  var NEXPREVIEW_RE = /````nexpreview[:\s]*([^\n]*)\n([\s\S]*?)````/g;
+  var NEXIMAGE_RE = /````neximage[:\s]*([^\n]*)\n([\s\S]*?)````/g;
   var FENCE_KINDS = ["nexpreview", "neximage"];
 
   // Deterministic small hash so the same stored message always requests
@@ -137,7 +143,7 @@
   function splitPreview(full) {
     var artifact = null;
     var text = full.replace(NEXPREVIEW_RE, function (_m, title, code) {
-      if (!artifact) artifact = { title: (title || "").trim() || "Vorschau", code: code };
+      if (!artifact) artifact = { title: (title || "").trim() || "Vorschau", code: code.replace(/\n?$/, "") };
       return "";
     });
     text = text.replace(NEXIMAGE_RE, function (_m, title, prompt) {
@@ -150,11 +156,14 @@
     // open live and grow the code view chunk by chunk for a nexpreview
     // block -- see Phase B wiring in streamInto()'s pump(). A neximage
     // block's pending state has no panel to feed (images render inline
-    // once complete, not in the side panel); it exists purely so the
-    // still-forming fence stays held back from `text`. Left null while
-    // the fence is merely ambiguous (could still turn out to be a plain
-    // fence or something else) or once it has fully closed (handled
-    // above instead).
+    // once complete, not in the side panel), but it DOES carry the
+    // prompt text seen so far -- the model doesn't always type the
+    // closing fence at all (observed live: the reply just ends mid-
+    // prompt), so pump() falls back to rendering whatever prompt arrived
+    // once the stream ends, same as nexpreview's own truncation fallback.
+    // Left null while the fence is merely ambiguous (could still turn
+    // out to be a plain fence or something else) or once it has fully
+    // closed (handled above instead).
     var pending = null;
     var runs = text.match(/`{3,}/g) || [];
     if (runs.length % 2 === 1) {
@@ -176,7 +185,8 @@
           var titlePart = infoSoFar.replace(/^nexpreview[:\s]*/, "").trim();
           pending = { kind: "nexpreview", title: titlePart || null, code: after.slice(newlineIdx + 1) };
         } else if (settledKind === "neximage") {
-          pending = { kind: "neximage" };
+          var imgTitlePart = infoSoFar.replace(/^neximage[:\s]*/, "").trim();
+          pending = { kind: "neximage", title: imgTitlePart || null, code: after.slice(newlineIdx + 1) };
         } else {
           pending = { kind: null, title: null, code: "" };
         }
@@ -578,7 +588,16 @@
               return;
             }
             var split = splitPreview(full);
-            bubble.innerHTML = renderMarkdown(split.text);
+            var renderText = split.text;
+            // Best-effort fallback, same idea as the nexpreview one below:
+            // the model doesn't always type the closing ```` for a
+            // neximage block either (observed live -- the reply just ends
+            // mid-prompt) -- generate the image from whatever prompt text
+            // arrived instead of silently dropping it.
+            if (!split.artifact && lastPending && lastPending.kind === "neximage" && (lastPending.code || "").trim()) {
+              renderText += "\n\n" + nexImageTag(lastPending.title || "Bild", lastPending.code.trim());
+            }
+            bubble.innerHTML = renderMarkdown(renderText);
             addCopyButtons(bubble);
             wireGeneratedImages(bubble);
             speakReply(split.text);
@@ -589,10 +608,7 @@
               // the stream ended (e.g. MAX_REPLY_TOKENS hit) before the
               // fence ever closed -- still swap to a best-effort iframe
               // with whatever code arrived instead of leaving the panel
-              // stuck on "Wird erstellt ..." forever. (A neximage prompt
-              // cut off mid-stream has no panel to fall back into -- the
-              // incomplete fence was already excluded from split.text, so
-              // the bubble just shows whatever prose came before it.)
+              // stuck on "Wird erstellt ..." forever.
               var truncated = { title: lastPending.title || "Vorschau", code: lastPending.code };
               appendPreviewChip(bubble, truncated);
               openPreviewPanel(truncated);

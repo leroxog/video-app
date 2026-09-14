@@ -994,9 +994,11 @@ def api_ai_chat_delete(chat_id):
 # Matches the same 4-backtick fences the client extracts into the preview
 # panel / an inline image (see pinklemon-nex.js's splitPreview, NEXPREVIEW_RE
 # and NEXIMAGE_RE) -- kept in sync deliberately, not shared code, since one
-# lives in Python and the other in JS.
-_NEXPREVIEW_HISTORY_RE = re.compile(r"````nexpreview[:\s]*([^\n]*)\n[\s\S]*?\n````")
-_NEXIMAGE_HISTORY_RE = re.compile(r"````neximage[:\s]*([^\n]*)\n[\s\S]*?\n````")
+# lives in Python and the other in JS. No \n required right before the
+# closing fence (only after the opening info line) -- the model doesn't
+# always end its content with a trailing newline before the closing ````.
+_NEXPREVIEW_HISTORY_RE = re.compile(r"````nexpreview[:\s]*([^\n]*)\n[\s\S]*?````")
+_NEXIMAGE_HISTORY_RE = re.compile(r"````neximage[:\s]*([^\n]*)\n[\s\S]*?````")
 
 
 def _collapse_artifacts_for_history(content):
