@@ -892,13 +892,19 @@
       micBtn.classList.add("is-listening");
       setVoiceStatus("Hört zu …");
     };
+    var micErrorShown = false;
     recognition.onend = function () {
       micBtn.classList.remove("is-listening");
       clearSilenceTimer();
       if (wantListening && !busy) {
         setTimeout(function () { if (wantListening) startListeningSafely(); }, 300);
       } else if (!wantListening) {
-        setVoiceStatus("");
+        // onerror (permission denied) fires just before onend and already
+        // set a status message -- onend runs right after with
+        // wantListening now false too, so without this guard it would
+        // immediately wipe that message back to empty.
+        if (micErrorShown) micErrorShown = false;
+        else setVoiceStatus("");
       }
     };
     recognition.onresult = function (event) {
@@ -918,6 +924,7 @@
       if (e.error === "not-allowed" || e.error === "service-not-allowed") {
         wantListening = false;
         voiceModeOn = false;
+        micErrorShown = true;
         micBtn.classList.remove("is-listening");
         setVoiceStatus("Mikrofon-Zugriff verweigert.");
       }
