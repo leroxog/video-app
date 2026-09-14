@@ -131,7 +131,7 @@
     border: none; background: none; color: var(--pl-text); font-size: 13.5px; font-weight: 600; padding: 9px 10px; border-radius: 8px;
   }
   .nx-version-menu button:hover { background: var(--pl-hover); }
-  .nx-version-menu button svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--pl-pink); visibility: hidden; }
+  .nx-version-menu button svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--nx-pink); visibility: hidden; }
   .nx-version-menu button.is-active svg { visibility: visible; }
 
   .nx-msgs {
@@ -143,7 +143,9 @@
 
   .nx-row { display: flex; }
   .nx-row.me { justify-content: flex-end; }
-  .nx-row.them { justify-content: flex-start; }
+  .nx-row.them { justify-content: flex-start; align-items: flex-start; gap: 10px; }
+  .nx-msg-avatar { width: 22px; height: 22px; flex-shrink: 0; margin-top: 3px; border-radius: 7px; overflow: hidden; }
+  .nx-msg-avatar svg { width: 100%; height: 100%; display: block; }
   .nx-bubble { font-size: 15.5px; line-height: 1.72; overflow-wrap: anywhere; }
   .nx-row.me .nx-bubble {
     max-width: 75%; border-radius: 22px; padding: 10px 18px;
@@ -157,7 +159,7 @@
   .nx-bubble p:last-child { margin-bottom: 0; }
   .nx-bubble ul, .nx-bubble ol { margin: 0 0 12px; padding-left: 22px; }
   .nx-bubble li { margin: 3px 0; }
-  .nx-bubble a { color: var(--pl-pink); }
+  .nx-bubble a { color: var(--nx-pink); }
   .nx-bubble blockquote {
     margin: 0 0 12px; padding: 2px 14px; border-left: 3px solid var(--pl-border); color: var(--pl-text-dim);
   }
@@ -312,7 +314,7 @@
   .nx-mode-version:hover { background: var(--pl-surface-2); color: var(--pl-text); }
   .nx-mode-version svg { width: 13px; height: 13px; }
   .nx-voice-status {
-    max-width: 768px; margin: 6px auto 0; text-align: center; font-size: 12px; color: var(--pl-pink); font-weight: 600;
+    max-width: 768px; margin: 6px auto 0; text-align: center; font-size: 12px; color: var(--nx-pink); font-weight: 600;
   }
   .nx-disclaimer { max-width: 768px; margin: 6px auto 0; text-align: center; font-size: 11px; color: var(--pl-text-faint); }
 
@@ -353,7 +355,7 @@
     font-size: 13px; font-weight: 600; padding: 8px 14px; border-radius: 12px;
   }
   .nx-preview-chip:hover { background: var(--pl-surface-2); }
-  .nx-preview-chip svg { width: 16px; height: 16px; color: var(--pl-pink); flex-shrink: 0; }
+  .nx-preview-chip svg { width: 16px; height: 16px; color: var(--nx-pink); flex-shrink: 0; }
 
   .nx-preview {
     display: flex; flex-direction: column; border-left: 1px solid var(--pl-border);
@@ -370,7 +372,7 @@
     font-size: 12.5px; font-weight: 600; padding: 6px 10px; border-radius: 8px;
   }
   .nx-preview-toggle:hover { background: var(--pl-surface-2); color: var(--pl-text); }
-  .nx-preview-toggle.is-active { background: var(--pl-pink); color: #fff; border-color: var(--pl-pink); }
+  .nx-preview-toggle.is-active { background: var(--nx-pink); color: #fff; border-color: var(--nx-pink); }
   .nx-preview-tabs {
     display: flex; gap: 6px; padding: 8px 12px; flex-shrink: 0; overflow-x: auto;
     border-bottom: 1px solid var(--pl-border);
@@ -380,7 +382,7 @@
     font-size: 12px; font-weight: 600; padding: 5px 11px; border-radius: 999px;
   }
   .nx-preview-tab:hover { background: var(--pl-surface-2); color: var(--pl-text); }
-  .nx-preview-tab.is-active { background: var(--pl-pink); color: #fff; border-color: var(--pl-pink); }
+  .nx-preview-tab.is-active { background: var(--nx-pink); color: #fff; border-color: var(--nx-pink); }
   .nx-preview-body { flex: 1; min-height: 0; position: relative; }
   .nx-preview-body iframe { width: 100%; height: 100%; border: none; background: #fff; }
   .nx-preview-code {
@@ -580,9 +582,14 @@
         <h2 id="nxGreeting">Hallo</h2>
       </div>
       {% endif %}
-      {% for m in messages %}
-      <div class="nx-row {{ 'me' if m.role == 'user' else 'them' }}"><div class="nx-bubble">{{ m.content }}</div></div>
-      {% endfor %}
+      <!-- Messages are rendered client-side via addMsg() (see the init
+           call in pinklemon-nex.js reading window.NEX_MESSAGES below),
+           not here -- addMsg runs markdown through the same
+           renderMarkdown()/DOMPurify pipeline as a live-streamed reply
+           and re-extracts nexpreview/neximage artifacts into their chip,
+           so a reloaded chat looks identical to one that just streamed
+           in instead of showing raw **markdown** syntax and losing its
+           artifact chips. -->
     </div>
 
     <div class="nx-compose">
@@ -680,6 +687,7 @@
 <script>
   window.NEX_CHAT_ID = {{ chat_id | tojson }};
   window.NEX_CHATS = {{ chats | tojson }};
+  window.NEX_MESSAGES = {{ messages | tojson }};
   window.NEX_USER_NAME = {{ (user.pl_display_name or user.username if user else None) | tojson }};
 </script>
 <script src="{{ url_for('static', filename='js/vendor/marked.min.js') }}"></script>

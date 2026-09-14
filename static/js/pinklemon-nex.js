@@ -385,6 +385,13 @@
     clearEmpty();
     var row = document.createElement("div");
     row.className = "nx-row " + (role === "user" ? "me" : "them");
+    if (role !== "user") {
+      // Reuses the top bar's already-rendered logo mark rather than a
+      // second hardcoded copy of the SVG here -- same trick showEmptyPane()
+      // uses for the empty-state mark.
+      var mark = document.querySelector(".nx-top-mark");
+      if (mark) row.innerHTML = mark.outerHTML.replace('class="nx-top-mark"', 'class="nx-msg-avatar"');
+    }
     var b = document.createElement("div");
     b.className = "nx-bubble";
     var split = splitPreview(text);
@@ -1479,4 +1486,17 @@
   // correct on first paint instead of staying unset from the earlier
   // call at script init, before this element existed.
   syncSend();
+
+  // The active chat's history arrives as raw JSON (window.NEX_MESSAGES,
+  // set in pl_nex.html) rather than pre-rendered server-side HTML --
+  // addMsg() runs each one through the exact same markdown/artifact
+  // pipeline a live-streamed reply gets (renderMarkdown, copy buttons,
+  // nexpreview/neximage extraction into its chip). Nothing else in this
+  // file walks pre-existing DOM to fix that up after the fact, so
+  // without this, reloading a chat showed raw **markdown** syntax and
+  // lost every artifact's preview chip until you switched away and back.
+  if (window.NEX_MESSAGES && window.NEX_MESSAGES.length) {
+    resetChatArtifacts();
+    window.NEX_MESSAGES.forEach(function (m) { addMsg(m.role, m.content); });
+  }
 })();
