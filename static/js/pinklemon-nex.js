@@ -561,13 +561,16 @@
               // the error never became a JSON {ok:false} the catch above
               // could show. Without this, the bubble would just stay
               // silently empty with no sign anything went wrong.
-              bubble.innerHTML = renderMarkdown("Da ist gerade etwas schiefgelaufen. Nochmal versuchen?");
+              var failMsg = "Da ist gerade etwas schiefgelaufen. Nochmal versuchen?";
+              bubble.innerHTML = renderMarkdown(failMsg);
+              speakReply(failMsg);
               return;
             }
             var split = splitPreview(full);
             bubble.innerHTML = renderMarkdown(split.text);
             addCopyButtons(bubble);
             wireGeneratedImages(bubble);
+            speakReply(split.text);
             if (split.artifact) {
               appendPreviewChip(bubble, split.artifact);
               openPreviewPanel(split.artifact);
@@ -642,7 +645,9 @@
         hideTyping();
         busy = false;
         syncSend();
-        addMsg("assistant", (err && err.message) || "Verbindungsfehler.");
+        var msg = (err && err.message) || "Verbindungsfehler.";
+        addMsg("assistant", msg);
+        speakReply(msg);
       });
   }
 
@@ -736,5 +741,201 @@
     });
 
     logoutBtn.addEventListener("click", function () { location.href = "/logout"; });
+  }
+
+  // ---------------- voice mode ----------------
+  // Native Web Speech API only -- no key, no external service, matches
+  // "kostenlos" better than any API would. Mic button is the sole on/off
+  // switch: click starts continuous listening, a 1.6s silence timer
+  // auto-sends whatever landed in #nxInput (reusing send() unchanged),
+  // and Nex's reply is read back once streaming completes (see the
+  // speakReply() calls added to pump() above). Recognition pauses while
+  // a reply is streaming or being spoken so Nex never transcribes itself.
+  var micBtn = document.getElementById("nxMicBtn");
+  var voiceStatus = document.getElementById("nxVoiceStatus");
+  var voiceMuteToggle = document.getElementById("nxVoiceMuteToggle");
+  var voiceMuteLabel = document.getElementById("nxVoiceMuteLabel");
+  var voiceSelect = document.getElementById("nxVoiceSelect");
+  var voiceModeOn = false;
+  var voiceMuted = false;
+  var wantListening = false;
+  var selectedVoice = null;
+  var recognition = null;
+
+  function setVoiceStatus(text) {
+    if (!voiceStatus) return;
+    voiceStatus.textContent = text || "";
+    voiceStatus.hidden = !text;
+  }
+
+  function pauseListening() {
+    if (recognition) { try { recognition.stop(); } catch (e) {} }
+  }
+
+  function startListeningSafely() {
+    if (!recognition || !wantListening || busy) return;
+    try { recognition.start(); } catch (e) { /* already running */ }
+  }
+
+  function resumeListeningIfWanted() {
+    if (wantListening && !busy) startListeningSafely();
+  }
+
+  // Code the model wrote (nexpreview/neximage fences are already gone
+  // from split.text by the time this runs -- neximage became an <img>
+  // tag, nexpreview an empty string) shouldn't be read out character by
+  // character; same for plain ``` snippets, links, and markdown noise.
+  function stripForSpeech(text) {
+    return text
+      .replace(/<img[^>]*class="nx-gen-image"[^>]*>/g, " Ich habe dir ein Bild im Chat gezeigt. ")
+      .replace(/```[\s\S]*?```/g, " Den Code habe ich dir im Chat gezeigt. ")
+      .replace(/https?:\/\/[^\s]+/g, "ein Link im Chat")
+      .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\u{FE0F}]/gu, "")
+      .replace(/[*_`~#>]+/g, "")
+      .replace(/^\s*[-•]\s+/gm, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+  }
+
+  function speakReply(text) {
+    if (!voiceModeOn || voiceMuted || !window.speechSynthesis) { resumeListeningIfWanted(); return; }
+    var spoken = stripForSpeech(text);
+    if (!spoken) { resumeListeningIfWanted(); return; }
+    speechSynthesis.cancel();
+    var utter = new SpeechSynthesisUtterance(spoken);
+    if (selectedVoice) utter.voice = selectedVoice;
+    utter.lang = "de-DE";
+    if (micBtn) micBtn.classList.add("is-speaking");
+    setVoiceStatus("Nex spricht …");
+    utter.onend = function () {
+      if (micBtn) micBtn.classList.remove("is-speaking");
+      resumeListeningIfWanted();
+    };
+    utter.onerror = utter.onend;
+    speechSynthesis.speak(utter);
+  }
+
+  // Quality heuristic for speechSynthesis.getVoices() -- prefers higher-
+  // quality/neural voices and German, falls back to whatever the browser
+  // offers. Voice list loading is async and browser-dependent, hence the
+  // onvoiceschanged hook.
+  function scoreVoice(v) {
+    var s = 0;
+    var n = v.name.toLowerCase();
+    if (/enhanced|premium|natural|neural|pro\b/.test(n)) s += 100;
+    if (/online|siri|google/.test(n)) s += 20;
+    if (/de-de|de_de/i.test(v.lang)) s += 15;
+    return s;
+  }
+  function populateVoices() {
+    if (!voiceSelect || !window.speechSynthesis) return;
+    var voices = speechSynthesis.getVoices();
+    if (!voices.length) return;
+    var relevant = voices.filter(function (v) { return /^de|^en/i.test(v.lang); });
+    var list = (relevant.length ? relevant : voices).slice().sort(function (a, b) { return scoreVoice(b) - scoreVoice(a); });
+    voiceSelect.innerHTML = list.map(function (v) {
+      return '<option value="' + esc(v.name) + '">' + esc(v.name) + " (" + esc(v.lang) + ")</option>";
+    }).join("");
+    if (list.length) { voiceSelect.value = list[0].name; selectedVoice = list[0]; }
+  }
+  if (window.speechSynthesis) {
+    speechSynthesis.onvoiceschanged = populateVoices;
+    populateVoices();
+  }
+  if (voiceSelect) {
+    voiceSelect.addEventListener("change", function () {
+      var voices = speechSynthesis.getVoices();
+      selectedVoice = voices.find(function (v) { return v.name === voiceSelect.value; }) || null;
+    });
+  }
+  if (voiceMuteToggle) {
+    voiceMuteToggle.addEventListener("click", function () {
+      voiceMuted = !voiceMuted;
+      voiceMuteLabel.textContent = "Antworten vorlesen: " + (voiceMuted ? "aus" : "an");
+      if (voiceMuted && window.speechSynthesis) speechSynthesis.cancel();
+    });
+  }
+
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  var isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+
+  if (!SR || (isIOS && isSafari)) {
+    if (micBtn) {
+      micBtn.disabled = true;
+      micBtn.title = "Spracherkennung wird von diesem Browser nicht unterstützt";
+    }
+  } else if (micBtn) {
+    recognition = new SR();
+    recognition.lang = "de-DE";
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+
+    var finalTranscript = "";
+    var silenceTimer = null;
+
+    function clearSilenceTimer() { if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; } }
+    function armSilenceTimer() {
+      clearSilenceTimer();
+      silenceTimer = setTimeout(function () {
+        if (input.value.trim() && !busy) {
+          pauseListening();
+          finalTranscript = "";
+          send();
+        }
+      }, 1600);
+    }
+
+    recognition.onstart = function () {
+      finalTranscript = "";
+      micBtn.classList.add("is-listening");
+      setVoiceStatus("Hört zu …");
+    };
+    recognition.onend = function () {
+      micBtn.classList.remove("is-listening");
+      clearSilenceTimer();
+      if (wantListening && !busy) {
+        setTimeout(function () { if (wantListening) startListeningSafely(); }, 300);
+      } else if (!wantListening) {
+        setVoiceStatus("");
+      }
+    };
+    recognition.onresult = function (event) {
+      var interimText = "";
+      for (var i = event.resultIndex; i < event.results.length; i++) {
+        var t = event.results[i][0].transcript;
+        if (event.results[i].isFinal) finalTranscript += t + " ";
+        else interimText += t;
+      }
+      input.value = (finalTranscript + interimText).trim();
+      autoGrow();
+      syncSend();
+      armSilenceTimer();
+    };
+    recognition.onerror = function (e) {
+      if (e.error === "no-speech" || e.error === "aborted") return;
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+        wantListening = false;
+        voiceModeOn = false;
+        micBtn.classList.remove("is-listening");
+        setVoiceStatus("Mikrofon-Zugriff verweigert.");
+      }
+    };
+
+    micBtn.addEventListener("click", function () {
+      if (wantListening) {
+        wantListening = false;
+        voiceModeOn = false;
+        clearSilenceTimer();
+        finalTranscript = "";
+        pauseListening();
+        setVoiceStatus("");
+      } else {
+        wantListening = true;
+        voiceModeOn = true;
+        startListeningSafely();
+      }
+    });
   }
 })();

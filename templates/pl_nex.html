@@ -201,6 +201,19 @@
   .nx-send:disabled { background: var(--pl-surface-3); color: var(--pl-text-faint); }
   .nx-send:not(:disabled):active { transform: scale(0.92); }
   .nx-send svg { width: 18px; height: 18px; }
+  .nx-mic-btn {
+    flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%; border: none;
+    background: transparent; color: var(--pl-text-dim);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .nx-mic-btn:hover { background: var(--pl-hover); color: var(--pl-text); }
+  .nx-mic-btn:disabled { opacity: .35; }
+  .nx-mic-btn svg { width: 18px; height: 18px; }
+  .nx-mic-btn.is-listening { background: var(--pl-pink); color: #fff; animation: nxMicPulse 1.4s ease-in-out infinite; }
+  @keyframes nxMicPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(230,60,130,.4); } 50% { box-shadow: 0 0 0 6px rgba(230,60,130,0); } }
+  .nx-voice-status {
+    max-width: 768px; margin: 6px auto 0; text-align: center; font-size: 12px; color: var(--pl-pink); font-weight: 600;
+  }
   .nx-disclaimer { max-width: 768px; margin: 6px auto 0; text-align: center; font-size: 11px; color: var(--pl-text-faint); }
 
   .nx-me { flex: none; display: flex; align-items: center; margin-left: auto; position: relative; }
@@ -218,6 +231,12 @@
   .nx-account-menu button:hover { background: var(--pl-hover); }
   .nx-account-menu button svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--pl-text-faint); }
   .nx-account-menu hr { border: none; border-top: 1px solid var(--pl-border); margin: 4px 6px; }
+  .nx-voice-row { display: flex; align-items: center; gap: 8px; padding: 6px 10px 4px; }
+  .nx-voice-row label { font-size: 12px; color: var(--pl-text-faint); flex-shrink: 0; }
+  .nx-voice-row select {
+    flex: 1; min-width: 0; background: var(--pl-surface-2); border: 1px solid var(--pl-border);
+    color: var(--pl-text); font-size: 12px; padding: 5px 6px; border-radius: 7px;
+  }
 
   @media (min-width: 900px) {
     .nx-sidebar { position: static; transform: none; }
@@ -325,6 +344,14 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg>
             Avatar ändern
           </button>
+          <button type="button" id="nxVoiceMuteToggle">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5Z"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+            <span id="nxVoiceMuteLabel">Antworten vorlesen: an</span>
+          </button>
+          <div class="nx-voice-row">
+            <label for="nxVoiceSelect">Stimme</label>
+            <select id="nxVoiceSelect"></select>
+          </div>
           <hr>
           <button type="button" id="nxLogoutBtn">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
@@ -352,10 +379,14 @@
     <div class="nx-compose">
       <div class="nx-compose-inner">
         <textarea id="nxInput" rows="1" maxlength="4000" placeholder="Nachricht an Nex"></textarea>
+        <button type="button" class="nx-mic-btn" id="nxMicBtn" aria-label="Sprachmodus" title="Sprachmodus">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><path d="M12 18v4M8 22h8"/></svg>
+        </button>
         <button class="nx-send" id="nxSend" aria-label="Senden" disabled>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>
         </button>
       </div>
+      <div class="nx-voice-status" id="nxVoiceStatus" hidden></div>
       <div class="nx-disclaimer">Nex kann Fehler machen. Wichtiges überprüfen.</div>
     </div>
   </div>
