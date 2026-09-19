@@ -88,6 +88,19 @@ class User(db.Model):
     is_company = db.Column(db.Boolean, nullable=False, default=False)
     company_name = db.Column(db.String(200), nullable=True)
     company_address = db.Column(db.String(300), nullable=True)
+    # ychat "live" status (see app.py's /api/ychat/live routes). This app
+    # has no streaming infrastructure of its own (no RTMP ingest, no
+    # transcoding, no CDN -- building that is a project on its own, not
+    # a feature) -- ychat_live_video_id is instead the video id of a
+    # REAL live broadcast the user is running on YouTube Live (free,
+    # no API key needed), extracted server-side from the youtube.com/
+    # watch or youtu.be URL they paste in. Embedding it uses the exact
+    # same official youtube.com/embed/<id> player NRS already uses for
+    # regular videos -- a live broadcast is just a video that happens to
+    # be live, same embed mechanism, genuinely real video either way.
+    ychat_is_live = db.Column(db.Boolean, nullable=False, default=False)
+    ychat_live_title = db.Column(db.String(100), nullable=True)
+    ychat_live_video_id = db.Column(db.String(20), nullable=True)
     subscriptions_made = db.relationship(
         "Subscription",
         foreign_keys="Subscription.subscriber_id",

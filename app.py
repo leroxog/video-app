@@ -249,6 +249,9 @@ def ensure_sqlite_columns_exist():
             ("company_address", "VARCHAR(300)"),
             ("nex7_persona", "VARCHAR(20)"),
             ("bio", "VARCHAR(300)"),
+            ("ychat_is_live", "BOOLEAN NOT NULL DEFAULT 0"),
+            ("ychat_live_title", "VARCHAR(100)"),
+            ("ychat_live_video_id", "VARCHAR(20)"),
         ],
         "ai_chat": [
             ("character", "VARCHAR(20) NOT NULL DEFAULT 'nex'"),
@@ -322,6 +325,9 @@ def ensure_columns_exist():
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS company_address VARCHAR(300)',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS nex7_persona VARCHAR(20)',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS bio VARCHAR(300)',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS ychat_is_live BOOLEAN NOT NULL DEFAULT FALSE',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS ychat_live_title VARCHAR(100)',
+        'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS ychat_live_video_id VARCHAR(20)',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS google_sub VARCHAR(64)',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS pl_display_name VARCHAR(50)',
         'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS pl_avatar_image VARCHAR(255)',
@@ -1140,6 +1146,53 @@ def api_ychat_posts_delete(post_id):
     db.session.delete(post)
     db.session.commit()
     return jsonify({"ok": True})
+
+
+@app.route("/api/ychat/live")
+def api_ychat_live_list():
+    """Everyone currently marked live, most recently-gone-live first.
+    video_id is set only when the user pasted a real YouTube Live URL
+    (see User.ychat_live_video_id's docstring) -- the client embeds that
+    as an actual live player; without it, this is just the title text,
+    honestly labeled as such rather than faking a video."""
+    users = User.query.filter_by(ychat_is_live=True).order_by(User.id.desc()).all()
+    return jsonify({
+        "ok": True,
+        "live": [
+            {
+                "name": u.pl_display_name or u.username,
+                "title": u.ychat_live_title or "",
+                "video_id": u.ychat_live_video_id,
+            }
+            for u in users
+        ],
+    })
+
+
+_YOUTUBE_ID_RE = re.compile(r"(?:youtube\.com/watch\?v=|youtu\.be/)([\w-]{6,15})")
+
+
+@app.route("/api/ychat/live", methods=["POST"])
+def api_ychat_live_set():
+    me = current_user()
+    data = request.get_json(silent=True) or {}
+    is_live = bool(data.get("is_live"))
+    title = (data.get("title") or "").strip()[:100]
+    video_url = (data.get("video_url") or "").strip()
+    video_id = None
+    if is_live and video_url:
+        match = _YOUTUBE_ID_RE.search(video_url)
+        if not match:
+            return jsonify({"ok": False, "error": "invalid_video_url"}), 400
+        video_id = match.group(1)
+    me.ychat_is_live = is_live
+    me.ychat_live_title = title if is_live else None
+    me.ychat_live_video_id = video_id if is_live else None
+    db.session.commit()
+    return jsonify({
+        "ok": True, "is_live": me.ychat_is_live,
+        "title": me.ychat_live_title or "", "video_id": me.ychat_live_video_id,
+    })
 
 
 # ==========================================================================

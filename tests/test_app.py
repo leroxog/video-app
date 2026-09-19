@@ -971,6 +971,72 @@ def test_ychat_created_at_is_explicitly_utc(client):
     assert post["created_at"].endswith("Z")
 
 
+def test_ychat_live_toggle_on_and_off(client):
+    signup(client, "alice")
+    assert client.get("/api/ychat/live").get_json()["live"] == []
+
+    r = client.post("/api/ychat/live", json={"is_live": True, "title": "baue was"})
+    j = r.get_json()
+    assert j["ok"] is True and j["is_live"] is True and j["title"] == "baue was"
+
+    live = client.get("/api/ychat/live").get_json()["live"]
+    assert live == [{"name": "alice", "title": "baue was", "video_id": None}]
+
+    r2 = client.post("/api/ychat/live", json={"is_live": False})
+    assert r2.get_json()["is_live"] is False
+    assert client.get("/api/ychat/live").get_json()["live"] == []
+
+
+def test_ychat_live_list_only_shows_live_users(client):
+    signup(client, "alice")
+    client.post("/api/ychat/live", json={"is_live": True, "title": "eins"})
+    bob = make_user(client, "bob")
+    # bob never goes live
+    live_names = [u["name"] for u in bob.get("/api/ychat/live").get_json()["live"]]
+    assert live_names == ["alice"]
+
+
+def test_ychat_live_requires_login(client):
+    assert client.post("/api/ychat/live", json={"is_live": True}).status_code == 401
+
+
+def test_ychat_live_with_valid_youtube_url_extracts_video_id(client):
+    signup(client, "alice")
+    r = client.post("/api/ychat/live", json={
+        "is_live": True, "title": "streame", "video_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+    })
+    j = r.get_json()
+    assert j["ok"] is True and j["video_id"] == "dQw4w9WgXcQ"
+    live = client.get("/api/ychat/live").get_json()["live"]
+    assert live[0]["video_id"] == "dQw4w9WgXcQ"
+
+
+def test_ychat_live_accepts_youtu_be_short_url(client):
+    signup(client, "alice")
+    r = client.post("/api/ychat/live", json={"is_live": True, "video_url": "https://youtu.be/dQw4w9WgXcQ"})
+    assert r.get_json()["video_id"] == "dQw4w9WgXcQ"
+
+
+def test_ychat_live_rejects_non_youtube_video_url(client):
+    signup(client, "alice")
+    r = client.post("/api/ychat/live", json={"is_live": True, "video_url": "https://example.com/stream"})
+    assert r.status_code == 400 and r.get_json()["error"] == "invalid_video_url"
+
+
+def test_ychat_live_without_video_url_is_text_only(client):
+    signup(client, "alice")
+    r = client.post("/api/ychat/live", json={"is_live": True, "title": "nur Text"})
+    j = r.get_json()
+    assert j["ok"] is True and j["video_id"] is None
+
+
+def test_ychat_live_video_id_cleared_when_going_offline(client):
+    signup(client, "alice")
+    client.post("/api/ychat/live", json={"is_live": True, "video_url": "https://youtu.be/dQw4w9WgXcQ"})
+    client.post("/api/ychat/live", json={"is_live": False})
+    assert client.get("/api/ychat/live").get_json()["live"] == []
+
+
 def test_system_prompt_documents_the_nexpreview_artifact_convention():
     assert "nexpreview" in app_module.ai_assistant.SYSTEM_PROMPT
 
