@@ -25,6 +25,7 @@
   var createCode = document.getElementById("nrsCreateCode");
   var createError = document.getElementById("nrsCreateError");
   var createSubmit = document.getElementById("nrsCreateSubmit");
+  var mySitesList = document.getElementById("nrsMySitesList");
 
   function esc(s) {
     return String(s == null ? "" : s)
@@ -384,6 +385,42 @@
     if (!slugTouched) createSlug.value = slugify(createName.value);
   });
 
+  function loadMySitesList() {
+    mySitesList.innerHTML = '<div class="nrs-mysite-empty">Lädt …</div>';
+    fetch("/api/nrs/sites").then(function (r) { return r.json(); }).then(function (j) {
+      if (!j.ok) return;
+      if (!j.sites.length) {
+        mySitesList.innerHTML = '<div class="nrs-mysite-empty">Noch keine eigenen Mini-Sites.</div>';
+        return;
+      }
+      mySitesList.innerHTML = j.sites.map(function (s) {
+        return '<div class="nrs-mysite-row">'
+          + '<button type="button" class="nrs-mysite-visit" data-visit-slug="' + esc(s.slug) + '">'
+          + '<span class="name">' + esc(s.name) + '</span><span class="slug">' + esc(s.slug) + '.nrs</span>'
+          + '</button>'
+          + '<button type="button" class="nrs-mysite-delete" data-delete-slug="' + esc(s.slug) + '" aria-label="Löschen" title="Löschen">'
+          + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6h16Z"/></svg>'
+          + '</button></div>';
+      }).join("");
+    });
+  }
+  mySitesList.addEventListener("click", function (e) {
+    var visitBtn = e.target.closest("[data-visit-slug]");
+    if (visitBtn) {
+      closeCreateModal();
+      navigate(activeTab() || createTab(true), { kind: "nrs", value: visitBtn.dataset.visitSlug }, true);
+      return;
+    }
+    var deleteBtn = e.target.closest("[data-delete-slug]");
+    if (deleteBtn) {
+      var slug = deleteBtn.dataset.deleteSlug;
+      if (!window.confirm('"' + slug + '.nrs" wirklich löschen?')) return;
+      fetch("/api/nrs/sites/" + encodeURIComponent(slug), { method: "DELETE" }).then(function () {
+        loadMySitesList();
+      });
+    }
+  });
+
   function openCreateModal() {
     createName.value = "";
     createSlug.value = "";
@@ -393,6 +430,7 @@
     createBackdrop.classList.add("open");
     createModal.classList.add("open");
     createName.focus();
+    loadMySitesList();
   }
   function closeCreateModal() {
     createBackdrop.classList.remove("open");
