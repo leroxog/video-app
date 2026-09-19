@@ -47,9 +47,13 @@
     var hasScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(v);
     // No scheme, has a space, or no dot anywhere -- reads like a search
     // phrase rather than a host, so send it to a search engine instead
-    // of trying (and failing) to resolve it as one.
+    // of trying (and failing) to resolve it as one. Bing specifically --
+    // verified live (curl + an actual test iframe) that unlike DuckDuckGo,
+    // Google, Brave and Ecosia (all of which send X-Frame-Options/CSP
+    // frame-ancestors refusing embedding), Bing's search results send
+    // neither and render normally in an iframe.
     var looksLikeHost = hasScheme || (/\./.test(v) && !/\s/.test(v));
-    if (!looksLikeHost) return "https://duckduckgo.com/?q=" + encodeURIComponent(v);
+    if (!looksLikeHost) return "https://www.bing.com/search?q=" + encodeURIComponent(v);
     return hasScheme ? v : "https://" + v;
   }
 
