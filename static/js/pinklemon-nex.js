@@ -585,7 +585,7 @@
     sidebarList.querySelectorAll(".nx-sidebar-row").forEach(function (row) {
       row.classList.toggle("is-active", Number(row.dataset.chatId) === id);
     });
-    if (!skipPush) history.pushState(null, "", id ? "/?chat=" + id : "/");
+    if (!skipPush) history.pushState(null, "", id ? "/nex-archiv?chat=" + id : "/nex-archiv");
     var chat = chats.find(function (c) { return c.id === id; });
     pendingPersona = null;
     syncVersionLabel(chat ? chat.character : "nex");

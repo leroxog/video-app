@@ -53,12 +53,18 @@ def test_root_redirects_to_login_when_logged_out(client):
     assert "/login" in r.headers["Location"]
 
 
-def test_signup_then_land_on_nex(client):
+def test_nex_archived_redirects_to_login_when_logged_out(client):
+    r = client.get("/nex-archiv", follow_redirects=False)
+    assert r.status_code == 302
+    assert "/login" in r.headers["Location"]
+
+
+def test_signup_then_land_on_nrs(client):
     r = signup(client, "alice")
     assert r.status_code in (302, 303)
     home = client.get("/")
     assert home.status_code == 200
-    assert b"HEXAGONUM" in home.data
+    assert b"nrsAddress" in home.data
 
 
 def test_signup_rejects_bad_username_and_short_password(client):
@@ -310,37 +316,48 @@ def _chat_id(client):
     return client.post("/api/ai/chats").get_json()["chat"]["id"]
 
 
-def test_root_shows_empty_state_with_no_chats_yet(client):
+def test_root_serves_nrs_not_nex(client):
+    """Nex (and Teams/Plugins with it) was archived in favor of NRS as
+    the site's main page (2026-09-19) -- "/" now serves NRS; the old
+    Nex UI still fully works, just at /nex-archiv (see tests below),
+    unlinked from anywhere a normal user would land."""
     signup(client, "alice")
     home = client.get("/")
+    assert home.status_code == 200
+    assert b"nrsAddress" in home.data and b"nxMsgs" not in home.data
+
+
+def test_nex_archived_still_reachable_and_shows_empty_state(client):
+    signup(client, "alice")
+    home = client.get("/nex-archiv")
     assert home.status_code == 200
     assert b"nxMsgs" in home.data and b"nxEmpty" in home.data
     with flask_app.app_context():
         assert AiChat.query.filter_by(user_id=User.query.filter_by(username="alice").first().id).count() == 0
 
 
-def test_root_shows_version_picker(client):
+def test_nex_archived_shows_version_picker(client):
     signup(client, "alice")
-    home = client.get("/")
+    home = client.get("/nex-archiv")
     assert "NexAi 0.1 (Beta)".encode() in home.data
     assert "Neo AI".encode() in home.data
 
 
-def test_root_shows_most_recently_active_chat_by_default(client, monkeypatch):
+def test_nex_archived_shows_most_recently_active_chat_by_default(client, monkeypatch):
     signup(client, "alice")
     _chat_id(client)
     cid2 = _chat_id(client)
     _mock_stream(monkeypatch, ["hi"])
     client.post(f"/api/ai/chats/{cid2}/stream", json={"message": "hallo"})
-    home = client.get("/")
+    home = client.get("/nex-archiv")
     assert f"window.NEX_CHAT_ID = {cid2};".encode() in home.data
 
 
-def test_root_honors_chat_query_param(client):
+def test_nex_archived_honors_chat_query_param(client):
     signup(client, "alice")
     cid1 = _chat_id(client)
     _chat_id(client)
-    home = client.get(f"/?chat={cid1}")
+    home = client.get(f"/nex-archiv?chat={cid1}")
     assert f"window.NEX_CHAT_ID = {cid1};".encode() in home.data
 
 

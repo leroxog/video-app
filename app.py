@@ -1030,8 +1030,13 @@ def _ai_rate_limited(user_id):
     return len(hits) > AI_RATE_LIMIT_MAX
 
 
-@app.route("/")
-def pl_home():
+@app.route("/nex-archiv")
+def pl_nex_archived():
+    """Nex, Teams and Plugins -- archived, not deleted, at the user's
+    request (2026-09-19) in favor of NRS (see pl_home below) as the
+    site's main page. All the code, models and routes behind this stay
+    exactly as they were; this view is just no longer linked from
+    anywhere, so nobody lands here without typing the URL directly."""
     me = current_user()
     chats = AiChat.query.filter_by(user_id=me.id).order_by(AiChat.updated_at.desc()).all()
     wanted_id = request.args.get("chat", type=int)
@@ -1043,6 +1048,11 @@ def pl_home():
         "pl_nex.html", messages=messages, chat_id=(chat.id if chat else None),
         chats=[_ai_serialize_chat(c) for c in chats],
     )
+
+
+@app.route("/")
+def pl_home():
+    return render_template("pl_nrs.html")
 
 
 @app.route("/api/ai/chats")
