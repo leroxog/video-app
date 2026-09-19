@@ -75,6 +75,36 @@
     return null;
   }
 
+  // Same idea, two more sites: open.spotify.com's normal pages restrict
+  // frame-ancestors to Spotify's own internal ad-preview domains only
+  // (verified live), but open.spotify.com/embed/<type>/<id> -- their
+  // official "Einbetten" share option -- sends no such restriction.
+  // vimeo.com itself sends X-Frame-Options: sameorigin, but
+  // player.vimeo.com/video/<id> -- their official embed player -- sends
+  // neither header (also verified live).
+  function spotifyEmbedUrl(url) {
+    try {
+      var u = new URL(url);
+      var host = u.hostname.replace(/^open\./, "");
+      if (host !== "spotify.com") return null;
+      var m = u.pathname.match(/^\/(track|album|playlist|episode|show|artist)\/([A-Za-z0-9]+)/);
+      if (m) return "https://open.spotify.com/embed/" + m[1] + "/" + m[2];
+    } catch (e) { /* not a valid absolute URL -- not a Spotify link either */ }
+    return null;
+  }
+  function vimeoEmbedUrl(url) {
+    try {
+      var u = new URL(url);
+      if (u.hostname.replace(/^www\./, "") !== "vimeo.com") return null;
+      var m = u.pathname.match(/^\/(\d+)/);
+      if (m) return "https://player.vimeo.com/video/" + m[1];
+    } catch (e) { /* not a valid absolute URL -- not a Vimeo link either */ }
+    return null;
+  }
+  function rewriteToEmbed(url) {
+    return youtubeEmbedUrl(url) || spotifyEmbedUrl(url) || vimeoEmbedUrl(url) || url;
+  }
+
   function renderTabTitle(tab) {
     tab.titleEl.textContent = tab.title || "Neuer Tab";
   }
@@ -155,7 +185,7 @@
   }
 
   function load(tab, url, pushToHistory) {
-    url = youtubeEmbedUrl(url) || url;
+    url = rewriteToEmbed(url);
     var home = tab.paneEl.querySelector(".nrs-home");
     if (home) home.hidden = true;
     tab.frameEl.hidden = false;
