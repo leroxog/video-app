@@ -134,6 +134,19 @@
     tab.titleEl.textContent = tab.title || "Neuer Tab";
   }
 
+  // Reassigning .srcdoc to a new value on an iframe that already has
+  // srcdoc content doesn't reliably re-navigate in every engine -- the
+  // DOM attribute updates but the rendered content silently doesn't
+  // (verified live: an .nrs site's "Lädt …" placeholder never got
+  // replaced by the real page once fetched). Clearing the attribute and
+  // forcing a layout read before the next assignment makes every
+  // srcdoc change behave like a fresh navigation.
+  function setSrcdoc(frameEl, html) {
+    frameEl.removeAttribute("srcdoc");
+    void frameEl.offsetHeight;
+    frameEl.srcdoc = html;
+  }
+
   function createTab(activate) {
     var tab = {
       id: nextTabId++, url: null, title: "Neuer Tab",
@@ -224,20 +237,20 @@
       tab.title = displayAddress;
       renderTabTitle(tab);
       tab.frameEl.setAttribute("sandbox", SANDBOX_NRS_SITE);
-      tab.frameEl.srcdoc = "<p style=\"font:14px sans-serif;padding:20px;color:#888\">Lädt …</p>";
+      setSrcdoc(tab.frameEl, "<p style=\"font:14px sans-serif;padding:20px;color:#888\">Lädt …</p>");
       var thisFrame = tab.frameEl;
       fetch("/api/nrs/sites/" + encodeURIComponent(entry.value)).then(function (r) { return r.json(); }).then(function (j) {
         if (tab.frameEl !== thisFrame) return; // superseded by a newer load in this tab
         if (!j.ok) {
-          thisFrame.srcdoc = "<div style=\"font:14px sans-serif;padding:24px;color:#888\">Diese .nrs-Seite gibt es nicht.</div>";
+          setSrcdoc(thisFrame, "<div style=\"font:14px sans-serif;padding:24px;color:#888\">Diese .nrs-Seite gibt es nicht.</div>");
           return;
         }
         tab.title = j.site.name;
         renderTabTitle(tab);
-        thisFrame.srcdoc = j.site.html_code;
+        setSrcdoc(thisFrame, j.site.html_code);
       }).catch(function () {
         if (tab.frameEl === thisFrame) {
-          thisFrame.srcdoc = "<div style=\"font:14px sans-serif;padding:24px;color:#888\">Konnte nicht geladen werden.</div>";
+          setSrcdoc(thisFrame, "<div style=\"font:14px sans-serif;padding:24px;color:#888\">Konnte nicht geladen werden.</div>");
         }
       });
     } else {
