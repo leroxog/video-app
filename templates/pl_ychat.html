@@ -1,0 +1,78 @@
+{% extends "pl_base.html" %}
+{% block title %}ychat{% endblock %}
+
+{% block head_extra %}
+<style>
+  .pl-screen.ychat { padding: 0; align-items: stretch; display: flex; flex-direction: column; background: var(--pl-bg); }
+
+  .yc-top {
+    display: flex; align-items: center; gap: 10px; padding: 12px 18px; flex-shrink: 0;
+    background: var(--pl-surface); border-bottom: 1px solid var(--pl-border);
+  }
+  .yc-top .logo { font-size: 19px; font-weight: 800; letter-spacing: -.02em; color: var(--pl-text); flex: 1; }
+  .yc-top .logo span { color: #7c5cff; }
+  .yc-logout { border: none; background: none; color: var(--pl-text-faint); font-size: 12.5px; font-weight: 600; }
+  .yc-logout:hover { color: var(--pl-text); }
+
+  .yc-body { flex: 1; min-height: 0; overflow-y: auto; }
+  .yc-main { max-width: 560px; margin: 0 auto; padding: 20px 16px 60px; }
+
+  .yc-composer { background: var(--pl-surface); border: 1px solid var(--pl-border); border-radius: 16px; padding: 14px; margin-bottom: 20px; }
+  .yc-composer textarea {
+    width: 100%; border: none; resize: none; font-family: inherit; font-size: 15px; min-height: 60px;
+    outline: none; background: none; color: var(--pl-text);
+  }
+  .yc-composer .row { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 8px; }
+  .yc-composer .count { font-size: 12px; color: var(--pl-text-faint); margin-right: auto; }
+  .yc-composer button {
+    border: none; background: #7c5cff; color: #fff; font-weight: 700; font-size: 13.5px;
+    padding: 9px 18px; border-radius: 999px; cursor: pointer;
+  }
+  .yc-composer button:disabled { opacity: .4; cursor: default; }
+
+  .yc-post { background: var(--pl-surface); border: 1px solid var(--pl-border); border-radius: 16px; padding: 14px 16px; margin-bottom: 12px; }
+  .yc-post .meta { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .yc-post .avatar {
+    width: 30px; height: 30px; border-radius: 50%; background: #7c5cff; color: #fff;
+    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; flex-shrink: 0;
+  }
+  .yc-post .name { font-weight: 700; font-size: 13.5px; color: var(--pl-text); }
+  .yc-post .time { color: var(--pl-text-faint); font-size: 12px; }
+  .yc-post .text { font-size: 14.5px; line-height: 1.5; white-space: pre-wrap; margin: 0 0 8px; color: var(--pl-text); }
+  .yc-post .actions { display: flex; align-items: center; gap: 4px; }
+  .yc-post .like {
+    display: inline-flex; align-items: center; gap: 5px; border: none; background: none;
+    color: var(--pl-text-faint); font-size: 13px; cursor: pointer; padding: 5px 8px; border-radius: 8px;
+  }
+  .yc-post .like:hover { background: var(--pl-hover); }
+  .yc-post .like.liked { color: #e0245e; }
+  .yc-post .del {
+    margin-left: auto; border: none; background: none; color: var(--pl-text-faint);
+    width: 26px; height: 26px; border-radius: 7px; display: flex; align-items: center; justify-content: center;
+  }
+  .yc-post .del:hover { background: var(--pl-hover); color: var(--pl-danger); }
+
+  .yc-empty { text-align: center; color: var(--pl-text-faint); font-size: 13.5px; padding: 30px 10px; }
+</style>
+{% endblock %}
+
+{% block screen_class %}ychat{% endblock %}
+{% block screen %}
+<div class="yc-top">
+  <div class="logo">y<span>chat</span></div>
+  <a class="yc-logout" href="/logout">Abmelden</a>
+</div>
+<div class="yc-body">
+  <div class="yc-main">
+    <div class="yc-composer">
+      <textarea id="ycInput" placeholder="Was gibt's Neues?" maxlength="280"></textarea>
+      <div class="row"><span class="count" id="ycCount"></span><button id="ycPostBtn" disabled>Posten</button></div>
+    </div>
+    <div id="ycFeed"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/pinklemon-ychat.js') }}"></script>
+{% endblock %}

@@ -292,3 +292,25 @@ class NrsSite(db.Model):
     html_code = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+# ==========================================================================
+# ychat -- a shared post feed, every logged-in user's own design/branding
+# (not a copy of any real platform's look), replacing NRS as the site's
+# main page (2026-09-19). See app.py's /api/ychat/... routes.
+# ==========================================================================
+
+class YchatPost(db.Model):
+    __tablename__ = "ychat_post"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    content = db.Column(db.String(280), nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class YchatLike(db.Model):
+    __tablename__ = "ychat_like"
+    id = db.Column(db.Integer, primary_key=True)
+    post_id = db.Column(db.Integer, db.ForeignKey("ychat_post.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    __table_args__ = (db.UniqueConstraint("post_id", "user_id", name="uq_ychat_like_post_user"),)

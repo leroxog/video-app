@@ -25,6 +25,7 @@ from werkzeug.exceptions import HTTPException
 from models import (
     db, User, Subscription, ErrorLog, PlMedia, AiChat, AiChatMessage,
     Team, TeamMember, TeamMessage, UserIntegration, NrsHistoryEntry, NrsSite,
+    YchatPost, YchatLike,
 )
 import ai_assistant
 import integrations
@@ -1050,9 +1051,95 @@ def pl_nex_archived():
     )
 
 
+@app.route("/nrs-archiv")
+def pl_nrs_archived():
+    """NRS -- archived, not deleted, at the user's request (2026-09-19)
+    in favor of ychat (see pl_home below) as the site's main page. All
+    the code, models and routes behind this stay exactly as they were;
+    this view is just no longer linked from anywhere."""
+    return render_template("pl_nrs.html")
+
+
 @app.route("/")
 def pl_home():
-    return render_template("pl_nrs.html")
+    return render_template("pl_ychat.html")
+
+
+# ==========================================================================
+# ychat -- a shared post feed (see models.YchatPost/YchatLike). Every
+# logged-in user can post, like/unlike, and delete their own posts.
+# ==========================================================================
+
+def _ychat_serialize_post(post, me_id):
+    author = db.session.get(User, post.user_id)
+    likes = YchatLike.query.filter_by(post_id=post.id).count()
+    liked_by_me = YchatLike.query.filter_by(post_id=post.id, user_id=me_id).first() is not None
+    return {
+        "id": post.id,
+        "author": (author.pl_display_name or author.username) if author else "Unbekannt",
+        "is_mine": post.user_id == me_id,
+        "content": post.content,
+        # created_at is stored naive (default=datetime.now(timezone.utc),
+        # but the DB column strips tzinfo) -- .isoformat() alone omits
+        # any timezone marker, which JS's `new Date(...)` then silently
+        # misreads as LOCAL time instead of UTC (verified live: a post
+        # made just now showed as "2h" old). Appending "Z" makes the
+        # UTC-ness explicit so the client computes the right offset.
+        "created_at": post.created_at.isoformat() + "Z",
+        "likes": likes,
+        "liked_by_me": liked_by_me,
+    }
+
+
+@app.route("/api/ychat/posts")
+def api_ychat_posts_list():
+    """Always the latest 100 posts, newest first -- a feed re-orders
+    itself as new posts arrive (unlike Teams' chat log), so there's no
+    "after"-based incremental fetch here; the client just re-polls this
+    whole list every few seconds and re-renders it."""
+    me = current_user()
+    posts = YchatPost.query.order_by(YchatPost.id.desc()).limit(100).all()
+    return jsonify({"ok": True, "posts": [_ychat_serialize_post(p, me.id) for p in posts]})
+
+
+@app.route("/api/ychat/posts", methods=["POST"])
+def api_ychat_posts_create():
+    me = current_user()
+    data = request.get_json(silent=True) or {}
+    content = (data.get("content") or "").strip()[:280]
+    if not content:
+        return jsonify({"ok": False, "error": "empty"}), 400
+    post = YchatPost(user_id=me.id, content=content)
+    db.session.add(post)
+    db.session.commit()
+    return jsonify({"ok": True, "post": _ychat_serialize_post(post, me.id)})
+
+
+@app.route("/api/ychat/posts/<int:post_id>/like", methods=["POST"])
+def api_ychat_posts_like(post_id):
+    me = current_user()
+    post = db.session.get(YchatPost, post_id)
+    if post is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    existing = YchatLike.query.filter_by(post_id=post_id, user_id=me.id).first()
+    if existing is None:
+        db.session.add(YchatLike(post_id=post_id, user_id=me.id))
+    else:
+        db.session.delete(existing)
+    db.session.commit()
+    return jsonify({"ok": True, "post": _ychat_serialize_post(post, me.id)})
+
+
+@app.route("/api/ychat/posts/<int:post_id>", methods=["DELETE"])
+def api_ychat_posts_delete(post_id):
+    me = current_user()
+    post = YchatPost.query.filter_by(id=post_id, user_id=me.id).first()
+    if post is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    YchatLike.query.filter_by(post_id=post_id).delete()
+    db.session.delete(post)
+    db.session.commit()
+    return jsonify({"ok": True})
 
 
 # ==========================================================================

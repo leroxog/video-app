@@ -59,12 +59,18 @@ def test_nex_archived_redirects_to_login_when_logged_out(client):
     assert "/login" in r.headers["Location"]
 
 
-def test_signup_then_land_on_nrs(client):
+def test_signup_then_land_on_ychat(client):
     r = signup(client, "alice")
     assert r.status_code in (302, 303)
     home = client.get("/")
     assert home.status_code == 200
-    assert b"nrsAddress" in home.data
+    assert b"ycFeed" in home.data
+
+
+def test_nrs_archived_redirects_to_login_when_logged_out(client):
+    r = client.get("/nrs-archiv", follow_redirects=False)
+    assert r.status_code == 302
+    assert "/login" in r.headers["Location"]
 
 
 def test_signup_rejects_bad_username_and_short_password(client):
@@ -316,15 +322,23 @@ def _chat_id(client):
     return client.post("/api/ai/chats").get_json()["chat"]["id"]
 
 
-def test_root_serves_nrs_not_nex(client):
-    """Nex (and Teams/Plugins with it) was archived in favor of NRS as
-    the site's main page (2026-09-19) -- "/" now serves NRS; the old
-    Nex UI still fully works, just at /nex-archiv (see tests below),
-    unlinked from anywhere a normal user would land."""
+def test_root_serves_ychat_not_nrs_or_nex(client):
+    """Nex was archived in favor of NRS, then NRS itself was archived in
+    favor of ychat as the site's main page (2026-09-19) -- "/" now
+    serves ychat; both older UIs still fully work, just at /nex-archiv
+    and /nrs-archiv (see tests elsewhere), unlinked from anywhere a
+    normal user would land."""
     signup(client, "alice")
     home = client.get("/")
     assert home.status_code == 200
-    assert b"nrsAddress" in home.data and b"nxMsgs" not in home.data
+    assert b"ycFeed" in home.data and b"nrsAddress" not in home.data and b"nxMsgs" not in home.data
+
+
+def test_nrs_archived_still_serves_nrs(client):
+    signup(client, "alice")
+    home = client.get("/nrs-archiv")
+    assert home.status_code == 200
+    assert b"nrsAddress" in home.data
 
 
 def test_nex_archived_still_reachable_and_shows_empty_state(client):
@@ -876,6 +890,85 @@ def test_nrs_site_delete_requires_ownership(client):
 
     assert client.delete("/api/nrs/sites/owned-by-alice").status_code == 200
     assert client.get("/api/nrs/sites/owned-by-alice").status_code == 404
+
+
+# ---------------- ychat ----------------
+
+def test_ychat_create_and_list_post(client):
+    signup(client, "alice")
+    r = client.post("/api/ychat/posts", json={"content": "Hallo Welt"})
+    j = r.get_json()
+    assert j["ok"] is True and j["post"]["content"] == "Hallo Welt" and j["post"]["is_mine"] is True
+    assert j["post"]["likes"] == 0 and j["post"]["liked_by_me"] is False
+
+    posts = client.get("/api/ychat/posts").get_json()["posts"]
+    assert len(posts) == 1 and posts[0]["content"] == "Hallo Welt"
+
+
+def test_ychat_rejects_empty_post(client):
+    signup(client, "alice")
+    assert client.post("/api/ychat/posts", json={"content": "   "}).status_code == 400
+
+
+def test_ychat_feed_shows_newest_first(client):
+    signup(client, "alice")
+    client.post("/api/ychat/posts", json={"content": "eins"})
+    client.post("/api/ychat/posts", json={"content": "zwei"})
+    contents = [p["content"] for p in client.get("/api/ychat/posts").get_json()["posts"]]
+    assert contents == ["zwei", "eins"]
+
+
+def test_ychat_feed_shows_posts_from_all_users(client):
+    signup(client, "alice")
+    client.post("/api/ychat/posts", json={"content": "von alice"})
+    bob = make_user(client, "bob")
+    bob.post("/api/ychat/posts", json={"content": "von bob"})
+
+    authors = sorted(p["author"] for p in bob.get("/api/ychat/posts").get_json()["posts"])
+    assert authors == ["alice", "bob"]
+
+
+def test_ychat_like_toggles_and_is_per_user(client):
+    signup(client, "alice")
+    post_id = client.post("/api/ychat/posts", json={"content": "hi"}).get_json()["post"]["id"]
+    bob = make_user(client, "bob")
+
+    r1 = bob.post(f"/api/ychat/posts/{post_id}/like")
+    j1 = r1.get_json()
+    assert j1["ok"] is True and j1["post"]["likes"] == 1 and j1["post"]["liked_by_me"] is True
+
+    # alice's own view of liked_by_me is independent of bob's like
+    alice_view = client.get("/api/ychat/posts").get_json()["posts"][0]
+    assert alice_view["likes"] == 1 and alice_view["liked_by_me"] is False
+
+    r2 = bob.post(f"/api/ychat/posts/{post_id}/like")
+    j2 = r2.get_json()
+    assert j2["post"]["likes"] == 0 and j2["post"]["liked_by_me"] is False
+
+
+def test_ychat_delete_requires_ownership(client):
+    signup(client, "alice")
+    post_id = client.post("/api/ychat/posts", json={"content": "hi"}).get_json()["post"]["id"]
+
+    bob = make_user(client, "bob")
+    assert bob.delete(f"/api/ychat/posts/{post_id}").status_code == 404
+    assert len(client.get("/api/ychat/posts").get_json()["posts"]) == 1
+
+    assert client.delete(f"/api/ychat/posts/{post_id}").status_code == 200
+    assert len(client.get("/api/ychat/posts").get_json()["posts"]) == 0
+
+
+def test_ychat_requires_login(client):
+    assert client.get("/api/ychat/posts").status_code == 401
+
+
+def test_ychat_created_at_is_explicitly_utc(client):
+    # A naive-UTC isoformat() string with no "Z"/offset gets misread as
+    # local time by JS's `new Date(...)` -- verified live (a fresh post
+    # showed as hours old). Guard against losing the explicit "Z" again.
+    signup(client, "alice")
+    post = client.post("/api/ychat/posts", json={"content": "hi"}).get_json()["post"]
+    assert post["created_at"].endswith("Z")
 
 
 def test_system_prompt_documents_the_nexpreview_artifact_convention():
