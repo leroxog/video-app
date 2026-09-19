@@ -9,7 +9,7 @@ os.environ["DATABASE_URL"] = f"sqlite:///{tempfile.gettempdir()}/video_app_test_
 import pytest
 import app as app_module
 from app import app as flask_app, db
-from models import User, AiChat, AiChatMessage, Team, TeamMember, TeamMessage, UserIntegration
+from models import User, AiChat, AiChatMessage, Team, TeamMember, TeamMessage, UserIntegration, NrsHistoryEntry
 
 
 @pytest.fixture
@@ -754,6 +754,57 @@ def test_calendar_context_injected_when_message_mentions_calendar(client, monkey
     _mock_stream(monkeypatch, fake_stream)
     client.post(f"/api/ai/chats/{cid}/stream", json={"message": "Was steht heute in meinem Kalender?"})
     assert any("Zahnarzt" in (m.get("content") or "") for m in seen["history"])
+
+
+# ---------------- NRS ----------------
+
+def test_nrs_history_add_and_list(client):
+    signup(client, "alice")
+    r = client.post("/api/nrs/history", json={"url": "https://example.com/", "title": "example.com"})
+    assert r.get_json()["ok"] is True
+    entries = client.get("/api/nrs/history").get_json()["entries"]
+    assert len(entries) == 1
+    assert entries[0]["url"] == "https://example.com/" and entries[0]["title"] == "example.com"
+
+
+def test_nrs_history_rejects_non_http_url(client):
+    signup(client, "alice")
+    r = client.post("/api/nrs/history", json={"url": "javascript:alert(1)", "title": "x"})
+    assert r.status_code == 400 and r.get_json()["error"] == "invalid_url"
+
+
+def test_nrs_history_newest_first(client):
+    signup(client, "alice")
+    client.post("/api/nrs/history", json={"url": "https://one.example/", "title": "one"})
+    client.post("/api/nrs/history", json={"url": "https://two.example/", "title": "two"})
+    entries = client.get("/api/nrs/history").get_json()["entries"]
+    assert [e["title"] for e in entries] == ["two", "one"]
+
+
+def test_nrs_history_clear_removes_entries(client):
+    signup(client, "alice")
+    client.post("/api/nrs/history", json={"url": "https://example.com/", "title": "example.com"})
+    r = client.post("/api/nrs/history/clear")
+    assert r.get_json()["ok"] is True
+    assert client.get("/api/nrs/history").get_json()["entries"] == []
+
+
+def test_nrs_history_only_shows_own_entries(client):
+    signup(client, "alice")
+    client.post("/api/nrs/history", json={"url": "https://alice-only.example/", "title": "alice's"})
+
+    bob = make_user(client, "bob")
+    bob.post("/api/nrs/history", json={"url": "https://bob-only.example/", "title": "bob's"})
+
+    alice_urls = [e["url"] for e in client.get("/api/nrs/history").get_json()["entries"]]
+    bob_urls = [e["url"] for e in bob.get("/api/nrs/history").get_json()["entries"]]
+    assert alice_urls == ["https://alice-only.example/"]
+    assert bob_urls == ["https://bob-only.example/"]
+
+
+def test_nrs_history_requires_login(client):
+    r = client.get("/api/nrs/history")
+    assert r.status_code == 401
 
 
 def test_system_prompt_documents_the_nexpreview_artifact_convention():

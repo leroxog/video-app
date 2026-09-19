@@ -255,3 +255,18 @@ class UserIntegration(db.Model):
     scopes = db.Column(db.Text, nullable=True)
     connected_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     __table_args__ = (db.UniqueConstraint("user_id", "service", name="uq_user_integration_user_service"),)
+
+
+class NrsHistoryEntry(db.Model):
+    """One page visited in NRS (see app.py's /api/nrs/history routes and
+    static/js/pinklemon-nrs.js) -- written on every real navigation (not
+    on a back/forward replay, which revisits a URL already in the list).
+    Purely a per-user visited-pages log; NRS itself never reads or
+    relays the traffic those visits represent, only records the URL the
+    user's own browser already went to directly."""
+    __tablename__ = "nrs_history_entry"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    url = db.Column(db.Text, nullable=False)
+    title = db.Column(db.String(255), nullable=True)
+    visited_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))

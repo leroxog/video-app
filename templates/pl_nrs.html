@@ -75,6 +75,39 @@
   .nrs-home-mark svg { width: 100%; height: 100%; display: block; }
   .nrs-home h1 { margin: 0; font-size: 22px; color: var(--pl-text); }
   .nrs-home p { margin: 0; max-width: 380px; font-size: 13.5px; line-height: 1.5; }
+
+  .nrs-history-backdrop {
+    position: fixed; inset: 0; z-index: 59; background: rgba(0, 0, 0, .4);
+    opacity: 0; pointer-events: none; transition: opacity .2s ease;
+  }
+  .nrs-history-backdrop.open { opacity: 1; pointer-events: auto; }
+  .nrs-history-panel {
+    position: fixed; top: 0; right: 0; bottom: 0; width: 320px; max-width: 88vw; z-index: 60;
+    background: var(--pl-surface); border-left: 1px solid var(--pl-border);
+    display: flex; flex-direction: column; transform: translateX(100%); transition: transform .2s ease;
+  }
+  .nrs-history-panel.open { transform: translateX(0); }
+  .nrs-history-top {
+    display: flex; align-items: center; gap: 8px; padding: 10px 12px; flex-shrink: 0;
+    border-bottom: 1px solid var(--pl-border);
+  }
+  .nrs-history-title { flex: 1; font-weight: 700; font-size: 14px; color: var(--pl-text); }
+  .nrs-history-list { flex: 1; overflow-y: auto; padding: 8px; }
+  .nrs-history-row { display: flex; flex-direction: column; gap: 2px; padding: 9px 10px; border-radius: 10px; cursor: pointer; }
+  .nrs-history-row:hover { background: var(--pl-hover); }
+  .nrs-history-row-title {
+    font-size: 13px; color: var(--pl-text); font-weight: 600;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .nrs-history-row-url {
+    font-size: 11.5px; color: var(--pl-text-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .nrs-history-empty { padding: 24px 14px; color: var(--pl-text-faint); font-size: 13px; text-align: center; }
+  .nrs-history-clear {
+    margin: 8px 12px 12px; flex-shrink: 0; border: 1px solid var(--pl-border); background: var(--pl-surface-2);
+    color: var(--pl-text); border-radius: 10px; padding: 9px 12px; font-size: 12.5px; font-weight: 600;
+  }
+  .nrs-history-clear:hover { background: var(--pl-hover); }
 </style>
 {% endblock %}
 
@@ -100,8 +133,23 @@
   <a href="#" id="nrsOpenNewTab" class="nrs-nav-btn" hidden target="_blank" rel="noopener" aria-label="Extern in echtem Browser-Tab öffnen" title="Extern in echtem Browser-Tab öffnen">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>
   </a>
+  <button type="button" class="nrs-nav-btn" id="nrsHistoryBtn" aria-label="Verlauf" title="Verlauf">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+  </button>
 </div>
 <div class="nrs-body" id="nrsBody"></div>
+
+<div class="nrs-history-backdrop" id="nrsHistoryBackdrop"></div>
+<aside class="nrs-history-panel" id="nrsHistoryPanel">
+  <div class="nrs-history-top">
+    <div class="nrs-history-title">Verlauf</div>
+    <button type="button" class="nrs-nav-btn" id="nrsHistoryClose" aria-label="Schließen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18 18 6M6 6l12 12"/></svg>
+    </button>
+  </div>
+  <div class="nrs-history-list" id="nrsHistoryList"></div>
+  <button type="button" class="nrs-history-clear" id="nrsHistoryClear">Verlauf löschen</button>
+</aside>
 {% endblock %}
 
 {% block scripts %}

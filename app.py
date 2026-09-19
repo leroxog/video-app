@@ -24,7 +24,7 @@ from sqlalchemy import text
 from werkzeug.exceptions import HTTPException
 from models import (
     db, User, Subscription, ErrorLog, PlMedia, AiChat, AiChatMessage,
-    Team, TeamMember, TeamMessage, UserIntegration,
+    Team, TeamMember, TeamMessage, UserIntegration, NrsHistoryEntry,
 )
 import ai_assistant
 import integrations
@@ -1053,6 +1053,51 @@ def pl_nex_archived():
 @app.route("/")
 def pl_home():
     return render_template("pl_nrs.html")
+
+
+# ==========================================================================
+# NRS history -- a per-user log of pages visited in NRS's embedded
+# browser (see static/js/pinklemon-nrs.js). Write-on-navigate, read-only
+# list, and a clear action; nothing here ever touches the actual page
+# content or traffic, just the URLs the user's own browser already
+# loaded directly.
+# ==========================================================================
+
+@app.route("/api/nrs/history")
+def api_nrs_history_list():
+    me = current_user()
+    entries = (
+        NrsHistoryEntry.query.filter_by(user_id=me.id)
+        .order_by(NrsHistoryEntry.id.desc()).limit(200).all()
+    )
+    return jsonify({
+        "ok": True,
+        "entries": [
+            {"id": e.id, "url": e.url, "title": e.title, "visited_at": e.visited_at.isoformat()}
+            for e in entries
+        ],
+    })
+
+
+@app.route("/api/nrs/history", methods=["POST"])
+def api_nrs_history_add():
+    me = current_user()
+    data = request.get_json(silent=True) or {}
+    url = (data.get("url") or "").strip()[:2000]
+    title = (data.get("title") or "").strip()[:255] or None
+    if not url.lower().startswith(("http://", "https://")):
+        return jsonify({"ok": False, "error": "invalid_url"}), 400
+    db.session.add(NrsHistoryEntry(user_id=me.id, url=url, title=title))
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/nrs/history/clear", methods=["POST"])
+def api_nrs_history_clear():
+    me = current_user()
+    NrsHistoryEntry.query.filter_by(user_id=me.id).delete()
+    db.session.commit()
+    return jsonify({"ok": True})
 
 
 @app.route("/api/ai/chats")

@@ -10,6 +10,17 @@
   var forwardBtn = document.getElementById("nrsForward");
   var reloadBtn = document.getElementById("nrsReload");
   var homeTemplateHtml = document.getElementById("nrsHomeTemplate").textContent;
+  var historyBtn = document.getElementById("nrsHistoryBtn");
+  var historyPanel = document.getElementById("nrsHistoryPanel");
+  var historyBackdrop = document.getElementById("nrsHistoryBackdrop");
+  var historyClose = document.getElementById("nrsHistoryClose");
+  var historyList = document.getElementById("nrsHistoryList");
+  var historyClearBtn = document.getElementById("nrsHistoryClear");
+
+  function esc(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
 
   // Each tab keeps its own visited-URL stack for back/forward -- a
   // cross-origin iframe's own navigation history isn't something this
@@ -133,6 +144,12 @@
       tab.historyStack = tab.historyStack.slice(0, tab.historyIndex + 1);
       tab.historyStack.push(url);
       tab.historyIndex = tab.historyStack.length - 1;
+      // A back/forward replay revisits a URL already on the list, so
+      // only a genuinely new navigation gets logged here.
+      fetch("/api/nrs/history", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: url, title: tab.title }),
+      }).catch(function () {});
     }
     if (tab.id === activeTabId) {
       address.value = url;
@@ -176,6 +193,45 @@
   reloadBtn.addEventListener("click", function () {
     var tab = activeTab();
     if (tab && tab.historyStack[tab.historyIndex]) load(tab, tab.historyStack[tab.historyIndex], false);
+  });
+
+  // ---------------- history panel ----------------
+  function openHistoryPanel() {
+    historyPanel.classList.add("open");
+    historyBackdrop.classList.add("open");
+    historyList.innerHTML = '<div class="nrs-history-empty">Lädt …</div>';
+    fetch("/api/nrs/history").then(function (r) { return r.json(); }).then(function (j) {
+      if (!j.ok) return;
+      if (!j.entries.length) {
+        historyList.innerHTML = '<div class="nrs-history-empty">Noch kein Verlauf.</div>';
+        return;
+      }
+      historyList.innerHTML = j.entries.map(function (e) {
+        return '<div class="nrs-history-row" data-url="' + esc(e.url) + '">'
+          + '<div class="nrs-history-row-title">' + esc(e.title || e.url) + '</div>'
+          + '<div class="nrs-history-row-url">' + esc(e.url) + '</div>'
+          + '</div>';
+      }).join("");
+    });
+  }
+  function closeHistoryPanel() {
+    historyPanel.classList.remove("open");
+    historyBackdrop.classList.remove("open");
+  }
+  historyBtn.addEventListener("click", openHistoryPanel);
+  historyClose.addEventListener("click", closeHistoryPanel);
+  historyBackdrop.addEventListener("click", closeHistoryPanel);
+  historyList.addEventListener("click", function (e) {
+    var row = e.target.closest("[data-url]");
+    if (!row) return;
+    closeHistoryPanel();
+    load(createTab(true), row.dataset.url, true);
+  });
+  historyClearBtn.addEventListener("click", function () {
+    if (!window.confirm("Verlauf wirklich löschen?")) return;
+    fetch("/api/nrs/history/clear", { method: "POST" }).then(function () {
+      historyList.innerHTML = '<div class="nrs-history-empty">Noch kein Verlauf.</div>';
+    });
   });
 
   createTab(true);
