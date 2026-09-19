@@ -24,7 +24,7 @@ from sqlalchemy import text
 from werkzeug.exceptions import HTTPException
 from models import (
     db, User, Subscription, ErrorLog, PlMedia, AiChat, AiChatMessage,
-    Team, TeamMember, TeamMessage, UserIntegration, NrsHistoryEntry,
+    Team, TeamMember, TeamMessage, UserIntegration, NrsHistoryEntry, NrsSite,
 )
 import ai_assistant
 import integrations
@@ -1096,6 +1096,74 @@ def api_nrs_history_add():
 def api_nrs_history_clear():
     me = current_user()
     NrsHistoryEntry.query.filter_by(user_id=me.id).delete()
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+# ==========================================================================
+# NRS sites -- user-made mini "sites" addressable by a made-up "<slug>.nrs"
+# address (see models.NrsSite's docstring for why this is safe: .nrs isn't
+# a real TLD, nothing here ever touches the real internet, and rendering
+# is sandboxed without allow-same-origin). Any logged-in user can create
+# one and visit any other user's by slug -- a small closed "build your own
+# site" feature, not a real hosting service.
+# ==========================================================================
+
+_NRS_SLUG_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
+
+
+def _nrs_site_serialize(site, include_code=False):
+    data = {
+        "slug": site.slug, "name": site.name,
+        "is_mine": site.owner_id == current_user().id,
+        "updated_at": site.updated_at.isoformat(),
+    }
+    if include_code:
+        data["html_code"] = site.html_code
+    return data
+
+
+@app.route("/api/nrs/sites")
+def api_nrs_sites_list_mine():
+    me = current_user()
+    sites = NrsSite.query.filter_by(owner_id=me.id).order_by(NrsSite.updated_at.desc()).all()
+    return jsonify({"ok": True, "sites": [_nrs_site_serialize(s) for s in sites]})
+
+
+@app.route("/api/nrs/sites", methods=["POST"])
+def api_nrs_sites_create():
+    me = current_user()
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()[:100]
+    slug = (data.get("slug") or "").strip().lower()[:63]
+    html_code = (data.get("html_code") or "").strip()[:200000]
+    if not name or not html_code:
+        return jsonify({"ok": False, "error": "empty"}), 400
+    if not _NRS_SLUG_RE.match(slug):
+        return jsonify({"ok": False, "error": "invalid_slug"}), 400
+    if NrsSite.query.filter_by(slug=slug).first() is not None:
+        return jsonify({"ok": False, "error": "slug_taken"}), 409
+    site = NrsSite(owner_id=me.id, slug=slug, name=name, html_code=html_code)
+    db.session.add(site)
+    db.session.commit()
+    return jsonify({"ok": True, "site": _nrs_site_serialize(site)})
+
+
+@app.route("/api/nrs/sites/<slug>")
+def api_nrs_sites_get(slug):
+    site = NrsSite.query.filter_by(slug=slug.strip().lower()).first()
+    if site is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    return jsonify({"ok": True, "site": _nrs_site_serialize(site, include_code=True)})
+
+
+@app.route("/api/nrs/sites/<slug>", methods=["DELETE"])
+def api_nrs_sites_delete(slug):
+    me = current_user()
+    site = NrsSite.query.filter_by(slug=slug.strip().lower(), owner_id=me.id).first()
+    if site is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    db.session.delete(site)
     db.session.commit()
     return jsonify({"ok": True})
 

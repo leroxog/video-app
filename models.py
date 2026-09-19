@@ -270,3 +270,25 @@ class NrsHistoryEntry(db.Model):
     url = db.Column(db.Text, nullable=False)
     title = db.Column(db.String(255), nullable=True)
     visited_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class NrsSite(db.Model):
+    """A user-made mini "site" -- a saved, self-contained HTML/CSS/JS
+    snippet (same idea as Nex's own nexpreview artifacts) addressable by
+    typing its made-up "<slug>.nrs" address into NRS's own address bar
+    (see app.py's /api/nrs/sites routes and static/js/pinklemon-nrs.js).
+    .nrs is not a real TLD and this never touches the real internet --
+    it's a small closed "build and visit your own site" feature, and it
+    renders via iframe.srcdoc (not .src, there's no real URL involved)
+    sandboxed WITHOUT allow-same-origin, same as nexpreview, so one
+    user's saved code can never read another's cookies/storage/session
+    even though (unlike nexpreview) any logged-in user can visit any
+    slug, not just its owner."""
+    __tablename__ = "nrs_site"
+    id = db.Column(db.Integer, primary_key=True)
+    owner_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    slug = db.Column(db.String(63), unique=True, nullable=False)
+    name = db.Column(db.String(100), nullable=False)
+    html_code = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))

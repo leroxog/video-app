@@ -807,6 +807,77 @@ def test_nrs_history_requires_login(client):
     assert r.status_code == 401
 
 
+def test_nrs_site_create_and_fetch_by_slug(client):
+    signup(client, "alice")
+    r = client.post("/api/nrs/sites", json={"name": "Meine Seite", "slug": "meine-seite", "html_code": "<h1>Hi</h1>"})
+    j = r.get_json()
+    assert j["ok"] is True and j["site"]["slug"] == "meine-seite" and j["site"]["is_mine"] is True
+
+    fetched = client.get("/api/nrs/sites/meine-seite").get_json()
+    assert fetched["ok"] is True
+    assert fetched["site"]["name"] == "Meine Seite"
+    assert fetched["site"]["html_code"] == "<h1>Hi</h1>"
+
+
+def test_nrs_site_rejects_invalid_slug(client):
+    signup(client, "alice")
+    r = client.post("/api/nrs/sites", json={"name": "X", "slug": "not valid!", "html_code": "<p>x</p>"})
+    assert r.status_code == 400 and r.get_json()["error"] == "invalid_slug"
+
+
+def test_nrs_site_rejects_empty_name_or_code(client):
+    signup(client, "alice")
+    assert client.post("/api/nrs/sites", json={"name": "", "slug": "x", "html_code": "<p>x</p>"}).status_code == 400
+    assert client.post("/api/nrs/sites", json={"name": "X", "slug": "x", "html_code": ""}).status_code == 400
+
+
+def test_nrs_site_rejects_duplicate_slug(client):
+    signup(client, "alice")
+    client.post("/api/nrs/sites", json={"name": "Erste", "slug": "dupe", "html_code": "<p>1</p>"})
+    r = client.post("/api/nrs/sites", json={"name": "Zweite", "slug": "dupe", "html_code": "<p>2</p>"})
+    assert r.status_code == 409 and r.get_json()["error"] == "slug_taken"
+
+
+def test_nrs_site_get_unknown_slug_404s(client):
+    signup(client, "alice")
+    assert client.get("/api/nrs/sites/does-not-exist").status_code == 404
+
+
+def test_nrs_site_any_logged_in_user_can_visit_by_slug(client):
+    signup(client, "alice")
+    client.post("/api/nrs/sites", json={"name": "Alices Seite", "slug": "alices-seite", "html_code": "<p>hi</p>"})
+
+    bob = make_user(client, "bob")
+    j = bob.get("/api/nrs/sites/alices-seite").get_json()
+    assert j["ok"] is True and j["site"]["html_code"] == "<p>hi</p>"
+    assert j["site"]["is_mine"] is False
+
+
+def test_nrs_site_list_mine_only_shows_own_sites(client):
+    signup(client, "alice")
+    client.post("/api/nrs/sites", json={"name": "Alices Seite", "slug": "alices-only", "html_code": "<p>x</p>"})
+
+    bob = make_user(client, "bob")
+    bob.post("/api/nrs/sites", json={"name": "Bobs Seite", "slug": "bobs-only", "html_code": "<p>x</p>"})
+
+    alice_slugs = [s["slug"] for s in client.get("/api/nrs/sites").get_json()["sites"]]
+    bob_slugs = [s["slug"] for s in bob.get("/api/nrs/sites").get_json()["sites"]]
+    assert alice_slugs == ["alices-only"]
+    assert bob_slugs == ["bobs-only"]
+
+
+def test_nrs_site_delete_requires_ownership(client):
+    signup(client, "alice")
+    client.post("/api/nrs/sites", json={"name": "Alices Seite", "slug": "owned-by-alice", "html_code": "<p>x</p>"})
+
+    bob = make_user(client, "bob")
+    assert bob.delete("/api/nrs/sites/owned-by-alice").status_code == 404
+    assert client.get("/api/nrs/sites/owned-by-alice").status_code == 200  # still exists
+
+    assert client.delete("/api/nrs/sites/owned-by-alice").status_code == 200
+    assert client.get("/api/nrs/sites/owned-by-alice").status_code == 404
+
+
 def test_system_prompt_documents_the_nexpreview_artifact_convention():
     assert "nexpreview" in app_module.ai_assistant.SYSTEM_PROMPT
 
