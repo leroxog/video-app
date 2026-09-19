@@ -16,6 +16,31 @@
      button in the bar instead of trying to guess when to show it. */
   .pl-screen.nrs { padding: 0; align-items: stretch; display: flex; flex-direction: column; background: var(--pl-bg); }
 
+  .nrs-tabstrip {
+    display: flex; align-items: flex-end; gap: 2px; padding: 6px 6px 0; flex-shrink: 0;
+    background: var(--pl-bg-2); overflow-x: auto;
+  }
+  .nrs-tab {
+    display: flex; align-items: center; gap: 6px; max-width: 180px; min-width: 120px;
+    padding: 8px 6px 8px 12px; border-radius: 10px 10px 0 0; cursor: pointer; flex-shrink: 0;
+    background: var(--pl-bg-2); color: var(--pl-text-faint); font-size: 12.5px; white-space: nowrap;
+    border: 1px solid transparent; border-bottom: none;
+  }
+  .nrs-tab.is-active { background: var(--pl-surface); color: var(--pl-text); border-color: var(--pl-border); }
+  .nrs-tab-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .nrs-tab-close {
+    flex-shrink: 0; width: 18px; height: 18px; border-radius: 5px; border: none; background: transparent;
+    color: inherit; display: flex; align-items: center; justify-content: center; opacity: .65;
+  }
+  .nrs-tab-close:hover { background: var(--pl-hover); opacity: 1; }
+  .nrs-tab-close svg { width: 12px; height: 12px; }
+  .nrs-tab-add {
+    flex-shrink: 0; width: 30px; height: 30px; margin-bottom: 2px; border-radius: 8px; border: none;
+    background: transparent; color: var(--pl-text-faint); font-size: 19px; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .nrs-tab-add:hover { background: var(--pl-hover); color: var(--pl-text); }
+
   .nrs-bar {
     display: flex; align-items: center; gap: 8px; padding: 10px 14px; flex-shrink: 0;
     background: var(--pl-surface); border-bottom: 1px solid var(--pl-border);
@@ -39,6 +64,8 @@
   }
 
   .nrs-body { flex: 1; min-height: 0; position: relative; }
+  .nrs-tab-pane { position: absolute; inset: 0; }
+  .nrs-tab-pane[hidden] { display: none; }
   .nrs-frame { width: 100%; height: 100%; border: none; background: #fff; }
   .nrs-home {
     position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -53,6 +80,9 @@
 
 {% block screen_class %}nrs{% endblock %}
 {% block screen %}
+<div class="nrs-tabstrip" id="nrsTabstrip">
+  <button type="button" class="nrs-tab-add" id="nrsTabAdd" aria-label="Neuer Tab">+</button>
+</div>
 <div class="nrs-bar">
   <button type="button" class="nrs-nav-btn" id="nrsBack" disabled aria-label="Zurück">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
@@ -67,20 +97,20 @@
     <input type="text" class="nrs-address" id="nrsAddress" placeholder="Adresse eingeben oder suchen …" autocomplete="off" autocapitalize="none" spellcheck="false">
   </form>
   <button type="submit" form="nrsForm" class="nrs-go-btn">Los</button>
-  <a href="#" id="nrsOpenNewTab" class="nrs-nav-btn" hidden target="_blank" rel="noopener" aria-label="In neuem Tab öffnen" title="In neuem Tab öffnen">
+  <a href="#" id="nrsOpenNewTab" class="nrs-nav-btn" hidden target="_blank" rel="noopener" aria-label="Extern in echtem Browser-Tab öffnen" title="Extern in echtem Browser-Tab öffnen">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>
   </a>
 </div>
-<div class="nrs-body">
-  <div class="nrs-home" id="nrsHome">
-    <span class="nrs-home-mark">{% include "partials/_pinklemon_logo.html" %}</span>
-    <h1>NRS</h1>
-    <p>Gib oben eine Adresse ein. Manche Seiten lassen sich aus eigenen Sicherheitseinstellungen nicht eingebettet öffnen -- dann hilft der Pfeil-Button oben rechts (in neuem Tab öffnen).</p>
-  </div>
-  <iframe class="nrs-frame" id="nrsFrame" hidden sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"></iframe>
-</div>
+<div class="nrs-body" id="nrsBody"></div>
 {% endblock %}
 
 {% block scripts %}
+<script id="nrsHomeTemplate" type="text/template">
+  <div class="nrs-home">
+    <span class="nrs-home-mark">{% include "partials/_pinklemon_logo.html" %}</span>
+    <h1>NRS</h1>
+    <p>Gib oben eine Adresse ein. Manche Seiten lassen sich aus eigenen Sicherheitseinstellungen nicht eingebettet öffnen -- dann hilft der Pfeil-Button oben rechts (extern öffnen).</p>
+  </div>
+</script>
 <script src="{{ url_for('static', filename='js/pinklemon-nrs.js') }}"></script>
 {% endblock %}
