@@ -57,6 +57,24 @@
     return hasScheme ? v : "https://" + v;
   }
 
+  // youtube.com/watch itself blocks framing (X-Frame-Options: SAMEORIGIN,
+  // verified live) same as its homepage/search -- but youtube.com/embed/
+  // sends neither header, because that's YouTube's own official, sanctioned
+  // embed player (exactly what their own "Teilen -> Einbetten" button
+  // generates). So a specific video link works here; browsing/searching
+  // YouTube's own site still doesn't and still needs "Extern öffnen".
+  function youtubeEmbedUrl(url) {
+    try {
+      var u = new URL(url);
+      var host = u.hostname.replace(/^(www|m)\./, "");
+      var id = null;
+      if (host === "youtube.com" && u.pathname === "/watch") id = u.searchParams.get("v");
+      else if (host === "youtu.be") id = u.pathname.slice(1).split("/")[0];
+      if (id && /^[\w-]{6,15}$/.test(id)) return "https://www.youtube.com/embed/" + id;
+    } catch (e) { /* not a valid absolute URL -- not a YouTube link either */ }
+    return null;
+  }
+
   function renderTabTitle(tab) {
     tab.titleEl.textContent = tab.title || "Neuer Tab";
   }
@@ -137,6 +155,7 @@
   }
 
   function load(tab, url, pushToHistory) {
+    url = youtubeEmbedUrl(url) || url;
     var home = tab.paneEl.querySelector(".nrs-home");
     if (home) home.hidden = true;
     tab.frameEl.hidden = false;
