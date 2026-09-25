@@ -9,7 +9,7 @@ os.environ["DATABASE_URL"] = f"sqlite:///{tempfile.gettempdir()}/video_app_test_
 import pytest
 import app as app_module
 from app import app as flask_app, db
-from models import User, AiChat, AiChatMessage, Team, TeamMember, TeamMessage, UserIntegration, NrsHistoryEntry
+from models import User, AiChat, AiChatMessage, Team, TeamMember, TeamMessage, UserIntegration, NrsHistoryEntry, YlibItem
 
 
 @pytest.fixture
@@ -59,16 +59,22 @@ def test_nex_archived_redirects_to_login_when_logged_out(client):
     assert "/login" in r.headers["Location"]
 
 
-def test_signup_then_land_on_ychat(client):
+def test_signup_then_land_on_ylib(client):
     r = signup(client, "alice")
     assert r.status_code in (302, 303)
     home = client.get("/")
     assert home.status_code == 200
-    assert b"ycFeed" in home.data
+    assert b"ylGrid" in home.data
 
 
 def test_nrs_archived_redirects_to_login_when_logged_out(client):
     r = client.get("/nrs-archiv", follow_redirects=False)
+    assert r.status_code == 302
+    assert "/login" in r.headers["Location"]
+
+
+def test_ychat_archived_redirects_to_login_when_logged_out(client):
+    r = client.get("/ychat-archiv", follow_redirects=False)
     assert r.status_code == 302
     assert "/login" in r.headers["Location"]
 
@@ -322,16 +328,21 @@ def _chat_id(client):
     return client.post("/api/ai/chats").get_json()["chat"]["id"]
 
 
-def test_root_serves_ychat_not_nrs_or_nex(client):
-    """Nex was archived in favor of NRS, then NRS itself was archived in
-    favor of ychat as the site's main page (2026-09-19) -- "/" now
-    serves ychat; both older UIs still fully work, just at /nex-archiv
-    and /nrs-archiv (see tests elsewhere), unlinked from anywhere a
-    normal user would land."""
+def test_root_serves_ylib_not_ychat_nrs_or_nex(client):
+    """Nex was archived in favor of NRS, then NRS in favor of ychat, then
+    ychat itself was archived in favor of ylib as the site's main page
+    (2026-09-25) -- "/" now serves ylib; all older UIs still fully work,
+    just at /nex-archiv, /nrs-archiv and /ychat-archiv (see tests
+    elsewhere), unlinked from anywhere a normal user would land."""
     signup(client, "alice")
     home = client.get("/")
     assert home.status_code == 200
-    assert b"ycFeed" in home.data and b"nrsAddress" not in home.data and b"nxMsgs" not in home.data
+    assert (
+        b"ylGrid" in home.data
+        and b"ycFeed" not in home.data
+        and b"nrsAddress" not in home.data
+        and b"nxMsgs" not in home.data
+    )
 
 
 def test_nrs_archived_still_serves_nrs(client):
@@ -339,6 +350,13 @@ def test_nrs_archived_still_serves_nrs(client):
     home = client.get("/nrs-archiv")
     assert home.status_code == 200
     assert b"nrsAddress" in home.data
+
+
+def test_ychat_archived_still_serves_ychat(client):
+    signup(client, "alice")
+    home = client.get("/ychat-archiv")
+    assert home.status_code == 200
+    assert b"ycFeed" in home.data
 
 
 def test_nex_archived_still_reachable_and_shows_empty_state(client):
@@ -1035,6 +1053,88 @@ def test_ychat_live_video_id_cleared_when_going_offline(client):
     client.post("/api/ychat/live", json={"is_live": True, "video_url": "https://youtu.be/dQw4w9WgXcQ"})
     client.post("/api/ychat/live", json={"is_live": False})
     assert client.get("/api/ychat/live").get_json()["live"] == []
+
+
+def test_ylib_requires_login(client):
+    r = client.get("/api/ylib/items")
+    assert r.status_code == 401
+
+
+def test_ylib_upload_and_list_image(client):
+    signup(client, "alice")
+    r = client.post("/api/ylib/items", data={
+        "title": "Strand",
+        "file": (io.BytesIO(b"\x89PNG\r\n\x1a\n" + b"0" * 200), "beach.png"),
+    }, content_type="multipart/form-data")
+    j = r.get_json()
+    assert j["ok"] is True
+    assert j["item"]["title"] == "Strand" and j["item"]["kind"] == "image" and j["item"]["url"]
+    listed = client.get("/api/ylib/items").get_json()["items"]
+    assert len(listed) == 1 and listed[0]["title"] == "Strand"
+
+
+def test_ylib_upload_video_sets_kind_video(client):
+    signup(client, "alice")
+    r = client.post("/api/ylib/items", data={
+        "title": "Urlaubsclip",
+        "file": (io.BytesIO(b"FAKEMP4DATA"), "clip.mp4"),
+    }, content_type="multipart/form-data")
+    assert r.get_json()["item"]["kind"] == "video"
+
+
+def test_ylib_upload_defaults_title_to_filename(client):
+    signup(client, "alice")
+    r = client.post("/api/ylib/items", data={
+        "file": (io.BytesIO(b"\x89PNG\r\n\x1a\n" + b"0" * 200), "sonnenuntergang.png"),
+    }, content_type="multipart/form-data")
+    assert r.get_json()["item"]["title"] == "sonnenuntergang.png"
+
+
+def test_ylib_upload_rejects_bad_extension(client):
+    signup(client, "alice")
+    r = client.post("/api/ylib/items", data={
+        "file": (io.BytesIO(b"not media"), "virus.exe"),
+    }, content_type="multipart/form-data")
+    assert r.status_code == 400 and r.get_json()["error"] == "bad_type"
+
+
+def test_ylib_upload_requires_a_file(client):
+    signup(client, "alice")
+    r = client.post("/api/ylib/items", data={"title": "leer"}, content_type="multipart/form-data")
+    assert r.status_code == 400 and r.get_json()["error"] == "no_file"
+
+
+def test_ylib_items_are_private_to_owner(client):
+    signup(client, "alice")
+    client.post("/api/ylib/items", data={
+        "title": "Geheim", "file": (io.BytesIO(b"\x89PNG" + b"0" * 50), "a.png"),
+    }, content_type="multipart/form-data")
+    bob = make_user(client, "bob")
+    assert bob.get("/api/ylib/items").get_json()["items"] == []
+
+
+def test_ylib_delete_own_item(client):
+    signup(client, "alice")
+    item_id = client.post("/api/ylib/items", data={
+        "title": "Weg damit", "file": (io.BytesIO(b"\x89PNG" + b"0" * 50), "a.png"),
+    }, content_type="multipart/form-data").get_json()["item"]["id"]
+    r = client.delete(f"/api/ylib/items/{item_id}")
+    assert r.get_json()["ok"] is True
+    assert client.get("/api/ylib/items").get_json()["items"] == []
+    with flask_app.app_context():
+        assert db.session.get(YlibItem, item_id) is None
+
+
+def test_ylib_delete_rejects_foreign_item(client):
+    signup(client, "alice")
+    item_id = client.post("/api/ylib/items", data={
+        "title": "Nicht deins", "file": (io.BytesIO(b"\x89PNG" + b"0" * 50), "a.png"),
+    }, content_type="multipart/form-data").get_json()["item"]["id"]
+    bob = make_user(client, "bob")
+    r = bob.delete(f"/api/ylib/items/{item_id}")
+    assert r.status_code == 404
+    with flask_app.app_context():
+        assert db.session.get(YlibItem, item_id) is not None
 
 
 def test_system_prompt_documents_the_nexpreview_artifact_convention():
