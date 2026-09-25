@@ -330,17 +330,27 @@ class YchatLike(db.Model):
 
 
 class YlibItem(db.Model):
-    """One uploaded file in a user's personal ylib library (see app.py's
-    /api/ylib/items routes). A browser can't read a visitor's real local
-    Downloads folder -- no site can, that's sandboxed for security -- so
-    this is upload-based: the file is chosen explicitly and stored via
-    the same _pl_store_media/PlMedia mechanism as avatars, then shown in
-    a YouTube-style grid. Private to its owner, not a shared feed."""
+    """One item in a user's personal ylib library (see app.py's
+    /api/ylib/items and /api/ylib/youtube routes), shown in a
+    YouTube-style grid. Private to its owner, not a shared feed. Two
+    sources:
+    - "upload": a file the owner chose explicitly, stored via the same
+      _pl_store_media/PlMedia mechanism as avatars (media_name/
+      content_type set, youtube_video_id empty).
+    - "youtube": a reference to a real YouTube video the owner linked --
+      NOT a downloaded copy. Actually downloading and rehosting YouTube
+      videos would mean redistributing other creators' copyrighted work,
+      which violates YouTube's Terms of Service and copyright law, so
+      this app never fetches or stores the video itself. Instead it
+      keeps the video id and renders it through YouTube's own official
+      embed player/thumbnail CDN (media_name/content_type empty)."""
     __tablename__ = "ylib_item"
     id = db.Column(db.Integer, primary_key=True)
     owner_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     title = db.Column(db.String(120), nullable=False)
-    media_name = db.Column(db.String(64), nullable=False)   # PlMedia.name / R2 key
-    content_type = db.Column(db.String(90), nullable=False)
+    source = db.Column(db.String(10), nullable=False, default="upload")  # "upload" or "youtube"
+    media_name = db.Column(db.String(64), nullable=False, default="")    # PlMedia.name / R2 key -- upload only
+    content_type = db.Column(db.String(90), nullable=False, default="")  # upload only
     kind = db.Column(db.String(10), nullable=False)         # "image" or "video"
+    youtube_video_id = db.Column(db.String(20), nullable=True)  # youtube only
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
