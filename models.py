@@ -327,20 +327,3 @@ class YchatLike(db.Model):
     post_id = db.Column(db.Integer, db.ForeignKey("ychat_post.id"), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     __table_args__ = (db.UniqueConstraint("post_id", "user_id", name="uq_ychat_like_post_user"),)
-
-
-class YlibItem(db.Model):
-    """One uploaded file in a user's personal ylib library (see app.py's
-    /api/ylib/items routes). A browser can't read a visitor's real local
-    Downloads folder -- no site can, that's sandboxed for security -- so
-    this is upload-based: the file is chosen explicitly and stored via
-    the same _pl_store_media/PlMedia mechanism as avatars, then shown in
-    a YouTube-style grid. Private to its owner, not a shared feed."""
-    __tablename__ = "ylib_item"
-    id = db.Column(db.Integer, primary_key=True)
-    owner_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    title = db.Column(db.String(120), nullable=False)
-    media_name = db.Column(db.String(64), nullable=False)   # PlMedia.name / R2 key
-    content_type = db.Column(db.String(90), nullable=False)
-    kind = db.Column(db.String(10), nullable=False)         # "image" or "video"
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
