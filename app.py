@@ -258,10 +258,6 @@ def ensure_sqlite_columns_exist():
             ("next_suggestion", "VARCHAR(200)"),
         ],
         "team_member": [("typing_at", "DATETIME")],
-        "ylib_item": [
-            ("source", "VARCHAR(10) NOT NULL DEFAULT 'upload'"),
-            ("youtube_video_id", "VARCHAR(20)"),
-        ],
     }
     with db.engine.connect() as conn:
         for table, columns in wanted.items():
@@ -345,8 +341,6 @@ def ensure_columns_exist():
         "ALTER TABLE ai_chat ADD COLUMN IF NOT EXISTS character VARCHAR(20) NOT NULL DEFAULT 'nex'",
         "ALTER TABLE ai_chat ADD COLUMN IF NOT EXISTS next_suggestion VARCHAR(200)",
         "ALTER TABLE team_member ADD COLUMN IF NOT EXISTS typing_at TIMESTAMP",
-        "ALTER TABLE ylib_item ADD COLUMN IF NOT EXISTS source VARCHAR(10) NOT NULL DEFAULT 'upload'",
-        "ALTER TABLE ylib_item ADD COLUMN IF NOT EXISTS youtube_video_id VARCHAR(20)",
     ]
     with db.engine.connect() as conn:
         for statement in statements:
@@ -1226,21 +1220,13 @@ YLIB_VIDEO_EXT = {"mp4", "webm", "ogg", "mov"}
 
 
 def _ylib_serialize(item):
-    data = {
+    return {
         "id": item.id,
         "title": item.title,
         "kind": item.kind,
-        "source": item.source,
+        "url": _pl_media_url(item.media_name),
         "created_at": item.created_at.isoformat() + "Z",
     }
-    if item.source == "youtube":
-        data["url"] = None
-        data["youtube_video_id"] = item.youtube_video_id
-        data["thumbnail_url"] = f"https://i.ytimg.com/vi/{item.youtube_video_id}/hqdefault.jpg"
-    else:
-        data["url"] = _pl_media_url(item.media_name)
-        data["thumbnail_url"] = None
-    return data
 
 
 @app.route("/api/ylib/items")
@@ -1267,47 +1253,9 @@ def api_ylib_items_create():
     name = f"{uuid.uuid4().hex}.{ext}"
     _pl_store_media(f, name)
     item = YlibItem(
-        owner_id=me.id, title=title, source="upload", media_name=name,
+        owner_id=me.id, title=title, media_name=name,
         content_type=(f.mimetype or "application/octet-stream")[:90], kind=kind,
     )
-    db.session.add(item)
-    db.session.commit()
-    return jsonify({"ok": True, "item": _ylib_serialize(item)})
-
-
-def _youtube_oembed_title(video_id):
-    """Best-effort real title via YouTube's own public oEmbed endpoint --
-    no key needed, sanctioned by YouTube for exactly this. Returns None
-    on any failure so a slow/unavailable request never blocks adding
-    the video; the caller falls back to a generic title."""
-    try:
-        r = requests.get(
-            "https://www.youtube.com/oembed",
-            params={"url": f"https://www.youtube.com/watch?v={video_id}", "format": "json"},
-            timeout=5,
-        )
-        if r.status_code == 200:
-            return (r.json().get("title") or "").strip()[:120] or None
-    except requests.RequestException:
-        pass
-    return None
-
-
-@app.route("/api/ylib/youtube", methods=["POST"])
-def api_ylib_youtube_create():
-    """Add a real YouTube video by link -- this never downloads or
-    rehosts the video (see models.YlibItem's docstring for why: that
-    would mean redistributing other creators' copyrighted work, which
-    this app doesn't do). Only the id is kept; playback and the
-    thumbnail both come straight from YouTube's own official CDN."""
-    me = current_user()
-    data = request.get_json(silent=True) or {}
-    match = _YOUTUBE_ID_RE.search((data.get("url") or "").strip())
-    if not match:
-        return jsonify({"ok": False, "error": "invalid_url"}), 400
-    video_id = match.group(1)
-    title = (data.get("title") or "").strip()[:120] or _youtube_oembed_title(video_id) or "YouTube-Video"
-    item = YlibItem(owner_id=me.id, title=title, source="youtube", kind="video", youtube_video_id=video_id)
     db.session.add(item)
     db.session.commit()
     return jsonify({"ok": True, "item": _ylib_serialize(item)})

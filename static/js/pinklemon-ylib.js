@@ -1,7 +1,6 @@
 (function () {
   "use strict";
   var uploadBtn = document.getElementById("ylUploadBtn");
-  var youtubeBtn = document.getElementById("ylYoutubeBtn");
   var fileInput = document.getElementById("ylFileInput");
   var body = document.getElementById("ylBody");
   var grid = document.getElementById("ylGrid");
@@ -36,18 +35,13 @@
     items.forEach(function (it) { itemsById[it.id] = it; });
     if (!items.length) {
       grid.innerHTML = '<div class="yl-empty" style="grid-column: 1/-1">' + EMPTY_ICON
-        + '<div>Noch nichts hier -- lade eine Datei hoch oder füge einen YouTube-Link hinzu.</div></div>';
+        + '<div>Noch nichts hochgeladen -- leg mit "Hochladen" los.</div></div>';
       return;
     }
     grid.innerHTML = items.map(function (it) {
-      var thumb;
-      if (it.source === "youtube") {
-        thumb = '<div class="yl-thumb"><img src="' + esc(it.thumbnail_url) + '" alt="" loading="lazy"><span class="yl-badge">YouTube</span></div>';
-      } else if (it.kind === "video") {
-        thumb = '<div class="yl-thumb is-video">' + PLAY_ICON + '<span class="yl-badge">Video</span></div>';
-      } else {
-        thumb = '<div class="yl-thumb"><img src="' + esc(it.url) + '" alt="" loading="lazy"></div>';
-      }
+      var thumb = it.kind === "video"
+        ? '<div class="yl-thumb is-video">' + PLAY_ICON + '<span class="yl-badge">Video</span></div>'
+        : '<div class="yl-thumb"><img src="' + esc(it.url) + '" alt="" loading="lazy"></div>';
       return '<div class="yl-card" data-id="' + it.id + '">'
         + thumb
         + '<button class="yl-del" data-del="' + it.id + '" aria-label="Löschen" title="Löschen">' + TRASH_ICON + '</button>'
@@ -66,15 +60,9 @@
   }
 
   function openPlayer(item) {
-    if (item.source === "youtube") {
-      stage.innerHTML = '<iframe style="width:100%;aspect-ratio:16/9;border:none;display:block"'
-        + ' src="https://www.youtube.com/embed/' + esc(item.youtube_video_id) + '?autoplay=1"'
-        + ' allow="autoplay; encrypted-media" allowfullscreen></iframe>';
-    } else {
-      stage.innerHTML = item.kind === "video"
-        ? '<video src="' + esc(item.url) + '" controls autoplay></video>'
-        : '<img src="' + esc(item.url) + '" alt="">';
-    }
+    stage.innerHTML = item.kind === "video"
+      ? '<video src="' + esc(item.url) + '" controls autoplay></video>'
+      : '<img src="' + esc(item.url) + '" alt="">';
     playerTitle.textContent = item.title;
     playerMeta.textContent = timeLabel(item.created_at);
     body.classList.add("in-player");
@@ -135,23 +123,6 @@
         uploadBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13m0-13 5 5m-5-5-5 5M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>Hochladen';
         fileInput.value = "";
       });
-  });
-
-  youtubeBtn.addEventListener("click", function () {
-    var url = window.prompt("Link zu einem YouTube-Video einfügen:", "");
-    if (!url) return;
-    youtubeBtn.disabled = true;
-    fetch("/api/ylib/youtube", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: url }),
-    }).then(function (r) { return r.json(); }).then(function (j) {
-      if (!j.ok) {
-        window.alert(j.error === "invalid_url" ? "Das sieht nicht nach einem YouTube-Link aus." : "Ging nicht.");
-      } else {
-        loadItems();
-      }
-    }).catch(function () { window.alert("Ging nicht."); })
-      .finally(function () { youtubeBtn.disabled = false; });
   });
 
   loadItems();
