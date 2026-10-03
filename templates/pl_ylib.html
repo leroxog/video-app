@@ -5,12 +5,27 @@
 <style>
   .pl-screen.ylib { padding: 0; align-items: stretch; display: flex; flex-direction: column; background: var(--pl-bg); }
 
+  /* Top bar: logo | search | actions */
   .yl-top {
-    display: flex; align-items: center; gap: 10px; padding: 12px 18px; flex-shrink: 0;
+    display: flex; align-items: center; gap: 10px 12px; flex-wrap: wrap; padding: 10px 18px; flex-shrink: 0;
     background: var(--pl-surface); border-bottom: 1px solid var(--pl-border);
   }
-  .yl-top .logo { font-size: 19px; font-weight: 800; letter-spacing: -.02em; color: var(--pl-text); flex: 1; }
+  .yl-top .logo {
+    font-size: 20px; font-weight: 800; letter-spacing: -.02em; color: var(--pl-text);
+    cursor: pointer; background: none; border: none; padding: 0; font-family: inherit;
+  }
   .yl-top .logo span { color: #17b897; }
+  .yl-search {
+    flex: 1 1 280px; max-width: 560px; margin: 0 auto; display: flex; align-items: center; gap: 8px;
+    border: 1px solid var(--pl-border); background: var(--pl-bg); border-radius: 999px; padding: 0 14px;
+  }
+  .yl-search:focus-within { border-color: #17b897; }
+  .yl-search svg { width: 16px; height: 16px; color: var(--pl-text-faint); flex-shrink: 0; }
+  .yl-search input {
+    flex: 1; min-width: 0; border: none; outline: none; background: none; color: var(--pl-text);
+    font: inherit; font-size: 14px; padding: 9px 0;
+  }
+  .yl-actions { display: flex; align-items: center; gap: 8px; }
   .yl-upload-btn {
     display: inline-flex; align-items: center; gap: 6px; border: none; background: #17b897; color: #fff;
     font-size: 12.5px; font-weight: 700; padding: 8px 16px; border-radius: 999px; cursor: pointer;
@@ -21,23 +36,35 @@
   .yl-yt-btn:hover { background: var(--pl-hover); }
   .yl-logout { border: none; background: none; color: var(--pl-text-faint); font-size: 12.5px; font-weight: 600; }
   .yl-logout:hover { color: var(--pl-text); }
+  @media (max-width: 640px) {
+    .yl-search { order: 3; flex-basis: 100%; max-width: none; }
+    .yl-top .logo { margin-right: auto; }
+    .yl-btn-label { display: none; }
+    .yl-upload-btn { padding: 8px 11px; }
+  }
 
   .yl-body { flex: 1; min-height: 0; overflow-y: auto; }
-  .yl-main { max-width: 1180px; margin: 0 auto; padding: 22px 18px 60px; }
 
-  .yl-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 18px 16px;
+  /* Filter chips, sticky under the top bar while the grid scrolls */
+  .yl-chips { position: sticky; top: 0; z-index: 2; background: var(--pl-bg); }
+  .yl-chips-inner { max-width: 1320px; margin: 0 auto; padding: 12px 18px; display: flex; gap: 10px; overflow-x: auto; }
+  .yl-chip {
+    flex-shrink: 0; border: none; border-radius: 8px; padding: 7px 13px; font-size: 13px; font-weight: 600;
+    background: var(--pl-surface-2); color: var(--pl-text); cursor: pointer; font-family: inherit;
   }
-  .yl-card {
-    background: var(--pl-surface); border: 1px solid var(--pl-border); border-radius: 14px;
-    overflow: hidden; cursor: pointer; position: relative; transition: transform .15s ease, box-shadow .15s ease;
-  }
-  .yl-card:hover { transform: translateY(-3px); box-shadow: 0 10px 24px rgba(0,0,0,.16); }
+  .yl-chip:hover { background: var(--pl-hover); }
+  .yl-chip.active { background: var(--pl-text); color: var(--pl-bg); }
+
+  .yl-main { max-width: 1320px; margin: 0 auto; padding: 6px 18px 60px; }
+  .yl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 26px 16px; }
+
+  .yl-card { position: relative; cursor: pointer; }
   .yl-thumb {
-    width: 100%; aspect-ratio: 16/9; background: var(--pl-surface-2); display: flex;
+    width: 100%; aspect-ratio: 16/9; background: var(--pl-surface-2); display: flex; border-radius: 12px;
     align-items: center; justify-content: center; overflow: hidden; position: relative;
   }
-  .yl-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .yl-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .25s ease; }
+  .yl-card:hover .yl-thumb img { transform: scale(1.04); }
   .yl-thumb.is-video { background: linear-gradient(145deg, #1c2333, #0f131c); }
   .yl-thumb.is-video svg { width: 46px; height: 46px; color: rgba(255,255,255,.92); }
   .yl-badge {
@@ -45,72 +72,104 @@
     font-size: 10.5px; font-weight: 700; letter-spacing: .03em; padding: 3px 7px; border-radius: 5px;
     text-transform: uppercase;
   }
-  .yl-info { padding: 10px 12px 12px; }
+  .yl-meta-row { display: flex; gap: 12px; padding: 12px 4px 0 0; }
+  .yl-avatar {
+    width: 36px; height: 36px; border-radius: 50%; background: #17b897; color: #fff; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px;
+  }
+  .yl-info { min-width: 0; }
   .yl-info .title {
-    font-size: 13.5px; font-weight: 700; color: var(--pl-text); line-height: 1.35;
+    font-size: 14.5px; font-weight: 700; color: var(--pl-text); line-height: 1.35;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
   }
-  .yl-info .meta { font-size: 12px; color: var(--pl-text-faint); margin-top: 5px; }
+  .yl-info .meta { font-size: 12.5px; color: var(--pl-text-faint); margin-top: 4px; }
   .yl-del {
     position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; border-radius: 8px;
     border: none; background: rgba(0,0,0,.55); color: #fff; display: flex; align-items: center;
-    justify-content: center; opacity: 0; transition: opacity .12s ease, background .12s ease;
+    justify-content: center; opacity: 0; transition: opacity .12s ease, background .12s ease; z-index: 1;
   }
   .yl-card:hover .yl-del { opacity: 1; }
+  @media (hover: none) { .yl-del { opacity: 1; } }
   .yl-del:hover { background: var(--pl-danger); }
   .yl-del svg { width: 15px; height: 15px; }
 
   .yl-empty { text-align: center; color: var(--pl-text-faint); font-size: 13.5px; padding: 70px 10px; }
   .yl-empty svg { width: 40px; height: 40px; margin-bottom: 10px; color: var(--pl-text-faint); }
 
-  .yl-uploading {
-    display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 8px;
-    color: var(--pl-text-faint); font-size: 12px; font-weight: 600;
-  }
-  .yl-spin {
-    width: 22px; height: 22px; border-radius: 50%; border: 2.5px solid var(--pl-border);
-    border-top-color: #17b897; animation: yl-spin .7s linear infinite;
-  }
-  @keyframes yl-spin { to { transform: rotate(360deg); } }
-
-  /* Player / detail view */
-  .yl-player { display: none; max-width: 920px; margin: 0 auto; padding: 18px 18px 60px; }
+  /* Watch view: player + details on the left, other items on the right */
+  .yl-player { display: none; max-width: 1320px; margin: 0 auto; padding: 18px 18px 60px; }
   .yl-player.active { display: block; }
   .yl-body.in-player .yl-grid-wrap { display: none; }
   .yl-back {
-    display: inline-flex; align-items: center; gap: 6px; border: none; background: none;
+    display: inline-flex; align-items: center; gap: 6px; border: none; background: none; font-family: inherit;
     color: var(--pl-text-dim); font-size: 13px; font-weight: 600; margin-bottom: 14px; cursor: pointer;
   }
   .yl-back:hover { color: var(--pl-text); }
   .yl-back svg { width: 16px; height: 16px; }
+  .yl-watch { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 24px; align-items: start; }
+  @media (max-width: 1000px) { .yl-watch { grid-template-columns: minmax(0, 1fr); } }
   .yl-stage {
-    width: 100%; border-radius: 14px; overflow: hidden; background: #000;
+    width: 100%; aspect-ratio: 16/9; border-radius: 14px; overflow: hidden; background: #000;
     display: flex; align-items: center; justify-content: center;
   }
-  .yl-stage img { width: 100%; max-height: 70vh; object-fit: contain; display: block; }
-  .yl-stage video { width: 100%; max-height: 70vh; display: block; }
-  .yl-player-title { font-size: 17px; font-weight: 800; color: var(--pl-text); margin: 16px 0 4px; }
-  .yl-player-meta { font-size: 12.5px; color: var(--pl-text-faint); }
+  .yl-stage img, .yl-stage video, .yl-stage iframe { width: 100%; height: 100%; display: block; border: none; }
+  .yl-stage img, .yl-stage video { object-fit: contain; }
+  .yl-player-title { font-size: 19px; font-weight: 800; color: var(--pl-text); margin: 14px 0 10px; line-height: 1.3; }
+  .yl-channel-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .yl-channel-row .name { font-weight: 700; font-size: 14px; color: var(--pl-text); }
+  .yl-channel-row .sub { font-size: 12.5px; color: var(--pl-text-faint); }
+  .yl-watch-actions { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+  .yl-pill-btn {
+    display: inline-flex; align-items: center; gap: 6px; border: none; background: var(--pl-surface-2);
+    color: var(--pl-text); font-size: 13px; font-weight: 600; padding: 8px 14px; border-radius: 999px;
+    text-decoration: none; cursor: pointer; font-family: inherit;
+  }
+  .yl-pill-btn:hover { background: var(--pl-hover); }
+  .yl-related-title { font-size: 14px; font-weight: 800; color: var(--pl-text); margin: 0 0 12px; }
+  .yl-rel { display: flex; gap: 10px; cursor: pointer; margin-bottom: 12px; }
+  .yl-rel .yl-thumb { width: 168px; flex-shrink: 0; border-radius: 10px; }
+  .yl-rel .yl-thumb.is-video svg { width: 28px; height: 28px; }
+  .yl-rel .yl-badge { font-size: 9.5px; padding: 2px 5px; right: 5px; bottom: 5px; }
+  .yl-rel-info { min-width: 0; }
+  .yl-rel-info .t {
+    font-size: 13.5px; font-weight: 700; color: var(--pl-text); line-height: 1.3;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .yl-rel-info .m { font-size: 12px; color: var(--pl-text-faint); margin-top: 4px; }
 </style>
 {% endblock %}
 
 {% block screen_class %}ylib{% endblock %}
 {% block screen %}
 <div class="yl-top">
-  <div class="logo">y<span>lib</span></div>
-  <button type="button" class="yl-upload-btn yl-yt-btn" id="ylYoutubeBtn">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-    YouTube-Link
-  </button>
-  <button type="button" class="yl-upload-btn" id="ylUploadBtn">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13m0-13 5 5m-5-5-5 5M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
-    Hochladen
-  </button>
-  <a class="yl-logout" href="/logout">Abmelden</a>
+  <button type="button" class="logo" id="ylHome">y<span>lib</span></button>
+  <label class="yl-search">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    <input type="search" id="ylSearch" placeholder="Suchen" autocomplete="off" aria-label="Suchen">
+  </label>
+  <div class="yl-actions">
+    <button type="button" class="yl-upload-btn yl-yt-btn" id="ylYoutubeBtn" title="YouTube-Link hinzufügen" aria-label="YouTube-Link hinzufügen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+      <span class="yl-btn-label">YouTube-Link</span>
+    </button>
+    <button type="button" class="yl-upload-btn" id="ylUploadBtn" title="Datei hochladen" aria-label="Datei hochladen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13m0-13 5 5m-5-5-5 5M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+      <span class="yl-btn-label" id="ylUploadLabel">Hochladen</span>
+    </button>
+    <a class="yl-logout" href="/logout">Abmelden</a>
+  </div>
 </div>
 <input type="file" id="ylFileInput" accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm,video/ogg,video/quicktime" hidden>
 <div class="yl-body" id="ylBody">
   <div class="yl-grid-wrap">
+    <div class="yl-chips">
+      <div class="yl-chips-inner" id="ylChips">
+        <button type="button" class="yl-chip active" data-filter="all">Alle</button>
+        <button type="button" class="yl-chip" data-filter="youtube">YouTube</button>
+        <button type="button" class="yl-chip" data-filter="video">Videos</button>
+        <button type="button" class="yl-chip" data-filter="image">Bilder</button>
+      </div>
+    </div>
     <div class="yl-main">
       <div class="yl-grid" id="ylGrid"></div>
     </div>
@@ -120,13 +179,31 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
       Zurück
     </button>
-    <div class="yl-stage" id="ylStage"></div>
-    <div class="yl-player-title" id="ylPlayerTitle"></div>
-    <div class="yl-player-meta" id="ylPlayerMeta"></div>
+    <div class="yl-watch">
+      <div class="yl-watch-main">
+        <div class="yl-stage" id="ylStage"></div>
+        <div class="yl-player-title" id="ylPlayerTitle"></div>
+        <div class="yl-channel-row">
+          <div class="yl-avatar" id="ylPlayerAvatar"></div>
+          <div>
+            <div class="name" id="ylPlayerName"></div>
+            <div class="sub" id="ylPlayerMeta"></div>
+          </div>
+          <div class="yl-watch-actions" id="ylPlayerActions"></div>
+        </div>
+      </div>
+      <aside class="yl-related">
+        <div class="yl-related-title">Weitere Videos</div>
+        <div id="ylRelated"></div>
+      </aside>
+    </div>
   </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
+<script>
+  window.YLIB_USER = {{ ((user.pl_display_name or user.username) if user else "") | tojson }};
+</script>
 <script src="{{ url_for('static', filename='js/pinklemon-ylib.js') }}"></script>
 {% endblock %}
