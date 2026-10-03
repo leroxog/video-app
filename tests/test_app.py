@@ -1125,6 +1125,62 @@ def test_ylib_delete_own_item(client):
         assert db.session.get(YlibItem, item_id) is None
 
 
+def test_ylib_youtube_add_uses_given_title(client, monkeypatch):
+    signup(client, "alice")
+    monkeypatch.setattr(app_module, "_youtube_oembed_title", lambda vid: "sollte nicht benutzt werden")
+    r = client.post("/api/ylib/youtube", json={"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "title": "Mein Titel"})
+    j = r.get_json()
+    assert j["ok"] is True
+    item = j["item"]
+    assert item["title"] == "Mein Titel" and item["source"] == "youtube" and item["kind"] == "video"
+    assert item["youtube_video_id"] == "dQw4w9WgXcQ"
+    assert item["thumbnail_url"] == "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg"
+    assert item["url"] is None
+
+
+def test_ylib_youtube_add_falls_back_to_oembed_title(client, monkeypatch):
+    signup(client, "alice")
+    monkeypatch.setattr(app_module, "_youtube_oembed_title", lambda vid: "Echter Titel via oEmbed")
+    r = client.post("/api/ylib/youtube", json={"url": "https://youtu.be/dQw4w9WgXcQ"})
+    assert r.get_json()["item"]["title"] == "Echter Titel via oEmbed"
+
+
+def test_ylib_youtube_add_falls_back_to_generic_title_when_oembed_fails(client, monkeypatch):
+    signup(client, "alice")
+    monkeypatch.setattr(app_module, "_youtube_oembed_title", lambda vid: None)
+    r = client.post("/api/ylib/youtube", json={"url": "https://youtu.be/dQw4w9WgXcQ"})
+    assert r.get_json()["item"]["title"] == "YouTube-Video"
+
+
+def test_ylib_youtube_add_rejects_non_youtube_url(client):
+    signup(client, "alice")
+    r = client.post("/api/ylib/youtube", json={"url": "https://example.com/video"})
+    assert r.status_code == 400 and r.get_json()["error"] == "invalid_url"
+
+
+def test_ylib_youtube_items_show_up_in_list_alongside_uploads(client, monkeypatch):
+    signup(client, "alice")
+    monkeypatch.setattr(app_module, "_youtube_oembed_title", lambda vid: "YT")
+    client.post("/api/ylib/youtube", json={"url": "https://youtu.be/dQw4w9WgXcQ"})
+    client.post("/api/ylib/items", data={
+        "title": "Bild", "file": (io.BytesIO(b"\x89PNG" + b"0" * 50), "a.png"),
+    }, content_type="multipart/form-data")
+    items = client.get("/api/ylib/items").get_json()["items"]
+    assert len(items) == 2
+    sources = {it["source"] for it in items}
+    assert sources == {"youtube", "upload"}
+
+
+def test_ylib_youtube_item_delete_does_not_touch_media_store(client, monkeypatch):
+    signup(client, "alice")
+    monkeypatch.setattr(app_module, "_youtube_oembed_title", lambda vid: "YT")
+    item_id = client.post("/api/ylib/youtube", json={"url": "https://youtu.be/dQw4w9WgXcQ"}).get_json()["item"]["id"]
+    r = client.delete(f"/api/ylib/items/{item_id}")
+    assert r.get_json()["ok"] is True
+    with flask_app.app_context():
+        assert db.session.get(YlibItem, item_id) is None
+
+
 def test_ylib_delete_rejects_foreign_item(client):
     signup(client, "alice")
     item_id = client.post("/api/ylib/items", data={
