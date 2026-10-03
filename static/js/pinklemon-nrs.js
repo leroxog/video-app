@@ -9,7 +9,6 @@
   var backBtn = document.getElementById("nrsBack");
   var forwardBtn = document.getElementById("nrsForward");
   var reloadBtn = document.getElementById("nrsReload");
-  var homeTemplateHtml = document.getElementById("nrsHomeTemplate").textContent;
   var historyBtn = document.getElementById("nrsHistoryBtn");
   var historyPanel = document.getElementById("nrsHistoryPanel");
   var historyBackdrop = document.getElementById("nrsHistoryBackdrop");
@@ -67,19 +66,29 @@
     try { return new URL(url).hostname.replace(/^www\./, ""); } catch (e) { return url; }
   }
 
+  // NRS's own search engine (see search_engine.py). Same origin as this page, so it embeds
+  // without any X-Frame-Options trouble, unlike third-party search engines.
+  var START_URL = location.origin + "/suche";
+
+  function isOwnPage(url) {
+    return url.indexOf(location.origin + "/") === 0;
+  }
+
+  function ownPageTitle(url) {
+    try {
+      var q = new URL(url).searchParams.get("q");
+      if (q) return q + " – NRS Suche";
+    } catch (e) { /* unparsable -- fall through to the plain title */ }
+    return "NRS Suche";
+  }
+
   function normalizeUrl(raw) {
     var v = raw.trim();
     if (!v) return null;
     var hasScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(v);
-    // No scheme, has a space, or no dot anywhere -- reads like a search
-    // phrase rather than a host, so send it to a search engine instead
-    // of trying (and failing) to resolve it as one. Bing specifically --
-    // verified live (curl + an actual test iframe) that unlike DuckDuckGo,
-    // Google, Brave and Ecosia (all of which send X-Frame-Options/CSP
-    // frame-ancestors refusing embedding), Bing's search results send
-    // neither and render normally in an iframe.
+    // No scheme, has a space, or no dot anywhere -- reads like a search phrase, not a host.
     var looksLikeHost = hasScheme || (/\./.test(v) && !/\s/.test(v));
-    if (!looksLikeHost) return "https://www.bing.com/search?q=" + encodeURIComponent(v);
+    if (!looksLikeHost) return START_URL + "?q=" + encodeURIComponent(v);
     return hasScheme ? v : "https://" + v;
   }
 
@@ -148,7 +157,8 @@
     frameEl.srcdoc = html;
   }
 
-  function createTab(activate) {
+  // A new tab opens NRS's search page unless `blank` (the caller is about to navigate anyway).
+  function createTab(activate, blank) {
     var tab = {
       id: nextTabId++, url: null, title: "Neuer Tab",
       historyStack: [], historyIndex: -1,
@@ -157,7 +167,6 @@
     tab.paneEl = document.createElement("div");
     tab.paneEl.className = "nrs-tab-pane";
     tab.paneEl.hidden = true;
-    tab.paneEl.innerHTML = homeTemplateHtml;
     tab.frameEl = document.createElement("iframe");
     tab.frameEl.className = "nrs-frame";
     tab.frameEl.hidden = true;
@@ -184,6 +193,7 @@
 
     tabs.push(tab);
     if (activate) activateTab(tab.id);
+    if (!blank) navigate(tab, { kind: "url", value: START_URL, title: "NRS Suche" }, true, false);
     return tab;
   }
 
@@ -225,8 +235,6 @@
 
   // entry: {kind: "url", value} | {kind: "nrs", value: slug}
   function render(tab, entry) {
-    var home = tab.paneEl.querySelector(".nrs-home");
-    if (home) home.hidden = true;
     tab.frameEl.hidden = false;
     tab.frameEl.removeAttribute("src");
     tab.frameEl.removeAttribute("srcdoc");
@@ -258,7 +266,7 @@
       var url = rewriteToEmbed(entry.value);
       tab.url = url;
       tab.urlKind = "url";
-      tab.title = hostnameOf(url);
+      tab.title = entry.title || (isOwnPage(url) ? ownPageTitle(url) : hostnameOf(url));
       renderTabTitle(tab);
       tab.frameEl.setAttribute("sandbox", SANDBOX_URL);
       tab.frameEl.src = url;
@@ -271,7 +279,7 @@
     }
   }
 
-  function navigate(tab, entry, pushToHistory) {
+  function navigate(tab, entry, pushToHistory, logVisit) {
     render(tab, entry);
     if (pushToHistory) {
       tab.historyStack = tab.historyStack.slice(0, tab.historyIndex + 1);
@@ -280,8 +288,8 @@
       // A back/forward replay revisits an entry already on the list, so
       // only a genuinely new navigation gets logged -- and only real
       // URLs; .nrs sites aren't logged to keep the history endpoint's
-      // http(s)-only validation simple.
-      if (entry.kind === "url") {
+      // http(s)-only validation simple. The automatic start page isn't logged either.
+      if (entry.kind === "url" && logVisit !== false) {
         fetch("/api/nrs/history", {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ url: tab.url, title: tab.title }),
@@ -316,6 +324,15 @@
     }
     var url = normalizeUrl(raw);
     if (url) navigate(tab, { kind: "url", value: url }, true);
+  });
+
+  // NRS's own search pages (in an iframe) ask the browser to open their links and searches,
+  // so the address bar, tab title and history stay in sync with what the frame shows.
+  window.addEventListener("message", function (e) {
+    if (e.origin !== location.origin || !e.data || e.data.nrs !== "go") return;
+    var tab = tabs.find(function (t) { return t.frameEl.contentWindow === e.source; });
+    if (!tab || typeof e.data.url !== "string" || !isOwnPage(e.data.url)) return;
+    navigate(tab, { kind: "url", value: e.data.url, title: String(e.data.title || "").slice(0, 120) }, true);
   });
 
   backBtn.addEventListener("click", function () {
@@ -365,7 +382,7 @@
     var row = e.target.closest("[data-url]");
     if (!row) return;
     closeHistoryPanel();
-    navigate(createTab(true), { kind: "url", value: row.dataset.url }, true);
+    navigate(createTab(true, true), { kind: "url", value: row.dataset.url }, true);
   });
   historyClearBtn.addEventListener("click", function () {
     if (!window.confirm("Verlauf wirklich löschen?")) return;

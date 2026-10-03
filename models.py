@@ -329,6 +329,29 @@ class YchatLike(db.Model):
     __table_args__ = (db.UniqueConstraint("post_id", "user_id", name="uq_ychat_like_post_user"),)
 
 
+class SearchDoc(db.Model):
+    """One page in NRS Suche's own index (see search_engine.py): an article
+    intro crawled from the German Wikipedia, kept as plain text so results
+    can show a snippet. Wikipedia text is CC BY-SA 4.0, so every result and
+    card links back to the source article."""
+    __tablename__ = "search_doc"
+    id = db.Column(db.Integer, primary_key=True)
+    url = db.Column(db.String(400), unique=True, nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    extract = db.Column(db.Text, nullable=False)
+    doc_len = db.Column(db.Integer, nullable=False, default=1)  # weighted term count, for BM25
+    source = db.Column(db.String(20), nullable=False, default="wikipedia")
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+
+class SearchPosting(db.Model):
+    """Inverted index: how often a normalized term occurs in a SearchDoc."""
+    __tablename__ = "search_posting"
+    term = db.Column(db.String(48), primary_key=True)
+    doc_id = db.Column(db.Integer, db.ForeignKey("search_doc.id"), primary_key=True)
+    tf = db.Column(db.Integer, nullable=False)
+
+
 class YlibItem(db.Model):
     """One item in a user's personal ylib library (see app.py's
     /api/ylib/items and /api/ylib/youtube routes), shown in a

@@ -5,9 +5,13 @@ import tempfile
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 os.environ["DATABASE_URL"] = f"sqlite:///{tempfile.gettempdir()}/video_app_test_import_throwaway.db"
+os.environ["NRS_AUTO_INDEX"] = "0"
+
+from datetime import date
 
 import pytest
 import app as app_module
+import search_engine
 from app import app as flask_app, db
 from models import User, AiChat, AiChatMessage, Team, TeamMember, TeamMessage, UserIntegration, NrsHistoryEntry, YlibItem, PlMedia
 
@@ -59,16 +63,16 @@ def test_nex_archived_redirects_to_login_when_logged_out(client):
     assert "/login" in r.headers["Location"]
 
 
-def test_signup_then_land_on_ylib(client):
+def test_signup_then_land_on_the_browser(client):
     r = signup(client, "alice")
     assert r.status_code in (302, 303)
     home = client.get("/")
     assert home.status_code == 200
-    assert b"ylGrid" in home.data
+    assert b"nrsAddress" in home.data
 
 
-def test_nrs_archived_redirects_to_login_when_logged_out(client):
-    r = client.get("/nrs-archiv", follow_redirects=False)
+def test_ylib_archived_redirects_to_login_when_logged_out(client):
+    r = client.get("/ylib-archiv", follow_redirects=False)
     assert r.status_code == 302
     assert "/login" in r.headers["Location"]
 
@@ -328,28 +332,26 @@ def _chat_id(client):
     return client.post("/api/ai/chats").get_json()["chat"]["id"]
 
 
-def test_root_serves_ylib_not_ychat_nrs_or_nex(client):
-    """Nex was archived in favor of NRS, then NRS in favor of ychat, then
-    ychat itself was archived in favor of ylib as the site's main page
-    (2026-09-25) -- "/" now serves ylib; all older UIs still fully work,
-    just at /nex-archiv, /nrs-archiv and /ychat-archiv (see tests
-    elsewhere), unlinked from anywhere a normal user would land."""
+def test_root_serves_the_browser_not_the_archived_pages(client):
+    """The home page cycled Nex, browser, ychat, ylib and is now the NRS browser
+    with its own search again (2026-10-03). The ylib, ychat and Nex UIs still fully
+    work at /ylib-archiv, /ychat-archiv and /nex-archiv, unlinked from anywhere."""
     signup(client, "alice")
     home = client.get("/")
     assert home.status_code == 200
     assert (
-        b"ylGrid" in home.data
+        b"nrsAddress" in home.data
+        and b"ylGrid" not in home.data
         and b"ycFeed" not in home.data
-        and b"nrsAddress" not in home.data
         and b"nxMsgs" not in home.data
     )
 
 
-def test_nrs_archived_still_serves_nrs(client):
+def test_ylib_archived_still_serves_the_library(client):
     signup(client, "alice")
-    home = client.get("/nrs-archiv")
+    home = client.get("/ylib-archiv")
     assert home.status_code == 200
-    assert b"nrsAddress" in home.data
+    assert b"ylGrid" in home.data
 
 
 def test_ychat_archived_still_serves_ychat(client):
@@ -1065,7 +1067,7 @@ BROWSER = {"Accept": "text/html,application/xhtml+xml"}
 
 def test_browser_opening_root_gets_guest_session_without_login(client):
     home = client.get("/", headers=BROWSER)
-    assert home.status_code == 200 and b"ylGrid" in home.data
+    assert home.status_code == 200 and b"nrsAddress" in home.data
     assert client.get("/api/ylib/items").get_json()["ok"] is True
     with flask_app.app_context():
         guest = User.query.one()
@@ -1086,8 +1088,8 @@ def test_guest_session_is_reused_on_later_visits(client):
         assert User.query.count() == 1
 
 
-def test_home_offers_picking_files_from_this_device(client):
-    home = client.get("/", headers=BROWSER)
+def test_library_offers_picking_files_from_this_device(client):
+    home = client.get("/ylib-archiv", headers=BROWSER)
     assert b'data-filter="local"' in home.data
     assert b"ylLocalFolder" in home.data and b"ylLocalFiles" in home.data
 
@@ -1244,6 +1246,168 @@ def test_media_type_comes_from_extension_not_uploader_header(client):
     served = client.get(r.get_json()["item"]["url"])
     assert served.mimetype == "image/png"
     assert served.headers["X-Content-Type-Options"] == "nosniff"
+
+
+# ---------------- NRS Suche (own search engine) ----------------
+
+def _add_page(title, extract, slug=None):
+    doc = search_engine.index_document(f"https://de.wikipedia.org/wiki/{slug or title}", title, extract)
+    db.session.commit()
+    return doc
+
+
+def test_tokenize_folds_case_umlauts_and_drops_stopwords():
+    assert search_engine.tokenize("Die Größe der BÄREN in Köln") == ["grosse", "baren", "koln"]
+
+
+def test_index_document_skips_urls_that_are_already_indexed(client):
+    assert _add_page("Katze", "Die Katze ist ein Haustier.") is not None
+    assert _add_page("Katze", "Die Katze ist ein Haustier.") is None
+    assert search_engine.doc_count() == 1
+
+
+def test_search_without_terms_or_index_returns_nothing(client):
+    assert search_engine.search("") == ([], 0)
+    assert search_engine.search("katze") == ([], 0)
+
+
+def test_search_finds_matching_pages_only(client):
+    _add_page("Katze", "Die Katze ist ein Haustier. Katzen jagen Mäuse.")
+    _add_page("Hund", "Der Hund ist ein Haustier und Begleiter des Menschen.")
+    results, total = search_engine.search("katze")
+    assert [r["title"] for r in results] == ["Katze"] and total == 1
+    both, _ = search_engine.search("haustier")
+    assert {r["title"] for r in both} == {"Katze", "Hund"}
+
+
+def test_search_prefers_pages_matching_all_terms(client):
+    _add_page("Bonn", "Bonn war die Hauptstadt der Bundesrepublik.")
+    _add_page("Berlin", "Berlin ist die Hauptstadt von Deutschland.")
+    results, _ = search_engine.search("hauptstadt berlin")
+    assert results[0]["title"] == "Berlin"
+
+
+def test_search_finds_longer_words_by_prefix(client):
+    _add_page("Berliner Mauer", "Die Berliner Mauer teilte die Stadt.")
+    results, _ = search_engine.search("berlin")
+    assert [r["title"] for r in results] == ["Berliner Mauer"]
+
+
+def test_snippet_highlights_hits_and_escapes_html():
+    html = str(search_engine.make_snippet("Ein <script>alert(1)</script> Text über Katzen.", ["katzen"]))
+    assert "<script>" not in html and "&lt;script&gt;" in html
+    assert "<mark>Katzen</mark>" in html
+
+
+def test_search_pages_need_a_session(client):
+    r = client.get("/suche", follow_redirects=False)
+    assert r.status_code == 302 and "/login" in r.headers["Location"]
+
+
+def test_search_home_shows_how_many_pages_are_indexed(client):
+    _add_page("Katze", "Die Katze ist ein Haustier.")
+    home = client.get("/suche", headers=BROWSER)
+    assert home.status_code == 200 and b"Durchsucht 1 Seiten" in home.data
+
+
+def test_search_results_page_lists_hits_with_links_to_the_card(client):
+    doc = _add_page("Katze", "Die Katze ist ein Haustier.")
+    client.get("/suche", headers=BROWSER)
+    r = client.get("/suche", query_string={"q": "katze"})
+    assert r.status_code == 200 and b"1 Ergebnisse" in r.data and b"<mark>Katze</mark>" in r.data
+    assert f"/suche/artikel/{doc.id}".encode() in r.data
+
+
+def test_search_results_page_without_hits_says_so(client):
+    client.get("/suche", headers=BROWSER)
+    r = client.get("/suche", query_string={"q": "zzzzqqq"})
+    assert b"Keine Ergebnisse" in r.data
+
+
+def test_search_query_is_escaped_on_the_page(client):
+    client.get("/suche", headers=BROWSER)
+    r = client.get("/suche", query_string={"q": "<script>alert(1)</script>"})
+    assert b"<script>alert(1)</script>" not in r.data and b"&lt;script&gt;" in r.data
+
+
+def test_search_results_are_paged_ten_at_a_time(client):
+    for i in range(12):
+        _add_page(f"Seite{i}", "Dieser Text erwähnt das Wort Testwort.")
+    client.get("/suche", headers=BROWSER)
+    first = client.get("/suche", query_string={"q": "testwort"}).data
+    second = client.get("/suche", query_string={"q": "testwort", "p": 2}).data
+    assert first.count(b'class="sr-result"') == 10 and b"Weiter" in first
+    assert second.count(b'class="sr-result"') == 2 and b"Weiter" not in second
+
+
+def test_search_card_shows_text_with_attribution(client):
+    doc = _add_page("Katze", "Die Katze ist ein Haustier.")
+    client.get("/suche", headers=BROWSER)
+    r = client.get(f"/suche/artikel/{doc.id}")
+    assert r.status_code == 200 and b"Die Katze ist ein Haustier." in r.data
+    assert b"CC BY-SA 4.0" in r.data and doc.url.encode() in r.data
+    assert client.get("/suche/artikel/9999").status_code == 404
+
+
+class _FakeResponse:
+    def __init__(self, payload, status_code=200):
+        self._payload, self.status_code = payload, status_code
+
+    def json(self):
+        return self._payload
+
+
+def test_fetch_popular_titles_skips_namespace_pages_and_sums_views(monkeypatch):
+    monkeypatch.setattr(search_engine.time, "sleep", lambda s: None)
+    pages = {
+        "2026/09": [{"article": "Berlin", "views": 10}, {"article": "Spezial:Suche", "views": 99}],
+        "2026/08": [{"article": "Hamburg", "views": 15}, {"article": "Berlin", "views": 10},
+                    {"article": "Wikipedia:Hauptseite", "views": 98}],
+    }
+
+    def fake_get(url, **kwargs):
+        key = "/".join(url.split("/")[-3:-1])
+        return _FakeResponse({"items": [{"articles": pages[key]}]})
+
+    monkeypatch.setattr(search_engine.requests, "get", fake_get)
+    titles = search_engine.fetch_popular_titles(months=2, today=date(2026, 10, 3))
+    assert titles == ["Berlin", "Hamburg"]
+
+
+def test_crawl_indexes_pages_once_and_skips_stubs(client, monkeypatch):
+    monkeypatch.setattr(search_engine.time, "sleep", lambda s: None)
+    long_text = "Berlin ist die Hauptstadt und eine Stadt in Deutschland. " * 3
+    monkeypatch.setattr(search_engine, "fetch_popular_titles", lambda months: ["Berlin", "Stub"])
+    monkeypatch.setattr(search_engine, "fetch_extracts", lambda titles: [("Berlin", long_text), ("Stub", "kurz")])
+    search_engine.crawl_wikipedia(limit=10)
+    search_engine.crawl_wikipedia(limit=10)
+    assert search_engine.doc_count() == 1
+    assert search_engine.search("hauptstadt")[0][0]["url"] == "https://de.wikipedia.org/wiki/Berlin"
+
+
+def test_article_url_quotes_titles():
+    assert search_engine.article_url("Frankfurt am Main") == "https://de.wikipedia.org/wiki/Frankfurt_am_Main"
+    assert search_engine.article_url("Köln") == "https://de.wikipedia.org/wiki/K%C3%B6ln"
+
+
+def test_guest_browser_page_hides_the_mini_site_button_but_accounts_keep_it(client):
+    guest = client.get("/", headers=BROWSER)
+    assert b'title="Mini-Site erstellen" hidden' in guest.data
+    member = flask_app.test_client()
+    member.post("/signup", data={"username": "carol", "password": "secret1", "password2": "secret1"})
+    assert b'title="Mini-Site erstellen" hidden' not in member.get("/").data
+
+
+def test_guest_can_use_the_browser_history(client):
+    client.get("/", headers=BROWSER)
+    assert client.post("/api/nrs/history", json={"url": "https://example.com", "title": "x"}).get_json()["ok"] is True
+    assert len(client.get("/api/nrs/history").get_json()["entries"]) == 1
+
+
+def test_guest_cannot_create_mini_sites(client):
+    client.get("/", headers=BROWSER)
+    r = client.post("/api/nrs/sites", json={"name": "x", "slug": "meine-seite", "html_code": "<p>hi</p>"})
+    assert r.status_code == 401
 
 
 def test_ylib_rejects_oversized_upload(client, monkeypatch):

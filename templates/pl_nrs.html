@@ -121,6 +121,7 @@
     box-shadow: 0 6px 20px rgba(0, 0, 0, .3);
   }
   .nrs-create-fab:hover { filter: brightness(1.08); }
+  .nrs-create-fab[hidden] { display: none; }
 
   .nrs-create-backdrop {
     position: fixed; inset: 0; z-index: 69; background: rgba(0, 0, 0, .45);
@@ -203,7 +204,7 @@
   </button>
 </div>
 <div class="nrs-body" id="nrsBody">
-  <button type="button" class="nrs-create-fab" id="nrsCreateFab" aria-label="Mini-Site erstellen" title="Mini-Site erstellen">+</button>
+  <button type="button" class="nrs-create-fab" id="nrsCreateFab" aria-label="Mini-Site erstellen" title="Mini-Site erstellen"{% if is_guest %} hidden{% endif %}>+</button>
 </div>
 
 <div class="nrs-create-backdrop" id="nrsCreateBackdrop"></div>
@@ -245,12 +246,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script id="nrsHomeTemplate" type="text/template">
-  <div class="nrs-home">
-    <span class="nrs-home-mark">{% include "partials/_pinklemon_logo.html" %}</span>
-    <h1>NRS</h1>
-    <p>Gib oben eine Adresse ein. Manche Seiten lassen sich aus eigenen Sicherheitseinstellungen nicht eingebettet öffnen -- dann hilft der Pfeil-Button oben rechts (extern öffnen). Einzelne Links zu YouTube-Videos, Spotify-Tracks/Playlists und Vimeo-Videos spielen direkt hier ab; die jeweiligen Seiten selbst (Suche, Startseite) nicht. Mit dem "+" unten rechts baust du deine eigene Mini-Site unter einer eigenen "&lt;name&gt;.nrs"-Adresse.</p>
-  </div>
-</script>
 <script src="{{ url_for('static', filename='js/pinklemon-nrs.js') }}"></script>
 {% endblock %}

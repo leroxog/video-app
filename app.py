@@ -4,6 +4,7 @@ import sys
 import uuid
 import urllib.parse
 import secrets
+import time
 import hashlib
 import logging
 import traceback
@@ -25,10 +26,11 @@ from werkzeug.exceptions import HTTPException
 from models import (
     db, User, Subscription, ErrorLog, PlMedia, AiChat, AiChatMessage,
     Team, TeamMember, TeamMessage, UserIntegration, NrsHistoryEntry, NrsSite,
-    YchatPost, YchatLike, YlibItem,
+    YchatPost, YchatLike, YlibItem, SearchDoc,
 )
 import ai_assistant
 import integrations
+import search_engine
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -386,6 +388,9 @@ with app.app_context():
             admin_user.is_admin = True
             db.session.commit()
 
+if os.environ.get("NRS_AUTO_INDEX", "1") == "1":
+    search_engine.start_background_crawl(app, limit=int(os.environ.get("NRS_INDEX_SIZE", "4000")))
+
 
 # Bumped each time a one-time global logout is explicitly requested -- not a
 # recurring mechanism. A session's user_id only counts if it also carries
@@ -512,10 +517,11 @@ _PUBLIC_ENDPOINTS = {
 
 # '-' can't appear in a registered username (see PL_USERNAME_RE), so this prefix never clashes.
 GUEST_USERNAME_PREFIX = "gast-"
-_GUEST_START_ENDPOINTS = {"pl_home", "pl_link"}
+_GUEST_START_ENDPOINTS = {"pl_home", "pl_link", "pl_search", "pl_ylib_archived"}
 _GUEST_ENDPOINTS = _GUEST_START_ENDPOINTS | {
-    "pl_media_file", "pl_logout", "api_link_preview", "api_ylib_items_list",
+    "pl_media_file", "pl_logout", "pl_search_doc", "api_link_preview", "api_ylib_items_list",
     "api_ylib_items_create", "api_ylib_youtube_create", "api_ylib_items_delete",
+    "api_nrs_history_list", "api_nrs_history_add", "api_nrs_history_clear",
 }
 
 
@@ -1105,14 +1111,13 @@ def pl_nex_archived():
     )
 
 
-@app.route("/nrs-archiv")
-def pl_nrs_archived():
-    """NRS -- archived, not deleted, at the user's request (2026-09-19)
-    in favor of ychat, itself later archived (see pl_home below) in
-    favor of ylib as the site's main page. All the code, models and
-    routes behind this stay exactly as they were; this view is just no
-    longer linked from anywhere."""
-    return render_template("pl_nrs.html")
+@app.route("/ylib-archiv")
+def pl_ylib_archived():
+    """The ylib media library -- archived, not deleted, at the user's request
+    (2026-10-03) in favor of the NRS browser with its own search (see pl_home
+    below). All the code, models and routes behind this stay exactly as they
+    were; this view is just no longer linked from anywhere."""
+    return render_template("pl_ylib.html")
 
 
 @app.route("/ychat-archiv")
@@ -1126,7 +1131,40 @@ def pl_ychat_archived():
 
 @app.route("/")
 def pl_home():
-    return render_template("pl_ylib.html")
+    return render_template("pl_nrs.html", is_guest=is_guest(current_user()))
+
+
+# ==========================================================================
+# NRS Suche -- the browser's own search engine (see search_engine.py): a
+# crawler + inverted index + BM25 ranking over German Wikipedia's most-read
+# articles. Not the whole web -- an honest, small index of our own.
+# ==========================================================================
+
+SEARCH_PAGE_SIZE = 10
+
+
+@app.route("/suche")
+def pl_search():
+    query = (request.args.get("q") or "").strip()[:200]
+    if not query:
+        return render_template("pl_search.html", q="", results=None, doc_count=search_engine.doc_count())
+    page = max(1, min(request.args.get("p", 1, type=int), 5))
+    started = time.perf_counter()
+    results, total = search_engine.search(query, limit=SEARCH_PAGE_SIZE * 5)
+    took = time.perf_counter() - started
+    start = (page - 1) * SEARCH_PAGE_SIZE
+    return render_template(
+        "pl_search.html", q=query, results=results[start:start + SEARCH_PAGE_SIZE], total=total, page=page,
+        has_next=len(results) > start + SEARCH_PAGE_SIZE, took=took, doc_count=search_engine.doc_count(),
+    )
+
+
+@app.route("/suche/artikel/<int:doc_id>")
+def pl_search_doc(doc_id):
+    doc = db.session.get(SearchDoc, doc_id)
+    if doc is None:
+        abort(404)
+    return render_template("pl_search_doc.html", doc=doc)
 
 
 # ==========================================================================

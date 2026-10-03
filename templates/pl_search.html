@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <script>
+    try { if (localStorage.getItem("pl_theme") === "light") document.documentElement.setAttribute("data-theme", "light"); } catch (e) {}
+  </script>
+  <title>{% if q %}{{ q }} – NRS Suche{% else %}NRS Suche{% endif %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/pinklemon.css') }}">
+  <style>
+    .sr-logo { font-weight: 800; letter-spacing: -.03em; color: var(--pl-text); text-decoration: none; }
+    .sr-logo span { color: #17b897; }
+    .sr-box {
+      display: flex; align-items: center; gap: 10px; width: 100%; background: var(--pl-surface);
+      border: 1px solid var(--pl-border); border-radius: 999px; padding: 0 8px 0 18px;
+      box-shadow: 0 4px 18px rgba(0,0,0,.12); transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .sr-box:focus-within { border-color: #17b897; box-shadow: 0 6px 24px rgba(23,184,151,.22); }
+    .sr-box svg { width: 18px; height: 18px; color: var(--pl-text-faint); flex-shrink: 0; }
+    .sr-box input {
+      flex: 1; min-width: 0; border: none; outline: none; background: none; color: var(--pl-text);
+      font: inherit; font-size: 16px; padding: 14px 0;
+    }
+    .sr-box button {
+      border: none; background: #17b897; color: #fff; font: inherit; font-size: 14px; font-weight: 700;
+      padding: 9px 20px; border-radius: 999px; cursor: pointer;
+    }
+
+    /* Start page */
+    .sr-home { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px 18px 80px; }
+    .sr-home .sr-logo { font-size: clamp(60px, 14vw, 104px); line-height: 1; margin-bottom: 8px; }
+    .sr-home .tagline { color: var(--pl-text-dim); font-size: 15px; margin: 0 0 30px; text-align: center; }
+    .sr-home form { width: 100%; max-width: 620px; }
+    .sr-home .note { margin-top: 26px; font-size: 12.5px; color: var(--pl-text-faint); text-align: center; max-width: 520px; line-height: 1.5; }
+
+    /* Results */
+    .sr-top { display: flex; align-items: center; gap: 22px; padding: 14px 22px; border-bottom: 1px solid var(--pl-border); flex-wrap: wrap; }
+    .sr-top .sr-logo { font-size: 28px; }
+    .sr-top form { flex: 1; max-width: 640px; min-width: 240px; }
+    .sr-top .sr-box input { padding: 10px 0; font-size: 15px; }
+    .sr-main { max-width: 700px; margin: 0 auto; padding: 18px 22px 70px; }
+    .sr-stats { font-size: 13px; color: var(--pl-text-faint); margin-bottom: 22px; }
+    .sr-result { margin-bottom: 26px; }
+    .sr-crumb { font-size: 12.5px; color: var(--pl-text-dim); margin-bottom: 3px; }
+    .sr-title { font-size: 19px; font-weight: 700; line-height: 1.3; }
+    .sr-title a { color: #17b897; text-decoration: none; }
+    .sr-title a:hover { text-decoration: underline; }
+    .sr-snippet { font-size: 14px; line-height: 1.55; color: var(--pl-text-dim); margin-top: 5px; }
+    .sr-snippet mark { background: none; color: var(--pl-text); font-weight: 700; }
+    .sr-empty { color: var(--pl-text-dim); font-size: 15px; line-height: 1.6; padding: 30px 0; }
+    .sr-pager { display: flex; gap: 12px; margin-top: 10px; }
+    .sr-pager a {
+      color: var(--pl-text); text-decoration: none; background: var(--pl-surface-2);
+      padding: 9px 18px; border-radius: 999px; font-size: 13.5px; font-weight: 600;
+    }
+    .sr-pager a:hover { background: var(--pl-hover); }
+    .sr-foot { margin-top: 36px; font-size: 12px; color: var(--pl-text-faint); }
+    @media (max-width: 560px) { .sr-top { gap: 12px; padding: 12px 14px; } .sr-main { padding: 14px 16px 60px; } }
+  </style>
+</head>
+<body>
+{% macro box(value, autofocus=False) %}
+  <form action="{{ url_for('pl_search') }}" method="get" role="search">
+    <div class="sr-box">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input type="search" name="q" value="{{ value }}" placeholder="Suchen" autocomplete="off" aria-label="Suchbegriff" {% if autofocus %}autofocus{% endif %}>
+      <button type="submit">Suchen</button>
+    </div>
+  </form>
+{% endmacro %}
+
+{% if results is none %}
+<main class="sr-home">
+  <a class="sr-logo" href="{{ url_for('pl_search') }}">N<span>RS</span></a>
+  <p class="tagline">Die Suchmaschine von NRS</p>
+  {{ box("", autofocus=True) }}
+  <p class="note">
+    {% if doc_count %}Durchsucht {{ "{:,}".format(doc_count).replace(",", ".") }} Seiten der deutschen Wikipedia -- die meistgelesenen Artikel.
+    {% else %}Der Index wird gerade aufgebaut. Komm in ein paar Minuten wieder.{% endif %}
+    Das ist unser eigener, kleiner Index und nicht das ganze Internet.
+  </p>
+</main>
+{% else %}
+<header class="sr-top">
+  <a class="sr-logo" href="{{ url_for('pl_search') }}">N<span>RS</span></a>
+  {{ box(q) }}
+</header>
+<main class="sr-main">
+  {% if results %}
+  <div class="sr-stats">{{ "{:,}".format(total).replace(",", ".") }} Ergebnisse ({{ "%.3f"|format(took)|replace(".", ",") }} Sekunden)</div>
+  {% for r in results %}
+  <article class="sr-result">
+    <div class="sr-crumb">{{ r.url.split("/")[2] }} › {{ r.title }}</div>
+    <div class="sr-title"><a href="{{ url_for('pl_search_doc', doc_id=r.id) }}" data-title="{{ r.title }}">{{ r.title }}</a></div>
+    <div class="sr-snippet">{{ r.snippet }}</div>
+  </article>
+  {% endfor %}
+  <nav class="sr-pager">
+    {% if page > 1 %}<a href="{{ url_for('pl_search', q=q, p=page - 1) }}">Zurück</a>{% endif %}
+    {% if has_next %}<a href="{{ url_for('pl_search', q=q, p=page + 1) }}">Weiter</a>{% endif %}
+  </nav>
+  {% else %}
+  <div class="sr-empty">
+    Keine Ergebnisse für <b>{{ q }}</b>.<br>
+    Prüfe die Schreibweise oder versuche einen allgemeineren Begriff. Unser Index umfasst {{ "{:,}".format(doc_count).replace(",", ".") }} Seiten der deutschen Wikipedia.
+  </div>
+  {% endif %}
+  <div class="sr-foot">Ergebnisse stammen aus der deutschen Wikipedia (CC BY-SA 4.0).</div>
+</main>
+{% endif %}
+<script src="{{ url_for('static', filename='js/pinklemon-search.js') }}"></script>
+</body>
+</html>

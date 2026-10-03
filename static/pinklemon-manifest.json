@@ -1,7 +1,7 @@
 {
     "name": "NRS",
     "short_name": "NRS",
-    "description": "NRS — deine Mediathek.",
+    "description": "NRS — dein Browser mit eigener Suche.",
     "id": "/",
     "start_url": "/?src=pwa",
     "scope": "/",
