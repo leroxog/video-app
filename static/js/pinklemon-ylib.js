@@ -31,6 +31,15 @@
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
 
+  var ERROR_TEXTS = {
+    bad_type: "Dieser Dateityp wird nicht unterstützt. Erlaubt: Bilder (png/jpg/gif/webp) und Videos (mp4/webm/ogg/mov).",
+    too_large: "Die Datei ist zu groß (maximal 50 MB).",
+    limit_reached: "Das Limit von 50 Einträgen ist erreicht -- lösche zuerst etwas.",
+    invalid_url: "Das sieht nicht nach einem YouTube-Link aus.",
+  };
+
+  function errorText(j, fallback) { return ERROR_TEXTS[j.error] || fallback; }
+
   function timeAgo(iso) {
     var d = new Date(iso);
     var diffMin = Math.round((Date.now() - d.getTime()) / 60000);
@@ -215,9 +224,7 @@
       .then(function (r) { return r.json(); })
       .then(function (j) {
         if (!j.ok) {
-          window.alert(j.error === "bad_type"
-            ? "Dieser Dateityp wird nicht unterstützt. Erlaubt: Bilder (png/jpg/gif/webp) und Videos (mp4/webm/ogg/mov)."
-            : "Hochladen ging nicht.");
+          window.alert(errorText(j, "Hochladen ging nicht."));
         } else {
           loadItems();
         }
@@ -239,7 +246,7 @@
       body: JSON.stringify({ url: url }),
     }).then(function (r) { return r.json(); }).then(function (j) {
       if (!j.ok) {
-        window.alert(j.error === "invalid_url" ? "Das sieht nicht nach einem YouTube-Link aus." : "Ging nicht.");
+        window.alert(errorText(j, "Ging nicht."));
       } else {
         loadItems();
       }

@@ -508,14 +508,42 @@ _PUBLIC_ENDPOINTS = {
 }
 
 
+# '-' can't appear in a registered username (see PL_USERNAME_RE), so this prefix never clashes.
+GUEST_USERNAME_PREFIX = "gast-"
+_GUEST_ENDPOINTS = {
+    "pl_home", "pl_media_file", "pl_logout", "api_ylib_items_list",
+    "api_ylib_items_create", "api_ylib_youtube_create", "api_ylib_items_delete",
+}
+
+
+def is_guest(user):
+    return user.username.startswith(GUEST_USERNAME_PREFIX)
+
+
+def _create_guest_user():
+    user = User(
+        username=f"{GUEST_USERNAME_PREFIX}{uuid.uuid4().hex[:10]}",
+        pl_display_name="Gast", purpose_of_use="private",
+    )
+    user.set_password(secrets.token_urlsafe(32))
+    db.session.add(user)
+    db.session.commit()
+    session["user_id"] = user.id
+    session["auth_epoch"] = AUTH_EPOCH
+    return user
+
+
 @app.before_request
 def require_login():
-    """HEXAGONUM is account-only. Anonymous visitors get the login screen;
-    unauthenticated API calls get a 401 JSON so the frontend can react
-    instead of getting an HTML redirect."""
+    """A browser opening "/" gets an anonymous guest; guests only reach the media library, everything else needs a real account."""
     if request.endpoint is None or request.endpoint in _PUBLIC_ENDPOINTS:
         return
-    if current_user() is not None:
+    user = current_user()
+    # Requiring text/html keeps curl, bots and health checks from creating guest rows.
+    if (user is None and request.endpoint == "pl_home" and request.method == "GET"
+            and "text/html" in request.headers.get("Accept", "")):
+        user = _create_guest_user()
+    if user is not None and (not is_guest(user) or request.endpoint in _GUEST_ENDPOINTS):
         return
     if request.path.startswith("/api/"):
         return jsonify({"ok": False, "error": "not_logged_in"}), 401
@@ -1223,6 +1251,8 @@ def api_ychat_live_set():
 
 YLIB_IMAGE_EXT = {"png", "jpg", "jpeg", "gif", "webp"}
 YLIB_VIDEO_EXT = {"mp4", "webm", "ogg", "mov"}
+YLIB_MAX_ITEMS_PER_USER = 50
+YLIB_MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
 
 def _ylib_serialize(item):
@@ -1263,6 +1293,13 @@ def api_ylib_items_create():
         kind = "video"
     else:
         return jsonify({"ok": False, "error": "bad_type"}), 400
+    if YlibItem.query.filter_by(owner_id=me.id).count() >= YLIB_MAX_ITEMS_PER_USER:
+        return jsonify({"ok": False, "error": "limit_reached"}), 400
+    f.stream.seek(0, os.SEEK_END)
+    size = f.stream.tell()
+    f.stream.seek(0)
+    if size > YLIB_MAX_UPLOAD_BYTES:
+        return jsonify({"ok": False, "error": "too_large"}), 413
     title = (request.form.get("title") or "").strip()[:120] or f.filename[:120]
     name = f"{uuid.uuid4().hex}.{ext}"
     _pl_store_media(f, name)
@@ -1305,6 +1342,8 @@ def api_ylib_youtube_create():
     match = _YOUTUBE_ID_RE.search((data.get("url") or "").strip())
     if not match:
         return jsonify({"ok": False, "error": "invalid_url"}), 400
+    if YlibItem.query.filter_by(owner_id=me.id).count() >= YLIB_MAX_ITEMS_PER_USER:
+        return jsonify({"ok": False, "error": "limit_reached"}), 400
     video_id = match.group(1)
     title = (data.get("title") or "").strip()[:120] or _youtube_oembed_title(video_id) or "YouTube-Video"
     item = YlibItem(owner_id=me.id, title=title, source="youtube", kind="video", youtube_video_id=video_id)

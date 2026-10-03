@@ -1,7 +1,7 @@
 {
-    "name": "HEXAGONUM",
-    "short_name": "HEXAGONUM",
-    "description": "HEXAGONUM — dein soziales Netzwerk.",
+    "name": "NRS",
+    "short_name": "NRS",
+    "description": "NRS — deine Mediathek.",
     "id": "/",
     "start_url": "/?src=pwa",
     "scope": "/",

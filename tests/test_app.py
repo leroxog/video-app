@@ -1060,6 +1060,100 @@ def test_ylib_requires_login(client):
     assert r.status_code == 401
 
 
+BROWSER = {"Accept": "text/html,application/xhtml+xml"}
+
+
+def test_browser_opening_root_gets_guest_session_without_login(client):
+    home = client.get("/", headers=BROWSER)
+    assert home.status_code == 200 and b"ylGrid" in home.data
+    assert client.get("/api/ylib/items").get_json()["ok"] is True
+    with flask_app.app_context():
+        guest = User.query.one()
+        assert guest.username.startswith("gast-") and guest.pl_display_name == "Gast"
+
+
+def test_non_browser_request_to_root_does_not_create_a_guest(client):
+    r = client.get("/", headers={"Accept": "*/*"}, follow_redirects=False)
+    assert r.status_code == 302 and "/login" in r.headers["Location"]
+    with flask_app.app_context():
+        assert User.query.count() == 0
+
+
+def test_guest_session_is_reused_on_later_visits(client):
+    client.get("/", headers=BROWSER)
+    client.get("/", headers=BROWSER)
+    with flask_app.app_context():
+        assert User.query.count() == 1
+
+
+def test_guest_can_upload_and_add_youtube_link(client, monkeypatch):
+    monkeypatch.setattr(app_module, "_youtube_oembed_title", lambda vid: "YT")
+    client.get("/", headers=BROWSER)
+    up = client.post("/api/ylib/items", data={
+        "title": "Bild", "file": (io.BytesIO(b"\x89PNG" + b"0" * 50), "a.png"),
+    }, content_type="multipart/form-data")
+    assert up.get_json()["ok"] is True
+    yt = client.post("/api/ylib/youtube", json={"url": "https://youtu.be/dQw4w9WgXcQ"})
+    assert yt.get_json()["ok"] is True
+    assert len(client.get("/api/ylib/items").get_json()["items"]) == 2
+
+
+def test_guests_have_separate_libraries(client):
+    client.get("/", headers=BROWSER)
+    client.post("/api/ylib/items", data={
+        "title": "Meins", "file": (io.BytesIO(b"\x89PNG" + b"0" * 50), "a.png"),
+    }, content_type="multipart/form-data")
+    other = flask_app.test_client()
+    other.get("/", headers=BROWSER)
+    assert other.get("/api/ylib/items").get_json()["items"] == []
+
+
+def test_guest_cannot_use_other_features(client):
+    client.get("/", headers=BROWSER)
+    assert client.post("/api/ychat/posts", json={"content": "hi"}).status_code == 401
+    assert client.get("/api/teams").status_code == 401
+    r = client.get("/ychat-archiv", follow_redirects=False)
+    assert r.status_code == 302 and "/login" in r.headers["Location"]
+
+
+def test_guest_can_log_out_and_reach_the_login_page(client):
+    client.get("/", headers=BROWSER)
+    assert client.get("/logout", follow_redirects=False).status_code == 302
+    assert client.get("/login").status_code == 200
+
+
+def test_guest_username_prefix_cannot_be_registered(client):
+    r = client.post("/api/pl/register/check-username", json={"username": "gast-1234567890"})
+    assert r.get_json()["available"] is False
+
+
+def test_ylib_rejects_oversized_upload(client, monkeypatch):
+    signup(client, "alice")
+    monkeypatch.setattr(app_module, "YLIB_MAX_UPLOAD_BYTES", 100)
+    r = client.post("/api/ylib/items", data={
+        "file": (io.BytesIO(b"\x89PNG" + b"0" * 500), "big.png"),
+    }, content_type="multipart/form-data")
+    assert r.status_code == 413 and r.get_json()["error"] == "too_large"
+    assert client.get("/api/ylib/items").get_json()["items"] == []
+
+
+def test_ylib_item_limit_applies_to_uploads_and_youtube_links(client, monkeypatch):
+    signup(client, "alice")
+    monkeypatch.setattr(app_module, "YLIB_MAX_ITEMS_PER_USER", 2)
+    monkeypatch.setattr(app_module, "_youtube_oembed_title", lambda vid: "YT")
+    for _ in range(2):
+        ok = client.post("/api/ylib/items", data={
+            "file": (io.BytesIO(b"\x89PNG" + b"0" * 50), "a.png"),
+        }, content_type="multipart/form-data")
+        assert ok.get_json()["ok"] is True
+    full = client.post("/api/ylib/items", data={
+        "file": (io.BytesIO(b"\x89PNG" + b"0" * 50), "a.png"),
+    }, content_type="multipart/form-data")
+    assert full.status_code == 400 and full.get_json()["error"] == "limit_reached"
+    yt = client.post("/api/ylib/youtube", json={"url": "https://youtu.be/dQw4w9WgXcQ"})
+    assert yt.status_code == 400 and yt.get_json()["error"] == "limit_reached"
+
+
 def test_ylib_upload_and_list_image(client):
     signup(client, "alice")
     r = client.post("/api/ylib/items", data={

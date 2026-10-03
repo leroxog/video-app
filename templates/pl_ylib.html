@@ -1,5 +1,5 @@
 {% extends "pl_base.html" %}
-{% block title %}ylib{% endblock %}
+{% block title %}NRS{% endblock %}
 
 {% block head_extra %}
 <style>
@@ -34,8 +34,6 @@
   .yl-upload-btn svg { width: 15px; height: 15px; }
   .yl-yt-btn { background: none; border: 1px solid var(--pl-border); color: var(--pl-text); }
   .yl-yt-btn:hover { background: var(--pl-hover); }
-  .yl-logout { border: none; background: none; color: var(--pl-text-faint); font-size: 12.5px; font-weight: 600; }
-  .yl-logout:hover { color: var(--pl-text); }
   @media (max-width: 640px) {
     .yl-search { order: 3; flex-basis: 100%; max-width: none; }
     .yl-top .logo { margin-right: auto; }
@@ -142,7 +140,7 @@
 {% block screen_class %}ylib{% endblock %}
 {% block screen %}
 <div class="yl-top">
-  <button type="button" class="logo" id="ylHome">y<span>lib</span></button>
+  <button type="button" class="logo" id="ylHome">N<span>RS</span></button>
   <label class="yl-search">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
     <input type="search" id="ylSearch" placeholder="Suchen" autocomplete="off" aria-label="Suchen">
@@ -156,7 +154,6 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13m0-13 5 5m-5-5-5 5M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
       <span class="yl-btn-label" id="ylUploadLabel">Hochladen</span>
     </button>
-    <a class="yl-logout" href="/logout">Abmelden</a>
   </div>
 </div>
 <input type="file" id="ylFileInput" accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm,video/ogg,video/quicktime" hidden>
