@@ -1293,6 +1293,11 @@ def test_search_finds_longer_words_by_prefix(client):
     assert [r["title"] for r in results] == ["Berliner Mauer"]
 
 
+def test_bm25_accepts_a_decimal_average_like_postgres_returns():
+    from decimal import Decimal
+    assert search_engine._bm25(2, 120, Decimal("95.5"), 1.3) == search_engine._bm25(2, 120, 95.5, 1.3)
+
+
 def test_snippet_highlights_hits_and_escapes_html():
     html = str(search_engine.make_snippet("Ein <script>alert(1)</script> Text über Katzen.", ["katzen"]))
     assert "<script>" not in html and "&lt;script&gt;" in html

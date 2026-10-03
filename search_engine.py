@@ -97,6 +97,12 @@ def _postings(term, n_docs):
     return merged
 
 
+def _bm25(tf, doc_len, avg_len, idf):
+    # Postgres returns AVG() as a Decimal, which can't be divided into a float -- hence float().
+    norm = tf + K1 * (1 - B + B * doc_len / float(avg_len))
+    return idf * tf * (K1 + 1) / norm
+
+
 def search(query, limit=50):
     """Rank indexed pages for a query with BM25. Returns (results, total_matches); each
     result is {"id", "title", "url", "source", "snippet"}."""
@@ -114,8 +120,7 @@ def search(query, limit=50):
             continue
         idf = math.log(1 + (n_docs - df + 0.5) / (df + 0.5))
         for doc_id, (tf, doc_len) in postings.items():
-            norm = tf + K1 * (1 - B + B * doc_len / avg_len)
-            scores[doc_id] = scores.get(doc_id, 0.0) + idf * tf * (K1 + 1) / norm
+            scores[doc_id] = scores.get(doc_id, 0.0) + _bm25(tf, doc_len, avg_len, idf)
             matched[doc_id] = matched.get(doc_id, 0) + 1
     if not scores:
         return [], 0
