@@ -1127,6 +1127,54 @@ def test_guest_username_prefix_cannot_be_registered(client):
     assert r.get_json()["available"] is False
 
 
+def test_link_page_redirects_non_browsers_to_login(client):
+    r = client.get("/link", follow_redirects=False)
+    assert r.status_code == 302 and "/login" in r.headers["Location"]
+
+
+def test_link_page_gives_browsers_a_guest_and_lists_examples(client):
+    r = client.get("/link", headers=BROWSER)
+    assert r.status_code == 200 and b"lkForm" in r.data
+    for ex in app_module.LINK_EXAMPLES:
+        assert ex["title"].encode() in r.data
+    assert b'class="lk-ex-url" hidden' in r.data
+    assert client.get("/api/ylib/items").get_json()["ok"] is True
+
+
+def test_link_examples_are_valid_youtube_links():
+    for ex in app_module.LINK_EXAMPLES:
+        match = app_module._YOUTUBE_ID_RE.search(f"https://www.youtube.com/watch?v={ex['id']}")
+        assert match and match.group(1) == ex["id"]
+
+
+def test_link_preview_returns_thumbnail_and_title(client, monkeypatch):
+    client.get("/link", headers=BROWSER)
+    monkeypatch.setattr(app_module, "_youtube_oembed_title", lambda vid: "Echter Titel")
+    j = client.get("/api/link/preview", query_string={"url": "https://youtu.be/dQw4w9WgXcQ"}).get_json()
+    assert j == {
+        "ok": True, "video_id": "dQw4w9WgXcQ", "title": "Echter Titel",
+        "thumbnail_url": "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
+    }
+
+
+def test_link_preview_falls_back_to_generic_title(client, monkeypatch):
+    client.get("/link", headers=BROWSER)
+    monkeypatch.setattr(app_module, "_youtube_oembed_title", lambda vid: None)
+    j = client.get("/api/link/preview", query_string={"url": "https://youtu.be/dQw4w9WgXcQ"}).get_json()
+    assert j["title"] == "YouTube-Video"
+
+
+def test_link_preview_rejects_non_youtube_url(client):
+    client.get("/link", headers=BROWSER)
+    r = client.get("/api/link/preview", query_string={"url": "https://example.com/video"})
+    assert r.status_code == 400 and r.get_json()["error"] == "invalid_url"
+
+
+def test_link_preview_requires_a_session(client):
+    r = client.get("/api/link/preview", query_string={"url": "https://youtu.be/dQw4w9WgXcQ"})
+    assert r.status_code == 401
+
+
 def test_ylib_rejects_oversized_upload(client, monkeypatch):
     signup(client, "alice")
     monkeypatch.setattr(app_module, "YLIB_MAX_UPLOAD_BYTES", 100)

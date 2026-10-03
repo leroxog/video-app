@@ -510,8 +510,9 @@ _PUBLIC_ENDPOINTS = {
 
 # '-' can't appear in a registered username (see PL_USERNAME_RE), so this prefix never clashes.
 GUEST_USERNAME_PREFIX = "gast-"
-_GUEST_ENDPOINTS = {
-    "pl_home", "pl_media_file", "pl_logout", "api_ylib_items_list",
+_GUEST_START_ENDPOINTS = {"pl_home", "pl_link"}
+_GUEST_ENDPOINTS = _GUEST_START_ENDPOINTS | {
+    "pl_media_file", "pl_logout", "api_link_preview", "api_ylib_items_list",
     "api_ylib_items_create", "api_ylib_youtube_create", "api_ylib_items_delete",
 }
 
@@ -540,7 +541,7 @@ def require_login():
         return
     user = current_user()
     # Requiring text/html keeps curl, bots and health checks from creating guest rows.
-    if (user is None and request.endpoint == "pl_home" and request.method == "GET"
+    if (user is None and request.endpoint in _GUEST_START_ENDPOINTS and request.method == "GET"
             and "text/html" in request.headers.get("Accept", "")):
         user = _create_guest_user()
     if user is not None and (not is_guest(user) or request.endpoint in _GUEST_ENDPOINTS):
@@ -1362,6 +1363,40 @@ def api_ylib_items_delete(item_id):
     db.session.delete(item)
     db.session.commit()
     return jsonify({"ok": True})
+
+
+# ==========================================================================
+# /link -- paste a YouTube link, see its thumbnail and title, watch it in
+# YouTube's own embedded player. Nothing is downloaded or stored.
+# ==========================================================================
+
+LINK_EXAMPLES = [
+    {"id": "h6fcK_fRYaI", "title": "The Egg - A Short Story", "channel": "Kurzgesagt"},
+    {"id": "W3q8Od5qJio", "title": "Rammstein - Du Hast", "channel": "Rammstein Official"},
+    {"id": "StZcUAPRRac", "title": "Rammstein - Sonne", "channel": "Rammstein Official"},
+    {"id": "jNQXAC9IVRw", "title": "Me at the zoo", "channel": "jawed"},
+    {"id": "9bZkp7q19f0", "title": "PSY - GANGNAM STYLE", "channel": "officialpsy"},
+    {"id": "dQw4w9WgXcQ", "title": "Rick Astley - Never Gonna Give You Up", "channel": "Rick Astley"},
+]
+
+
+@app.route("/link")
+def pl_link():
+    return render_template("pl_link.html", examples=LINK_EXAMPLES)
+
+
+@app.route("/api/link/preview")
+def api_link_preview():
+    match = _YOUTUBE_ID_RE.search((request.args.get("url") or "").strip())
+    if not match:
+        return jsonify({"ok": False, "error": "invalid_url"}), 400
+    video_id = match.group(1)
+    return jsonify({
+        "ok": True,
+        "video_id": video_id,
+        "title": _youtube_oembed_title(video_id) or "YouTube-Video",
+        "thumbnail_url": f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg",
+    })
 
 
 # ==========================================================================
