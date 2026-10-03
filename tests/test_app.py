@@ -9,7 +9,7 @@ os.environ["DATABASE_URL"] = f"sqlite:///{tempfile.gettempdir()}/video_app_test_
 import pytest
 import app as app_module
 from app import app as flask_app, db
-from models import User, AiChat, AiChatMessage, Team, TeamMember, TeamMessage, UserIntegration, NrsHistoryEntry, YlibItem
+from models import User, AiChat, AiChatMessage, Team, TeamMember, TeamMessage, UserIntegration, NrsHistoryEntry, YlibItem, PlMedia
 
 
 @pytest.fixture
@@ -1173,6 +1173,71 @@ def test_link_preview_rejects_non_youtube_url(client):
 def test_link_preview_requires_a_session(client):
     r = client.get("/api/link/preview", query_string={"url": "https://youtu.be/dQw4w9WgXcQ"})
     assert r.status_code == 401
+
+
+JPEG = b"\xff\xd8\xff\xe0" + b"0" * 100
+
+
+def _upload_video(client, thumb=None, thumb_name="thumb.jpg"):
+    data = {"title": "Clip", "file": (io.BytesIO(b"FAKEMP4DATA"), "clip.mp4")}
+    if thumb is not None:
+        data["thumb"] = (io.BytesIO(thumb), thumb_name)
+    return client.post("/api/ylib/items", data=data, content_type="multipart/form-data").get_json()
+
+
+def test_ylib_video_upload_keeps_optional_thumbnail(client):
+    signup(client, "alice")
+    item = _upload_video(client, thumb=JPEG)["item"]
+    assert item["thumbnail_url"]
+    served = client.get(item["thumbnail_url"])
+    assert served.status_code == 200 and served.mimetype == "image/jpeg" and served.data == JPEG
+
+
+def test_ylib_video_upload_without_thumbnail_still_works(client):
+    signup(client, "alice")
+    item = _upload_video(client)["item"]
+    assert item["kind"] == "video" and item["thumbnail_url"] is None
+
+
+@pytest.mark.parametrize("thumb,name", [
+    pytest.param(b"\xff\xd8\xff" + b"0" * (300 * 1024), "t.jpg", id="too_big"),
+    pytest.param(b"not a jpeg at all", "t.jpg", id="not_a_jpeg"),
+    pytest.param(JPEG, "t.exe", id="wrong_extension"),
+    pytest.param(b"", "t.jpg", id="empty"),
+])
+def test_ylib_ignores_a_bad_thumbnail_but_keeps_the_upload(client, thumb, name):
+    signup(client, "alice")
+    result = _upload_video(client, thumb=thumb, thumb_name=name)
+    assert result["ok"] is True and result["item"]["thumbnail_url"] is None
+
+
+def test_ylib_thumbnail_is_ignored_for_images(client):
+    signup(client, "alice")
+    r = client.post("/api/ylib/items", data={
+        "file": (io.BytesIO(b"\x89PNG" + b"0" * 50), "a.png"),
+        "thumb": (io.BytesIO(JPEG), "t.jpg"),
+    }, content_type="multipart/form-data")
+    assert r.get_json()["item"]["thumbnail_url"] is None
+
+
+def test_ylib_delete_removes_video_and_thumbnail_media(client):
+    signup(client, "alice")
+    item = _upload_video(client, thumb=JPEG)["item"]
+    with flask_app.app_context():
+        assert PlMedia.query.count() == 2
+    client.delete(f"/api/ylib/items/{item['id']}")
+    with flask_app.app_context():
+        assert PlMedia.query.count() == 0
+
+
+def test_media_type_comes_from_extension_not_uploader_header(client):
+    signup(client, "alice")
+    r = client.post("/api/ylib/items", data={
+        "file": (io.BytesIO(b"<script>alert(1)</script>"), "evil.png", "text/html"),
+    }, content_type="multipart/form-data")
+    served = client.get(r.get_json()["item"]["url"])
+    assert served.mimetype == "image/png"
+    assert served.headers["X-Content-Type-Options"] == "nosniff"
 
 
 def test_ylib_rejects_oversized_upload(client, monkeypatch):

@@ -40,6 +40,38 @@
 
   function errorText(j, fallback) { return ERROR_TEXTS[j.error] || fallback; }
 
+  // Grabs a JPEG frame from the chosen video in the browser (resolves null if the browser can't decode it).
+  function makeVideoThumb(file) {
+    return new Promise(function (resolve) {
+      var url = URL.createObjectURL(file);
+      var video = document.createElement("video");
+      var settled = false;
+      function finish(blob) {
+        if (settled) return;
+        settled = true;
+        URL.revokeObjectURL(url);
+        resolve(blob);
+      }
+      video.muted = true;
+      video.preload = "metadata";
+      video.onerror = function () { finish(null); };
+      video.onloadeddata = function () {
+        video.currentTime = Math.min(1, (video.duration || 2) / 2);
+      };
+      video.onseeked = function () {
+        var vw = video.videoWidth || 480;
+        var vh = video.videoHeight || 270;
+        var canvas = document.createElement("canvas");
+        canvas.width = Math.min(vw, 480);
+        canvas.height = Math.round(canvas.width * vh / vw);
+        canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(finish, "image/jpeg", 0.8);
+      };
+      setTimeout(function () { finish(null); }, 8000);
+      video.src = url;
+    });
+  }
+
   function timeAgo(iso) {
     var d = new Date(iso);
     var diffMin = Math.round((Date.now() - d.getTime()) / 60000);
@@ -61,6 +93,9 @@
   function thumbHtml(it) {
     if (it.source === "youtube") {
       return '<div class="yl-thumb"><img src="' + esc(it.thumbnail_url) + '" alt="" loading="lazy"><span class="yl-badge">YouTube</span></div>';
+    }
+    if (it.kind === "video" && it.thumbnail_url) {
+      return '<div class="yl-thumb"><img src="' + esc(it.thumbnail_url) + '" alt="" loading="lazy"><span class="yl-badge">Video</span></div>';
     }
     if (it.kind === "video") {
       return '<div class="yl-thumb is-video">' + PLAY_ICON + '<span class="yl-badge">Video</span></div>';
@@ -215,12 +250,17 @@
     var guessTitle = file.name.includes(".") ? file.name.slice(0, file.name.lastIndexOf(".")) : file.name;
     var title = window.prompt("Titel für diese Datei:", guessTitle);
     if (title === null) { fileInput.value = ""; return; }
-    var fd = new FormData();
-    fd.append("file", file);
-    fd.append("title", title);
     uploadBtn.disabled = true;
     uploadLabel.textContent = "Lädt hoch …";
-    fetch("/api/ylib/items", { method: "POST", body: fd })
+    var thumbReady = file.type.indexOf("video/") === 0 ? makeVideoThumb(file) : Promise.resolve(null);
+    thumbReady
+      .then(function (thumb) {
+        var fd = new FormData();
+        fd.append("file", file);
+        fd.append("title", title);
+        if (thumb) fd.append("thumb", thumb, "thumb.jpg");
+        return fetch("/api/ylib/items", { method: "POST", body: fd });
+      })
       .then(function (r) { return r.json(); })
       .then(function (j) {
         if (!j.ok) {

@@ -353,4 +353,5 @@ class YlibItem(db.Model):
     content_type = db.Column(db.String(90), nullable=False, default="")  # upload only
     kind = db.Column(db.String(10), nullable=False)         # "image" or "video"
     youtube_video_id = db.Column(db.String(20), nullable=True)  # youtube only
+    thumb_name = db.Column(db.String(64), nullable=True)  # PlMedia name of a browser-made JPEG preview -- uploaded videos only
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)

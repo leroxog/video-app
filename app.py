@@ -261,6 +261,7 @@ def ensure_sqlite_columns_exist():
         "ylib_item": [
             ("source", "VARCHAR(10) NOT NULL DEFAULT 'upload'"),
             ("youtube_video_id", "VARCHAR(20)"),
+            ("thumb_name", "VARCHAR(64)"),
         ],
     }
     with db.engine.connect() as conn:
@@ -347,6 +348,7 @@ def ensure_columns_exist():
         "ALTER TABLE team_member ADD COLUMN IF NOT EXISTS typing_at TIMESTAMP",
         "ALTER TABLE ylib_item ADD COLUMN IF NOT EXISTS source VARCHAR(10) NOT NULL DEFAULT 'upload'",
         "ALTER TABLE ylib_item ADD COLUMN IF NOT EXISTS youtube_video_id VARCHAR(20)",
+        "ALTER TABLE ylib_item ADD COLUMN IF NOT EXISTS thumb_name VARCHAR(64)",
     ]
     with db.engine.connect() as conn:
         for statement in statements:
@@ -999,6 +1001,12 @@ def _pl_delete_media(name):
         pass
 
 
+_PL_MEDIA_TYPES = {
+    "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "gif": "image/gif", "webp": "image/webp",
+    "mp4": "video/mp4", "webm": "video/webm", "ogg": "video/ogg", "mov": "video/quicktime",
+}
+
+
 @app.route("/plm/<name>")
 def pl_media_file(name):
     """Serve a HEXAGONUM upload from the persistent Postgres store, falling
@@ -1006,8 +1014,13 @@ def pl_media_file(name):
     name = os.path.basename(name)
     row = db.session.get(PlMedia, name)
     if row is not None:
-        return Response(row.data, mimetype=row.content_type,
-                        headers={"Cache-Control": "public, max-age=31536000, immutable"})
+        # Type comes from the extension, never the uploader's claimed Content-Type, so an
+        # uploaded "x.png" can't be served as HTML from our origin.
+        mimetype = _PL_MEDIA_TYPES.get(name.rsplit(".", 1)[-1].lower(), "application/octet-stream")
+        return Response(row.data, mimetype=mimetype, headers={
+            "Cache-Control": "public, max-age=31536000, immutable",
+            "X-Content-Type-Options": "nosniff",
+        })
     if os.path.exists(os.path.join(PL_MEDIA_DIR, name)):
         return send_from_directory(PL_MEDIA_DIR, name, max_age=31536000)
     abort(404)
@@ -1270,8 +1283,29 @@ def _ylib_serialize(item):
         data["thumbnail_url"] = f"https://i.ytimg.com/vi/{item.youtube_video_id}/hqdefault.jpg"
     else:
         data["url"] = _pl_media_url(item.media_name)
-        data["thumbnail_url"] = None
+        data["thumbnail_url"] = _pl_media_url(item.thumb_name) if item.thumb_name else None
     return data
+
+
+YLIB_MAX_THUMB_BYTES = 300 * 1024
+
+
+def _ylib_store_thumb(thumb):
+    """Optional browser-made JPEG preview of an uploaded video. Anything off
+    about it is ignored rather than failing the upload."""
+    if thumb is None or not (thumb.filename or "").lower().endswith((".jpg", ".jpeg")):
+        return None
+    thumb.stream.seek(0, os.SEEK_END)
+    size = thumb.stream.tell()
+    thumb.stream.seek(0)
+    if size == 0 or size > YLIB_MAX_THUMB_BYTES:
+        return None
+    if thumb.stream.read(3) != b"\xff\xd8\xff":
+        return None
+    thumb.stream.seek(0)
+    name = f"{uuid.uuid4().hex}.jpg"
+    _pl_store_media(thumb, name)
+    return name
 
 
 @app.route("/api/ylib/items")
@@ -1304,8 +1338,9 @@ def api_ylib_items_create():
     title = (request.form.get("title") or "").strip()[:120] or f.filename[:120]
     name = f"{uuid.uuid4().hex}.{ext}"
     _pl_store_media(f, name)
+    thumb_name = _ylib_store_thumb(request.files.get("thumb")) if kind == "video" else None
     item = YlibItem(
-        owner_id=me.id, title=title, source="upload", media_name=name,
+        owner_id=me.id, title=title, source="upload", media_name=name, thumb_name=thumb_name,
         content_type=(f.mimetype or "application/octet-stream")[:90], kind=kind,
     )
     db.session.add(item)
@@ -1360,6 +1395,7 @@ def api_ylib_items_delete(item_id):
     if item is None:
         return jsonify({"ok": False, "error": "not_found"}), 404
     _pl_delete_media(item.media_name)
+    _pl_delete_media(item.thumb_name)
     db.session.delete(item)
     db.session.commit()
     return jsonify({"ok": True})
