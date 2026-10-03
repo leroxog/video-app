@@ -25,7 +25,7 @@ from werkzeug.exceptions import HTTPException
 from models import (
     db, User, Subscription, ErrorLog, PlMedia, AiChat, AiChatMessage,
     Team, TeamMember, TeamMessage, UserIntegration, NrsHistoryEntry, NrsSite,
-    YchatPost, YchatLike,
+    YchatPost, YchatLike, YlibItem,
 )
 import ai_assistant
 import integrations
@@ -1060,15 +1060,25 @@ def pl_nex_archived():
 @app.route("/nrs-archiv")
 def pl_nrs_archived():
     """NRS -- archived, not deleted, at the user's request (2026-09-19)
-    in favor of ychat (see pl_home below) as the site's main page. All
+    in favor of ychat, itself later archived (see pl_home below) in
+    favor of ylib as the site's main page. All the code, models and
+    routes behind this stay exactly as they were; this view is just no
+    longer linked from anywhere."""
+    return render_template("pl_nrs.html")
+
+
+@app.route("/ychat-archiv")
+def pl_ychat_archived():
+    """ychat -- archived, not deleted, at the user's request (2026-09-25)
+    in favor of ylib (see pl_home below) as the site's main page. All
     the code, models and routes behind this stay exactly as they were;
     this view is just no longer linked from anywhere."""
-    return render_template("pl_nrs.html")
+    return render_template("pl_ychat.html")
 
 
 @app.route("/")
 def pl_home():
-    return render_template("pl_ychat.html")
+    return render_template("pl_ylib.html")
 
 
 # ==========================================================================
@@ -1193,6 +1203,74 @@ def api_ychat_live_set():
         "ok": True, "is_live": me.ychat_is_live,
         "title": me.ychat_live_title or "", "video_id": me.ychat_live_video_id,
     })
+
+
+# ==========================================================================
+# ylib -- a personal, private media library (see models.YlibItem). A
+# website can't read a visitor's actual local Downloads folder -- that's
+# sandboxed by every browser, not something any site can bypass -- so
+# this is upload-based: the user explicitly picks a file, it's stored via
+# the same media mechanism as avatars (_pl_store_media, R2 or a Postgres
+# blob fallback), and shown back in a YouTube-style grid. Each user only
+# ever sees and manages their own items, never other users'.
+# ==========================================================================
+
+YLIB_IMAGE_EXT = {"png", "jpg", "jpeg", "gif", "webp"}
+YLIB_VIDEO_EXT = {"mp4", "webm", "ogg", "mov"}
+
+
+def _ylib_serialize(item):
+    return {
+        "id": item.id,
+        "title": item.title,
+        "kind": item.kind,
+        "url": _pl_media_url(item.media_name),
+        "created_at": item.created_at.isoformat() + "Z",
+    }
+
+
+@app.route("/api/ylib/items")
+def api_ylib_items_list():
+    me = current_user()
+    items = YlibItem.query.filter_by(owner_id=me.id).order_by(YlibItem.id.desc()).all()
+    return jsonify({"ok": True, "items": [_ylib_serialize(i) for i in items]})
+
+
+@app.route("/api/ylib/items", methods=["POST"])
+def api_ylib_items_create():
+    me = current_user()
+    f = request.files.get("file")
+    if f is None or not f.filename:
+        return jsonify({"ok": False, "error": "no_file"}), 400
+    ext = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else ""
+    if ext in YLIB_IMAGE_EXT:
+        kind = "image"
+    elif ext in YLIB_VIDEO_EXT:
+        kind = "video"
+    else:
+        return jsonify({"ok": False, "error": "bad_type"}), 400
+    title = (request.form.get("title") or "").strip()[:120] or f.filename[:120]
+    name = f"{uuid.uuid4().hex}.{ext}"
+    _pl_store_media(f, name)
+    item = YlibItem(
+        owner_id=me.id, title=title, media_name=name,
+        content_type=(f.mimetype or "application/octet-stream")[:90], kind=kind,
+    )
+    db.session.add(item)
+    db.session.commit()
+    return jsonify({"ok": True, "item": _ylib_serialize(item)})
+
+
+@app.route("/api/ylib/items/<int:item_id>", methods=["DELETE"])
+def api_ylib_items_delete(item_id):
+    me = current_user()
+    item = YlibItem.query.filter_by(id=item_id, owner_id=me.id).first()
+    if item is None:
+        return jsonify({"ok": False, "error": "not_found"}), 404
+    _pl_delete_media(item.media_name)
+    db.session.delete(item)
+    db.session.commit()
+    return jsonify({"ok": True})
 
 
 # ==========================================================================
