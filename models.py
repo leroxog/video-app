@@ -329,6 +329,53 @@ class YchatLike(db.Model):
     __table_args__ = (db.UniqueConstraint("post_id", "user_id", name="uq_ychat_like_post_user"),)
 
 
+class McHost(db.Model):
+    """A volunteer's computer that can run Minecraft servers for NRS Server (see
+    mc_hosting.py and host_agent/nrs_host_agent.py). It joins with a one-time invite
+    and then talks to the site only through its own secret token (stored hashed),
+    polling for start/stop jobs. The token never leaves the host except to this site."""
+    __tablename__ = "mc_host"
+    id = db.Column(db.Integer, primary_key=True)
+    owner_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    name = db.Column(db.String(60), nullable=False)
+    token_hash = db.Column(db.String(64), unique=True, nullable=False)
+    address = db.Column(db.String(120), nullable=True)   # last host:port the agent advertised
+    max_servers = db.Column(db.Integer, nullable=False, default=1)
+    last_seen = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+
+class McHostInvite(db.Model):
+    """A single-use code an admin hands to someone so they may add their computer."""
+    __tablename__ = "mc_host_invite"
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(32), unique=True, nullable=False)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    used_at = db.Column(db.DateTime, nullable=True)
+    used_host_id = db.Column(db.Integer, db.ForeignKey("mc_host.id"), nullable=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+
+class McServer(db.Model):
+    """One Minecraft (Java, vanilla) server a user created. desired is what the owner
+    asked for ("start"/"stop"); status is what a host reports back."""
+    __tablename__ = "mc_server"
+    id = db.Column(db.Integer, primary_key=True)
+    owner_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    name = db.Column(db.String(40), nullable=False)
+    version = db.Column(db.String(20), nullable=False)
+    max_players = db.Column(db.Integer, nullable=False, default=10)
+    auto_start = db.Column(db.Boolean, nullable=False, default=False)
+    desired = db.Column(db.String(8), nullable=False, default="stop")
+    status = db.Column(db.String(10), nullable=False, default="offline")  # offline/queued/starting/online/stopping
+    host_id = db.Column(db.Integer, db.ForeignKey("mc_host.id"), nullable=True)
+    address = db.Column(db.String(120), nullable=True)
+    players = db.Column(db.Integer, nullable=False, default=0)
+    console = db.Column(db.Text, nullable=False, default="")
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+
 class SearchDoc(db.Model):
     """One page in NRS Suche's own index (see search_engine.py): an article
     intro crawled from the German Wikipedia, kept as plain text so results

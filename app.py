@@ -30,6 +30,7 @@ from models import (
 )
 import ai_assistant
 import integrations
+import mc_hosting
 import search_engine
 
 logging.basicConfig(level=logging.INFO)
@@ -509,6 +510,7 @@ def _make_session_permanent():
 
 
 _PUBLIC_ENDPOINTS = {
+    "api_agent_sync", "download_host_agent",
     "pl_login", "pl_signup", "static", "service_worker", "offline_page",
     "pl_google_auth_start", "pl_google_auth_callback",
     "api_pl_login", "api_pl_register_check_username", "api_pl_register_complete",
@@ -517,7 +519,7 @@ _PUBLIC_ENDPOINTS = {
 
 # '-' can't appear in a registered username (see PL_USERNAME_RE), so this prefix never clashes.
 GUEST_USERNAME_PREFIX = "gast-"
-_GUEST_START_ENDPOINTS = {"pl_home", "pl_link", "pl_search", "pl_ylib_archived"}
+_GUEST_START_ENDPOINTS = {"pl_home", "pl_link", "pl_search", "pl_ylib_archived", "pl_browser_archived"}
 _GUEST_ENDPOINTS = _GUEST_START_ENDPOINTS | {
     "pl_media_file", "pl_logout", "pl_search_doc", "api_link_preview", "api_ylib_items_list",
     "api_ylib_items_create", "api_ylib_youtube_create", "api_ylib_items_delete",
@@ -1129,9 +1131,18 @@ def pl_ychat_archived():
     return render_template("pl_ychat.html")
 
 
+@app.route("/browser-archiv")
+def pl_browser_archived():
+    """The NRS browser with its own search -- archived, not deleted, at the user's request
+    (2026-10-03) in favor of NRS Server (see pl_home). Code, routes and the /suche search
+    stay exactly as they were; this view is just no longer linked from anywhere."""
+    return render_template("pl_nrs.html", is_guest=is_guest(current_user()))
+
+
 @app.route("/")
 def pl_home():
-    return render_template("pl_nrs.html", is_guest=is_guest(current_user()))
+    me = current_user()
+    return render_template("pl_servers.html", is_guest=is_guest(me), is_admin=bool(me.is_admin), username=pl_display_name(me))
 
 
 # ==========================================================================
@@ -1165,6 +1176,10 @@ def pl_search_doc(doc_id):
     if doc is None:
         abort(404)
     return render_template("pl_search_doc.html", doc=doc)
+
+
+# NRS Server (Aternos-style Minecraft hosting on volunteers' computers) -- see mc_hosting.py.
+mc_hosting.register_routes(app, current_user, is_guest)
 
 
 # ==========================================================================

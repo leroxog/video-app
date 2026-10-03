@@ -11,9 +11,14 @@ from datetime import date
 
 import pytest
 import app as app_module
+import mc_hosting
 import search_engine
 from app import app as flask_app, db
 from models import User, AiChat, AiChatMessage, Team, TeamMember, TeamMessage, UserIntegration, NrsHistoryEntry, YlibItem, PlMedia
+from models import McHost, McHostInvite, McServer
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "host_agent")))
+import nrs_host_agent as agent_mod
 
 
 @pytest.fixture
@@ -63,12 +68,12 @@ def test_nex_archived_redirects_to_login_when_logged_out(client):
     assert "/login" in r.headers["Location"]
 
 
-def test_signup_then_land_on_the_browser(client):
+def test_signup_then_land_on_the_server_panel(client):
     r = signup(client, "alice")
     assert r.status_code in (302, 303)
     home = client.get("/")
     assert home.status_code == 200
-    assert b"nrsAddress" in home.data
+    assert b"svList" in home.data
 
 
 def test_ylib_archived_redirects_to_login_when_logged_out(client):
@@ -332,19 +337,27 @@ def _chat_id(client):
     return client.post("/api/ai/chats").get_json()["chat"]["id"]
 
 
-def test_root_serves_the_browser_not_the_archived_pages(client):
-    """The home page cycled Nex, browser, ychat, ylib and is now the NRS browser
-    with its own search again (2026-10-03). The ylib, ychat and Nex UIs still fully
-    work at /ylib-archiv, /ychat-archiv and /nex-archiv, unlinked from anywhere."""
+def test_root_serves_the_server_panel_not_the_archived_pages(client):
+    """The home page cycled Nex, browser, ychat, ylib, the browser again and is now NRS
+    Server (2026-10-03). The browser, ylib, ychat and Nex UIs still fully work at
+    /browser-archiv, /ylib-archiv, /ychat-archiv and /nex-archiv, unlinked from anywhere."""
     signup(client, "alice")
     home = client.get("/")
     assert home.status_code == 200
     assert (
-        b"nrsAddress" in home.data
+        b"svList" in home.data
+        and b"nrsAddress" not in home.data
         and b"ylGrid" not in home.data
         and b"ycFeed" not in home.data
         and b"nxMsgs" not in home.data
     )
+
+
+def test_browser_archived_still_serves_the_browser(client):
+    signup(client, "alice")
+    home = client.get("/browser-archiv")
+    assert home.status_code == 200
+    assert b"nrsAddress" in home.data
 
 
 def test_ylib_archived_still_serves_the_library(client):
@@ -1067,7 +1080,7 @@ BROWSER = {"Accept": "text/html,application/xhtml+xml"}
 
 def test_browser_opening_root_gets_guest_session_without_login(client):
     home = client.get("/", headers=BROWSER)
-    assert home.status_code == 200 and b"nrsAddress" in home.data
+    assert home.status_code == 200 and "Anmelden oder registrieren".encode() in home.data
     assert client.get("/api/ylib/items").get_json()["ok"] is True
     with flask_app.app_context():
         guest = User.query.one()
@@ -1396,11 +1409,11 @@ def test_article_url_quotes_titles():
 
 
 def test_guest_browser_page_hides_the_mini_site_button_but_accounts_keep_it(client):
-    guest = client.get("/", headers=BROWSER)
+    guest = client.get("/browser-archiv", headers=BROWSER)
     assert b'title="Mini-Site erstellen" hidden' in guest.data
     member = flask_app.test_client()
     member.post("/signup", data={"username": "carol", "password": "secret1", "password2": "secret1"})
-    assert b'title="Mini-Site erstellen" hidden' not in member.get("/").data
+    assert b'title="Mini-Site erstellen" hidden' not in member.get("/browser-archiv").data
 
 
 def test_guest_can_use_the_browser_history(client):
@@ -1413,6 +1426,478 @@ def test_guest_cannot_create_mini_sites(client):
     client.get("/", headers=BROWSER)
     r = client.post("/api/nrs/sites", json={"name": "x", "slug": "meine-seite", "html_code": "<p>hi</p>"})
     assert r.status_code == 401
+
+
+# ---------------- NRS Server (Minecraft hosting on volunteers' computers) ----------------
+
+@pytest.fixture(autouse=True)
+def _fixed_minecraft_versions(monkeypatch):
+    """Never ask Mojang over the network during tests."""
+    monkeypatch.setattr(mc_hosting, "valid_versions", lambda: ["1.21.4", "1.20.1"])
+
+
+def _make_admin(username):
+    User.query.filter_by(username=username).first().is_admin = True
+    db.session.commit()
+
+
+def _user_client(username):
+    other = flask_app.test_client()
+    other.post("/signup", data={"username": username, "password": "secret1", "password2": "secret1"})
+    return other
+
+
+def _new_host(admin, owner, name="Gaming-PC"):
+    code = admin.post("/api/mc/invites").get_json()["code"]
+    return owner.post("/api/mc/hosts", json={"invite": code, "name": name}).get_json()
+
+
+def _sync(token, servers=None, **extra):
+    return flask_app.test_client().post(
+        "/api/agent/sync", json={"servers": servers or [], **extra}, headers={"Authorization": "Bearer " + token},
+    ).get_json()
+
+
+def _new_server(user, name="Survival", version="1.21.4"):
+    return user.post("/api/mc/servers", json={"name": name, "version": version}).get_json()["server"]["id"]
+
+
+def test_guest_sees_a_landing_page_not_the_panel(client):
+    home = client.get("/", headers=BROWSER)
+    assert "Anmelden oder registrieren".encode() in home.data and b"svList" not in home.data
+
+
+def test_guests_cannot_use_the_server_api(client):
+    client.get("/", headers=BROWSER)
+    assert client.get("/api/mc/servers").status_code == 401
+    assert client.post("/api/mc/servers", json={"name": "x", "version": "1.21.4"}).status_code == 401
+
+
+def test_create_server_validates_name_version_and_limit(client):
+    signup(client, "alice")
+    assert client.post("/api/mc/servers", json={"name": "  ", "version": "1.21.4"}).get_json()["error"] == "empty_name"
+    assert client.post("/api/mc/servers", json={"name": "x", "version": "0.0.1"}).get_json()["error"] == "bad_version"
+    assert _new_server(client, "Eins") and _new_server(client, "Zwei")
+    r = client.post("/api/mc/servers", json={"name": "Drei", "version": "1.21.4"})
+    assert r.status_code == 400 and r.get_json()["error"] == "limit_reached"
+
+
+def test_max_players_is_capped(client):
+    signup(client, "alice")
+    r = client.post("/api/mc/servers", json={"name": "Groß", "version": "1.21.4", "max_players": 500})
+    assert r.get_json()["server"]["max_players"] == 20
+
+
+def test_start_queues_and_stop_cancels_a_queued_server(client):
+    signup(client, "alice")
+    sid = _new_server(client)
+    started = client.post(f"/api/mc/servers/{sid}/start").get_json()["server"]
+    assert started["status"] == "queued"
+    stopped = client.post(f"/api/mc/servers/{sid}/stop").get_json()["server"]
+    assert stopped["status"] == "offline"
+
+
+def test_servers_belong_to_their_owner(client):
+    signup(client, "alice")
+    sid = _new_server(client)
+    bob = _user_client("bob")
+    assert bob.get("/api/mc/servers").get_json()["servers"] == []
+    assert bob.post(f"/api/mc/servers/{sid}/start").status_code == 404
+    assert bob.post(f"/api/mc/servers/{sid}/stop").status_code == 404
+    assert bob.delete(f"/api/mc/servers/{sid}").status_code == 404
+
+
+def test_only_admins_can_create_invites(client):
+    signup(client, "alice")
+    assert client.post("/api/mc/invites").status_code == 403
+    _make_admin("alice")
+    j = client.post("/api/mc/invites").get_json()
+    assert j["ok"] is True and len(j["code"].replace("-", "")) == 16
+
+
+def test_invite_lets_someone_add_a_computer_exactly_once(client):
+    signup(client, "alice")
+    _make_admin("alice")
+    bob = _user_client("bob")
+    code = client.post("/api/mc/invites").get_json()["code"]
+    first = bob.post("/api/mc/hosts", json={"invite": code.lower(), "name": "Bobs PC"}).get_json()
+    assert first["ok"] is True and first["token"]
+    again = bob.post("/api/mc/hosts", json={"invite": code, "name": "Noch ein PC"})
+    assert again.status_code == 403 and again.get_json()["error"] == "bad_invite"
+    host = McHost.query.one()
+    assert host.token_hash == mc_hosting.hash_token(first["token"]) and host.token_hash != first["token"]
+
+
+def test_wrong_or_expired_invites_are_rejected(client):
+    signup(client, "alice")
+    _make_admin("alice")
+    assert client.post("/api/mc/hosts", json={"invite": "NICHTECHT", "name": "PC"}).status_code == 403
+    client.post("/api/mc/invites")
+    invite = McHostInvite.query.one()
+    invite.expires_at = invite.expires_at.replace(year=2020)
+    db.session.commit()
+    assert client.post("/api/mc/hosts", json={"invite": invite.code, "name": "PC"}).status_code == 403
+
+
+def test_adding_a_computer_needs_a_name_and_an_account(client):
+    signup(client, "alice")
+    _make_admin("alice")
+    code = client.post("/api/mc/invites").get_json()["code"]
+    assert client.post("/api/mc/hosts", json={"invite": code, "name": " "}).get_json()["error"] == "empty_name"
+    guest = flask_app.test_client()
+    guest.get("/", headers=BROWSER)
+    assert guest.post("/api/mc/hosts", json={"invite": code, "name": "PC"}).status_code == 401
+
+
+def test_hosts_list_shows_own_computers_and_admins_see_all(client):
+    signup(client, "alice")
+    _make_admin("alice")
+    bob = _user_client("bob")
+    _new_host(client, bob, "Bobs PC")
+    assert [h["name"] for h in bob.get("/api/mc/hosts").get_json()["hosts"]] == ["Bobs PC"]
+    assert client.get("/api/mc/hosts").get_json()["hosts"][0]["owner"] == "bob"
+    carol = _user_client("carol")
+    assert carol.get("/api/mc/hosts").get_json()["hosts"] == []
+
+
+def test_agent_needs_a_valid_token(client):
+    assert flask_app.test_client().post("/api/agent/sync", json={}).status_code == 401
+    r = flask_app.test_client().post("/api/agent/sync", json={}, headers={"Authorization": "Bearer falsch"})
+    assert r.status_code == 401
+
+
+def test_agent_sync_marks_the_computer_online_and_stores_its_address(client):
+    signup(client, "alice")
+    _make_admin("alice")
+    token = _new_host(client, client)["token"]
+    assert client.get("/api/mc/hosts").get_json()["hosts"][0]["online"] is False
+    _sync(token, address="203.0.113.7:25565")
+    host = client.get("/api/mc/hosts").get_json()["hosts"][0]
+    assert host["online"] is True and host["address"] == "203.0.113.7:25565"
+    for bad in ("evil<script>", "203.0.113.9:25565\n"):
+        _sync(token, address=bad)
+        assert client.get("/api/mc/hosts").get_json()["hosts"][0]["address"] == "203.0.113.7:25565"
+
+
+def test_computer_counts_as_offline_after_30_quiet_seconds(client):
+    signup(client, "alice")
+    _make_admin("alice")
+    token = _new_host(client, client)["token"]
+    _sync(token)
+    host = McHost.query.one()
+    host.last_seen = host.last_seen.replace(year=2020)
+    db.session.commit()
+    assert client.get("/api/mc/hosts").get_json()["hosts"][0]["online"] is False
+
+
+def test_queued_server_is_handed_to_a_computer_and_runs_through_to_online(client):
+    signup(client, "alice")
+    _make_admin("alice")
+    token = _new_host(client, client)["token"]
+    sid = _new_server(client, version="1.20.1")
+    client.post(f"/api/mc/servers/{sid}/start")
+    jobs = _sync(token)["jobs"]
+    assert jobs == [{"action": "start", "server_id": sid, "version": "1.20.1", "max_players": 10}]
+    assert client.get("/api/mc/servers").get_json()["servers"][0]["status"] == "starting"
+    assert _sync(token, [{"id": sid, "status": "starting"}])["jobs"] == []
+    _sync(token, [{"id": sid, "status": "online", "players": 3, "address": "203.0.113.7:25565",
+                   "log": ["Done (3.1s)!"]}])
+    server = client.get("/api/mc/servers").get_json()["servers"][0]
+    assert (server["status"], server["players"], server["address"], server["host"]) == (
+        "online", 3, "203.0.113.7:25565", "Gaming-PC")
+    assert "Done (3.1s)!" in server["console"]
+
+
+def test_start_job_is_repeated_until_the_agent_reports_the_server(client):
+    signup(client, "alice")
+    _make_admin("alice")
+    token = _new_host(client, client)["token"]
+    sid = _new_server(client)
+    client.post(f"/api/mc/servers/{sid}/start")
+    assert len(_sync(token)["jobs"]) == 1
+    assert len(_sync(token)["jobs"]) == 1
+
+
+def test_a_computer_only_runs_as_many_servers_as_it_allows(client):
+    signup(client, "alice")
+    _make_admin("alice")
+    token = _new_host(client, client)["token"]
+    first, second = _new_server(client, "A"), _new_server(client, "B")
+    client.post(f"/api/mc/servers/{first}/start")
+    client.post(f"/api/mc/servers/{second}/start")
+    jobs = _sync(token, max_servers=1)["jobs"]
+    assert [j["server_id"] for j in jobs] == [first]
+    assert [s["status"] for s in client.get("/api/mc/servers").get_json()["servers"]] == ["starting", "queued"]
+    client.post(f"/api/mc/servers/{first}/stop")
+    assert _sync(token, [{"id": first, "status": "online"}])["jobs"] == [{"action": "stop", "server_id": first}]
+    jobs = _sync(token, [{"id": first, "status": "offline"}])["jobs"]
+    assert [j["server_id"] for j in jobs] == [second]
+
+
+def test_max_servers_reported_by_the_agent_is_capped(client):
+    signup(client, "alice")
+    _make_admin("alice")
+    token = _new_host(client, client)["token"]
+    _sync(token, max_servers=99)
+    assert McHost.query.one().max_servers == mc_hosting.MAX_HOST_SERVERS
+
+
+def test_stopping_an_online_server_sends_a_stop_job_and_ends_offline(client):
+    signup(client, "alice")
+    _make_admin("alice")
+    token = _new_host(client, client)["token"]
+    sid = _new_server(client)
+    client.post(f"/api/mc/servers/{sid}/start")
+    _sync(token)
+    _sync(token, [{"id": sid, "status": "online", "address": "203.0.113.7:25565"}])
+    assert client.post(f"/api/mc/servers/{sid}/stop").get_json()["server"]["status"] == "stopping"
+    assert _sync(token, [{"id": sid, "status": "online"}])["jobs"] == [{"action": "stop", "server_id": sid}]
+    _sync(token, [{"id": sid, "status": "offline"}])
+    server = client.get("/api/mc/servers").get_json()["servers"][0]
+    assert (server["status"], server["host"], server["address"], server["players"]) == ("offline", None, None, 0)
+
+
+def test_server_the_agent_no_longer_runs_is_finalized_when_stopping(client):
+    signup(client, "alice")
+    _make_admin("alice")
+    token = _new_host(client, client)["token"]
+    sid = _new_server(client)
+    client.post(f"/api/mc/servers/{sid}/start")
+    _sync(token)
+    client.post(f"/api/mc/servers/{sid}/stop")
+    _sync(token)
+    assert client.get("/api/mc/servers").get_json()["servers"][0]["status"] == "offline"
+
+
+def test_agent_error_report_takes_the_server_offline_and_shows_the_reason(client):
+    signup(client, "alice")
+    _make_admin("alice")
+    token = _new_host(client, client)["token"]
+    sid = _new_server(client)
+    client.post(f"/api/mc/servers/{sid}/start")
+    _sync(token)
+    _sync(token, [{"id": sid, "status": "error", "log": ["Fehler: Java wurde nicht gefunden."]}])
+    server = client.get("/api/mc/servers").get_json()["servers"][0]
+    assert server["status"] == "offline" and "Java wurde nicht gefunden" in server["console"]
+
+
+def test_agent_is_told_to_stop_servers_that_are_not_its_to_run(client):
+    signup(client, "alice")
+    _make_admin("alice")
+    mine = _new_host(client, client, "Erster")["token"]
+    other = _new_host(client, client, "Zweiter")["token"]
+    sid = _new_server(client)
+    client.post(f"/api/mc/servers/{sid}/start")
+    _sync(mine)
+    jobs = _sync(other, [{"id": sid, "status": "online"}, {"id": 9999, "status": "online"}])["jobs"]
+    assert sorted(j["server_id"] for j in jobs) == [sid, 9999] and all(j["action"] == "stop" for j in jobs)
+    assert client.get("/api/mc/servers").get_json()["servers"][0]["host"] == "Erster"
+
+
+def test_agent_reports_are_clamped_and_cannot_flood_the_console(client):
+    signup(client, "alice")
+    _make_admin("alice")
+    token = _new_host(client, client)["token"]
+    sid = _new_server(client)
+    client.post(f"/api/mc/servers/{sid}/start")
+    _sync(token)
+    _sync(token, [{"id": sid, "status": "online", "players": 10**9, "log": ["x" * 5000] * 200 + [42, None]}])
+    server = McServer.query.one()
+    assert server.players == server.max_players
+    assert len(server.console) <= mc_hosting.CONSOLE_MAX_CHARS
+    assert server.console.count("\n") <= mc_hosting.MAX_LOG_LINES_PER_SYNC
+
+
+def test_malformed_agent_payloads_do_not_crash_the_site(client):
+    signup(client, "alice")
+    _make_admin("alice")
+    token = _new_host(client, client)["token"]
+    auth = {"Authorization": "Bearer " + token}
+    for body in ([1, 2], {"servers": "nope"}, {"servers": [None, 5, {"id": "x"}, {"id": 1, "log": "text"}]}):
+        r = flask_app.test_client().post("/api/agent/sync", json=body, headers=auth)
+        assert r.status_code == 200 and r.get_json()["ok"] is True
+
+
+def test_running_servers_cannot_be_deleted_offline_ones_can(client):
+    signup(client, "alice")
+    sid = _new_server(client)
+    client.post(f"/api/mc/servers/{sid}/start")
+    assert client.delete(f"/api/mc/servers/{sid}").status_code == 409
+    client.post(f"/api/mc/servers/{sid}/stop")
+    assert client.delete(f"/api/mc/servers/{sid}").get_json()["ok"] is True
+    assert client.get("/api/mc/servers").get_json()["servers"] == []
+
+
+def test_removing_a_computer_releases_its_servers(client):
+    signup(client, "alice")
+    _make_admin("alice")
+    host = _new_host(client, client)
+    sid = _new_server(client)
+    client.post(f"/api/mc/servers/{sid}/start")
+    _sync(host["token"])
+    assert client.delete(f"/api/mc/hosts/{host['host']['id']}").get_json()["ok"] is True
+    assert client.get("/api/mc/servers").get_json()["servers"][0]["status"] == "offline"
+    assert _sync(host["token"]).get("error") == "bad_token"
+
+
+def test_only_the_owner_or_an_admin_can_remove_a_computer(client):
+    signup(client, "alice")
+    _make_admin("alice")
+    bob = _user_client("bob")
+    host_id = _new_host(client, bob)["host"]["id"]
+    carol = _user_client("carol")
+    assert carol.delete(f"/api/mc/hosts/{host_id}").status_code == 404
+    assert client.delete(f"/api/mc/hosts/{host_id}").get_json()["ok"] is True
+
+
+def test_auto_start_queues_only_offline_servers_marked_for_it(client):
+    signup(client, "alice")
+    auto, manual = _new_server(client, "Auto"), _new_server(client, "Manuell")
+    assert client.post(f"/api/mc/servers/{auto}/auto-start", json={"enabled": True}).get_json()["server"]["auto_start"]
+    assert client.post("/api/mc/auto-start").get_json()["queued"] == 1
+    statuses = {s["id"]: s["status"] for s in client.get("/api/mc/servers").get_json()["servers"]}
+    assert statuses == {auto: "queued", manual: "offline"}
+    assert client.post("/api/mc/auto-start").get_json()["queued"] == 0
+
+
+def test_host_agent_download_is_public_and_is_the_readable_source(client):
+    r = flask_app.test_client().get("/host-agent.py")
+    assert r.status_code == 200 and b"NRS Server host agent" in r.data
+    assert b"never runs commands" in r.data.lower().replace(b"\n", b" ").replace(b"  ", b" ") or b"never runs" in r.data.lower()
+
+
+# ---- the host agent program itself
+
+def test_agent_accepts_only_plain_release_version_numbers():
+    assert agent_mod.clean_version("1.21.4") == "1.21.4"
+    for bad in ("../../etc", "1.21; calc", "latest", "", None, 121, "1.21.4\n"):
+        assert agent_mod.clean_version(bad) is None
+
+
+def test_agent_only_downloads_from_mojang_over_https():
+    assert agent_mod.check_download_url("https://piston-data.mojang.com/v1/objects/x/server.jar")
+    for bad in ("http://piston-data.mojang.com/x", "https://example.com/server.jar",
+                "https://piston-data.mojang.com.evil.example/x", "file:///etc/passwd"):
+        with pytest.raises(ValueError):
+            agent_mod.check_download_url(bad)
+
+
+def test_agent_server_properties_are_safe_and_capped():
+    props = agent_mod.build_properties(25570, 500)
+    assert props["server-port"] == "25570" and props["max-players"] == "20"
+    assert props["online-mode"] == "true" and props["enable-rcon"] == "false"
+
+
+def test_agent_keeps_existing_properties_when_writing_its_own(tmp_path):
+    path = tmp_path / "server.properties"
+    path.write_text("# comment\ndifficulty=hard\nmax-players=3\n", encoding="utf-8")
+    agent_mod.write_properties(str(path), {"max-players": "7"})
+    text = path.read_text(encoding="utf-8")
+    assert "difficulty=hard" in text and "max-players=7" in text and "max-players=3" not in text
+
+
+class _Config:
+    def __init__(self, tmp_path, **overrides):
+        self.dir, self.ram, self.port, self.max_servers = str(tmp_path), 1024, 25565, 1
+        self.advertise_host, self.simulate, self.accept_eula = "198.51.100.4", True, False
+        self.__dict__.update(overrides)
+
+
+def _agent_for(token, tmp_path, **overrides):
+    def transport(payload):
+        r = flask_app.test_client().post("/api/agent/sync", json=payload, headers={"Authorization": "Bearer " + token})
+        return r.get_json()
+    return agent_mod.Agent(_Config(tmp_path, **overrides), transport)
+
+
+def test_simulated_agent_runs_a_server_from_start_to_stop(client, tmp_path):
+    signup(client, "alice")
+    _make_admin("alice")
+    agent = _agent_for(_new_host(client, client)["token"], tmp_path)
+    sid = _new_server(client)
+    client.post(f"/api/mc/servers/{sid}/start")
+    for _ in range(12):
+        agent.step()
+        if client.get("/api/mc/servers").get_json()["servers"][0]["status"] == "online":
+            break
+    server = client.get("/api/mc/servers").get_json()["servers"][0]
+    assert server["status"] == "online" and server["address"] == "198.51.100.4:25565"
+    for _ in range(4):
+        agent.step()
+    assert client.get("/api/mc/servers").get_json()["servers"][0]["players"] == 1
+    client.post(f"/api/mc/servers/{sid}/stop")
+    for _ in range(8):
+        agent.step()
+        if client.get("/api/mc/servers").get_json()["servers"][0]["status"] == "offline":
+            break
+    server = client.get("/api/mc/servers").get_json()["servers"][0]
+    assert server["status"] == "offline" and agent.instances == {}
+    assert "Simulation" in server["console"]
+
+
+def test_agent_refuses_to_start_a_real_server_without_the_eula(client, tmp_path):
+    signup(client, "alice")
+    _make_admin("alice")
+    agent = _agent_for(_new_host(client, client)["token"], tmp_path, simulate=False, accept_eula=False)
+    sid = _new_server(client)
+    client.post(f"/api/mc/servers/{sid}/start")
+    for _ in range(4):
+        agent.step()
+    server = client.get("/api/mc/servers").get_json()["servers"][0]
+    assert server["status"] == "offline" and "EULA" in server["console"]
+    assert not (tmp_path / "servers").exists()
+
+
+def test_agent_ignores_jobs_with_bad_data(tmp_path):
+    agent = agent_mod.Agent(_Config(tmp_path), lambda payload: {"jobs": []})
+    agent.handle({"action": "start", "server_id": "1; rm -rf", "version": "1.21.4"})
+    agent.handle({"action": "rm", "server_id": 1})
+    agent.handle("start")
+    agent.handle({"action": "start", "server_id": 5, "version": "../../x"})
+    assert [type(i).__name__ for i in agent.instances.values()] == ["FailedInstance"]
+
+
+def test_agent_survives_an_unreachable_site(tmp_path):
+    def broken(payload):
+        raise OSError("offline")
+    assert agent_mod.Agent(_Config(tmp_path), broken).step() is False
+
+
+class _FakeProc:
+    def __init__(self, lines):
+        self.stdout, self.stdin, self.terminated = iter(lines), io.StringIO(), False
+
+    def poll(self):
+        return None
+
+    def terminate(self):
+        self.terminated = True
+
+
+def test_java_instance_follows_the_server_log(tmp_path):
+    import time
+    proc = _FakeProc([
+        "[12:00:00] [Server thread/INFO]: Preparing level",
+        '[12:00:03] [Server thread/INFO]: Done (3.2s)! For help, type "help"',
+        "[12:00:10] [Server thread/INFO]: Alice joined the game",
+        "[12:00:11] [Server thread/INFO]: Bob joined the game",
+        "[12:00:20] [Server thread/INFO]: Alice left the game",
+    ])
+    instance = agent_mod.JavaInstance(1, proc, "198.51.100.4:25565")
+    for _ in range(50):
+        if len(instance.log) == 5:
+            break
+        time.sleep(0.02)
+    assert (instance.status, instance.players) == ("online", 1)
+    instance.stop()
+    assert instance.status == "stopping" and proc.stdin.getvalue() == "stop\n"
+
+
+def test_agent_report_sends_at_most_fifty_log_lines_at_a_time():
+    instance = agent_mod.SimulatedInstance(1, "x:1")
+    instance.log.extend(f"Zeile {i}" for i in range(120))
+    first = agent_mod.report_of(instance)
+    assert len(first["log"]) == 50 and len(agent_mod.report_of(instance)["log"]) == 50
 
 
 def test_ylib_rejects_oversized_upload(client, monkeypatch):
