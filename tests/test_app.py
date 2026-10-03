@@ -1086,6 +1086,12 @@ def test_guest_session_is_reused_on_later_visits(client):
         assert User.query.count() == 1
 
 
+def test_home_offers_picking_files_from_this_device(client):
+    home = client.get("/", headers=BROWSER)
+    assert b'data-filter="local"' in home.data
+    assert b"ylLocalFolder" in home.data and b"ylLocalFiles" in home.data
+
+
 def test_guest_can_upload_and_add_youtube_link(client, monkeypatch):
     monkeypatch.setattr(app_module, "_youtube_oembed_title", lambda vid: "YT")
     client.get("/", headers=BROWSER)

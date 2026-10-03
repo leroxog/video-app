@@ -91,6 +91,15 @@
   .yl-del:hover { background: var(--pl-danger); }
   .yl-del svg { width: 15px; height: 15px; }
 
+  .yl-localbar { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding-bottom: 6px; }
+  .yl-localbar .note { font-size: 12.5px; color: var(--pl-text-faint); }
+  .yl-save {
+    margin-top: 8px; border: none; background: var(--pl-surface-2); color: var(--pl-text); font: inherit;
+    font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 999px; cursor: pointer;
+  }
+  .yl-save:hover { background: var(--pl-hover); }
+  .yl-save:disabled { opacity: .6; cursor: default; }
+
   .yl-empty { text-align: center; color: var(--pl-text-faint); font-size: 13.5px; padding: 70px 10px; }
   .yl-empty svg { width: 40px; height: 40px; margin-bottom: 10px; color: var(--pl-text-faint); }
 
@@ -157,6 +166,8 @@
   </div>
 </div>
 <input type="file" id="ylFileInput" accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm,video/ogg,video/quicktime" hidden>
+<input type="file" id="ylLocalFolder" webkitdirectory multiple hidden>
+<input type="file" id="ylLocalFiles" accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm,video/ogg,video/quicktime" multiple hidden>
 <div class="yl-body" id="ylBody">
   <div class="yl-grid-wrap">
     <div class="yl-chips">
@@ -165,6 +176,7 @@
         <button type="button" class="yl-chip" data-filter="youtube">YouTube</button>
         <button type="button" class="yl-chip" data-filter="video">Videos</button>
         <button type="button" class="yl-chip" data-filter="image">Bilder</button>
+        <button type="button" class="yl-chip" data-filter="local">Dieses Gerät</button>
       </div>
     </div>
     <div class="yl-main">

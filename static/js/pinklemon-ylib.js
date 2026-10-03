@@ -4,6 +4,8 @@
   var uploadLabel = document.getElementById("ylUploadLabel");
   var youtubeBtn = document.getElementById("ylYoutubeBtn");
   var fileInput = document.getElementById("ylFileInput");
+  var localFolder = document.getElementById("ylLocalFolder");
+  var localFiles = document.getElementById("ylLocalFiles");
   var homeBtn = document.getElementById("ylHome");
   var searchInput = document.getElementById("ylSearch");
   var chips = document.getElementById("ylChips");
@@ -25,6 +27,14 @@
   var itemsById = {};
   var filter = "all";
   var query = "";
+
+  // Files picked from this device ("Dieses Gerät"): read and played locally via object URLs, never uploaded unless saved.
+  var LOCAL_LIMIT = 100;
+  var MEDIA_EXT = /\.(png|jpe?g|gif|webp|mp4|webm|ogg|mov)$/i;
+  var VIDEO_EXT = /\.(mp4|webm|ogg|mov)$/i;
+  var localItems = [];
+  var localById = {};
+  var localNote = "";
 
   function esc(s) {
     return String(s == null ? "" : s)
@@ -83,8 +93,11 @@
 
   function sourceLabel(it) {
     if (it.source === "youtube") return "YouTube";
-    return it.kind === "video" ? "Video" : "Bild";
+    var kind = it.kind === "video" ? "Video" : "Bild";
+    return it.source === "local" ? kind + " (Gerät)" : kind;
   }
+
+  function findItem(id) { return itemsById[id] || localById[id]; }
 
   var PLAY_ICON = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
   var TRASH_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6h16Z"/></svg>';
@@ -110,19 +123,51 @@
     return true;
   }
 
-  function visibleItems() {
-    return allItems.filter(function (it) {
-      return matchesFilter(it) && (!query || it.title.toLowerCase().indexOf(query) !== -1);
+  function matchesQuery(it) {
+    return !query || it.title.toLowerCase().indexOf(query) !== -1;
+  }
+
+  function emptyHtml(msg) {
+    return '<div class="yl-empty" style="grid-column: 1/-1">' + EMPTY_ICON + '<div>' + msg + '</div></div>';
+  }
+
+  function setTitles(items) {
+    grid.querySelectorAll(".yl-card").forEach(function (el, i) {
+      el.querySelector(".title").textContent = items[i].title;
     });
   }
 
-  function renderGrid() {
-    var items = visibleItems();
+  function renderLocal() {
+    var items = localItems.filter(matchesQuery);
+    var bar = '<div class="yl-localbar">'
+      + '<button type="button" class="yl-pill-btn" data-local-pick="folder">Ordner wählen</button>'
+      + '<button type="button" class="yl-pill-btn" data-local-pick="files">Dateien wählen</button>'
+      + '<span class="note">Bleibt auf deinem Gerät, bis du auf &bdquo;In Mediathek speichern&ldquo; klickst. ' + esc(localNote) + '</span></div>';
     if (!items.length) {
-      var msg = allItems.length
+      grid.innerHTML = bar + emptyHtml(localItems.length
         ? "Nichts gefunden."
-        : "Noch nichts hier -- lade eine Datei hoch oder füge einen YouTube-Link hinzu.";
-      grid.innerHTML = '<div class="yl-empty" style="grid-column: 1/-1">' + EMPTY_ICON + '<div>' + msg + '</div></div>';
+        : (localNote || "Wähle deinen Downloads-Ordner -- deine Bilder und Videos erscheinen dann hier, ohne hochgeladen zu werden."));
+      return;
+    }
+    grid.innerHTML = bar + items.map(function (it) {
+      return '<div class="yl-card" data-id="' + esc(it.id) + '">'
+        + thumbHtml(it)
+        + '<div class="yl-meta-row"><div class="yl-avatar">' + esc(userInitial) + '</div>'
+        + '<div class="yl-info"><div class="title"></div>'
+        + '<div class="meta">' + sourceLabel(it) + ' &bull; ' + timeAgo(it.created_at) + '</div>'
+        + '<button type="button" class="yl-save" data-save="' + esc(it.id) + '">In Mediathek speichern</button></div></div>'
+        + '</div>';
+    }).join("");
+    setTitles(items);
+  }
+
+  function renderGrid() {
+    if (filter === "local") { renderLocal(); return; }
+    var items = allItems.filter(function (it) { return matchesFilter(it) && matchesQuery(it); });
+    if (!items.length) {
+      grid.innerHTML = emptyHtml(allItems.length
+        ? "Nichts gefunden."
+        : "Noch nichts hier -- lade eine Datei hoch oder füge einen YouTube-Link hinzu.");
       return;
     }
     grid.innerHTML = items.map(function (it) {
@@ -134,9 +179,7 @@
         + '<div class="meta">' + esc(userName) + ' &bull; ' + sourceLabel(it) + ' &bull; ' + timeAgo(it.created_at) + '</div></div></div>'
         + '</div>';
     }).join("");
-    grid.querySelectorAll(".yl-card").forEach(function (el, i) {
-      el.querySelector(".title").textContent = items[i].title;
-    });
+    setTitles(items);
   }
 
   function loadItems() {
@@ -149,11 +192,12 @@
     });
   }
 
-  function renderRelated(currentId) {
-    var others = allItems.filter(function (it) { return it.id !== currentId; }).slice(0, 12);
+  function renderRelated(current) {
+    var pool = current.source === "local" ? localItems : allItems;
+    var others = pool.filter(function (it) { return it.id !== current.id; }).slice(0, 12);
     if (!others.length) { related.innerHTML = ""; return; }
     related.innerHTML = others.map(function (it) {
-      return '<div class="yl-rel" data-id="' + it.id + '">' + thumbHtml(it)
+      return '<div class="yl-rel" data-id="' + esc(it.id) + '">' + thumbHtml(it)
         + '<div class="yl-rel-info"><div class="t"></div>'
         + '<div class="m">' + esc(userName) + '<br>' + sourceLabel(it) + ' &bull; ' + timeAgo(it.created_at) + '</div></div></div>';
     }).join("");
@@ -172,14 +216,15 @@
       stage.innerHTML = item.kind === "video"
         ? '<video src="' + esc(item.url) + '" controls autoplay></video>'
         : '<img src="' + esc(item.url) + '" alt="">';
-      playerActions.innerHTML = '<a class="yl-pill-btn" target="_blank" rel="noopener" download'
-        + ' href="' + esc(item.url) + '">Herunterladen</a>';
+      playerActions.innerHTML = item.source === "local"
+        ? '<button type="button" class="yl-pill-btn" data-save="' + esc(item.id) + '">In Mediathek speichern</button>'
+        : '<a class="yl-pill-btn" target="_blank" rel="noopener" download href="' + esc(item.url) + '">Herunterladen</a>';
     }
     playerTitle.textContent = item.title;
     playerAvatar.textContent = userInitial;
     playerName.textContent = userName;
     playerMeta.textContent = sourceLabel(item) + " • " + timeAgo(item.created_at);
-    renderRelated(item.id);
+    renderRelated(item);
     body.classList.add("in-player");
     player.classList.add("active");
     body.scrollTop = 0;
@@ -197,6 +242,92 @@
       c.classList.toggle("active", c.dataset.filter === value);
     });
     renderGrid();
+  }
+
+  function revokeLocal() {
+    localItems.forEach(function (it) {
+      URL.revokeObjectURL(it.url);
+      if (it.thumbBlob) URL.revokeObjectURL(it.thumbnail_url);
+    });
+  }
+
+  // Frames are grabbed one video at a time so a big folder doesn't make the browser decode everything at once.
+  function generateLocalThumbs(batch) {
+    return batch.filter(function (it) { return it.kind === "video"; }).reduce(function (chain, it) {
+      return chain.then(function () {
+        if (batch !== localItems) return null;
+        return makeVideoThumb(it.file).then(function (blob) {
+          if (!blob || batch !== localItems) return;
+          it.thumbBlob = blob;
+          it.thumbnail_url = URL.createObjectURL(blob);
+          var thumb = grid.querySelector('.yl-card[data-id="' + it.id + '"] .yl-thumb');
+          if (thumb) thumb.outerHTML = thumbHtml(it);
+        });
+      });
+    }, Promise.resolve());
+  }
+
+  function addLocalFiles(fileList) {
+    closePlayer();
+    revokeLocal();
+    var files = Array.prototype.filter.call(fileList, function (f) { return MEDIA_EXT.test(f.name); });
+    files.sort(function (a, b) { return b.lastModified - a.lastModified; });
+    var total = files.length;
+    localNote = !total ? "In dieser Auswahl sind keine Bilder oder Videos."
+      : total > LOCAL_LIMIT ? "Die neuesten " + LOCAL_LIMIT + " von " + total + " werden gezeigt." : "";
+    var batch = files.slice(0, LOCAL_LIMIT).map(function (f, i) {
+      var isVideo = VIDEO_EXT.test(f.name);
+      var url = URL.createObjectURL(f);
+      return {
+        id: "local-" + i, source: "local", kind: isVideo ? "video" : "image", file: f, url: url,
+        title: f.name.replace(/\.[^.]+$/, ""), thumbnail_url: isVideo ? null : url,
+        created_at: new Date(f.lastModified).toISOString(),
+      };
+    });
+    localItems = batch;
+    localById = {};
+    batch.forEach(function (it) { localById[it.id] = it; });
+    setFilter("local");
+    generateLocalThumbs(batch);
+  }
+
+  // Uploads a file into the library, with a browser-made frame as its preview for videos; resolves true on success.
+  function uploadFile(file, title, knownThumb) {
+    uploadBtn.disabled = true;
+    uploadLabel.textContent = "Lädt hoch …";
+    var isVideo = file.type.indexOf("video/") === 0 || VIDEO_EXT.test(file.name);
+    var thumbReady = knownThumb ? Promise.resolve(knownThumb) : isVideo ? makeVideoThumb(file) : Promise.resolve(null);
+    return thumbReady
+      .then(function (thumb) {
+        var fd = new FormData();
+        fd.append("file", file);
+        fd.append("title", title);
+        if (thumb) fd.append("thumb", thumb, "thumb.jpg");
+        return fetch("/api/ylib/items", { method: "POST", body: fd });
+      })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (!j.ok) {
+          window.alert(errorText(j, "Hochladen ging nicht."));
+          return false;
+        }
+        loadItems();
+        return true;
+      })
+      .catch(function () { window.alert("Hochladen ging nicht."); return false; })
+      .finally(function () {
+        uploadBtn.disabled = false;
+        uploadLabel.textContent = "Hochladen";
+      });
+  }
+
+  function saveLocal(item, btn) {
+    if (btn) { btn.disabled = true; btn.textContent = "Speichert …"; }
+    uploadFile(item.file, item.title, item.thumbBlob).then(function (ok) {
+      if (!btn) return;
+      btn.textContent = ok ? "Gespeichert" : "In Mediathek speichern";
+      btn.disabled = ok;
+    });
   }
 
   backBtn.addEventListener("click", closePlayer);
@@ -220,6 +351,18 @@
   });
 
   grid.addEventListener("click", function (e) {
+    var pick = e.target.closest("[data-local-pick]");
+    if (pick) {
+      (pick.dataset.localPick === "folder" ? localFolder : localFiles).click();
+      return;
+    }
+    var saveBtn = e.target.closest("[data-save]");
+    if (saveBtn) {
+      e.stopPropagation();
+      var local = localById[saveBtn.dataset.save];
+      if (local) saveLocal(local, saveBtn);
+      return;
+    }
     var delBtn = e.target.closest("[data-del]");
     if (delBtn) {
       e.stopPropagation();
@@ -230,16 +373,30 @@
     }
     var card = e.target.closest(".yl-card");
     if (card) {
-      var item = itemsById[card.dataset.id];
+      var item = findItem(card.dataset.id);
       if (item) openPlayer(item);
     }
+  });
+
+  playerActions.addEventListener("click", function (e) {
+    var saveBtn = e.target.closest("[data-save]");
+    if (!saveBtn) return;
+    var local = localById[saveBtn.dataset.save];
+    if (local) saveLocal(local, saveBtn);
   });
 
   related.addEventListener("click", function (e) {
     var rel = e.target.closest(".yl-rel");
     if (!rel) return;
-    var item = itemsById[rel.dataset.id];
+    var item = findItem(rel.dataset.id);
     if (item) openPlayer(item);
+  });
+
+  [localFolder, localFiles].forEach(function (input) {
+    input.addEventListener("change", function () {
+      if (input.files.length) addLocalFiles(input.files);
+      input.value = "";
+    });
   });
 
   uploadBtn.addEventListener("click", function () { fileInput.click(); });
@@ -250,31 +407,7 @@
     var guessTitle = file.name.includes(".") ? file.name.slice(0, file.name.lastIndexOf(".")) : file.name;
     var title = window.prompt("Titel für diese Datei:", guessTitle);
     if (title === null) { fileInput.value = ""; return; }
-    uploadBtn.disabled = true;
-    uploadLabel.textContent = "Lädt hoch …";
-    var thumbReady = file.type.indexOf("video/") === 0 ? makeVideoThumb(file) : Promise.resolve(null);
-    thumbReady
-      .then(function (thumb) {
-        var fd = new FormData();
-        fd.append("file", file);
-        fd.append("title", title);
-        if (thumb) fd.append("thumb", thumb, "thumb.jpg");
-        return fetch("/api/ylib/items", { method: "POST", body: fd });
-      })
-      .then(function (r) { return r.json(); })
-      .then(function (j) {
-        if (!j.ok) {
-          window.alert(errorText(j, "Hochladen ging nicht."));
-        } else {
-          loadItems();
-        }
-      })
-      .catch(function () { window.alert("Hochladen ging nicht."); })
-      .finally(function () {
-        uploadBtn.disabled = false;
-        uploadLabel.textContent = "Hochladen";
-        fileInput.value = "";
-      });
+    uploadFile(file, title).then(function () { fileInput.value = ""; });
   });
 
   youtubeBtn.addEventListener("click", function () {
