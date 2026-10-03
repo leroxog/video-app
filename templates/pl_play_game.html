@@ -1,0 +1,78 @@
+{% extends "pl_base.html" %}
+{% block title %}{{ game.title }} – NRS Play{% endblock %}
+
+{% block head_extra %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/play-glass.css') }}">
+{% endblock %}
+
+{% block screen_class %}play{% endblock %}
+{% block screen %}
+<div class="pg-bg"><i></i><i></i><i></i></div>
+<div class="pg-scroll pg">
+  <header class="pg-nav pg-glass">
+    <a class="pg-logo" href="/spiele">N<b>RS</b><small>Play</small></a>
+    <div class="pg-nav-right">
+      <a href="/spiele">Alle Spiele</a>
+      <a href="/">Server</a>
+    </div>
+  </header>
+
+  <main class="pg-game">
+    {% if status != "published" %}
+    <div class="pg-banner pg-glass">
+      {% if status == "pending" %}Dieses Spiel ist noch in Prüfung. Nur du und die Admins können es sehen.
+      {% elif status == "rejected" %}Dieses Spiel wurde abgelehnt. Nur du und die Admins können es sehen.
+      {% else %}Dieses Spiel ist ausgeblendet. Nur du und die Admins können es sehen.{% endif %}
+    </div>
+    {% endif %}
+
+    <div class="pg-stage pg-glass">
+      <!-- No sandbox attribute on purpose: the frame's own Content-Security-Policy header already sandboxes it (and some browsers/extensions block attribute-sandboxed frames). -->
+      <iframe id="pgFrame" src="/spiele/frame/{{ game.id }}" title="{{ game.title }}"
+              allow="fullscreen" referrerpolicy="no-referrer"></iframe>
+    </div>
+
+    <div class="pg-gamebar">
+      <h1>{{ game.emoji }} {{ game.title }}</h1>
+      <button type="button" class="pg-btn glass small" id="pgFullscreen">Vollbild</button>
+      {% if status == "published" %}
+      <div class="pg-report">
+        <button type="button" class="pg-btn glass small" id="pgReportBtn">Melden</button>
+        <div class="pg-pop pg-glass" id="pgReportPop" hidden>
+          <select id="pgReportReason" aria-label="Grund">
+            <option value="unpassend">Unpassend für Kinder</option>
+            <option value="gewalt">Gewalt</option>
+            <option value="persoenliche-daten">Fragt nach persönlichen Daten</option>
+            <option value="kopiert">Kopiert von jemand anderem</option>
+            <option value="sonstiges">Etwas anderes</option>
+          </select>
+          <button type="button" class="pg-btn danger small" id="pgReportSend">Melden</button>
+          <div class="pg-note" id="pgReportDone" hidden style="margin-top:10px">Danke, wir schauen es uns an.</div>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+    <div class="pg-byline">
+      <span class="pg-avatar">{{ game.author[:1]|upper }}</span><span>von {{ game.author }}</span>
+      <span>·</span><span><b id="pgViews">{{ game.views }}</b> Aufrufe</span>
+    </div>
+    {% if game.description %}<p class="pg-desc">{{ game.description }}</p>{% endif %}
+
+    <div class="pg-ad pg-glass">
+      <span class="tag">Werbung</span>
+      <p>Hier erscheint später Werbung ohne Tracking. Ein Teil davon geht an den Ersteller des Spiels.</p>
+    </div>
+  </main>
+
+  <footer class="pg-foot">
+    Das Spiel läuft abgeschottet: ohne Internet, ohne Speicher und ohne Zugriff auf NRS. Gib in Spielen nie deinen echten Namen, deine Adresse oder Passwörter ein.
+  </footer>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.NRS_GAME = {{ {"id": game.id, "published": status == "published"} | tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/pinklemon-play-game.js') }}"></script>
+{% endblock %}

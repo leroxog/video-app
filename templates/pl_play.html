@@ -1,0 +1,118 @@
+{% extends "pl_base.html" %}
+{% block title %}NRS Play{% endblock %}
+
+{% block head_extra %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/play-glass.css') }}">
+{% endblock %}
+
+{% block screen_class %}play{% endblock %}
+{% block screen %}
+<div class="pg-bg"><i></i><i></i><i></i></div>
+<div class="pg-scroll pg">
+  <header class="pg-nav pg-glass">
+    <a class="pg-logo" href="/spiele">N<b>RS</b><small>Play</small></a>
+    <div class="pg-tabs" id="pgTabs">
+      <button type="button" class="pg-tab active" data-tab="discover">Entdecken</button>
+      <button type="button" class="pg-tab" data-tab="mine">Meine Spiele</button>
+      {% if is_admin %}<button type="button" class="pg-tab" data-tab="review">Prüfen</button>{% endif %}
+    </div>
+    <div class="pg-nav-right">
+      <a href="/">Server</a>
+      {% if is_guest %}<a href="/logout">Anmelden</a>{% else %}<span>{{ username }}</span><a href="/logout">Abmelden</a>{% endif %}
+    </div>
+  </header>
+
+  <main class="pg-main">
+    <section id="pgDiscover">
+      <div class="pg-hero">
+        <h1>Spiele bauen.<br>Spiele spielen.</h1>
+        <p>Veröffentliche dein eigenes Mini-Spiel und bekomme einen fairen Anteil an der Werbung, die rund um dein Spiel erscheint. Ohne Tracking und ohne private Nachrichten.</p>
+        <div class="pg-hero-actions">
+          <button type="button" class="pg-btn" id="pgHeroCreate">Eigenes Spiel veröffentlichen</button>
+          <a class="pg-btn glass" href="#pgGrid">Spiele ansehen</a>
+        </div>
+      </div>
+      <div class="pg-chips" id="pgSort">
+        <button type="button" class="pg-chip active" data-sort="new">Neu</button>
+        <button type="button" class="pg-chip" data-sort="popular">Beliebt</button>
+      </div>
+      <div class="pg-grid" id="pgGrid"></div>
+    </section>
+
+    <section id="pgMine" hidden>
+      {% if is_guest %}
+      <div class="pg-panel pg-glass" style="text-align:center">
+        <h2>Melde dich an, um Spiele zu veröffentlichen</h2>
+        <p class="pg-note" style="margin:8px 0 18px">Spielen kannst du ohne Konto. Zum Veröffentlichen und Verdienen brauchst du ein Konto.</p>
+        <a class="pg-btn" href="/logout">Anmelden oder registrieren</a>
+      </div>
+      {% else %}
+      <div class="pg-stats">
+        <div class="pg-stat pg-glass"><div class="num" id="pgStatGames">0</div><div class="label">Spiele</div></div>
+        <div class="pg-stat pg-glass"><div class="num" id="pgStatViews">0</div><div class="label">Aufrufe</div></div>
+        <div class="pg-stat pg-glass"><div class="num" id="pgStatEarn">0,00 €</div><div class="label">geschätzte Einnahmen</div></div>
+      </div>
+      <div class="pg-panel pg-glass">
+        <h2>So funktioniert das Geld</h2>
+        <p class="pg-note">
+          Rund um jedes Spiel steht Werbung ohne Tracking. Davon bekommst du <b>{{ share }} %</b>. Als Schätzung rechnen wir mit
+          <b>{{ "%.2f"|format(rpm)|replace(".", ",") }} € pro 1.000 Aufrufe</b>, also etwa
+          <b>{{ "%.2f"|format(rpm * share / 100)|replace(".", ",") }} € für dich</b>. Das ist wenig, und viele Spiele verdienen am Anfang nur Cent-Beträge.
+          Die Werbung ist noch nicht freigeschaltet, deshalb sind die Beträge hier eine Schätzung. Eine Auszahlung gibt es später, nur auf ein Konto deiner Eltern oder eines Erwachsenen.
+        </p>
+      </div>
+
+      <div class="pg-head"><h2>Meine Spiele</h2><button type="button" class="pg-btn" id="pgNewBtn">Neues Spiel</button></div>
+
+      <div class="pg-panel pg-glass" id="pgEditor" hidden>
+        <h2 id="pgEditorTitle">Neues Spiel</h2>
+        <p class="pg-note" style="margin-bottom:18px">Ein Spiel ist <b>eine einzige HTML-Datei</b> mit HTML, CSS und JavaScript. Es läuft in einem abgeschotteten Rahmen: ohne Internet, ohne Speicher und ohne Zugriff auf NRS. Nach dem Absenden prüft ein Admin es, bevor es öffentlich wird.</p>
+        <div class="pg-editor-grid">
+          <div>
+            <div class="pg-row">
+              <div class="pg-field"><label for="pgEmoji">Symbol</label><input class="pg-input" id="pgEmoji" maxlength="4" value="🎮"></div>
+              <div class="pg-field"><label for="pgTitle">Titel</label><input class="pg-input" id="pgTitle" maxlength="60" placeholder="Wie heißt dein Spiel?"></div>
+            </div>
+            <div class="pg-field"><label for="pgDesc">Beschreibung</label><input class="pg-input" id="pgDesc" maxlength="300" placeholder="Worum geht es in einem Satz?"></div>
+            <div class="pg-field"><label>Farbe</label><div class="pg-swatches" id="pgSwatches"></div></div>
+            <div class="pg-field"><label for="pgCode">Code</label><textarea class="pg-textarea" id="pgCode" spellcheck="false" placeholder="&lt;!DOCTYPE html&gt; ..."></textarea></div>
+          </div>
+          <div>
+            <div class="pg-field"><label>Vorschau</label><div class="pg-preview"><iframe id="pgPreview" sandbox="allow-scripts allow-modals" title="Vorschau"></iframe></div></div>
+            <p class="pg-note">Die Vorschau läuft abgeschottet, aber noch ohne Internet-Sperre. Beim Veröffentlichen gilt dann die strenge Sperre.</p>
+          </div>
+        </div>
+        <div class="pg-error" id="pgEditorError"></div>
+        <div class="pg-actions">
+          <button type="button" class="pg-btn" id="pgSubmit">Zur Prüfung senden</button>
+          <button type="button" class="pg-btn glass" id="pgPreviewBtn">Vorschau aktualisieren</button>
+          <button type="button" class="pg-btn glass" id="pgExampleBtn">Beispiel einfügen</button>
+          <button type="button" class="pg-btn glass" id="pgCancelBtn">Abbrechen</button>
+        </div>
+      </div>
+
+      <div class="pg-list" id="pgMineList"></div>
+      {% endif %}
+    </section>
+
+    {% if is_admin %}
+    <section id="pgReview" hidden>
+      <div class="pg-head"><h2>Zu prüfen</h2></div>
+      <p class="pg-note" style="margin-bottom:18px">Neue Spiele und Spiele, die mehrfach gemeldet wurden. Schau dir das Spiel an: Ist es für Kinder geeignet, ohne persönliche Daten, ohne fremde Marken und ohne Gewalt? Dann freigeben, sonst ablehnen.</p>
+      <div class="pg-list" id="pgReviewList"></div>
+    </section>
+    {% endif %}
+  </main>
+
+  <footer class="pg-foot">
+    Auf NRS Play gibt es keine privaten Nachrichten, und die Werbung kommt ohne Tracking aus. Einnahmen sind Schätzungen, und eine Auszahlung gibt es nur über Erwachsene. Unpassendes Spiel gefunden? Auf der Spielseite „Melden“ drücken.
+  </footer>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.NRS_PLAY = {{ {"isGuest": is_guest, "isAdmin": is_admin, "maxGames": max_games} | tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/pinklemon-play.js') }}"></script>
+{% endblock %}

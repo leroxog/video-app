@@ -12,10 +12,11 @@ from datetime import date
 import pytest
 import app as app_module
 import mc_hosting
+import play_platform
 import search_engine
 from app import app as flask_app, db
 from models import User, AiChat, AiChatMessage, Team, TeamMember, TeamMessage, UserIntegration, NrsHistoryEntry, YlibItem, PlMedia
-from models import McHost, McHostInvite, McServer
+from models import McHost, McHostInvite, McServer, PlayGame, PlayView, PlayReport
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "host_agent")))
 import nrs_host_agent as agent_mod
@@ -1898,6 +1899,271 @@ def test_agent_report_sends_at_most_fifty_log_lines_at_a_time():
     instance.log.extend(f"Zeile {i}" for i in range(120))
     first = agent_mod.report_of(instance)
     assert len(first["log"]) == 50 and len(agent_mod.report_of(instance)["log"]) == 50
+
+
+# ---------------- NRS Play (members publish games, ad revenue is shared) ----------------
+
+GAME_CODE = "<!DOCTYPE html><html><body><h1>Mein Spiel</h1><script>var score = 0;</script></body></html>"
+
+
+def _publish_game(owner, admin, title="Testspiel", **extra):
+    fields = {"title": title, "code": GAME_CODE, **extra}
+    game_id = owner.post("/api/play/games", json=fields).get_json()["game"]["id"]
+    admin.post(f"/api/play/games/{game_id}/review", json={"decision": "approve"})
+    return game_id
+
+
+def _guest_client():
+    guest = flask_app.test_client()
+    guest.get("/spiele", headers=BROWSER)
+    return guest
+
+
+def test_play_gallery_is_open_to_guests_and_shows_only_published_games(client):
+    signup(client, "alice")
+    _make_admin("alice")
+    bob = _user_client("bob")
+    bob.post("/api/play/games", json={"title": "Wartet", "code": GAME_CODE})
+    guest = _guest_client()
+    page = flask_app.test_client().get("/spiele", headers=BROWSER)
+    assert page.status_code == 200 and b"pgGrid" in page.data
+    assert guest.get("/api/play/games").get_json()["games"] == []
+    _publish_game(bob, client, "Fertig")
+    assert [g["title"] for g in guest.get("/api/play/games").get_json()["games"]] == ["Fertig"]
+
+
+def test_play_api_never_sends_game_code_in_lists(client):
+    signup(client, "alice")
+    _make_admin("alice")
+    _publish_game(client, client)
+    game = client.get("/api/play/games").get_json()["games"][0]
+    assert "code" not in game
+
+
+def test_publishing_needs_an_account(client):
+    guest = _guest_client()
+    assert guest.post("/api/play/games", json={"title": "x", "code": GAME_CODE}).status_code == 401
+    assert guest.get("/api/play/mine").status_code == 401
+
+
+def test_new_games_wait_for_review_and_show_up_in_my_games(client):
+    signup(client, "alice")
+    created = client.post("/api/play/games", json={"title": "Neu", "code": GAME_CODE, "emoji": "🚀", "accent": 3}).get_json()
+    assert created["game"]["status"] == "pending" and created["game"]["emoji"] == "🚀" and created["game"]["accent"] == 3
+    mine = client.get("/api/play/mine").get_json()
+    assert [g["title"] for g in mine["games"]] == ["Neu"]
+    assert mine["totals"] == {"games": 1, "views": 0, "earnings_eur": 0}
+
+
+def test_game_fields_are_validated_and_capped(client):
+    signup(client, "alice")
+    post = lambda **kw: client.post("/api/play/games", json={"title": "T", "code": GAME_CODE, **kw})
+    assert post(title=" ").get_json()["error"] == "empty_title"
+    assert post(code="  ").get_json()["error"] == "empty_code"
+    assert post(code="x" * (play_platform.MAX_CODE_CHARS + 1)).get_json()["error"] == "code_too_long"
+    game = post(accent=99, emoji="", description="d" * 999, title="t" * 200).get_json()["game"]
+    assert game["accent"] == 5 and game["emoji"] == "🎮"
+    assert len(game["description"]) == play_platform.DESCRIPTION_MAX and len(game["title"]) == play_platform.TITLE_MAX
+
+
+def test_each_member_can_have_only_a_few_games(client):
+    signup(client, "alice")
+    for i in range(play_platform.MAX_GAMES_PER_USER):
+        assert client.post("/api/play/games", json={"title": f"S{i}", "code": GAME_CODE}).get_json()["ok"]
+    r = client.post("/api/play/games", json={"title": "zu viel", "code": GAME_CODE})
+    assert r.status_code == 400 and r.get_json()["error"] == "limit_reached"
+
+
+def test_only_admins_review_games(client):
+    signup(client, "alice")
+    _make_admin("alice")
+    bob = _user_client("bob")
+    game_id = bob.post("/api/play/games", json={"title": "Neu", "code": GAME_CODE}).get_json()["game"]["id"]
+    assert bob.get("/api/play/review").status_code == 403
+    assert bob.post(f"/api/play/games/{game_id}/review", json={"decision": "approve"}).status_code == 403
+    assert [g["title"] for g in client.get("/api/play/review").get_json()["games"]] == ["Neu"]
+    assert client.post(f"/api/play/games/{game_id}/review", json={"decision": "maybe"}).status_code == 400
+
+
+def test_rejected_games_show_the_admins_note_to_their_creator(client):
+    signup(client, "alice")
+    _make_admin("alice")
+    bob = _user_client("bob")
+    game_id = bob.post("/api/play/games", json={"title": "Neu", "code": GAME_CODE}).get_json()["game"]["id"]
+    client.post(f"/api/play/games/{game_id}/review", json={"decision": "reject", "note": "Bitte ohne Gewalt."})
+    mine = bob.get("/api/play/mine").get_json()["games"][0]
+    assert (mine["status"], mine["review_note"]) == ("rejected", "Bitte ohne Gewalt.")
+    assert bob.get("/api/play/games").get_json()["games"] == []
+
+
+def test_unpublished_games_are_visible_only_to_their_owner_and_admins(client):
+    signup(client, "alice")
+    _make_admin("alice")
+    bob = _user_client("bob")
+    game_id = bob.post("/api/play/games", json={"title": "Geheim", "code": GAME_CODE}).get_json()["game"]["id"]
+    stranger = _user_client("carol")
+    for path in (f"/spiele/{game_id}", f"/spiele/frame/{game_id}"):
+        assert stranger.get(path).status_code == 404
+        assert _guest_client().get(path).status_code == 404
+        assert bob.get(path).status_code == 200
+        assert client.get(path).status_code == 200
+
+
+def test_game_frame_is_served_with_locked_down_headers(client):
+    signup(client, "alice")
+    _make_admin("alice")
+    game_id = _publish_game(client, client)
+    r = client.get(f"/spiele/frame/{game_id}")
+    csp = r.headers["Content-Security-Policy"]
+    assert r.status_code == 200 and r.data.decode() == GAME_CODE and r.mimetype == "text/html"
+    assert csp.startswith("sandbox allow-scripts") and "allow-same-origin" not in csp
+    assert "default-src 'none'" in csp and "form-action 'none'" in csp and "frame-ancestors 'self'" in csp
+    assert "connect-src" not in csp and "http" not in csp
+    assert r.headers["X-Content-Type-Options"] == "nosniff" and r.headers["Cache-Control"] == "no-store"
+
+
+def test_game_page_embeds_the_frame_and_escapes_text(client):
+    signup(client, "alice")
+    _make_admin("alice")
+    game_id = _publish_game(client, client, "<script>alert(1)</script>", description="<b>fett</b>")
+    page = client.get(f"/spiele/{game_id}")
+    assert f'src="/spiele/frame/{game_id}"'.encode() in page.data
+    assert b"<script>alert(1)</script>" not in page.data and b"<b>fett</b>" not in page.data
+    assert b"allow-same-origin" not in page.data and "Werbung".encode() in page.data
+    # The lock-down comes from the frame response's own header, not from an attribute a browser might drop.
+    assert b'sandbox="' not in page.data.split(b'id="pgFrame"')[1].split(b"</iframe>")[0]
+
+
+def test_editing_a_game_sends_it_back_to_review_and_only_the_owner_may(client):
+    signup(client, "alice")
+    _make_admin("alice")
+    bob = _user_client("bob")
+    game_id = _publish_game(bob, client, "Alt")
+    assert _user_client("carol").put(f"/api/play/games/{game_id}", json={"title": "Hack", "code": GAME_CODE}).status_code == 404
+    updated = bob.put(f"/api/play/games/{game_id}", json={"title": "Neu", "code": GAME_CODE + "<!-- v2 -->"}).get_json()["game"]
+    assert (updated["title"], updated["status"]) == ("Neu", "pending")
+    assert bob.get("/api/play/games").get_json()["games"] == []
+    assert bob.get(f"/api/play/games/{game_id}/source").get_json()["game"]["code"].endswith("<!-- v2 -->")
+    assert _user_client("dave").get(f"/api/play/games/{game_id}/source").status_code == 404
+
+
+def test_owner_or_admin_can_delete_a_game_but_nobody_else(client):
+    signup(client, "alice")
+    _make_admin("alice")
+    bob = _user_client("bob")
+    game_id = _publish_game(bob, client)
+    assert _user_client("carol").delete(f"/api/play/games/{game_id}").status_code == 404
+    assert bob.delete(f"/api/play/games/{game_id}").get_json()["ok"] is True
+    other = _publish_game(bob, client, "Zweites")
+    assert client.delete(f"/api/play/games/{other}").get_json()["ok"] is True
+    assert PlayGame.query.count() == 0
+
+
+def test_a_view_counts_once_per_viewer_per_day_but_not_for_the_author(client):
+    signup(client, "alice")
+    _make_admin("alice")
+    game_id = _publish_game(client, client)
+    fan = _user_client("fan")
+    assert fan.post(f"/api/play/games/{game_id}/view").get_json() == {"ok": True, "counted": True, "views": 1}
+    assert fan.post(f"/api/play/games/{game_id}/view").get_json()["counted"] is False
+    assert client.post(f"/api/play/games/{game_id}/view").get_json()["counted"] is False
+    PlayView.query.update({"day": date(2020, 1, 1)})
+    db.session.commit()
+    assert fan.post(f"/api/play/games/{game_id}/view").get_json() == {"ok": True, "counted": True, "views": 2}
+    assert _guest_client().post(f"/api/play/games/{game_id}/view").get_json()["views"] == 3
+
+
+def test_unpublished_games_cannot_collect_views(client):
+    signup(client, "alice")
+    game_id = client.post("/api/play/games", json={"title": "Neu", "code": GAME_CODE}).get_json()["game"]["id"]
+    assert _user_client("bob").post(f"/api/play/games/{game_id}/view").status_code == 404
+
+
+def test_earnings_are_a_clearly_small_estimate():
+    assert play_platform.estimate_eur(0) == 0
+    assert play_platform.estimate_eur(1000) == 0.4
+    assert play_platform.estimate_eur(2500) == 1.0
+
+
+def test_my_games_list_shows_views_and_estimated_earnings(client):
+    signup(client, "alice")
+    _make_admin("alice")
+    bob = _user_client("bob")
+    game_id = _publish_game(bob, client)
+    PlayGame.query.filter_by(id=game_id).update({"views": 3000})
+    db.session.commit()
+    mine = bob.get("/api/play/mine").get_json()
+    assert mine["games"][0]["earnings_eur"] == 1.2 and mine["totals"]["views"] == 3000
+
+
+def test_popular_sort_puts_the_most_played_game_first(client):
+    signup(client, "alice")
+    _make_admin("alice")
+    first, second = _publish_game(client, client, "Wenig"), _publish_game(client, client, "Viel")
+    PlayGame.query.filter_by(id=first).update({"views": 50})
+    db.session.commit()
+    assert [g["title"] for g in client.get("/api/play/games", query_string={"sort": "popular"}).get_json()["games"]] == ["Wenig", "Viel"]
+    assert [g["title"] for g in client.get("/api/play/games").get_json()["games"]] == ["Viel", "Wenig"]
+
+
+def test_enough_reports_from_accounts_hide_a_game_until_an_admin_decides(client):
+    signup(client, "alice")
+    _make_admin("alice")
+    game_id = _publish_game(client, client)
+    for name in ("reporter_a", "reporter_b"):
+        assert _user_client(name).post(f"/api/play/games/{game_id}/report", json={"reason": "gewalt"}).get_json()["ok"]
+    assert client.get("/api/play/games").get_json()["games"][0]["id"] == game_id
+    _user_client("reporter_c").post(f"/api/play/games/{game_id}/report", json={"reason": "unpassend"})
+    assert client.get("/api/play/games").get_json()["games"] == []
+    queue = client.get("/api/play/review").get_json()["games"]
+    assert [(g["status"], g["reports"]) for g in queue] == [("hidden", 3)]
+    client.post(f"/api/play/games/{game_id}/review", json={"decision": "approve"})
+    assert client.get("/api/play/games").get_json()["games"][0]["id"] == game_id
+    assert PlayReport.query.count() == 0
+
+
+def test_reports_from_guests_and_repeats_cannot_hide_a_game(client):
+    signup(client, "alice")
+    _make_admin("alice")
+    game_id = _publish_game(client, client)
+    for _ in range(5):
+        _guest_client().post(f"/api/play/games/{game_id}/report", json={"reason": "gewalt"})
+    twice = _user_client("reporter_a")
+    twice.post(f"/api/play/games/{game_id}/report", json={"reason": "gewalt"})
+    twice.post(f"/api/play/games/{game_id}/report", json={"reason": "gewalt"})
+    assert PlayReport.query.count() == 6
+    assert len(client.get("/api/play/games").get_json()["games"]) == 1
+
+
+def test_report_with_an_unknown_reason_is_filed_as_other(client):
+    signup(client, "alice")
+    _make_admin("alice")
+    game_id = _publish_game(client, client)
+    _user_client("reporter_a").post(f"/api/play/games/{game_id}/report", json={"reason": "<script>"})
+    assert PlayReport.query.one().reason == "sonstiges"
+
+
+def test_bundled_demo_games_are_seeded_once_and_need_no_internet(client):
+    play_platform.seed_demo_games()
+    play_platform.seed_demo_games()
+    games = PlayGame.query.all()
+    assert len(games) == 2 and all(g.status == "published" for g in games)
+    assert User.query.filter_by(username=play_platform.TEAM_USERNAME).count() == 1
+    for demo in play_platform.DEMO_GAMES:
+        assert "http://" not in demo["code"] and "https://" not in demo["code"]
+
+
+def test_the_team_account_name_cannot_be_registered(client):
+    r = client.post("/api/pl/register/check-username", json={"username": play_platform.TEAM_USERNAME})
+    assert r.get_json()["available"] is False
+
+
+def test_play_pages_offer_the_right_tabs(client):
+    signup(client, "alice")
+    assert b'data-tab="review"' not in client.get("/spiele").data
+    _make_admin("alice")
+    assert b'data-tab="review"' in client.get("/spiele").data
+    assert b"Anmelden oder registrieren" in _guest_client().get("/spiele").data
 
 
 def test_ylib_rejects_oversized_upload(client, monkeypatch):

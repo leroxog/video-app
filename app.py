@@ -31,6 +31,7 @@ from models import (
 import ai_assistant
 import integrations
 import mc_hosting
+import play_platform
 import search_engine
 
 logging.basicConfig(level=logging.INFO)
@@ -389,6 +390,9 @@ with app.app_context():
             admin_user.is_admin = True
             db.session.commit()
 
+with app.app_context():
+    play_platform.seed_demo_games()
+
 if os.environ.get("NRS_AUTO_INDEX", "1") == "1":
     search_engine.start_background_crawl(app, limit=int(os.environ.get("NRS_INDEX_SIZE", "4000")))
 
@@ -519,8 +523,11 @@ _PUBLIC_ENDPOINTS = {
 
 # '-' can't appear in a registered username (see PL_USERNAME_RE), so this prefix never clashes.
 GUEST_USERNAME_PREFIX = "gast-"
-_GUEST_START_ENDPOINTS = {"pl_home", "pl_link", "pl_search", "pl_ylib_archived", "pl_browser_archived"}
+_GUEST_START_ENDPOINTS = {
+    "pl_home", "pl_link", "pl_search", "pl_ylib_archived", "pl_browser_archived", "pl_play", "pl_play_game",
+}
 _GUEST_ENDPOINTS = _GUEST_START_ENDPOINTS | {
+    "play_frame", "api_play_games", "api_play_view", "api_play_report",
     "pl_media_file", "pl_logout", "pl_search_doc", "api_link_preview", "api_ylib_items_list",
     "api_ylib_items_create", "api_ylib_youtube_create", "api_ylib_items_delete",
     "api_nrs_history_list", "api_nrs_history_add", "api_nrs_history_clear",
@@ -1180,6 +1187,9 @@ def pl_search_doc(doc_id):
 
 # NRS Server (Aternos-style Minecraft hosting on volunteers' computers) -- see mc_hosting.py.
 mc_hosting.register_routes(app, current_user, is_guest)
+
+# NRS Play (members publish small games, ad revenue is shared) -- see play_platform.py.
+play_platform.register_routes(app, current_user, is_guest)
 
 
 # ==========================================================================

@@ -329,6 +329,45 @@ class YchatLike(db.Model):
     __table_args__ = (db.UniqueConstraint("post_id", "user_id", name="uq_ychat_like_post_user"),)
 
 
+class PlayGame(db.Model):
+    """A small browser game a member published on NRS Play (see play_platform.py). It is
+    one self-contained HTML file that runs in a locked-down frame, and it only becomes
+    public after an admin approved it. views drives an *estimated* ad-revenue share."""
+    __tablename__ = "play_game"
+    id = db.Column(db.Integer, primary_key=True)
+    author_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    title = db.Column(db.String(60), nullable=False)
+    description = db.Column(db.String(300), nullable=False, default="")
+    code = db.Column(db.Text, nullable=False)
+    emoji = db.Column(db.String(8), nullable=False, default="🎮")
+    accent = db.Column(db.Integer, nullable=False, default=0)           # cover color, 0-5
+    status = db.Column(db.String(10), nullable=False, default="pending")  # pending/published/rejected/hidden
+    review_note = db.Column(db.String(200), nullable=False, default="")
+    views = db.Column(db.Integer, nullable=False, default=0)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+
+class PlayView(db.Model):
+    """One counted view: a viewer is counted at most once per game and day."""
+    __tablename__ = "play_view"
+    id = db.Column(db.Integer, primary_key=True)
+    game_id = db.Column(db.Integer, db.ForeignKey("play_game.id"), nullable=False)
+    viewer_key = db.Column(db.String(20), nullable=False)
+    day = db.Column(db.Date, nullable=False)
+    __table_args__ = (db.UniqueConstraint("game_id", "viewer_key", "day", name="uq_play_view_game_viewer_day"),)
+
+
+class PlayReport(db.Model):
+    __tablename__ = "play_report"
+    id = db.Column(db.Integer, primary_key=True)
+    game_id = db.Column(db.Integer, db.ForeignKey("play_game.id"), nullable=False)
+    reporter_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    reason = db.Column(db.String(30), nullable=False)
+    from_member = db.Column(db.Boolean, nullable=False, default=False)   # real account, not an anonymous guest
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    __table_args__ = (db.UniqueConstraint("game_id", "reporter_id", name="uq_play_report_game_reporter"),)
+
+
 class McHost(db.Model):
     """A volunteer's computer that can run Minecraft servers for NRS Server (see
     mc_hosting.py and host_agent/nrs_host_agent.py). It joins with a one-time invite

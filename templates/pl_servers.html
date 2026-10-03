@@ -111,7 +111,9 @@
     <button type="button" class="sv-tab active" data-tab="servers">Server</button>
     <button type="button" class="sv-tab" data-tab="hosts">Computer</button>
   </div>
-  <div class="sv-user"><span>{{ username }}</span><a href="/logout">Abmelden</a></div>
+  <div class="sv-user"><a href="/spiele">Spiele</a><span>{{ username }}</span><a href="/logout">Abmelden</a></div>
+  {% else %}
+  <div class="sv-user"><a href="/spiele">Spiele</a></div>
   {% endif %}
 </div>
 <div class="sv-body">
