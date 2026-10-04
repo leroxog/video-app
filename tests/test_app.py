@@ -72,13 +72,14 @@ def test_nex_archived_redirects_to_login_when_logged_out(client):
     assert "/login" in r.headers["Location"]
 
 
-def test_signup_then_land_on_ysound(client):
+def test_signup_then_land_on_gomat(client):
     r = signup(client, "alice")
     assert r.status_code in (302, 303)
     home = client.get("/")
     assert home.status_code == 200
-    assert b"createForm" in home.data and b"msNav" not in home.data
+    assert b"gomatData" in home.data and b"createForm" not in home.data and b"msNav" not in home.data
     assert b"msNav" in client.get("/sound-archiv").data
+    assert b"createForm" in client.get("/ysound-archiv").data
 
 
 def test_ylib_archived_redirects_to_login_when_logged_out(client):
@@ -342,15 +343,17 @@ def _chat_id(client):
     return client.post("/api/ai/chats").get_json()["chat"]["id"]
 
 
-def test_root_serves_ysound_not_the_archived_pages(client):
-    """The home page cycled Nex, browser, ychat, ylib, the browser again, NRS Server, NRS Sound and is now
-    ysound (2026-10-04). The sound studio, server panel, browser, ylib, ychat and Nex UIs still fully work at
-    /sound-archiv, /server-archiv, /browser-archiv, /ylib-archiv, /ychat-archiv and /nex-archiv, unlinked from anywhere."""
+def test_root_serves_gomat_not_the_archived_pages(client):
+    """The home page cycled Nex, browser, ychat, ylib, the browser again, NRS Server, NRS Sound, ysound and is now
+    gomat (2026-10-05). The song site, sound studio, server panel, browser, ylib, ychat and Nex UIs still fully work at
+    /ysound-archiv, /sound-archiv, /server-archiv, /browser-archiv, /ylib-archiv, /ychat-archiv and /nex-archiv,
+    unlinked from anywhere."""
     signup(client, "alice")
     home = client.get("/")
     assert home.status_code == 200
     assert (
-        b"createForm" in home.data
+        b"gomatData" in home.data
+        and b"createForm" not in home.data
         and b"msNav" not in home.data
         and b"svList" not in home.data
         and b"nrsAddress" not in home.data
@@ -3137,9 +3140,9 @@ def _ysound_offline(monkeypatch):
 
 
 def _ys_client():
-    """A visitor's browser: opens the home page once, which hands out the device cookie."""
+    """A visitor's browser: opens the (archived) song page once, which hands out the device cookie."""
     visitor = flask_app.test_client()
-    visitor.get("/", headers=BROWSER)
+    visitor.get("/ysound-archiv", headers=BROWSER)
     return visitor
 
 
@@ -3200,32 +3203,32 @@ def test_ysound_has_exactly_fifty_unique_genres():
     assert all(label and words for _, label, words in ysound.GENRES)
 
 
-def test_home_is_ysound_open_to_everyone_without_creating_any_account(client):
+def test_the_archived_song_page_is_open_to_everyone_without_creating_any_account(client):
     visitor = flask_app.test_client()
-    home = visitor.get("/", headers=BROWSER)
+    home = visitor.get("/ysound-archiv", headers=BROWSER)
     assert home.status_code == 200 and b"createForm" in home.data and b"ysound.js" in home.data
     assert home.data.count(b'class="chip"') == 50
     assert "Sprachlich".encode() in home.data and b"Instrumental" in home.data
     assert b'id="fDesc"' in home.data and b'id="fLyrics"' in home.data and b'id="goBtn"' in home.data
     assert b'data-go="home"' in home.data and b'data-go="create"' in home.data and b'data-go="library"' in home.data
     assert b"2:30" in home.data and b"Stable Audio" not in home.data
-    assert visitor.get("/", headers={"Accept": "*/*"}).status_code == 200
+    assert visitor.get("/ysound-archiv", headers={"Accept": "*/*"}).status_code == 200
     with flask_app.app_context():
         assert User.query.count() == 0
 
 
-def test_home_hands_out_a_device_cookie_and_replaces_a_broken_one(client):
+def test_the_song_page_hands_out_a_device_cookie_and_replaces_a_broken_one(client):
     visitor = flask_app.test_client()
-    first = visitor.get("/")
+    first = visitor.get("/ysound-archiv")
     cookie = first.headers.get_all("Set-Cookie")
     assert any(c.startswith("ysound_id=") and "HttpOnly" in c and "SameSite=Lax" in c for c in cookie)
     key = visitor.get_cookie("ysound_id").value
     assert ysound.KEY_RE.fullmatch(key)
-    visitor.get("/")
+    visitor.get("/ysound-archiv")
     assert visitor.get_cookie("ysound_id").value == key        # kept, not re-issued
     broken = flask_app.test_client()
     broken.set_cookie("ysound_id", "not-a-valid-id")
-    broken.get("/")
+    broken.get("/ysound-archiv")
     assert ysound.KEY_RE.fullmatch(broken.get_cookie("ysound_id").value)
 
 
@@ -3998,7 +4001,7 @@ def _ads_config_of(page):
 
 def test_without_adsense_the_page_has_no_google_code_and_no_ads_txt(client):
     visitor = flask_app.test_client()
-    home = visitor.get("/")
+    home = visitor.get("/ysound-archiv")
     for marker in (b"adsbygoogle", b"googlesyndication", b"adsConfig", b"google-adsense-account", b"privacyBtn"):
         assert marker not in home.data, marker
     assert b'href="/datenschutz"' in home.data and b'href="/impressum"' in home.data
@@ -4008,7 +4011,7 @@ def test_without_adsense_the_page_has_no_google_code_and_no_ads_txt(client):
 def test_with_an_adsense_id_the_page_loads_googles_script_and_serves_ads_txt(client, monkeypatch):
     _ads_on(monkeypatch, ADSENSE_SLOT="1234567890")
     visitor = flask_app.test_client()                                     # no login, no cookie
-    home = visitor.get("/")
+    home = visitor.get("/ysound-archiv")
     assert f'src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={AD_CLIENT}"'.encode() in home.data
     assert f'<meta name="google-adsense-account" content="{AD_CLIENT}">'.encode() in home.data
     assert b'id="privacyBtn"' in home.data
@@ -4027,7 +4030,7 @@ def test_an_adsense_id_that_does_not_look_right_switches_ads_off_instead_of_reac
     if client_id == "ca-pub-1234567890123456 ":
         assert ysound.ads_config() is not None                              # surrounding spaces are just trimmed
         return
-    home = flask_app.test_client().get("/")
+    home = flask_app.test_client().get("/ysound-archiv")
     assert ysound.ads_config() is None and b"adsbygoogle" not in home.data and b"<script>alert" not in home.data
     assert flask_app.test_client().get("/ads.txt").status_code == 404
 
@@ -4043,7 +4046,7 @@ def test_the_ad_slot_and_age_treatment_are_checked_and_default_to_the_careful_ch
     for value, expected in (("0", "0"), ("1", "1"), ("2", "2"), ("9", "1"), ("", "1"), ("child", "1")):
         monkeypatch.setenv("ADSENSE_AGE_TREATMENT", value)
         assert ysound.ads_config()["age"] == expected, value
-    home = flask_app.test_client().get("/")
+    home = flask_app.test_client().get("/ysound-archiv")
     assert b"adsbygoogle.js" in home.data and _ads_config_of(home.data)["slot"] == "9876543210"
 
 
@@ -4054,21 +4057,28 @@ def test_the_page_script_labels_ads_requests_the_age_treatment_and_never_asks_on
     assert "showRevocationMessage" in source
 
 
-def test_the_privacy_policy_is_public_and_describes_what_really_happens(client):
+def test_the_privacy_policy_is_about_gomat_and_public(client, monkeypatch):
+    monkeypatch.delenv("YSOUND_DEMO")                                 # the archived song site is switched off
     page = flask_app.test_client().get("/datenschutz")
     text = page.get_data(as_text=True)
-    assert page.status_code == 200 and "<title>Datenschutz | ysound</title>" in text
-    for fact in ("ysound_id", "Groq", "ACE-Step", "auf einem eigenen Computer", "Railway", "öffentlich", "Impressum", "Auskunft"):
+    assert page.status_code == 200 and "<title>Datenschutz | gomat</title>" in text
+    for fact in ("gomat.v1", "keine Cookies", "Railway", "Nunito", "Auskunft", "Impressum", "lokalen Speicher"):
         assert fact in text, fact
-    assert "AdSense" not in text and "fal.ai" not in text                       # only mentioned when it is actually used
+    for absent in ("ysound", "Groq", "AdSense", "fal.ai", "ACE-Step"):
+        assert absent not in text, absent
+    assert page.headers.get_all("Set-Cookie") == []
 
 
-def test_the_privacy_policy_mentions_google_only_when_ads_are_on_and_fal_only_when_used(client, monkeypatch):
-    _ads_on(monkeypatch)
-    text = flask_app.test_client().get("/datenschutz").get_data(as_text=True)
-    assert "Google AdSense" in text and "Datenschutz-Einstellungen" in text and "keine personalisierte Werbung" in text
+def test_the_privacy_policy_mentions_the_archived_song_site_and_its_ads_only_while_they_can_be_used(client, monkeypatch):
+    text = flask_app.test_client().get("/datenschutz").get_data(as_text=True)          # demo mode is on in these tests
+    assert "ysound_id" in text and "Groq" in text and "auf einem eigenen Computer" in text and "AdSense" not in text
     monkeypatch.setenv("FAL_KEY", "k")
     assert "fal.ai" in flask_app.test_client().get("/datenschutz").get_data(as_text=True)
+    monkeypatch.delenv("FAL_KEY")
+    monkeypatch.delenv("YSOUND_DEMO")
+    monkeypatch.setenv("ADSENSE_CLIENT", AD_CLIENT)                                      # ads are on the archived page only
+    ads_text = flask_app.test_client().get("/datenschutz").get_data(as_text=True)
+    assert "Google AdSense" in ads_text and "ysound" in ads_text and "keine personalisierte Werbung" in ads_text
 
 
 def test_the_imprint_shows_the_operators_details_from_the_environment_and_escapes_them(client, monkeypatch):

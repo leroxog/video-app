@@ -34,6 +34,7 @@ import mc_hosting
 import music_studio
 import play_platform
 import search_engine
+import gomat
 import ysound
 
 logging.basicConfig(level=logging.INFO)
@@ -516,6 +517,9 @@ def _make_session_permanent():
     # the browser is closed -- on mobile in particular that meant users got
     # logged out constantly. Marking the session permanent + a long
     # lifetime gives it a real expiry date instead.
+    # gomat keeps nothing on the server, so its pages and API never set a cookie at all.
+    if request.endpoint in gomat.NO_COOKIE_ENDPOINTS:
+        return
     session.permanent = True
 
 
@@ -524,7 +528,7 @@ _PUBLIC_ENDPOINTS = {
     "pl_login", "pl_signup", "static", "service_worker", "offline_page",
     "pl_google_auth_start", "pl_google_auth_callback",
     "api_pl_login", "api_pl_register_check_username", "api_pl_register_complete",
-} | ysound.PUBLIC_ENDPOINTS   # ysound: the home page and its API need no account at all
+} | ysound.PUBLIC_ENDPOINTS | gomat.PUBLIC_ENDPOINTS | {"gomat_privacy", "gomat_imprint"}   # the home page (gomat), its API and the archived ysound need no account
 
 
 # '-' can't appear in a registered username (see PL_USERNAME_RE), so this prefix never clashes.
@@ -1221,6 +1225,9 @@ music_studio.register_routes(app, current_user, is_guest, _pl_store_media, _pl_m
 
 # ysound (the home page: anonymous AI songs with Stable Audio Open) -- see ysound.py.
 ysound.register_routes(app, current_user, _pl_store_media, _pl_media_url, _pl_delete_media)
+
+# gomat (the home page: a maths course, progress lives in the browser) -- see gomat.py.
+gomat.register_routes(app)
 
 
 # ==========================================================================

@@ -100,9 +100,9 @@ SECTION_TAG_RE = re.compile(r"\[[^\]\n]{1,30}\]")
 
 # Endpoints that need no login at all (app.py adds these to its public list).
 PUBLIC_ENDPOINTS = {
-    "pl_home", "ysound_status", "ysound_feed", "ysound_mine", "ysound_create", "ysound_delete", "ysound_report",
+    "ysound_archived", "ysound_status", "ysound_feed", "ysound_mine", "ysound_create", "ysound_delete", "ysound_report",
     "ysound_audio", "ysound_worker_ping", "ysound_worker_claim", "ysound_worker_audio", "ysound_worker_fail",
-    "ysound_ads_txt", "ysound_privacy", "ysound_imprint",
+    "ysound_ads_txt",
 }
 ADSENSE_CLIENT_RE = re.compile(r"ca-pub-\d{10,20}")
 ADSENSE_SLOT_RE = re.compile(r"\d{6,20}")
@@ -667,8 +667,11 @@ def register_routes(app, current_user, store_media, media_url, delete_media):
             return "daily_cap"
         return None
 
-    @app.route("/", endpoint="pl_home")
-    def ysound_home():
+    @app.route("/ysound-archiv")
+    def ysound_archived():
+        """ysound (anonymous AI songs) -- archived, not deleted, at the user's request (2026-10-05) in
+        favor of gomat (see gomat.py, which serves "/" as pl_home). Code, routes and songs stay as they
+        were; this page is just no longer linked from anywhere."""
         key, is_new = _owner_key()
         page = render_template(
             "ysound.html", genres=[{"id": gid, "label": label} for gid, label, _ in GENRES],
@@ -685,14 +688,6 @@ def register_routes(app, current_user, store_media, media_url, delete_media):
             abort(404)
         line = f"google.com, pub-{ads['client'][len('ca-pub-'):]}, DIRECT, {ADSENSE_CERTIFICATION_ID}\n"
         return Response(line, mimetype="text/plain")
-
-    @app.route("/datenschutz")
-    def ysound_privacy():
-        return render_template("ysound_legal.html", page="privacy", ads=ads_config(), imprint=imprint(), provider=provider())
-
-    @app.route("/impressum")
-    def ysound_imprint():
-        return render_template("ysound_legal.html", page="imprint", ads=ads_config(), imprint=imprint(), provider=provider())
 
     @app.route("/ysound/a/<name>")
     def ysound_audio(name):

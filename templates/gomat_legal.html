@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{{ "Datenschutz" if page == "privacy" else "Impressum" }} | gomat</title>
+<meta name="theme-color" content="#1cb0f6">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/gomat.css') }}?v=1">
+</head>
+<body>
+<div class="legal-page">
+  <a class="logo" href="/" aria-label="gomat – zurück zur Startseite"><span class="word">gomat</span></a>
+  <main>
+{%- if page == "imprint" %}
+    <h1>Impressum</h1>
+    <h2>Angaben gemäß § 5 DDG</h2>
+  {%- if imprint %}
+    <p>{{ imprint.name }}<br>{% for line in imprint.address %}{{ line }}{% if not loop.last %}<br>{% endif %}{% endfor %}</p>
+    {%- if imprint.email %}
+    <h2>Kontakt</h2>
+    <p>E-Mail: <a href="mailto:{{ imprint.email }}">{{ imprint.email }}</a></p>
+    {%- endif %}
+  {%- else %}
+    <p>Die Angaben zum Betreiber der Seite werden gerade ergänzt.</p>
+  {%- endif %}
+  {%- if archive_active %}
+    <h2>Inhalte der Nutzer</h2>
+    <p>Beim Archiv-Angebot „ysound“ stammen Namen, Beschreibungen, Songtexte und die Musik von den Nutzern bzw. werden von einer KI erzeugt. Für diese Inhalte sind die jeweiligen Nutzer verantwortlich. Rechtswidrige Inhalte entfernen wir nach Hinweis.</p>
+  {%- endif %}
+{%- else %}
+    <h1>Datenschutz</h1>
+    <p class="lead">Kurz und ehrlich: gomat will so wenig Daten wie möglich. Es gibt keine Konten, keine Cookies und keine Werbung.</p>
+
+    <h2>Wer ist verantwortlich?</h2>
+    <p>Der Betreiber, der im <a href="/impressum">Impressum</a> steht. Dort erreichst du ihn auch für Fragen zum Datenschutz.</p>
+
+    <h2>Dein Lernfortschritt</h2>
+    <p>Dein Fortschritt (geschaffte Lektionen, XP, Streak, Herzen, Tagesziel und deine Einstellungen) wird nur in deinem Browser gespeichert, im sogenannten lokalen Speicher unter dem Namen <code>gomat.v1</code>. Diese Daten verlassen dein Gerät nicht und werden nicht an uns gesendet. Du kannst sie jederzeit unter „Profil“ mit „Zurücksetzen“ löschen oder indem du die Websitedaten deines Browsers löschst. Die Speicherung ist für die Funktion der Seite technisch notwendig und geschieht auf deinen Wunsch (§ 25 Abs. 2 TDDDG).</p>
+
+    <h2>Besuch der Seite</h2>
+    <p>Beim Aufruf verarbeitet der Hoster der Seite technisch notwendige Daten, die dein Browser sendet (zum Beispiel IP-Adresse, Zeitpunkt, aufgerufene Adresse), um die Seite auszuliefern und missbräuchliche Zugriffe zu erkennen. Die Seite läuft bei Railway (Railway Corp., USA); dabei können Daten in Länder außerhalb der EU übertragen werden. Rechtsgrundlage ist unser berechtigtes Interesse am sicheren Betrieb (Art. 6 Abs. 1 lit. f DSGVO).</p>
+
+    <h2>Die Aufgaben</h2>
+    <p>Wenn du eine Lektion startest, erzeugt der Server die Aufgaben nach dem Zufallsprinzip. Dabei wird nichts über dich gespeichert. Die Schrift (Nunito) liegt auf unserem eigenen Server, es werden keine Daten an Schriftanbieter gesendet.</p>
+
+    <h2>Kein Tracking, keine Weitergabe</h2>
+    <p>gomat setzt keine Cookies, nutzt keine Analyse- oder Werbedienste und gibt keine Daten an Dritte weiter.</p>
+  {%- if archive_active %}
+
+    <h2>Archiv-Angebot „ysound“</h2>
+    <p>Falls du das nicht mehr verlinkte Angebot „ysound“ (KI-Songs) nutzt: Es legt ein Cookie <code>ysound_id</code> mit einer zufälligen Nummer an, damit deine Songs deiner Bibliothek zugeordnet werden können. Songs mit Name, Beschreibung, Text und Musik sind dort öffentlich sichtbar. Der eingegebene Text wird vor der Erstellung von einem KI-Dienst der Groq, Inc. (USA) geprüft. Die Musik erzeugt das Open-Source-Modell ACE-Step {% if provider == "fal" %}auf den Servern von fal.ai (USA){% else %}auf einem eigenen Computer des Betreibers{% endif %}.</p>
+    {%- if ads %}
+    <p>Auf dieser Archiv-Seite wird Werbung von Google AdSense angezeigt (Google Ireland Limited bzw. Google LLC). Google kann dafür Cookies und ähnliche Technologien nutzen und Daten wie deine IP-Adresse verarbeiten. Für Besucher aus dem Europäischen Wirtschaftsraum, dem Vereinigten Königreich und der Schweiz fragt eine Einwilligungsabfrage von Google nach deiner Zustimmung; ohne Einwilligung gibt es keine personalisierte Werbung. Die Werbung ist für Kinder und Jugendliche auf eingeschränkte Behandlung eingestellt (keine personalisierte Werbung). Mehr dazu: <a href="https://policies.google.com/technologies/ads?hl=de" rel="noopener" target="_blank">Wie Google Werbung nutzt</a>. Rechtsgrundlage ist deine Einwilligung (Art. 6 Abs. 1 lit. a DSGVO, § 25 Abs. 1 TDDDG).</p>
+    {%- endif %}
+  {%- endif %}
+
+    <h2>Deine Rechte</h2>
+    <p>Du hast das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung und Widerspruch sowie darauf, deine Einwilligung jederzeit zu widerrufen. Du kannst dich außerdem bei einer Datenschutz-Aufsichtsbehörde beschweren. Schreib dafür an die Adresse im <a href="/impressum">Impressum</a>.</p>
+{%- endif %}
+  </main>
+  <footer class="links"><a href="/">Zurück zu gomat</a><a href="/datenschutz">Datenschutz</a><a href="/impressum">Impressum</a></footer>
+</div>
+</body>
+</html>
