@@ -11,6 +11,6 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 @pytest.mark.skipif(NODE is None, reason="Node.js is not installed")
 def test_the_learning_rules_pass_their_node_tests():
-    result = subprocess.run([NODE, "--test", os.path.join(HERE, "gomat_core.test.js"), os.path.join(HERE, "gomat_core2.test.js")], capture_output=True, text=True, timeout=180)
+    result = subprocess.run([NODE, "--test", os.path.join(HERE, "gomat_core.test.js"), os.path.join(HERE, "gomat_core2.test.js"), os.path.join(HERE, "gomat_core3.test.js")], capture_output=True, text=True, timeout=180)
     assert result.returncode == 0, (result.stdout + result.stderr)[-3000:]
     assert "# fail 0" in result.stdout and "# pass" in result.stdout

@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="de" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{{ {"terms": "Nutzungsbedingungen", "privacy": "Datenschutz", "imprint": "Impressum"}[page] }} | yipi</title>
+<meta name="description" content="{{ {"terms": "Die Regeln auf yipi und was du von uns erwarten kannst.", "privacy": "Welche Daten yipi speichert, wozu und wie du sie löschst.", "imprint": "Angaben zum Betreiber von yipi."}[page] }}">
+<meta name="theme-color" content="#000000">
+<meta name="color-scheme" content="dark light">
+<link rel="icon" href="{{ static_url('img/yipi-icon.svg') }}" type="image/svg+xml">
+<link rel="icon" href="{{ static_url('img/yipi-192.png') }}" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="{{ static_url('img/yipi-180.png') }}">
+<link rel="stylesheet" href="{{ static_url('css/yipi.css') }}">
+<script src="{{ static_url('js/yipi-theme.js') }}"></script>
+</head>
+<body>
+<div class="legal-page">
+  <a class="legal-logo" href="/" aria-label="yipi, zurück zur Startseite">
+    <svg viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b6cff"/><stop offset="1" stop-color="#ff4f9a"/></linearGradient></defs><path d="M32 5C16.500 5 5 15.500 5 29.500c0 13.500 10.700 23.500 25.500 23.500 3.300 0 6.300-.5 9-1.500L53 59l-2.800-12C55.800 42.800 59 36.500 59 29.500 59 15.500 47.500 5 32 5z" fill="url(#lg)"/><path d="M20 21l12 14 12-14M32 35l-7 13" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span>yipi</span>
+  </a>
+  <main class="legal">
+{%- if page == "imprint" %}
+    <h1>Impressum</h1>
+    <h2>Angaben gemäß § 5 DDG</h2>
+  {%- if imprint %}
+    <p>{{ imprint.name }}<br>{% for line in imprint.address %}{{ line }}{% if not loop.last %}<br>{% endif %}{% endfor %}</p>
+    {%- if imprint.email %}
+    <h2>Kontakt</h2>
+    <p>E-Mail: <a href="mailto:{{ imprint.email }}">{{ imprint.email }}</a></p>
+    {%- endif %}
+  {%- else %}
+    <p>Die Angaben zum Betreiber der Seite werden gerade ergänzt.</p>
+  {%- endif %}
+    <h2>Inhalte der Nutzer</h2>
+    <p>Yips, Antworten, Profile, Bilder und Nachrichten stammen von den Nutzern. Für diese Inhalte sind die jeweiligen Nutzer verantwortlich, nicht der Betreiber. Wir prüfen sie nicht vorab, entfernen rechtswidrige Inhalte aber, sobald wir davon erfahren.</p>
+    <h2>Rechtswidrige Inhalte melden</h2>
+    <p>Wenn du angemeldet bist, tippe bei dem Yip oder dem Profil auf „Melden“. Das geht am schnellsten. Du kannst uns auch schreiben{% if imprint and imprint.email %} (<a href="mailto:{{ imprint.email }}">{{ imprint.email }}</a>){% endif %}. Nenne dabei die Adresse des Yips oder Profils und erkläre kurz, warum der Inhalt gegen das Gesetz oder die <a href="/nutzungsbedingungen">Nutzungsbedingungen</a> verstößt. Wir antworten, sobald wir die Meldung geprüft haben.</p>
+{%- elif page == "terms" %}
+    <h1>Nutzungsbedingungen</h1>
+    <p class="lead">yipi ist ein kleines, kostenloses Netzwerk für kurze Beiträge („Yips“). Damit sich alle wohlfühlen, gelten ein paar Regeln. Stand: Oktober 2026.</p>
+
+    <h2>1. Dein Konto</h2>
+    <p>Ein Konto kannst du ab 16 Jahren anlegen, jüngere brauchen die Erlaubnis ihrer Eltern. Pro Person gibt es ein Konto. Du bist für dein Passwort verantwortlich: Gib es nicht weiter. yipi verschickt keine E-Mails, deshalb können wir ein vergessenes Passwort nicht zurücksetzen. Bewahre es sicher auf. Du kannst dein Konto jederzeit unter „Einstellungen, Dein Konto“ löschen.</p>
+
+    <h2>2. Deine Inhalte</h2>
+    <p>Was du schreibst und hochlädst, gehört dir. Yips, Antworten, Reposts, dein Profil und deine Bilder sind öffentlich und für alle sichtbar, auch ohne Anmeldung. Du erlaubst yipi, sie so anzuzeigen, zu speichern und weiterzugeben, wie es für den Betrieb nötig ist (zum Beispiel in den Zeitleisten anderer Nutzer und in Link-Vorschauen). Wenn du etwas löschst, verschwindet es von yipi. Nachrichten sehen nur du und die andere Person.</p>
+    <p>Lade nur hoch und schreibe nur, wozu du das Recht hast. Fremde Texte und Bilder brauchen die Erlaubnis der Urheber.</p>
+
+    <h2>3. Das ist nicht erlaubt</h2>
+    <ul>
+      <li>Drohungen, Gewalt und Aufrufe zu Gewalt, auch gegen Gruppen von Menschen.</li>
+      <li>Beleidigung, Belästigung, Mobbing und das Verbreiten privater Daten anderer („Doxing“).</li>
+      <li>Hass und Hetze gegen Menschen wegen ihrer Herkunft, Religion, Hautfarbe, ihres Geschlechts, ihrer sexuellen Orientierung, einer Behinderung oder Krankheit.</li>
+      <li>Inhalte, die Kinder oder Jugendliche sexualisieren, pornografische Inhalte und Inhalte, die Selbstverletzung oder Suizid verherrlichen.</li>
+      <li>Rechtswidrige Inhalte, zum Beispiel Verherrlichung von Terror, Anleitungen zu Straftaten, Betrug und verbotene Symbole.</li>
+      <li>Spam, Massen-Werbung, künstliche Likes, Reposts oder Follower und mehrere Konten, um Regeln zu umgehen.</li>
+      <li>Sich als eine andere Person oder als das Team von yipi auszugeben.</li>
+      <li>Das Ausnutzen von Fehlern, das Überlasten der Seite oder der Versuch, auf fremde Konten zuzugreifen.</li>
+    </ul>
+
+    <h2>4. Melden, Sperren und Löschen</h2>
+    <p>Etwas Unpassendes siehst du? Tippe bei dem Yip oder dem Profil auf „Melden“. Du kannst Konten außerdem stummschalten oder blockieren, dann siehst du ihre Yips nicht mehr und sie können dir nicht mehr schreiben oder folgen. Wir prüfen Meldungen und können Yips löschen und Konten sperren, besonders bei Verstößen gegen Abschnitt 3 und bei wiederholten Verstößen. Eine Sperre kann ohne Vorwarnung erfolgen, wenn ein Verstoß schwer wiegt. Wenn du meinst, dass wir uns geirrt haben, schreib uns an die Adresse im <a href="/impressum">Impressum</a>.</p>
+
+    <h2>5. Verfügbarkeit und Haftung</h2>
+    <p>yipi ist ein privates Projekt ohne Gewähr. Es kann ausfallen, sich ändern oder eingestellt werden. Du solltest dich nicht darauf verlassen, dass ein Inhalt für immer gespeichert bleibt. Für die Inhalte der Nutzer sind diese selbst verantwortlich. Unsere Haftung ist bei leichter Fahrlässigkeit ausgeschlossen, außer bei der Verletzung von Leben, Körper und Gesundheit und bei wesentlichen Vertragspflichten. Zwingende gesetzliche Rechte bleiben unberührt.</p>
+
+    <h2>6. Änderungen</h2>
+    <p>Wir können diese Bedingungen ändern, zum Beispiel wenn yipi neue Funktionen bekommt. Die aktuelle Fassung steht immer hier. Wenn du yipi nach einer Änderung weiter nutzt, gilt die neue Fassung.</p>
+{%- else %}
+    <h1>Datenschutz</h1>
+    <p class="lead">Kurz und ehrlich: yipi speichert nur, was für ein soziales Netzwerk nötig ist. Es gibt keine Werbung, kein Tracking und keine Weitergabe an Dritte. Stand: Oktober 2026.</p>
+
+    <h2>Wer ist verantwortlich?</h2>
+    <p>Der Betreiber, der im <a href="/impressum">Impressum</a> steht. Dort erreichst du ihn auch für Fragen zum Datenschutz.</p>
+
+    <h2>Besuch ohne Konto</h2>
+    <p>Du kannst Profile und Yips ansehen, ohne ein Konto zu haben. Dabei setzt yipi kein Cookie. Dein Browser speichert nur Einstellungen auf deinem Gerät: dein gewähltes Farbschema (<code>yipi.theme</code>), die zuletzt gewählte Zeitleiste (<code>yipi.feed</code>) und deine letzten Suchen (<code>yipi.recent</code>). Diese Daten verlassen dein Gerät nicht. Die Speicherung ist für die Funktion der Seite technisch notwendig (§ 25 Abs. 2 TDDDG). Du kannst sie löschen, indem du die Websitedaten deines Browsers löschst.</p>
+
+    <h2>Dein Konto</h2>
+    <p>Wenn du ein Konto erstellst, speichern wir auf unserem Server:</p>
+    <ul>
+      <li>deinen Nutzernamen und deinen Anzeigenamen, optional eine E-Mail-Adresse (nur für die Anmeldung, wir schicken dir keine E-Mails),</li>
+      <li>dein Passwort, nur als verschlüsselten Hash, wir können es nicht lesen,</li>
+      <li>freiwillige Profilangaben: Beschreibung, Ort, Webseite, Profil- und Titelbild,</li>
+      <li>den Zeitpunkt der Anmeldung und wann du zuletzt auf yipi warst.</li>
+    </ul>
+    <p>Rechtsgrundlage ist die Bereitstellung des Kontos, das du dir wünschst (Art. 6 Abs. 1 lit. b DSGVO). Das Alter fragen wir nur ab, wir speichern es nicht.</p>
+    <p>Damit du angemeldet bleibst, setzt yipi nach der Anmeldung ein Cookie (<code>yipi_session</code>), das 30 Tage gültig ist. Es ist technisch notwendig (§ 25 Abs. 2 TDDDG) und wird beim Abmelden entfernt. Entwürfe von Yips merkt sich dein Browser nur so lange, bis du den Tab schließt.</p>
+
+    <h2>Deine Inhalte</h2>
+    <p>Was du schreibst, speichern wir, damit andere es sehen können:</p>
+    <ul>
+      <li><strong>Öffentlich</strong> sind Yips, Antworten, Reposts, Zitate, Bilder, dein Profil und wem du folgst und wer dir folgt. Sie sind auch ohne Anmeldung einsehbar und können von Suchmaschinen gefunden werden.</li>
+      <li><strong>Nur für dich</strong> sind Lesezeichen, Benachrichtigungen, Stummschaltungen und Blockierungen. Bei Likes sehen andere nur die Anzahl, die Autorin oder der Autor erfährt über eine Benachrichtigung, wer den Yip mag.</li>
+      <li><strong>Nachrichten</strong> sehen nur du und die andere Person. Sie liegen unverschlüsselt in unserer Datenbank, sind also nicht Ende-zu-Ende-verschlüsselt. Wir lesen sie nicht, es sei denn, das Gesetz verlangt es.</li>
+    </ul>
+    <p>Bilder werden schon in deinem Browser verkleinert und neu gespeichert. Dabei verschwinden versteckte Angaben wie Aufnahmeort und Kamera. Das gilt nicht für GIFs, sie werden unverändert hochgeladen. Bilder liegen als Teil der Datenbank auf unserem Server.</p>
+    <p>Wenn du etwas meldest, speichern wir die Meldung und deinen Namen als Melder, bis wir sie bearbeitet haben.</p>
+
+    <h2>Löschen</h2>
+    <p>Du kannst einzelne Yips jederzeit löschen. Unter „Einstellungen, Dein Konto“ kannst du dein ganzes Konto löschen: Dann werden dein Profil, alle deine Yips, Bilder, Likes, Lesezeichen und Nachrichten sofort und endgültig gelöscht. Auch von dir gesendete Nachrichten verschwinden dann bei den Empfängern.</p>
+
+    <h2>Besuch der Seite</h2>
+    <p>Beim Aufruf verarbeitet der Hoster der Seite technisch notwendige Daten, die dein Browser sendet (zum Beispiel IP-Adresse, Zeitpunkt, aufgerufene Adresse), um die Seite auszuliefern und missbräuchliche Zugriffe zu erkennen. Die Seite läuft bei Railway (Railway Corp., USA); dabei können Daten in Länder außerhalb der EU übertragen werden. Gegen Missbrauch (zum Beispiel zu viele Anmeldeversuche) zählt yipi Anfragen pro IP-Adresse kurz im Arbeitsspeicher, ohne sie zu speichern. Rechtsgrundlage ist unser berechtigtes Interesse am sicheren Betrieb (Art. 6 Abs. 1 lit. f DSGVO).</p>
+
+    <h2>Kein Tracking, keine Weitergabe</h2>
+    <p>yipi nutzt keine Analyse- und Werbedienste, keine fremden Schriften und keine fremden Skripte. Wir geben keine Daten an Dritte weiter, außer wenn wir gesetzlich dazu verpflichtet sind. Links in Yips führen auf fremde Seiten, für deren Datenschutz wir nicht verantwortlich sind.</p>
+
+    <h2>Deine Rechte</h2>
+    <p>Du hast das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung, Datenübertragbarkeit und Widerspruch sowie darauf, eine Einwilligung jederzeit zu widerrufen. Du kannst dich außerdem bei einer Datenschutz-Aufsichtsbehörde beschweren. Schreib dafür an die Adresse im <a href="/impressum">Impressum</a>.</p>
+{%- endif %}
+  </main>
+  <footer class="legal-links"><a href="/">Zurück zu yipi</a><a href="/nutzungsbedingungen">Nutzungsbedingungen</a><a href="/datenschutz">Datenschutz</a><a href="/impressum">Impressum</a></footer>
+</div>
+</body>
+</html>

@@ -151,7 +151,7 @@ def test_every_unit_has_one_of_four_characters_and_they_exist_in_the_art():
 
 
 def test_the_page_hands_the_rules_to_the_script_and_loads_the_scripts_in_order(client):
-    text = client.get("/").get_data(as_text=True)
+    text = client.get("/gomat-archiv").get_data(as_text=True)
     data = json.loads(re.search(r'<script type="application/json" id="gomatData">(.*?)</script>', text, re.S).group(1))
     core = read("static", "js", "gomat-core.js")
     assert data["passMistakes"] == gomat.TEST_MAX_MISTAKES == int(re.search(r"TEST_MAX_MISTAKES = (\d+)", core).group(1))
@@ -172,7 +172,7 @@ def test_the_unit_tests_are_called_meistertest():
 
 def test_the_screens_have_the_new_features_in_good_german():
     source = read("static", "js", "gomat.js")
-    for text in ("Ich kann gerade nicht sprechen", "Überspringen", "Weiß ich nicht", "Schon aus der Schule raus", "Noch nicht in der Schule", "Kurzer Einstufungstest",
+    for text in ("Ich kann gerade nicht sprechen", "Überspringen", "Weiß ich nicht", "Schon aus der Schule raus", "Noch nicht in der Schule", "Einstufungstest",
                  "Wie gut kannst du schon rechnen?", "In welcher Klassenstufe bist du?", "Meistertest nicht bestanden", "Meistertest bestanden!", "Einheit übersprungen!",
                  "Serien-Schutz", "Edelsteine", "Herzen auffüllen", "Dein Begleiter", "Sag es laut", "Wähle die richtige Antwort", "Schreibe die Antwort",
                  "Finde die Paare", "Du startest bei Einheit", "Ohne Test starten", "Zum Shop", "de-DE"):
@@ -186,7 +186,7 @@ def test_the_screens_have_the_new_features_in_good_german():
 def test_the_speech_button_and_the_microphone_stay_inside_what_the_page_allows():
     source = read("static", "js", "gomat.js")
     assert "SpeechRecognition" in source and "muteSpeaking" in source and "canSpeakNow" in source
-    headers = flask_app.test_client().get("/").headers
+    headers = flask_app.test_client().get("/gomat-archiv").headers
     assert "script-src 'self'" in headers["Content-Security-Policy"] and "connect-src 'self'" in headers["Content-Security-Policy"]
     assert "microphone=(self)" in headers["Permissions-Policy"] and "camera=()" in headers["Permissions-Policy"]
 

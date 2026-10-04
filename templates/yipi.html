@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="de" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{{ title }}</title>
+<meta name="description" content="{{ description }}">
+<meta name="theme-color" content="#000000">
+<meta name="color-scheme" content="dark light">
+<link rel="canonical" href="{{ base }}{{ path }}">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="{{ static_url('img/yipi-icon.svg') }}" type="image/svg+xml">
+<link rel="icon" href="{{ static_url('img/yipi-192.png') }}" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="{{ static_url('img/yipi-180.png') }}">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="yipi">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="yipi">
+<meta property="og:locale" content="de_DE">
+<meta property="og:title" content="{{ title }}">
+<meta property="og:description" content="{{ description }}">
+<meta property="og:url" content="{{ base }}{{ path }}">
+<meta property="og:image" content="{{ base }}/static/img/yipi-og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="{{ static_url('css/yipi.css') }}">
+<script src="{{ static_url('js/yipi-theme.js') }}"></script>
+</head>
+<body>
+<a class="skip" href="#main">Zum Inhalt springen</a>
+<div id="app" class="app"></div>
+<noscript>
+  <div class="noscript">
+    <h1>yipi</h1>
+    <p>yipi braucht JavaScript. Bitte schalte es in deinem Browser ein.</p>
+  </div>
+</noscript>
+<script type="application/json" id="yipiBoot">{{ boot|tojson }}</script>
+<script src="{{ static_url('js/yipi-core.js') }}"></script>
+<script src="{{ static_url('js/yipi-icons.js') }}"></script>
+<script src="{{ static_url('js/yipi-api.js') }}"></script>
+<script src="{{ static_url('js/yipi-ui.js') }}"></script>
+<script src="{{ static_url('js/yipi-components.js') }}"></script>
+<script src="{{ static_url('js/yipi-views.js') }}"></script>
+<script src="{{ static_url('js/yipi-pages.js') }}"></script>
+<script src="{{ static_url('js/yipi.js') }}"></script>
+</body>
+</html>

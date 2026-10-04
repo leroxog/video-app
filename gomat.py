@@ -29,6 +29,7 @@ from math import gcd
 from flask import Response, jsonify, render_template, request, url_for
 
 import ysound
+from gomat_accounts import ACCOUNT_ENDPOINTS
 
 LESSON_LENGTH = 10
 TEST_LENGTH = 12
@@ -40,11 +41,12 @@ PLACEMENT_QUESTIONS = 10
 CAST = ("gomi", "otto", "ben", "robi")      # the characters; a unit's character is CAST[(unit - 1) % 4]
 MINUS = "−"
 LESSON_ID_RE = re.compile(r"([1-9])-([1-9])")
-PUBLIC_ENDPOINTS = {"pl_home", "gomat_lesson", "gomat_practice", "gomat_placement"}
+PUBLIC_ENDPOINTS = {"gomat_archived", "gomat_lesson", "gomat_practice", "gomat_placement"} | ACCOUNT_ENDPOINTS   # (the account routes check the sign-in themselves)
 LEGAL_ENDPOINTS = {"gomat_privacy", "gomat_imprint"}
-META_ENDPOINTS = {"gomat_manifest", "gomat_robots", "gomat_sitemap"}
-PAGE_ENDPOINTS = {"pl_home"} | LEGAL_ENDPOINTS
-# Routes of this module never need the site's session cookie (nothing is stored on the server).
+META_ENDPOINTS = {"gomat_manifest"}
+PAGE_ENDPOINTS = {"gomat_archived"} | LEGAL_ENDPOINTS
+# Routes of this module never touch the site's blanket session handling: a visitor without an account gets no cookie at
+# all, and the account routes set the sign-in cookie themselves (gomat_accounts.sign_in).
 NO_COOKIE_ENDPOINTS = PUBLIC_ENDPOINTS | LEGAL_ENDPOINTS | META_ENDPOINTS
 
 # What the pages may load: only our own files. (Styles may be set inline by the script; scripts may not.)
@@ -53,8 +55,7 @@ CONTENT_SECURITY_POLICY = (
     "connect-src 'self'; manifest-src 'self'; base-uri 'none'; object-src 'none'; form-action 'self'; frame-ancestors 'none'"
 )
 TAGLINE = "Mathe lernen, Schritt für Schritt"
-DESCRIPTION = "gomat: Mathe lernen in kurzen Lektionen, wie ein Spiel. Kostenlos, ohne Anmeldung, ohne Cookies."
-ARCHIVE_PATHS = ("/ysound-archiv", "/sound-archiv", "/server-archiv", "/browser-archiv", "/ylib-archiv", "/ychat-archiv", "/nex-archiv")
+DESCRIPTION = "gomat: Mathe lernen in kurzen Lektionen, wie ein Spiel. Kostenlos, mit oder ohne Konto."
 
 PEOPLE = [("Mia", "Sie"), ("Ben", "Er"), ("Lena", "Sie"), ("Tom", "Er"), ("Emma", "Sie"), ("Leo", "Er"),
           ("Anna", "Sie"), ("Paul", "Er"), ("Sophie", "Sie"), ("Max", "Er"), ("Lea", "Sie"), ("Finn", "Er")]
@@ -963,7 +964,7 @@ def base_url():
 def manifest():
     return {
         "name": "gomat – Mathe lernen", "short_name": "gomat", "description": DESCRIPTION, "lang": "de", "dir": "ltr",
-        "id": "/", "start_url": "/", "scope": "/", "display": "standalone", "orientation": "portrait",
+        "id": "/gomat-archiv", "start_url": "/gomat-archiv", "scope": "/gomat-archiv", "display": "standalone", "orientation": "portrait",
         "background_color": "#ffffff", "theme_color": "#1cb0f6", "categories": ["education", "kids"],
         "icons": [
             {"src": "/static/img/gomat-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
@@ -1002,7 +1003,7 @@ def register_routes(app):
             response.headers["Cache-Control"] = "no-store"
         return response
 
-    @app.route("/", endpoint="pl_home")
+    @app.route("/gomat-archiv", endpoint="gomat_archived")
     def gomat_home():
         root = base_url()
         return render_template("gomat.html", units=public_curriculum(), lesson_length=LESSON_LENGTH, pass_mistakes=TEST_MAX_MISTAKES,
@@ -1015,37 +1016,17 @@ def register_routes(app):
         return render_template("gomat_legal.html", page=page, imprint=ysound.imprint(), ads=ads, provider=ysound.provider(),
                                archive_active=ysound.provider() is not None or ads is not None)
 
-    @app.route("/datenschutz")
+    @app.route("/gomat-archiv/datenschutz")
     def gomat_privacy():
         return legal("privacy")
 
-    @app.route("/impressum")
+    @app.route("/gomat-archiv/impressum")
     def gomat_imprint():
         return legal("imprint")
 
-    @app.route("/manifest.webmanifest")
+    @app.route("/gomat-archiv/manifest.webmanifest")
     def gomat_manifest():
         return Response(json.dumps(manifest(), ensure_ascii=False), mimetype="application/manifest+json")
-
-    @app.route("/robots.txt")
-    def gomat_robots():
-        lines = ["User-agent: *", "Allow: /", "Disallow: /api/"] + [f"Disallow: {path}" for path in ARCHIVE_PATHS]
-        lines += ["", f"Sitemap: {base_url()}/sitemap.xml", ""]
-        return Response("\n".join(lines), mimetype="text/plain")
-
-    @app.route("/sitemap.xml")
-    def gomat_sitemap():
-        root = base_url()
-        urls = "".join(f"  <url><loc>{root}{path}</loc></url>\n" for path in ("/", "/datenschutz", "/impressum"))
-        return Response(f'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n{urls}</urlset>\n',
-                        mimetype="application/xml")
-
-    @app.errorhandler(404)
-    def gomat_not_found(error):
-        if request.path.startswith("/api/"):
-            return jsonify({"ok": False, "error": "not_found"}), 404
-        return render_template("gomat_error.html", code=404, mood="sad", title="Diese Seite gibt es nicht",
-                               text="Vielleicht hat sich die Adresse geändert, oder sie war nie da. Gomi bringt dich zurück zum Lernen."), 404
 
     @app.route("/api/gomat/lesson/<lesson_id>")
     def gomat_lesson(lesson_id):

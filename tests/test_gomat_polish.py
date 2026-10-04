@@ -47,7 +47,7 @@ def png_size(path):
 
 # ------------------------------------------------------------------ security headers
 
-@pytest.mark.parametrize("path", ["/", "/datenschutz", "/impressum"])
+@pytest.mark.parametrize("path", ["/gomat-archiv", "/gomat-archiv/datenschutz", "/gomat-archiv/impressum"])
 def test_pages_send_a_strict_content_security_policy_and_other_security_headers(client, path):
     r = client.get(path, headers={"X-Forwarded-Proto": "https"})
     csp = r.headers["Content-Security-Policy"]
@@ -67,7 +67,7 @@ def test_the_api_is_never_cached_and_sniffing_is_off(client):
 
 
 def test_the_page_templates_have_nothing_a_strict_policy_would_block():
-    for name in ("gomat.html", "gomat_legal.html", "gomat_error.html"):
+    for name in ("gomat.html", "gomat_legal.html"):
         text = read("templates", name)
         for tag in re.findall(r"<script\b[^>]*>", text):
             assert "src=" in tag or 'type="application/json"' in tag, (name, tag)
@@ -78,10 +78,10 @@ def test_the_page_templates_have_nothing_a_strict_policy_would_block():
 # --------------------------------------------------------------------- app, icons, previews
 
 def test_the_web_app_manifest_describes_an_installable_app(client):
-    r = client.get("/manifest.webmanifest")
+    r = client.get("/gomat-archiv/manifest.webmanifest")
     data = json.loads(r.get_data(as_text=True))
     assert r.status_code == 200 and r.mimetype == "application/manifest+json" and r.headers.get_all("Set-Cookie") == []
-    assert (data["name"], data["short_name"], data["lang"], data["display"], data["start_url"]) == ("gomat – Mathe lernen", "gomat", "de", "standalone", "/")
+    assert (data["name"], data["short_name"], data["lang"], data["display"], data["start_url"]) == ("gomat – Mathe lernen", "gomat", "de", "standalone", "/gomat-archiv")
     assert data["theme_color"] == "#1cb0f6" and data["background_color"] == "#ffffff"
     purposes = {(i["sizes"], i["purpose"]) for i in data["icons"]}
     assert purposes == {("192x192", "any"), ("512x512", "any"), ("512x512", "maskable")}
@@ -99,35 +99,36 @@ def test_icons_and_the_link_preview_picture_have_the_right_sizes():
 
 
 def test_the_home_page_has_link_preview_and_app_meta_tags(client):
-    text = client.get("/", headers={"Host": "gomat.example", "X-Forwarded-Proto": "https"}).get_data(as_text=True)
+    text = client.get("/gomat-archiv", headers={"Host": "gomat.example", "X-Forwarded-Proto": "https"}).get_data(as_text=True)
     for fragment in ('<meta property="og:title" content="gomat – Mathe lernen, Schritt für Schritt">', '<meta property="og:locale" content="de_DE">',
                      '<meta property="og:image" content="https://gomat.example/static/img/gomat-og.png">', '<meta name="twitter:card" content="summary_large_image">',
-                     '<link rel="canonical" href="https://gomat.example/">', '<link rel="manifest" href="/manifest.webmanifest">', '<meta name="theme-color" content="#1cb0f6">',
+                     '<link rel="canonical" href="https://gomat.example/gomat-archiv">', '<link rel="manifest" href="/gomat-archiv/manifest.webmanifest">', '<meta name="theme-color" content="#1cb0f6">',
                      'rel="apple-touch-icon"', '<a class="skip" href="#main">Zum Inhalt springen</a>', '<html lang="de">'):
         assert fragment in text, fragment
     assert "noindex" not in text
 
 
 def test_static_files_carry_their_modification_time_so_updates_reach_everyone(client):
-    text = client.get("/").get_data(as_text=True)
+    text = client.get("/gomat-archiv").get_data(as_text=True)
     for name in ("css/gomat.css", "js/gomat.js", "js/gomat-core.js", "js/gomat-art.js", "js/gomat-sound.js"):
         version = int(os.path.getmtime(os.path.join(ROOT, "static", *name.split("/"))))
         assert f"/static/{name}?v={version}" in text, name
     assert client.get(f"/static/js/gomat.js?v=1").status_code == 200
 
 
-def test_robots_and_sitemap(client):
-    robots = client.get("/robots.txt", headers={"X-Forwarded-Proto": "https", "Host": "gomat.example"})
+def test_robots_and_sitemap_belong_to_the_whole_site_and_keep_the_archives_out(client):
+    robots = client.get("/robots.txt", headers={"X-Forwarded-Proto": "https", "Host": "yipi.example"})
     text = robots.get_data(as_text=True)
     assert robots.status_code == 200 and robots.mimetype == "text/plain" and "Allow: /\n" in text
-    for path in ("/api/", "/ysound-archiv", "/sound-archiv", "/nex-archiv"):
+    for path in ("/api/", "/gomat-archiv", "/ysound-archiv", "/sound-archiv", "/nex-archiv"):
         assert f"Disallow: {path}\n" in text, path
-    assert "Sitemap: https://gomat.example/sitemap.xml" in text
-    sitemap = client.get("/sitemap.xml", headers={"Host": "gomat.example"})
+    assert "Sitemap: https://yipi.example/sitemap.xml" in text
+    sitemap = client.get("/sitemap.xml", headers={"Host": "yipi.example"})
     root = ET.fromstring(sitemap.data)
     urls = [e.text for e in root.iter("{http://www.sitemaps.org/schemas/sitemap/0.9}loc")]
-    assert sitemap.mimetype == "application/xml" and urls == ["http://gomat.example/", "http://gomat.example/datenschutz", "http://gomat.example/impressum"]
-    for path in ("/robots.txt", "/sitemap.xml", "/manifest.webmanifest"):
+    assert sitemap.mimetype == "application/xml" and urls[0] == "http://yipi.example/" and "http://yipi.example/impressum" in urls
+    assert not any("archiv" in url for url in urls)
+    for path in ("/robots.txt", "/sitemap.xml", "/manifest.webmanifest", "/gomat-archiv/manifest.webmanifest"):
         assert client.get(path).headers.get_all("Set-Cookie") == [], path
 
 
@@ -136,7 +137,7 @@ def test_robots_and_sitemap(client):
 def test_unknown_pages_get_a_friendly_404_and_no_cookie(client):
     r = client.get("/gibt-es-nicht")
     text = r.get_data(as_text=True)
-    assert r.status_code == 404 and "Diese Seite gibt es nicht" in text and 'href="/"' in text and "gomi-sad.svg" in text
+    assert r.status_code == 404 and "Diese Seite gibt es nicht" in text and 'href="/"' in text
     assert '<meta name="robots" content="noindex">' in text and r.headers.get_all("Set-Cookie") == []
     api = client.get("/api/gomat/nope")
     assert api.status_code == 404 and api.get_json() == {"ok": False, "error": "not_found"}
@@ -148,9 +149,9 @@ def test_a_crash_shows_the_friendly_500_page_without_details(client, monkeypatch
         raise RuntimeError("secret internal detail")
 
     monkeypatch.setattr(gomat, "public_curriculum", boom)
-    r = client.get("/")
+    r = client.get("/gomat-archiv")
     text = r.get_data(as_text=True)
-    assert r.status_code == 500 and "Da ist etwas schiefgelaufen" in text and "gomi-sad.svg" in text
+    assert r.status_code == 500 and "Da ist etwas schiefgelaufen" in text
     assert "secret internal detail" not in text and "Traceback" not in text and "noindex" in text
 
 
@@ -168,7 +169,7 @@ def test_the_mascot_is_a_monkey_with_three_moods_and_the_files_match_the_script(
         assert not [e for e in tree.iter() if e.tag.split("}")[1] in ("script", "image", "foreignObject")], name
         images[name] = open(os.path.join(ROOT, "static", "img", name), encoding="utf-8").read()
     assert len(set(images.values())) == 3
-    assert "2b1d14" in images["gomi.svg"] and "#8a5a3b" in images["gomi.svg"]          # brown fur, dark features
+    assert "#3f2616" in images["gomi.svg"] and "#8a5a3b" in images["gomi.svg"]          # brown fur, dark features
 
 
 @pytest.mark.skipif(NODE is None, reason="Node.js is not installed")
@@ -228,7 +229,7 @@ def test_division_word_problems_agree_in_gender():
 
 def test_the_page_script_uses_the_better_german_and_says_serie_not_streak():
     source = read("static", "js", "gomat.js") + read("static", "js", "gomat-core.js")
-    for good in ("Deine Serie:", "Mathe lernen mit gomat", "Hallo, ich bin Gomi, dein Mathe-Affe!", "Wie viel möchtest du täglich üben?", "Nicht ganz",
+    for good in ("Deine Serie:", "Mathe lernen: kostenlos, spielerisch und wirksam", "Wer soll dich beim Lernen begleiten?", "Wie viel möchtest du täglich üben?", "Nicht ganz",
                  "Richtige Lösung: ", "Wiederholen", "Zur nächsten Lektion", "Üben und Herz verdienen", "Wochenserie", "Monatsserie", "Drei Tage in Folge",
                  "Wenn du jetzt aufhörst", "Fehler kosten hier kein Herz", "Entspannt", "Ehrgeizig", "unwiderruflich"):
         assert good in source, good

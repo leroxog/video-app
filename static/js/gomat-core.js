@@ -1,8 +1,8 @@
 /* gomat core: every rule that doesn't need a screen -- progress, XP, gems, streak (with streak protection),
    hearts, daily goal, unlocking behind master tests, placement test, achievements, answer checking
    (typed and spoken) -- as plain functions. The page (gomat.js) draws; this decides.
-   It runs in the browser and in Node (that is how the tests run it). Everything is kept in the learner's
-   own browser (localStorage); nothing is sent anywhere. */
+   It runs in the browser and in Node (that is how the tests run it). The progress is kept in the learner's own
+   browser (localStorage); with an account (gomat-account.js) a copy is also kept on the server. */
 (function (root, factory) {
   if (typeof module === "object" && module.exports) module.exports = factory();
   else root.GomatCore = factory();
@@ -22,6 +22,8 @@
   const PRICES = { hearts: 80, freeze: 120 };
   const MAX_FREEZES = 2;
   const TEST_MAX_MISTAKES = 3;              // a master test is passed with at most this many mistakes
+  const CHEST_MIN = 5;                      // the daily chest holds this many gems at least ...
+  const CHEST_MAX = 20;                     // ... and at most this many
   const NO_SPEAK_MS = 60 * 60 * 1000;       // "I can't speak right now" switches speaking exercises off for an hour
   const HISTORY_DAYS = 14;
   const UNIT_COUNT = 9;
@@ -58,7 +60,7 @@
     return {
       v: 1, onboarded: false, startUnit: 1, goal: 20, sound: true, companion: "gomi", grade: null, selfLevel: null,
       xp: 0, xpToday: 0, xpDay: dayKey(now), streak: 0, bestStreak: 0, lastDay: null,
-      gems: 0, gemsEarned: 0, freezes: 0, noSpeakUntil: 0,
+      gems: 0, gemsEarned: 0, freezes: 0, noSpeakUntil: 0, chestDay: null,
       hearts: MAX_HEARTS, heartsAt: now.getTime(),
       lessons: {}, history: {}, placement: null,
       stats: { lessons: 0, perfect: 0, correct: 0, wrong: 0, practice: 0, testsPassed: 0, testsFailed: 0 },
@@ -99,6 +101,7 @@
     state.gemsEarned = Math.max(state.gems, int(raw.gemsEarned, 0, 100000000, 0));
     state.freezes = int(raw.freezes, 0, MAX_FREEZES, 0);
     state.noSpeakUntil = Number.isFinite(raw.noSpeakUntil) && raw.noSpeakUntil > 0 ? raw.noSpeakUntil : 0;
+    state.chestDay = isDayKey(raw.chestDay) ? raw.chestDay : null;
     state.hearts = int(raw.hearts, 0, MAX_HEARTS, MAX_HEARTS);
     state.heartsAt = Number.isFinite(raw.heartsAt) ? raw.heartsAt : now.getTime();
     state.placement = sanitizePlacement(raw.placement);
@@ -472,6 +475,47 @@
     return state;
   }
 
+  // ------------------------------------------------------------ daily chest
+  /* One chest a day, with a few gems in it. `roll` is a number from 0 up to (not including) 1. */
+  function chestReady(state, now) {
+    return state.onboarded && state.chestDay !== dayKey(now);
+  }
+
+  function claimChest(state, now, roll) {
+    if (!chestReady(state, now)) return 0;
+    const span = CHEST_MAX - CHEST_MIN + 1;
+    const gems = CHEST_MIN + Math.min(span - 1, Math.max(0, Math.floor((Number.isFinite(roll) ? roll : 0) * span)));
+    state.chestDay = dayKey(now);
+    return addGems(state, gems);
+  }
+
+  // ------------------------------------------------------ progress on the server
+  /* How far someone has come: only ever goes up, so the state with the higher number is the newer one. */
+  function progressScore(state) {
+    const done = Object.values(state.lessons).filter((entry) => entry.done).length;
+    return state.xp + state.gemsEarned + 10 * done;
+  }
+
+  function hasProgress(state) {
+    return state.xp > 0 || Object.values(state.lessons).some((entry) => entry.done);
+  }
+
+  /* Which progress to keep when this device and the account each have one:
+       "local"  the device's, and it is saved to the account;
+       "remote" the account's, and it replaces the device's;
+       "ask"    both moved on separately: the learner chooses.
+     `meta` says what this device last knew about the account: {email, rev, dirty}. */
+  function reconcile({ local, remote, remoteRev, meta, email }) {
+    if (!remote || !remote.onboarded) return local.onboarded ? "local" : "remote";
+    if (!local.onboarded) return "remote";
+    const sameAccount = !!meta && meta.email === email;
+    if (sameAccount && !meta.dirty) return "remote";                 // this device was up to date: the account is at least as new
+    if (sameAccount && meta.rev === remoteRev) return "local";       // only this device changed
+    if (!hasProgress(local)) return "remote";
+    if (!hasProgress(remote)) return "local";
+    return progressScore(local) === progressScore(remote) ? "remote" : "ask";
+  }
+
   // ---------------------------------------------------------- achievements
   function achievements(units, state) {
     const unitDone = (id) => {
@@ -595,12 +639,13 @@
 
   return {
     STORAGE_KEY, MAX_HEARTS, HEART_MS, GOALS, XP_LESSON, XP_TEST, XP_PERFECT_BONUS, XP_PRACTICE, XP_SKIP, GEMS, PRICES, MAX_FREEZES,
-    TEST_MAX_MISTAKES, NO_SPEAK_MS, UNIT_COUNT, PLACEMENT_QUESTIONS, COMPANIONS, GRADE_IDS, SELF_LEVELS,
+    TEST_MAX_MISTAKES, NO_SPEAK_MS, UNIT_COUNT, PLACEMENT_QUESTIONS, COMPANIONS, GRADE_IDS, SELF_LEVELS, CHEST_MIN, CHEST_MAX,
     dayKey, dayBefore, daysBetween, defaultState, sanitize, memoryStorage, load, save, rollover, streakActiveToday, touchStreak,
     addXp, addGems, lastDays, regenHearts, loseHeart, addHeart, heartsEta, formatWait, buyHearts, buyFreeze,
     canSpeakNow, muteSpeaking, flatten, unitOf, isDone, currentLessonId, lessonStatus, unitProgress, unitStatus, allDone,
     skippableUnit, starsFor, accuracyOf, completeLesson, completeSkip, completePractice,
     unitForGrade, unitForSelf, recommendedStart, nextPlacementUnit, placementOutcome, finishOnboarding,
+    chestReady, claimChest, progressScore, hasProgress, reconcile,
     achievements, parseNumber, answersMatch, sameOrder, parseSpokenNumber, spokenMatches,
   };
 });

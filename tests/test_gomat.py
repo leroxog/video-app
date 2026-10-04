@@ -309,9 +309,9 @@ def test_the_practice_api(client):
 
 # -------------------------------------------------------------------------------- page
 
-def test_the_home_page_is_gomat_open_to_everyone_and_sets_no_cookie(client):
+def test_the_archived_course_is_open_to_everyone_and_sets_no_cookie(client):
     visitor = flask_app.test_client()
-    home = visitor.get("/", headers={"Accept": "text/html"})
+    home = visitor.get("/gomat-archiv", headers={"Accept": "text/html"})
     text = home.get_data(as_text=True)
     assert home.status_code == 200 and "<title>gomat" in text and "gomat.js" in text and "gomat-core.js" in text
     assert home.headers.get_all("Set-Cookie") == []
@@ -329,7 +329,7 @@ def test_logging_in_still_works_and_the_session_cookie_is_still_set_there(client
 
 
 def test_the_page_loads_a_self_hosted_font_and_nothing_from_other_sites(client):
-    text = flask_app.test_client().get("/").get_data(as_text=True)
+    text = flask_app.test_client().get("/gomat-archiv").get_data(as_text=True)
     css = open(os.path.join(ROOT, "static", "css", "gomat.css"), encoding="utf-8").read()
     assert "/static/fonts/Nunito-Variable.ttf" in css and os.path.getsize(os.path.join(ROOT, "static", "fonts", "Nunito-Variable.ttf")) > 100_000
     for source in (text, css):       # nothing from other sites (the page's own address, e.g. in link previews, is fine)
@@ -351,6 +351,6 @@ def test_the_page_script_builds_text_with_the_dom_never_with_user_data_in_html()
     for name in ("gomat.js", "gomat-art.js", "gomat-sound.js", "gomat-core.js"):
         source = open(os.path.join(ROOT, "static", "js", name), encoding="utf-8").read()
         # innerHTML is only for our own fixed pictures: the icons and characters of gomat-art.js
-        unsafe = [line.strip() for line in source.splitlines() if "innerHTML" in line and not re.search(r"\b(ICON|SVG)\b|Art\.(character|portrait)\(", line)]
+        unsafe = [line.strip() for line in source.splitlines() if "innerHTML" in line and not re.search(r"\b(ICON|SVG)\b|Art\.(character|portrait|chest)\(", line)]
         assert unsafe == [], (name, unsafe)
         assert "insertAdjacentHTML" not in source and "document.write" not in source and "eval(" not in source, name

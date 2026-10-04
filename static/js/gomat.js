@@ -1,6 +1,6 @@
 /* gomat: the screens. The rules (progress, XP, gems, streak, hearts, answer checking) are in gomat-core.js, the
-   pictures and characters in gomat-art.js, the sounds in gomat-sound.js; the exercises come from the server
-   (/api/gomat/...). Text from the server is put on the page with textContent and DOM nodes only. The only
+   pictures and characters in gomat-art.js, the sounds in gomat-sound.js, the account calls in gomat-account.js;
+   the exercises come from the server (/api/gomat/...). Text from the server is put on the page with textContent and DOM nodes only. The only
    innerHTML is for our own fixed SVG pictures (the characters from gomat-art.js). */
 (() => {
   "use strict";
@@ -8,6 +8,7 @@
   const Core = window.GomatCore;
   const Art = window.GomatArt;
   const Sound = window.GomatSound || { play() {}, setEnabled() {} };
+  const Account = window.GomatAccount;
   const DATA = JSON.parse(document.getElementById("gomatData").textContent);
   const UNITS = DATA.units;
   const PASS_MISTAKES = DATA.passMistakes;
@@ -44,6 +45,7 @@
   function characterEl(name, mood = "happy", cls = "", scene = "") {
     const holder = document.createElement("div");
     holder.className = `char ${cls}`.trim();
+    holder.dataset.who = name;
     holder.innerHTML = Art.character(name, mood, scene);
     return holder;
   }
@@ -52,6 +54,14 @@
     const holder = document.createElement("span");
     holder.className = `portrait ${cls}`.trim();
     holder.innerHTML = Art.portrait(name, mood);
+    return holder;
+  }
+
+  function chestEl() {
+    const holder = document.createElement("button");
+    holder.type = "button";
+    holder.className = "chest-wrap";
+    holder.innerHTML = Art.chest();
     return holder;
   }
 
@@ -122,13 +132,157 @@
   let state = Core.load(store, now());
   const freezeUsed = state.freezeUsed || 0;
   if (freezeUsed) Core.save(store, state);           // the protection is used up for good, not again on every visit
-  const freshOnboarding = () => ({ step: 0, self: null, grade: null, goal: 20, placement: null, startUnit: null });
-  const ui = { screen: location.hash.slice(1) || "learn", openNode: null, onb: freshOnboarding(), session: null, scrolled: false, seen: null, fresh: null };
-  if (!SCREENS.includes(ui.screen)) ui.screen = "learn";
 
+  // ------------------------------------------------------- the account and saving
+  /* What the page knows about the account: who is signed in, which version of the progress the server has (rev) and
+     whether something has not been saved yet (dirty). Without an account none of this does anything. */
+  const sync = { user: null, rev: 0, dirty: false, version: 0, saving: false, timer: null, status: "off" };
+  const SYNC_TEXT = { saved: "Gespeichert", saving: "Wird gespeichert …", error: "Nicht gespeichert (offline)", off: "" };
+
+  function paintSync(el) {
+    el.className = `sync ${sync.status}`;
+    el.replaceChildren(icon("cloud"), SYNC_TEXT[sync.status] || "");
+  }
+
+  function setSyncStatus(status) {
+    sync.status = status;
+    for (const el of document.querySelectorAll(".sync")) paintSync(el);
+  }
+
+  function syncBadge() {
+    const el = h("span", { class: "sync", role: "status" });
+    paintSync(el);
+    return el;
+  }
+
+  function markDirty() {
+    sync.dirty = true;
+    sync.version += 1;
+    Account.writeMeta(store, { email: sync.user.email, rev: sync.rev, dirty: true });
+    setSyncStatus("saving");
+  }
+
+  function markSaved(rev) {
+    sync.rev = rev;
+    sync.dirty = false;
+    Account.writeMeta(store, { email: sync.user.email, rev, dirty: false });
+    setSyncStatus("saved");
+  }
+
+  /* Keeps the progress in the browser and, with an account, sends it to the server a moment later. */
   function persist() {
     Core.save(store, state);
+    if (sync.user) {
+      markDirty();
+      clearTimeout(sync.timer);
+      sync.timer = setTimeout(() => saveNow(false), 1200);
+    }
   }
+
+  /* Sends the progress to the account. True when the server has it. */
+  async function saveNow(keepalive) {
+    clearTimeout(sync.timer);
+    if (!sync.user || !sync.dirty) return true;
+    if (sync.saving) return false;
+    sync.saving = true;
+    const version = sync.version;
+    const reply = await Account.save(JSON.parse(JSON.stringify(state)), sync.rev, keepalive);
+    sync.saving = false;
+    if (reply.ok) {
+      if (sync.version === version) { markSaved(reply.data.rev); return true; }
+      sync.rev = reply.data.rev;                       // changed again while saving: save once more
+      Account.writeMeta(store, { email: sync.user.email, rev: sync.rev, dirty: true });
+      sync.timer = setTimeout(() => saveNow(false), 300);
+      return false;
+    }
+    if (reply.status === 401) {                        // the sign-in is over (cookie gone, or the password was changed elsewhere)
+      sync.user = null;
+      setSyncStatus("off");
+      toast("Du wurdest abgemeldet. Melde dich wieder an, damit dein Fortschritt gespeichert wird.");
+      if (state.onboarded && !ui.session && !overlay.firstChild) render();
+      return false;
+    }
+    if (reply.status === 409 && reply.data.state) {    // another device saved first
+      await meetRemote(reply.data.state, reply.data.rev);
+      return false;
+    }
+    setSyncStatus("error");
+    sync.timer = setTimeout(() => saveNow(false), 30000);
+    return false;
+  }
+
+  /* The account has progress, too: keep the device's, take the account's, or let the learner choose. */
+  async function meetRemote(remoteRaw, remoteRev) {
+    const remote = remoteRaw ? Core.sanitize(remoteRaw, now()) : null;
+    const verdict = Core.reconcile({ local: state, remote, remoteRev, meta: Account.readMeta(store), email: sync.user.email });
+    if (verdict === "remote") adoptRemote(remote, remoteRev);
+    else if (verdict === "local") { sync.rev = remoteRev; markDirty(); saveNow(false); }
+    else askWhichProgress(remote, remoteRev);
+  }
+
+  function adoptRemote(remote, rev) {
+    state = remote;
+    const used = Core.rollover(state, now());
+    Core.regenHearts(state, now());
+    Core.save(store, state);
+    Sound.setEnabled(state.sound);
+    sync.rev = rev;
+    sync.dirty = false;
+    Account.writeMeta(store, { email: sync.user.email, rev, dirty: false });
+    setSyncStatus("saved");
+    ui.seen = null;
+    ui.scrolled = false;
+    if (!ui.session) renderFresh();
+    if (used) { persist(); toast("Dein Serien-Schutz hat deine Serie gerettet."); }
+  }
+
+  function askWhichProgress(remote, remoteRev) {
+    const lessonsDone = (progress) => Core.flatten(UNITS).filter((l) => Core.isDone(progress, l.id)).length;
+    const summary = (progress) => `${progress.xp} XP, ${lessonsDone(progress)} Lektionen`;
+    const better = Core.progressScore(remote) > Core.progressScore(state) ? "remote" : "local";
+    modal({
+      mood: "happy", sticky: true, title: "Welchen Fortschritt behalten?",
+      text: "Auf diesem Gerät und in deinem Konto gibt es unterschiedlichen Fortschritt. Du kannst nur einen behalten.",
+      buttons: [
+        { label: `Konto: ${summary(remote)}`, kind: better === "remote" ? "btn-primary" : "btn-secondary", run: () => adoptRemote(remote, remoteRev) },
+        { label: `Dieses Gerät: ${summary(state)}`, kind: better === "local" ? "btn-primary" : "btn-secondary", run: () => { sync.rev = remoteRev; markDirty(); saveNow(false); toast("Der Fortschritt von diesem Gerät ist jetzt in deinem Konto."); } },
+      ],
+    });
+  }
+
+  /* When the page opens: is somebody signed in? Then compare the account's progress with the device's. */
+  async function bootAccount() {
+    const reply = await Account.me();
+    if (!reply.ok || !reply.data.user) return;
+    sync.user = reply.data.user;
+    sync.rev = reply.data.rev;
+    setSyncStatus(Account.readMeta(store) && Account.readMeta(store).dirty ? "saving" : "saved");
+    await meetRemote(reply.data.state, reply.data.rev);
+    if (!ui.session && !overlay.firstChild && !document.querySelector(".modal-back")) render();
+    if (sync.dirty) saveNow(false);
+  }
+
+  /* Leaves the account on this device: the device forgets the progress (it stays in the account). */
+  function forgetDevice() {
+    try { store.removeItem(Core.STORAGE_KEY); } catch (error) { /* nothing to remove */ }
+    Account.writeMeta(store, null);
+    sync.user = null;
+    sync.dirty = false;
+    sync.rev = 0;
+    setSyncStatus("off");
+    state = Core.defaultState(now());
+    Sound.setEnabled(true);
+    ui.onb = freshOnboarding();
+    ui.seen = null;
+    ui.screen = "learn";
+    history.replaceState(null, "", "#learn");
+    clearOverlay();
+    render();
+  }
+
+  const freshOnboarding = () => ({ landing: !sync.user, step: 0, self: null, grade: null, goal: 20, placement: null, startUnit: null });
+  const ui = { screen: location.hash.slice(1) || "learn", openNode: null, onb: freshOnboarding(), session: null, scrolled: false, seen: null, fresh: null };
+  if (!SCREENS.includes(ui.screen)) ui.screen = "learn";
 
   function refresh() {
     Core.rollover(state, now());
@@ -166,11 +320,93 @@
   function showOverlay(node) {
     overlay.replaceChildren(node);
     root.inert = true;
+    document.body.classList.add("has-overlay");
   }
 
   function clearOverlay() {
     overlay.replaceChildren();
     root.inert = false;
+    document.body.classList.remove("has-overlay");
+  }
+
+  // ------------------------------------------------- the characters come alive
+  /* What each companion says: after a right answer, after a wrong one, and when somebody pokes them. */
+  const LINES = {
+    gomi: { right: ["Ooh-ooh, richtig!", "Bananastark!", "Super gemacht!", "Du bist ein Mathe-Affe!", "Perfekt!"], wrong: ["Nicht ganz", "Ups, das war knifflig!", "Nicht ganz, aber gleich!"], poke: ["Ooh-ooh!", "Hihi!", "Hast du Bananen?", "Kitzelt!"] },
+    otto: { right: ["Wunderbar!", "Sehr schön gemacht!", "Das hast du fein gemacht!", "Genau so, weiter so!", "Richtig, richtig!"], wrong: ["Nicht ganz, das kennt jeder.", "Nicht ganz, aber Übung macht klug.", "Nicht ganz, wir haben Zeit."], poke: ["Na sowas!", "Hehe, das kitzelt!", "Ich lese gerade …", "Hast du Tee dabei?"] },
+    ben: { right: ["Yes! Mega!", "Läuft bei dir!", "Stark, weiter so!", "Easy!", "Boom, richtig!"], wrong: ["Nicht ganz, passiert den Besten.", "Nicht ganz, nächster Versuch!", "Nicht ganz, Kopf hoch!"], poke: ["Hey!", "Was geht?", "Los, weiter!", "Ball gefällig?"] },
+    robi: { right: ["Berechnung korrekt!", "Ergebnis: perfekt.", "Bip bop, richtig!", "Fehlerfrei erkannt!", "Systeme jubeln!"], wrong: ["Nicht ganz: neu berechnen!", "Nicht ganz. Bip …", "Nicht ganz: Neuer Versuch gestartet."], poke: ["Bip!", "Bzzzt!", "Alle Systeme laufen.", "Antenne kitzelt!"] },
+  };
+
+  /* A click on a character makes it jump and say something. */
+  function poke(svg) {
+    const holder = svg.parentElement;
+    const who = [...svg.classList].map((name) => name.replace("ch-", "")).find((name) => LINES[name]) || "gomi";
+    svg.classList.remove("poked");
+    void svg.getBoundingClientRect();
+    svg.classList.add("poked");
+    setTimeout(() => svg.classList.remove("poked"), 700);
+    sfx("poke");
+    holder.querySelector(".say")?.remove();
+    const bubble = h("div", { class: "say" }, pick(LINES[who].poke));
+    holder.append(bubble);
+    setTimeout(() => bubble.remove(), 1900);
+  }
+
+  document.addEventListener("click", (event) => {
+    const svg = event.target.closest && event.target.closest(".char .ch");
+    if (svg && !svg.closest("button")) poke(svg);
+  });
+
+  /* Their eyes follow the pointer (or the finger). */
+  function lookAt(x, y) {
+    for (const svg of document.querySelectorAll(".ch")) {
+      const box = svg.getBoundingClientRect();
+      if (!box.width || box.bottom < 0 || box.top > innerHeight) continue;
+      const dx = x - (box.left + box.width / 2);
+      const dy = y - (box.top + box.height * 0.4);
+      const distance = Math.hypot(dx, dy) || 1;
+      const reach = Math.min(1, distance / 160);
+      svg.style.setProperty("--lx", ((dx / distance) * reach).toFixed(2));
+      svg.style.setProperty("--ly", ((dy / distance) * reach).toFixed(2));
+    }
+  }
+
+  if (!REDUCED) {
+    let waiting = false;
+    let spot = null;
+    const follow = (x, y) => {
+      spot = { x, y };
+      if (waiting) return;
+      waiting = true;
+      requestAnimationFrame(() => { waiting = false; lookAt(spot.x, spot.y); });
+    };
+    document.addEventListener("pointermove", (event) => follow(event.clientX, event.clientY));
+    document.addEventListener("touchstart", (event) => { const t = event.touches[0]; if (t) follow(t.clientX, t.clientY); }, { passive: true });
+  }
+
+  /* Gems fly from a spot to the gem counter in the top bar. */
+  function flyGems(from, count) {
+    const target = document.querySelector('[data-stat="gems"]');
+    if (!target || REDUCED) return;
+    const a = from.getBoundingClientRect();
+    const b = target.getBoundingClientRect();
+    const startX = a.left + a.width / 2;
+    const startY = a.top + a.height / 3;
+    for (let i = 0; i < count; i++) {
+      const gem = h("div", { class: "flygem", "aria-hidden": "true" }, icon("gem"));
+      gem.style.left = `${startX - 14}px`;
+      gem.style.top = `${startY - 14}px`;
+      document.body.append(gem);
+      const spread = (Math.random() - 0.5) * 140;
+      const animation = gem.animate([
+        { transform: "translate(0, 0) scale(.5)", opacity: 0 },
+        { transform: `translate(${spread}px, -70px) scale(1.1)`, opacity: 1, offset: 0.3 },
+        { transform: `translate(${b.left + b.width / 2 - startX}px, ${b.top + b.height / 2 - startY}px) scale(.6)`, opacity: 0.9 },
+      ], { duration: 900 + i * 60, delay: i * 70, easing: "cubic-bezier(.5, 0, .3, 1)", fill: "both" });
+      animation.onfinish = () => gem.remove();
+      setTimeout(() => gem.remove(), 2800);
+    }
   }
 
   // ------------------------------------------------------------------ toast
@@ -186,7 +422,8 @@
   // ---------------------------------------------------------------- dialogs
   let closeTop = null;
 
-  function openDialog(box, label) {
+  /* A dialog over the page. `sticky` ones cannot be dismissed by a click beside them or by Escape (the learner must choose). */
+  function openDialog(box, label, sticky) {
     const back = h("div", { class: "modal-back", role: "dialog", "aria-modal": "true", "aria-label": label });
     const opener = document.activeElement;
     const close = () => {
@@ -204,22 +441,47 @@
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
     });
     back.append(box);
-    back.addEventListener("click", (event) => { if (event.target === back) close(); });
+    if (!sticky) back.addEventListener("click", (event) => { if (event.target === back) close(); });
     document.body.append(back);
-    closeTop = close;
+    closeTop = sticky ? null : close;
     sfx("open");
     box.querySelector("button:not([disabled])")?.focus();
     return close;
   }
 
-  function modal({ mood, who, title, text, body, buttons }) {
+  function modal({ mood, who, title, text, body, buttons, sticky }) {
     let close;
     const box = h("div", { class: "modal" },
       mood ? characterEl(who || state.companion, mood, "m-char") : null,
       h("h2", {}, title), text ? h("p", {}, text) : null, body || null,
       h("div", { class: "btns" }, buttons.map((b) => h("button", { class: `btn ${b.kind || "btn-secondary"} btn-block`, type: "button", disabled: b.disabled, snd: "none", onclick: () => { sfx("close"); if (!b.stay) close(); if (b.run) b.run(); } }, b.label))));
-    close = openDialog(box, title);
+    close = openDialog(box, title, sticky);
     return close;
+  }
+
+  /* A dialog with one or more input fields (for the password changes). `run` gets the values and answers with an
+     error text, or nothing when it worked. */
+  function formDialog({ title, text, fields, submit, danger, run }) {
+    const inputs = fields.map((f) => h("input", { type: "password", name: f.name, placeholder: f.placeholder, autocomplete: f.autocomplete, maxlength: "200", "aria-label": f.placeholder }));
+    const error = h("p", { class: "auth-error", role: "alert" });
+    const go = h("button", { class: `btn ${danger ? "btn-danger" : "btn-primary"} btn-block`, type: "submit", disabled: true, snd: "none" }, submit);
+    let close;
+    const update = () => { go.disabled = inputs.some((input) => !input.value); };
+    inputs.forEach((input) => input.addEventListener("input", update));
+    const box = h("form", { class: "modal", novalidate: true, onsubmit: async (event) => {
+      event.preventDefault();
+      if (go.disabled) return;
+      go.disabled = true;
+      error.textContent = "";
+      const problem = await run(inputs.map((input) => input.value));
+      if (problem) { error.textContent = problem; sfx("deny"); update(); return; }
+      close();
+    } },
+    h("h2", {}, title), text ? h("p", {}, text) : null,
+    h("div", { class: "field-group" }, inputs.map((input) => h("label", { class: "field" }, input))), error,
+    h("div", { class: "btns" }, go, h("button", { class: "btn btn-secondary btn-block", type: "button", onclick: () => close() }, "Abbrechen")));
+    close = openDialog(box, title);
+    inputs[0].focus();
   }
 
   // ------------------------------------------------------------ the shell
@@ -293,7 +555,7 @@
     return h("aside", { class: "rail" },
       goalCard(),
       h("div", { class: "card tip" }, portraitEl(state.companion, "happy", "p-md"), h("div", {}, h("h3", {}, `Tipp von ${castName(state.companion)}`), h("p", {}, tipOfTheDay()))),
-      h("div", { class: "links" }, h("a", { href: "/datenschutz" }, "Datenschutz"), h("a", { href: "/impressum" }, "Impressum")));
+      h("div", { class: "links" }, h("a", { href: "/gomat-archiv/datenschutz" }, "Datenschutz"), h("a", { href: "/gomat-archiv/impressum" }, "Impressum")));
   }
 
   function tipOfTheDay() {
@@ -317,6 +579,8 @@
 
   function render() {
     refresh();
+    jumpObserver?.disconnect();
+    document.querySelector(".jump")?.remove();
     root.replaceChildren();
     if (!state.onboarded) {
       root.append(onboarding());
@@ -324,7 +588,7 @@
     }
     const pages = { learn: learnPage, practice: practicePage, achievements: achievementsPage, profile: profilePage };
     root.append(h("div", { class: "shell" },
-      h("nav", { class: "side", "aria-label": "Hauptmenü" }, h("a", { class: "logo", href: "/", "aria-label": "gomat" }, icon("logo"), h("span", { class: "word" }, "gomat")), NAV.map(navItem)),
+      h("nav", { class: "side", "aria-label": "Hauptmenü" }, h("a", { class: "logo", href: "/gomat-archiv", "aria-label": "gomat" }, icon("logo"), h("span", { class: "word" }, "gomat")), NAV.map(navItem)),
       h("main", { class: "main", id: "main", tabindex: "-1" },
         topbar(),
         h("div", { class: `col${ui.fade ? " fade" : ""}` }, pages[ui.screen]())),
@@ -434,7 +698,7 @@
       h("button", { class: "btn btn-block", type: "button", onclick: () => startLesson(lesson.id) }, status === "done" ? "Wiederholen" : `Start +${lesson.test ? Core.XP_TEST : Core.XP_LESSON} XP`));
   }
 
-  function nodeButton(unit, lesson, index, order) {
+  function nodeButton(unit, lesson, index, order, withChest) {
     const status = Core.lessonStatus(UNITS, state, lesson.id);
     const number = index + 1;
     const label = lesson.test ? `${lesson.title} der Einheit ${unit.id}` : `Lektion ${number}: ${lesson.title}`;
@@ -446,6 +710,7 @@
         onclick: (event) => { event.stopPropagation(); ui.openNode = ui.openNode === lesson.id ? null : lesson.id; render(); } },
         icon(kind)),
       status === "done" ? h("div", { class: "stars", "aria-hidden": "true" }, [1, 2, 3].map((n) => h("span", { class: n <= stars ? "on" : "", style: `--s:${n}` }, icon("star")))) : null);
+    if (withChest) wrap.append(chestSide(index));
     if (ui.openNode === lesson.id) wrap.append(popCard(unit, lesson, index, status));
     return wrap;
   }
@@ -463,9 +728,10 @@
     const current = Core.currentLessonId(UNITS, state);
     const skippable = Core.skippableUnit(UNITS, state);
     let order = 0;
+    const chest = Core.chestReady(state, now());
     const sections = UNITS.map((unit) => {
       const progress = Core.unitProgress(UNITS, state, unit.id);
-      const lessonNodes = unit.lessons.map((lesson, index) => nodeButton(unit, lesson, index, order++));
+      const lessonNodes = unit.lessons.map((lesson, index) => nodeButton(unit, lesson, index, order++, chest && lesson.id === current));
       const second = Core.COMPANIONS[(Core.COMPANIONS.indexOf(unit.character) + 1) % Core.COMPANIONS.length];
       sideChar(unit, lessonNodes, 1, unit.character);
       sideChar(unit, lessonNodes, Math.min(5, lessonNodes.length - 2), second);
@@ -478,7 +744,48 @@
         h("div", { class: "path" }, lessonNodes));
     });
     const end = current === null ? h("div", { class: "course-end" }, characterEl(state.companion, "cheer", "big"), h("h2", {}, "Du hast alles geschafft!"), h("p", {}, "Wiederhole Lektionen oder übe gemischt, damit alles sitzt.")) : null;
-    return h("div", { onclick: () => { if (ui.openNode) { ui.openNode = null; render(); } } }, sections, end);
+    return h("div", { onclick: () => { if (ui.openNode) { ui.openNode = null; render(); } } }, current === null ? chestCard() : null, sections, end);
+  }
+
+  /* One chest a day with a few gems in it: it stands beside the lesson that is next (or, when the whole course is done, on top). */
+  function chestSide(index) {
+    const wrap = chestEl();
+    wrap.classList.add("chest-side", OFFSETS[index % OFFSETS.length] >= 0 ? "right" : "left");
+    wrap.setAttribute("aria-label", "Tagesgeschenk öffnen");
+    wrap.dataset.snd = "none";
+    wrap.append(h("span", { class: "chest-tag" }, "Geschenk"));
+    wrap.addEventListener("click", (event) => { event.stopPropagation(); openChest(wrap); });
+    return wrap;
+  }
+
+  function chestCard() {
+    if (!Core.chestReady(state, now())) return null;
+    const wrap = chestEl();
+    wrap.setAttribute("aria-label", "Tagesgeschenk öffnen");
+    wrap.dataset.snd = "none";
+    const open = h("button", { class: "btn btn-gold btn-sm", type: "button", snd: "none" }, "Öffnen");
+    const card = h("div", { class: "chest-card" }, wrap, h("div", {}, h("h3", {}, "Tagesgeschenk"), h("p", {}, "Heute wartet eine Kiste voller Edelsteine auf dich.")), open);
+    wrap.addEventListener("click", () => openChest(wrap, card));
+    open.addEventListener("click", () => openChest(wrap, card));
+    return card;
+  }
+
+  function openChest(wrap, card) {
+    if (wrap.classList.contains("open")) return;
+    const gems = Core.claimChest(state, now(), Math.random());
+    if (!gems) return;
+    persist();
+    wrap.classList.add("open");
+    sfx("chest");
+    const tag = wrap.querySelector(".chest-tag");
+    if (tag) tag.textContent = `+${gems}`;
+    if (card) {
+      card.querySelector("h3").textContent = `+${gems} Edelsteine!`;
+      card.querySelector("p").textContent = "Komm morgen wieder für das nächste Geschenk.";
+      card.querySelector(".btn")?.remove();
+    }
+    flyGems(wrap, Math.min(10, gems));
+    setTimeout(() => { sfx("gem"); render(); }, REDUCED ? 100 : 1500);
   }
 
   let jumpObserver = null;
@@ -543,7 +850,8 @@
     const stat = (iconName, value, label, color) => h("div", { class: "statcard tilt" }, h("div", { class: "v", style: `color:${color}` }, icon(iconName), String(value)), h("div", { class: "k" }, label));
     const who = Art.CAST[state.companion];
     return h("div", {}, h("h1", { class: "page-title" }, "Dein Profil"),
-      h("div", { class: "card me" }, characterEl(state.companion, "happy", "me-char"),
+      accountCard(),
+      h("div", { class: "card me", style: "margin-top:16px" }, characterEl(state.companion, "happy", "me-char"),
         h("div", {}, h("h2", {}, "Mathe-Fan"), h("p", { style: "margin:4px 0 0;color:var(--muted)" }, `${lessons.filter((l) => Core.isDone(state, l.id)).length} von ${lessons.length} Lektionen geschafft`),
           h("p", { style: "margin:2px 0 0;color:var(--muted)" }, `${gradeLabel()} · ${who.name} begleitet dich`))),
       h("h2", { class: "page-title", style: "font-size:20px" }, "Dein Begleiter"),
@@ -565,10 +873,10 @@
         h("div", { class: "setting" }, h("div", {}, "Töne"), h("button", { class: "switch", type: "button", role: "switch", snd: "none", "aria-checked": String(state.sound), "aria-label": "Töne", onclick: () => { state.sound = !state.sound; Sound.setEnabled(state.sound); persist(); render(); sfx("right"); } })),
         h("div", { class: "setting" }, h("div", {}, h("div", {}, "Sprechaufgaben"), h("small", { style: "color:var(--muted)" }, speakingNote())),
           Core.canSpeakNow(state, now()) ? null : h("button", { class: "btn btn-secondary btn-sm", type: "button", onclick: () => { state.noSpeakUntil = 0; persist(); render(); toast("Sprechaufgaben sind wieder an."); } }, "Wieder an")),
-        h("div", { class: "setting" }, h("div", {}, h("div", {}, "Fortschritt zurücksetzen"), h("small", { style: "color:var(--muted)" }, "Löscht alle Daten in diesem Browser.")),
+        h("div", { class: "setting" }, h("div", {}, h("div", {}, "Fortschritt zurücksetzen"), h("small", { style: "color:var(--muted)" }, sync.user ? "Setzt den Fortschritt in diesem Browser und in deinem Konto zurück." : "Löscht alle Daten in diesem Browser.")),
           h("button", { class: "btn btn-secondary btn-sm", type: "button", onclick: confirmReset }, "Zurücksetzen"))),
-      h("p", { style: "color:var(--muted);font-size:14px;margin-top:16px" }, "Dein Fortschritt wird nur in diesem Browser gespeichert. Es gibt keine Konten und keine Cookies."),
-      h("div", { class: "links" }, h("a", { href: "/datenschutz" }, "Datenschutz"), h("a", { href: "/impressum" }, "Impressum")));
+      h("p", { style: "color:var(--muted);font-size:14px;margin-top:16px" }, sync.user ? "Dein Fortschritt wird in deinem Konto gespeichert und ist auf jedem Gerät da." : "Ohne Konto wird dein Fortschritt nur in diesem Browser gespeichert. Mit einem Konto geht er nicht verloren."),
+      h("div", { class: "links" }, h("a", { href: "/gomat-archiv/datenschutz" }, "Datenschutz"), h("a", { href: "/gomat-archiv/impressum" }, "Impressum")));
   }
 
   function speakingNote() {
@@ -577,8 +885,168 @@
   }
 
   function confirmReset() {
-    modal({ mood: "sad", title: "Wirklich alles löschen?", text: "Dein Fortschritt, deine XP, deine Edelsteine und deine Serie gehen unwiderruflich verloren.",
+    modal({ mood: "sad", title: "Wirklich alles löschen?", text: sync.user ? "Dein Fortschritt, deine XP, deine Edelsteine und deine Serie gehen auf diesem Gerät und in deinem Konto unwiderruflich verloren." : "Dein Fortschritt, deine XP, deine Edelsteine und deine Serie gehen unwiderruflich verloren.",
       buttons: [{ label: "Nein, behalten", kind: "btn-primary" }, { label: "Ja, zurücksetzen", kind: "btn-danger", run: () => { state = Core.defaultState(now()); persist(); ui.onb = freshOnboarding(); ui.seen = null; go("learn"); } }] });
+  }
+
+  // ---------------------------------------------------------------- the account
+  const AUTH_ERRORS = {
+    bad_email: "Das sieht nicht wie eine E-Mail-Adresse aus.",
+    bad_password: "Das Passwort braucht mindestens 8 Zeichen.",
+    email_taken: "Mit dieser E-Mail gibt es schon ein Konto. Melde dich an.",
+    wrong_login: "E-Mail oder Passwort stimmt nicht.",
+    wrong_password: "Das Passwort stimmt nicht.",
+    too_many: "Zu viele Versuche. Bitte warte ein paar Minuten.",
+    network: "Keine Verbindung. Prüfe dein Internet und versuche es noch einmal.",
+  };
+  const authError = (reply) => AUTH_ERRORS[reply.data && reply.data.error] || "Das hat nicht geklappt. Bitte versuche es noch einmal.";
+
+  function accountCard() {
+    const button = (label, kind, iconName, run) => h("button", { class: `btn ${kind} btn-sm`, type: "button", onclick: run }, iconName ? icon(iconName) : null, label);
+    if (sync.user) {
+      return h("div", { class: "card" },
+        h("div", { class: "acct" }, portraitEl(state.companion, "happy"), h("div", {}, h("h2", {}, sync.user.name), h("small", {}, sync.user.email), syncBadge())),
+        h("div", { class: "acct-btns" }, button("Passwort ändern", "btn-secondary", "lock", changePasswordDialog), button("Abmelden", "btn-secondary", "logout", confirmLogout)),
+        h("div", { class: "acct-btns" }, button("Konto löschen", "btn-ghost", "trash", deleteAccountDialog)));
+    }
+    return h("div", { class: "card save-prompt" }, icon("cloud"),
+      h("div", {}, h("h3", {}, "Fortschritt sichern"), h("p", {}, "Mit einem kostenlosen Konto ist dein Fortschritt auf jedem Gerät da und geht nicht verloren."),
+        h("div", { class: "acct-btns" }, button("Konto erstellen", "btn-primary", null, () => showAuth("signup", false)), button("Anmelden", "btn-secondary", null, () => showAuth("login", false)))));
+  }
+
+  function confirmLogout() {
+    modal({
+      mood: "happy", title: "Abmelden?", text: "Dein Fortschritt bleibt in deinem Konto gespeichert. Auf diesem Gerät wird er entfernt.",
+      buttons: [
+        { label: "Abmelden", kind: "btn-danger", run: async () => {
+          const saved = await saveNow(false);
+          if (!saved && sync.dirty) {
+            modal({ mood: "sad", title: "Nicht alles gespeichert", text: "Dein letzter Fortschritt konnte nicht in dein Konto gespeichert werden (kein Internet?). Wenn du dich jetzt abmeldest, geht er verloren.",
+              buttons: [{ label: "Angemeldet bleiben", kind: "btn-primary" }, { label: "Trotzdem abmelden", kind: "btn-danger", run: async () => { await Account.logout(); forgetDevice(); } }] });
+            return;
+          }
+          await Account.logout();
+          forgetDevice();
+          toast("Du bist abgemeldet. Bis bald!");
+        } },
+        { label: "Abbrechen" },
+      ],
+    });
+  }
+
+  function changePasswordDialog() {
+    formDialog({
+      title: "Passwort ändern", text: "Auf allen anderen Geräten musst du dich danach neu anmelden.",
+      fields: [{ name: "old", placeholder: "Altes Passwort", autocomplete: "current-password" }, { name: "new", placeholder: "Neues Passwort (mindestens 8 Zeichen)", autocomplete: "new-password" }],
+      submit: "Passwort ändern",
+      run: async ([oldPassword, newPassword]) => {
+        if (newPassword.length < 8) return AUTH_ERRORS.bad_password;
+        const reply = await Account.changePassword(oldPassword, newPassword);
+        if (!reply.ok) return reply.data && reply.data.error === "wrong_password" ? "Das alte Passwort stimmt nicht." : authError(reply);
+        toast("Dein Passwort ist geändert.");
+        return null;
+      },
+    });
+  }
+
+  function deleteAccountDialog() {
+    formDialog({
+      title: "Konto löschen?", text: "Dein Konto und der gespeicherte Fortschritt werden sofort und endgültig gelöscht. Zur Sicherheit brauchen wir dein Passwort.",
+      fields: [{ name: "password", placeholder: "Passwort", autocomplete: "current-password" }], submit: "Konto endgültig löschen", danger: true,
+      run: async ([password]) => {
+        const reply = await Account.remove(password);
+        if (!reply.ok) return authError(reply);
+        forgetDevice();
+        toast("Dein Konto wurde gelöscht.");
+        return null;
+      },
+    });
+  }
+
+  function passwordField(placeholder, autocomplete) {
+    const input = h("input", { type: "password", name: "password", placeholder, autocomplete, maxlength: "200", required: true, "aria-label": placeholder });
+    const eye = h("button", { class: "eye", type: "button", "aria-label": "Passwort anzeigen", snd: "tap" }, icon("eye"));
+    eye.addEventListener("click", () => {
+      const show = input.type === "password";
+      input.type = show ? "text" : "password";
+      eye.replaceChildren(icon(show ? "eyeoff" : "eye"));
+      eye.setAttribute("aria-label", show ? "Passwort verbergen" : "Passwort anzeigen");
+    });
+    return { input, row: h("label", { class: "field" }, input, eye) };
+  }
+
+  function showAuth(mode, afterOnboarding) {
+    showOverlay(authScreen(mode, afterOnboarding));
+    overlay.querySelector("input")?.focus();
+  }
+
+  /* Sign up ("Erstelle dein Profil") and sign in: one screen, same look as the questions before it. */
+  function authScreen(mode, afterOnboarding) {
+    const signup = mode === "signup";
+    let busy = false;
+    const name = h("input", { type: "text", name: "name", placeholder: "Name (zum Beispiel dein Vorname)", autocomplete: "given-name", maxlength: "30", "aria-label": "Name" });
+    const email = h("input", { type: "email", name: "email", placeholder: "E-Mail", autocomplete: "email", inputmode: "email", maxlength: "254", required: true, "aria-label": "E-Mail" });
+    const pass = passwordField(signup ? "Passwort (mindestens 8 Zeichen)" : "Passwort", signup ? "new-password" : "current-password");
+    const error = h("p", { class: "auth-error", role: "alert" });
+    const label = signup ? "Konto erstellen" : "Anmelden";
+    const submit = h("button", { class: "btn btn-primary btn-block", type: "submit", disabled: true, snd: "none" }, label);
+    const valid = () => /^[^@\s]+@[^@\s]+\.[^@\s.]{2,}$/.test(email.value.trim()) && pass.input.value.length >= (signup ? 8 : 1);
+    const update = () => { submit.disabled = busy || !valid(); };
+    for (const input of [email, pass.input]) input.addEventListener("input", () => { error.textContent = ""; update(); });
+
+    const leave = () => { clearOverlay(); if (afterOnboarding) renderFresh(); else render(); };
+    const switchTo = () => {
+      if (signup) { showAuth("login", afterOnboarding); return; }
+      if (!state.onboarded) { clearOverlay(); ui.onb.landing = false; render(); return; }
+      showAuth("signup", false);
+    };
+
+    async function send(event) {
+      event.preventDefault();
+      if (busy || !valid()) return;
+      busy = true;
+      update();
+      error.textContent = "";
+      submit.textContent = "Einen Moment …";
+      const reply = signup
+        ? await Account.signup(name.value, email.value.trim(), pass.input.value, JSON.parse(JSON.stringify(state)))
+        : await Account.login(email.value.trim(), pass.input.value);
+      busy = false;
+      submit.textContent = label;
+      if (!reply.ok) { error.textContent = authError(reply); sfx("deny"); update(); return; }
+      sync.user = reply.data.user;
+      sync.rev = reply.data.rev;
+      clearOverlay();
+      sfx("goal");
+      if (signup) {
+        sync.dirty = false;
+        Account.writeMeta(store, { email: sync.user.email, rev: sync.rev, dirty: false });
+        setSyncStatus("saved");
+        if (reply.data.rev === 0) { markDirty(); saveNow(false); }
+        renderFresh();
+        toast(`Willkommen, ${sync.user.name}! Dein Fortschritt wird jetzt gespeichert.`);
+      } else {
+        await meetRemote(reply.data.state, reply.data.rev);
+        if (!document.querySelector(".modal-back")) renderFresh();
+        toast(`Willkommen zurück, ${sync.user.name}!`);
+      }
+    }
+
+    return h("div", { class: "screen auth", role: "dialog", "aria-modal": "true", "aria-label": signup ? "Konto erstellen" : "Anmelden" },
+      h("div", { class: "ob-top" },
+        h("button", { class: "ob-back", type: "button", "aria-label": afterOnboarding ? "Jetzt nicht" : "Schließen", onclick: leave }, icon(afterOnboarding ? "back" : "close")),
+        afterOnboarding ? h("div", { class: "ob-bar bar", role: "progressbar", "aria-valuenow": "100", "aria-valuemin": "0", "aria-valuemax": "100" }, h("i", { style: "width:100%" })) : null),
+      h("form", { class: "body auth-form", novalidate: true, onsubmit: send },
+        characterEl(state.companion, "happy", "mid"),
+        h("h1", {}, signup ? "Erstelle dein Profil, um deinen Fortschritt zu speichern!" : "Willkommen zurück!"),
+        signup ? null : h("p", {}, "Melde dich an und mach dort weiter, wo du aufgehört hast."),
+        h("div", { class: "field-group" }, signup ? h("label", { class: "field" }, name) : null, h("label", { class: "field" }, email), pass.row),
+        error, submit,
+        signup
+          ? h("p", { class: "auth-note" }, "Mit einem Konto stimmst du der ", h("a", { href: "/gomat-archiv/datenschutz", target: "_blank", rel: "noopener" }, "Datenschutzerklärung"), " zu. Kinder unter 16 fragen bitte vorher ihre Eltern.")
+          : h("p", { class: "auth-note" }, "Passwort vergessen? Dafür gibt es noch keine E-Mail-Funktion. Du kannst jederzeit ein neues Konto erstellen."),
+        h("button", { class: "btn btn-ghost btn-block", type: "button", onclick: switchTo }, signup ? "Ich habe bereits ein Konto" : "Neu hier? Konto erstellen"),
+        afterOnboarding ? h("button", { class: "btn btn-ghost btn-block", type: "button", onclick: leave }, "Jetzt nicht") : null));
   }
 
   // -------------------------------------------------------------- onboarding
@@ -589,10 +1057,31 @@
     [3, "Ich bin richtig gut in Mathe", "Gleichungen und mehr"],
   ];
   const GOAL_OPTIONS = [[10, "Entspannt", "10 XP, etwa eine Lektion"], [20, "Normal", "20 XP, etwa zwei Lektionen"], [30, "Ehrgeizig", "30 XP, etwa drei Lektionen"], [50, "Intensiv", "50 XP, etwa fünf Lektionen"]];
-  const ONB_STEPS = 6;
+  const ONB_STEPS = 6;          // companion, level, class, test, result, goal
+
+  const links = () => h("div", { class: "links" }, h("a", { href: "/gomat-archiv/datenschutz" }, "Datenschutz"), h("a", { href: "/gomat-archiv/impressum" }, "Impressum"));
+
+  /* The first screen: the name, a big friendly character and two buttons. */
+  function landing() {
+    const start = () => { ui.onb.landing = false; render(); };
+    const login = () => showAuth("login", false);
+    return h("div", { class: "screen landing" },
+      h("header", { class: "ld-top" }, h("span", { class: "logo" }, icon("logo"), h("span", { class: "word" }, "gomat")),
+        h("button", { class: "btn btn-secondary btn-sm", type: "button", onclick: login }, "Ich habe bereits ein Konto")),
+      h("main", { class: "ld-main" },
+        h("div", { class: "ld-stage tilt" }, characterEl("gomi", "cheer", "", "banana"), ["+", "−", "×", "÷"].map((sign) => h("span", { class: "sym", "aria-hidden": "true" }, sign))),
+        h("div", { class: "ld-copy" },
+          h("h1", {}, "Mathe lernen: kostenlos, spielerisch und wirksam"),
+          h("p", {}, "Kurze Lektionen, Meistertests und vier Begleiter, die mit dir lernen."),
+          h("button", { class: "btn btn-primary btn-block", type: "button", onclick: start }, "Jetzt starten"),
+          h("button", { class: "btn btn-secondary btn-block", type: "button", onclick: login }, "Ich habe bereits ein Konto"),
+          h("div", { class: "ld-cast", "aria-hidden": "true" }, Core.COMPANIONS.map((name) => portraitEl(name, "happy"))))),
+      h("footer", { class: "ld-foot" }, links()));
+  }
 
   function onboarding() {
     const o = ui.onb;
+    if (o.landing) return landing();
     const go1 = (step) => { o.step = step; render(); };
     const choose = (key, value) => { o[key] = value; render(); };
     const primary = (label, run, disabled) => h("button", { class: "btn btn-primary btn-block", type: "button", disabled, onclick: run }, label);
@@ -601,38 +1090,58 @@
     const unit = UNITS.find((u) => u.id === startUnit) || UNITS[0];
     const placement = o.placement;
 
+    /* choosing the companion changes the guide on this very screen, so it is done without drawing everything again */
+    const guide = h("div", { class: "guide" });
+    const drawGuide = (text, mood) => guide.replaceChildren(characterEl(state.companion, mood, "big"), h("div", { class: "speech beside" }, text));
+    const castPick = () => h("div", { class: "cast-pick", role: "group", "aria-label": "Begleiter wählen" }, Core.COMPANIONS.map((name) => {
+      const card = h("button", { class: `cast-b${state.companion === name ? " on" : ""}`, type: "button", snd: "select", "aria-pressed": String(state.companion === name),
+        onclick: () => {
+          state.companion = name;
+          persist();
+          drawGuide("Wer soll dich beim Lernen begleiten?", "cheer");
+          for (const other of document.querySelectorAll(".cast-pick .cast-b")) other.classList.toggle("on", other === card);
+        } },
+      characterEl(name, "happy", "cast-char"), h("b", {}, Art.CAST[name].name), h("small", {}, Art.CAST[name].role));
+      return card;
+    }));
+
     const screens = [
-      () => ({ who: "gomi", mood: "cheer", wordmark: true, speech: "Hallo, ich bin Gomi, dein Mathe-Affe!", title: "Mathe lernen mit gomat", text: "Kurze Lektionen, Meistertests und jeden Tag ein Stück besser rechnen. Erst schauen wir, wo du stehst.", action: primary("Los geht’s", () => go1(1)) }),
-      () => ({ who: "otto", mood: "happy", speech: "Na, wie läuft es mit der Mathematik?", title: "Wie gut kannst du schon rechnen?",
+      () => ({ mood: "cheer", text: "Wer soll dich beim Lernen begleiten?", body: castPick(), action: primary("Weiter", () => go1(1)) }),
+      () => ({ mood: "happy", text: "Wie gut kannst du schon rechnen?",
         body: h("div", { class: "options" }, SELF_OPTIONS.map(([value, label, small]) => h("button", { class: `opt${o.self === value ? " sel" : ""}`, type: "button", snd: "select", onclick: () => choose("self", value) }, h("span", {}, label, h("small", {}, small))))),
         action: primary("Weiter", () => go1(2), o.self === null) }),
-      () => ({ who: "ben", mood: "happy", speech: "Und in welcher Klasse bist du?", title: "In welcher Klassenstufe bist du?",
+      () => ({ mood: "happy", text: "In welcher Klassenstufe bist du?",
         body: h("div", { class: "grades" }, gradeBtn(0, "Noch nicht in der Schule", true), Array.from({ length: 13 }, (_, i) => gradeBtn(i + 1, `Klasse ${i + 1}`, i === 12)), gradeBtn(99, "Schon aus der Schule raus", true)),
         action: primary("Weiter", () => go1(3), o.grade === null) }),
-      () => ({ who: "robi", mood: "happy", speech: "Ich messe kurz, wie fit du bist.", title: "Kurzer Einstufungstest",
-        text: `${DATA.placementQuestions} Fragen, die langsam schwerer oder leichter werden. Du verlierst keine Herzen und bekommst keine Note. Rate nicht wild: Wenn du etwas nicht weißt, tippe auf „Weiß ich nicht“.`,
+      () => ({ mood: "happy", text: "Ich messe kurz, wie fit du bist. Das ist der Einstufungstest.",
+        sub: `${DATA.placementQuestions} Fragen, die langsam schwerer oder leichter werden. Du verlierst keine Herzen und bekommst keine Note. Rate nicht wild: Wenn du etwas nicht weißt, tippe auf „Weiß ich nicht“.`,
         action: primary("Test starten", startPlacement), extra: h("button", { class: "btn btn-ghost btn-block", type: "button", onclick: () => { o.placement = null; o.startUnit = Core.recommendedStart(o.grade, o.self); go1(5); } }, "Ohne Test starten") }),
-      () => ({ who: "robi", mood: placement && placement.correct * 10 >= placement.total * 7 ? "cheer" : "happy", speech: placement ? `${placement.correct} von ${placement.total} richtig!` : "Fertig!", title: `Du startest bei Einheit ${unit.id}`, text: unit.title,
+      () => ({ mood: placement && placement.correct * 10 >= placement.total * 7 ? "cheer" : "happy", text: placement ? `${placement.correct} von ${placement.total} richtig! Du startest bei Einheit ${unit.id}: ${unit.title}.` : `Du startest bei Einheit ${unit.id}: ${unit.title}.`,
         body: placement ? h("div", { class: "placed" }, placement.details.map((d) => {
           const u = UNITS.find((x) => x.id === d.unit);
           return h("div", { class: `prow ${d.passed ? "ok" : "no"}` }, h("div", { class: "pi" }, icon(d.passed ? "check" : "close")), h("div", { class: "pt" }, h("b", {}, `Einheit ${d.unit}`), h("small", {}, u ? u.title : "")), h("div", { class: "ps" }, `${d.ok}/${d.total}`));
         })) : null,
         action: primary("Weiter", () => go1(5)) }),
-      () => ({ who: "gomi", mood: "happy", speech: "Jeden Tag ein bisschen!", title: "Wie viel möchtest du täglich üben?",
+      () => ({ mood: "happy", text: "Wie viel möchtest du täglich üben?",
         body: h("div", { class: "options" }, GOAL_OPTIONS.map(([goal, label, small]) => h("button", { class: `opt${o.goal === goal ? " sel" : ""}`, type: "button", snd: "select", onclick: () => choose("goal", goal) }, h("span", {}, label, h("small", {}, small))))),
-        action: primary("Lernen starten", finishOnboarding) }),
+        action: primary("Los geht’s", finishOnboarding) }),
     ];
     const s = screens[o.step]();
-    const back = o.step === 0 ? null : () => go1(o.step === 5 && !o.placement ? 3 : o.step - 1);
-    return h("div", { class: "screen onb", key: o.step },
-      h("div", { class: "body" },
-        h("div", { class: "dots" }, Array.from({ length: ONB_STEPS }, (_, i) => h("i", { class: i <= o.step ? "on" : "" }))),
-        s.wordmark ? h("div", { class: "wordmark" }, "gomat") : null,
-        h("div", { class: "speech" }, s.speech), characterEl(s.who, s.mood, "big"),
-        h("h1", {}, s.title), s.text ? h("p", {}, s.text) : null, s.body || null),
-      h("div", { class: "foot" }, h("div", { class: "inner" }, s.action, s.extra || null, back ? h("button", { class: "btn btn-ghost btn-block", type: "button", onclick: back }, "Zurück") : null)));
+    drawGuide(s.text, s.mood);
+    const back = () => {
+      if (o.step === 0) { o.landing = true; render(); return; }
+      go1(o.step === 5 && !o.placement ? 3 : o.step - 1);
+    };
+    const pct = Math.round((100 * (o.step + 1)) / (ONB_STEPS + 1));
+    return h("div", { class: "screen onb" },
+      h("div", { class: "ob-top" },
+        h("button", { class: "ob-back", type: "button", "aria-label": "Zurück", onclick: back }, icon("back")),
+        h("div", { class: "ob-bar bar", role: "progressbar", "aria-valuenow": String(pct), "aria-valuemin": "0", "aria-valuemax": "100" }, h("i", { style: `width:${pct}%` }))),
+      h("div", { class: "body" }, guide, s.sub ? h("p", { class: "sub" }, s.sub) : null, s.body || null),
+      h("div", { class: "foot" }, h("div", { class: "inner" }, s.action, s.extra || null)));
   }
 
+  /* The questions are answered: the progress starts. Without an account the learner is asked to create one now. */
   function finishOnboarding() {
     const o = ui.onb;
     Core.finishOnboarding(state, { grade: o.grade, selfLevel: o.self, startUnit: o.startUnit || Core.recommendedStart(o.grade, o.self), goal: o.goal, placement: o.placement }, now());
@@ -640,8 +1149,13 @@
     ui.scrolled = false;
     ui.seen = { streak: 0, gems: 0, hearts: state.hearts };
     sfx("goal");
-    renderFresh();
-    toast(`Willkommen! ${Core.GEMS.welcome} Edelsteine als Geschenk.`);
+    if (sync.user) {
+      renderFresh();
+      toast(`Willkommen! ${Core.GEMS.welcome} Edelsteine als Geschenk.`);
+      return;
+    }
+    render();
+    showAuth("signup", true);
   }
 
   // --------------------------------------------------------------- starting
@@ -683,7 +1197,7 @@
       return;
     }
     ui.session = {
-      spec, kind: spec.kind, total: exercises.length, done: 0, mistakes: 0, startedAt: Date.now(), queue: exercises.map((e) => ({ e })), current: null, failed: false,
+      spec, kind: spec.kind, total: exercises.length, done: 0, mistakes: 0, combo: 0, startedAt: Date.now(), queue: exercises.map((e) => ({ e })), current: null, failed: false,
       unitBefore: spec.unitId ? Core.unitProgress(UNITS, state, spec.unitId) : null,
     };
     nextExercise();
@@ -723,7 +1237,7 @@
   }
 
   // ------------------------------------------------------------ the lesson
-  const PRAISE = ["Super!", "Richtig!", "Stark!", "Genau!", "Perfekt!", "Klasse!", "Toll gemacht!"];
+  const linesOf = () => LINES[state.companion] || LINES.gomi;
   const EXPR = /^[\d\s+−×÷=?▢()²³⁴x,./-]+$/;
   const KIND_LABEL = { choice: "Wähle die richtige Antwort", input: "Schreibe die Antwort", match: "Finde die Paare", build: "Bring es in die richtige Reihenfolge", speak: "Sag es laut" };
 
@@ -874,7 +1388,9 @@
     if (ok) {
       s.done += 1;
       sfx("right");
+      rightInARow(s);
     } else {
+      s.combo = 0;
       s.mistakes += 1;
       if (usesHearts(s)) Core.loseHeart(state, now());
       persist();
@@ -887,9 +1403,20 @@
     refresh();
     const detail = ok ? null : h("div", {}, result.answerText ? h("p", {}, "Richtige Lösung: ", rich(result.answerText)) : null, e.explain ? h("p", {}, rich(e.explain)) : null,
       s.failed ? h("p", {}, `Das waren mehr als ${PASS_MISTAKES} Fehler.`) : null);
-    showFooter(ok, ok ? pick(PRAISE) : "Nicht ganz", detail);
+    showFooter(ok, pick(ok ? linesOf().right : linesOf().wrong), detail);
     updateSide(!ok && usesHearts(s));
     if (!ok) { v.body.classList.add("shake"); setTimeout(() => v.body.classList.remove("shake"), 400); }
+  }
+
+  /* Three or more right answers in a row: a little flame bubble. */
+  function rightInARow(s) {
+    s.combo = (s.combo || 0) + 1;
+    if (s.combo < 3) return;
+    const frame = overlay.querySelector(".lesson");
+    if (!frame) return;
+    frame.querySelector(".combo")?.remove();
+    frame.append(h("div", { class: "combo", role: "status" }, icon("flame"), `${s.combo} in Folge!`));
+    setTimeout(() => sfx("combo"), 260);
   }
 
   function noHearts() {
@@ -1129,9 +1656,10 @@
       s.done += 1;
       s.view.answered = true;
       sfx("right");
+      if (hurt) s.combo = 0; else rightInARow(s);
       s.failed = isTest(s) && s.mistakes > PASS_MISTAKES;
       refresh();
-      showFooter(true, pick(PRAISE), null);
+      showFooter(true, pick(linesOf().right), null);
     }
     return ctl;
   }
@@ -1272,6 +1800,8 @@
         h("div", { class: "daydots" }, week.map((d) => h("span", { class: d.xp ? "on" : "" }, d.label[0])))) : null,
       result.goalReached ? note("goal", "target", "Tagesziel geschafft!", `Du hast heute ${state.goal} XP gesammelt.`) : null,
       result.heartWon ? note("heart", "heart", "Ein Herz zurück!", "Gut geübt! Du hast ein Herz zurückbekommen.") : null,
+      !sync.user && [1, 3, 6, 10, 20].includes(state.stats.lessons) ? note("save", "cloud", "Fortschritt sichern", "Mit einem Konto ist dein Fortschritt auf jedem Gerät da.",
+        h("button", { class: "btn btn-primary btn-sm", type: "button", onclick: () => { clearOverlay(); render(); showAuth("signup", false); } }, "Konto erstellen")) : null,
     ] : [
       note("fail", "close", `${mistakes} Fehler sind zu viel`, `Für den Meistertest sind höchstens ${PASS_MISTAKES} Fehler erlaubt.${s.kind === "skip" ? " Du kannst die Einheit ganz normal lernen." : " Wiederhole die Lektionen und versuche es dann noch einmal."}`),
     ];
@@ -1333,6 +1863,8 @@
     if (event.metaKey || event.ctrlKey || event.altKey) return;
     if (event.key === "Escape") {
       if (closeTop) { closeTop(); return; }
+      const auth = overlay.querySelector(".screen.auth .ob-back");
+      if (auth) { auth.click(); return; }
       if (ui.openNode) { ui.openNode = null; render(); }
       return;
     }
@@ -1351,8 +1883,14 @@
     const next = location.hash.slice(1);
     if (SCREENS.includes(next) && next !== ui.screen && !ui.session && state.onboarded) go(next);
   });
-  document.addEventListener("visibilitychange", () => { if (!document.hidden && !ui.session && !document.querySelector(".modal-back")) { refresh(); render(); } });
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) { saveNow(true); return; }
+    if (!ui.session && !overlay.firstChild && !document.querySelector(".modal-back")) { refresh(); render(); }
+  });
+  window.addEventListener("pagehide", () => { saveNow(true); });
+  window.addEventListener("online", () => { if (sync.dirty) saveNow(false); });
 
   renderFresh();
+  bootAccount();
   if (freezeUsed) toast(`Dein Serien-Schutz hat deine Serie gerettet${freezeUsed > 1 ? ` (${freezeUsed} Tage)` : ""}.`);
 })();

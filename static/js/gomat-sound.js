@@ -1,5 +1,5 @@
 /* gomat sound: every sound is made on the fly with the Web Audio API (no sound files to load). There is a
-   sound for taps, menus, answers, hearts, gems, streaks, tests, the microphone and the shop. */
+   sound for taps, menus, answers, hearts, gems, streaks, tests, the microphone, the shop, the chest and for poking a character. */
 (function () {
   "use strict";
 
@@ -94,6 +94,9 @@
     micOn: () => notes([520, 780], 0.09, 0.14, { volume: 0.09 }),
     micOff: () => notes([780, 520], 0.09, 0.14, { volume: 0.08 }),
     whoosh: () => whoosh(0, 0.28, { volume: 0.06 }),
+    poke: () => { tone(280, 0, 0.16, { type: "sine", volume: 0.1, to: 640 }); tone(640, 0.12, 0.12, { type: "triangle", volume: 0.06, to: 420 }); },
+    combo: () => { notes([784, 988, 1175, 1568], 0.06, 0.2, { type: "triangle", volume: 0.09 }); whoosh(0, 0.3, { volume: 0.04, from: 800, to: 2800 }); },
+    chest: () => { tone(180, 0, 0.3, { type: "sawtooth", volume: 0.05, to: 90 }); whoosh(0.1, 0.35, { volume: 0.05, from: 300, to: 2400 }); notes([523, 659, 784, 1047, 1319, 1568], 0.08, 0.3, { volume: 0.09 }); },
     goal: () => { notes([784, 988, 1175, 1568], 0.08, 0.3, { volume: 0.1 }); whoosh(0.1, 0.4, { volume: 0.04, from: 1000, to: 3000 }); },
   };
 

@@ -35,6 +35,9 @@ import music_studio
 import play_platform
 import search_engine
 import gomat
+import gomat_accounts
+import siteauth  # noqa: F401  (its table is made together with the others)
+import yipi
 import ysound
 
 logging.basicConfig(level=logging.INFO)
@@ -91,6 +94,8 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-change-in-production")
 app.config["MAX_CONTENT_LENGTH"] = 200 * 1024 * 1024  # 200 MB pro Upload
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"          # the sign-in cookie is not sent along with requests from other sites
+app.config["SESSION_COOKIE_SECURE"] = bool(os.environ.get("RAILWAY_ENVIRONMENT_NAME") or os.environ.get("RAILWAY_ENVIRONMENT"))   # https only in production
 
 # "Mit Google fortfahren" on the login/signup screen -- real credentials only
 # ever come from a Railway env var, never hardcoded (this repo is public).
@@ -466,8 +471,9 @@ def handle_unexpected_error(exc):
         exc, path=request.path, method=request.method,
         tb=traceback.format_exc(), user_id=user.id if user else None,
     )
-    return render_template("gomat_error.html", code=500, mood="sad", title="Da ist etwas schiefgelaufen",
-                           text="Das war unerwartet. Gomi kümmert sich darum. Bitte versuche es gleich noch einmal."), 500
+    if request.path.startswith("/api/"):
+        return jsonify({"ok": False, "error": "server_error"}), 500
+    return yipi.error_page(500, "Da ist etwas schiefgelaufen", "Das war unerwartet. Bitte versuche es gleich noch einmal.")
 
 
 LAST_SEEN_UPDATE_THROTTLE_SECONDS = 60
@@ -519,7 +525,7 @@ def _make_session_permanent():
     # logged out constantly. Marking the session permanent + a long
     # lifetime gives it a real expiry date instead.
     # gomat keeps nothing on the server, so its pages and API never set a cookie at all.
-    if request.endpoint is None or request.endpoint in gomat.NO_COOKIE_ENDPOINTS:
+    if request.endpoint is None or request.endpoint in gomat.NO_COOKIE_ENDPOINTS or request.endpoint in yipi.ENDPOINTS:
         return
     session.permanent = True
 
@@ -1229,6 +1235,9 @@ ysound.register_routes(app, current_user, _pl_store_media, _pl_media_url, _pl_de
 
 # gomat (the home page: a maths course, progress lives in the browser) -- see gomat.py.
 gomat.register_routes(app)
+gomat_accounts.register_routes(app)
+yipi.register_routes(app)
+_PUBLIC_ENDPOINTS.update(yipi.ENDPOINTS)       # yipi has accounts of its own and checks the sign-in itself
 
 
 # ==========================================================================

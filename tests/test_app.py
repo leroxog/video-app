@@ -72,12 +72,13 @@ def test_nex_archived_redirects_to_login_when_logged_out(client):
     assert "/login" in r.headers["Location"]
 
 
-def test_signup_then_land_on_gomat(client):
+def test_signup_then_land_on_yipi(client):
     r = signup(client, "alice")
     assert r.status_code in (302, 303)
     home = client.get("/")
     assert home.status_code == 200
-    assert b"gomatData" in home.data and b"createForm" not in home.data and b"msNav" not in home.data
+    assert b"yipiBoot" in home.data and b"gomatData" not in home.data and b"createForm" not in home.data and b"msNav" not in home.data
+    assert b"gomatData" in client.get("/gomat-archiv").data
     assert b"msNav" in client.get("/sound-archiv").data
     assert b"createForm" in client.get("/ysound-archiv").data
 
@@ -343,16 +344,17 @@ def _chat_id(client):
     return client.post("/api/ai/chats").get_json()["chat"]["id"]
 
 
-def test_root_serves_gomat_not_the_archived_pages(client):
-    """The home page cycled Nex, browser, ychat, ylib, the browser again, NRS Server, NRS Sound, ysound and is now
-    gomat (2026-10-05). The song site, sound studio, server panel, browser, ylib, ychat and Nex UIs still fully work at
-    /ysound-archiv, /sound-archiv, /server-archiv, /browser-archiv, /ylib-archiv, /ychat-archiv and /nex-archiv,
-    unlinked from anywhere."""
+def test_root_serves_yipi_not_the_archived_pages(client):
+    """The home page cycled Nex, browser, ychat, ylib, the browser again, NRS Server, NRS Sound, ysound, gomat and is now
+    yipi (2026-10-04). The maths course, song site, sound studio, server panel, browser, ylib, ychat and Nex UIs still fully
+    work at /gomat-archiv, /ysound-archiv, /sound-archiv, /server-archiv, /browser-archiv, /ylib-archiv, /ychat-archiv and
+    /nex-archiv, unlinked from anywhere."""
     signup(client, "alice")
     home = client.get("/")
     assert home.status_code == 200
     assert (
-        b"gomatData" in home.data
+        b"yipiBoot" in home.data
+        and b"gomatData" not in home.data
         and b"createForm" not in home.data
         and b"msNav" not in home.data
         and b"svList" not in home.data
@@ -361,6 +363,7 @@ def test_root_serves_gomat_not_the_archived_pages(client):
         and b"ycFeed" not in home.data
         and b"nxMsgs" not in home.data
     )
+    assert b"gomatData" in client.get("/gomat-archiv").data
 
 
 def test_browser_archived_still_serves_the_browser(client):
@@ -4004,7 +4007,7 @@ def test_without_adsense_the_page_has_no_google_code_and_no_ads_txt(client):
     home = visitor.get("/ysound-archiv")
     for marker in (b"adsbygoogle", b"googlesyndication", b"adsConfig", b"google-adsense-account", b"privacyBtn"):
         assert marker not in home.data, marker
-    assert b'href="/datenschutz"' in home.data and b'href="/impressum"' in home.data
+    assert b'href="/gomat-archiv/datenschutz"' in home.data and b'href="/gomat-archiv/impressum"' in home.data
     assert visitor.get("/ads.txt").status_code == 404 and ysound.ads_config() is None
 
 
@@ -4057,9 +4060,9 @@ def test_the_page_script_labels_ads_requests_the_age_treatment_and_never_asks_on
     assert "showRevocationMessage" in source
 
 
-def test_the_privacy_policy_is_about_gomat_and_public(client, monkeypatch):
+def test_the_privacy_policy_of_the_archived_course_is_about_gomat_and_public(client, monkeypatch):
     monkeypatch.delenv("YSOUND_DEMO")                                 # the archived song site is switched off
-    page = flask_app.test_client().get("/datenschutz")
+    page = flask_app.test_client().get("/gomat-archiv/datenschutz")
     text = page.get_data(as_text=True)
     assert page.status_code == 200 and "<title>Datenschutz | gomat</title>" in text
     for fact in ("gomat.v1", "keine Cookies", "Railway", "Nunito", "Auskunft", "Impressum", "lokalen Speicher"):
@@ -4070,25 +4073,25 @@ def test_the_privacy_policy_is_about_gomat_and_public(client, monkeypatch):
 
 
 def test_the_privacy_policy_mentions_the_archived_song_site_and_its_ads_only_while_they_can_be_used(client, monkeypatch):
-    text = flask_app.test_client().get("/datenschutz").get_data(as_text=True)          # demo mode is on in these tests
+    text = flask_app.test_client().get("/gomat-archiv/datenschutz").get_data(as_text=True)          # demo mode is on in these tests
     assert "ysound_id" in text and "Groq" in text and "auf einem eigenen Computer" in text and "AdSense" not in text
     monkeypatch.setenv("FAL_KEY", "k")
-    assert "fal.ai" in flask_app.test_client().get("/datenschutz").get_data(as_text=True)
+    assert "fal.ai" in flask_app.test_client().get("/gomat-archiv/datenschutz").get_data(as_text=True)
     monkeypatch.delenv("FAL_KEY")
     monkeypatch.delenv("YSOUND_DEMO")
     monkeypatch.setenv("ADSENSE_CLIENT", AD_CLIENT)                                      # ads are on the archived page only
-    ads_text = flask_app.test_client().get("/datenschutz").get_data(as_text=True)
+    ads_text = flask_app.test_client().get("/gomat-archiv/datenschutz").get_data(as_text=True)
     assert "Google AdSense" in ads_text and "ysound" in ads_text and "keine personalisierte Werbung" in ads_text
 
 
 def test_the_imprint_shows_the_operators_details_from_the_environment_and_escapes_them(client, monkeypatch):
-    empty = flask_app.test_client().get("/impressum").get_data(as_text=True)
+    empty = flask_app.test_client().get("/gomat-archiv/impressum").get_data(as_text=True)
     assert "Impressum" in empty and "werden gerade ergänzt" in empty and "mailto:" not in empty
     monkeypatch.setenv("IMPRESSUM_NAME", "Erika <b>Muster</b>")
-    assert "werden gerade ergänzt" in flask_app.test_client().get("/impressum").get_data(as_text=True)    # an address is needed, too
+    assert "werden gerade ergänzt" in flask_app.test_client().get("/gomat-archiv/impressum").get_data(as_text=True)    # an address is needed, too
     monkeypatch.setenv("IMPRESSUM_ADDRESS", "Musterstraße 1 | 12345 Musterstadt|  |<script>x</script>")
     monkeypatch.setenv("IMPRESSUM_EMAIL", "erika@example.com")
-    page = flask_app.test_client().get("/impressum")
+    page = flask_app.test_client().get("/gomat-archiv/impressum")
     text = page.get_data(as_text=True)
     assert page.status_code == 200 and "Erika &lt;b&gt;Muster&lt;/b&gt;" in text and "<b>Muster</b>" not in text
     assert "Musterstraße 1<br>12345 Musterstadt<br>&lt;script&gt;x&lt;/script&gt;" in text
@@ -4100,7 +4103,7 @@ def test_the_imprint_shows_the_operators_details_from_the_environment_and_escape
 
 def test_the_legal_pages_need_no_login_and_make_no_guest_account(client):
     visitor = flask_app.test_client()
-    for path in ("/datenschutz", "/impressum"):
+    for path in ("/datenschutz", "/impressum", "/nutzungsbedingungen", "/gomat-archiv/datenschutz", "/gomat-archiv/impressum"):
         assert visitor.get(path, headers=BROWSER).status_code == 200, path
     with flask_app.app_context():
         assert User.query.count() == 0

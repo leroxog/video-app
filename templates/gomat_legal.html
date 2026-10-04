@@ -9,8 +9,9 @@
 <link rel="stylesheet" href="{{ static_url('css/gomat.css') }}">
 </head>
 <body>
+<div class="bg" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
 <div class="legal-page">
-  <a class="logo" href="/" aria-label="gomat – zurück zur Startseite"><img src="{{ static_url('img/gomat-icon.svg') }}" alt="" width="40" height="40"><span class="word">gomat</span></a>
+  <a class="logo" href="/gomat-archiv" aria-label="gomat – zurück zur Startseite"><img src="{{ static_url('img/gomat-icon.svg') }}" alt="" width="40" height="40"><span class="word">gomat</span></a>
   <main>
 {%- if page == "imprint" %}
     <h1>Impressum</h1>
@@ -30,13 +31,18 @@
   {%- endif %}
 {%- else %}
     <h1>Datenschutz</h1>
-    <p class="lead">Kurz und ehrlich: gomat will so wenig Daten wie möglich. Es gibt keine Konten, keine Cookies und keine Werbung.</p>
+    <p class="lead">Kurz und ehrlich: gomat will so wenig Daten wie möglich. Du kannst ganz ohne Konto lernen. Mit einem Konto speichern wir deinen Fortschritt, damit du ihn auf jedem Gerät hast. Es gibt keine Werbung und kein Tracking.</p>
 
     <h2>Wer ist verantwortlich?</h2>
-    <p>Der Betreiber, der im <a href="/impressum">Impressum</a> steht. Dort erreichst du ihn auch für Fragen zum Datenschutz.</p>
+    <p>Der Betreiber, der im <a href="/gomat-archiv/impressum">Impressum</a> steht. Dort erreichst du ihn auch für Fragen zum Datenschutz.</p>
 
-    <h2>Dein Lernfortschritt</h2>
-    <p>Dein Fortschritt (geschaffte Lektionen, XP, Serie, Edelsteine, Herzen, Tagesziel, deine Klassenstufe, das Ergebnis des Einstufungstests, dein Begleiter und deine Einstellungen) wird nur in deinem Browser gespeichert, im sogenannten lokalen Speicher unter dem Namen <code>gomat.v1</code>. Diese Daten verlassen dein Gerät nicht und werden nicht an uns gesendet. Du kannst sie jederzeit unter „Profil“ mit „Zurücksetzen“ löschen oder indem du die Websitedaten deines Browsers löschst. Die Speicherung ist für die Funktion der Seite technisch notwendig und geschieht auf deinen Wunsch (§ 25 Abs. 2 TDDDG).</p>
+    <h2>Dein Lernfortschritt ohne Konto</h2>
+    <p>Ohne Konto wird dein Fortschritt (geschaffte Lektionen, XP, Serie, Edelsteine, Herzen, Tagesziel, deine Klassenstufe, das Ergebnis des Einstufungstests, dein Begleiter und deine Einstellungen) wird nur in deinem Browser gespeichert, im sogenannten lokalen Speicher unter dem Namen <code>gomat.v1</code>. Diese Daten verlassen dein Gerät nicht und werden nicht an uns gesendet (mit einem Konto ist das anders, siehe unten). Du kannst sie jederzeit unter „Profil“ mit „Zurücksetzen“ löschen oder indem du die Websitedaten deines Browsers löschst. Die Speicherung ist für die Funktion der Seite technisch notwendig und geschieht auf deinen Wunsch (§ 25 Abs. 2 TDDDG).</p>
+
+    <h2>Dein Konto (freiwillig)</h2>
+    <p>Wenn du ein Konto erstellst, speichern wir auf unserem Server: deinen Namen (auch ein Spitzname ist in Ordnung), deine E-Mail-Adresse, dein Passwort (nur als verschlüsselter Hash, wir können es nicht lesen), den Zeitpunkt der Erstellung und der letzten Anmeldung sowie deinen Lernfortschritt (geschaffte Lektionen, XP, Edelsteine, Serie, Einstellungen, Begleiter). Die E-Mail-Adresse brauchen wir nur für die Anmeldung. Wir schicken dir keine E-Mails. Rechtsgrundlage ist die Bereitstellung des Kontos, das du dir wünschst (Art. 6 Abs. 1 lit. b DSGVO).</p>
+    <p>Damit du angemeldet bleibst, setzt gomat nach der Anmeldung ein Cookie (<code>session</code>), das 30 Tage gültig ist. Es ist technisch notwendig (§ 25 Abs. 2 TDDDG) und wird beim Abmelden entfernt. Ohne Konto setzt gomat keine Cookies.</p>
+    <p>Du kannst dein Konto jederzeit unter „Profil“ mit „Konto löschen“ löschen. Dann werden dein Konto und der gespeicherte Fortschritt sofort und endgültig gelöscht. Ein Konto ist freiwillig. Kinder unter 16 Jahren brauchen dafür die Erlaubnis ihrer Eltern.</p>
 
     <h2>Besuch der Seite</h2>
     <p>Beim Aufruf verarbeitet der Hoster der Seite technisch notwendige Daten, die dein Browser sendet (zum Beispiel IP-Adresse, Zeitpunkt, aufgerufene Adresse), um die Seite auszuliefern und missbräuchliche Zugriffe zu erkennen. Die Seite läuft bei Railway (Railway Corp., USA); dabei können Daten in Länder außerhalb der EU übertragen werden. Rechtsgrundlage ist unser berechtigtes Interesse am sicheren Betrieb (Art. 6 Abs. 1 lit. f DSGVO).</p>
@@ -48,7 +54,7 @@
     <p>Bei manchen Aufgaben sagst du die Antwort laut. Dafür nutzt gomat die Spracherkennung deines Browsers. Das Mikrofon wird erst eingeschaltet, wenn du auf das Mikrofon tippst, und dein Browser fragt vorher, ob er es benutzen darf. gomat selbst nimmt nichts auf, speichert nichts und sendet keine Sprache an uns. Je nach Browser schickt dieser die Sprache zur Erkennung an den Anbieter des Browsers (zum Beispiel Google bei Chrome oder Apple bei Safari); darauf hat gomat keinen Einfluss. Wenn du das nicht möchtest, tippe bei der Aufgabe auf „Ich kann gerade nicht sprechen“ und verweigere dem Browser das Mikrofon: Dann gibt es nur Aufgaben zum Tippen.</p>
 
     <h2>Kein Tracking, keine Weitergabe</h2>
-    <p>gomat setzt keine Cookies, nutzt keine Analyse- oder Werbedienste und gibt keine Daten an Dritte weiter.</p>
+    <p>gomat nutzt keine Analyse- oder Werbedienste und gibt keine Daten an Dritte weiter. Cookies gibt es nur, wenn du dich anmeldest.</p>
   {%- if archive_active %}
 
     <h2>Archiv-Angebot „ysound“</h2>
@@ -59,10 +65,10 @@
   {%- endif %}
 
     <h2>Deine Rechte</h2>
-    <p>Du hast das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung und Widerspruch sowie darauf, deine Einwilligung jederzeit zu widerrufen. Du kannst dich außerdem bei einer Datenschutz-Aufsichtsbehörde beschweren. Schreib dafür an die Adresse im <a href="/impressum">Impressum</a>.</p>
+    <p>Du hast das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung und Widerspruch sowie darauf, deine Einwilligung jederzeit zu widerrufen. Du kannst dich außerdem bei einer Datenschutz-Aufsichtsbehörde beschweren. Schreib dafür an die Adresse im <a href="/gomat-archiv/impressum">Impressum</a>.</p>
 {%- endif %}
   </main>
-  <footer class="links"><a href="/">Zurück zu gomat</a><a href="/datenschutz">Datenschutz</a><a href="/impressum">Impressum</a></footer>
+  <footer class="links"><a href="/gomat-archiv">Zurück zu gomat</a><a href="/gomat-archiv/datenschutz">Datenschutz</a><a href="/gomat-archiv/impressum">Impressum</a></footer>
 </div>
 </body>
 </html>
