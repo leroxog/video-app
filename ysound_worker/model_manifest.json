@@ -1,0 +1,88 @@
+{
+ "repo": "ACE-Step/Ace-Step1.5",
+ "revision": "19671f406d603126926c1b7e2adc169acbcade22",
+ "license": "MIT",
+ "note": "The LM folder (acestep-5Hz-lm-*) is deliberately not listed: it does not fit next to the DiT on a 4 GB card.",
+ "files": {
+  "Qwen3-Embedding-0.6B/added_tokens.json": {
+   "size": 707,
+   "sha256": null,
+   "git_blob": "b54f9135e44c1e81047e8d05cb027af8bc039eed"
+  },
+  "Qwen3-Embedding-0.6B/chat_template.jinja": {
+   "size": 4116,
+   "sha256": null,
+   "git_blob": "699ff8df401fe4788525e9c1f9b86a99eadd6230"
+  },
+  "Qwen3-Embedding-0.6B/config.json": {
+   "size": 1359,
+   "sha256": null,
+   "git_blob": "21bd712c76114dc22587c6eeb84ab64186c9d245"
+  },
+  "Qwen3-Embedding-0.6B/merges.txt": {
+   "size": 1671853,
+   "sha256": null,
+   "git_blob": "31349551d90c7606f325fe0f11bbb8bd5fa0d7c7"
+  },
+  "Qwen3-Embedding-0.6B/model.safetensors": {
+   "size": 1191586416,
+   "sha256": "0437e45c94563b09e13cb7a64478fc406947a93cb34a7e05870fc8dcd48e23fd",
+   "git_blob": "9116264a405846ebfe4e95556b63b1ca07c892a0"
+  },
+  "Qwen3-Embedding-0.6B/special_tokens_map.json": {
+   "size": 613,
+   "sha256": null,
+   "git_blob": "ac23c0aaa2434523c494330aeb79c58395378103"
+  },
+  "Qwen3-Embedding-0.6B/tokenizer.json": {
+   "size": 11423705,
+   "sha256": "def76fb086971c7867b829c23a26261e38d9d74e02139253b38aeb9df8b4b50a",
+   "git_blob": "18a4abbf4a408dc534006a455544dcc195f356d2"
+  },
+  "Qwen3-Embedding-0.6B/tokenizer_config.json": {
+   "size": 5404,
+   "sha256": null,
+   "git_blob": "ddaf69808214a44fdd26d3785b66c1367c78277a"
+  },
+  "Qwen3-Embedding-0.6B/vocab.json": {
+   "size": 2776833,
+   "sha256": null,
+   "git_blob": "4783fe10ac3adce15ac8f358ef5462739852c569"
+  },
+  "acestep-v15-turbo/config.json": {
+   "size": 1968,
+   "sha256": null,
+   "git_blob": "6a0b5c09a654614302947fd1d7041f7ed0764d8c"
+  },
+  "acestep-v15-turbo/configuration_acestep_v15.py": {
+   "size": 13130,
+   "sha256": null,
+   "git_blob": "965a1b73afb1c89d0959c7d80691e487fdfde505"
+  },
+  "acestep-v15-turbo/model.safetensors": {
+   "size": 4787825604,
+   "sha256": "3f6e0797fad420a39bd33979eb6e840e30989e34a3794e843d23b60ec6e422d7",
+   "git_blob": "dd5858cb03b6587350e2c4abc4fd55c0ae7dc39b"
+  },
+  "acestep-v15-turbo/modeling_acestep_v15_turbo.py": {
+   "size": 96036,
+   "sha256": null,
+   "git_blob": "fa1162a5a01cc45c7959f3c531e2a8272ca05104"
+  },
+  "acestep-v15-turbo/silence_latent.pt": {
+   "size": 3841215,
+   "sha256": "a778e9dd942f5e8b2c09c55370782d318834432b03dabbcdf70e6ed49ad6358b",
+   "git_blob": "6b1e0f254e47f4f23ec505313d05e1d9fd09ae3e"
+  },
+  "vae/config.json": {
+   "size": 425,
+   "sha256": null,
+   "git_blob": "f49eb7b261dde15ed29c0fa1e790251dcecbd280"
+  },
+  "vae/diffusion_pytorch_model.safetensors": {
+   "size": 337431388,
+   "sha256": "da17edb604c40deaf09e9b24974e590d1ca83a374070e5d0884cfa4bed9a99b0",
+   "git_blob": "1b5eb1b18009ae7ad96c3bda6412517b68ec2bc2"
+  }
+ }
+}

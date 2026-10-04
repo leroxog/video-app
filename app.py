@@ -269,6 +269,7 @@ def ensure_sqlite_columns_exist():
             ("youtube_video_id", "VARCHAR(20)"),
             ("thumb_name", "VARCHAR(64)"),
         ],
+        "ysong": [("tags", "VARCHAR(300)")],
     }
     with db.engine.connect() as conn:
         for table, columns in wanted.items():
@@ -355,6 +356,7 @@ def ensure_columns_exist():
         "ALTER TABLE ylib_item ADD COLUMN IF NOT EXISTS source VARCHAR(10) NOT NULL DEFAULT 'upload'",
         "ALTER TABLE ylib_item ADD COLUMN IF NOT EXISTS youtube_video_id VARCHAR(20)",
         "ALTER TABLE ylib_item ADD COLUMN IF NOT EXISTS thumb_name VARCHAR(64)",
+        "ALTER TABLE ysong ADD COLUMN IF NOT EXISTS tags VARCHAR(300)",
     ]
     with db.engine.connect() as conn:
         for statement in statements:

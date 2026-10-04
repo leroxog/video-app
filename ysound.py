@@ -1,7 +1,13 @@
 """ysound: nobody signs in, everybody can make AI songs.
 
-The model is ACE-Step (open source, Apache-2.0), run on fal. It makes whole songs of up to four minutes
-and really sings the lyrics (German is one of its best languages); ysound makes them 2:30 long.
+The model is ACE-Step (open source), which makes whole songs of up to several minutes and really sings
+the lyrics; ysound makes them 2:30 long. It needs a graphics card, which this website's server doesn't have,
+so there are three ways to run it (the first that is configured wins):
+  * "worker": a small program on a computer with a GPU (ysound_worker/worker.py) polls this site for waiting
+    songs, makes them with ACE-Step locally and uploads the MP3. Free, and the site never talks to the
+    computer -- the computer only makes outgoing requests;
+  * "fal": ACE-Step on fal's servers, paid per second of audio (needs FAL_KEY);
+  * "demo": a plain test tone, only if YSOUND_DEMO=1 (never AI).
 
 What happens when someone presses "Erstellen":
   * the texts (name, description, lyrics) are checked by our Groq model -- if that check can't run, the
@@ -9,14 +15,16 @@ What happens when someone presses "Erstellen":
   * a "sung" song without lyrics gets lyrics written by our AI from the description (and checked too);
   * the description becomes a few English style tags (the audio model reads English tags) next to the
     picked genres, and the lyrics get [verse]/[chorus] markers if they have none;
-  * both go to ACE-Step through fal (needs the FAL_KEY environment variable; about $0.0002 per second of
-    audio, so roughly 3 cents for a 2:30 song);
-  * the WAV that comes back is squeezed to MP3 (about 20x smaller) and stored like every other upload.
+  * both go to ACE-Step (the worker, or fal at about $0.0002 per second of audio, so 3 cents a song);
+  * the audio that comes back is squeezed to MP3 if it is a WAV (about 20x smaller) and stored like every
+    other upload.
 
 Nobody has an account, so "your library" is the list of songs made from this browser: a random id in a
 cookie (`ysound_id`) is stored with each song. The Home feed shows every song ever made by anyone.
 """
 import array
+import hashlib
+import hmac
 import io
 import json
 import logging
@@ -69,8 +77,13 @@ LYRICS_MAX = 1500
 FEED_PAGE = 30
 LIBRARY_MAX = 100
 DEFAULT_SECONDS = 150               # 2:30; ACE-Step itself goes up to 240
-STALE_JOB_MINUTES = 8
-MAX_CONCURRENT_JOBS = 2
+STALE_JOB_MINUTES = 8               # a song that is still being prepared by this site
+STALE_QUEUE_MINUTES = 25            # a song waiting for / being made by the song computer
+IN_PROGRESS = ("generating", "queued", "working")   # generating: this site prepares it; queued: waits for the worker; working: the worker makes it
+WORKER_ONLINE_SECONDS = 45
+WORKER_UPLOAD_MAX = 30_000_000
+WORKER_FAIL_MESSAGE = "Der Song-Rechner konnte den Song nicht erzeugen. Versuch es noch einmal."
+HEX64_RE = re.compile(r"[0-9a-f]{64}")
 AUDIO_DOWNLOAD_MAX = 100_000_000    # a 4-minute 48 kHz float WAV is ~92 MB
 RAW_AUDIO_MAX = 12_000_000          # largest un-compressed file we still store when MP3 conversion isn't possible
 MP3_KBPS = 128
@@ -88,7 +101,7 @@ SECTION_TAG_RE = re.compile(r"\[[^\]\n]{1,30}\]")
 # Endpoints that need no login at all (app.py adds these to its public list).
 PUBLIC_ENDPOINTS = {
     "pl_home", "ysound_status", "ysound_feed", "ysound_mine", "ysound_create", "ysound_delete", "ysound_report",
-    "ysound_audio",
+    "ysound_audio", "ysound_worker_ping", "ysound_worker_claim", "ysound_worker_audio", "ysound_worker_fail",
 }
 
 
@@ -115,8 +128,31 @@ def daily_cap():
     return _env_int("YSOUND_DAILY_CAP", 100, 1, 100000)
 
 
+def max_queue():
+    return _env_int("YSOUND_MAX_QUEUE", 3, 1, 50)
+
+
+def worker_hash():
+    """The SHA-256 of the song computer's secret token (the secret itself only lives on that computer),
+    or None when no song computer is configured."""
+    value = os.environ.get("YSOUND_WORKER_TOKEN_SHA256", "").strip().lower()
+    return value if HEX64_RE.fullmatch(value) else None
+
+
+# When the song computer last asked for work (per process; the site runs a single process).
+_worker_seen = {"at": None}
+
+
+def worker_online():
+    seen = _worker_seen["at"]
+    return seen is not None and (_now() - seen).total_seconds() < WORKER_ONLINE_SECONDS
+
+
 def provider():
-    """'fal' when a FAL_KEY is set, 'demo' only if YSOUND_DEMO=1 (a plain test tone, not AI), else None."""
+    """'worker' when a song computer is set up, else 'fal' when a FAL_KEY is set, else 'demo' only if
+    YSOUND_DEMO=1 (a plain test tone, not AI), else None."""
+    if worker_hash():
+        return "worker"
     if os.environ.get("FAL_KEY", "").strip():
         return "fal"
     if os.environ.get("YSOUND_DEMO") == "1":
@@ -251,6 +287,15 @@ def write_lyrics(title, description, genre_ids):
     lyrics = clean_lyrics(reply.replace("```", "") if isinstance(reply, str) else "")
     sung_lines = [line for line in lyrics.split("\n") if line and not SECTION_TAG_RE.fullmatch(line)]
     return lyrics if len(sung_lines) >= 4 else None
+
+
+_GERMAN_WORDS = re.compile(r"\b(und|ich|der|die|das|nicht|mit|ein|eine|du|wir|ist|auf|zu|mein|dein|im)\b", re.IGNORECASE)
+
+
+def guess_language(lyrics):
+    """'de' for German-looking lyrics, else 'unknown' (the audio model then works the language out itself)."""
+    text = lyrics or ""
+    return "de" if re.search("[äöüßÄÖÜ]", text) or len(_GERMAN_WORDS.findall(text)) >= 3 else "unknown"
 
 
 def build_tags(genre_ids, description_en, with_vocals):
@@ -424,8 +469,27 @@ def fetch_fal_audio(tags, lyrics, length):
 _hooks = {"store_media": None, "delete_media": None}
 
 
+def store_audio(song, raw):
+    """Check the audio of a finished song, shrink a WAV to MP3, and store it. Returns an error message to
+    show the creator, or None when the audio is stored (the caller then marks the song ready)."""
+    kind = sniff_audio(raw)
+    if kind is None:
+        return "Der Musik-Dienst hat keine Audiodatei geliefert. Versuch es noch einmal."
+    if kind == "wav":
+        mp3 = wav_to_mp3(raw)
+        if mp3:
+            raw, kind = mp3, "mp3"
+        elif len(raw) > RAW_AUDIO_MAX:
+            return "Die Musikdatei ist zu groß geworden. Versuch es noch einmal."
+    name = f"ysound-{secrets.token_hex(12)}.{kind}"
+    _hooks["store_media"](FileStorage(stream=io.BytesIO(raw), filename=name, content_type=AUDIO_TYPES[kind]), name)
+    song.audio_name = name
+    return None
+
+
 def run_job(song_id):
-    """Make one song. Needs an app context. Always ends with the song 'ready' or 'failed'."""
+    """Prepare and (unless a song computer does that part) make one song. Needs an app context. Always ends
+    with the song 'ready', 'failed' or -- for the song computer -- 'queued'."""
     song = db.session.get(YSong, song_id)
     if song is None:
         return
@@ -449,24 +513,19 @@ def run_job(song_id):
         tags = build_tags(genre_ids, english_description(song.description), song.with_vocals)
         lyrics = structure_lyrics(song.lyrics) if song.with_vocals else "[inst]"
         which = provider()
+        if which == "worker":
+            song.tags, song.status = tags, "queued"       # the song computer picks it up from here
+            db.session.commit()
+            return
         if which == "fal":
             raw = fetch_fal_audio(tags, lyrics, song.duration)
         elif which == "demo":
             raw = demo_wav(song.duration)
         else:
             return fail("ysound ist noch nicht eingerichtet.")
-        kind = sniff_audio(raw)
-        if kind is None:
-            return fail("Der Musik-Dienst hat keine Audiodatei geliefert. Versuch es noch einmal.")
-        if kind == "wav":
-            mp3 = wav_to_mp3(raw)
-            if mp3:
-                raw, kind = mp3, "mp3"
-            elif len(raw) > RAW_AUDIO_MAX:
-                return fail("Die Musikdatei ist zu groß geworden. Versuch es noch einmal.")
-        name = f"ysound-{secrets.token_hex(12)}.{kind}"
-        _hooks["store_media"](FileStorage(stream=io.BytesIO(raw), filename=name, content_type=AUDIO_TYPES[kind]), name)
-        song.audio_name = name
+        error = store_audio(song, raw)
+        if error:
+            return fail(error)
         song.model = "demo" if which == "demo" else MODEL
         song.status, song.error = "ready", ""
         db.session.commit()
@@ -496,9 +555,13 @@ def start_job(app, song_id):
 
 
 def fail_stale_jobs():
-    """A song still 'generating' after a few minutes lost its worker (a restart) -- mark it failed."""
-    stale = YSong.query.filter(YSong.status == "generating",
-                               YSong.created_at < _now() - timedelta(minutes=STALE_JOB_MINUTES)).all()
+    """A song that is still in progress after a while lost its worker (a restart, or the song computer was
+    switched off) -- mark it failed."""
+    now = _now()
+    stale = YSong.query.filter(db.or_(
+        db.and_(YSong.status == "generating", YSong.created_at < now - timedelta(minutes=STALE_JOB_MINUTES)),
+        db.and_(YSong.status.in_(("queued", "working")), YSong.created_at < now - timedelta(minutes=STALE_QUEUE_MINUTES)),
+    )).all()
     for song in stale:
         song.status, song.error = "failed", "Abgebrochen. Bitte erstelle den Song noch einmal."
     if stale:
@@ -540,7 +603,8 @@ def register_routes(app, current_user, store_media, media_url, delete_media):
     def serialize(song, owner, admin, reports=0):
         data = {
             "id": song.id, "title": song.title, "with_vocals": song.with_vocals, "lyrics": song.lyrics,
-            "description": song.description, "duration": song.duration, "status": song.status, "error": song.error,
+            "description": song.description, "duration": song.duration, "error": song.error,
+            "status": "generating" if song.status in IN_PROGRESS else song.status, "queued": song.status == "queued",
             "genres": [{"id": gid, "label": GENRE_BY_ID[gid][0]} for gid in song.genres.split(",") if gid in GENRE_BY_ID],
             "audio_url": audio_url(song.audio_name) if song.status == "ready" and song.audio_name else None,
             "created_at": _iso(song.created_at), "mine": song.owner_key == owner, "demo": song.model == "demo",
@@ -560,9 +624,12 @@ def register_routes(app, current_user, store_media, media_url, delete_media):
         return jsonify({"ok": False, "error": error}), status
 
     def availability():
-        """Why a song can't be made right now ('not_configured', 'daily_cap'), or None."""
-        if provider() is None:
+        """Why a song can't be made right now ('not_configured', 'worker_offline', 'daily_cap'), or None."""
+        which = provider()
+        if which is None:
             return "not_configured"
+        if which == "worker" and not worker_online():
+            return "worker_offline"
         day_ago = _now() - timedelta(days=1)
         if YSong.query.filter(YSong.created_at > day_ago).count() >= daily_cap():
             return "daily_cap"
@@ -596,7 +663,7 @@ def register_routes(app, current_user, store_media, media_url, delete_media):
     def ysound_status():
         reason = availability()
         return jsonify({"ok": True, "available": reason is None, "reason": reason, "demo": provider() == "demo",
-                        "is_admin": is_admin(), "seconds": seconds()})
+                        "is_admin": is_admin(), "seconds": seconds(), "model": MODEL})
 
     @app.route("/api/ysound/songs")
     def ysound_feed():
@@ -642,12 +709,12 @@ def register_routes(app, current_user, store_media, media_url, delete_media):
             return reply({"ok": False, "error": "lyrics_confirm"}, 400)
         reason = availability()
         if reason:
-            return reply({"ok": False, "error": reason}, 503 if reason == "not_configured" else 429)
-        if YSong.query.filter_by(owner_key=key, status="generating").count():
+            return reply({"ok": False, "error": reason}, 503 if reason in ("not_configured", "worker_offline") else 429)
+        if YSong.query.filter(YSong.owner_key == key, YSong.status.in_(IN_PROGRESS)).count():
             return reply({"ok": False, "error": "already_generating"}, 429)
         if YSong.query.filter(YSong.owner_key == key, YSong.created_at > _now() - timedelta(hours=1)).count() >= per_hour_limit():
             return reply({"ok": False, "error": "rate_limited"}, 429)
-        if YSong.query.filter_by(status="generating").count() >= MAX_CONCURRENT_JOBS:
+        if YSong.query.filter(YSong.status.in_(IN_PROGRESS)).count() >= max_queue():
             return reply({"ok": False, "error": "busy"}, 429)
         song = YSong(owner_key=key, title=title, with_vocals=with_vocals, lyrics=lyrics, description=description,
                      genres=",".join(genre_ids), duration=seconds(), model=MODEL)
@@ -681,4 +748,83 @@ def register_routes(app, current_user, store_media, media_url, delete_media):
         if song.owner_key != key and YSongReport.query.filter_by(song_id=song.id, reporter_key=key).first() is None:
             db.session.add(YSongReport(song_id=song.id, reporter_key=key))
             db.session.commit()
+        return jsonify({"ok": True})
+
+    # ---- the song computer (ysound_worker/worker.py): it only ever calls these three, with its token.
+    def worker_check():
+        """None when the request carries the song computer's token, else the error response to send. The
+        site only stores the token's SHA-256, so a leaked environment variable doesn't leak the token."""
+        expected = worker_hash()
+        if expected is None:
+            return fail("not_found", 404)
+        header = request.headers.get("Authorization", "")
+        token = header[7:] if header.startswith("Bearer ") else ""
+        if not hmac.compare_digest(hashlib.sha256(token.encode("utf-8")).hexdigest(), expected):
+            return fail("unauthorized", 401)
+        return None
+
+    @app.route("/api/ysound/worker/ping", methods=["POST"])
+    def ysound_worker_ping():
+        """A harmless "is my token right?" for the song computer's --check: counts as online, claims nothing."""
+        denied = worker_check()
+        if denied:
+            return denied
+        _worker_seen["at"] = _now()
+        return jsonify({"ok": True, "waiting": YSong.query.filter_by(status="queued").count()})
+
+    @app.route("/api/ysound/worker/claim", methods=["POST"])
+    def ysound_worker_claim():
+        denied = worker_check()
+        if denied:
+            return denied
+        _worker_seen["at"] = _now()
+        fail_stale_jobs()
+        song = YSong.query.filter_by(status="queued").order_by(YSong.id).first()
+        if song is None:
+            return jsonify({"ok": True, "job": None})
+        # Only one claimer can turn queued into working.
+        if YSong.query.filter_by(id=song.id, status="queued").update({"status": "working"}) != 1:
+            db.session.rollback()
+            return jsonify({"ok": True, "job": None})
+        db.session.commit()
+        return jsonify({"ok": True, "job": {
+            "id": song.id, "tags": song.tags or "", "duration": song.duration,
+            "lyrics": structure_lyrics(song.lyrics) if song.with_vocals else "[inst]",
+            "language": guess_language(song.lyrics) if song.with_vocals else "unknown",
+        }})
+
+    @app.route("/api/ysound/worker/jobs/<int:song_id>/audio", methods=["POST"])
+    def ysound_worker_audio(song_id):
+        denied = worker_check()
+        if denied:
+            return denied
+        song = db.session.get(YSong, song_id)
+        if song is None or song.status != "working":
+            return fail("not_found", 404)
+        if (request.content_length or 0) > WORKER_UPLOAD_MAX:
+            return fail("too_large", 413)
+        data = request.stream.read(WORKER_UPLOAD_MAX + 1)
+        if not data:
+            return fail("bad_audio")
+        if len(data) > WORKER_UPLOAD_MAX:
+            return fail("too_large", 413)
+        error = store_audio(song, data)
+        if error:
+            song.status, song.error = "failed", error[:160]
+            db.session.commit()
+            return fail("bad_audio")
+        song.model, song.status, song.error = MODEL, "ready", ""
+        db.session.commit()
+        return jsonify({"ok": True})
+
+    @app.route("/api/ysound/worker/jobs/<int:song_id>/fail", methods=["POST"])
+    def ysound_worker_fail(song_id):
+        denied = worker_check()
+        if denied:
+            return denied
+        song = db.session.get(YSong, song_id)
+        if song is None or song.status != "working":
+            return fail("not_found", 404)
+        song.status, song.error = "failed", WORKER_FAIL_MESSAGE
+        db.session.commit()
         return jsonify({"ok": True})

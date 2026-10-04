@@ -3124,8 +3124,9 @@ _REAL_YSOUND_LYRICS = ysound.write_lyrics
 def _ysound_offline(monkeypatch):
     """No Groq, no fal and no threads: the demo tone provider is on and the song job runs inline."""
     monkeypatch.delenv("FAL_KEY", raising=False)
-    for name in ("YSOUND_PER_HOUR", "YSOUND_DAILY_CAP", "YSOUND_SECONDS"):
+    for name in ("YSOUND_PER_HOUR", "YSOUND_DAILY_CAP", "YSOUND_SECONDS", "YSOUND_MAX_QUEUE", "YSOUND_WORKER_TOKEN_SHA256"):
         monkeypatch.delenv(name, raising=False)
+    monkeypatch.setitem(ysound._worker_seen, "at", None)
     monkeypatch.setenv("YSOUND_DEMO", "1")
     monkeypatch.setattr(ysound, "moderate", lambda title, description, lyrics: "ok")
     monkeypatch.setattr(ysound, "english_description", lambda description: "calm piano" if description else None)
@@ -3384,7 +3385,8 @@ def test_global_daily_cap_protects_the_provider_bill(client, monkeypatch):
 def test_too_many_songs_at_once_answers_busy(client):
     with flask_app.app_context():
         _ys_row(owner="b" * 24, status="generating")
-        _ys_row(owner="c" * 24, status="generating")
+        _ys_row(owner="c" * 24, status="queued")
+        _ys_row(owner="d" * 24, status="working")
     r = _ys_create(_ys_client())
     assert r.status_code == 429 and r.get_json()["error"] == "busy"
 
@@ -3764,3 +3766,213 @@ def test_the_old_nrs_sound_still_works_as_an_archive(client):
     archive = client.get("/sound-archiv")
     assert archive.status_code == 200 and b"msNav" in archive.data and b"createForm" in archive.data
     assert _make_song(client, title="Altes Lied")["ok"] is True
+
+
+# ---------------- ysound: the song computer (worker) ----------------
+
+_WORKER_TOKEN = "test-worker-token-" + "x" * 30
+
+
+def _worker_on(monkeypatch):
+    monkeypatch.setenv("YSOUND_WORKER_TOKEN_SHA256", ysound.hashlib.sha256(_WORKER_TOKEN.encode()).hexdigest())
+
+
+def _wh(token=_WORKER_TOKEN):
+    return {"Authorization": f"Bearer {token}"}
+
+
+def _claim(token=_WORKER_TOKEN):
+    return flask_app.test_client().post("/api/ysound/worker/claim", headers=_wh(token))
+
+
+def _worker_song(monkeypatch, **changes):
+    """Worker mode on, the song computer online, one song prepared and waiting in the queue."""
+    _worker_on(monkeypatch)
+    assert _claim().get_json() == {"ok": True, "job": None}          # the first poll doubles as "I am online"
+    visitor = _ys_client()
+    assert _ys_create(visitor, **changes).get_json()["ok"] is True
+    return visitor
+
+
+def test_the_worker_endpoints_do_not_exist_until_a_token_hash_is_configured(client):
+    for path in ("claim", "jobs/1/audio", "jobs/1/fail"):
+        r = flask_app.test_client().post(f"/api/ysound/worker/{path}", headers=_wh())
+        assert r.status_code == 404, path
+    assert ysound.worker_hash() is None and ysound.provider() == "demo"
+
+
+def test_the_worker_endpoints_reject_missing_and_wrong_tokens(client, monkeypatch):
+    _worker_on(monkeypatch)
+    anon = flask_app.test_client()
+    for path in ("claim", "jobs/1/audio", "jobs/1/fail"):
+        assert anon.post(f"/api/ysound/worker/{path}").status_code == 401, path
+        assert anon.post(f"/api/ysound/worker/{path}", headers=_wh("wrong")).status_code == 401, path
+        assert anon.post(f"/api/ysound/worker/{path}", headers={"Authorization": _WORKER_TOKEN}).status_code == 401, path
+        assert anon.get(f"/api/ysound/worker/{path}").status_code == 405, path
+    assert ysound.worker_online() is False                           # a rejected poll is not a heartbeat
+    assert _claim().status_code == 200
+
+
+def test_only_the_hash_of_the_token_is_needed_and_a_malformed_hash_switches_the_feature_off(client, monkeypatch):
+    monkeypatch.setenv("YSOUND_WORKER_TOKEN_SHA256", "not-a-hash")
+    assert ysound.worker_hash() is None and _claim().status_code == 404
+    monkeypatch.setenv("YSOUND_WORKER_TOKEN_SHA256", ysound.hashlib.sha256(b"abc").hexdigest().upper())
+    assert ysound.worker_hash() and _claim("abc").status_code == 200 and _claim("abd").status_code == 401
+
+
+def test_worker_mode_beats_fal_and_demo(client, monkeypatch):
+    monkeypatch.setenv("FAL_KEY", "k")
+    assert ysound.provider() == "fal"
+    _worker_on(monkeypatch)
+    assert ysound.provider() == "worker"
+
+
+def test_songs_cannot_be_started_while_the_song_computer_is_off(client, monkeypatch):
+    _worker_on(monkeypatch)
+    visitor = _ys_client()
+    status = visitor.get("/api/ysound/status").get_json()
+    assert status["available"] is False and status["reason"] == "worker_offline"
+    r = _ys_create(visitor)
+    assert r.status_code == 503 and r.get_json()["error"] == "worker_offline"
+    _claim()
+    assert visitor.get("/api/ysound/status").get_json()["available"] is True
+    assert _ys_create(visitor).get_json()["ok"] is True
+    monkeypatch.setitem(ysound._worker_seen, "at", ysound._now() - ysound.timedelta(seconds=ysound.WORKER_ONLINE_SECONDS + 5))
+    assert visitor.get("/api/ysound/status").get_json()["reason"] == "worker_offline"
+    with flask_app.app_context():
+        assert YSong.query.count() == 1
+
+
+def test_a_song_is_prepared_queued_claimed_made_and_published(client, monkeypatch):
+    visitor = _worker_song(monkeypatch, title="Regen", genres=["lofi", "piano"], description="ruhig")
+    mine = visitor.get("/api/ysound/mine").get_json()["songs"][0]
+    assert mine["status"] == "generating" and mine["queued"] is True and mine["audio_url"] is None
+    with flask_app.app_context():
+        row = YSong.query.one()
+        assert row.status == "queued" and row.tags == "lo-fi hip hop, solo piano, calm piano, instrumental"
+    assert visitor.get("/api/ysound/songs").get_json()["songs"] == []        # not public yet
+
+    job = _claim().get_json()["job"]
+    assert job == {"id": mine["id"], "tags": "lo-fi hip hop, solo piano, calm piano, instrumental",
+                   "duration": 150, "lyrics": "[inst]", "language": "unknown"}
+    assert _claim().get_json()["job"] is None                                # nobody can claim it twice
+    working = visitor.get("/api/ysound/mine").get_json()["songs"][0]
+    assert working["status"] == "generating" and working["queued"] is False
+
+    mp3 = ysound.wav_to_mp3(ysound.demo_wav(4))
+    done = flask_app.test_client().post(f"/api/ysound/worker/jobs/{job['id']}/audio", data=mp3, headers=_wh())
+    assert done.status_code == 200 and done.get_json()["ok"] is True
+    ready = visitor.get("/api/ysound/mine").get_json()["songs"][0]
+    assert ready["status"] == "ready" and ready["demo"] is False and ready["audio_url"].endswith(".mp3")
+    assert flask_app.test_client().get(ready["audio_url"]).data == mp3
+    assert [s["title"] for s in flask_app.test_client().get("/api/ysound/songs").get_json()["songs"]] == ["Regen"]
+    with flask_app.app_context():
+        assert YSong.query.one().model == "ace-step"
+    assert flask_app.test_client().post(f"/api/ysound/worker/jobs/{job['id']}/audio", data=mp3, headers=_wh()).status_code == 404
+
+
+def test_sung_songs_reach_the_worker_with_structured_lyrics_and_written_lyrics(client, monkeypatch):
+    _worker_song(monkeypatch, with_vocals=True, lyrics="eins\nzwei\n\ndrei", own_lyrics=True, genres=["pop"])
+    job = _claim().get_json()["job"]
+    assert job["lyrics"] == "[verse]\neins\nzwei\n\n[chorus]\ndrei" and job["language"] == "unknown"
+    visitor = _ys_client()
+    _ys_create(visitor, with_vocals=True, genres=["pop"])                    # the writer is mocked to a fixed text
+    job = _claim().get_json()["job"]
+    assert job["lyrics"] == "[verse]\na\nb\nc\nd"
+    assert visitor.get("/api/ysound/mine").get_json()["songs"][0]["lyrics"] == "[verse]\na\nb\nc\nd"
+
+
+def test_the_queue_is_oldest_first_and_counts_toward_the_limits(client, monkeypatch):
+    first = _worker_song(monkeypatch, title="Erster")
+    second = _ys_client()
+    assert _ys_create(second, title="Zweiter").get_json()["ok"] is True
+    assert _ys_create(first, title="Dritter").status_code == 429            # one song at a time per device
+    assert _claim().get_json()["job"]["id"] == first.get("/api/ysound/mine").get_json()["songs"][0]["id"]
+    monkeypatch.setenv("YSOUND_MAX_QUEUE", "2")
+    r = _ys_create(_ys_client())
+    assert r.status_code == 429 and r.get_json()["error"] == "busy"
+
+
+def test_bad_uploads_are_refused_and_fail_the_song(client, monkeypatch):
+    visitor = _worker_song(monkeypatch)
+    job = _claim().get_json()["job"]
+    url = f"/api/ysound/worker/jobs/{job['id']}/audio"
+    worker = flask_app.test_client()
+    assert worker.post(url, data=b"", headers=_wh()).status_code == 400
+    assert worker.post("/api/ysound/worker/jobs/9999/audio", data=b"ID3", headers=_wh()).status_code == 404
+    monkeypatch.setattr(ysound, "WORKER_UPLOAD_MAX", 100)
+    assert worker.post(url, data=b"ID3" + b"x" * 500, headers=_wh()).status_code == 413
+    monkeypatch.setattr(ysound, "WORKER_UPLOAD_MAX", 30_000_000)
+    r = worker.post(url, data=b"<html><script>alert(1)</script></html>", headers=_wh())
+    assert r.status_code == 400 and r.get_json()["error"] == "bad_audio"
+    song = visitor.get("/api/ysound/mine").get_json()["songs"][0]
+    assert song["status"] == "failed" and song["audio_url"] is None
+    with flask_app.app_context():
+        assert PlMedia.query.count() == 0
+
+
+def test_an_upload_for_a_song_that_was_never_claimed_is_refused(client, monkeypatch):
+    visitor = _worker_song(monkeypatch)
+    song_id = visitor.get("/api/ysound/mine").get_json()["songs"][0]["id"]       # still queued, not working
+    mp3 = ysound.wav_to_mp3(ysound.demo_wav(2))
+    assert flask_app.test_client().post(f"/api/ysound/worker/jobs/{song_id}/audio", data=mp3, headers=_wh()).status_code == 404
+    assert flask_app.test_client().post(f"/api/ysound/worker/jobs/{song_id}/fail", headers=_wh()).status_code == 404
+
+
+def test_a_worker_wav_upload_is_shrunk_to_mp3(client, monkeypatch):
+    visitor = _worker_song(monkeypatch)
+    job = _claim().get_json()["job"]
+    wav = ysound.demo_wav(4)
+    flask_app.test_client().post(f"/api/ysound/worker/jobs/{job['id']}/audio", data=wav, headers=_wh())
+    url = visitor.get("/api/ysound/mine").get_json()["songs"][0]["audio_url"]
+    assert url.endswith(".mp3") and len(flask_app.test_client().get(url).data) < len(wav) / 2
+
+
+def test_the_worker_can_report_that_it_failed_and_the_creator_sees_a_fixed_message(client, monkeypatch):
+    visitor = _worker_song(monkeypatch)
+    job = _claim().get_json()["job"]
+    r = flask_app.test_client().post(f"/api/ysound/worker/jobs/{job['id']}/fail", json={"message": "<b>secret path C:\\x</b>"}, headers=_wh())
+    assert r.get_json()["ok"] is True
+    song = visitor.get("/api/ysound/mine").get_json()["songs"][0]
+    assert song["status"] == "failed" and song["error"] == ysound.WORKER_FAIL_MESSAGE
+    assert _ys_create(visitor).get_json()["ok"] is True                      # and the next try is allowed
+
+
+def test_songs_the_song_computer_never_finished_are_failed_after_a_while(client, monkeypatch):
+    _worker_on(monkeypatch)
+    visitor = _ys_client()
+    key = visitor.get_cookie("ysound_id").value
+    with flask_app.app_context():
+        _ys_row(owner=key, status="queued", age_minutes=ysound.STALE_QUEUE_MINUTES + 1, title="alt")
+        _ys_row(owner=key, status="working", age_minutes=ysound.STALE_QUEUE_MINUTES + 1, title="alt2")
+        _ys_row(owner=key, status="queued", age_minutes=10, title="neu")
+    songs = {s["title"]: s for s in visitor.get("/api/ysound/mine").get_json()["songs"]}
+    assert songs["alt"]["status"] == "failed" and songs["alt2"]["status"] == "failed"
+    assert songs["neu"]["status"] == "generating" and songs["neu"]["queued"] is True
+
+
+def test_a_song_computer_job_has_no_provider_calls_on_the_site(client, monkeypatch):
+    monkeypatch.setattr(ysound, "demo_wav", lambda length: pytest.fail("the site must not make the audio itself"))
+    monkeypatch.setattr(ysound, "fetch_fal_audio", lambda *a: pytest.fail("the site must not call fal"))
+    _worker_song(monkeypatch)
+
+
+def test_german_lyrics_are_recognised_for_the_singing_language():
+    assert ysound.guess_language("Der Regen fällt ganz leise") == "de"
+    assert ysound.guess_language("Ich bin da und du bist es auch") == "de"
+    assert ysound.guess_language("Walking down the street tonight") == "unknown"
+    assert ysound.guess_language("") == "unknown" and ysound.guess_language(None) == "unknown"
+
+
+def test_the_worker_ping_counts_as_online_without_claiming_anything(client, monkeypatch):
+    _worker_on(monkeypatch)
+    visitor = _ys_client()
+    assert visitor.get("/api/ysound/status").get_json()["reason"] == "worker_offline"
+    assert flask_app.test_client().post("/api/ysound/worker/ping").status_code == 401
+    assert ysound.worker_online() is False
+    r = flask_app.test_client().post("/api/ysound/worker/ping", headers=_wh())
+    assert r.get_json() == {"ok": True, "waiting": 0} and ysound.worker_online() is True
+    _ys_create(visitor)
+    assert flask_app.test_client().post("/api/ysound/worker/ping", headers=_wh()).get_json()["waiting"] == 1
+    with flask_app.app_context():
+        assert YSong.query.one().status == "queued"

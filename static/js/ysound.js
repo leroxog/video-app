@@ -20,6 +20,7 @@
     busy: "Gerade ist viel los. Probiere es in einer Minute noch einmal.",
     daily_cap: "Für heute sind alle Songs aufgebraucht. Morgen geht es weiter.",
     not_configured: "ysound ist noch nicht freigeschaltet: Der Musik-Dienst muss erst eingerichtet werden.",
+    worker_offline: "Der Song-Rechner ist gerade aus. Probiere es später noch einmal.",
     network: "Keine Verbindung. Prüfe dein Internet und versuche es noch einmal.",
   };
 
@@ -126,7 +127,9 @@
     const tags = [song.with_vocals ? "Sprachlich" : "Instrumental", ...song.genres.map((g) => g.label)].join(" · ");
     meta.append(title, el("div", "tags", tags));
     if (song.status === "generating") {
-      meta.append(el("div", "status-line", "Wird erstellt … das dauert ein bis zwei Minuten."));
+      meta.append(el("div", "status-line", song.queued
+        ? "Wartet auf den Song-Rechner … gleich bist du dran."
+        : "Wird erstellt … das kann ein paar Minuten dauern."));
     } else if (song.status === "failed") {
       meta.append(el("div", "status-line bad", song.error || "Das hat nicht geklappt."));
     } else {
@@ -284,7 +287,7 @@
     state.submitting = false;
     if (!data.ok) {
       showFormError(ERRORS[data.error] || "Das hat nicht geklappt. Versuche es noch einmal.");
-      if (data.error === "daily_cap" || data.error === "not_configured") refreshStatus();
+      if (["daily_cap", "not_configured", "worker_offline"].includes(data.error)) refreshStatus();
       updateGo();
       return;
     }

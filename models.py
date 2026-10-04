@@ -390,6 +390,7 @@ class YSong(db.Model):
     lyrics = db.Column(db.Text, nullable=False, default="")
     description = db.Column(db.String(300), nullable=False, default="")
     genres = db.Column(db.String(120), nullable=False, default="")      # up to 3 genre ids, comma-joined
+    tags = db.Column(db.String(300), nullable=True)                     # English style tags, set when a job waits for the song computer
     duration = db.Column(db.Integer, nullable=False, default=30)        # seconds
     status = db.Column(db.String(12), nullable=False, default="generating")  # generating/ready/failed
     error = db.Column(db.String(160), nullable=False, default="")
