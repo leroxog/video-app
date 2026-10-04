@@ -354,9 +354,20 @@ svg { display: block; }
 .shake { animation: shake .35s; }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 
+/* ------------------------------------------------------- accessibility, errors */
+.skip { position: absolute; left: 12px; top: -60px; z-index: 300; padding: 10px 16px; border-radius: 12px; background: var(--blue); color: #fff; font-weight: 900; text-decoration: none; transition: top .15s; }
+.skip:focus { top: 12px; }
+.main:focus { outline: none; }
+.errorpage { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 24px 20px; text-align: center; max-width: 460px; margin: 0 auto; }
+.errorpage .code { margin: 8px 0 0; font-size: 15px; font-weight: 900; letter-spacing: 3px; color: var(--blue-t); }
+.errorpage h1 { font-size: 28px; }
+.errorpage p { margin: 0 0 12px; color: var(--muted); font-weight: 700; }
+.fade { animation: fade .18s ease-out; }
+
 /* ------------------------------------------------------------ legal pages */
 .legal-page { max-width: 680px; margin: 0 auto; padding: 24px 20px 60px; }
 .legal-page .logo { margin-bottom: 18px; text-decoration: none; }
+.legal-page .logo img { width: 40px; height: 40px; }
 .legal-page h1 { font-size: 30px; margin-bottom: 8px; }
 .legal-page h2 { font-size: 19px; margin: 26px 0 6px; }
 .legal-page p { margin: 0 0 12px; font-weight: 600; line-height: 1.65; }

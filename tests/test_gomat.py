@@ -332,8 +332,8 @@ def test_the_page_loads_a_self_hosted_font_and_nothing_from_other_sites(client):
     text = flask_app.test_client().get("/").get_data(as_text=True)
     css = open(os.path.join(ROOT, "static", "css", "gomat.css"), encoding="utf-8").read()
     assert "/static/fonts/Nunito-Variable.ttf" in css and os.path.getsize(os.path.join(ROOT, "static", "fonts", "Nunito-Variable.ttf")) > 100_000
-    for source in (text, css):
-        assert not re.search(r"https?://(?!www\.w3\.org)", source), re.findall(r"https?://[^\s\"')]+", source)
+    for source in (text, css):       # nothing from other sites (the page's own address, e.g. in link previews, is fine)
+        assert not re.search(r"https?://(?!www\.w3\.org|localhost)", source), re.findall(r"https?://[^\s\"')]+", source)
     assert os.path.exists(os.path.join(ROOT, "static", "fonts", "OFL-Nunito.txt"))
 
 

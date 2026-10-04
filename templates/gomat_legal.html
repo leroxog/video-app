@@ -5,11 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>{{ "Datenschutz" if page == "privacy" else "Impressum" }} | gomat</title>
 <meta name="theme-color" content="#1cb0f6">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/gomat.css') }}?v=1">
+<link rel="icon" href="{{ static_url('img/gomat-icon.svg') }}" type="image/svg+xml">
+<link rel="stylesheet" href="{{ static_url('css/gomat.css') }}">
 </head>
 <body>
 <div class="legal-page">
-  <a class="logo" href="/" aria-label="gomat – zurück zur Startseite"><span class="word">gomat</span></a>
+  <a class="logo" href="/" aria-label="gomat – zurück zur Startseite"><img src="{{ static_url('img/gomat-icon.svg') }}" alt="" width="40" height="40"><span class="word">gomat</span></a>
   <main>
 {%- if page == "imprint" %}
     <h1>Impressum</h1>

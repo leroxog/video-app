@@ -466,7 +466,8 @@ def handle_unexpected_error(exc):
         exc, path=request.path, method=request.method,
         tb=traceback.format_exc(), user_id=user.id if user else None,
     )
-    return render_template("500.html"), 500
+    return render_template("gomat_error.html", code=500, mood="sad", title="Da ist etwas schiefgelaufen",
+                           text="Das war unerwartet. Gomi kümmert sich darum. Bitte versuche es gleich noch einmal."), 500
 
 
 LAST_SEEN_UPDATE_THROTTLE_SECONDS = 60
@@ -518,7 +519,7 @@ def _make_session_permanent():
     # logged out constantly. Marking the session permanent + a long
     # lifetime gives it a real expiry date instead.
     # gomat keeps nothing on the server, so its pages and API never set a cookie at all.
-    if request.endpoint in gomat.NO_COOKIE_ENDPOINTS:
+    if request.endpoint is None or request.endpoint in gomat.NO_COOKIE_ENDPOINTS:
         return
     session.permanent = True
 
@@ -528,7 +529,7 @@ _PUBLIC_ENDPOINTS = {
     "pl_login", "pl_signup", "static", "service_worker", "offline_page",
     "pl_google_auth_start", "pl_google_auth_callback",
     "api_pl_login", "api_pl_register_check_username", "api_pl_register_complete",
-} | ysound.PUBLIC_ENDPOINTS | gomat.PUBLIC_ENDPOINTS | {"gomat_privacy", "gomat_imprint"}   # the home page (gomat), its API and the archived ysound need no account
+} | ysound.PUBLIC_ENDPOINTS | gomat.PUBLIC_ENDPOINTS | gomat.LEGAL_ENDPOINTS | gomat.META_ENDPOINTS   # the home page (gomat), its API and the archived ysound need no account
 
 
 # '-' can't appear in a registered username (see PL_USERNAME_RE), so this prefix never clashes.

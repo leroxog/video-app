@@ -18,12 +18,14 @@ Every exercise also has `explain`, and may have a `visual` (dots, array, pie, ba
 Generators add a private `_meta` (an expression and its value) that the tests use to re-check the maths
 independently; it never leaves the server.
 """
+import json
+import os
 import random
 import re
 from fractions import Fraction
 from math import gcd
 
-from flask import jsonify, render_template, request
+from flask import Response, jsonify, render_template, request, url_for
 
 import ysound
 
@@ -33,8 +35,19 @@ MINUS = "−"
 LESSON_ID_RE = re.compile(r"([1-9])-([1-9])")
 PUBLIC_ENDPOINTS = {"pl_home", "gomat_lesson", "gomat_practice"}
 LEGAL_ENDPOINTS = {"gomat_privacy", "gomat_imprint"}
+META_ENDPOINTS = {"gomat_manifest", "gomat_robots", "gomat_sitemap"}
+PAGE_ENDPOINTS = {"pl_home"} | LEGAL_ENDPOINTS
 # Routes of this module never need the site's session cookie (nothing is stored on the server).
-NO_COOKIE_ENDPOINTS = PUBLIC_ENDPOINTS | LEGAL_ENDPOINTS
+NO_COOKIE_ENDPOINTS = PUBLIC_ENDPOINTS | LEGAL_ENDPOINTS | META_ENDPOINTS
+
+# What the pages may load: only our own files. (Styles may be set inline by the script; scripts may not.)
+CONTENT_SECURITY_POLICY = (
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; "
+    "connect-src 'self'; manifest-src 'self'; base-uri 'none'; object-src 'none'; form-action 'self'; frame-ancestors 'none'"
+)
+TAGLINE = "Mathe lernen, Schritt für Schritt"
+DESCRIPTION = "gomat: Mathe lernen in kurzen Lektionen, wie ein Spiel. Kostenlos, ohne Anmeldung, ohne Cookies."
+ARCHIVE_PATHS = ("/ysound-archiv", "/sound-archiv", "/server-archiv", "/browser-archiv", "/ylib-archiv", "/ychat-archiv", "/nex-archiv")
 
 PEOPLE = [("Mia", "Sie"), ("Ben", "Er"), ("Lena", "Sie"), ("Tom", "Er"), ("Emma", "Sie"), ("Leo", "Er"),
           ("Anna", "Sie"), ("Paul", "Er"), ("Sophie", "Sie"), ("Max", "Er"), ("Lea", "Sie"), ("Finn", "Er")]
@@ -197,9 +210,9 @@ def add(rng, p):
     s = a + b
     hint = f"{a} + {b} = {s}."
     if top <= 20 and a < 10 < s and a != 10:
-        hint += f" Tipp: Erst auf 10 auffüllen ({a} + {10 - a}), dann den Rest ({b - (10 - a)}) dazu."
+        hint += f" Tipp: Fülle erst auf 10 auf ({a} + {10 - a}) und rechne dann noch {b - (10 - a)} dazu."
     elif top > 20:
-        hint += f" Tipp: Rechne erst die Zehner, dann die Einer."
+        hint += " Tipp: Rechne erst die Zehner, dann die Einer."
     return either(rng, f"{a} + {b} = ?", s, near(rng, s, 0, top + 10), hint, meta=_meta(f"{a}+{b}", s))
 
 
@@ -216,9 +229,9 @@ def sub(rng, p):
     d = a - b
     hint = f"{a} − {b} = {d}."
     if top <= 20 and a > 10 > d and b > a - 10:
-        hint += f" Tipp: Erst bis zur 10 zurück ({a} − {a - 10}), dann den Rest ({b - (a - 10)}) weg."
+        hint += f" Tipp: Gehe erst bis zur 10 zurück ({a} − {a - 10}) und ziehe dann noch {b - (a - 10)} ab."
     elif top > 20:
-        hint += " Tipp: Rechne erst die Zehner weg, dann die Einer."
+        hint += " Tipp: Ziehe erst die Zehner ab, dann die Einer."
     return either(rng, f"{a} − {b} = ?", d, near(rng, d, 0, top), hint, meta=_meta(f"{a}-{b}", d))
 
 
@@ -330,9 +343,9 @@ def round_tens(rng, p):
         n = rng.randint(11, 98)
     down, up = n // 10 * 10, n // 10 * 10 + 10
     best = up if n % 10 >= 5 else down
-    return choice(rng, f"Runde {n} auf Zehner.", best, [down if best == up else up, best + 10 if best == up else best - 10,
+    return choice(rng, f"Runde {n} auf den nächsten Zehner.", best, [down if best == up else up, best + 10 if best == up else best - 10,
                                                       n, n + 1],
-                  f"Bei {n} entscheidet die Einerstelle {n % 10}: ab 5 wird aufgerundet, sonst abgerundet. Also {best}.",
+                  f"Schau auf die Einerstelle ({n % 10}): Ab 5 rundest du auf, sonst ab. Also {best}.",
                   meta=_meta(str(best), best))
 
 
@@ -348,7 +361,7 @@ def times(rng, p):
     if rng.random() < 0.5:
         a, b = b, a
     return either(rng, f"{a} × {b} = ?", a * b, near(rng, a * b, 0, 100, extra=[a * (b + 1), a * (b - 1), (a + 1) * b]),
-                  f"{a} × {b} = {a * b}. Du kannst auch {b} × {a} rechnen, das ergibt dasselbe.", meta=_meta(f"{a}*{b}", a * b))
+                  f"{a} × {b} = {a * b}. Du kannst auch {b} × {a} rechnen, das Ergebnis ist dasselbe.", meta=_meta(f"{a}*{b}", a * b))
 
 
 def times_missing(rng, p):
@@ -384,7 +397,7 @@ def multiples(rng, p):
         if w % r != 0 and w not in wrong:
             wrong.append(w)
     return choice(rng, f"Welche Zahl steht in der {r}er-Reihe?", right, wrong,
-                  f"In der {r}er-Reihe stehen die Zahlen, die du mit {r} mal etwas bekommst, zum Beispiel {right} = {r} × {right // r}.",
+                  f"Zur {r}er-Reihe gehören alle Zahlen, die du mit {r} malnehmen kannst, zum Beispiel {right} = {r} × {right // r}.",
                   meta=_meta(f"{right}/{r}*{r}", right))
 
 
@@ -406,15 +419,15 @@ def fact_family(rng, p):
     a, b = rng.randint(2, 9), rng.randint(2, 9)
     p_ = a * b
     return either(rng, f"Wenn {a} × {b} = {p_} ist, wie viel ist dann {p_} ÷ {b}?", a, near(rng, a, 1, 12, extra=[b]),
-                  f"Teilen ist das Gegenteil von Malnehmen: {p_} ÷ {b} = {a}.", meta=_meta(f"{p_}/{b}", a))
+                  f"Teilen ist die Umkehrung von Malnehmen: {p_} ÷ {b} = {a}.", meta=_meta(f"{p_}/{b}", a))
 
 
 def divide_word(rng, p):
     d, q = _row(rng, p)
     q = max(q, 2)
     thing = rng.choice(["Bonbons", "Kekse", "Sticker", "Karten", "Murmeln"])
-    name = rng.choice(["Kinder", "Freunde", "Gäste"])
-    return either(rng, f"{d * q} {thing} werden gerecht auf {d} {name} verteilt. Wie viele bekommt jedes?", q,
+    group, each = rng.choice([("Kinder", "jedes Kind"), ("Freunde", "jeder Freund"), ("Gäste", "jeder Gast")])
+    return either(rng, f"{d * q} {thing} werden gerecht auf {d} {group} verteilt. Wie viele {thing} bekommt {each}?", q,
                   near(rng, q, 1, 15), f"{d * q} ÷ {d} = {q}.", meta=_meta(f"{d * q}/{d}", q))
 
 
@@ -529,14 +542,14 @@ def dec_add(rng, p):
     if rng.random() < 0.5:
         s = a + b
         return either(rng, f"{dec(a)} + {dec(b)} = ?", dec(s, trim=True), [dec(s + d, trim=True) for d in (1, -1, 10, -10)],
-                      f"Setze Komma unter Komma: {dec(a)} + {dec(b)} = {dec(s, trim=True)}.", meta=_meta(f"{a}/10+{b}/10", Fraction(s, 10)))
+                      f"Schreibe Komma unter Komma: {dec(a)} + {dec(b)} = {dec(s, trim=True)}.", meta=_meta(f"{a}/10+{b}/10", Fraction(s, 10)))
     if a == b:
         a += 1
     if a < b:
         a, b = b, a
     d = a - b
     return either(rng, f"{dec(a)} − {dec(b)} = ?", dec(d, trim=True), [dec(d + k, trim=True) for k in (1, -1, 10, -10) if d + k >= 0],
-                  f"Setze Komma unter Komma: {dec(a)} − {dec(b)} = {dec(d, trim=True)}.", meta=_meta(f"{a}/10-{b}/10", Fraction(d, 10)))
+                  f"Schreibe Komma unter Komma: {dec(a)} − {dec(b)} = {dec(d, trim=True)}.", meta=_meta(f"{a}/10-{b}/10", Fraction(d, 10)))
 
 
 def dec_compare(rng, p):
@@ -581,7 +594,7 @@ def percent_convert(rng, p):
 
 def percent_match(rng, p):
     table = rng.sample([("50 %", "1/2"), ("25 %", "1/4"), ("75 %", "3/4"), ("10 %", "0,1"), ("20 %", "1/5"), ("100 %", "das Ganze")], 4)
-    return matching(rng, "Ordne die Prozente zu.", table, "Prozent heißt „von Hundert“: 50 % sind die Hälfte, 25 % ein Viertel und so weiter.")
+    return matching(rng, "Ordne die Prozente zu.", table, "Prozent heißt „von hundert“: 50 % sind die Hälfte, 25 % ein Viertel, 10 % ein Zehntel.")
 
 
 # ------------------------------------------------------------------------------- unit 7: negatives, rules
@@ -675,7 +688,7 @@ def word_equation(rng, p):
                       f"x + {b} = {x + b}, also x = {x + b} − {b} = {x}.", meta=_meta(f"{x + b}-{b}", x))
     if kind == 1:
         m = rng.randint(2, 6)
-        return either(rng, f"Ich denke mir eine Zahl und nehme sie mal {m}. Dann habe ich {x * m}. Welche Zahl war es?", x, near(rng, x, 1, 40),
+        return either(rng, f"Ich denke mir eine Zahl und multipliziere sie mit {m}. Dann habe ich {x * m}. Welche Zahl war es?", x, near(rng, x, 1, 40),
                       f"{m}x = {x * m}, also x = {x * m} ÷ {m} = {x}.", meta=_meta(f"{x * m}/{m}", x))
     b = rng.randint(2, 9)
     return either(rng, f"Ich denke mir eine Zahl und ziehe {b} ab. Dann habe ich {x}. Welche Zahl war es?", x + b, near(rng, x + b, 0, 40),
@@ -766,19 +779,19 @@ UNITS = [
         {"title": "Plus bis 100", "icon": "plus", "mix": [M("add", 4, max=100, min=11), M("word_addsub", 2, max=100)]},
         {"title": "Minus bis 100", "icon": "minus", "mix": [M("sub", 4, max=100), M("word_addsub", 2, max=100)]},
     ]},
-    {"id": 3, "title": "Das Einmaleins", "desc": "Mal rechnen, Reihen und Muster", "color": "orange", "lessons": [
+    {"id": 3, "title": "Das Einmaleins", "desc": "Malnehmen, Reihen und Muster", "color": "orange", "lessons": [
         {"title": "2er, 5er und 10er", "icon": "times", "mix": [M("times", 4, rows=[2, 5, 10]), M("times_array", 2), M("multiples", 2, rows=[2, 5, 10])]},
         {"title": "3er und 4er", "icon": "times", "mix": [M("times", 4, rows=[3, 4]), M("times_missing", 2, rows=[3, 4]), M("times_word", 2, rows=[3, 4])]},
         {"title": "6er und 7er", "icon": "times", "mix": [M("times", 4, rows=[6, 7]), M("times_missing", 2, rows=[6, 7]), M("match_calc", 1, op="times", rows=[6, 7])]},
         {"title": "8er und 9er", "icon": "times", "mix": [M("times", 4, rows=[8, 9]), M("times_missing", 2, rows=[8, 9]), M("times_word", 2, rows=[8, 9])]},
     ]},
-    {"id": 4, "title": "Teilen", "desc": "Gerecht verteilen und Gegenaufgaben", "color": "pink", "lessons": [
+    {"id": 4, "title": "Teilen", "desc": "Gerecht verteilen und Umkehraufgaben", "color": "pink", "lessons": [
         {"title": "Teilen durch 2, 5, 10", "icon": "divide", "mix": [M("divide", 4, rows=[2, 5, 10]), M("divide_word", 2, rows=[2, 5, 10]), M("divide_missing", 1, rows=[2, 5, 10])]},
         {"title": "Teilen durch 3 und 4", "icon": "divide", "mix": [M("divide", 4, rows=[3, 4]), M("divide_missing", 2, rows=[3, 4]), M("fact_family", 1)]},
         {"title": "Größere Reihen", "icon": "divide", "mix": [M("divide", 4, rows=[6, 7, 8, 9]), M("fact_family", 2), M("match_calc", 1, op="divide", rows=[6, 7, 8, 9])]},
         {"title": "Rest und Textaufgaben", "icon": "divide", "mix": [M("remainder", 3), M("divide_word", 3, rows=[3, 4, 6, 8]), M("fact_family", 1)]},
     ]},
-    {"id": 5, "title": "Brüche", "desc": "Teile vom Ganzen", "color": "cyan", "lessons": [
+    {"id": 5, "title": "Brüche", "desc": "Teile von einem Ganzen", "color": "cyan", "lessons": [
         {"title": "Brüche erkennen", "icon": "pie", "mix": [M("frac_visual", 5)]},
         {"title": "Bruchteile von Zahlen", "icon": "pie", "mix": [M("frac_of_number", 5), M("frac_visual", 2)]},
         {"title": "Brüche vergleichen", "icon": "pie", "mix": [M("frac_compare", 4), M("frac_visual", 1, dens=[2, 4, 8])]},
@@ -791,14 +804,14 @@ UNITS = [
         {"title": "Prozent erkennen", "icon": "percent", "mix": [M("percent_convert", 4), M("percent_match", 2)]},
         {"title": "Prozent berechnen", "icon": "percent", "mix": [M("percent_of", 5), M("percent_convert", 1)]},
     ]},
-    {"id": 7, "title": "Negative Zahlen und Regeln", "desc": "Unter null und Punkt vor Strich", "color": "red", "lessons": [
+    {"id": 7, "title": "Negative Zahlen und Rechenregeln", "desc": "Unter null und Punkt vor Strich", "color": "red", "lessons": [
         {"title": "Negative Zahlen", "icon": "minus", "mix": [M("neg_compare", 3), M("neg_order", 2)]},
         {"title": "Plus und Minus unter null", "icon": "plusminus", "mix": [M("neg_add_sub", 5), M("neg_compare", 1)]},
         {"title": "Punkt vor Strich", "icon": "times", "mix": [M("order_ops", 5)]},
         {"title": "Klammern und Hochzahlen", "icon": "times", "mix": [M("parens", 3), M("powers", 3), M("order_ops", 1)]},
     ]},
-    {"id": 8, "title": "Gleichungen", "desc": "Das Geheimnis hinter dem x", "color": "violet", "lessons": [
-        {"title": "Die leere Box", "icon": "x", "mix": [M("box_equation", 5), M("solve_lin", 1, kinds=["add"])]},
+    {"id": 8, "title": "Gleichungen", "desc": "Dem x auf der Spur", "color": "violet", "lessons": [
+        {"title": "Lücken füllen", "icon": "x", "mix": [M("box_equation", 5), M("solve_lin", 1, kinds=["add"])]},
         {"title": "x finden", "icon": "x", "mix": [M("solve_lin", 5), M("solve_choice", 1)]},
         {"title": "Zwei Schritte", "icon": "x", "mix": [M("solve_two_step", 5), M("solve_choice", 2)]},
         {"title": "Zahlenrätsel", "icon": "x", "mix": [M("word_equation", 5), M("solve_lin", 1)]},
@@ -876,6 +889,34 @@ def practice_exercises(max_unit, count, seed):
 
 # ----------------------------------------------------------------------------------------- routes
 
+def static_url(path):
+    """A static file's address with its modification time, so browsers fetch a changed file right away."""
+    try:
+        version = int(os.path.getmtime(os.path.join("static", *path.split("/"))))
+    except OSError:
+        version = 0
+    return f"{url_for('static', filename=path)}?v={version}"
+
+
+def base_url():
+    """The site's own address as visitors see it (behind the host's proxy the scheme comes from a header)."""
+    scheme = request.headers.get("X-Forwarded-Proto", request.scheme).split(",")[0].strip()
+    return f"{scheme if scheme in ('http', 'https') else 'https'}://{request.host}"
+
+
+def manifest():
+    return {
+        "name": "gomat – Mathe lernen", "short_name": "gomat", "description": DESCRIPTION, "lang": "de", "dir": "ltr",
+        "id": "/", "start_url": "/", "scope": "/", "display": "standalone", "orientation": "portrait",
+        "background_color": "#ffffff", "theme_color": "#1cb0f6", "categories": ["education", "kids"],
+        "icons": [
+            {"src": "/static/img/gomat-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+            {"src": "/static/img/gomat-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+            {"src": "/static/img/gomat-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
+        ],
+    }
+
+
 def register_routes(app):
     def seed_of(raw):
         try:
@@ -884,9 +925,32 @@ def register_routes(app):
             return random.SystemRandom().randrange(2 ** 31)
         return value % (2 ** 31)
 
+    @app.context_processor
+    def gomat_template_helpers():
+        return {"static_url": static_url}
+
+    @app.after_request
+    def gomat_headers(response):
+        endpoint = request.endpoint
+        if endpoint in PAGE_ENDPOINTS:
+            response.headers["Content-Security-Policy"] = CONTENT_SECURITY_POLICY
+            response.headers["X-Frame-Options"] = "DENY"
+            response.headers["Cache-Control"] = "no-cache"
+        if endpoint in NO_COOKIE_ENDPOINTS:
+            response.headers["X-Content-Type-Options"] = "nosniff"
+            response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+            response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+            if request.headers.get("X-Forwarded-Proto", request.scheme).split(",")[0].strip() == "https":
+                response.headers["Strict-Transport-Security"] = "max-age=31536000"
+        if endpoint in ("gomat_lesson", "gomat_practice"):
+            response.headers["Cache-Control"] = "no-store"
+        return response
+
     @app.route("/", endpoint="pl_home")
     def gomat_home():
-        return render_template("gomat.html", units=public_curriculum(), lesson_length=LESSON_LENGTH)
+        root = base_url()
+        return render_template("gomat.html", units=public_curriculum(), lesson_length=LESSON_LENGTH, tagline=TAGLINE,
+                               description=DESCRIPTION, base=root, og_image=f"{root}/static/img/gomat-og.png")
 
     def legal(page):
         # The archived song site (ysound) is only described while it can still be used or shows ads.
@@ -901,6 +965,30 @@ def register_routes(app):
     @app.route("/impressum")
     def gomat_imprint():
         return legal("imprint")
+
+    @app.route("/manifest.webmanifest")
+    def gomat_manifest():
+        return Response(json.dumps(manifest(), ensure_ascii=False), mimetype="application/manifest+json")
+
+    @app.route("/robots.txt")
+    def gomat_robots():
+        lines = ["User-agent: *", "Allow: /", "Disallow: /api/"] + [f"Disallow: {path}" for path in ARCHIVE_PATHS]
+        lines += ["", f"Sitemap: {base_url()}/sitemap.xml", ""]
+        return Response("\n".join(lines), mimetype="text/plain")
+
+    @app.route("/sitemap.xml")
+    def gomat_sitemap():
+        root = base_url()
+        urls = "".join(f"  <url><loc>{root}{path}</loc></url>\n" for path in ("/", "/datenschutz", "/impressum"))
+        return Response(f'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n{urls}</urlset>\n',
+                        mimetype="application/xml")
+
+    @app.errorhandler(404)
+    def gomat_not_found(error):
+        if request.path.startswith("/api/"):
+            return jsonify({"ok": False, "error": "not_found"}), 404
+        return render_template("gomat_error.html", code=404, mood="sad", title="Diese Seite gibt es nicht",
+                               text="Vielleicht hat sich die Adresse geändert, oder sie war nie da. Gomi bringt dich zurück zum Lernen."), 404
 
     @app.route("/api/gomat/lesson/<lesson_id>")
     def gomat_lesson(lesson_id):
