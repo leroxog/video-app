@@ -31,8 +31,10 @@ from models import (
 import ai_assistant
 import integrations
 import mc_hosting
+import music_studio
 import play_platform
 import search_engine
+import ysound
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -392,6 +394,8 @@ with app.app_context():
 
 with app.app_context():
     play_platform.seed_demo_games()
+    music_studio.fail_stale_jobs()
+    ysound.fail_stale_jobs()
 
 if os.environ.get("NRS_AUTO_INDEX", "1") == "1":
     search_engine.start_background_crawl(app, limit=int(os.environ.get("NRS_INDEX_SIZE", "4000")))
@@ -518,15 +522,17 @@ _PUBLIC_ENDPOINTS = {
     "pl_login", "pl_signup", "static", "service_worker", "offline_page",
     "pl_google_auth_start", "pl_google_auth_callback",
     "api_pl_login", "api_pl_register_check_username", "api_pl_register_complete",
-}
+} | ysound.PUBLIC_ENDPOINTS   # ysound: the home page and its API need no account at all
 
 
 # '-' can't appear in a registered username (see PL_USERNAME_RE), so this prefix never clashes.
 GUEST_USERNAME_PREFIX = "gast-"
 _GUEST_START_ENDPOINTS = {
-    "pl_home", "pl_link", "pl_search", "pl_ylib_archived", "pl_browser_archived", "pl_play", "pl_play_game",
+    "pl_link", "pl_search", "pl_ylib_archived", "pl_browser_archived", "pl_play", "pl_play_game",
+    "pl_server_archived", "pl_sound_archived",
 }
 _GUEST_ENDPOINTS = _GUEST_START_ENDPOINTS | {
+    "api_music_genres", "api_music_songs", "api_music_song", "api_music_play", "api_music_report",
     "play_frame", "api_play_games", "api_play_view", "api_play_report",
     "pl_media_file", "pl_logout", "pl_search_doc", "api_link_preview", "api_ylib_items_list",
     "api_ylib_items_create", "api_ylib_youtube_create", "api_ylib_items_delete",
@@ -1146,10 +1152,27 @@ def pl_browser_archived():
     return render_template("pl_nrs.html", is_guest=is_guest(current_user()))
 
 
-@app.route("/")
-def pl_home():
+@app.route("/server-archiv")
+def pl_server_archived():
+    """NRS Server (Minecraft hosting on volunteers' computers) -- archived, not deleted, at the
+    user's request (2026-10-03) in favor of NRS Sound (see pl_home). Code, routes and data stay
+    exactly as they were; this view is just no longer linked from anywhere."""
     me = current_user()
     return render_template("pl_servers.html", is_guest=is_guest(me), is_admin=bool(me.is_admin), username=pl_display_name(me))
+
+
+@app.route("/sound-archiv")
+def pl_sound_archived():
+    """NRS Sound (AI song studio with a browser synthesizer) -- archived, not deleted, at the user's
+    request (2026-10-04) in favor of ysound (see ysound.py, which serves "/" as pl_home). Code, routes
+    and data stay exactly as they were; this view is just no longer linked from anywhere."""
+    me = current_user()
+    return render_template(
+        "pl_music.html", is_guest=is_guest(me), is_admin=bool(me.is_admin), username=pl_display_name(me),
+        min_seconds=music_studio.MIN_SECONDS, max_seconds=music_studio.MAX_SECONDS,
+        genres=[{"id": key, "label": g["label"], "emoji": g["emoji"], "colors": g["colors"]}
+                for key, g in music_studio.GENRES.items()],
+    )
 
 
 # ==========================================================================
@@ -1190,6 +1213,12 @@ mc_hosting.register_routes(app, current_user, is_guest)
 
 # NRS Play (members publish small games, ad revenue is shared) -- see play_platform.py.
 play_platform.register_routes(app, current_user, is_guest)
+
+# NRS Sound (archived AI song studio, see /sound-archiv) -- see music_studio.py.
+music_studio.register_routes(app, current_user, is_guest, _pl_store_media, _pl_media_url, _pl_delete_media)
+
+# ysound (the home page: anonymous AI songs with Stable Audio Open) -- see ysound.py.
+ysound.register_routes(app, current_user, _pl_store_media, _pl_media_url, _pl_delete_media)
 
 
 # ==========================================================================

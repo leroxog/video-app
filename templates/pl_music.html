@@ -1,0 +1,190 @@
+{% extends "pl_base.html" %}
+{% block title %}NRS Sound{% endblock %}
+
+{% block head_extra %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/music.css') }}">
+{% endblock %}
+
+{% block screen_class %}music{% endblock %}
+{% block screen %}
+{%- macro icon(name) -%}
+  {%- if name == "home" -%}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11 12 3l9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>
+  {%- elif name == "search" -%}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+  {%- elif name == "library" -%}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v16M9 4v16"/><path d="m14 5 5 14"/></svg>
+  {%- elif name == "create" -%}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
+  {%- endif -%}
+{%- endmacro %}
+<div class="ms" id="ms">
+  <aside class="ms-side">
+    <div class="ms-block">
+      <a class="ms-logo" href="/">N<b>RS</b><small>Sound</small></a>
+      <nav class="ms-nav" id="msNav">
+        <button type="button" data-view="home" class="active">{{ icon("home") }}Start</button>
+        <button type="button" data-view="search">{{ icon("search") }}Suche</button>
+        <button type="button" data-view="library">{{ icon("library") }}Bibliothek</button>
+        <button type="button" data-view="create">{{ icon("create") }}Song erstellen</button>
+      </nav>
+    </div>
+    <div class="ms-block" style="flex:1;display:flex;flex-direction:column;min-height:0">
+      <div class="ms-side-title">Genres</div>
+      <div class="ms-genre-list" id="msGenreList"></div>
+      <div class="ms-side-foot">Alle Songs stehen unter <a href="https://creativecommons.org/licenses/by/4.0/deed.de" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>.<br><a href="/spiele">NRS Play</a> · <a href="/browser-archiv">Browser</a></div>
+    </div>
+  </aside>
+
+  <section class="ms-main">
+    <header class="ms-top">
+      <label class="ms-search" id="msSearchBox" hidden>
+        {{ icon("search") }}
+        <input type="search" id="msSearch" placeholder="Songs, Genres oder Ersteller suchen" autocomplete="off" aria-label="Suchen">
+      </label>
+      <div class="grow"></div>
+      <div class="ms-user">
+        {% if is_guest %}<a class="ms-pill" href="/logout">Anmelden</a>
+        {% else %}<span class="name">{{ username }}</span><a href="/logout">Abmelden</a>{% endif %}
+      </div>
+    </header>
+
+    <div class="ms-scroll" id="msScroll">
+      <div class="ms-view" id="viewHome">
+        <h1 id="msGreeting">Hallo</h1>
+        <div class="ms-banner">
+          <div class="txt"><h2>Erschaffe deinen eigenen KI-Song</h2><p>Wähle ein Genre, die Länge und einen Namen, beschreib die Stimmung &ndash; und unsere KI komponiert, schreibt den Text und malt das Cover.</p></div>
+          <button type="button" class="ms-pill" data-goto="create">Jetzt erstellen</button>
+        </div>
+        <h2>Neu erstellt</h2>
+        <div class="ms-shelf" id="shelfNew"></div>
+        <h2>Beliebt</h2>
+        <div class="ms-shelf" id="shelfPop"></div>
+        <h2>Nach Genre stöbern</h2>
+        <div class="ms-tiles" id="homeTiles"></div>
+      </div>
+
+      <div class="ms-view" id="viewSearch" hidden>
+        <h1 id="searchTitle">Suchen</h1>
+        <div class="ms-tiles" id="searchTiles"></div>
+        <div id="searchResultsWrap" hidden><div class="ms-rows" id="searchResults"></div></div>
+      </div>
+
+      <div class="ms-view" id="viewLibrary" hidden>
+        <h1>Deine Bibliothek</h1>
+        <div class="ms-tabs" id="libTabs">
+          <button type="button" class="ms-tab active" data-lib="mine">Meine Songs</button>
+          <button type="button" class="ms-tab" data-lib="liked">Gefällt mir</button>
+          {% if is_admin %}<button type="button" class="ms-tab" data-lib="hidden">Gemeldet</button>{% endif %}
+        </div>
+        <div class="ms-rows" id="libRows"></div>
+      </div>
+
+      <div class="ms-view" id="viewCreate" hidden>
+        <h1>Song erstellen</h1>
+        {% if is_guest %}
+        <div class="ms-info" style="max-width:560px">
+          <h3>Zum Erstellen brauchst du ein Konto</h3>
+          <p>Anhören kannst du alles ohne Konto. Zum Erstellen und für &bdquo;Gefällt mir&ldquo; melde dich bitte an.</p>
+          <a class="ms-pill" href="/logout">Anmelden oder registrieren</a>
+        </div>
+        {% else %}
+        <div class="ms-create" id="createWrap">
+          <form class="ms-form" id="createForm" autocomplete="off">
+            <div class="ms-field"><label class="lab">Genre</label><div class="ms-genres" id="fGenres"></div></div>
+            <div class="ms-field">
+              <label class="lab" for="fLen">Länge</label>
+              <div class="ms-len"><input type="range" id="fLen" min="{{ min_seconds }}" max="{{ max_seconds }}" step="5" value="60"><output id="fLenOut">1:00</output></div>
+              <div class="hint">Zwischen {{ min_seconds }} Sekunden und 2:30 Minuten.</div>
+            </div>
+            <div class="ms-field"><label class="lab" for="fTitle">Name des Songs</label><input class="ms-input" id="fTitle" maxlength="60" placeholder="Wie soll dein Song heißen?"></div>
+            <div class="ms-field">
+              <label class="lab" for="fDesc">Beschreibe den Song</label>
+              <textarea class="ms-textarea" id="fDesc" maxlength="300" placeholder="Zum Beispiel: ruhig und verträumt, wie ein Regentag am Fenster"></textarea>
+              <div class="hint">Je genauer du Stimmung und Tempo beschreibst, desto besser passt der Song.</div>
+            </div>
+            <label class="ms-switch"><input type="checkbox" id="fVocals"><span class="track"></span>Mit Gesang</label>
+            <div class="ms-field" id="lyricsBox" hidden>
+              <label class="lab" for="fLyrics">Text zum Singen (optional)</label>
+              <textarea class="ms-textarea" id="fLyrics" maxlength="1500" style="min-height:140px" placeholder="Eine Zeile pro Textzeile. Leer lassen: Dann schreibt die KI den Text."></textarea>
+              <label class="ms-check" id="ownBox" hidden><input type="checkbox" id="fOwn"><span>Diesen Text habe ich selbst geschrieben. Ich nutze keine Songtexte von anderen, denn der Song wird für alle veröffentlicht.</span></label>
+              <div class="hint">Der Gesang kommt von der Computerstimme deines Geräts und klingt deshalb nicht wie ein echter Sänger.</div>
+            </div>
+            <div class="ms-error" id="fError" role="alert"></div>
+            <button type="submit" class="ms-go" id="fGo">Erstellen</button>
+          </form>
+          <aside class="ms-info">
+            <h3>So entsteht dein Song</h3>
+            <ol>
+              <li>Unsere KI plant Tempo, Tonart und Akkorde zu deiner Beschreibung.</li>
+              <li>Bei Gesang schreibt sie den Text, falls du keinen eingibst.</li>
+              <li>Ein Bild-Modell malt das Cover.</li>
+              <li>Dein Gerät spielt die Musik live mit unserem Synthesizer.</li>
+            </ol>
+            <p><span class="cc">CC BY 4.0</span>Alle Songs sind frei nutzbar, solange der Ersteller genannt wird. Der Text zählt dazu.</p>
+          </aside>
+        </div>
+        <div class="ms-progress" id="createProgress" hidden>
+          <div class="spin"></div><h3 id="progTitle">Dein Song entsteht</h3><p id="progStep"></p>
+        </div>
+        <div class="ms-progress" id="createDone" hidden>
+          <div class="ms-result"><div class="ms-cover" id="doneCover"></div><div><h3 id="doneTitle" style="margin:0 0 6px"></h3><p style="margin:0 0 16px" id="doneSub"></p><button type="button" class="ms-go" id="donePlay">Anhören</button> <button type="button" class="ms-pill dark" id="doneAgain">Noch einen erstellen</button></div></div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="ms-overlay" id="msOverlay" hidden>
+      <button type="button" class="ms-icon ms-overlay-close" id="ovClose" aria-label="Schließen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      <div class="ms-overlay-body">
+        <div class="ms-cover ms-big" id="ovCover"></div>
+        <div>
+          <h1 id="ovTitle"></h1>
+          <div class="by" id="ovBy"></div>
+          <div class="ms-badges" id="ovBadges"></div>
+          <div class="ms-actions">
+            <button type="button" class="ms-pill dark" id="ovLike">Gefällt mir</button>
+            <button type="button" class="ms-pill dark" id="ovWav">Als WAV speichern</button>
+            <button type="button" class="ms-pill dark" id="ovVocal" hidden>Gesang: an</button>
+            <button type="button" class="ms-pill dark" id="ovReport">Melden</button>
+          </div>
+          <p class="ms-desc" id="ovDesc"></p>
+          <canvas class="ms-vis" id="ovVis" width="600" height="64"></canvas>
+          <div class="ms-lyrics" id="ovLyrics"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="ms-player" id="msPlayer">
+    <div class="ms-render" id="msRender"></div>
+    <div class="ms-now" id="msNow">
+      <div class="ms-cover" id="plCover"></div>
+      <div class="ms-now-text"><div class="ms-now-title" id="plTitle">Wähle einen Song</div><div class="ms-now-sub" id="plSub">NRS Sound</div></div>
+    </div>
+    <div class="ms-ctrl">
+      <div class="ms-btns">
+        <button type="button" class="ms-icon" id="plPrev" aria-label="Zurück" disabled><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
+        <button type="button" class="ms-playbtn" id="plPlay" aria-label="Abspielen" disabled><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
+        <button type="button" class="ms-icon" id="plNext" aria-label="Weiter" disabled><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg></button>
+      </div>
+      <div class="ms-bar"><span id="plCur">0:00</span><input type="range" id="plSeek" min="0" max="1000" value="0" aria-label="Position"><span class="time-r" id="plDur">0:00</span></div>
+    </div>
+    <div class="ms-extra">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--dim)"><path d="M11 5 6 9H3v6h3l5 4zM16 9a4 4 0 0 1 0 6M19 6a8 8 0 0 1 0 12"/></svg>
+      <input type="range" id="plVol" min="0" max="100" value="80" aria-label="Lautstärke">
+    </div>
+  </footer>
+
+  <nav class="ms-bottomnav" id="msBottomNav">
+    <button type="button" data-view="home" class="active">{{ icon("home") }}Start</button>
+    <button type="button" data-view="search">{{ icon("search") }}Suche</button>
+    <button type="button" data-view="library">{{ icon("library") }}Bibliothek</button>
+    <button type="button" data-view="create">{{ icon("create") }}Erstellen</button>
+  </nav>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.NRS_MUSIC = {{ {"isGuest": is_guest, "isAdmin": is_admin, "genres": genres, "minSeconds": min_seconds, "maxSeconds": max_seconds} | tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/nrs-synth.js') }}"></script>
+<script src="{{ url_for('static', filename='js/pinklemon-music.js') }}"></script>
+{% endblock %}

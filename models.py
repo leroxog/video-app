@@ -329,6 +329,86 @@ class YchatLike(db.Model):
     __table_args__ = (db.UniqueConstraint("post_id", "user_id", name="uq_ychat_like_post_user"),)
 
 
+class Song(db.Model):
+    """An AI-composed song on NRS Sound (see music_studio.py). The audio itself is not stored:
+    `plan` is a small JSON score (tempo, key, chords, seed ...) that the browser's synthesizer
+    turns into sound, so a song costs a few hundred bytes. All songs are CC BY 4.0."""
+    __tablename__ = "song"
+    id = db.Column(db.Integer, primary_key=True)
+    creator_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    title = db.Column(db.String(60), nullable=False)
+    genre = db.Column(db.String(20), nullable=False)
+    duration = db.Column(db.Integer, nullable=False)                    # seconds, 15-150
+    description = db.Column(db.String(300), nullable=False, default="")
+    with_vocals = db.Column(db.Boolean, nullable=False, default=False)
+    lyrics = db.Column(db.Text, nullable=False, default="")
+    plan = db.Column(db.Text, nullable=False, default="{}")             # JSON score
+    cover_name = db.Column(db.String(64), nullable=True)                # PlMedia name of the AI cover image
+    status = db.Column(db.String(10), nullable=False, default="composing")  # composing/ready/failed/hidden
+    error = db.Column(db.String(120), nullable=False, default="")
+    plays = db.Column(db.Integer, nullable=False, default=0)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+
+class SongPlay(db.Model):
+    """One counted play: a listener is counted at most once per song and day."""
+    __tablename__ = "song_play"
+    id = db.Column(db.Integer, primary_key=True)
+    song_id = db.Column(db.Integer, db.ForeignKey("song.id"), nullable=False)
+    listener_key = db.Column(db.String(20), nullable=False)
+    day = db.Column(db.Date, nullable=False)
+    __table_args__ = (db.UniqueConstraint("song_id", "listener_key", "day", name="uq_song_play_song_listener_day"),)
+
+
+class SongLike(db.Model):
+    __tablename__ = "song_like"
+    id = db.Column(db.Integer, primary_key=True)
+    song_id = db.Column(db.Integer, db.ForeignKey("song.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    __table_args__ = (db.UniqueConstraint("song_id", "user_id", name="uq_song_like_song_user"),)
+
+
+class SongReport(db.Model):
+    __tablename__ = "song_report"
+    id = db.Column(db.Integer, primary_key=True)
+    song_id = db.Column(db.Integer, db.ForeignKey("song.id"), nullable=False)
+    reporter_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    reason = db.Column(db.String(30), nullable=False)
+    from_member = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    __table_args__ = (db.UniqueConstraint("song_id", "reporter_id", name="uq_song_report_song_reporter"),)
+
+
+class YSong(db.Model):
+    """A song made on ysound (see ysound.py): anonymous, no account. `owner_key` is the random id
+    in the creator's device cookie, which is all that ties a song to its "library"."""
+    __tablename__ = "ysong"
+    id = db.Column(db.Integer, primary_key=True)
+    owner_key = db.Column(db.String(40), nullable=False, index=True)
+    title = db.Column(db.String(60), nullable=False)
+    with_vocals = db.Column(db.Boolean, nullable=False, default=True)
+    lyrics = db.Column(db.Text, nullable=False, default="")
+    description = db.Column(db.String(300), nullable=False, default="")
+    genres = db.Column(db.String(120), nullable=False, default="")      # up to 3 genre ids, comma-joined
+    duration = db.Column(db.Integer, nullable=False, default=30)        # seconds
+    status = db.Column(db.String(12), nullable=False, default="generating")  # generating/ready/failed
+    error = db.Column(db.String(160), nullable=False, default="")
+    audio_name = db.Column(db.String(64), nullable=True)                # PlMedia name (R2 key) of the mp3/wav
+    model = db.Column(db.String(24), nullable=False, default="ace-step")  # or "demo"
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
+
+
+class YSongReport(db.Model):
+    """A listener flagged a song. Reports never hide anything by themselves (anonymous devices
+    could fake them); they only show up for the admin, who can delete the song."""
+    __tablename__ = "ysong_report"
+    id = db.Column(db.Integer, primary_key=True)
+    song_id = db.Column(db.Integer, db.ForeignKey("ysong.id"), nullable=False)
+    reporter_key = db.Column(db.String(40), nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    __table_args__ = (db.UniqueConstraint("song_id", "reporter_key", name="uq_ysong_report_song_reporter"),)
+
+
 class PlayGame(db.Model):
     """A small browser game a member published on NRS Play (see play_platform.py). It is
     one self-contained HTML file that runs in a locked-down frame, and it only becomes

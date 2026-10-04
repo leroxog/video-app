@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ysound</title>
+<meta name="description" content="ysound: Erstelle ohne Anmeldung unendlich viele Songs mit KI.">
+<meta name="theme-color" content="#09080f">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%238b5cf6'/%3E%3Cstop offset='.6' stop-color='%23ec4899'/%3E%3Cstop offset='1' stop-color='%23f97316'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Cpath d='M16 36v-8M24 44V20M32 50V14M40 44V20M48 36v-8' stroke='white' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/ysound.css') }}?v=1">
+</head>
+<body>
+{%- macro icon(name) -%}
+  {%- if name == "home" -%}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11 12 3l9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>
+  {%- elif name == "plus" -%}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+  {%- elif name == "book" -%}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5"/><path d="M9 8h6"/></svg>
+  {%- endif -%}
+{%- endmacro %}
+
+<div class="app" id="app">
+  <header class="top">
+    <a class="logo" href="/#create" aria-label="ysound"><span class="logo-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span>ysound</a>
+    <span class="demo-badge" id="demoBadge" hidden>Demo</span>
+  </header>
+
+  <main>
+    <section class="view" id="view-home" data-view="home" hidden>
+      <h1>Home</h1>
+      <p class="sub">Alle Songs, die jemals auf ysound erstellt wurden.</p>
+      <div class="list" id="homeList" aria-live="polite"></div>
+      <div class="empty" id="homeEmpty" hidden>Noch keine Songs. Erstelle den ersten!</div>
+      <button class="more" id="homeMore" type="button" hidden>Mehr laden</button>
+    </section>
+
+    <section class="view" id="view-create" data-view="create" hidden>
+      <h1>Neuer Song</h1>
+      <form id="createForm" autocomplete="off" novalidate>
+        <label class="field">
+          <span>Name</span>
+          <input id="fTitle" type="text" maxlength="{{ title_max }}" placeholder="Wie heißt dein Song?" enterkeyhint="done">
+        </label>
+
+        <div class="seg" role="group" aria-label="Art des Songs">
+          <button type="button" class="on" data-vocal="1" aria-pressed="true">Sprachlich</button>
+          <button type="button" data-vocal="0" aria-pressed="false">Instrumental</button>
+        </div>
+
+        <div id="lyricsBox">
+          <label class="field">
+            <span>Songtext</span>
+            <textarea id="fLyrics" rows="6" maxlength="{{ lyrics_max }}" placeholder="Schreibe hier deinen Songtext …"></textarea>
+          </label>
+          <p class="hint">Die KI singt deinen Text. Schreibe ihn am besten in Strophen mit einer leeren Zeile dazwischen. Lässt du das Feld leer, schreibt die KI einen Text zu deiner Beschreibung. KI-Gesang ist nicht perfekt: Aussprache und Betonung können abweichen.</p>
+          <label class="check" id="ownRow" hidden><input type="checkbox" id="fOwn"> <span>Der Text ist von mir.</span></label>
+        </div>
+
+        <label class="field">
+          <span>Beschreibung</span>
+          <textarea id="fDesc" rows="3" maxlength="{{ description_max }}" placeholder="Beschreibe deinen Song: Stimmung, Instrumente, Tempo …"></textarea>
+        </label>
+
+        <div class="genres-head"><span>Genres</span><b id="genreCount">0/{{ max_genres }}</b></div>
+        <div class="genres" id="genres" data-max="{{ max_genres }}" role="group" aria-label="Genres, bis zu {{ max_genres }} auswählbar">
+          {%- for g in genres %}
+          <button type="button" class="chip" data-id="{{ g.id }}" aria-pressed="false">{{ g.label }}</button>
+          {%- endfor %}
+        </div>
+
+        <p class="note" id="availNote" hidden></p>
+        <p class="note error" id="formError" role="alert" hidden></p>
+        <button class="go" id="goBtn" type="submit">Erstellen</button>
+        <p class="fine">Jeder Song ist {{ length }} Minuten lang. Das Erstellen dauert ein bis zwei Minuten. Alle Songs sind öffentlich auf Home zu hören.</p>
+      </form>
+    </section>
+
+    <section class="view" id="view-library" data-view="library" hidden>
+      <h1>Bibliothek</h1>
+      <p class="sub">Deine erstellten Songs. Sie sind an diesen Browser gebunden, andere findest du auf Home.</p>
+      <div class="list" id="libList" aria-live="polite"></div>
+      <div class="empty" id="libEmpty" hidden>Du hast noch keinen Song erstellt.</div>
+    </section>
+  </main>
+
+  <div class="player" id="player" hidden>
+    <div class="player-art" id="playerArt" aria-hidden="true"></div>
+    <div class="player-body">
+      <div class="player-title" id="playerTitle"></div>
+      <div class="player-bar">
+        <input type="range" id="seek" min="0" max="1000" value="0" aria-label="Position im Song">
+        <span id="timeLabel">0:00</span>
+      </div>
+    </div>
+    <button type="button" class="player-btn" id="playPause" aria-label="Abspielen oder pausieren"></button>
+    <button type="button" class="player-close" id="playerClose" aria-label="Player schließen">×</button>
+  </div>
+
+  <nav class="tabbar" aria-label="Hauptmenü">
+    <div class="tabbar-in">
+      <button type="button" class="tab" data-go="home" aria-label="Home">{{ icon("home") }}<span>Home</span></button>
+      <button type="button" class="tab tab-plus" data-go="create" aria-label="Neuen Song erstellen">{{ icon("plus") }}</button>
+      <button type="button" class="tab" data-go="library" aria-label="Bibliothek">{{ icon("book") }}<span>Bibliothek</span></button>
+    </div>
+  </nav>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <audio id="audio" preload="none"></audio>
+</div>
+<script src="{{ url_for('static', filename='js/ysound.js') }}?v=1"></script>
+</body>
+</html>
