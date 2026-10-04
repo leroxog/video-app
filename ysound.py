@@ -38,7 +38,7 @@ import wave
 from datetime import datetime, timedelta, timezone
 
 import requests
-from flask import abort, jsonify, make_response, render_template, request, send_file
+from flask import Response, abort, jsonify, make_response, render_template, request, send_file
 from sqlalchemy import func
 from werkzeug.datastructures import FileStorage
 
@@ -102,7 +102,12 @@ SECTION_TAG_RE = re.compile(r"\[[^\]\n]{1,30}\]")
 PUBLIC_ENDPOINTS = {
     "pl_home", "ysound_status", "ysound_feed", "ysound_mine", "ysound_create", "ysound_delete", "ysound_report",
     "ysound_audio", "ysound_worker_ping", "ysound_worker_claim", "ysound_worker_audio", "ysound_worker_fail",
+    "ysound_ads_txt", "ysound_privacy", "ysound_imprint",
 }
+ADSENSE_CLIENT_RE = re.compile(r"ca-pub-\d{10,20}")
+ADSENSE_SLOT_RE = re.compile(r"\d{6,20}")
+ADSENSE_CERTIFICATION_ID = "f08c47fec0942fa0"     # Google's fixed id in every AdSense ads.txt line
+AD_FIRST_AFTER, AD_EVERY = 3, 6                   # an ad after the 3rd song of the Home feed, then after every 6th
 
 
 class ProviderError(Exception):
@@ -130,6 +135,33 @@ def daily_cap():
 
 def max_queue():
     return _env_int("YSOUND_MAX_QUEUE", 3, 1, 50)
+
+
+def ads_config():
+    """Google AdSense settings from the environment, or None (= no ads, no Google code on the page at all).
+      ADSENSE_CLIENT         the publisher id, "ca-pub-1234567890123456" (required to switch ads on)
+      ADSENSE_SLOT           the id of one responsive display ad unit; without it only Google's script loads
+      ADSENSE_AGE_TREATMENT  1 (default): treat the audience as children -- no personalised ads;
+                             2: teens, 0: no restriction. ysound is open to under-16s, so 1 is the safe default.
+    Values that don't look right are ignored instead of being written into the page."""
+    client = os.environ.get("ADSENSE_CLIENT", "").strip()
+    if not ADSENSE_CLIENT_RE.fullmatch(client):
+        return None
+    slot = os.environ.get("ADSENSE_SLOT", "").strip()
+    age = os.environ.get("ADSENSE_AGE_TREATMENT", "1").strip()
+    return {"client": client, "slot": slot if ADSENSE_SLOT_RE.fullmatch(slot) else "",
+            "age": age if age in ("0", "1", "2") else "1", "first": AD_FIRST_AFTER, "every": AD_EVERY}
+
+
+def imprint():
+    """The operator's details for the Impressum, from IMPRESSUM_NAME / IMPRESSUM_ADDRESS (lines separated by
+    '|') / IMPRESSUM_EMAIL -- or None if the name or the address is missing."""
+    name = os.environ.get("IMPRESSUM_NAME", "").strip()
+    lines = [line.strip() for line in os.environ.get("IMPRESSUM_ADDRESS", "").split("|") if line.strip()]
+    if not name or not lines:
+        return None
+    return {"name": name[:120], "address": [line[:120] for line in lines[:5]],
+            "email": os.environ.get("IMPRESSUM_EMAIL", "").strip()[:120]}
 
 
 def worker_hash():
@@ -641,9 +673,26 @@ def register_routes(app, current_user, store_media, media_url, delete_media):
         page = render_template(
             "ysound.html", genres=[{"id": gid, "label": label} for gid, label, _ in GENRES],
             max_genres=MAX_GENRES, title_max=TITLE_MAX, description_max=DESCRIPTION_MAX, lyrics_max=LYRICS_MAX,
-            length=clock(seconds()),
+            length=clock(seconds()), ads=ads_config(),
         )
         return _with_cookie(make_response(page), key, is_new)
+
+    @app.route("/ads.txt")
+    def ysound_ads_txt():
+        """Tells ad buyers that this site's AdSense account is the real seller. Only exists when ads are on."""
+        ads = ads_config()
+        if ads is None:
+            abort(404)
+        line = f"google.com, pub-{ads['client'][len('ca-pub-'):]}, DIRECT, {ADSENSE_CERTIFICATION_ID}\n"
+        return Response(line, mimetype="text/plain")
+
+    @app.route("/datenschutz")
+    def ysound_privacy():
+        return render_template("ysound_legal.html", page="privacy", ads=ads_config(), imprint=imprint(), provider=provider())
+
+    @app.route("/impressum")
+    def ysound_imprint():
+        return render_template("ysound_legal.html", page="imprint", ads=ads_config(), imprint=imprint(), provider=provider())
 
     @app.route("/ysound/a/<name>")
     def ysound_audio(name):

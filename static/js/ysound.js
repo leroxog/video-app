@@ -182,8 +182,68 @@
     return root;
   }
 
+  // ------------------------------------------------------------------- ads
+  // Google AdSense, only when the server wrote an #adsConfig (an AdSense id is set). One responsive ad
+  // unit is slipped into the Home feed between songs; it is labelled "Anzeige" and never sits next to a
+  // button or the player. All ad requests are made for the configured age treatment (default: children).
+  let ADS = null;
+  try {
+    const raw = document.getElementById("adsConfig");
+    ADS = raw ? JSON.parse(raw.textContent) : null;
+  } catch (error) {
+    ADS = null;
+  }
+
+  function adNode() {
+    const wrap = el("div", "ad-slot");
+    wrap.append(el("div", "ad-label", "Anzeige"));
+    const unit = document.createElement("ins");
+    unit.className = "adsbygoogle";
+    unit.style.display = "block";
+    unit.dataset.adClient = ADS.client;
+    unit.dataset.adSlot = ADS.slot;
+    unit.dataset.adFormat = "auto";
+    unit.dataset.fullWidthResponsive = "true";
+    unit.dataset.tagForAgeTreatment = ADS.age;
+    wrap.append(unit);
+    return wrap;
+  }
+
+  function withAds(nodes, context) {
+    if (!ADS || !ADS.slot || context !== "home") return nodes;
+    const out = [];
+    nodes.forEach((node, index) => {
+      out.push(node);
+      const number = index + 1;
+      if (number === ADS.first || (number > ADS.first && (number - ADS.first) % ADS.every === 0)) out.push(adNode());
+    });
+    return out;
+  }
+
+  function activateAds(container) {
+    for (const unit of container.querySelectorAll("ins.adsbygoogle:not([data-ys-requested])")) {
+      if (!unit.offsetWidth) continue;          // on a hidden screen: Google can't size the ad, so don't ask yet
+      unit.dataset.ysRequested = "1";
+      try {
+        (window.adsbygoogle = window.adsbygoogle || []).push({});
+      } catch (error) {
+        unit.closest(".ad-slot")?.remove();
+      }
+    }
+  }
+
+  const privacyButton = document.getElementById("privacyBtn");
+  if (privacyButton) {
+    privacyButton.addEventListener("click", () => {
+      const fc = window.googlefc;
+      if (fc && fc.callbackQueue && fc.showRevocationMessage) fc.callbackQueue.push(fc.showRevocationMessage);
+      else toast("Die Datenschutz-Einstellungen sind gerade nicht verfügbar.");
+    });
+  }
+
   function renderList(container, songs, context) {
-    container.replaceChildren(...songs.map((song) => card(song, context)));
+    container.replaceChildren(...withAds(songs.map((song) => card(song, context)), context));
+    activateAds(container);
     syncPlaying();
   }
 

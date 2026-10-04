@@ -1,6 +1,7 @@
 import os
 import sys
 import io
+import json
 import tempfile
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -3124,7 +3125,8 @@ _REAL_YSOUND_LYRICS = ysound.write_lyrics
 def _ysound_offline(monkeypatch):
     """No Groq, no fal and no threads: the demo tone provider is on and the song job runs inline."""
     monkeypatch.delenv("FAL_KEY", raising=False)
-    for name in ("YSOUND_PER_HOUR", "YSOUND_DAILY_CAP", "YSOUND_SECONDS", "YSOUND_MAX_QUEUE", "YSOUND_WORKER_TOKEN_SHA256"):
+    for name in ("YSOUND_PER_HOUR", "YSOUND_DAILY_CAP", "YSOUND_SECONDS", "YSOUND_MAX_QUEUE", "YSOUND_WORKER_TOKEN_SHA256",
+                 "ADSENSE_CLIENT", "ADSENSE_SLOT", "ADSENSE_AGE_TREATMENT", "IMPRESSUM_NAME", "IMPRESSUM_ADDRESS", "IMPRESSUM_EMAIL"):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setitem(ysound._worker_seen, "at", None)
     monkeypatch.setenv("YSOUND_DEMO", "1")
@@ -3976,3 +3978,119 @@ def test_the_worker_ping_counts_as_online_without_claiming_anything(client, monk
     assert flask_app.test_client().post("/api/ysound/worker/ping", headers=_wh()).get_json()["waiting"] == 1
     with flask_app.app_context():
         assert YSong.query.one().status == "queued"
+
+
+# ---------------- ysound: Google AdSense, ads.txt and the legal pages ----------------
+
+AD_CLIENT = "ca-pub-1234567890123456"
+
+
+def _ads_on(monkeypatch, **extra):
+    monkeypatch.setenv("ADSENSE_CLIENT", AD_CLIENT)
+    for name, value in extra.items():
+        monkeypatch.setenv(name, value)
+
+
+def _ads_config_of(page):
+    marker = b'<script type="application/json" id="adsConfig">'
+    return json.loads(page.split(marker)[1].split(b"</script>")[0])
+
+
+def test_without_adsense_the_page_has_no_google_code_and_no_ads_txt(client):
+    visitor = flask_app.test_client()
+    home = visitor.get("/")
+    for marker in (b"adsbygoogle", b"googlesyndication", b"adsConfig", b"google-adsense-account", b"privacyBtn"):
+        assert marker not in home.data, marker
+    assert b'href="/datenschutz"' in home.data and b'href="/impressum"' in home.data
+    assert visitor.get("/ads.txt").status_code == 404 and ysound.ads_config() is None
+
+
+def test_with_an_adsense_id_the_page_loads_googles_script_and_serves_ads_txt(client, monkeypatch):
+    _ads_on(monkeypatch, ADSENSE_SLOT="1234567890")
+    visitor = flask_app.test_client()                                     # no login, no cookie
+    home = visitor.get("/")
+    assert f'src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={AD_CLIENT}"'.encode() in home.data
+    assert f'<meta name="google-adsense-account" content="{AD_CLIENT}">'.encode() in home.data
+    assert b'id="privacyBtn"' in home.data
+    assert _ads_config_of(home.data) == {"client": AD_CLIENT, "slot": "1234567890", "age": "1", "first": 3, "every": 6}
+    ads_txt = visitor.get("/ads.txt")
+    assert ads_txt.status_code == 200 and ads_txt.mimetype == "text/plain"
+    assert ads_txt.data.decode() == "google.com, pub-1234567890123456, DIRECT, f08c47fec0942fa0\n"
+
+
+@pytest.mark.parametrize("client_id", [
+    "", "pub-1234567890123456", "ca-pub-12", "ca-pub-abc", "ca-pub-1234567890123456 ", 'ca-pub-1234567890123456"><script>alert(1)</script>',
+    "ca-app-pub-1234567890123456", "CA-PUB-1234567890123456",
+])
+def test_an_adsense_id_that_does_not_look_right_switches_ads_off_instead_of_reaching_the_page(client, monkeypatch, client_id):
+    monkeypatch.setenv("ADSENSE_CLIENT", client_id)
+    if client_id == "ca-pub-1234567890123456 ":
+        assert ysound.ads_config() is not None                              # surrounding spaces are just trimmed
+        return
+    home = flask_app.test_client().get("/")
+    assert ysound.ads_config() is None and b"adsbygoogle" not in home.data and b"<script>alert" not in home.data
+    assert flask_app.test_client().get("/ads.txt").status_code == 404
+
+
+def test_the_ad_slot_and_age_treatment_are_checked_and_default_to_the_careful_choice(client, monkeypatch):
+    _ads_on(monkeypatch)
+    assert ysound.ads_config()["slot"] == "" and ysound.ads_config()["age"] == "1"        # ysound is open to under-16s
+    for slot in ("abc", "12", '123456"><b>', "1234567890123456789012"):
+        monkeypatch.setenv("ADSENSE_SLOT", slot)
+        assert ysound.ads_config()["slot"] == "", slot
+    monkeypatch.setenv("ADSENSE_SLOT", "9876543210")
+    assert ysound.ads_config()["slot"] == "9876543210"
+    for value, expected in (("0", "0"), ("1", "1"), ("2", "2"), ("9", "1"), ("", "1"), ("child", "1")):
+        monkeypatch.setenv("ADSENSE_AGE_TREATMENT", value)
+        assert ysound.ads_config()["age"] == expected, value
+    home = flask_app.test_client().get("/")
+    assert b"adsbygoogle.js" in home.data and _ads_config_of(home.data)["slot"] == "9876543210"
+
+
+def test_the_page_script_labels_ads_requests_the_age_treatment_and_never_asks_on_a_hidden_screen():
+    source = open(os.path.join(os.path.dirname(__file__), "..", "static", "js", "ysound.js"), encoding="utf-8").read()
+    assert "tagForAgeTreatment = ADS.age" in source and '"Anzeige"' in source
+    assert "offsetWidth" in source and 'context !== "home"' in source
+    assert "showRevocationMessage" in source
+
+
+def test_the_privacy_policy_is_public_and_describes_what_really_happens(client):
+    page = flask_app.test_client().get("/datenschutz")
+    text = page.get_data(as_text=True)
+    assert page.status_code == 200 and "<title>Datenschutz | ysound</title>" in text
+    for fact in ("ysound_id", "Groq", "ACE-Step", "auf einem eigenen Computer", "Railway", "öffentlich", "Impressum", "Auskunft"):
+        assert fact in text, fact
+    assert "AdSense" not in text and "fal.ai" not in text                       # only mentioned when it is actually used
+
+
+def test_the_privacy_policy_mentions_google_only_when_ads_are_on_and_fal_only_when_used(client, monkeypatch):
+    _ads_on(monkeypatch)
+    text = flask_app.test_client().get("/datenschutz").get_data(as_text=True)
+    assert "Google AdSense" in text and "Datenschutz-Einstellungen" in text and "keine personalisierte Werbung" in text
+    monkeypatch.setenv("FAL_KEY", "k")
+    assert "fal.ai" in flask_app.test_client().get("/datenschutz").get_data(as_text=True)
+
+
+def test_the_imprint_shows_the_operators_details_from_the_environment_and_escapes_them(client, monkeypatch):
+    empty = flask_app.test_client().get("/impressum").get_data(as_text=True)
+    assert "Impressum" in empty and "werden gerade ergänzt" in empty and "mailto:" not in empty
+    monkeypatch.setenv("IMPRESSUM_NAME", "Erika <b>Muster</b>")
+    assert "werden gerade ergänzt" in flask_app.test_client().get("/impressum").get_data(as_text=True)    # an address is needed, too
+    monkeypatch.setenv("IMPRESSUM_ADDRESS", "Musterstraße 1 | 12345 Musterstadt|  |<script>x</script>")
+    monkeypatch.setenv("IMPRESSUM_EMAIL", "erika@example.com")
+    page = flask_app.test_client().get("/impressum")
+    text = page.get_data(as_text=True)
+    assert page.status_code == 200 and "Erika &lt;b&gt;Muster&lt;/b&gt;" in text and "<b>Muster</b>" not in text
+    assert "Musterstraße 1<br>12345 Musterstadt<br>&lt;script&gt;x&lt;/script&gt;" in text
+    assert 'href="mailto:erika@example.com"' in text and "§ 5 DDG" in text
+    assert ysound.imprint()["email"] == "erika@example.com"
+    monkeypatch.setenv("IMPRESSUM_ADDRESS", "|".join(f"Zeile {n}" for n in range(20)))
+    assert len(ysound.imprint()["address"]) == 5
+
+
+def test_the_legal_pages_need_no_login_and_make_no_guest_account(client):
+    visitor = flask_app.test_client()
+    for path in ("/datenschutz", "/impressum"):
+        assert visitor.get(path, headers=BROWSER).status_code == 200, path
+    with flask_app.app_context():
+        assert User.query.count() == 0

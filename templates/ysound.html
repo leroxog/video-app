@@ -7,7 +7,11 @@
 <meta name="description" content="ysound: Erstelle ohne Anmeldung unendlich viele Songs mit KI.">
 <meta name="theme-color" content="#09080f">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%238b5cf6'/%3E%3Cstop offset='.6' stop-color='%23ec4899'/%3E%3Cstop offset='1' stop-color='%23f97316'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Cpath d='M16 36v-8M24 44V20M32 50V14M40 44V20M48 36v-8' stroke='white' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/ysound.css') }}?v=1">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/ysound.css') }}?v=2">
+{%- if ads %}
+<meta name="google-adsense-account" content="{{ ads.client }}">
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={{ ads.client }}" crossorigin="anonymous"></script>
+{%- endif %}
 </head>
 <body>
 {%- macro icon(name) -%}
@@ -79,6 +83,10 @@
       <div class="list" id="libList" aria-live="polite"></div>
       <div class="empty" id="libEmpty" hidden>Du hast noch keinen Song erstellt.</div>
     </section>
+    <footer class="legal">
+      <a href="/datenschutz">Datenschutz</a><span aria-hidden="true">·</span><a href="/impressum">Impressum</a>
+      {%- if ads %}<span aria-hidden="true">·</span><button type="button" id="privacyBtn">Datenschutz-Einstellungen</button>{% endif %}
+    </footer>
   </main>
 
   <div class="player" id="player" hidden>
@@ -105,6 +113,9 @@
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
   <audio id="audio" preload="none"></audio>
 </div>
-<script src="{{ url_for('static', filename='js/ysound.js') }}?v=1"></script>
+{%- if ads %}
+<script type="application/json" id="adsConfig">{{ ads|tojson }}</script>
+{%- endif %}
+<script src="{{ url_for('static', filename='js/ysound.js') }}?v=2"></script>
 </body>
 </html>
