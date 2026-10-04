@@ -1,6 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 120 120">
-      <ellipse cx="60" cy="116" rx="30" ry="4" fill="#000" opacity=".12"/>
-      <path d="M84 104c24 5 28-20 15-27" fill="none" stroke="#8a5a3b" stroke-width="7" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 120 120" class="ch ch-gomi ch-cheer"><ellipse cx="60" cy="116" rx="30" ry="4" fill="#000" opacity=".12"/><g class="ch-bob">
+      <path class="ch-tail" d="M84 104c24 5 28-20 15-27" fill="none" stroke="#8a5a3b" stroke-width="7" stroke-linecap="round"/>
       <ellipse cx="47" cy="112" rx="10" ry="5" fill="#f6d2ad"/><ellipse cx="73" cy="112" rx="10" ry="5" fill="#f6d2ad"/>
       <ellipse cx="25" cy="70" rx="8" ry="14" transform="rotate(-32 25 70)" fill="#8a5a3b"/><ellipse cx="95" cy="70" rx="8" ry="14" transform="rotate(32 95 70)" fill="#8a5a3b"/>
          <circle cx="17" cy="58" r="7" fill="#f6d2ad"/><circle cx="103" cy="58" r="7" fill="#f6d2ad"/>
@@ -17,4 +16,4 @@
       <path d="M43 51q6-8 12 0M65 51q6-8 12 0" fill="none" stroke="#2b1d14" stroke-width="3.600" stroke-linecap="round"/>
       <circle cx="56" cy="66" r="1.600" fill="#2b1d14"/><circle cx="64" cy="66" r="1.600" fill="#2b1d14"/>
       <path d="M47 72q13 20 26 0z" fill="#2b1d14"/><path d="M53 81q7-5 14 0q-7 5-14 0z" fill="#ff7a8a"/>
-    </svg>
+    </g></svg>

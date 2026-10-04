@@ -37,8 +37,10 @@
     <p>Mathe lernen in kurzen Lektionen. Dafür braucht gomat JavaScript. Bitte schalte es in deinem Browser ein.</p>
   </div>
 </noscript>
-<script type="application/json" id="gomatData">{{ {"units": units, "lessonLength": lesson_length}|tojson }}</script>
+<script type="application/json" id="gomatData">{{ {"units": units, "lessonLength": lesson_length, "passMistakes": pass_mistakes, "placementQuestions": placement_questions}|tojson }}</script>
 <script src="{{ static_url('js/gomat-core.js') }}"></script>
+<script src="{{ static_url('js/gomat-art.js') }}"></script>
+<script src="{{ static_url('js/gomat-sound.js') }}"></script>
 <script src="{{ static_url('js/gomat.js') }}"></script>
 </body>
 </html>

@@ -12,6 +12,7 @@ There is nothing to sign in to and nothing to store here: the browser keeps the 
 Exercise types the page can show:
   choice  {prompt, options[], answer (index)}           pick one card
   input   {prompt, answer}                              type a number on the keypad
+  speak   {prompt, answer}                              say the number out loud (only when the browser asked for it)
   match   {prompt, pairs[[left, right], ...]}           connect the pairs
   build   {prompt, tokens[], answer[]}                  put tiles in the right order
 Every exercise also has `explain`, and may have a `visual` (dots, array, pie, bar, rect, triangle).
@@ -31,9 +32,15 @@ import ysound
 
 LESSON_LENGTH = 10
 TEST_LENGTH = 12
+TEST_MAX_MISTAKES = 3          # a master test is passed with at most this many mistakes (gomat-core.js uses the same number)
+SPEAK_PER_LESSON = 2
+SPEAK_PER_TEST = 1
+PLACEMENT_PER_UNIT = 3
+PLACEMENT_QUESTIONS = 10
+CAST = ("gomi", "otto", "ben", "robi")      # the characters; a unit's character is CAST[(unit - 1) % 4]
 MINUS = "−"
 LESSON_ID_RE = re.compile(r"([1-9])-([1-9])")
-PUBLIC_ENDPOINTS = {"pl_home", "gomat_lesson", "gomat_practice"}
+PUBLIC_ENDPOINTS = {"pl_home", "gomat_lesson", "gomat_practice", "gomat_placement"}
 LEGAL_ENDPOINTS = {"gomat_privacy", "gomat_imprint"}
 META_ENDPOINTS = {"gomat_manifest", "gomat_robots", "gomat_sitemap"}
 PAGE_ENDPOINTS = {"pl_home"} | LEGAL_ENDPOINTS
@@ -827,7 +834,7 @@ UNITS = [
 # Every unit ends with a test that mixes the unit's lessons, and a trophy marks it on the path.
 for _unit in UNITS:
     _mix = [entry for lesson in _unit["lessons"] for entry in lesson["mix"]]
-    _unit["lessons"].append({"title": "Einheitstest", "icon": "trophy", "mix": _mix, "test": True})
+    _unit["lessons"].append({"title": "Meistertest", "icon": "trophy", "mix": _mix, "test": True})
     for _n, _lesson in enumerate(_unit["lessons"], start=1):
         _lesson["id"] = f"{_unit['id']}-{_n}"
         _lesson["unit"] = _unit["id"]
@@ -837,7 +844,7 @@ LESSONS = {lesson["id"]: lesson for unit in UNITS for lesson in unit["lessons"]}
 
 def public_curriculum():
     """What the page needs to draw the path (no generator details)."""
-    return [{"id": u["id"], "title": u["title"], "desc": u["desc"], "color": u["color"],
+    return [{"id": u["id"], "title": u["title"], "desc": u["desc"], "color": u["color"], "character": CAST[(u["id"] - 1) % len(CAST)],
              "lessons": [{"id": l["id"], "title": l["title"], "icon": l["icon"], "test": bool(l.get("test"))} for l in u["lessons"]]}
             for u in UNITS]
 
@@ -874,17 +881,66 @@ def public(exercise):
     return {k: v for k, v in exercise.items() if not k.startswith("_") and v not in (None, "")}
 
 
-def lesson_exercises(lesson_id, seed):
+SPOKEN_ANSWER_RE = re.compile(r"[\u2212-]?\d+(,\d+)?")
+
+
+def to_speak(exercise):
+    """The same question as a "say it out loud" exercise (only typed number answers can be said)."""
+    spoken = dict(exercise)
+    spoken["type"] = "speak"
+    is_sum = not re.search(r"[A-Za-zÄÖÜäöüß]{4,}", exercise["prompt"])      # "6 × 7 = ?" versus a word problem
+    spoken["prompt"] = ("Sag die Lösung laut: " if is_sum else "Sag deine Antwort laut. ") + exercise["prompt"]
+    return spoken
+
+
+def make_speakable(exercises, how_many, rng):
+    """Turn up to `how_many` typed exercises (never the first two) into speaking exercises, in place."""
+    eligible = [i for i, e in enumerate(exercises) if i >= 2 and e["type"] == "input" and SPOKEN_ANSWER_RE.fullmatch(e["answer"])]
+    for i in rng.sample(eligible, min(how_many, len(eligible))):
+        exercises[i] = to_speak(exercises[i])
+    return exercises
+
+
+def lesson_exercises(lesson_id, seed, speak=False):
     lesson = LESSONS[lesson_id]
     rng = random.Random(seed)
-    return generate(lesson["mix"], TEST_LENGTH if lesson.get("test") else LESSON_LENGTH, rng)
+    exercises = generate(lesson["mix"], TEST_LENGTH if lesson.get("test") else LESSON_LENGTH, rng)
+    if speak:
+        make_speakable(exercises, SPEAK_PER_TEST if lesson.get("test") else SPEAK_PER_LESSON, rng)
+    return exercises
 
 
-def practice_exercises(max_unit, count, seed):
+def practice_exercises(max_unit, count, seed, speak=False):
     """A mixed practice round over every unit up to `max_unit`."""
     rng = random.Random(seed)
     mix = [entry for unit in UNITS if unit["id"] <= max_unit for lesson in unit["lessons"] if not lesson.get("test") for entry in lesson["mix"]]
-    return generate(mix, count, rng)
+    exercises = generate(mix, count, rng)
+    if speak:
+        make_speakable(exercises, 1, rng)
+    return exercises
+
+
+def placement_exercises(seed):
+    """For the placement test: a few typed or multiple-choice questions for every unit (the page walks up and down
+    the units depending on the answers). Returns [(unit id, exercise), ...] with the private _meta still on."""
+    rng = random.Random(seed)
+    out = []
+    for unit in UNITS:
+        mix = [entry for lesson in unit["lessons"] if not lesson.get("test") for entry in lesson["mix"]]
+        weights = [weight for _, _, weight in mix]
+        seen, picked, attempts = set(), 0, 0
+        while picked < PLACEMENT_PER_UNIT and attempts < 200:
+            attempts += 1
+            name, params, _ = mix[rng.choices(range(len(mix)), weights)[0]]
+            exercise = FAMILIES[name](rng, params)
+            signature = _signature(exercise)
+            if exercise["type"] not in ("choice", "input") or signature in seen:
+                continue
+            seen.add(signature)
+            exercise["family"] = name
+            out.append((unit["id"], exercise))
+            picked += 1
+    return out
 
 
 # ----------------------------------------------------------------------------------------- routes
@@ -939,17 +995,18 @@ def register_routes(app):
         if endpoint in NO_COOKIE_ENDPOINTS:
             response.headers["X-Content-Type-Options"] = "nosniff"
             response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-            response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+            response.headers["Permissions-Policy"] = "camera=(), microphone=(self), geolocation=(), payment=(), usb=()"
             if request.headers.get("X-Forwarded-Proto", request.scheme).split(",")[0].strip() == "https":
                 response.headers["Strict-Transport-Security"] = "max-age=31536000"
-        if endpoint in ("gomat_lesson", "gomat_practice"):
+        if endpoint in ("gomat_lesson", "gomat_practice", "gomat_placement"):
             response.headers["Cache-Control"] = "no-store"
         return response
 
     @app.route("/", endpoint="pl_home")
     def gomat_home():
         root = base_url()
-        return render_template("gomat.html", units=public_curriculum(), lesson_length=LESSON_LENGTH, tagline=TAGLINE,
+        return render_template("gomat.html", units=public_curriculum(), lesson_length=LESSON_LENGTH, pass_mistakes=TEST_MAX_MISTAKES,
+                               placement_questions=PLACEMENT_QUESTIONS, tagline=TAGLINE,
                                description=DESCRIPTION, base=root, og_image=f"{root}/static/img/gomat-og.png")
 
     def legal(page):
@@ -995,7 +1052,7 @@ def register_routes(app):
         if not LESSON_ID_RE.fullmatch(lesson_id) or lesson_id not in LESSONS:
             return jsonify({"ok": False, "error": "not_found"}), 404
         lesson = LESSONS[lesson_id]
-        exercises = lesson_exercises(lesson_id, seed_of(request.args.get("seed")))
+        exercises = lesson_exercises(lesson_id, seed_of(request.args.get("seed")), speak=request.args.get("speak") == "1")
         return jsonify({"ok": True, "lesson": {"id": lesson_id, "title": lesson["title"], "unit": lesson["unit"]},
                         "exercises": [public(e) for e in exercises]})
 
@@ -1006,4 +1063,11 @@ def register_routes(app):
             count = max(5, min(20, int(request.args.get("n", 10))))
         except ValueError:
             return jsonify({"ok": False, "error": "bad_request"}), 400
-        return jsonify({"ok": True, "exercises": [public(e) for e in practice_exercises(max_unit, count, seed_of(request.args.get("seed")))]})
+        exercises = practice_exercises(max_unit, count, seed_of(request.args.get("seed")), speak=request.args.get("speak") == "1")
+        return jsonify({"ok": True, "exercises": [public(e) for e in exercises]})
+
+    @app.route("/api/gomat/placement")
+    def gomat_placement():
+        questions = placement_exercises(seed_of(request.args.get("seed")))
+        units = [{"unit": unit["id"], "exercises": [public(e) for u, e in questions if u == unit["id"]]} for unit in UNITS]
+        return jsonify({"ok": True, "questions": PLACEMENT_QUESTIONS, "units": units})

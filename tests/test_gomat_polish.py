@@ -55,7 +55,7 @@ def test_pages_send_a_strict_content_security_policy_and_other_security_headers(
         assert part in csp, part
     assert "'unsafe-eval'" not in csp and "script-src 'self' 'unsafe-inline'" not in csp and "http:" not in csp.replace("https:", "")
     assert r.headers["X-Content-Type-Options"] == "nosniff" and r.headers["X-Frame-Options"] == "DENY"
-    assert r.headers["Referrer-Policy"] == "strict-origin-when-cross-origin" and "microphone=()" in r.headers["Permissions-Policy"]
+    assert r.headers["Referrer-Policy"] == "strict-origin-when-cross-origin" and "microphone=(self)" in r.headers["Permissions-Policy"] and "camera=()" in r.headers["Permissions-Policy"]
     assert r.headers["Strict-Transport-Security"].startswith("max-age=")
     assert "Strict-Transport-Security" not in client.get(path).headers            # plain http (local development): no HSTS
 
@@ -110,7 +110,7 @@ def test_the_home_page_has_link_preview_and_app_meta_tags(client):
 
 def test_static_files_carry_their_modification_time_so_updates_reach_everyone(client):
     text = client.get("/").get_data(as_text=True)
-    for name in ("css/gomat.css", "js/gomat.js", "js/gomat-core.js"):
+    for name in ("css/gomat.css", "js/gomat.js", "js/gomat-core.js", "js/gomat-art.js", "js/gomat-sound.js"):
         version = int(os.path.getmtime(os.path.join(ROOT, "static", *name.split("/"))))
         assert f"/static/{name}?v={version}" in text, name
     assert client.get(f"/static/js/gomat.js?v=1").status_code == 200
@@ -157,9 +157,9 @@ def test_a_crash_shows_the_friendly_500_page_without_details(client, monkeypatch
 # ----------------------------------------------------------------------------- the monkey
 
 def test_the_mascot_is_a_monkey_with_three_moods_and_the_files_match_the_script():
-    source = read("static", "js", "gomat.js")
-    assert "maths monkey" in source and "owl" not in source.lower() and "Eule" not in source
-    assert "Mathe-Affe" in source
+    source = read("static", "js", "gomat-art.js")
+    assert "Gomi, the maths monkey" in source and "owl" not in source.lower() and "Eule" not in source
+    assert "Mathe-Affe" in source and "Mathe-Affe" in read("static", "js", "gomat.js")
     images = {}
     for name in ("gomi.svg", "gomi-sad.svg", "gomi-cheer.svg"):
         tree = ET.parse(os.path.join(ROOT, "static", "img", name))

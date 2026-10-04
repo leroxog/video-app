@@ -100,7 +100,7 @@ def test_every_lesson_only_uses_known_generators():
 
 def test_the_public_curriculum_hides_generator_details():
     units = gomat.public_curriculum()
-    assert len(units) == 9 and set(units[0]) == {"id", "title", "desc", "color", "lessons"}
+    assert len(units) == 9 and set(units[0]) == {"id", "title", "desc", "color", "character", "lessons"}
     assert set(units[0]["lessons"][0]) == {"id", "title", "icon", "test"}
     assert "mix" not in repr(units)
 
@@ -318,7 +318,7 @@ def test_the_home_page_is_gomat_open_to_everyone_and_sets_no_cookie(client):
     assert visitor.get("/api/gomat/lesson/1-1").headers.get_all("Set-Cookie") == []
     with flask_app.app_context():
         assert User.query.count() == 0
-    assert 'id="gomatData"' in text and "Zahlen bis 20" in text and "Einheitstest" in text
+    assert 'id="gomatData"' in text and "Zahlen bis 20" in text and "Meistertest" in text
     assert "ysound" not in text.lower()
 
 
@@ -348,6 +348,9 @@ def test_the_look_is_blue_not_green_and_the_code_does_not_name_another_brand():
 
 
 def test_the_page_script_builds_text_with_the_dom_never_with_user_data_in_html():
-    source = open(os.path.join(ROOT, "static", "js", "gomat.js"), encoding="utf-8").read()
-    unsafe = [line.strip() for line in source.splitlines() if "innerHTML" in line and not re.search(r"\b(ICON|SVG)\b|mascot\(", line)]
-    assert unsafe == [] and "insertAdjacentHTML" not in source and "document.write" not in source and "eval(" not in source
+    for name in ("gomat.js", "gomat-art.js", "gomat-sound.js", "gomat-core.js"):
+        source = open(os.path.join(ROOT, "static", "js", name), encoding="utf-8").read()
+        # innerHTML is only for our own fixed pictures: the icons and characters of gomat-art.js
+        unsafe = [line.strip() for line in source.splitlines() if "innerHTML" in line and not re.search(r"\b(ICON|SVG)\b|Art\.(character|portrait)\(", line)]
+        assert unsafe == [], (name, unsafe)
+        assert "insertAdjacentHTML" not in source and "document.write" not in source and "eval(" not in source, name
