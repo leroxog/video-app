@@ -129,7 +129,7 @@
         first: (reply) => { firstCursor = reply.items.length ? Math.max(...reply.items.map((item) => item.cursor || 0)) : 0; },
         empty: feed === "following"
           ? emptyState("Hier ist noch nichts los", "Folge Leuten, um ihre Yips hier zu sehen.", link("/explore", { class: "btn primary" }, "Leute entdecken"))
-          : emptyState("Noch keine Yips", "Schreib den ersten.", null),
+          : emptyState("Noch keine Yips", signedIn ? "Schreib den ersten." : "Erstelle ein Konto und schreib den ersten.", null),
       });
       fill(feedBox, feedPager.element);
     }
@@ -174,7 +174,7 @@
   views.explore = function explore(route, ctx) {
     const trendBox = h("section", { class: "card" }, h("h2", {}, "Im Trend"), Y.skeleton(2));
     const peopleBox = h("section", { class: "card" }, h("h2", {}, "Wem folgen"), Y.skeleton(2));
-    const feedPager = pager({ load: listLoader((cursor) => qs("/timeline", { feed: "foryou", cursor })), render: (item) => Y.postCard(item), empty: emptyState("Noch keine Yips", "Schreib den ersten.") });
+    const feedPager = pager({ load: listLoader((cursor) => qs("/timeline", { feed: "foryou", cursor })), render: (item) => Y.postCard(item), empty: emptyState("Noch keine Yips", Y.me ? "Schreib den ersten." : "Erstelle ein Konto und schreib den ersten.") });
     const el = h("div", { class: "view" },
       topbar({ title: "Entdecken", className: "search-bar", extra: h("div", { class: "topbar-search" }, searchForm("")) }),
       h("div", { class: "explore-cards" }, trendBox, peopleBox),
