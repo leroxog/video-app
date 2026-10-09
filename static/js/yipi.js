@@ -37,7 +37,7 @@
 
   // ----------------------------------------------------------------------------------------------- shell
   const NAV = [
-    { id: "home", label: "Startseite", path: () => "/", icon: "home", on: "homeFill" },
+    { id: "home", label: "Startseite", path: () => Y.HOME, icon: "home", on: "homeFill" },
     { id: "explore", label: "Entdecken", path: () => "/explore", icon: "search", on: "searchBold" },
     { id: "notifications", label: "Benachrichtigungen", path: () => "/notifications", icon: "bell", on: "bellFill", auth: true, badge: true },
     { id: "messages", label: "Nachrichten", path: () => "/messages", icon: "mail", on: "mailFill", auth: true, badge: true },
@@ -121,7 +121,7 @@
     if (Y.me && Y.me.isAdmin) items.push({ id: "moderation", label: "Moderation", path: () => "/moderation", icon: "shield", on: "shield" });
     const side = h("header", { class: "side" },
       h("div", { class: "side-inner" },
-        link("/", { class: "brand", "aria-label": "yipi, zur Startseite" }, Icons.logo(), h("span", { class: "brand-name" }, "yipi")),
+        link(Y.HOME, { class: "brand", "aria-label": "yipi, zur Startseite" }, Icons.logo(), h("span", { class: "brand-name" }, "yipi")),
         h("nav", { class: "nav", "aria-label": "Hauptmenü" }, items.map((entry) => navItem(entry, false))),
         Y.me ? h("button", { class: "btn primary compose-btn", type: "button", "aria-label": "Neuer Yip", onclick: () => Y.compose() }, h("span", { class: "cb-text" }, "Yippen"), h("span", { class: "cb-icon" }, icon("feather")))
              : h("div", { class: "side-guest" }, link("/i/signup", { class: "btn primary" }, "Registrieren"), link("/i/login", { class: "btn ghost" }, "Anmelden")),
@@ -272,6 +272,7 @@
   Y.navigate = (href, options = {}) => {
     let url;
     try { url = new URL(href, location.href); } catch (error) { return; }
+    if (url.pathname === "/") url = new URL(Y.HOME, location.href);                  // "/" is raumo's page, yipi's own home is elsewhere
     if (url.origin !== location.origin || OUTSIDE.has(url.pathname.split("/")[1])) { location.assign(url.href); return; }
     const target = url.pathname + url.search;
     if (target === location.pathname + location.search && !options.replace) {
@@ -284,7 +285,7 @@
     render();
   };
 
-  Y.back = (fallback = "/") => {
+  Y.back = (fallback = Y.HOME) => {
     if (history.state && history.state.inApp) history.back();
     else Y.navigate(fallback);
   };
@@ -304,7 +305,7 @@
   Y.logout = async () => {
     await Api.post("/logout");
     Y.setMe(null);
-    Y.navigate("/", { replace: true });
+    Y.navigate(Y.HOME, { replace: true });
     toast("Du wurdest abgemeldet.");
   };
 
@@ -351,7 +352,7 @@
     if (goPending) {
       goPending = false;
       clearTimeout(goTimer);
-      const places = { h: "/", e: "/explore", n: "/notifications", m: "/messages", b: "/bookmarks", s: "/settings", p: Y.me ? `/${Y.me.handle}` : "/i/login" };
+      const places = { h: Y.HOME, e: "/explore", n: "/notifications", m: "/messages", b: "/bookmarks", s: "/settings", p: Y.me ? `/${Y.me.handle}` : "/i/login" };
       if (places[key]) { event.preventDefault(); Y.navigate(places[key]); }
       return;
     }

@@ -986,7 +986,7 @@ def test_moderators_cannot_be_suspended_by_a_report(client, monkeypatch):
 # =============================================================================================== pages
 def test_every_page_of_the_app_is_served_with_security_headers(client):
     c = flask_app.test_client()
-    for path in ("/", "/explore", "/notifications", "/messages", "/messages/someone", "/bookmarks", "/settings", "/settings/account", "/search", "/moderation", "/i/login", "/i/signup"):
+    for path in ("/yipi-archiv", "/explore", "/notifications", "/messages", "/messages/someone", "/bookmarks", "/settings", "/settings/account", "/search", "/moderation", "/i/login", "/i/signup"):
         r = c.get(path)
         assert r.status_code == 200 and b'id="yipiBoot"' in r.data, path
         assert "script-src 'self'" in r.headers["Content-Security-Policy"] and r.headers["X-Frame-Options"] == "DENY", path
@@ -1009,9 +1009,9 @@ def test_profile_and_yip_pages_exist_only_for_real_ones_and_carry_link_previews(
 
 def test_the_home_page_knows_who_is_signed_in(client):
     mia = person("mia")
-    page = mia.get("/").get_data(as_text=True)
+    page = mia.get("/yipi-archiv").get_data(as_text=True)
     assert re.search(r'"handle":\s*"mia"', page)
-    assert re.search(r'"me":\s*null', flask_app.test_client().get("/").get_data(as_text=True))
+    assert re.search(r'"me":\s*null', flask_app.test_client().get("/yipi-archiv").get_data(as_text=True))
 
 
 # ============================================================================================ huge numbers

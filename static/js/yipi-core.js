@@ -9,6 +9,7 @@
   "use strict";
 
   const MAX_POST = 280;
+  const HOME = "/yipi-archiv";                          // yipi's home page (the site's own home page is raumo)
   const MAX_MEDIA = 4;
   const MONTHS = ["Jan.", "Feb.", "März", "Apr.", "Mai", "Juni", "Juli", "Aug.", "Sept.", "Okt.", "Nov.", "Dez."];
   const MONTHS_LONG = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
@@ -137,7 +138,7 @@
   function parsePath(pathname, search = "") {
     const path = String(pathname || "/").replace(/\/+$/, "") || "/";
     const params = new URLSearchParams(search);
-    const fixed = { "/": "home", "/explore": "explore", "/notifications": "notifications", "/messages": "messages", "/bookmarks": "bookmarks", "/moderation": "moderation", "/i/login": "login", "/i/signup": "signup" };
+    const fixed = { "/yipi-archiv": "home", "/explore": "explore", "/notifications": "notifications", "/messages": "messages", "/bookmarks": "bookmarks", "/moderation": "moderation", "/i/login": "login", "/i/signup": "signup" };
     if (fixed[path]) return { name: fixed[path] };
     if (path === "/search") return { name: "search", q: params.get("q") || "", type: params.get("type") === "people" ? "people" : "posts" };
     if (path === "/settings") return { name: "settings", section: "" };
@@ -156,7 +157,7 @@
 
   function buildPath(route) {
     switch (route.name) {
-      case "home": return "/";
+      case "home": return HOME;
       case "explore": case "notifications": case "messages": case "bookmarks": case "moderation": return `/${route.name}`;
       case "login": return "/i/login";
       case "signup": return "/i/signup";
@@ -166,7 +167,7 @@
       case "profile": return `/${route.handle}`;
       case "post": return `/${route.handle}/status/${route.id}`;
       case "followers": case "following": return `/${route.handle}/${route.name}`;
-      default: return "/";
+      default: return HOME;
     }
   }
 
@@ -222,7 +223,7 @@
   }
 
   return {
-    MAX_POST, MAX_MEDIA, cleanText, charCount, counterState, tokenize, shortUrl, formatCount, relativeTime, fullTime, joinedLabel,
+    HOME, MAX_POST, MAX_MEDIA, cleanText, charCount, counterState, tokenize, shortUrl, formatCount, relativeTime, fullTime, joinedLabel,
     isHandle, parsePath, buildPath, groupNotifications, fitSize, coverCrop, avatarHue, initials,
   };
 });

@@ -55,14 +55,14 @@ def test_template_loads_the_scripts_in_dependency_order():
 
 
 def test_the_templates_have_nothing_a_strict_policy_would_block():
-    for name in ("yipi.html", "yipi_legal.html", "yipi_error.html"):
+    for name in ("yipi.html", "legal.html", "error.html"):
         text = read("templates", name)
         assert not re.search(r"\son[a-z]+\s*=", text), f"{name}: inline event handler"
         assert 'style="' not in text and "javascript:" not in text, name
 
 
 def test_every_file_the_templates_load_exists():
-    for template in ("yipi.html", "yipi_legal.html", "yipi_error.html"):
+    for template in ("yipi.html", "legal.html", "error.html"):
         html = read("templates", template)
         for path in re.findall(r"static_url\('([^']+)'\)", html):
             assert os.path.exists(os.path.join(ROOT, "static", *path.split("/"))), f"{template} loads {path}"
@@ -76,7 +76,7 @@ def test_the_images_of_the_page_and_the_manifest_exist():
 
 
 def test_the_shell_is_served_with_a_strict_policy_and_the_boot_data(client):
-    response = client.get("/")
+    response = client.get("/yipi-archiv")
     assert response.status_code == 200
     csp = response.headers["Content-Security-Policy"]
     assert "script-src 'self'" in csp and "'unsafe-inline'" not in csp.split("style-src")[0]
@@ -262,7 +262,7 @@ def test_the_legal_pages_exist_and_say_what_they_must(client):
 
 
 def test_the_privacy_page_matches_what_the_app_really_stores():
-    page = read("templates", "yipi_legal.html")
+    page = read("templates", "legal.html")
     for key in ("yipi.theme", "yipi.feed", "yipi.recent"):
         assert key in page
         assert any(key in source for source in JS.values()), f"{key} is described but not used"
@@ -279,26 +279,26 @@ def test_the_imprint_shows_the_operator_when_it_is_set(client, monkeypatch):
 
 
 def test_manifest_robots_and_sitemap(client):
-    manifest = client.get("/manifest.webmanifest")
+    manifest = client.get("/yipi-archiv/manifest.webmanifest")
     assert manifest.mimetype == "application/manifest+json"
     data = manifest.get_json()
-    assert data["name"] == "yipi" and data["start_url"] == "/" and data["display"] == "standalone"
+    assert data["name"] == "yipi" and data["start_url"] == "/yipi-archiv" and data["display"] == "standalone"
     assert {icon["purpose"] for icon in data["icons"]} == {"any", "maskable"}
     robots = client.get("/robots.txt").get_data(as_text=True)
-    for private in ("/api/", "/messages", "/settings", "/gomat-archiv", "/ysound-archiv"):
+    for private in ("/api/", "/messages", "/settings", "/yipi-archiv", "/gomat-archiv", "/ysound-archiv"):
         assert f"Disallow: {private}" in robots
     assert "Sitemap: http://localhost/sitemap.xml" in robots
     sitemap = client.get("/sitemap.xml").get_data(as_text=True)
-    for page in ("/", "/explore", "/datenschutz", "/impressum", "/nutzungsbedingungen"):
+    for page in ("/", "/datenschutz", "/impressum", "/nutzungsbedingungen"):
         assert f"<loc>http://localhost{page}</loc>" in sitemap
-    assert "gomat-archiv" not in sitemap
+    assert "gomat-archiv" not in sitemap and "yipi-archiv" not in sitemap
 
 
-def test_error_pages_are_yipi_pages(client):
+def test_error_pages_are_raumo_pages(client):
     page = client.get("/gibt-es-nicht-1234")
     assert page.status_code == 404
     text = page.get_data(as_text=True)
-    assert "yipi" in text and "Diese Seite gibt es nicht" in text and "gomat" not in text.lower()
+    assert "raumo" in text and "Diese Seite gibt es nicht" in text and "gomat" not in text.lower()
     assert "Content-Security-Policy" in page.headers
     api = client.get("/api/yipi/gibt-es-nicht")
     assert api.status_code == 404 and api.get_json() == {"ok": False, "error": "not_found"}

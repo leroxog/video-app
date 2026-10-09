@@ -32,7 +32,7 @@
   function errorState(reply, retry) {
     const title = reply.offline ? "Keine Verbindung" : reply.status === 404 ? "Das gibt es nicht" : "Das hat nicht geklappt";
     return h("div", { class: "empty error" }, h("h3", {}, title), h("p", {}, Api.message(reply)),
-      retry && reply.status !== 404 ? h("button", { class: "btn primary", type: "button", onclick: retry }, "Noch einmal versuchen") : link("/", { class: "btn primary" }, "Zur Startseite"));
+      retry && reply.status !== 404 ? h("button", { class: "btn primary", type: "button", onclick: retry }, "Noch einmal versuchen") : link(Y.HOME, { class: "btn primary" }, "Zur Startseite"));
   }
 
   /* The bar at the top of a view. `back` is true or the address to go to when there is no page to go back to. */
@@ -42,7 +42,7 @@
     subline.hidden = !sub;
     const bar = h("div", { class: `topbar ${className}`.trim() },
       h("div", { class: "topbar-row" },
-        back ? h("button", { class: "icon-btn", type: "button", "aria-label": "Zurück", onclick: () => Y.back(typeof back === "string" ? back : "/") }, icon("back")) : null,
+        back ? h("button", { class: "icon-btn", type: "button", "aria-label": "Zurück", onclick: () => Y.back(typeof back === "string" ? back : Y.HOME) }, icon("back")) : null,
         h("div", { class: "topbar-title" }, heading, subline), right || null),
       extra || null);
     bar.set = (text, more) => { heading.textContent = text; subline.textContent = more || ""; subline.hidden = !more; };
@@ -481,7 +481,7 @@
       const item = reply.data.post;
       if (item.user && item.user.handle.toLowerCase() !== route.handle.toLowerCase()) { Y.navigate(`/${item.user.handle}/status/${item.id}`, { replace: true }); return; }
       fill(above, ...reply.data.ancestors.map((ancestor) => { const card = Y.postCard(ancestor); card.classList.add("line"); return card; }));
-      detail = Y.postCard(item, { detail: true, onDelete: () => Y.back("/"), onReply: (post) => { replies.prepend(Y.postCard(post, { noReplyLine: true })); } });
+      detail = Y.postCard(item, { detail: true, onDelete: () => Y.back(Y.HOME), onReply: (post) => { replies.prepend(Y.postCard(post, { noReplyLine: true })); } });
       fill(main, detail);
       if (item.user) {
         result.title = `${item.user.name} auf yipi: „${snippet(item.text || "Yip mit Bild", 60)}“`;

@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="de" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>raumo: durch den Raum gehen und scannen</title>
+<meta name="description" content="{{ description }}">
+<meta name="theme-color" content="#0c0d10">
+<meta name="color-scheme" content="dark">
+<link rel="canonical" href="{{ base }}/">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="{{ static_url('img/raumo-icon.svg') }}" type="image/svg+xml">
+<link rel="icon" href="{{ static_url('img/raumo-192.png') }}" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="{{ static_url('img/raumo-180.png') }}">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="raumo">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="raumo">
+<meta property="og:locale" content="de_DE">
+<meta property="og:title" content="raumo: durch den Raum gehen und scannen">
+<meta property="og:description" content="{{ description }}">
+<meta property="og:url" content="{{ base }}/">
+<meta property="og:image" content="{{ base }}/static/img/raumo-og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="{{ static_url('css/raumo.css') }}">
+</head>
+<body>
+<a class="skip" href="#main">Zum Inhalt springen</a>
+<div id="app"></div>
+<noscript>
+  <div class="noscript">
+    <h1>raumo</h1>
+    <p>raumo braucht JavaScript. Bitte schalte es in deinem Browser ein.</p>
+  </div>
+</noscript>
+<script src="{{ static_url('js/raumo-core.js') }}"></script>
+<script src="{{ static_url('js/raumo-cloud.js') }}"></script>
+<script src="{{ static_url('js/raumo-export.js') }}"></script>
+<script src="{{ static_url('js/raumo-store.js') }}"></script>
+<script src="{{ static_url('js/raumo-sim.js') }}"></script>
+<script src="{{ static_url('js/raumo-gl.js') }}"></script>
+<script src="{{ static_url('js/raumo-demo.js') }}"></script>
+<script src="{{ static_url('js/raumo-xr.js') }}"></script>
+<script src="{{ static_url('js/raumo-ui.js') }}"></script>
+<script src="{{ static_url('js/raumo-sensors.js') }}"></script>
+<script src="{{ static_url('js/raumo-bake.js') }}"></script>
+<script src="{{ static_url('js/raumo-scan.js') }}"></script>
+<script src="{{ static_url('js/raumo-walk.js') }}"></script>
+<script src="{{ static_url('js/raumo-editors.js') }}"></script>
+<script src="{{ static_url('js/raumo-project.js') }}"></script>
+<script src="{{ static_url('js/raumo-views.js') }}"></script>
+<script src="{{ static_url('js/raumo.js') }}"></script>
+</body>
+</html>

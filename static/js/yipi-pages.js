@@ -19,7 +19,7 @@
   views.notfound = function notfound() {
     return { element: h("div", { class: "view" }, topbar({ title: "Nicht gefunden" }),
       h("div", { class: "empty big" }, h("div", { class: "empty-logo" }, window.YipiIcons.logo()), h("h2", {}, "Diese Seite gibt es nicht"), h("p", {}, "Vielleicht ist der Link falsch, oder das Konto oder der Yip wurde gelöscht."),
-        link("/", { class: "btn primary" }, "Zur Startseite"))), title: "Nicht gefunden" };
+        link(Y.HOME, { class: "btn primary" }, "Zur Startseite"))), title: "Nicht gefunden" };
   };
 
   views.needLogin = function needLogin(route) {
@@ -236,7 +236,7 @@
             const reply = await Api.post("/delete", { password: confirmPassword.value });
             if (!reply.ok) { showError(error, Api.message(reply)); return false; }
             Y.setMe(null);
-            Y.navigate("/", { replace: true });
+            Y.navigate(Y.HOME, { replace: true });
             toast("Dein Konto wurde gelöscht.");
             return true;
           } }] });
@@ -362,7 +362,7 @@
   // ------------------------------------------------------------------------------------------- sign in
   function authFrame(title, subtitle, content, footer) {
     return h("div", { class: "auth-page" }, h("div", { class: "auth-card" },
-      link("/", { class: "auth-logo", "aria-label": "yipi" }, window.YipiIcons.logo(), h("span", {}, "yipi")),
+      link(Y.HOME, { class: "auth-logo", "aria-label": "yipi" }, window.YipiIcons.logo(), h("span", {}, "yipi")),
       h("h1", {}, title), subtitle ? h("p", { class: "muted" }, subtitle) : null, content, h("p", { class: "auth-switch" }, footer)));
   }
 
@@ -378,7 +378,7 @@
   }
 
   views.login = function login() {
-    if (Y.me) { setTimeout(() => Y.navigate("/", { replace: true }), 0); return { element: h("div"), title: "yipi" }; }
+    if (Y.me) { setTimeout(() => Y.navigate(Y.HOME, { replace: true }), 0); return { element: h("div"), title: "yipi" }; }
     const name = h("input", { class: "field", autocomplete: "username", "aria-label": "Nutzername oder E-Mail", maxlength: 254, required: true, autocapitalize: "none", spellcheck: "false" });
     const password = passwordField("Passwort", "current-password");
     const error = formError();
@@ -392,14 +392,14 @@
       submit.disabled = false;
       if (!reply.ok) { showError(error, Api.message(reply)); return; }
       Y.setMe(reply.data.me);
-      Y.navigate("/", { replace: true });
+      Y.navigate(Y.HOME, { replace: true });
     } }, field("Nutzername oder E-Mail", name), password.element, error, submit);
     setTimeout(() => name.focus(), 0);
     return { element: authFrame("Anmelden bei yipi", "", form, ["Noch kein Konto? ", link("/i/signup", {}, "Registrieren")]), title: "Anmelden", bare: true };
   };
 
   views.signup = function signup() {
-    if (Y.me) { setTimeout(() => Y.navigate("/", { replace: true }), 0); return { element: h("div"), title: "yipi" }; }
+    if (Y.me) { setTimeout(() => Y.navigate(Y.HOME, { replace: true }), 0); return { element: h("div"), title: "yipi" }; }
     const handle = h("input", { class: "field", autocomplete: "username", "aria-label": "Nutzername", maxlength: 15, required: true, autocapitalize: "none", spellcheck: "false", "aria-describedby": "handleState" });
     const state = h("small", { class: "hint", id: "handleState", "aria-live": "polite" }, "3 bis 15 Zeichen: Buchstaben, Zahlen und _.");
     const name = h("input", { class: "field", autocomplete: "name", "aria-label": "Anzeigename", maxlength: 50, placeholder: "So sehen dich andere (optional)" });
@@ -434,7 +434,7 @@
       submit.disabled = false;
       if (!reply.ok) { showError(error, Api.message(reply)); return; }
       Y.setMe(reply.data.me);
-      Y.navigate("/", { replace: true });
+      Y.navigate(Y.HOME, { replace: true });
       toast("Willkommen bei yipi!");
     } },
       field("Nutzername", h("div", { class: "with-prefix" }, h("span", {}, "@"), handle), null), state,

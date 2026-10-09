@@ -6,7 +6,7 @@
 
   const Core = window.YipiCore;
   const Icons = window.YipiIcons;
-  const Yipi = (window.Yipi = { me: null, navigate() {}, requireLogin() {} });
+  const Yipi = (window.Yipi = { me: null, HOME: Core.HOME, navigate() {}, requireLogin() {} });
 
   // ---------------------------------------------------------------------------------------- elements
   function h(tag, attrs, ...children) {

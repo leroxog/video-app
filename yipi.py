@@ -88,7 +88,7 @@ CONTENT_SECURITY_POLICY = (
 )
 DESCRIPTION = "yipi: kurze Yips, Antworten, Reposts und Likes. Sag, was dich gerade bewegt."
 # Old home pages of the site that stay reachable but are not for search engines.
-ARCHIVE_PATHS = ("/gomat-archiv", "/ysound-archiv", "/sound-archiv", "/server-archiv", "/browser-archiv", "/ylib-archiv", "/ychat-archiv", "/nex-archiv")
+ARCHIVE_PATHS = ("/yipi-archiv", "/gomat-archiv", "/ysound-archiv", "/sound-archiv", "/server-archiv", "/browser-archiv", "/ylib-archiv", "/ychat-archiv", "/nex-archiv")
 ENDPOINTS = set()           # filled by register_routes: every endpoint of this module (the site's login gate must let them through)
 
 
@@ -630,7 +630,7 @@ def page_meta(path):
 def manifest():
     return {
         "name": "yipi", "short_name": "yipi", "description": DESCRIPTION, "lang": "de", "dir": "ltr",
-        "id": "/", "start_url": "/", "scope": "/", "display": "standalone", "orientation": "portrait-primary",
+        "id": "/yipi-archiv", "start_url": "/yipi-archiv", "scope": "/", "display": "standalone", "orientation": "portrait-primary",
         "background_color": "#000000", "theme_color": "#000000", "categories": ["social"],
         "icons": [
             {"src": "/static/img/yipi-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
@@ -650,7 +650,8 @@ def page_headers(response):
 
 
 def error_page(code, title, text):
-    return page_headers(make_response(render_template("yipi_error.html", code=code, title=title, text=text), code))
+    """The page for a mistake (a 404, a 500) for the whole site."""
+    return page_headers(make_response(render_template("error.html", code=code, title=title, text=text), code))
 
 
 def base_url():
@@ -1663,9 +1664,9 @@ def register_routes(app):
         return jsonify({"ok": True})
 
     # ---------------------------------------------------------------------------------- the pages
-    @route("/", endpoint="pl_home")
+    @route("/yipi-archiv", endpoint="yipi_home")
     def yipi_home():
-        return render_shell("/")
+        return render_shell("/yipi-archiv")
 
     def render_shell(path):
         user = current_user()
@@ -1686,7 +1687,7 @@ def register_routes(app):
 
     # ---------------------------------------------------------------------- legal pages, files for browsers and crawlers
     def legal(page):
-        return page_headers(make_response(render_template("yipi_legal.html", page=page, imprint=ysound.imprint())))
+        return page_headers(make_response(render_template("legal.html", page=page, imprint=ysound.imprint())))
 
     @route("/nutzungsbedingungen")
     def yipi_terms():
@@ -1700,7 +1701,7 @@ def register_routes(app):
     def yipi_imprint():
         return legal("imprint")
 
-    @route("/manifest.webmanifest")
+    @route("/yipi-archiv/manifest.webmanifest")
     def yipi_manifest():
         return Response(json.dumps(manifest(), ensure_ascii=False), mimetype="application/manifest+json")
 
@@ -1714,14 +1715,14 @@ def register_routes(app):
     @route("/sitemap.xml")
     def yipi_sitemap():
         root = base_url()
-        urls = "".join(f"  <url><loc>{root}{path}</loc></url>\n" for path in ("/", "/explore", "/nutzungsbedingungen", "/datenschutz", "/impressum"))
+        urls = "".join(f"  <url><loc>{root}{path}</loc></url>\n" for path in ("/", "/datenschutz", "/impressum", "/nutzungsbedingungen"))
         return Response(f'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n{urls}</urlset>\n', mimetype="application/xml")
 
     @app.errorhandler(404)
     def yipi_not_found(error):
         if request.path.startswith("/api/"):
             return jsonify({"ok": False, "error": "not_found"}), 404
-        return error_page(404, "Diese Seite gibt es nicht", "Vielleicht ist der Link falsch, oder das Konto oder der Yip wurde gelöscht.")
+        return error_page(404, "Diese Seite gibt es nicht", "Vielleicht ist der Link falsch, oder die Seite wurde entfernt.")
 
     @route("/<handle>")
     def yipi_page_profile(handle):

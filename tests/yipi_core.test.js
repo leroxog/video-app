@@ -123,7 +123,7 @@ test("the full time and the join date", () => {
 // ----------------------------------------------------------------------------------------- addresses
 test("every address of the page is read and built the same way", () => {
   const cases = [
-    ["/", "", { name: "home" }], ["/explore", "", { name: "explore" }], ["/notifications", "", { name: "notifications" }], ["/messages", "", { name: "messages" }],
+    ["/yipi-archiv", "", { name: "home" }], ["/", "", { name: "notfound" }], ["/explore", "", { name: "explore" }], ["/notifications", "", { name: "notifications" }], ["/messages", "", { name: "messages" }],
     ["/messages/mia", "", { name: "thread", handle: "mia" }], ["/bookmarks", "", { name: "bookmarks" }], ["/settings", "", { name: "settings", section: "" }],
     ["/settings/account", "", { name: "settings", section: "account" }], ["/moderation", "", { name: "moderation" }], ["/i/login", "", { name: "login" }], ["/i/signup", "", { name: "signup" }],
     ["/search", "?q=hallo%20welt", { name: "search", q: "hallo welt", type: "posts" }], ["/search", "?q=%23tag&type=people", { name: "search", q: "#tag", type: "people" }],
@@ -132,12 +132,14 @@ test("every address of the page is read and built the same way", () => {
   ];
   for (const [path, search, route] of cases) {
     assert.deepEqual(core.parsePath(path, search), route, path);
+    if (route.name === "notfound") continue;
     const [built, query] = core.buildPath(route).split("?");
     assert.deepEqual(core.parsePath(built, query ? `?${query}` : ""), route, `${path} (built again)`);
   }
   assert.deepEqual(core.parsePath("/explore/"), { name: "explore" });
   for (const path of ["/ab", "/mia/status/x", "/mia/status/1/2", "/mia/other", "/a b", "/mia/followers/x", "/a".repeat(20), "/settings/Konto", "/mía"]) assert.equal(core.parsePath(path).name, "notfound", path);
-  assert.equal(core.buildPath({ name: "nonsense" }), "/");
+  assert.equal(core.buildPath({ name: "nonsense" }), "/yipi-archiv");
+  assert.equal(core.HOME, "/yipi-archiv");
 });
 
 test("handles are checked the way the server checks them", () => {
