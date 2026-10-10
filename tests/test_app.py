@@ -72,12 +72,12 @@ def test_nex_archived_redirects_to_login_when_logged_out(client):
     assert "/login" in r.headers["Location"]
 
 
-def test_signup_then_land_on_raumo(client):
+def test_signup_then_land_on_treff(client):
     r = signup(client, "alice")
     assert r.status_code in (302, 303)
     home = client.get("/")
     assert home.status_code == 200
-    assert b"raumo-core.js" in home.data and b"yipiBoot" not in home.data and b"gomatData" not in home.data and b"createForm" not in home.data and b"msNav" not in home.data
+    assert b"treff-core.js" in home.data and b"yipiBoot" not in home.data and b"gomatData" not in home.data and b"createForm" not in home.data and b"msNav" not in home.data
     assert b"yipiBoot" in client.get("/yipi-archiv").data
     assert b"gomatData" in client.get("/gomat-archiv").data
     assert b"msNav" in client.get("/sound-archiv").data
@@ -345,16 +345,16 @@ def _chat_id(client):
     return client.post("/api/ai/chats").get_json()["chat"]["id"]
 
 
-def test_root_serves_raumo_not_the_archived_pages(client):
+def test_root_serves_treff_not_the_archived_pages(client):
     """The home page cycled Nex, browser, ychat, ylib, the browser again, NRS Server, NRS Sound, ysound, gomat, yipi and is now
-    raumo (2026-10-09). The social network, maths course, song site, sound studio, server panel, browser, ylib, ychat and Nex UIs
+    Treff (2026-10-10). The social network, maths course, song site, sound studio, server panel, browser, ylib, ychat and Nex UIs
     still fully work at /yipi-archiv, /gomat-archiv, /ysound-archiv, /sound-archiv, /server-archiv, /browser-archiv, /ylib-archiv,
     /ychat-archiv and /nex-archiv, unlinked from anywhere."""
     signup(client, "alice")
     home = client.get("/")
     assert home.status_code == 200
     assert (
-        b"raumo-core.js" in home.data
+        b"treff-core.js" in home.data
         and b"yipiBoot" not in home.data
         and b"gomatData" not in home.data
         and b"createForm" not in home.data

@@ -272,7 +272,7 @@
   Y.navigate = (href, options = {}) => {
     let url;
     try { url = new URL(href, location.href); } catch (error) { return; }
-    if (url.pathname === "/") url = new URL(Y.HOME, location.href);                  // "/" is raumo's page, yipi's own home is elsewhere
+    if (url.pathname === "/") url = new URL(Y.HOME, location.href);                  // "/" is the page of the site, yipi's own home is elsewhere
     if (url.origin !== location.origin || OUTSIDE.has(url.pathname.split("/")[1])) { location.assign(url.href); return; }
     const target = url.pathname + url.search;
     if (target === location.pathname + location.search && !options.replace) {

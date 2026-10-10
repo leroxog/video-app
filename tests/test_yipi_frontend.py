@@ -294,11 +294,11 @@ def test_manifest_robots_and_sitemap(client):
     assert "gomat-archiv" not in sitemap and "yipi-archiv" not in sitemap
 
 
-def test_error_pages_are_raumo_pages(client):
+def test_error_pages_are_treff_pages(client):
     page = client.get("/gibt-es-nicht-1234")
     assert page.status_code == 404
     text = page.get_data(as_text=True)
-    assert "raumo" in text and "Diese Seite gibt es nicht" in text and "gomat" not in text.lower()
+    assert "Treff" in text and "Diese Seite gibt es nicht" in text and "gomat" not in text.lower()
     assert "Content-Security-Policy" in page.headers
     api = client.get("/api/yipi/gibt-es-nicht")
     assert api.status_code == 404 and api.get_json() == {"ok": False, "error": "not_found"}

@@ -3,18 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>{{ {"terms": "Nutzungsbedingungen von yipi", "privacy": "Datenschutz", "imprint": "Impressum"}[page] }} | raumo</title>
-<meta name="description" content="{{ {"terms": "Die Regeln auf yipi (dem Archiv-Angebot) und was du von uns erwarten kannst.", "privacy": "Welche Daten raumo und das Archiv-Angebot yipi verarbeiten, wozu und wie du sie löschst.", "imprint": "Angaben zum Betreiber von raumo."}[page] }}">
-<meta name="theme-color" content="#0c0d10">
-<meta name="color-scheme" content="dark">
-<link rel="icon" href="{{ static_url('img/raumo-icon.svg') }}" type="image/svg+xml">
-<link rel="icon" href="{{ static_url('img/raumo-192.png') }}" type="image/png" sizes="192x192">
-<link rel="apple-touch-icon" href="{{ static_url('img/raumo-180.png') }}">
-<link rel="stylesheet" href="{{ static_url('css/raumo.css') }}">
+<title>{{ {"terms": "Nutzungsbedingungen", "privacy": "Datenschutz", "imprint": "Impressum"}[page] }} | Treff</title>
+<meta name="description" content="{{ {"terms": "Die Regeln auf Treff und was du von uns erwarten kannst.", "privacy": "Welche Daten Treff verarbeitet, wozu und wie du sie löschst.", "imprint": "Angaben zum Betreiber von Treff."}[page] }}">
+<meta name="theme-color" content="#0b0f17">
+<meta name="color-scheme" content="dark light">
+<link rel="icon" href="{{ static_url('img/treff-icon.svg') }}" type="image/svg+xml">
+<link rel="icon" href="{{ static_url('img/treff-192.png') }}" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="{{ static_url('img/treff-180.png') }}">
+<link rel="stylesheet" href="{{ static_url('css/treff.css') }}">
 </head>
 <body>
 <div class="legal-page">
-  <a class="legal-logo" href="/" aria-label="raumo, zurück zur Startseite"><svg viewBox="0 0 48 48" aria-hidden="true" focusable="false"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff8a1f"/><stop offset="1" stop-color="#ffcf3a"/></linearGradient></defs><path d="M6 15V9a3 3 0 013-3h6M33 6h6a3 3 0 013 3v6M42 33v6a3 3 0 01-3 3h-6M15 42H9a3 3 0 01-3-3v-6" fill="none" stroke="url(#lg)" stroke-width="3.4" stroke-linecap="round"/><path d="M24 13l9.500 5.300v10.600L24 34.300l-9.500-5.400V18.300z" fill="url(#lg)"/><path d="M24 23.600l9.500-5.300M24 23.600v10.700M24 23.600l-9.500-5.300" fill="none" stroke="#1a1204" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" opacity=".55"/></svg><span>raumo</span></a>
+  <a class="legal-logo" href="/" aria-label="Treff, zurück zur Startseite"><svg viewBox="0 0 48 48" aria-hidden="true" focusable="false"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3b82f6"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs><rect x="2" y="2" width="44" height="44" rx="12" fill="url(#lg)"/><path d="M13 12h22a3 3 0 013 3v12a3 3 0 01-3 3H25l-7 6v-6h-5a3 3 0 01-3-3V15a3 3 0 013-3z" fill="#fff"/><path d="M24 17.500v6" stroke="#0b0f17" stroke-width="3" stroke-linecap="round"/><circle cx="24" cy="27.200" r="1.900" fill="#0b0f17"/></svg><span>Treff</span></a>
   <main class="legal">
 {%- if page == "imprint" %}
     <h1>Impressum</h1>
@@ -28,20 +28,20 @@
   {%- else %}
     <p>Die Angaben zum Betreiber der Seite werden gerade ergänzt.</p>
   {%- endif %}
-    <h2>Inhalte der Nutzer (Archiv-Angebot yipi)</h2>
-    <p>Beim Archiv-Angebot yipi stammen Yips, Antworten, Profile, Bilder und Nachrichten von den Nutzern. Für diese Inhalte sind die jeweiligen Nutzer verantwortlich, nicht der Betreiber. Wir prüfen sie nicht vorab, entfernen rechtswidrige Inhalte aber, sobald wir davon erfahren.</p>
+    <h2>Inhalte der Nutzer</h2>
+    <p>Die Nachrichten, Fakten und Gruppen auf Treff stammen von den Nutzern, die als „user“ mit einer Nummer schreiben. Für diese Inhalte sind die jeweiligen Nutzer verantwortlich, nicht der Betreiber. Wir prüfen sie nicht vorab, entfernen rechtswidrige Inhalte aber, sobald wir davon erfahren.</p>
     <h2>Rechtswidrige Inhalte melden</h2>
-    <p>Wenn du angemeldet bist, tippe bei dem Yip oder dem Profil auf „Melden“. Das geht am schnellsten. Du kannst uns auch schreiben{% if imprint and imprint.email %} (<a href="mailto:{{ imprint.email }}">{{ imprint.email }}</a>){% endif %}. Nenne dabei die Adresse des Yips oder Profils und erkläre kurz, warum der Inhalt gegen das Gesetz oder die <a href="/nutzungsbedingungen">Nutzungsbedingungen</a> verstößt. Wir antworten, sobald wir die Meldung geprüft haben.</p>
+    <p>Tippe bei der Nachricht, dem Fakt oder der Gruppe auf „Melden“ (bei einer Nachricht über die drei Punkte). Das geht am schnellsten. Du kannst uns auch schreiben{% if imprint and imprint.email %} (<a href="mailto:{{ imprint.email }}">{{ imprint.email }}</a>){% endif %}. Nenne dabei die Adresse der Gruppe und erkläre kurz, warum der Inhalt gegen das Gesetz oder die <a href="/nutzungsbedingungen">Nutzungsbedingungen</a> verstößt. Wir antworten, sobald wir die Meldung geprüft haben.</p>
 {%- elif page == "terms" %}
-    <h1>Nutzungsbedingungen von yipi</h1>
-    <p class="lead">Diese Regeln gelten für das Archiv-Angebot yipi (unter /yipi-archiv). raumo selbst hat kein Konto und keine Beiträge von Nutzern. yipi ist ein kleines, kostenloses Netzwerk für kurze Beiträge („Yips“). Damit sich alle wohlfühlen, gelten ein paar Regeln. Stand: Oktober 2026.</p>
+    <h1>Nutzungsbedingungen</h1>
+    <p class="lead">Treff ist ein kostenloser Ort für Gruppen zu jedem Thema. Alle können mitlesen und mitschreiben, ohne Konto. Damit sich alle wohlfühlen, gelten ein paar Regeln. Stand: Oktober 2026.</p>
 
-    <h2>1. Dein Konto</h2>
-    <p>Ein Konto kannst du ab 16 Jahren anlegen, jüngere brauchen die Erlaubnis ihrer Eltern. Pro Person gibt es ein Konto. Du bist für dein Passwort verantwortlich: Gib es nicht weiter. yipi verschickt keine E-Mails, deshalb können wir ein vergessenes Passwort nicht zurücksetzen. Bewahre es sicher auf. Du kannst dein Konto jederzeit unter „Einstellungen, Dein Konto“ löschen.</p>
+    <h2>1. Wer schreibt hier?</h2>
+    <p>Du brauchst kein Konto. Wenn du zum ersten Mal etwas schreibst, bekommt dein Browser eine Nummer aus sechs Ziffern und einen geheimen Schlüssel. Du erscheinst als „user“ mit dieser Nummer. Die Nummer gehört zu deinem Browser, nicht zu dir als Person: Wenn du die Browserdaten löschst, ist sie weg. Gib deinen Schlüssel nicht weiter. Treff ist für Menschen ab 16 Jahren. Jüngere brauchen die Erlaubnis ihrer Eltern.</p>
 
     <h2>2. Deine Inhalte</h2>
-    <p>Was du schreibst und hochlädst, gehört dir. Yips, Antworten, Reposts, dein Profil und deine Bilder sind öffentlich und für alle sichtbar, auch ohne Anmeldung. Du erlaubst yipi, sie so anzuzeigen, zu speichern und weiterzugeben, wie es für den Betrieb nötig ist (zum Beispiel in den Zeitleisten anderer Nutzer und in Link-Vorschauen). Wenn du etwas löschst, verschwindet es von yipi. Nachrichten sehen nur du und die andere Person.</p>
-    <p>Lade nur hoch und schreibe nur, wozu du das Recht hast. Fremde Texte und Bilder brauchen die Erlaubnis der Urheber.</p>
+    <p>Alles, was du schreibst (Nachrichten, Fakten, Gruppen, Beschreibungen), ist öffentlich und für alle sichtbar, die die Seite öffnen. Schreibe nichts, was nicht öffentlich sein soll: keine Passwörter, keine privaten Daten von dir oder anderen. Du erlaubst Treff, deine Inhalte so anzuzeigen und zu speichern, wie es für den Betrieb nötig ist. Eigene Nachrichten und Fakten kannst du jederzeit löschen. Wer eine Gruppe gemacht hat, kann in ihr Nachrichten und Fakten löschen und die Gruppe auflösen.</p>
+    <p>Schreibe nur, wozu du das Recht hast. Fremde Texte und Bilder brauchen die Erlaubnis der Urheber.</p>
 
     <h2>3. Das ist nicht erlaubt</h2>
     <ul>
@@ -50,73 +50,59 @@
       <li>Hass und Hetze gegen Menschen wegen ihrer Herkunft, Religion, Hautfarbe, ihres Geschlechts, ihrer sexuellen Orientierung, einer Behinderung oder Krankheit.</li>
       <li>Inhalte, die Kinder oder Jugendliche sexualisieren, pornografische Inhalte und Inhalte, die Selbstverletzung oder Suizid verherrlichen.</li>
       <li>Rechtswidrige Inhalte, zum Beispiel Verherrlichung von Terror, Anleitungen zu Straftaten, Betrug und verbotene Symbole.</li>
-      <li>Spam, Massen-Werbung, künstliche Likes, Reposts oder Follower und mehrere Konten, um Regeln zu umgehen.</li>
-      <li>Sich als eine andere Person oder als das Team von yipi auszugeben.</li>
-      <li>Das Ausnutzen von Fehlern, das Überlasten der Seite oder der Versuch, auf fremde Konten zuzugreifen.</li>
+      <li>Spam, Massen-Werbung, Links zu Schadsoftware oder Betrugsseiten und das Vortäuschen einer anderen Person oder des Betreibers.</li>
+      <li>Das Ausnutzen von Fehlern, das Überlasten der Seite oder der Versuch, die Nummern anderer zu übernehmen.</li>
     </ul>
 
-    <h2>4. Melden, Sperren und Löschen</h2>
-    <p>Etwas Unpassendes siehst du? Tippe bei dem Yip oder dem Profil auf „Melden“. Du kannst Konten außerdem stummschalten oder blockieren, dann siehst du ihre Yips nicht mehr und sie können dir nicht mehr schreiben oder folgen. Wir prüfen Meldungen und können Yips löschen und Konten sperren, besonders bei Verstößen gegen Abschnitt 3 und bei wiederholten Verstößen. Eine Sperre kann ohne Vorwarnung erfolgen, wenn ein Verstoß schwer wiegt. Wenn du meinst, dass wir uns geirrt haben, schreib uns an die Adresse im <a href="/impressum">Impressum</a>.</p>
+    <h2>4. Melden und Löschen</h2>
+    <p>Etwas Unpassendes siehst du? Tippe bei der Nachricht, dem Fakt oder der Gruppe auf „Melden“. Wir prüfen Meldungen und können Nachrichten, Fakten und ganze Gruppen löschen, besonders bei Verstößen gegen Abschnitt 3. Das kann ohne Vorwarnung geschehen, wenn ein Verstoß schwer wiegt. Wenn du meinst, dass wir uns geirrt haben, schreib uns an die Adresse im <a href="/impressum">Impressum</a>.</p>
 
     <h2>5. Verfügbarkeit und Haftung</h2>
-    <p>yipi ist ein privates Projekt ohne Gewähr. Es kann ausfallen, sich ändern oder eingestellt werden. Du solltest dich nicht darauf verlassen, dass ein Inhalt für immer gespeichert bleibt. Für die Inhalte der Nutzer sind diese selbst verantwortlich. Unsere Haftung ist bei leichter Fahrlässigkeit ausgeschlossen, außer bei der Verletzung von Leben, Körper und Gesundheit und bei wesentlichen Vertragspflichten. Zwingende gesetzliche Rechte bleiben unberührt.</p>
+    <p>Treff ist ein privates Projekt ohne Gewähr. Es kann ausfallen, sich ändern oder eingestellt werden. Du solltest dich nicht darauf verlassen, dass ein Inhalt für immer gespeichert bleibt. Für die Inhalte der Nutzer sind diese selbst verantwortlich. Unsere Haftung ist bei leichter Fahrlässigkeit ausgeschlossen, außer bei der Verletzung von Leben, Körper und Gesundheit und bei wesentlichen Vertragspflichten. Zwingende gesetzliche Rechte bleiben unberührt.</p>
 
     <h2>6. Änderungen</h2>
-    <p>Wir können diese Bedingungen ändern, zum Beispiel wenn yipi neue Funktionen bekommt. Die aktuelle Fassung steht immer hier. Wenn du yipi nach einer Änderung weiter nutzt, gilt die neue Fassung.</p>
+    <p>Wir können diese Bedingungen ändern, zum Beispiel wenn Treff neue Funktionen bekommt. Die aktuelle Fassung steht immer hier. Wenn du Treff nach einer Änderung weiter nutzt, gilt die neue Fassung.</p>
+
+    <h2>7. Das Archiv-Angebot yipi</h2>
+    <p>Unter <a href="/yipi-archiv">/yipi-archiv</a> gibt es noch das frühere Netzwerk yipi mit Konten. Dort gelten die obigen Regeln sinngemäß: Wer ein Konto hat, ist für seine Yips verantwortlich, kann sie und das Konto jederzeit löschen („Einstellungen, Dein Konto“) und Inhalte anderer melden („Melden“). Ein vergessenes Passwort kann nicht zurückgesetzt werden.</p>
 {%- else %}
     <h1>Datenschutz</h1>
-    <p class="lead">Kurz und ehrlich: raumo verarbeitet alles, was du scannst, auf deinem Gerät. Es gibt kein Konto, keine Cookies, keine Werbung und kein Tracking. Das Archiv-Angebot yipi (weiter unten) funktioniert anders, weil es ein soziales Netzwerk mit Konten ist. Stand: Oktober 2026.</p>
+    <p class="lead">Kurz und ehrlich: Bei Treff gibt es kein Konto, keine Werbung und kein Tracking. Was du schreibst, ist öffentlich. Dein Browser bekommt eine Nummer und einen geheimen Schlüssel, damit der Server dich beim nächsten Mal wiedererkennt. Stand: Oktober 2026.</p>
 
     <h2>Wer ist verantwortlich?</h2>
     <p>Der Betreiber, der im <a href="/impressum">Impressum</a> steht. Dort erreichst du ihn auch für Fragen zum Datenschutz.</p>
 
-    <h2>raumo: was auf deinem Gerät bleibt</h2>
-    <p>Wenn du einen Raum scannst, liest die Seite die Kamera und die Bewegungssensoren deines Handys, erst nachdem du es im Browser erlaubt hast und nur, solange der Scan läuft. Das Kamerabild wird nicht aufgenommen und nicht gesendet. Aus den Messwerten entstehen Punkte (Ort und Farbe) und, wenn du einen Raum im Stehen misst, Fotos der Wände. Das alles liegt nur im Speicher deines Browsers (IndexedDB) und wird <strong>nicht an uns oder andere gesendet</strong>. Du löschst es in der Seite (Scan oder Gebäude löschen) oder indem du die Websitedaten deines Browsers löschst. Die Speicherung ist für die Funktion der Seite technisch notwendig und geschieht auf deinen Wunsch (§ 25 Abs. 2 TDDDG).</p>
-    <p>Dateien, die du öffnest (Punktwolken, Sicherungen), werden nur auf deinem Gerät gelesen. Dateien, die du speicherst (PLY, LAS, GLB, Sicherungen und so weiter), erzeugt die Seite auf deinem Gerät.</p>
-    <p>Beim Durchlaufen-Scannen auf Android stellt dein Gerät die Positionsverfolgung und die Tiefenmessung über ARCore (Google Play-Dienste für AR) bereit. raumo erhält davon nur die Ergebnisse auf deinem Gerät. Was Google dabei verarbeitet, ist in Googles Datenschutzhinweisen geregelt.</p>
-    <p>raumo setzt keine Cookies und legt kein Konto an. Der Browser speichert nur deine Scans und Einstellungen auf dem Gerät. Fremde Schriften, Skripte und Analysedienste gibt es nicht.</p>
+    <h2>Treff: was auf unserem Server liegt</h2>
+    <ul>
+      <li><strong>Deine Nummer:</strong> eine Zahl aus sechs Ziffern, die es nur einmal gibt, und ein Prüfwert (Hash) deines geheimen Schlüssels. Den Schlüssel selbst kennen wir nicht. Sie entstehen, wenn du das erste Mal etwas schreibst oder eine Gruppe machst. Wer nur liest, bekommt keine Nummer.</li>
+      <li><strong>Deine Inhalte:</strong> Nachrichten (mit Antworten, Reaktionen und der Markierung „Wichtig!“), Fakten, Gruppen mit Namen und Beschreibung, jeweils mit deiner Nummer und der Zeit. Sie sind <strong>öffentlich</strong> und für alle sichtbar. Die Nummer ist kein Klarname, aber was du schreibst, kann dich verraten: Schreibe keine privaten Daten.</li>
+      <li><strong>Meldungen:</strong> Wenn du etwas meldest, speichern wir die Meldung, deine Nummer als Melder und den Grund, bis sie bearbeitet ist.</li>
+    </ul>
+    <p>Rechtsgrundlage ist die Bereitstellung der Seite, die du nutzen möchtest (Art. 6 Abs. 1 lit. b DSGVO), und unser berechtigtes Interesse, Missbrauch zu verhindern (Art. 6 Abs. 1 lit. f DSGVO). Eigene Nachrichten und Fakten kannst du jederzeit selbst löschen. Wer eine Gruppe gemacht hat, kann sie samt allen Nachrichten löschen. Gelöschte Nachrichten werden geleert; ein Platzhalter „Diese Nachricht wurde gelöscht“ bleibt, damit Antworten verständlich bleiben.</p>
+
+    <h2>Was in deinem Browser liegt</h2>
+    <p>Treff setzt <strong>keine Cookies</strong>. Dein Browser speichert aber (localStorage) deinen geheimen Schlüssel (<code>treff.key</code>), welche Nachrichten du schon gesehen hast (<code>treff.seen</code>), welche Hinweise du ausgeblendet hast (<code>treff.dismissed</code>) und ob du die Einführung weggeklickt hast (<code>treff.intro</code>). Das ist für die Funktion der Seite technisch notwendig (§ 25 Abs. 2 TDDDG). Wenn du die Websitedaten deines Browsers löschst, ist deine Nummer weg und du bekommst beim nächsten Schreiben eine neue.</p>
 
     <h2>Besuch der Seite</h2>
-    <p>Beim Aufruf verarbeitet der Hoster der Seite technisch notwendige Daten, die dein Browser sendet (zum Beispiel IP-Adresse, Zeitpunkt, aufgerufene Adresse), um die Seite auszuliefern und missbräuchliche Zugriffe zu erkennen. Die Seite läuft bei Railway (Railway Corp., USA); dabei können Daten in Länder außerhalb der EU übertragen werden. Rechtsgrundlage ist unser berechtigtes Interesse am sicheren Betrieb (Art. 6 Abs. 1 lit. f DSGVO).</p>
+    <p>Beim Aufruf verarbeitet der Hoster der Seite technisch notwendige Daten, die dein Browser sendet (zum Beispiel IP-Adresse, Zeitpunkt, aufgerufene Adresse), um die Seite auszuliefern und missbräuchliche Zugriffe zu erkennen. Die Seite läuft bei Railway (Railway Corp., USA); dabei können Daten in Länder außerhalb der EU übertragen werden. Damit niemand die Seite mit Nachrichten überschwemmt, zählt der Server kurzzeitig im Arbeitsspeicher mit, wie oft eine IP-Adresse oder Nummer etwas tut; das wird nicht in der Datenbank gespeichert und nach spätestens einer Stunde vergessen. Rechtsgrundlage ist unser berechtigtes Interesse am sicheren Betrieb (Art. 6 Abs. 1 lit. f DSGVO).</p>
 
-    <h2>Archiv-Angebot yipi</h2>
-    <p>Das soziale Netzwerk yipi (früher die Startseite, jetzt unter <a href="/yipi-archiv">/yipi-archiv</a>) speichert nur, was für ein soziales Netzwerk nötig ist. Es gibt dort keine Werbung, kein Tracking und keine Weitergabe an Dritte. Die folgenden Abschnitte gelten für yipi.</p>
-
-    <h2>yipi: Besuch ohne Konto</h2>
-    <p>Du kannst Profile und Yips ansehen, ohne ein Konto zu haben. Dabei setzt yipi kein Cookie. Dein Browser speichert nur Einstellungen auf deinem Gerät: dein gewähltes Farbschema (<code>yipi.theme</code>), die zuletzt gewählte Zeitleiste (<code>yipi.feed</code>) und deine letzten Suchen (<code>yipi.recent</code>). Diese Daten verlassen dein Gerät nicht. Die Speicherung ist für die Funktion der Seite technisch notwendig (§ 25 Abs. 2 TDDDG). Du kannst sie löschen, indem du die Websitedaten deines Browsers löschst.</p>
-
-    <h2>yipi: Dein Konto</h2>
-    <p>Wenn du ein Konto erstellst, speichern wir auf unserem Server:</p>
-    <ul>
-      <li>deinen Nutzernamen und deinen Anzeigenamen, optional eine E-Mail-Adresse (nur für die Anmeldung, wir schicken dir keine E-Mails),</li>
-      <li>dein Passwort, nur als verschlüsselten Hash, wir können es nicht lesen,</li>
-      <li>freiwillige Profilangaben: Beschreibung, Ort, Webseite, Profil- und Titelbild,</li>
-      <li>den Zeitpunkt der Anmeldung und wann du zuletzt auf yipi warst.</li>
-    </ul>
-    <p>Rechtsgrundlage ist die Bereitstellung des Kontos, das du dir wünschst (Art. 6 Abs. 1 lit. b DSGVO). Das Alter fragen wir nur ab, wir speichern es nicht.</p>
-    <p>Damit du angemeldet bleibst, setzt yipi nach der Anmeldung ein Cookie (<code>yipi_session</code>), das 30 Tage gültig ist. Es ist technisch notwendig (§ 25 Abs. 2 TDDDG) und wird beim Abmelden entfernt. Entwürfe von Yips merkt sich dein Browser nur so lange, bis du den Tab schließt.</p>
-
-    <h2>yipi: Deine Inhalte</h2>
-    <p>Was du schreibst, speichern wir, damit andere es sehen können:</p>
-    <ul>
-      <li><strong>Öffentlich</strong> sind Yips, Antworten, Reposts, Zitate, Bilder, dein Profil und wem du folgst und wer dir folgt. Sie sind auch ohne Anmeldung einsehbar und können von Suchmaschinen gefunden werden.</li>
-      <li><strong>Nur für dich</strong> sind Lesezeichen, Benachrichtigungen, Stummschaltungen und Blockierungen. Bei Likes sehen andere nur die Anzahl, die Autorin oder der Autor erfährt über eine Benachrichtigung, wer den Yip mag.</li>
-      <li><strong>Nachrichten</strong> sehen nur du und die andere Person. Sie liegen unverschlüsselt in unserer Datenbank, sind also nicht Ende-zu-Ende-verschlüsselt. Wir lesen sie nicht, es sei denn, das Gesetz verlangt es.</li>
-    </ul>
-    <p>Bilder werden schon in deinem Browser verkleinert und neu gespeichert. Dabei verschwinden versteckte Angaben wie Aufnahmeort und Kamera. Das gilt nicht für GIFs, sie werden unverändert hochgeladen. Bilder liegen als Teil der Datenbank auf unserem Server.</p>
-    <p>Wenn du etwas meldest, speichern wir die Meldung und deinen Namen als Melder, bis wir sie bearbeitet haben.</p>
-
-    <h2>yipi: Löschen</h2>
-    <p>Du kannst einzelne Yips jederzeit löschen. Unter „Einstellungen, Dein Konto“ kannst du dein ganzes Konto löschen: Dann werden dein Profil, alle deine Yips, Bilder, Likes, Lesezeichen und Nachrichten sofort und endgültig gelöscht. Auch von dir gesendete Nachrichten verschwinden dann bei den Empfängern.</p>
+    <h2>Links</h2>
+    <p>In Nachrichten und Fakten kann es Links auf fremde Seiten geben. Für deren Datenschutz sind wir nicht verantwortlich. Treff lädt von diesen Seiten nichts nach: Du siehst nur den Link.</p>
 
     <h2>Kein Tracking, keine Weitergabe</h2>
-    <p>raumo und yipi nutzen keine Analyse- und Werbedienste, keine fremden Schriften und keine fremden Skripte. Wir geben keine Daten an Dritte weiter, außer wenn wir gesetzlich dazu verpflichtet sind. Links in Yips führen auf fremde Seiten, für deren Datenschutz wir nicht verantwortlich sind.</p>
+    <p>Treff nutzt keine Analyse- und Werbedienste, keine fremden Schriften und keine fremden Skripte. Wir geben keine Daten an Dritte weiter, außer wenn wir gesetzlich dazu verpflichtet sind.</p>
+
+    <h2>Das Archiv-Angebot yipi</h2>
+    <p>Unter <a href="/yipi-archiv">/yipi-archiv</a> gibt es noch das frühere soziale Netzwerk yipi. Es hat Konten und speichert, was dafür nötig ist: Nutzername und Anzeigename, optional eine E-Mail-Adresse (nur für die Anmeldung), das Passwort nur als Prüfwert, freiwillige Profilangaben, Yips, Antworten, Bilder, Likes, Lesezeichen und Nachrichten (nicht Ende-zu-Ende-verschlüsselt). Yips und Profile sind öffentlich. Nach der Anmeldung setzt yipi ein Cookie (<code>yipi_session</code>), das 30 Tage gültig ist (technisch notwendig, § 25 Abs. 2 TDDDG) und beim Abmelden entfernt wird. Im Browser liegen nur Einstellungen (<code>yipi.theme</code>, <code>yipi.feed</code>, <code>yipi.recent</code>). Unter „Einstellungen, Dein Konto“ kannst du dein Konto samt allen Inhalten sofort und endgültig löschen.</p>
+
+    <h2>Löschen</h2>
+    <p>Eigene Nachrichten und Fakten löschst du selbst (bei der Nachricht über die drei Punkte, bei Fakten unter „Fakten!“). Wer eine Gruppe gemacht hat, kann sie unter „Infos und Einstellungen“ samt allen Nachrichten und Fakten löschen. Alles Weitere, zum Beispiel deine Nummer, löschen wir auf Anfrage (siehe unten).</p>
 
     <h2>Deine Rechte</h2>
-    <p>Du hast das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung, Datenübertragbarkeit und Widerspruch sowie darauf, eine Einwilligung jederzeit zu widerrufen. Du kannst dich außerdem bei einer Datenschutz-Aufsichtsbehörde beschweren. Schreib dafür an die Adresse im <a href="/impressum">Impressum</a>.</p>
+    <p>Du hast das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung, Datenübertragbarkeit und Widerspruch sowie darauf, eine Einwilligung jederzeit zu widerrufen. Du kannst dich außerdem bei einer Datenschutz-Aufsichtsbehörde beschweren. Schreib dafür an die Adresse im <a href="/impressum">Impressum</a>. Weil wir bei Treff dich nur an einer Nummer wiedererkennen, brauchen wir für eine Auskunft oder Löschung deine Nummer und den Nachweis, dass sie dir gehört (zum Beispiel eine Nachricht, die du in einer Gruppe schreibst).</p>
 {%- endif %}
   </main>
-  <footer class="legal-links"><a href="/">Zurück zu raumo</a><a href="/nutzungsbedingungen">Nutzungsbedingungen (yipi)</a><a href="/datenschutz">Datenschutz</a><a href="/impressum">Impressum</a></footer>
+  <footer class="legal-links"><a href="/">Zurück zu Treff</a><a href="/nutzungsbedingungen">Nutzungsbedingungen</a><a href="/datenschutz">Datenschutz</a><a href="/impressum">Impressum</a></footer>
 </div>
 </body>
 </html>

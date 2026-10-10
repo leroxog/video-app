@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="de" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{{ title }}</title>
+<meta name="description" content="{{ description }}">
+<meta name="theme-color" content="#0b0f17">
+<meta name="color-scheme" content="dark light">
+<link rel="canonical" href="{{ base }}{{ path }}">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="{{ static_url('img/treff-icon.svg') }}" type="image/svg+xml">
+<link rel="icon" href="{{ static_url('img/treff-192.png') }}" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="{{ static_url('img/treff-180.png') }}">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Treff">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Treff">
+<meta property="og:locale" content="de_DE">
+<meta property="og:title" content="{{ title }}">
+<meta property="og:description" content="{{ description }}">
+<meta property="og:url" content="{{ base }}{{ path }}">
+<meta property="og:image" content="{{ base }}/static/img/treff-og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="{{ static_url('css/treff.css') }}">
+</head>
+<body>
+<a class="skip" href="#main">Zum Inhalt springen</a>
+<div id="app"></div>
+<noscript>
+  <div class="noscript">
+    <h1>Treff</h1>
+    <p>Treff braucht JavaScript. Bitte schalte es in deinem Browser ein.</p>
+  </div>
+</noscript>
+<script src="{{ static_url('js/treff-core.js') }}"></script>
+<script src="{{ static_url('js/treff-ui.js') }}"></script>
+<script src="{{ static_url('js/treff-api.js') }}"></script>
+<script src="{{ static_url('js/treff-render.js') }}"></script>
+<script src="{{ static_url('js/treff-chat.js') }}"></script>
+<script src="{{ static_url('js/treff-side.js') }}"></script>
+<script src="{{ static_url('js/treff.js') }}"></script>
+</body>
+</html>

@@ -9,7 +9,7 @@
   "use strict";
 
   const MAX_POST = 280;
-  const HOME = "/yipi-archiv";                          // yipi's home page (the site's own home page is raumo)
+  const HOME = "/yipi-archiv";                          // yipi's home page (the site's own home page is Treff)
   const MAX_MEDIA = 4;
   const MONTHS = ["Jan.", "Feb.", "März", "Apr.", "Mai", "Juni", "Juli", "Aug.", "Sept.", "Okt.", "Nov.", "Dez."];
   const MONTHS_LONG = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];

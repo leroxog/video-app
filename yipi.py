@@ -1707,7 +1707,7 @@ def register_routes(app):
 
     @route("/robots.txt")
     def yipi_robots():
-        private = ("/api/", "/i/", "/search", "/messages", "/notifications", "/bookmarks", "/settings", "/moderation")
+        private = ("/api/", "/i/", "/search", "/messages", "/notifications", "/bookmarks", "/settings", "/moderation", "/treff-admin")
         lines = ["User-agent: *", "Allow: /"] + [f"Disallow: {path}" for path in private + ARCHIVE_PATHS]
         lines += ["", f"Sitemap: {base_url()}/sitemap.xml", ""]
         return Response("\n".join(lines), mimetype="text/plain")
