@@ -55,7 +55,8 @@ def test_the_list_has_a_model_for_every_kind_of_computer_best_first(models):
     assert sizes == sorted(sizes, reverse=True) and len(set(sizes)) == len(sizes), "best first: the bigger a model, the earlier"
     assert ml[-1]["cpu"] is True and ml[-1]["dtypes"]["q4"] < 400e6 and ml[-1]["dtypes"]["q4f16"] < 350e6, "the last one is for any computer: small enough for the memory and the processor"
     assert all(m["cpu"] is False for m in ml[:-1]), "only the last one may run on a processor alone"
-    assert "onnx-community/gemma-3-1b-it-ONNX" in ids and "onnx-community/gemma-3-270m-it-ONNX" == ids[-1]
+    assert ids[0] == "onnx-community/Qwen3-4B-Instruct-2507-ONNX" and "onnx-community/gemma-3-1b-it-ONNX" in ids and "onnx-community/gemma-3-270m-it-ONNX" == ids[-1]
+    assert ml[0]["minBuffer"] >= 1e9 and ml[0]["minMemory"] >= 8 and list(ml[0]["dtypes"]) == ["q4f16"] and ml[0]["gpu"] is True
     for m in ml:
         assert m["license_url"].startswith(("https://ai.google.dev/gemma/", "https://www.apache.org/licenses/"))
 
@@ -178,10 +179,10 @@ def test_the_archived_list_points_to_the_chat_and_the_sitemap_has_only_the_pages
 
 def test_the_legal_pages_say_where_the_chat_runs_and_what_it_keeps(client):
     privacy = client.get("/datenschutz").get_data(as_text=True)
-    for word in ("auf deinem Gerät", "transformers-cache", "regal.chats", "regal.skip", "Transformers.js", "nicht an uns und nicht an Dritte", "Gemma 3", "Grafikkarte"):
+    for word in ("auf deinem Gerät", "transformers-cache", "regal.chats", "regal.skip", "Transformers.js", "nicht an uns und nicht an Dritte", "Gemma 3", "Qwen3", "Grafikkarte"):
         assert word in privacy, word
     terms = client.get("/nutzungsbedingungen").get_data(as_text=True)
-    for word in ("Gemma-Nutzungsbedingungen", "ai.google.dev/gemma/terms", "falsch, unvollständig oder unpassend", "NOTICE.txt"):
+    for word in ("Gemma-Nutzungsbedingungen", "ai.google.dev/gemma/terms", "Qwen3", "Apache", "falsch, unvollständig oder unpassend", "NOTICE.txt"):
         assert word in terms, word
 
 

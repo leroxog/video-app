@@ -179,7 +179,11 @@ test("the AI is the best model (the list is best first) that this computer can r
 });
 
 test("the speed of an AI is predicted from the memory speed of the graphics card and the size of the model", () => {
-  assert.equal(Math.round(C.predictedSpeed({ bandwidth: 38 }, 0.784e9) * 10) / 10, 7.8);          // measured on a real computer: Gemma 3 with 1 billion parameters writes 8 to 10 tokens a second
+  const near = (value, low, high) => assert.ok(value >= low && value <= high, `${value} is not between ${low} and ${high}`);
+  near(C.predictedSpeed({ bandwidth: 38 }, 0.298e9), 15, 25);                                       // measured on a real computer (38 GB/s): Gemma 3 270M 17 to 24 tokens a second
+  near(C.predictedSpeed({ bandwidth: 38 }, 0.784e9), 8, 10);                                        // Gemma 3 1B 9
+  near(C.predictedSpeed({ bandwidth: 38 }, 2.9e9), 3.5, 4.8);                                       // Qwen3 4B 3.7 to 4.7
+  assert.equal(C.speedFactor(10), 0.3);
   assert.ok(C.predictedSpeed({ bandwidth: 300 }, 2.9e9) > C.MIN_SPEED);
   assert.ok(C.predictedSpeed({ bandwidth: 38 }, 2.9e9) < C.MIN_SPEED);
   assert.equal(C.predictedSpeed({}, 1e9), C.predictedSpeed({ bandwidth: 30 }, 1e9));              // not measured: a middle value

@@ -151,15 +151,19 @@
 
   // How fast the AI will probably be on this computer, from what the page measured of its graphics card.  Writing an answer reads the whole
   // model once for every word, so the speed follows the memory speed of the graphics card (GB/s, measured by the page in a short test)
-  // divided by the size of the model.  The AI runtime gets about SPEED_FACTOR of it (measured: Gemma 3 with 1 billion parameters,
-  // 0.78 GB, writes 9 tokens a second on a graphics card of 38 GB/s).  From MIN_SPEED tokens a second (about 3 words) a chat feels alive.
-  const SPEED_FACTOR = 0.16;
+  // divided by the size of the model.  The AI runtime gets only part of it, more of it for bigger models (the fixed work per word weighs
+  // less).  Measured on a graphics card of 38 GB/s: Gemma 3 270M (0.3 GB) 17 to 24 tokens a second, Gemma 3 1B (0.78 GB) 9, Qwen3 4B
+  // (2.9 GB) 3.7 to 4.7.  From MIN_SPEED tokens a second (about 3 words) a chat feels alive.
   const MIN_SPEED = 5;
   const UNKNOWN_BANDWIDTH = 30;
 
+  /* The part of the memory speed that the AI runtime gets, for a model of `gb` gigabytes. */
+  function speedFactor(gb) { return Math.min(0.3, 0.12 + 0.07 * gb); }
+
   function predictedSpeed(hw, bytes) {
     const bandwidth = hw && hw.bandwidth > 0 ? hw.bandwidth : UNKNOWN_BANDWIDTH;
-    return (SPEED_FACTOR * bandwidth) / (bytes / 1e9);
+    const gb = bytes / 1e9;
+    return (speedFactor(gb) * bandwidth) / gb;
   }
 
   /* Does the model fit into the memory of this computer?  (`minBuffer`: the biggest single piece in graphics memory; `minMemory`: GB of RAM.) */
@@ -260,5 +264,5 @@
     return groups.filter(([, list]) => list.length).map(([label, list]) => ({ label, chats: list }));
   }
 
-  return { MAX_CHATS, MAX_MESSAGES, titleFrom, newChatId, sanitizeStore, trimChats, groupChats, SYSTEM_PROMPT, HISTORY_CHARS, MAX_INPUT, MAX_NEW_TOKENS, SUGGESTIONS, chooseRuntime, buildMessages, parseInline, parseBlocks, progressOf, remaining, friendlyError, speedText, cacheUrls, bestModel, predictedSpeed, fits, SPEED_FACTOR, MIN_SPEED, activeSkips, isDeviceTrouble, chunkMetaUrl, SKIP_DAYS, formatBytes: Core.formatBytes };
+  return { MAX_CHATS, MAX_MESSAGES, titleFrom, newChatId, sanitizeStore, trimChats, groupChats, SYSTEM_PROMPT, HISTORY_CHARS, MAX_INPUT, MAX_NEW_TOKENS, SUGGESTIONS, chooseRuntime, buildMessages, parseInline, parseBlocks, progressOf, remaining, friendlyError, speedText, cacheUrls, bestModel, predictedSpeed, speedFactor, fits, MIN_SPEED, activeSkips, isDeviceTrouble, chunkMetaUrl, SKIP_DAYS, formatBytes: Core.formatBytes };
 });
