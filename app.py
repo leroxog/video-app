@@ -526,7 +526,8 @@ def _make_session_permanent():
     # logged out constantly. Marking the session permanent + a long
     # lifetime gives it a real expiry date instead.
     # gomat keeps nothing on the server, so its pages and API never set a cookie at all.
-    if request.endpoint is None or request.endpoint in gomat.NO_COOKIE_ENDPOINTS or request.endpoint in yipi.ENDPOINTS or request.endpoint in regal.ENDPOINTS:
+    # Nor do static files (scripts, styles, images): a cookie on those would be set on every visit to a page that says it uses none.
+    if request.endpoint is None or request.endpoint == "static" or request.endpoint in gomat.NO_COOKIE_ENDPOINTS or request.endpoint in yipi.ENDPOINTS or request.endpoint in regal.ENDPOINTS:
         return
     session.permanent = True
 

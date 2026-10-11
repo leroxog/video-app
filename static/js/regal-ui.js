@@ -70,6 +70,11 @@
     shield: '<path d="M12 3l8 3v6c0 4.500-3.200 8-8 9-4.800-1-8-4.500-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
     plus: '<path d="M12 5v14M5 12h14"/>',
     stop: '<rect x="6" y="6" width="12" height="12" rx="2"/>',
+    send: '<path d="M12 19V5M5.500 11.500L12 5l6.500 6.500"/>',
+    menu: '<path d="M4 7h16M4 12h16M4 17h10"/>',
+    refresh: '<path d="M20 11a8 8 0 10-2.300 5.700M20 5v6h-6"/>',
+    edit: '<path d="M4 20h4L19 9l-4-4L4 16zM13.500 6.500l4 4"/>',
+    trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 002 2h6a2 2 0 002-2l1-12M9 7V4h6v3"/>',
   };
   function icon(name) {
     return svgElement(`<svg xmlns="${SVG_NS}" viewBox="0 0 24 24" ${LINE} aria-hidden="true" focusable="false">${ICONS[name] || ICONS.info}</svg>`);

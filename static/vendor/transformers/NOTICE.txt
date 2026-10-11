@@ -1,0 +1,35 @@
+Files in this folder are third-party open-source software, copied unchanged from npm packages (nothing is modified).  The two big files
+are stored gzip-compressed (`gzip -9`; unpacking gives back the npm file with the SHA-256 below) as transformers.min.js.gz and
+ort-wasm-simd-threaded.asyncify.wasm.gz; regal.py serves them under their original names with Content-Encoding gzip.
+
+  transformers.min.js
+      @huggingface/transformers 4.3.0 (npm, dist/transformers.min.js), Apache License 2.0, see LICENSE-transformers.js.txt
+      https://github.com/huggingface/transformers.js
+      (this file contains ONNX Runtime Web 1.31.0-dev.20260914-8d85527a0, MIT License, Copyright (c) Microsoft Corporation)
+
+  ort-wasm-simd-threaded.asyncify.mjs, ort-wasm-simd-threaded.asyncify.wasm (kept here as ort-wasm-simd-threaded.asyncify.wasm.gz)
+      onnxruntime-web 1.31.0-dev.20260914-8d85527a0 (npm, dist/), MIT License, Copyright (c) Microsoft Corporation
+      https://github.com/microsoft/onnxruntime
+
+They run the AI model in the visitor's browser (see static/js/regal-chat-worker.js).  The page loads them from this server, never
+from a CDN.  SHA-256:
+
+  1475fd440e9932ab206682ee42cb18f6097403e9ee77ea62084c592d0f83597d  transformers.min.js
+  0966b6105cd936744498aa60df7a22cbd47af3374dbc64a9ab561c08a71e3611  ort-wasm-simd-threaded.asyncify.mjs
+  49871f5a4409519797e127440868a6d1923339d9185907f301a5b2a1d90af082  ort-wasm-simd-threaded.asyncify.wasm
+
+MIT License (ONNX Runtime Web)
+
+Copyright (c) Microsoft Corporation
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
+FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

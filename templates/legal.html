@@ -45,10 +45,13 @@
     <h2>3. Wie du die Modelle benutzt</h2>
     <p>Benutze KI-Modelle nicht, um anderen zu schaden: keine Täuschung, keine Belästigung, keine gefälschten Inhalte über echte Personen, keine rechtswidrigen Inhalte. Beachte beim Erzeugen von Bildern, Videos, Musik und Stimmen die Rechte anderer (Urheberrecht, Persönlichkeitsrechte) und kennzeichne KI-Inhalte, wo es verlangt wird.</p>
 
-    <h2>4. Programme und Befehle</h2>
+    <h2>4. Der Chat im Browser</h2>
+    <p>Unter <a href="/chat">/chat</a> kannst du mit einem kleinen KI-Modell schreiben, das in deinem Browser auf deinem Gerät läuft. Das Modell lädt dein Browser einmal von Hugging Face; für Modell und Lizenz gilt das Gleiche wie in Abschnitt 2. Antworten einer KI können falsch, unvollständig oder unpassend sein. Verlass dich bei wichtigen Dingen (Gesundheit, Recht, Geld, Sicherheit) nicht darauf und prüfe sie selbst. Gib keine Antworten der KI als menschliche Äußerung oder als geprüfte Auskunft aus. Das Modell braucht Speicherplatz (je nach Modell etwa 0,5 bis 2,5 GB) und Rechenleistung deines Geräts. Der Chat benutzt die Open-Source-Programme Transformers.js (Apache-2.0) und ONNX Runtime Web (MIT); ihre Lizenztexte liegen unter <a href="/static/vendor/transformers/NOTICE.txt">/static/vendor/transformers/NOTICE.txt</a>.</p>
+
+    <h2>5. Programme und Befehle</h2>
     <p>Wir zeigen dir Programme (zum Beispiel LM Studio, Ollama, ComfyUI) und Befehle, mit denen du Modelle starten kannst. Diese Programme stammen von Dritten. Lade sie nur von den Seiten ihrer Hersteller, die wir verlinken, und prüfe selbst, ob sie für dich geeignet sind. Große Modelle brauchen viel Speicherplatz und einen starken Rechner. Prüfe vor dem Herunterladen die Größe.</p>
 
-    <h2>5. Verfügbarkeit und Haftung</h2>
+    <h2>6. Verfügbarkeit und Haftung</h2>
     <p>KI-Regal ist ein privates Projekt ohne Gewähr. Es kann ausfallen, sich ändern oder eingestellt werden. Wir übernehmen keine Haftung für Modelle, ihre Ergebnisse, Programme Dritter oder verlinkte Seiten. Unsere Haftung ist bei leichter Fahrlässigkeit ausgeschlossen, außer bei der Verletzung von Leben, Körper und Gesundheit und bei wesentlichen Vertragspflichten. Zwingende gesetzliche Rechte bleiben unberührt.</p>
 
     <h2>6. Änderungen</h2>
@@ -75,17 +78,20 @@
     <h2>Herunterladen von Modellen</h2>
     <p>Wenn du ein Modell herunterlädst (mit „In einen Ordner speichern“ oder „Normal herunterladen“), ruft dein Browser die Datei direkt bei <strong>Hugging Face</strong> ab (huggingface.co und dessen Auslieferungsserver hf.co). Dabei verarbeitet Hugging Face, zum Beispiel deine IP-Adresse; das ist in dessen Datenschutzhinweisen geregelt. Wir sehen davon nichts. Erst wenn du auf einen Download oder einen Link zu Hugging Face klickst, entsteht diese Verbindung, vorher nicht. Beim Speichern in einen Ordner schreibt die Seite die Dateien nur in den Ordner, den du ausgewählt hast, und nur, solange du das erlaubst.</p>
 
+    <h2>Der Chat im Browser</h2>
+    <p>Beim Chat unter <a href="/chat">/chat</a> läuft das KI-Modell <strong>auf deinem Gerät</strong>, in deinem Browser. Was du schreibst und was die KI antwortet, wird nicht an uns und nicht an Dritte gesendet. Damit du deine früheren Chats in der Seitenleiste wiederfindest, speichert dein Browser sie auf deinem Gerät (localStorage, Schlüssel <code>regal.chats</code>); sie verlassen dein Gerät nie. Du löschst einen Chat mit dem Papierkorb-Symbol, alle mit „Alle Chats löschen“ in der Seitenleiste oder mit den Websitedaten deines Browsers. Das Programm, das das Modell ausführt (Transformers.js und ONNX Runtime Web), liefern wir selbst von unserem Server aus. Das Modell lädt dein Browser einmal direkt von <strong>Hugging Face</strong> (huggingface.co, hf.co); dabei verarbeitet Hugging Face zum Beispiel deine IP-Adresse (siehe dessen Datenschutzhinweise). Das geschieht erst, wenn du auf „Laden und starten“ klickst. Das geladene Modell bleibt im Cache-Speicher deines Browsers (Cache Storage, Name <code>transformers-cache</code>), damit du es nicht noch einmal laden musst. Du löschst es mit „Gespeicherte Modelle löschen“ auf der Chat-Seite oder mit den Websitedaten deines Browsers. Dein zuletzt gewähltes Modell merkt sich dein Browser (localStorage, Schlüssel <code>regal.chat.model</code>). Beides ist für die Funktion technisch notwendig (§ 25 Abs. 2 TDDDG) und verlässt dein Gerät nicht.</p>
+
     <h2>Links</h2>
     <p>Die Seite verlinkt Programme und Seiten Dritter (zum Beispiel GitHub, lmstudio.ai, ollama.com). Für deren Datenschutz sind wir nicht verantwortlich.</p>
 
     <h2>Kein Tracking, keine Weitergabe</h2>
-    <p>KI-Regal nutzt keine Analyse- und Werbedienste, keine fremden Schriften und keine fremden Skripte. Wir geben keine Daten an Dritte weiter, außer wenn wir gesetzlich dazu verpflichtet sind.</p>
+    <p>KI-Regal nutzt keine Analyse- und Werbedienste, keine fremden Schriften und keine fremden Skripte (die Programme für den Chat liegen auf unserem eigenen Server). Wir geben keine Daten an Dritte weiter, außer wenn wir gesetzlich dazu verpflichtet sind.</p>
 
     <h2>Das Archiv-Angebot yipi</h2>
     <p>Unter <a href="/yipi-archiv">/yipi-archiv</a> gibt es noch das frühere soziale Netzwerk yipi. Es hat Konten und speichert, was dafür nötig ist: Nutzername und Anzeigename, optional eine E-Mail-Adresse (nur für die Anmeldung), das Passwort nur als Prüfwert, freiwillige Profilangaben, Yips, Antworten, Bilder, Likes, Lesezeichen und Nachrichten (nicht Ende-zu-Ende-verschlüsselt). Yips und Profile sind öffentlich. Nach der Anmeldung setzt yipi ein Cookie (<code>yipi_session</code>), das 30 Tage gültig ist (technisch notwendig, § 25 Abs. 2 TDDDG) und beim Abmelden entfernt wird. Im Browser liegen nur Einstellungen (<code>yipi.theme</code>, <code>yipi.feed</code>, <code>yipi.recent</code>). Unter „Einstellungen, Dein Konto“ kannst du dein Konto samt allen Inhalten sofort und endgültig löschen.</p>
 
     <h2>Löschen</h2>
-    <p>Bei KI-Regal speichern wir nichts über dich, das wir löschen könnten. Deine Merkliste löschst du in deinem Browser. Bei yipi löschst du dein Konto selbst.</p>
+    <p>Bei KI-Regal speichern wir nichts über dich, das wir löschen könnten. Deine Merkliste, deine Chats und die geladenen Chat-Modelle löschst du in deinem Browser. Bei yipi löschst du dein Konto selbst.</p>
 
     <h2>Deine Rechte</h2>
     <p>Du hast das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung, Datenübertragbarkeit und Widerspruch sowie darauf, eine Einwilligung jederzeit zu widerrufen. Du kannst dich außerdem bei einer Datenschutz-Aufsichtsbehörde beschweren. Schreib dafür an die Adresse im <a href="/impressum">Impressum</a>.</p>

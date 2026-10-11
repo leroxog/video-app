@@ -30,6 +30,9 @@ self.addEventListener("fetch", (event) => {
     const url = new URL(request.url);
     if (url.origin !== self.location.origin) return;
 
+    // The AI runtime of the chat (tens of megabytes) is cached by the browser itself; copying it into this cache as well would only waste space.
+    if (url.pathname.startsWith("/static/vendor/")) return;
+
     // Full page loads: network-first (always fresh when online), cache
     // previously-visited pages so they still open when offline, and fall
     // back to a dedicated offline page for anything never visited before.

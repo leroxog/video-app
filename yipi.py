@@ -1715,7 +1715,7 @@ def register_routes(app):
     @route("/sitemap.xml")
     def yipi_sitemap():
         root = base_url()
-        urls = "".join(f"  <url><loc>{root}{path}</loc></url>\n" for path in ("/", "/datenschutz", "/impressum", "/nutzungsbedingungen"))
+        urls = "".join(f"  <url><loc>{root}{path}</loc></url>\n" for path in ("/", "/chat", "/datenschutz", "/impressum", "/nutzungsbedingungen"))
         return Response(f'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n{urls}</urlset>\n', mimetype="application/xml")
 
     @app.errorhandler(404)
