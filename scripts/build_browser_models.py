@@ -21,13 +21,22 @@ SMALL_FILES = ("config.json", "generation_config.json", "tokenizer.json", "token
                "added_tokens.json", "merges.txt", "vocab.json", "tokenizer.model")
 
 # `gpu` (made below) says that the model needs a graphics card with WebGPU (it has no variant that a normal processor can run).
-# The models the chat uses, best first: the page takes the first one that this computer can run, and the next one when loading it fails
-# (too little memory).  `cpu: False` says that a model is too big for a computer without a graphics card (WebGPU).  Only models that were
-# tried here are listed: Gemma 3 with 1 billion parameters writes good German for its size, the small one (270 million) is the way out
-# for weak computers.  Others that were tried (Qwen 2.5 in 0.5 and 1.5 billion parameters, Llama 3.2, Phi 3.5) were not good enough or
-# not tried, so they are not offered.
+# The models the chat uses, BEST FIRST: the page measures the graphics card of the visitor and takes the first one that fits into the memory
+# and will be fast enough (see bestModel in static/js/regal-chat-core.js), and the next one when loading it fails.  `cpu: False` says that a
+# model is too big for a computer without a graphics card (WebGPU); `dtypes` limits the variants offered; `minBuffer` (bytes, the biggest
+# single piece in graphics memory) and `minMemory` (GB of RAM) say what it needs.  Only models that were tried here are listed:
+# Gemma 3 with 1 billion parameters (writes good German for its size) for normal computers, and the small Gemma (270 million) as the
+# way out for weak ones; Qwen3 4B (STRONG, above) will be the one for strong graphics cards.  Others that were tried (Qwen 2.5 in 0.5 and 1.5 billion parameters,
+# Llama 3.2, Phi 3.5) were not good enough or not tried, so they are not offered.
+# Waits for a test on a computer with a strong graphics card (it was only tried to load, 2.9 GB, never to answer): put it first in MODELS
+# when it has answered well.  The page then takes it on every computer whose graphics card is fast enough (bestModel).
+STRONG = {"id": "onnx-community/Qwen3-4B-Instruct-2507-ONNX", "name": "Qwen3 4B", "maker": "Alibaba", "params": "4 Mrd.", "cpu": False, "dtypes": ["q4f16"],
+          "minBuffer": 1000000000, "minMemory": 8,
+          "license": "Apache-2.0", "license_url": "https://www.apache.org/licenses/LICENSE-2.0", "commercial": True}
+
 MODELS = [
     {"id": "onnx-community/gemma-3-1b-it-ONNX", "name": "Gemma 3", "maker": "Google", "params": "1 Mrd.", "cpu": False,
+     "minBuffer": 700000000, "minMemory": 4,
      "license": "Gemma-Nutzungsbedingungen", "license_url": "https://ai.google.dev/gemma/terms", "commercial": True},
     {"id": "onnx-community/gemma-3-270m-it-ONNX", "name": "Gemma 3 klein", "maker": "Google", "params": "270 Mio.", "cpu": True,
      "license": "Gemma-Nutzungsbedingungen", "license_url": "https://ai.google.dev/gemma/terms", "commercial": True},
@@ -45,13 +54,13 @@ def size_of(sibling):
     return int(sibling.get("size") or (sibling.get("lfs") or {}).get("size") or 0)
 
 
-def variants(info):
+def variants(info, wanted=None):
     """{dtype: {"bytes": what the browser downloads for this variant (the model file, its data files, the tokenizer and the settings),
     "files": the big files (the model and its data): the page knows that a variant is in the browser when all of them are}}."""
     files = {s["rfilename"]: size_of(s) for s in info["siblings"]}
     small = sum(size for name, size in files.items() if name in SMALL_FILES)
     result = {}
-    for dtype in DTYPES:
+    for dtype in (wanted or DTYPES):
         main = f"onnx/model_{dtype}.onnx"
         if main not in files:
             continue
@@ -67,7 +76,7 @@ def main():
         info = get(spec["id"])
         if info.get("gated") or info.get("private"):
             sys.exit(f"{spec['id']} needs a login: not usable")
-        sizes = variants(info)
+        sizes = variants(info, spec.get("dtypes"))
         if not sizes:
             sys.exit(f"{spec['id']}: no q4f16 or q4 file")
         if spec.get("gpu") is None and "q4" not in sizes:

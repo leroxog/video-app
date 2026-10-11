@@ -46,18 +46,18 @@ def models():
 
 
 # ------------------------------------------------------------------------------------------- the list of models
-def test_the_list_names_the_one_model_that_runs_on_every_kind_of_computer(models):
+def test_the_list_has_a_model_for_every_kind_of_computer_best_first(models):
     assert DATE_RE.match(models["generated"]) and models["library"]["name"] == "Transformers.js"
-    ids = [m["id"] for m in models["models"]]
-    assert len(ids) == len(set(ids)) and len(ids) >= 1
-    best, small = models["models"][0], models["models"][1]
-    assert best["id"] == "onnx-community/gemma-3-1b-it-ONNX", "the first one is what everybody gets who can run it"
-    assert best["cpu"] is False, "the big one is not for a computer without a graphics card"
-    assert small["id"] == "onnx-community/gemma-3-270m-it-ONNX" and small["cpu"] is True, "the way out for weak computers (and when the big one does not load)"
-    assert small["dtypes"]["q4"] < 400e6 and small["dtypes"]["q4f16"] < 350e6, "small enough for the memory of any computer"
-    for m in models["models"]:
-        assert "q4" in m["dtypes"] and "q4f16" in m["dtypes"], "q4 for computers without 16-bit graphics, q4f16 to be small with them"
-        assert m["license_url"].startswith("https://ai.google.dev/gemma/")
+    ml = models["models"]
+    ids = [m["id"] for m in ml]
+    assert len(ids) == len(set(ids)) and len(ml) >= 2
+    sizes = [m["dtypes"]["q4f16"] for m in ml]
+    assert sizes == sorted(sizes, reverse=True) and len(set(sizes)) == len(sizes), "best first: the bigger a model, the earlier"
+    assert ml[-1]["cpu"] is True and ml[-1]["dtypes"]["q4"] < 400e6 and ml[-1]["dtypes"]["q4f16"] < 350e6, "the last one is for any computer: small enough for the memory and the processor"
+    assert all(m["cpu"] is False for m in ml[:-1]), "only the last one may run on a processor alone"
+    assert "onnx-community/gemma-3-1b-it-ONNX" in ids and "onnx-community/gemma-3-270m-it-ONNX" == ids[-1]
+    for m in ml:
+        assert m["license_url"].startswith(("https://ai.google.dev/gemma/", "https://www.apache.org/licenses/"))
 
 
 def test_every_model_is_described_completely_and_has_a_download_a_normal_computer_can_take(models):
@@ -69,10 +69,11 @@ def test_every_model_is_described_completely_and_has_a_download_a_normal_compute
         assert m["dtypes"] and set(m["dtypes"]) <= {"q4f16", "q4"}, m["id"]
         assert set(m["files"]) == set(m["dtypes"]), "the big files of every variant are named (the page uses them to see that a model is in the browser)"
         for dtype, size in m["dtypes"].items():
-            assert 100e6 < size < 2e9, (m["id"], dtype, size)
+            assert 100e6 < size < 3.2e9, (m["id"], dtype, size)
             assert m["files"][dtype][0] == f"onnx/model_{dtype}.onnx" and all(re.fullmatch(rf"onnx/model_{dtype}\.onnx(_data(_\d+)?)?", name) for name in m["files"][dtype]), (m["id"], dtype)
         if "q4" in m["dtypes"] and "q4f16" in m["dtypes"]:
             assert m["dtypes"]["q4f16"] < m["dtypes"]["q4"], "the small variant is the smaller one"
+        assert m.get("minBuffer", 0) < 2e9 and m.get("minMemory", 0) <= 8, "what a model asks of the computer must be possible at all"
         assert (not m.get("gpu")) == ("q4" in m["dtypes"]), f"{m['id']}: `gpu` must say that there is no variant for the processor"
 
 
@@ -177,7 +178,7 @@ def test_the_archived_list_points_to_the_chat_and_the_sitemap_has_only_the_pages
 
 def test_the_legal_pages_say_where_the_chat_runs_and_what_it_keeps(client):
     privacy = client.get("/datenschutz").get_data(as_text=True)
-    for word in ("auf deinem Gerät", "transformers-cache", "regal.chats", "regal.skip", "Transformers.js", "nicht an uns und nicht an Dritte", "Gemma 3"):
+    for word in ("auf deinem Gerät", "transformers-cache", "regal.chats", "regal.skip", "Transformers.js", "nicht an uns und nicht an Dritte", "Gemma 3", "Grafikkarte"):
         assert word in privacy, word
     terms = client.get("/nutzungsbedingungen").get_data(as_text=True)
     for word in ("Gemma-Nutzungsbedingungen", "ai.google.dev/gemma/terms", "falsch, unvollständig oder unpassend", "NOTICE.txt"):

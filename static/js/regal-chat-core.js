@@ -149,10 +149,33 @@
     return names.map((name) => `https://huggingface.co/${model.id}/resolve/main/${name}`);
   }
 
-  /* The model to use: the first of the list (best first) that this computer can run and that did not fail here before (`skip`: their ids),
-     or null when there is none. */
-  function bestModel(models, gpu, skip = []) {
-    return models.find((m) => !skip.includes(m.id) && chooseRuntime(gpu, m).ok) || null;
+  // How fast the AI will probably be on this computer, from what the page measured of its graphics card.  Writing an answer reads the whole
+  // model once for every word, so the speed follows the memory speed of the graphics card (GB/s, measured by the page in a short test)
+  // divided by the size of the model.  The AI runtime gets about SPEED_FACTOR of it (measured: Gemma 3 with 1 billion parameters,
+  // 0.78 GB, writes 9 tokens a second on a graphics card of 38 GB/s).  From MIN_SPEED tokens a second (about 3 words) a chat feels alive.
+  const SPEED_FACTOR = 0.16;
+  const MIN_SPEED = 5;
+  const UNKNOWN_BANDWIDTH = 30;
+
+  function predictedSpeed(hw, bytes) {
+    const bandwidth = hw && hw.bandwidth > 0 ? hw.bandwidth : UNKNOWN_BANDWIDTH;
+    return (SPEED_FACTOR * bandwidth) / (bytes / 1e9);
+  }
+
+  /* Does the model fit into the memory of this computer?  (`minBuffer`: the biggest single piece in graphics memory; `minMemory`: GB of RAM.) */
+  function fits(hw, model) {
+    if (hw && hw.webgpu && model.minBuffer && hw.maxBuffer && hw.maxBuffer < model.minBuffer) return false;
+    if (hw && model.minMemory && hw.deviceMemory && hw.deviceMemory < model.minMemory) return false;
+    return true;
+  }
+
+  /* The model to use: the best one (the list is best first) that this computer can run, that fits into its memory, that will be fast enough
+     to chat with, and that did not fail here before (`skip`: their ids).  When none is fast enough, the smallest one that can run;
+     null when there is none at all. */
+  function bestModel(models, hw, skip = []) {
+    const usable = models.filter((m) => !skip.includes(m.id) && chooseRuntime(hw, m).ok && fits(hw, m));
+    const fast = usable.find((m) => { const r = chooseRuntime(hw, m); return r.device !== "webgpu" || predictedSpeed(hw, r.bytes) >= MIN_SPEED; });
+    return fast || usable[usable.length - 1] || null;
   }
 
   /* Models that did not load on this computer are remembered for two weeks ({id: time}), so that the next visit starts with the one that works. */
@@ -237,5 +260,5 @@
     return groups.filter(([, list]) => list.length).map(([label, list]) => ({ label, chats: list }));
   }
 
-  return { MAX_CHATS, MAX_MESSAGES, titleFrom, newChatId, sanitizeStore, trimChats, groupChats, SYSTEM_PROMPT, HISTORY_CHARS, MAX_INPUT, MAX_NEW_TOKENS, SUGGESTIONS, chooseRuntime, buildMessages, parseInline, parseBlocks, progressOf, remaining, friendlyError, speedText, cacheUrls, bestModel, activeSkips, isDeviceTrouble, chunkMetaUrl, SKIP_DAYS, formatBytes: Core.formatBytes };
+  return { MAX_CHATS, MAX_MESSAGES, titleFrom, newChatId, sanitizeStore, trimChats, groupChats, SYSTEM_PROMPT, HISTORY_CHARS, MAX_INPUT, MAX_NEW_TOKENS, SUGGESTIONS, chooseRuntime, buildMessages, parseInline, parseBlocks, progressOf, remaining, friendlyError, speedText, cacheUrls, bestModel, predictedSpeed, fits, SPEED_FACTOR, MIN_SPEED, activeSkips, isDeviceTrouble, chunkMetaUrl, SKIP_DAYS, formatBytes: Core.formatBytes };
 });

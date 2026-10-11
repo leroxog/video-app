@@ -46,8 +46,49 @@
   const activeChat = () => app.chats.find((chat) => chat.id === app.activeId) || null;
 
   // ------------------------------------------------------------------------------------------------ the computer
+  /* How fast the graphics card reads its memory (GB/s): a program that reads a buffer of 128 MB again and again.  That speed decides how
+     fast an AI can write, so the page uses it to take the best AI that is still fast enough on this computer.  Takes about half a second;
+     null when it cannot be measured. */
+  async function measureBandwidth(adapter) {
+    let device = null;
+    try {
+      device = await adapter.requestDevice();
+      const bytes = 128 * 1024 * 1024;                                    // exactly the default limit of one buffer
+      const threads = 1 << 19;                                             // each of them reads 16 values of 16 bytes: 128 MB together
+      const data = device.createBuffer({ size: bytes, usage: GPUBufferUsage.STORAGE });
+      const out = device.createBuffer({ size: threads * 4, usage: GPUBufferUsage.STORAGE });
+      const module = device.createShaderModule({ code: `
+        @group(0) @binding(0) var<storage, read> data: array<vec4<u32>>;
+        @group(0) @binding(1) var<storage, read_write> out: array<u32>;
+        @compute @workgroup_size(256)
+        fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+          var acc = vec4<u32>(0u);
+          for (var j = 0u; j < 16u; j = j + 1u) { acc = acc ^ data[j * ${threads}u + id.x]; }
+          out[id.x] = acc.x ^ acc.y ^ acc.z ^ acc.w;
+        }` });
+      const pipeline = device.createComputePipeline({ layout: "auto", compute: { module, entryPoint: "main" } });
+      const group = device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: [{ binding: 0, resource: { buffer: data } }, { binding: 1, resource: { buffer: out } }] });
+      const run = async (rounds) => {
+        const encoder = device.createCommandEncoder();
+        for (let r = 0; r < rounds; r++) { const pass = encoder.beginComputePass(); pass.setPipeline(pipeline); pass.setBindGroup(0, group); pass.dispatchWorkgroups(threads / 256); pass.end(); }
+        const start = performance.now();
+        device.queue.submit([encoder.finish()]);
+        await device.queue.onSubmittedWorkDone();
+        return performance.now() - start;
+      };
+      await run(2);                                                        // the first runs prepare the program
+      let best = 0;
+      for (let k = 0; k < 3; k++) best = Math.max(best, (bytes * 24) / ((await run(24)) / 1000) / 1e9);
+      return best > 0 && isFinite(best) ? Math.round(best * 10) / 10 : null;
+    } catch (error) {
+      return null;
+    } finally {
+      try { device && device.destroy(); } catch (ignored) { /* it is gone anyway */ }
+    }
+  }
+
   async function probeGpu() {
-    const gpu = { webgpu: false, f16: false };
+    const gpu = { webgpu: false, f16: false, bandwidth: null, maxBuffer: 0, deviceMemory: navigator.deviceMemory || 0, name: "" };
     try {
       const adapter = navigator.gpu ? await navigator.gpu.requestAdapter() : null;
       if (adapter) {
@@ -55,7 +96,10 @@
         gpu.f16 = adapter.features.has("shader-f16");
         const info = adapter.info || {};
         gpu.name = [info.vendor, info.architecture, info.device].filter(Boolean).join(" ");
-        gpu.maxBuffer = adapter.limits ? adapter.limits.maxBufferSize : 0;
+        const limits = adapter.limits || {};
+        gpu.maxBuffer = Math.min(limits.maxBufferSize || Infinity, limits.maxStorageBufferBindingSize || Infinity);
+        if (!isFinite(gpu.maxBuffer)) gpu.maxBuffer = 0;
+        gpu.bandwidth = await measureBandwidth(adapter);
       }
     } catch (error) { /* no graphics card for the browser */ }
     return gpu;
@@ -209,6 +253,12 @@
     startWorker().postMessage({ type: "load", id: app.model.id, device: app.runtime.device, dtype: app.runtime.dtype });
   }
 
+  /* A bigger version failed here before (maybe only because the memory was full at that moment): try again from the top. */
+  function tryBigger() {
+    if (busyNow()) return;
+    retry();
+  }
+
   /* "Noch einmal versuchen": from the top again, with the best model (what failed before is forgotten). */
   function retry() {
     stopWorker();
@@ -252,7 +302,7 @@
     return [
       `Modell: ${app.model ? app.model.id : "-"}`,
       `Ausgeführt auf: ${app.runtime && app.runtime.ok ? `${app.runtime.device} (${app.runtime.dtype})` : "-"}`,
-      `Grafikkarte: ${g.webgpu ? `ja${g.f16 ? ", 16 Bit" : ""}${g.name ? `, ${g.name}` : ""}${g.maxBuffer ? `, größter Puffer ${Chat.formatBytes(g.maxBuffer)}` : ""}` : "nein (kein WebGPU)"}`,
+      `Grafikkarte: ${g.webgpu ? `ja${g.f16 ? ", 16 Bit" : ""}${g.name ? `, ${g.name}` : ""}${g.maxBuffer ? `, größter Puffer ${Chat.formatBytes(g.maxBuffer)}` : ""}${g.bandwidth ? `, Speichertempo ${g.bandwidth} GB/s` : ""}` : "nein (kein WebGPU)"}`,
       `Arbeitsspeicher laut Browser: ${navigator.deviceMemory ? `${navigator.deviceMemory} GB` : "unbekannt"}`,
       `Browser: ${navigator.userAgent.replace(/^Mozilla\/5\.0 /, "").slice(0, 140)}`,
       `Fehler: ${String(raw || "-").slice(0, 400)}`,
@@ -297,7 +347,7 @@
       h("h2", {}, app.cached ? "Nex Ai wird gestartet" : "Nex Ai wird auf dein Gerät geladen"),
       el.barBox, el.barText,
       h("p", { class: "muted small" }, app.cached ? "Das dauert nur einen Moment." : "Das passiert nur beim ersten Mal. Du kannst dieses Fenster offen lassen und etwas anderes machen."),
-      app.downgraded ? h("p", { class: "notice" }, icon("info"), "Die größere Version hat auf deinem Gerät nicht funktioniert (zu wenig Speicher). Nex Ai nimmt deshalb die kleinere.") : null,
+      app.downgraded ? h("p", { class: "notice" }, icon("info"), "Die größere Version hat auf deinem Gerät nicht funktioniert (zu wenig Speicher). Nex Ai nimmt deshalb eine kleinere.") : null,
       app.pending ? h("p", { class: "pending" }, h("span", {}, "Deine Nachricht:"), app.pending) : null,
       h("button", { class: "btn ghost", type: "button", onclick: cancelLoading }, "Abbrechen"));
   }
@@ -357,11 +407,12 @@
   function renderBottom() {
     const notes = [];
     if (app.runtime && app.runtime.ok && !app.ready && !app.loading && !app.cached && !app.problem) {
-      notes.push(h("p", { class: "notice" }, icon("download"), `Beim ersten Mal lädt Nex Ai sich einmalig auf dein Gerät (${Chat.formatBytes(app.runtime.bytes)}), am besten im WLAN. Danach geht es schnell.`));
+      notes.push(h("p", { class: "notice" }, icon("download"), `Beim ersten Mal lädt Nex Ai sich einmalig auf dein Gerät (${Chat.formatBytes(app.runtime.bytes)}${app.runtime.bytes > 1.5e9 ? ", das dauert etwas" : ""}), am besten im WLAN. Danach geht es schnell.`));
     }
     if (app.runtime && app.runtime.ok && app.runtime.speed === "slow") notes.push(h("p", { class: "notice" }, icon("warn"), app.runtime.reason));
-    if (app.ready && app.models.length && app.model && app.model.id !== app.models[0].id) {
-      notes.push(h("p", { class: "notice" }, icon("info"), "Du nutzt gerade die kleine Version von Nex Ai: Sie ist schnell, aber ungenauer, weil dein Gerät die größere nicht schafft."));
+    if (app.ready && app.models.length > 1 && app.model && app.model.id === app.models[app.models.length - 1].id) {
+      notes.push(h("p", { class: "notice" }, icon("info"), h("span", {}, "Du nutzt gerade die kleine Version von Nex Ai: Sie ist schnell, aber ungenauer, weil dein Gerät die größeren nicht schafft. ",
+        Object.keys(app.skips).length ? h("button", { class: "linklike", type: "button", onclick: tryBigger }, "Größere Version noch einmal probieren") : null)));
     }
     if (app.ready && app.savedNote) notes.push(h("p", { class: "notice save-note" }, icon("info"), "Dein Browser hat die KI nicht gespeichert (vielleicht ist zu wenig Platz frei). Beim nächsten Mal muss sie noch einmal geladen werden."));
     fill(el.bottom, notes, app.runtime && app.runtime.ok && !app.problem ? el.composer : null);
@@ -533,7 +584,9 @@
       app.models = (await response.json()).models;
       app.gpu = await probeGpu();
       loadSkips();
-      app.model = Chat.bestModel(app.models, app.gpu, Object.keys(app.skips)) || Chat.bestModel(app.models, app.gpu);      // when everything failed before, from the top again
+      const wished = new URLSearchParams(location.search).get("ai");              // not offered on the page: ?ai=qwen takes the first model whose name contains it
+      const chosen = wished ? app.models.find((m) => m.id.toLowerCase().includes(wished.toLowerCase()) && Chat.chooseRuntime(app.gpu, m).ok) : null;
+      app.model = chosen || Chat.bestModel(app.models, app.gpu, Object.keys(app.skips)) || Chat.bestModel(app.models, app.gpu);      // when everything failed before, from the top again
       app.runtime = Chat.chooseRuntime(app.gpu, app.model || app.models[0]);
       app.downgraded = !!app.model && app.model.id !== (Chat.bestModel(app.models, app.gpu) || {}).id;
       app.cached = await findCached();

@@ -126,6 +126,13 @@ def test_the_chat_stores_only_the_chats_and_the_failed_models_and_the_privacy_pa
     assert '"transformers-cache"' in CHAT_JS["regal-chat.js"] and "transformers-cache" in legal
 
 
+def test_the_page_measures_the_graphics_card_and_takes_the_best_ai_for_it():
+    code = code_of(CHAT_JS["regal-chat.js"])
+    assert "measureBandwidth(adapter)" in code and "onSubmittedWorkDone" in code and "device.destroy()" in code
+    assert "Chat.bestModel(app.models, app.gpu" in code and "gpu.maxBuffer" in code and "navigator.deviceMemory" in code
+    assert "fetch(" in code and code.count("fetch(") == 1, "measuring needs no network"
+
+
 def test_the_chat_has_nothing_to_choose():
     code = code_of(CHAT_JS["regal-chat.js"])
     assert "bestModel(" in code and 'type: "radio"' not in code and "listbox" not in code, "one AI: the page takes the best one"

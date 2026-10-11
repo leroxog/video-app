@@ -149,6 +149,8 @@ ol.ans-list { list-style: decimal; }
 .composer-note { margin: 8px auto 0; text-align: center; color: var(--faint); font-size: 11px; }
 .notice { display: flex; align-items: flex-start; gap: 8px; margin: 0 0 8px; padding: 10px 14px; border-radius: 14px; background: var(--glass); border: 1px solid var(--line); color: var(--muted); font-size: 13px; line-height: 1.45; }
 .notice svg { width: 16px; height: 16px; flex: none; margin-top: 2px; color: var(--accent-2); }
+.linklike { color: var(--accent-2); text-decoration: underline; font: inherit; }
+.linklike:hover { color: var(--text); }
 .notice.save-note svg { color: var(--warn); }
 
 /* ------------------------------------------------------------------------------------------------- wide screens */

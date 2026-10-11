@@ -157,16 +157,35 @@ test("the chats are grouped by day for the side bar", () => {
   assert.deepEqual(C.groupChats([], now), []);
 });
 
-test("the AI is the first model of the list (best first) that this computer can run, and nothing is left to choose", () => {
-  const good = model({ id: "b/good" });
-  const big = model({ id: "c/big", dtypes: { q4f16: 2.3e9 } });
-  const small = model({ id: "a/small", dtypes: { q4f16: 4e8, q4: 7e8 } });
-  const gpu = { webgpu: true, f16: true };
-  assert.equal(C.bestModel([big, good, small], gpu).id, "c/big");                                         // the best one, when it can run
-  assert.equal(C.bestModel([big, good, small], { webgpu: false, f16: false }).id, "b/good");               // a computer without a graphics card cannot run the big one
-  assert.equal(C.bestModel([big], { webgpu: false, f16: false }), null);
-  assert.equal(C.bestModel([], gpu), null);
+test("the AI is the best model (the list is best first) that this computer can run, fits and is fast enough for", () => {
+  const strong = model({ id: "c/strong", cpu: false, dtypes: { q4f16: 2.9e9 }, minBuffer: 1e9, minMemory: 8 });
+  const good = model({ id: "b/good", cpu: false, minBuffer: 7e8, minMemory: 4 });
+  const small = model({ id: "a/small", cpu: true, dtypes: { q4f16: 3e8, q4: 3.5e8 } });
+  const list = [strong, good, small];
+  const hw = (over = {}) => ({ webgpu: true, f16: true, bandwidth: 38, maxBuffer: 2147483644, deviceMemory: 16, ...over });
+  assert.equal(C.bestModel(list, hw()).id, "b/good");                                              // a graphics card of 38 GB/s: the middle one is fast enough, the strong one is not
+  assert.equal(C.bestModel(list, hw({ bandwidth: 300 })).id, "c/strong");                          // a strong graphics card: the best one
+  assert.equal(C.bestModel(list, hw({ bandwidth: 15 })).id, "a/small");                            // a weak one: only the small one is fast enough
+  assert.equal(C.bestModel(list, hw({ bandwidth: 300, deviceMemory: 4 })).id, "b/good");           // not enough RAM for the strong one
+  assert.equal(C.bestModel(list, hw({ bandwidth: 300, maxBuffer: 268435456 })).id, "a/small");     // the pieces of the others do not fit into the graphics memory
+  assert.equal(C.bestModel(list, hw({ bandwidth: 300, f16: false })).id, "b/good");                // the strong one only comes in the 16-bit variant
+  assert.equal(C.bestModel(list, hw({ bandwidth: null })).id, "b/good");                           // not measured: the middle one
+  assert.equal(C.bestModel(list, { webgpu: false, f16: false }).id, "a/small");                    // no graphics card: the one that may run on the processor
+  assert.equal(C.bestModel(list, hw({ bandwidth: 300 }), ["c/strong"]).id, "b/good");              // it did not load here before
+  assert.equal(C.bestModel(list, hw({ bandwidth: 300 }), ["c/strong", "b/good", "a/small"]), null);
+  assert.equal(C.bestModel([strong], hw({ bandwidth: 5 })).id, "c/strong");                         // none is fast enough: the smallest that can run, better than nothing
+  assert.equal(C.bestModel([], hw()), null);
   assert.match(C.SYSTEM_PROMPT, /Nex Ai/);
+});
+
+test("the speed of an AI is predicted from the memory speed of the graphics card and the size of the model", () => {
+  assert.equal(Math.round(C.predictedSpeed({ bandwidth: 38 }, 0.784e9) * 10) / 10, 7.8);          // measured on a real computer: Gemma 3 with 1 billion parameters writes 8 to 10 tokens a second
+  assert.ok(C.predictedSpeed({ bandwidth: 300 }, 2.9e9) > C.MIN_SPEED);
+  assert.ok(C.predictedSpeed({ bandwidth: 38 }, 2.9e9) < C.MIN_SPEED);
+  assert.equal(C.predictedSpeed({}, 1e9), C.predictedSpeed({ bandwidth: 30 }, 1e9));              // not measured: a middle value
+  assert.equal(C.fits({ webgpu: true, maxBuffer: 5e8, deviceMemory: 16 }, { minBuffer: 7e8 }), false);
+  assert.equal(C.fits({ webgpu: true, maxBuffer: 0, deviceMemory: 0 }, { minBuffer: 7e8, minMemory: 8 }), true);   // unknown is not a reason to say no
+  assert.equal(C.fits({ webgpu: false, deviceMemory: 2 }, { minMemory: 4 }), false);
 });
 
 test("a model that is too big for a computer without a graphics card is not run there", () => {
@@ -183,10 +202,11 @@ test("when the best model did not load here the next one is taken, and nothing i
   const big = model({ id: "a/big", cpu: false });
   const small = model({ id: "a/small", cpu: true, dtypes: { q4f16: 3e8, q4: 3.5e8 } });
   const gpu = { webgpu: true, f16: true }, cpu = { webgpu: false, f16: false };
-  assert.equal(C.bestModel([big, small], gpu, []).id, "a/big");
-  assert.equal(C.bestModel([big, small], gpu, ["a/big"]).id, "a/small");
+  const fast = { ...gpu, bandwidth: 100 };
+  assert.equal(C.bestModel([big, small], fast, []).id, "a/big");
+  assert.equal(C.bestModel([big, small], fast, ["a/big"]).id, "a/small");
   assert.equal(C.bestModel([big, small], cpu, []).id, "a/small");
-  assert.equal(C.bestModel([big, small], gpu, ["a/big", "a/small"]), null);
+  assert.equal(C.bestModel([big, small], fast, ["a/big", "a/small"]), null);
 });
 
 test("failures are remembered for two weeks and a damaged note is ignored", () => {
