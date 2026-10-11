@@ -216,13 +216,17 @@ def test_the_layout_works_on_small_screens_and_respects_reduced_motion_and_light
             assert "data-theme" not in handle.read(), page
 
 
-def test_the_chat_page_works_on_small_screens_too_and_has_the_look_of_nex():
+def test_the_chat_page_works_on_small_screens_too_and_has_the_look_of_chatgpt():
     assert "@media (max-width: 899px)" in CHAT_CSS and "@media (min-width: 900px)" in CHAT_CSS and "prefers-reduced-motion: reduce" in CHAT_CSS
     assert "env(safe-area-inset-bottom)" in CHAT_CSS, "the message field must stay above the home bar of a phone"
-    assert "backdrop-filter: var(--glass-blur)" in CHAT_CSS and "rgba(255, 45, 149" in CHAT_CSS and "rgba(16, 163, 127" in CHAT_CSS, "the glass and the two glows of Nex"
-    for token in ("--bg: #212121", "--bg-deep: #171717", "--panel: #2f2f2f", "--accent: #ff2d95", '"Fraunces"'):
+    for token in ("--bg: #212121", "--bg-deep: #171717", "--panel: #2f2f2f", "--accent: #10a37f", "--primary: #ececec", '"Inter"'):
         assert token in CSS, token
-    assert os.path.exists(os.path.join(ROOT, "static", "fonts", "fraunces-latin-wght-normal.woff2")) and os.path.exists(os.path.join(ROOT, "static", "fonts", "Fraunces-OFL.txt"))
+    for flat in ("backdrop-filter", "radial-gradient", "blur("):
+        assert flat not in CHAT_CSS, f"flat like ChatGPT: no {flat}"
+    assert ".send { " in CHAT_CSS and "background: var(--primary)" in CHAT_CSS, "the send button is the round white one"
+    assert "Fraunces" not in CSS and "Fraunces" not in CHAT_CSS
+    assert os.path.exists(os.path.join(ROOT, "static", "fonts", "inter-latin-wght-normal.woff2")) and os.path.exists(os.path.join(ROOT, "static", "fonts", "Inter-OFL.txt"))
+    assert not os.path.exists(os.path.join(ROOT, "static", "fonts", "fraunces-latin-wght-normal.woff2")), "the old font is not shipped any more"
 
 
 def test_the_page_names_what_there_is_in_plain_words_and_promises_what_the_list_holds():

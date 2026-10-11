@@ -1,39 +1,38 @@
-/* Nex Ai: the look (shared by the chat, the list of models, the legal pages and the error pages).  Dark like ChatGPT with one pink accent;
-   a light version for people whose computer is set to light. */
-
-@font-face { font-family: "Fraunces"; src: url("/static/fonts/fraunces-latin-wght-normal.woff2") format("woff2"); font-weight: 100 900; font-style: normal; font-display: swap; }
+/* Nex Ai: the look (shared by the chat, the list of models, the legal pages and the error pages).  Made like ChatGPT: flat greys (a dark
+   one, and a light one for computers that are set to light), white and black for the main buttons, one quiet green for small accents,
+   and a clean sans-serif (Inter, kept on this server). */
+@font-face { font-family: "Inter"; src: url("/static/fonts/inter-latin-wght-normal.woff2") format("woff2"); font-weight: 100 900; font-style: normal; font-display: swap; }
 
 :root {
-  /* The look of Nex (the earlier project): the greys of ChatGPT, one pink accent, frosted glass, and an editorial serif (Fraunces). */
   --bg: #212121;
   --bg-deep: #171717;
   --panel: #2f2f2f;
-  --panel-2: #3f3f3f;
-  --panel-3: #4a4a4a;
-  --line: rgba(255, 255, 255, 0.08);
-  --line-strong: rgba(255, 255, 255, 0.17);
+  --panel-2: #383838;
+  --panel-3: #424242;
+  --line: rgba(255, 255, 255, 0.1);
+  --line-strong: rgba(255, 255, 255, 0.2);
   --text: #ececec;
   --muted: #b4b4b4;
   --faint: #8e8ea0;
-  --accent: #ff2d95;
-  --accent-2: #ff7ab8;
-  --grad: #ff2d95;
+  --accent: #10a37f;
+  --accent-2: #2dd4a8;
+  --grad: #10a37f;
   --on-accent: #fff;
-  --glass: color-mix(in srgb, var(--bg-deep) 68%, transparent);
-  --glass-blur: blur(20px) saturate(1.4);
+  --primary: #ececec;
+  --on-primary: #171717;
   --warn: #f59e0b;
   --bad: #f87171;
-  --good: #34d399;
+  --good: #10a37f;
   --radius: 14px;
-  --font: "Fraunces", "Iowan Old Style", Georgia, "Times New Roman", serif;
-  --mono: "Consolas", "SF Mono", ui-monospace, SFMono-Regular, Menlo, "Liberation Mono", monospace;
+  --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, Menlo, "Liberation Mono", monospace;
   color-scheme: dark;
 }
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
-    --bg: #ffffff; --bg-deep: #f9f9f9; --panel: #f4f4f4; --panel-2: #ececec; --panel-3: #e3e3e3; --line: rgba(0, 0, 0, 0.1); --line-strong: rgba(0, 0, 0, 0.18);
-    --text: #0d0d0d; --muted: #5d5d5d; --faint: #6f7075; --accent: #ff2d95; --accent-2: #c80f6b; --grad: #ff2d95;
-    --warn: #b45309; --bad: #dc2626; --good: #059669; color-scheme: light;
+    --bg: #ffffff; --bg-deep: #f9f9f9; --panel: #f4f4f4; --panel-2: #ececec; --panel-3: #e3e3e3; --line: rgba(0, 0, 0, 0.1); --line-strong: rgba(0, 0, 0, 0.2);
+    --text: #0d0d0d; --muted: #5d5d5d; --faint: #8f8f8f; --accent: #10a37f; --accent-2: #0e8a6b; --grad: #10a37f; --primary: #0d0d0d; --on-primary: #ffffff;
+    --warn: #b45309; --bad: #dc2626; --good: #10a37f; color-scheme: light;
   }
 }
 
@@ -50,7 +49,7 @@ button:disabled { cursor: default; opacity: 0.55; }
 svg { display: block; }
 [hidden] { display: none !important; }
 :focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
-.skip { position: absolute; left: -9999px; top: 0; z-index: 5000; padding: 10px 16px; background: var(--accent); color: #fff; border-radius: 0 0 10px 0; }
+.skip { position: absolute; left: -9999px; top: 0; z-index: 5000; padding: 10px 16px; background: var(--primary); color: var(--on-primary); border-radius: 0 0 10px 0; }
 .skip:focus { left: 0; }
 .noscript { padding: 40px 24px; text-align: center; }
 .grow { flex: 1; }
@@ -67,7 +66,7 @@ svg { display: block; }
 .icon-btn[aria-pressed="true"] { color: var(--warn); background: color-mix(in srgb, var(--warn) 18%, transparent); }
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 0 18px; border-radius: 999px; border: 1px solid transparent; font-weight: 700; white-space: nowrap; transition: filter 0.15s, background 0.15s; }
 .btn svg { width: 19px; height: 19px; }
-.btn.primary { background: var(--grad); color: var(--on-accent); }
+.btn.primary { background: var(--primary); color: var(--on-primary); }
 .btn.primary:hover:not(:disabled) { filter: brightness(1.08); }
 .btn.ghost { border-color: var(--line-strong); background: transparent; }
 .btn.ghost:hover:not(:disabled) { background: var(--panel-3); }
@@ -126,7 +125,7 @@ svg { display: block; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip { display: inline-flex; align-items: center; gap: 7px; padding: 6px 14px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); font-weight: 600; font-size: 14px; }
 .chip svg { width: 16px; height: 16px; }
-.chip.on { background: var(--grad); border-color: transparent; color: #fff; }
+.chip.on { background: var(--primary); border-color: transparent; color: var(--on-primary); }
 .chip .count { font-size: 12px; opacity: 0.85; }
 .controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 14px; }
 .control { display: grid; gap: 3px; font-size: 12px; font-weight: 700; color: var(--muted); }

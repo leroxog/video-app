@@ -1,4 +1,4 @@
-/* Nex Ai chat: a chat like ChatGPT whose AI runs inside the visitor's browser.  There is one AI and nothing to choose: the page takes
+/* Nex Ai chat: a chat made like ChatGPT whose AI runs inside the visitor's browser.  There is one AI and nothing to choose: the page takes
    the best model that this computer can run, loads it once (from Hugging Face, kept in the browser afterwards), and then every question
    is answered by the visitor's own graphics card or processor, in a worker (regal-chat-worker.js).  A side bar with the earlier chats,
    the talk in the middle, the message field below.  What is written here never leaves the computer: this script sends nothing
@@ -128,12 +128,15 @@
   function buildShell() {
     el.history = h("nav", { class: "history", "aria-label": "Frühere Chats" });
     el.side = h("aside", { class: "side", id: "side", "aria-label": "Seitenleiste" },
-      h("button", { class: "new-chat", type: "button", onclick: newChat }, icon("edit"), "Neuer Chat"),
+      h("div", { class: "side-head" },
+        h("a", { class: "side-logo", href: "/", "aria-label": "Nex Ai, Startseite" }, logo()),
+        h("button", { class: "icon-btn side-close", type: "button", "aria-label": "Seitenleiste schließen", onclick: closeDrawer }, icon("close"))),
+      h("button", { class: "side-item new-chat", type: "button", onclick: newChat }, icon("edit"), "Neuer Chat"),
       el.history,
       h("div", { class: "side-foot" },
         h("button", { class: "side-link", type: "button", onclick: freeSpace }, icon("trash"), "Gespeicherte KI löschen"),
         h("button", { class: "side-link", type: "button", onclick: deleteAll }, icon("close"), "Alle Chats löschen"),
-        (el.sideModel = h("p", { class: "side-model" })),
+        (el.sideModel = h("div", { class: "side-model" })),
         h("nav", { class: "legal-mini", "aria-label": "Mehr" }, h("a", { href: "/nutzungsbedingungen" }, "Bedingungen"), h("a", { href: "/datenschutz" }, "Datenschutz"), h("a", { href: "/impressum" }, "Impressum"))));
     paintSideModel();
     el.top = h("header", { class: "topbar" });
@@ -145,13 +148,14 @@
     buildComposer();
   }
 
-  function paintSideModel() {
-    const m = app.model;
-    fill(el.sideModel, icon("pc"), `Nex Ai ist ${m ? m.name : "ein Sprachmodell"}${m && m.maker ? ` von ${m.maker}` : ""} und läuft auf deinem Gerät.`);
-  }
-
   /* On a phone the side bar is a drawer: choosing something in it closes it (on a computer it stays). */
   function closeDrawer() { el.shell.classList.remove("side-open"); }
+
+  function paintSideModel() {
+    const m = app.model;
+    fill(el.sideModel, h("span", { class: "side-avatar" }, logo()),
+      h("span", { class: "side-model-text" }, h("b", {}, "Nex Ai"), h("small", {}, `${m ? `${m.name} (${m.maker}) · ` : ""}läuft auf deinem Gerät`)));
+  }
 
   /* The menu button (only on a phone): the side bar slides in over the page.  On a computer it is always there. */
   function toggleSide() { el.shell.classList.toggle("side-open"); }
@@ -162,7 +166,6 @@
     const status = app.ready ? "bereit" : app.loading ? "startet …" : app.problem ? "läuft nicht" : "";
     fill(el.top,
       h("button", { class: "icon-btn menu-btn", type: "button", "aria-label": "Chats", "aria-controls": "side", onclick: toggleSide }, icon("menu")),
-      h("span", { class: "top-mark" }, logo()),
       h("b", { class: "top-name" }, "Nex Ai"),
       h("span", { class: "top-status", title: status }, h("span", { class: `dot ${state}`, "aria-hidden": "true" }), status ? h("span", {}, status) : null),
       h("span", { class: "grow" }),
@@ -392,26 +395,24 @@
   }
 
   // ------------------------------------------------------------------------------------------------------ chat
-  function greeting() {
-    const hour = new Date().getHours();
-    return hour < 5 ? "Gute Nacht" : hour < 11 ? "Guten Morgen" : hour < 18 ? "Guten Tag" : hour < 23 ? "Guten Abend" : "Gute Nacht";
+  function welcome() {
+    return h("div", { class: "thread-inner welcome" }, h("h1", {}, "Wie kann ich dir helfen?"));
   }
 
-  function welcome() {
-    return h("div", { class: "thread-inner welcome" },
-      h("div", { class: "welcome-logo" }, logo()),
-      h("h1", {}, greeting()),
-      h("div", { class: "suggestions" }, Chat.SUGGESTIONS.map((text) => h("button", { class: "suggestion", type: "button", onclick: () => submit(text) }, text))));
+  /* Ideas to start with, below the message field of a new chat. */
+  function suggestionRow() {
+    if (!el.suggest) el.suggest = h("div", { class: "suggestions" }, Chat.SUGGESTIONS.map((text) => h("button", { class: "suggestion", type: "button", onclick: () => submit(text) }, text)));
+    return el.suggest;
   }
 
   function buildComposer() {
-    app.input = h("textarea", { class: "composer-input", rows: "1", maxlength: String(Chat.MAX_INPUT), placeholder: "Schreib eine Nachricht …", "aria-label": "Deine Nachricht", enterkeyhint: "send",
+    app.input = h("textarea", { class: "composer-input", rows: "1", maxlength: String(Chat.MAX_INPUT), placeholder: "Nachricht an Nex Ai", "aria-label": "Deine Nachricht", enterkeyhint: "send",
       oninput: () => { grow(); paintSend(); },
       onkeydown: (event) => { if (event.key === "Enter" && !event.shiftKey && !event.isComposing) { event.preventDefault(); submit(); } } });
     el.send = h("button", { class: "send", type: "button", onclick: () => (app.busy ? app.worker?.postMessage({ type: "stop" }) : submit()) });
     el.composer = h("div", { class: "composer" },
       h("div", { class: "composer-box" }, app.input, el.send),
-      h("p", { class: "composer-note" }, "Nex Ai läuft auf deinem Gerät, nichts wird gesendet. Nex kann Fehler machen. Wichtiges überprüfen."));
+      h("p", { class: "composer-note" }, "Nex Ai läuft auf deinem Gerät, nichts wird gesendet. Nex Ai kann Fehler machen. Überprüfe wichtige Angaben."));
     paintSend();
   }
 
@@ -436,7 +437,8 @@
         Object.keys(app.skips).length ? h("button", { class: "linklike", type: "button", onclick: tryBigger }, "Größere Version noch einmal probieren") : null)));
     }
     if (app.ready && app.savedNote) notes.push(h("p", { class: "notice save-note" }, icon("info"), "Dein Browser hat die KI nicht gespeichert (vielleicht ist zu wenig Platz frei). Beim nächsten Mal muss sie noch einmal geladen werden."));
-    fill(el.bottom, notes, app.runtime && app.runtime.ok && !app.problem ? el.composer : null);
+    const usable = app.runtime && app.runtime.ok && !app.problem;
+    fill(el.bottom, notes, usable ? el.composer : null, usable && el.stage.classList.contains("is-empty") ? suggestionRow() : null);
   }
 
   function renderThread() {
@@ -470,7 +472,7 @@
 
   function messageNode(message, last) {
     if (message.role === "user") return h("div", { class: "msg user" }, h("div", { class: "bubble" }, message.content));
-    return h("div", { class: "msg bot" }, h("div", { class: "avatar" }, logo()),
+    return h("div", { class: "msg bot" },
       h("div", { class: "bot-main" }, h("div", { class: "answer" }, Chat.parseBlocks(message.content).map(blockNode)), h("div", { class: "msg-meta" }, actions(message.content, last))));
   }
 
@@ -479,6 +481,7 @@
       chat.messages.map((message, index) => messageNode(message, message.role === "assistant" && index === chat.messages.length - 1)));
     fill(el.thread, h("div", { class: "thread-inner" }, el.list));
     el.stage.classList.remove("is-empty");
+    if (el.suggest) el.suggest.remove();
     follow(true);
   }
 
@@ -528,9 +531,9 @@
   /* The AI starts writing the next answer of `chat` (its last message is the question). */
   function answer(chat) {
     el.list.querySelectorAll(".regen").forEach((button) => button.remove());                // only the newest answer can be written again
-    const body = h("div", { class: "answer streaming" }, h("span", { class: "typing", "aria-label": "Nex schreibt" }, h("i"), h("i"), h("i")));
+    const body = h("div", { class: "answer streaming" }, h("span", { class: "typing", "aria-label": "Nex Ai schreibt" }, h("i")));
     const meta = h("div", { class: "msg-meta" });
-    put(el.list, h("div", { class: "msg bot" }, h("div", { class: "avatar" }, logo()), h("div", { class: "bot-main" }, body, meta)));
+    put(el.list, h("div", { class: "msg bot" }, h("div", { class: "bot-main" }, body, meta)));
     app.current = { chat, text: "", body, meta };
     app.busy = true;
     paintSend();

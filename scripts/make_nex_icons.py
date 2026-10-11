@@ -8,14 +8,14 @@ static/js/regal-ui.js (a 100 x 100 grid), so every icon of the site looks the sa
 import math
 import os
 
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from PIL import Image, ImageDraw, ImageFont
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 OUT = os.path.join(ROOT, "static", "img")
-TILE, NIGHT, PINK, GREEN = (47, 47, 47), (33, 33, 33), (255, 45, 149), (16, 163, 127)
+TILE, NIGHT = (47, 47, 47), (33, 33, 33)
 SUPER = 4
-# the title is set in Fraunces when Pillow can read the font file, else in a serif that every Windows and Linux machine has
-FONTS = [os.path.join(ROOT, "static", "fonts", "fraunces-latin-wght-normal.woff2"), "C:/Windows/Fonts/georgiab.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf"]
+# the title is set in Inter (the font of the site) when Pillow can read the font file, else in a bold sans-serif that the machine has
+FONTS = [os.path.join(ROOT, "static", "fonts", "inter-latin-wght-normal.woff2"), "C:/Windows/Fonts/segoeuib.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"]
 VERTICES = [(50, 19), (78.6, 35.5), (78.6, 68.5), (50, 85), (21.4, 68.5), (21.4, 35.5)]
 
 
@@ -57,22 +57,14 @@ def font(size):
     return ImageFont.load_default()
 
 
-def glow(image, box, color, alpha, blur):
-    layer = Image.new("RGBA", image.size, (0, 0, 0, 0))
-    ImageDraw.Draw(layer).ellipse(box, fill=color + (alpha,))
-    image.alpha_composite(layer.filter(ImageFilter.GaussianBlur(blur)))
-
-
 def og_image():
     width, height = 1200, 630
     image = Image.new("RGBA", (width, height), NIGHT + (255,))
-    glow(image, [-200, -240, 560, 330], PINK, 70, 110)            # the pink glow at the top left and the green one at the bottom right of Nex
-    glow(image, [700, 360, 1400, 900], GREEN, 85, 120)
     draw = ImageDraw.Draw(image)
     image.alpha_composite(mark(150), (90, 110))
-    draw.text((90, 290), "Nex Ai", font=font(150), fill=(236, 236, 236, 255))
-    draw.text((96, 480), "Chat mit einer KI auf deinem Computer.", font=font(44), fill=(180, 180, 180, 255))
-    draw.text((96, 540), "Ohne App. Ohne Konto. Nichts wird gesendet.", font=font(34), fill=PINK + (255,))
+    draw.text((90, 290), "Nex Ai", font=font(140), fill=(236, 236, 236, 255))
+    draw.text((96, 470), "Chat mit einer KI auf deinem Computer.", font=font(44), fill=(180, 180, 180, 255))
+    draw.text((96, 534), "Ohne App. Ohne Konto. Nichts wird gesendet.", font=font(34), fill=(142, 142, 160, 255))
     return image.convert("RGB")
 
 
