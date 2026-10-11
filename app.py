@@ -37,7 +37,7 @@ import search_engine
 import gomat
 import gomat_accounts
 import siteauth  # noqa: F401  (its table is made together with the others)
-import treff
+import regal
 import yipi
 import ysound
 
@@ -526,7 +526,7 @@ def _make_session_permanent():
     # logged out constantly. Marking the session permanent + a long
     # lifetime gives it a real expiry date instead.
     # gomat keeps nothing on the server, so its pages and API never set a cookie at all.
-    if request.endpoint is None or request.endpoint in gomat.NO_COOKIE_ENDPOINTS or request.endpoint in yipi.ENDPOINTS or request.endpoint in treff.ENDPOINTS:
+    if request.endpoint is None or request.endpoint in gomat.NO_COOKIE_ENDPOINTS or request.endpoint in yipi.ENDPOINTS or request.endpoint in regal.ENDPOINTS:
         return
     session.permanent = True
 
@@ -1239,9 +1239,9 @@ gomat.register_routes(app)
 gomat_accounts.register_routes(app)
 yipi.register_routes(app)
 _PUBLIC_ENDPOINTS.update(yipi.ENDPOINTS)       # yipi has accounts of its own and checks the sign-in itself
-# Treff (the home page since 2026-10-10: groups where everybody can talk about one thing, without an account; "user" plus six digits).
-treff.register_routes(app)
-_PUBLIC_ENDPOINTS.update(treff.ENDPOINTS)
+# KI-Regal (the home page since 2026-10-11: a list of more than a thousand free AI models to download; no accounts, no cookies).
+regal.register_routes(app)
+_PUBLIC_ENDPOINTS.update(regal.ENDPOINTS)
 
 
 # ==========================================================================

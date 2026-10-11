@@ -1,6 +1,7 @@
-"""Treff's page: the files it is made of agree with each other (the scripts in the right order, every style a script uses exists), nothing
-a person writes is ever put on the page as HTML, links to other sites do not hand over the page, and the page stores only what the
-privacy page says.  The functions that do not touch the page are tested in treff_core.test.js (run from here too)."""
+"""KI-Regal's page: the files it is made of agree with each other (the scripts in the right order, every style a script uses exists),
+nothing from the list is ever put on the page as HTML, links to other sites do not hand over the page, and the page talks only to
+Hugging Face and only for the files that a person chooses.  The functions that do not touch the page are tested in regal_core.test.js
+(run from here too)."""
 import glob
 import os
 import re
@@ -17,7 +18,7 @@ os.environ["NRS_AUTO_INDEX"] = "0"
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 JS_DIR = os.path.join(ROOT, "static", "js")
-SCRIPTS = ["treff-core.js", "treff-ui.js", "treff-api.js", "treff-render.js", "treff-chat.js", "treff-side.js", "treff.js"]
+SCRIPTS = ["regal-core.js", "regal-ui.js", "regal-download.js", "regal.js"]
 NODE = shutil.which("node")
 
 
@@ -27,7 +28,7 @@ def read(*parts):
 
 
 JS = {name: read("static", "js", name) for name in SCRIPTS}
-CSS = read("static", "css", "treff.css")
+CSS = read("static", "css", "regal.css")
 
 
 def code_of(source):
@@ -35,11 +36,11 @@ def code_of(source):
 
 
 def test_the_template_loads_the_scripts_in_dependency_order_and_nothing_inline():
-    html = read("templates", "treff.html")
+    html = read("templates", "regal.html")
     assert re.findall(r"<script src=\"\{\{ static_url\('js/([\w-]+\.js)'\) \}\}\"></script>", html) == SCRIPTS
     for tag in re.findall(r"<script\b[^>]*>", html):
         assert "src=" in tag, f"an inline script would break the content security policy: {tag}"
-    for name in ("treff.html", "legal.html", "error.html"):
+    for name in ("regal.html", "legal.html", "error.html"):
         text = read("templates", name)
         assert not re.search(r"\son[a-z]+\s*=", text), f"{name}: inline event handler"
         assert 'style="' not in text and "javascript:" not in text, name
@@ -48,8 +49,8 @@ def test_the_template_loads_the_scripts_in_dependency_order_and_nothing_inline()
 
 
 def test_every_script_is_listed_in_the_template_and_is_valid_javascript():
-    on_disk = sorted(os.path.basename(path) for path in glob.glob(os.path.join(JS_DIR, "treff*.js")))
-    assert on_disk == sorted(SCRIPTS), "a treff script that the page does not load (or the other way round)"
+    on_disk = sorted(os.path.basename(path) for path in glob.glob(os.path.join(JS_DIR, "regal*.js")))
+    assert on_disk == sorted(SCRIPTS), "a regal script that the page does not load (or the other way round)"
     if NODE is None:
         pytest.skip("Node.js is not installed")
     for name in on_disk:
@@ -58,54 +59,54 @@ def test_every_script_is_listed_in_the_template_and_is_valid_javascript():
 
 
 @pytest.mark.skipif(NODE is None, reason="Node.js is not installed")
-def test_the_node_tests_of_treff_pass():
-    files = sorted(glob.glob(os.path.join(ROOT, "tests", "treff_*.test.js")))
+def test_the_node_tests_of_the_shelf_pass():
+    files = sorted(glob.glob(os.path.join(ROOT, "tests", "regal_*.test.js")))
     assert files
     result = subprocess.run([NODE, "--test"] + files, capture_output=True, text=True, timeout=300)
     assert result.returncode == 0, (result.stdout + result.stderr)[-3000:]
     assert "# fail 0" in result.stdout and "# pass" in result.stdout
 
 
-def test_nothing_a_person_writes_is_put_on_the_page_as_html_and_the_page_runs_no_foreign_code():
+ALLOWED = ("http://www.w3.org/2000/svg", "https://huggingface.co", "https://github.com/", "https://lmstudio.ai", "https://ollama.com", "https://${", "http://${")
+
+
+def test_nothing_from_the_list_is_put_on_the_page_as_html_and_the_page_runs_no_foreign_code():
     for name, source in JS.items():
         code = code_of(source)
-        for sink in ("innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", "eval(", "new Function", "document.cookie"):
+        for sink in ("innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", "eval(", "new Function", "document.cookie", "sessionStorage"):
             assert sink not in code, f"{name} uses {sink}"
         for address in re.findall(r"https?://[^\s\"'`)]+", code):
-            assert address.startswith(("http://www.w3.org/2000/svg", "https://${", "http://${")), f"{name} points to {address}"
+            assert address.startswith(ALLOWED), f"{name} points to {address}"
         assert "importScripts" not in code and "import(" not in code, name
 
 
-def test_only_the_api_file_talks_to_the_server_and_only_the_server_of_this_site():
+def test_the_page_asks_only_for_its_own_list_and_for_the_files_a_person_chooses():
     for name, source in JS.items():
         code = code_of(source)
         for sink in ("XMLHttpRequest", "sendBeacon", "WebSocket", "EventSource"):
             assert sink not in code, f"{name} uses {sink}"
-        if name != "treff-api.js":
-            assert "fetch(" not in code, f"{name} makes a request"
-    api = code_of(JS["treff-api.js"])
-    assert api.count("fetch(") == 1 and "`/api/treff${path}`" in api and 'credentials: "omit"' in api
+    fetches = {name: code_of(source).count("fetch(") for name, source in JS.items()}
+    assert fetches == {"regal-core.js": 0, "regal-ui.js": 0, "regal-download.js": 1, "regal.js": 1}, fetches
+    assert "fetch(root.dataset.models" in JS["regal.js"] and "Core.fileUrl(model.id, item.path, false)" in JS["regal-download.js"]
+    assert 'credentials: "omit"' in JS["regal.js"]
 
 
 def test_links_to_other_sites_do_not_hand_over_the_page():
     for name, source in JS.items():
         for line in code_of(source).split("\n"):
             if 'target: "_blank"' in line:
-                assert ("rel: REL" in line) or ("noopener" in line and "noreferrer" in line), f"{name}: {line.strip()[:120]}"
-    assert 'const REL = "noopener noreferrer nofollow ugc"' in JS["treff-render.js"]
+                assert "noopener" in line and "noreferrer" in line, f"{name}: {line.strip()[:120]}"
+    assert 'a.rel = "noopener noreferrer"' in JS["regal-download.js"]
 
 
 def test_the_page_stores_only_what_the_privacy_page_says():
     legal = read("templates", "legal.html")
     keys = set()
     for name, source in JS.items():
-        keys |= set(re.findall(r'"(treff\.[a-z]+)"', code_of(source)))
-        assert ("localStorage" in code_of(source)) == (name == "treff-api.js"), f"{name}: only treff-api.js keeps things in the browser"
-        assert ("sessionStorage" in code_of(source)) == (name == "treff-side.js"), f"{name}: only the admin page keeps a word until the tab is closed"
-    assert {"treff.key", "treff.seen", "treff.dismissed", "treff.intro"} <= keys
-    for key in keys - {"treff.admin"}:
-        assert key in legal, f"{key} is stored but the privacy page does not say so"
-    assert "keine Cookies" in legal and "document.cookie" not in "".join(JS.values())
+        keys |= set(re.findall(r'"(regal\.[a-z]+)"', code_of(source)))
+        assert ("localStorage" in code_of(source)) == (name == "regal.js"), f"{name}: only regal.js keeps things in the browser"
+    assert keys == {"regal.fav"}
+    assert "regal.fav" in legal and "keine Cookies" in legal and "Hugging Face" in legal
 
 
 def test_every_style_variable_that_is_used_is_defined():
@@ -129,8 +130,8 @@ def class_names_in(source):
     return names
 
 
-# Classes that are only a marker for the script (nothing to draw).
-MARKERS = {"on", "open", "important", "new-group", "time"}
+# Classes that are only a marker for the script (nothing to draw) or are made from a name (fmt-gguf, lic-yes ...).
+MARKERS = {"on", "open", "count", "bar", "more", "fav", "section", "size", "kind"}
 
 
 def test_every_class_the_scripts_give_to_an_element_has_a_style():
@@ -143,14 +144,20 @@ def test_every_class_the_scripts_give_to_an_element_has_a_style():
     assert not missing, missing
 
 
-def test_the_layout_has_two_panes_and_one_on_a_phone_and_hidden_things_stay_hidden():
+def test_the_layout_works_on_small_screens_and_respects_reduced_motion_and_light_mode():
     assert "[hidden] { display: none !important; }" in CSS, "a hidden element must be hidden whatever display its class says"
-    assert "@media (max-width: 860px)" in CSS and '.app[data-pane="list"] .main { display: none; }' in CSS and '.app[data-pane="chat"] .side { display: none; }' in CSS
+    assert "@media (max-width: 560px)" in CSS and "grid-template-columns: repeat(auto-fill, minmax(min(290px, 100%), 1fr))" in CSS
+    # a grid column that may not shrink below its content pushed the dialog out of a phone screen
+    assert ".model-body { display: grid; grid-template-columns: minmax(0, 1fr);" in CSS
     assert "prefers-reduced-motion: reduce" in CSS and "prefers-color-scheme: light" in CSS
     assert "env(safe-area-inset-bottom)" in CSS and "env(safe-area-inset-top)" in CSS
+    for page in ("regal.html", "legal.html", "error.html"):             # a fixed data-theme="dark" would keep the light colours from ever being used
+        with open(os.path.join(ROOT, "templates", page), encoding="utf-8") as handle:
+            assert "data-theme" not in handle.read(), page
 
 
-def test_the_page_shows_the_numbers_the_way_the_task_says():
-    assert 'userName = (number) => `user ${number}`' in read("static", "js", "treff-core.js")
-    assert "100000, 999999" in read("treff.py")
-    assert "Fakten!" in JS["treff-chat.js"] and "Wichtig!" in JS["treff-render.js"]
+def test_the_page_names_what_there_is_in_plain_words_and_promises_what_the_list_holds():
+    core = JS["regal-core.js"]
+    for word in ("Chat & Schreiben", "Bilder erzeugen", "Videos erzeugen", "Musik & Klänge", "Sprache vorlesen"):
+        assert word in core, word
+    assert "Gratis" in JS["regal.js"] and "Ohne Konto" in JS["regal.js"]

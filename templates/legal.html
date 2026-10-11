@@ -1,20 +1,20 @@
 <!doctype html>
-<html lang="de" data-theme="dark">
+<html lang="de">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>{{ {"terms": "Nutzungsbedingungen", "privacy": "Datenschutz", "imprint": "Impressum"}[page] }} | Treff</title>
-<meta name="description" content="{{ {"terms": "Die Regeln auf Treff und was du von uns erwarten kannst.", "privacy": "Welche Daten Treff verarbeitet, wozu und wie du sie löschst.", "imprint": "Angaben zum Betreiber von Treff."}[page] }}">
-<meta name="theme-color" content="#0b0f17">
+<title>{{ {"terms": "Nutzungsbedingungen", "privacy": "Datenschutz", "imprint": "Impressum"}[page] }} | KI-Regal</title>
+<meta name="description" content="{{ {"terms": "Die Regeln auf KI-Regal und was du von uns erwarten kannst.", "privacy": "Welche Daten KI-Regal verarbeitet (fast keine), wozu und wie du sie löschst.", "imprint": "Angaben zum Betreiber von KI-Regal."}[page] }}">
+<meta name="theme-color" content="#0b0e14">
 <meta name="color-scheme" content="dark light">
-<link rel="icon" href="{{ static_url('img/treff-icon.svg') }}" type="image/svg+xml">
-<link rel="icon" href="{{ static_url('img/treff-192.png') }}" type="image/png" sizes="192x192">
-<link rel="apple-touch-icon" href="{{ static_url('img/treff-180.png') }}">
-<link rel="stylesheet" href="{{ static_url('css/treff.css') }}">
+<link rel="icon" href="{{ static_url('img/regal-icon.svg') }}" type="image/svg+xml">
+<link rel="icon" href="{{ static_url('img/regal-192.png') }}" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="{{ static_url('img/regal-180.png') }}">
+<link rel="stylesheet" href="{{ static_url('css/regal.css') }}">
 </head>
 <body>
 <div class="legal-page">
-  <a class="legal-logo" href="/" aria-label="Treff, zurück zur Startseite"><svg viewBox="0 0 48 48" aria-hidden="true" focusable="false"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3b82f6"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs><rect x="2" y="2" width="44" height="44" rx="12" fill="url(#lg)"/><path d="M13 12h22a3 3 0 013 3v12a3 3 0 01-3 3H25l-7 6v-6h-5a3 3 0 01-3-3V15a3 3 0 013-3z" fill="#fff"/><path d="M24 17.500v6" stroke="#0b0f17" stroke-width="3" stroke-linecap="round"/><circle cx="24" cy="27.200" r="1.900" fill="#0b0f17"/></svg><span>Treff</span></a>
+  <a class="legal-logo" href="/" aria-label="KI-Regal, zurück zur Startseite"><svg viewBox="0 0 48 48" aria-hidden="true" focusable="false"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b5cf6"/><stop offset="1" stop-color="#ec4899"/></linearGradient></defs><rect x="2" y="2" width="44" height="44" rx="12" fill="url(#lg)"/><rect x="9" y="12" width="9" height="13" rx="2" fill="#fff"/><rect x="20" y="8" width="9" height="17" rx="2" fill="#fff" opacity=".9"/><rect x="31" y="14" width="8" height="11" rx="2" fill="#fff" opacity=".8"/><path d="M7 28h34M10 28v10M38 28v10" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg><span>KI-Regal</span></a>
   <main class="legal">
 {%- if page == "imprint" %}
     <h1>Impressum</h1>
@@ -28,81 +28,70 @@
   {%- else %}
     <p>Die Angaben zum Betreiber der Seite werden gerade ergänzt.</p>
   {%- endif %}
-    <h2>Inhalte der Nutzer</h2>
-    <p>Die Nachrichten, Fakten und Gruppen auf Treff stammen von den Nutzern, die als „user“ mit einer Nummer schreiben. Für diese Inhalte sind die jeweiligen Nutzer verantwortlich, nicht der Betreiber. Wir prüfen sie nicht vorab, entfernen rechtswidrige Inhalte aber, sobald wir davon erfahren.</p>
+    <h2>Inhalte Dritter</h2>
+    <p>Die Modelle, die KI-Regal auflistet, stammen von ihren jeweiligen Urhebern und liegen bei Hugging Face. Wir hosten sie nicht und prüfen ihren Inhalt nicht im Einzelnen. Für die Modelle und ihre Lizenzen sind die Urheber verantwortlich.</p>
     <h2>Rechtswidrige Inhalte melden</h2>
-    <p>Tippe bei der Nachricht, dem Fakt oder der Gruppe auf „Melden“ (bei einer Nachricht über die drei Punkte). Das geht am schnellsten. Du kannst uns auch schreiben{% if imprint and imprint.email %} (<a href="mailto:{{ imprint.email }}">{{ imprint.email }}</a>){% endif %}. Nenne dabei die Adresse der Gruppe und erkläre kurz, warum der Inhalt gegen das Gesetz oder die <a href="/nutzungsbedingungen">Nutzungsbedingungen</a> verstößt. Wir antworten, sobald wir die Meldung geprüft haben.</p>
+    <p>Wenn ein Eintrag falsch ist, ein Link nicht mehr geht oder ein Modell gegen das Gesetz oder Rechte Dritter verstößt, schreib uns{% if imprint and imprint.email %} (<a href="mailto:{{ imprint.email }}">{{ imprint.email }}</a>){% endif %} mit dem Namen des Modells (zum Beispiel „autor/modell“). Wir nehmen den Eintrag aus der Liste, sobald wir ihn geprüft haben. Das Modell selbst können nur seine Urheber oder Hugging Face entfernen.</p>
 {%- elif page == "terms" %}
     <h1>Nutzungsbedingungen</h1>
-    <p class="lead">Treff ist ein kostenloser Ort für Gruppen zu jedem Thema. Alle können mitlesen und mitschreiben, ohne Konto. Damit sich alle wohlfühlen, gelten ein paar Regeln. Stand: Oktober 2026.</p>
+    <p class="lead">KI-Regal ist eine kostenlose Liste von frei herunterladbaren KI-Modellen. Wir hosten die Modelle nicht, wir zeigen dir, was es gibt, wie groß es ist und was die Lizenz sagt. Stand: Oktober 2026.</p>
 
-    <h2>1. Wer schreibt hier?</h2>
-    <p>Du brauchst kein Konto. Wenn du zum ersten Mal etwas schreibst, bekommt dein Browser eine Nummer aus sechs Ziffern und einen geheimen Schlüssel. Du erscheinst als „user“ mit dieser Nummer. Die Nummer gehört zu deinem Browser, nicht zu dir als Person: Wenn du die Browserdaten löschst, ist sie weg. Gib deinen Schlüssel nicht weiter. Treff ist für Menschen ab 16 Jahren. Jüngere brauchen die Erlaubnis ihrer Eltern.</p>
+    <h2>1. Was KI-Regal ist</h2>
+    <p>KI-Regal verlinkt Modelle und ihre Dateien bei Hugging Face. Wenn du etwas herunterlädst, kommt die Datei direkt von Hugging Face zu dir. Dafür gelten die Bedingungen von Hugging Face und die Lizenz des Modells. Die Liste ist eine Auswahl und ein Stand: Modelle können sich ändern, verschwinden oder gesperrt werden.</p>
 
-    <h2>2. Deine Inhalte</h2>
-    <p>Alles, was du schreibst (Nachrichten, Fakten, Gruppen, Beschreibungen), ist öffentlich und für alle sichtbar, die die Seite öffnen. Schreibe nichts, was nicht öffentlich sein soll: keine Passwörter, keine privaten Daten von dir oder anderen. Du erlaubst Treff, deine Inhalte so anzuzeigen und zu speichern, wie es für den Betrieb nötig ist. Eigene Nachrichten und Fakten kannst du jederzeit löschen. Wer eine Gruppe gemacht hat, kann in ihr Nachrichten und Fakten löschen und die Gruppe auflösen.</p>
-    <p>Schreibe nur, wozu du das Recht hast. Fremde Texte und Bilder brauchen die Erlaubnis der Urheber.</p>
+    <h2>2. Lizenzen und erlaubte Nutzung</h2>
+    <p>Jedes Modell hat eine Lizenz seiner Urheber. Manche erlauben jede Nutzung, manche nur nicht-kommerzielle, manche haben Bedingungen (zum Beispiel für sehr große Firmen oder für bestimmte Zwecke). Was wir an einem Modell zur Lizenz zeigen, ist nur ein Hinweis. Verbindlich ist der Lizenztext des Modells. Du bist selbst dafür verantwortlich, ein Modell nur so zu benutzen, wie es die Lizenz und das Gesetz erlauben.</p>
 
-    <h2>3. Das ist nicht erlaubt</h2>
-    <ul>
-      <li>Drohungen, Gewalt und Aufrufe zu Gewalt, auch gegen Gruppen von Menschen.</li>
-      <li>Beleidigung, Belästigung, Mobbing und das Verbreiten privater Daten anderer („Doxing“).</li>
-      <li>Hass und Hetze gegen Menschen wegen ihrer Herkunft, Religion, Hautfarbe, ihres Geschlechts, ihrer sexuellen Orientierung, einer Behinderung oder Krankheit.</li>
-      <li>Inhalte, die Kinder oder Jugendliche sexualisieren, pornografische Inhalte und Inhalte, die Selbstverletzung oder Suizid verherrlichen.</li>
-      <li>Rechtswidrige Inhalte, zum Beispiel Verherrlichung von Terror, Anleitungen zu Straftaten, Betrug und verbotene Symbole.</li>
-      <li>Spam, Massen-Werbung, Links zu Schadsoftware oder Betrugsseiten und das Vortäuschen einer anderen Person oder des Betreibers.</li>
-      <li>Das Ausnutzen von Fehlern, das Überlasten der Seite oder der Versuch, die Nummern anderer zu übernehmen.</li>
-    </ul>
+    <h2>3. Wie du die Modelle benutzt</h2>
+    <p>Benutze KI-Modelle nicht, um anderen zu schaden: keine Täuschung, keine Belästigung, keine gefälschten Inhalte über echte Personen, keine rechtswidrigen Inhalte. Beachte beim Erzeugen von Bildern, Videos, Musik und Stimmen die Rechte anderer (Urheberrecht, Persönlichkeitsrechte) und kennzeichne KI-Inhalte, wo es verlangt wird.</p>
 
-    <h2>4. Melden und Löschen</h2>
-    <p>Etwas Unpassendes siehst du? Tippe bei der Nachricht, dem Fakt oder der Gruppe auf „Melden“. Wir prüfen Meldungen und können Nachrichten, Fakten und ganze Gruppen löschen, besonders bei Verstößen gegen Abschnitt 3. Das kann ohne Vorwarnung geschehen, wenn ein Verstoß schwer wiegt. Wenn du meinst, dass wir uns geirrt haben, schreib uns an die Adresse im <a href="/impressum">Impressum</a>.</p>
+    <h2>4. Programme und Befehle</h2>
+    <p>Wir zeigen dir Programme (zum Beispiel LM Studio, Ollama, ComfyUI) und Befehle, mit denen du Modelle starten kannst. Diese Programme stammen von Dritten. Lade sie nur von den Seiten ihrer Hersteller, die wir verlinken, und prüfe selbst, ob sie für dich geeignet sind. Große Modelle brauchen viel Speicherplatz und einen starken Rechner. Prüfe vor dem Herunterladen die Größe.</p>
 
     <h2>5. Verfügbarkeit und Haftung</h2>
-    <p>Treff ist ein privates Projekt ohne Gewähr. Es kann ausfallen, sich ändern oder eingestellt werden. Du solltest dich nicht darauf verlassen, dass ein Inhalt für immer gespeichert bleibt. Für die Inhalte der Nutzer sind diese selbst verantwortlich. Unsere Haftung ist bei leichter Fahrlässigkeit ausgeschlossen, außer bei der Verletzung von Leben, Körper und Gesundheit und bei wesentlichen Vertragspflichten. Zwingende gesetzliche Rechte bleiben unberührt.</p>
+    <p>KI-Regal ist ein privates Projekt ohne Gewähr. Es kann ausfallen, sich ändern oder eingestellt werden. Wir übernehmen keine Haftung für Modelle, ihre Ergebnisse, Programme Dritter oder verlinkte Seiten. Unsere Haftung ist bei leichter Fahrlässigkeit ausgeschlossen, außer bei der Verletzung von Leben, Körper und Gesundheit und bei wesentlichen Vertragspflichten. Zwingende gesetzliche Rechte bleiben unberührt.</p>
 
     <h2>6. Änderungen</h2>
-    <p>Wir können diese Bedingungen ändern, zum Beispiel wenn Treff neue Funktionen bekommt. Die aktuelle Fassung steht immer hier. Wenn du Treff nach einer Änderung weiter nutzt, gilt die neue Fassung.</p>
+    <p>Wir können diese Bedingungen ändern. Die aktuelle Fassung steht immer hier.</p>
 
     <h2>7. Das Archiv-Angebot yipi</h2>
-    <p>Unter <a href="/yipi-archiv">/yipi-archiv</a> gibt es noch das frühere Netzwerk yipi mit Konten. Dort gelten die obigen Regeln sinngemäß: Wer ein Konto hat, ist für seine Yips verantwortlich, kann sie und das Konto jederzeit löschen („Einstellungen, Dein Konto“) und Inhalte anderer melden („Melden“). Ein vergessenes Passwort kann nicht zurückgesetzt werden.</p>
+    <p>Unter <a href="/yipi-archiv">/yipi-archiv</a> gibt es noch das frühere Netzwerk yipi mit Konten. Dort gelten sinngemäß: Wer ein Konto hat, ist für seine Yips verantwortlich, kann sie und das Konto jederzeit löschen („Einstellungen, Dein Konto“) und Inhalte anderer melden („Melden“). Ein Konto bei yipi gibt es ab 16 Jahren, jüngere brauchen die Erlaubnis ihrer Eltern. Ein vergessenes Passwort kann bei yipi nicht zurückgesetzt werden.</p>
 {%- else %}
     <h1>Datenschutz</h1>
-    <p class="lead">Kurz und ehrlich: Bei Treff gibt es kein Konto, keine Werbung und kein Tracking. Was du schreibst, ist öffentlich. Dein Browser bekommt eine Nummer und einen geheimen Schlüssel, damit der Server dich beim nächsten Mal wiedererkennt. Stand: Oktober 2026.</p>
+    <p class="lead">Kurz und ehrlich: KI-Regal hat keine Konten, setzt keine Cookies und nutzt kein Tracking. Die Liste ist eine Datei auf unserem Server. Wenn du ein Modell herunterlädst, lädt dein Browser es von Hugging Face. Stand: Oktober 2026.</p>
 
     <h2>Wer ist verantwortlich?</h2>
     <p>Der Betreiber, der im <a href="/impressum">Impressum</a> steht. Dort erreichst du ihn auch für Fragen zum Datenschutz.</p>
 
-    <h2>Treff: was auf unserem Server liegt</h2>
-    <ul>
-      <li><strong>Deine Nummer:</strong> eine Zahl aus sechs Ziffern, die es nur einmal gibt, und ein Prüfwert (Hash) deines geheimen Schlüssels. Den Schlüssel selbst kennen wir nicht. Sie entstehen, wenn du das erste Mal etwas schreibst oder eine Gruppe machst. Wer nur liest, bekommt keine Nummer.</li>
-      <li><strong>Deine Inhalte:</strong> Nachrichten (mit Antworten, Reaktionen und der Markierung „Wichtig!“), Fakten, Gruppen mit Namen und Beschreibung, jeweils mit deiner Nummer und der Zeit. Sie sind <strong>öffentlich</strong> und für alle sichtbar. Die Nummer ist kein Klarname, aber was du schreibst, kann dich verraten: Schreibe keine privaten Daten.</li>
-      <li><strong>Meldungen:</strong> Wenn du etwas meldest, speichern wir die Meldung, deine Nummer als Melder und den Grund, bis sie bearbeitet ist.</li>
-    </ul>
-    <p>Rechtsgrundlage ist die Bereitstellung der Seite, die du nutzen möchtest (Art. 6 Abs. 1 lit. b DSGVO), und unser berechtigtes Interesse, Missbrauch zu verhindern (Art. 6 Abs. 1 lit. f DSGVO). Eigene Nachrichten und Fakten kannst du jederzeit selbst löschen. Wer eine Gruppe gemacht hat, kann sie samt allen Nachrichten löschen. Gelöschte Nachrichten werden geleert; ein Platzhalter „Diese Nachricht wurde gelöscht“ bleibt, damit Antworten verständlich bleiben.</p>
+    <h2>Besuch der Seite</h2>
+    <p>Beim Aufruf verarbeitet der Hoster der Seite technisch notwendige Daten, die dein Browser sendet (zum Beispiel IP-Adresse, Zeitpunkt, aufgerufene Adresse), um die Seite auszuliefern und missbräuchliche Zugriffe zu erkennen. Die Seite läuft bei Railway (Railway Corp., USA); dabei können Daten in Länder außerhalb der EU übertragen werden. Rechtsgrundlage ist unser berechtigtes Interesse am sicheren Betrieb (Art. 6 Abs. 1 lit. f DSGVO). Wir selbst speichern nichts über dich: kein Konto, keine Anmeldung, kein Cookie.</p>
+
+    <h2>Suchen und Filtern</h2>
+    <p>Die Liste der Modelle wird einmal geladen. Suchen, Filtern und Sortieren passieren in deinem Browser: Was du eingibst, wird nicht an uns gesendet. Die Einstellungen stehen nur in der Adresse der Seite (damit du sie teilen kannst).</p>
 
     <h2>Was in deinem Browser liegt</h2>
-    <p>Treff setzt <strong>keine Cookies</strong>. Dein Browser speichert aber (localStorage) deinen geheimen Schlüssel (<code>treff.key</code>), welche Nachrichten du schon gesehen hast (<code>treff.seen</code>), welche Hinweise du ausgeblendet hast (<code>treff.dismissed</code>) und ob du die Einführung weggeklickt hast (<code>treff.intro</code>). Das ist für die Funktion der Seite technisch notwendig (§ 25 Abs. 2 TDDDG). Wenn du die Websitedaten deines Browsers löschst, ist deine Nummer weg und du bekommst beim nächsten Schreiben eine neue.</p>
+    <p>Wenn du Modelle mit dem Herz merkst, speichert dein Browser die Namen der gemerkten Modelle auf deinem Gerät (localStorage, Schlüssel <code>regal.fav</code>). Das ist für die Funktion technisch notwendig (§ 25 Abs. 2 TDDDG) und verlässt dein Gerät nicht. Du löschst es mit den Websitedaten deines Browsers.</p>
 
-    <h2>Besuch der Seite</h2>
-    <p>Beim Aufruf verarbeitet der Hoster der Seite technisch notwendige Daten, die dein Browser sendet (zum Beispiel IP-Adresse, Zeitpunkt, aufgerufene Adresse), um die Seite auszuliefern und missbräuchliche Zugriffe zu erkennen. Die Seite läuft bei Railway (Railway Corp., USA); dabei können Daten in Länder außerhalb der EU übertragen werden. Damit niemand die Seite mit Nachrichten überschwemmt, zählt der Server kurzzeitig im Arbeitsspeicher mit, wie oft eine IP-Adresse oder Nummer etwas tut; das wird nicht in der Datenbank gespeichert und nach spätestens einer Stunde vergessen. Rechtsgrundlage ist unser berechtigtes Interesse am sicheren Betrieb (Art. 6 Abs. 1 lit. f DSGVO).</p>
+    <h2>Herunterladen von Modellen</h2>
+    <p>Wenn du ein Modell herunterlädst (mit „In einen Ordner speichern“ oder „Normal herunterladen“), ruft dein Browser die Datei direkt bei <strong>Hugging Face</strong> ab (huggingface.co und dessen Auslieferungsserver hf.co). Dabei verarbeitet Hugging Face, zum Beispiel deine IP-Adresse; das ist in dessen Datenschutzhinweisen geregelt. Wir sehen davon nichts. Erst wenn du auf einen Download oder einen Link zu Hugging Face klickst, entsteht diese Verbindung, vorher nicht. Beim Speichern in einen Ordner schreibt die Seite die Dateien nur in den Ordner, den du ausgewählt hast, und nur, solange du das erlaubst.</p>
 
     <h2>Links</h2>
-    <p>In Nachrichten und Fakten kann es Links auf fremde Seiten geben. Für deren Datenschutz sind wir nicht verantwortlich. Treff lädt von diesen Seiten nichts nach: Du siehst nur den Link.</p>
+    <p>Die Seite verlinkt Programme und Seiten Dritter (zum Beispiel GitHub, lmstudio.ai, ollama.com). Für deren Datenschutz sind wir nicht verantwortlich.</p>
 
     <h2>Kein Tracking, keine Weitergabe</h2>
-    <p>Treff nutzt keine Analyse- und Werbedienste, keine fremden Schriften und keine fremden Skripte. Wir geben keine Daten an Dritte weiter, außer wenn wir gesetzlich dazu verpflichtet sind.</p>
+    <p>KI-Regal nutzt keine Analyse- und Werbedienste, keine fremden Schriften und keine fremden Skripte. Wir geben keine Daten an Dritte weiter, außer wenn wir gesetzlich dazu verpflichtet sind.</p>
 
     <h2>Das Archiv-Angebot yipi</h2>
     <p>Unter <a href="/yipi-archiv">/yipi-archiv</a> gibt es noch das frühere soziale Netzwerk yipi. Es hat Konten und speichert, was dafür nötig ist: Nutzername und Anzeigename, optional eine E-Mail-Adresse (nur für die Anmeldung), das Passwort nur als Prüfwert, freiwillige Profilangaben, Yips, Antworten, Bilder, Likes, Lesezeichen und Nachrichten (nicht Ende-zu-Ende-verschlüsselt). Yips und Profile sind öffentlich. Nach der Anmeldung setzt yipi ein Cookie (<code>yipi_session</code>), das 30 Tage gültig ist (technisch notwendig, § 25 Abs. 2 TDDDG) und beim Abmelden entfernt wird. Im Browser liegen nur Einstellungen (<code>yipi.theme</code>, <code>yipi.feed</code>, <code>yipi.recent</code>). Unter „Einstellungen, Dein Konto“ kannst du dein Konto samt allen Inhalten sofort und endgültig löschen.</p>
 
     <h2>Löschen</h2>
-    <p>Eigene Nachrichten und Fakten löschst du selbst (bei der Nachricht über die drei Punkte, bei Fakten unter „Fakten!“). Wer eine Gruppe gemacht hat, kann sie unter „Infos und Einstellungen“ samt allen Nachrichten und Fakten löschen. Alles Weitere, zum Beispiel deine Nummer, löschen wir auf Anfrage (siehe unten).</p>
+    <p>Bei KI-Regal speichern wir nichts über dich, das wir löschen könnten. Deine Merkliste löschst du in deinem Browser. Bei yipi löschst du dein Konto selbst.</p>
 
     <h2>Deine Rechte</h2>
-    <p>Du hast das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung, Datenübertragbarkeit und Widerspruch sowie darauf, eine Einwilligung jederzeit zu widerrufen. Du kannst dich außerdem bei einer Datenschutz-Aufsichtsbehörde beschweren. Schreib dafür an die Adresse im <a href="/impressum">Impressum</a>. Weil wir bei Treff dich nur an einer Nummer wiedererkennen, brauchen wir für eine Auskunft oder Löschung deine Nummer und den Nachweis, dass sie dir gehört (zum Beispiel eine Nachricht, die du in einer Gruppe schreibst).</p>
+    <p>Du hast das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung, Datenübertragbarkeit und Widerspruch sowie darauf, eine Einwilligung jederzeit zu widerrufen. Du kannst dich außerdem bei einer Datenschutz-Aufsichtsbehörde beschweren. Schreib dafür an die Adresse im <a href="/impressum">Impressum</a>.</p>
 {%- endif %}
   </main>
-  <footer class="legal-links"><a href="/">Zurück zu Treff</a><a href="/nutzungsbedingungen">Nutzungsbedingungen</a><a href="/datenschutz">Datenschutz</a><a href="/impressum">Impressum</a></footer>
+  <footer class="legal-links"><a href="/">Zurück zu KI-Regal</a><a href="/nutzungsbedingungen">Nutzungsbedingungen</a><a href="/datenschutz">Datenschutz</a><a href="/impressum">Impressum</a></footer>
 </div>
 </body>
 </html>

@@ -1,11 +1,10 @@
-/* Treff ui: the small building blocks of the page -- elements, icons, pictures of people and groups, dialogs, menus, messages.  Text that
-   comes from people is only ever put on the page as text, never as HTML; the icons are fixed drawings parsed as SVG. */
+/* KI-Regal ui: the small building blocks of the page -- elements, icons, dialogs, menus, messages.  Text from the list is only ever put
+   on the page as text, never as HTML; the icons are fixed drawings parsed as SVG. */
 (function () {
   "use strict";
 
   const SVG_NS = "http://www.w3.org/2000/svg";
-  const Core = window.TreffCore;
-  const T = (window.Treff = window.Treff || {});
+  const T = (window.Regal = window.Regal || {});
 
   // -------------------------------------------------------------------------------------------- elements
   function h(tag, attrs, ...children) {
@@ -42,56 +41,48 @@
   const LINE = 'fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"';
   const ICONS = {
     chat: '<path d="M5 5h14a2 2 0 012 2v8a2 2 0 01-2 2h-7l-5 4v-4H5a2 2 0 01-2-2V7a2 2 0 012-2z"/>',
-    plus: '<path d="M12 5v14M5 12h14"/>',
+    code: '<path d="M8 8l-5 4 5 4M16 8l5 4-5 4M14 5l-4 14"/>',
+    image: '<rect x="3" y="4" width="18" height="16" rx="2.500"/><circle cx="9" cy="10" r="1.800"/><path d="M4 18l5-5 4 4 3-3 4 4"/>',
+    video: '<rect x="3" y="5" width="13" height="14" rx="2.500"/><path d="M16 10l5-3v10l-5-3z"/>',
+    music: '<path d="M9 18V6l11-2v12"/><circle cx="6.500" cy="18" r="2.500"/><circle cx="17.500" cy="16" r="2.500"/>',
+    voice: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/>',
+    ear: '<path d="M7 10a5 5 0 0110 0c0 3-3 3.500-3 6.500a2.500 2.500 0 01-5 0M10 10a2 2 0 014 0"/>',
+    eye: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+    wand: '<path d="M5 19L17 7M14 4l1-2 1 2 2 1-2 1-1 2-1-2-2-1zM18 12l.7-1.400L20 10l-1.300-.6L18 8l-.7 1.400L16 10l1.300.6z"/>',
+    wave: '<path d="M3 12h2M7 8v8M11 5v14M15 9v6M19 11v2"/>',
+    scan: '<path d="M4 8V6a2 2 0 012-2h2M16 4h2a2 2 0 012 2v2M20 16v2a2 2 0 01-2 2h-2M8 20H6a2 2 0 01-2-2v-2"/><path d="M4 12h16"/>',
+    globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>',
     search: '<circle cx="11" cy="11" r="6.500"/><path d="M16 16l4.500 4.500"/>',
-    send: '<path d="M4 12L20 4l-5 16-3.500-6.500z"/><path d="M11.500 13.500L20 4"/>',
-    back: '<path d="M19 12H5M11 5l-7 7 7 7"/>',
-    close: '<path d="M6 6l12 12M18 6L6 18"/>',
-    more: '<circle cx="5" cy="12" r="1.600" fill="currentColor"/><circle cx="12" cy="12" r="1.600" fill="currentColor"/><circle cx="19" cy="12" r="1.600" fill="currentColor"/>',
+    cube: '<path d="M12 3l8 4.500v9L12 21l-8-4.500v-9z"/><path d="M12 12l8-4.500M12 12v9M12 12L4 7.500"/>',
+    download: '<path d="M12 4v11M7.500 10.500L12 15l4.500-4.500M5 19h14"/>',
+    folder: '<path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>',
     copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 00-2-2H6a2 2 0 00-2 2v8a2 2 0 002 2h2"/>',
     external: '<path d="M14 4h6v6M20 4l-9 9M18 14v4a2 2 0 01-2 2H6a2 2 0 01-2-2V8a2 2 0 012-2h4"/>',
-    reply: '<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/>',
-    smile: '<circle cx="12" cy="12" r="9"/><path d="M8.500 14a4 4 0 007 0M9 9.500h.01M15 9.500h.01"/>',
-    flag: '<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>',
-    idea: '<path d="M9 18h6M10 21h4M12 3a6 6 0 00-3.500 10.900c.6.500 1 1.200 1 2.100h5c0-.9.4-1.600 1-2.100A6 6 0 0012 3z"/>',
-    trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>',
-    edit: '<path d="M4 20h4L19 9a2.800 2.800 0 00-4-4L4 16z"/><path d="M13.500 6.500l4 4"/>',
-    info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
-    share: '<path d="M12 15V3M7.500 7.500L12 3l4.500 4.500M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"/>',
-    users: '<circle cx="9" cy="8" r="3.500"/><path d="M2.500 20c.6-3.600 3.200-5.500 6.500-5.500s5.900 1.900 6.500 5.500"/><path d="M16 4.700a3.500 3.500 0 010 6.600M18.500 14.800c1.600.8 2.700 2.400 3 5.200"/>',
-    gear: '<circle cx="12" cy="12" r="3"/><path d="M12 3v2.500M12 18.500V21M3 12h2.500M18.500 12H21M5.600 5.600l1.800 1.800M16.600 16.600l1.800 1.800M5.600 18.400l1.800-1.800M16.600 7.400l1.800-1.800"/>',
+    heart: '<path d="M12 20s-8-5-8-11a4.500 4.500 0 018-2.700A4.500 4.500 0 0120 9c0 6-8 11-8 11z"/>',
     check: '<path d="M5 12.500l4.500 4.500L19 7"/>',
+    close: '<path d="M6 6l12 12M18 6L6 18"/>',
+    info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
     warn: '<path d="M12 4l9 16H3z"/><path d="M12 10v5M12 17.500h.01"/>',
-    down: '<path d="M12 5v14M5 12l7 7 7-7"/>',
-    chevron: '<path d="M9 5l7 7-7 7"/>',
-    quote: '<path d="M7 17c-2 0-3-1.300-3-3.500 0-3.500 2-6 5-6.500M17 17c-2 0-3-1.300-3-3.500 0-3.500 2-6 5-6.500"/>',
-    pin: '<path d="M9 4h6l-1 6 3 3v2H7v-2l3-3zM12 15v6"/>',
-    flame: '<path d="M12 3c1 3.500 5 5.500 5 10a5 5 0 01-10 0c0-2 1-3 2-4 .3 1.200 1 2 2 2 0-3-.5-5 1-8z"/>',
+    filter: '<path d="M4 6h16M7 12h10M10 18h4"/>',
+    pc: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+    terminal: '<rect x="3" y="4" width="18" height="16" rx="2.500"/><path d="M7 9l3 3-3 3M13 15h4"/>',
+    down: '<path d="M6 9l6 6 6-6"/>',
+    shield: '<path d="M12 3l8 3v6c0 4.500-3.200 8-8 9-4.800-1-8-4.500-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    stop: '<rect x="6" y="6" width="12" height="12" rx="2"/>',
   };
   function icon(name) {
     return svgElement(`<svg xmlns="${SVG_NS}" viewBox="0 0 24 24" ${LINE} aria-hidden="true" focusable="false">${ICONS[name] || ICONS.info}</svg>`);
   }
 
   let logoCount = 0;
-  /* The logo: a speech bubble with an exclamation mark ("Fakten!") on a blue tile. */
+  /* The logo: a shelf with three boxes (models) on a tile in a gradient from violet to pink. */
   function logo() {
-    const id = `tg${++logoCount}`;
-    return svgElement(`<svg xmlns="${SVG_NS}" viewBox="0 0 48 48" aria-hidden="true" focusable="false"><defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3b82f6"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs>
+    const id = `rg${++logoCount}`;
+    return svgElement(`<svg xmlns="${SVG_NS}" viewBox="0 0 48 48" aria-hidden="true" focusable="false"><defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b5cf6"/><stop offset="1" stop-color="#ec4899"/></linearGradient></defs>
       <rect x="2" y="2" width="44" height="44" rx="12" fill="url(#${id})"/>
-      <path d="M13 12h22a3 3 0 013 3v12a3 3 0 01-3 3H25l-7 6v-6h-5a3 3 0 01-3-3V15a3 3 0 013-3z" fill="#fff"/>
-      <path d="M24 17.500v6" stroke="#0b0f17" stroke-width="3" stroke-linecap="round"/><circle cx="24" cy="27.200" r="1.900" fill="#0b0f17"/></svg>`);
-  }
-
-  // -------------------------------------------------------------------------------------- pictures of people
-  /* The round picture of a group (its first letters) or of a person: always the same colour for the same name. */
-  function avatar(seed, label, size = "") {
-    const c = Core.colorFor(seed);
-    return h("span", { class: `avatar${size ? ` ${size}` : ""}`, "aria-hidden": "true", style: `background: linear-gradient(135deg, ${c.background}, hsl(${(c.hue + 40) % 360} 62% 38%))` }, label);
-  }
-  /* "user 482913" in the colour of that person. */
-  function person(number, extra) {
-    const c = Core.colorFor(`user ${number}`);
-    return h("span", { class: `person${extra ? ` ${extra}` : ""}`, style: `color: ${c.soft}` }, Core.userName(number));
+      <rect x="9" y="12" width="9" height="13" rx="2" fill="#fff"/><rect x="20" y="8" width="9" height="17" rx="2" fill="#fff" opacity=".9"/><rect x="31" y="14" width="8" height="11" rx="2" fill="#fff" opacity=".8"/>
+      <path d="M7 28h34M10 28v10M38 28v10" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg>`);
   }
 
   /* Copies a text to the clipboard (resolves to whether it worked). */
@@ -244,18 +235,7 @@
     return entry;
   }
 
-  // ----------------------------------------------------------------------------------------------- controls
-  /* A row of buttons of which one is on. options: [[value, label]] */
-  function segmented(options, value, onChange, label) {
-    const bar = h("div", { class: "segmented", role: "group", "aria-label": label || "Auswahl" });
-    const draw = (v) => { for (const b of bar.querySelectorAll("button")) b.setAttribute("aria-pressed", String(b.dataset.value === String(v))); };
-    for (const [v, text] of options) bar.append(h("button", { type: "button", "data-value": String(v), onclick: () => { draw(v); onChange(v); } }, text));
-    draw(value);
-    bar.set = draw;
-    return bar;
-  }
-
   const count = (n) => Number(n).toLocaleString("de-DE");
 
-  Object.assign(T, { h, put, fill, append, wait, nextFrame, svgElement, icon, logo, avatar, person, copyText, toast, dialog, confirmBox, formDialog, menu, segmented, count });
+  Object.assign(T, { h, put, fill, append, wait, nextFrame, svgElement, icon, logo, copyText, toast, dialog, confirmBox, formDialog, menu, count });
 })();
