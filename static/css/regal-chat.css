@@ -90,6 +90,10 @@ body { overflow: hidden; }
 .pending span { color: var(--faint); font-size: 12px; }
 .row { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 6px; }
 
+.tech { width: min(560px, 100%); margin-top: 6px; text-align: left; color: var(--muted); font-size: 12.5px; }
+.tech summary { cursor: pointer; text-align: center; color: var(--faint); }
+.tech pre { margin: 10px 0; padding: 12px 14px; border-radius: 10px; background: var(--bg-deep); border: 1px solid var(--line); font: 12px/1.55 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+
 /* ----------------------------------------------------------------------------------------------- messages */
 .msgs { display: flex; flex-direction: column; gap: 26px; padding-top: 10px; }
 .msg { display: flex; gap: 10px; align-items: flex-start; min-width: 0; }

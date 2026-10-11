@@ -9,9 +9,116 @@ import { env, pipeline, TextStreamer, InterruptableStoppingCriteria } from "../v
 
 const BASE = new URL("../vendor/transformers/", import.meta.url).href;
 
+/* The browser's cache for the files of the model, in pieces.  A browser refuses to put a big file into its Cache Storage in one piece (the
+   limit is a fraction of the free space, often only about 250 MB, and the model has files of 300 to 800 MB), so the model would be loaded
+   again at every visit.  This cache keeps each file as parts of 48 MB (`?nex-part=0`, `?nex-part=1` ...) and, written last, a note
+   (`?nex-meta`) with the number of parts and the size: a file is only there when the note is.  The page looks for the same note
+   (chunkMetaUrl in regal-chat-core.js) to know whether a model is in the browser. */
+const PART = 48 * 1024 * 1024;
+
+class PartsCache {
+  constructor(name) { this.name = name; this.opened = null; }
+  cache() { return (this.opened ||= caches.open(this.name)); }
+
+  async match(key) {
+    const cache = await this.cache();
+    const whole = await cache.match(key);
+    if (whole) return whole;
+    const note = await cache.match(`${key}?nex-meta`);
+    if (!note) return undefined;
+    let meta = null;
+    try { meta = await note.json(); } catch (error) { return undefined; }
+    if (!meta || !(meta.parts >= 1) || !(meta.size >= 0)) return undefined;
+    const parts = [];
+    for (let i = 0; i < meta.parts; i++) {
+      const part = await cache.match(`${key}?nex-part=${i}`);
+      if (!part) return undefined;                  // a part is missing (the browser threw it away): then the file is not there
+      parts.push(part);
+    }
+    let next = 0, reader = null;
+    const body = new ReadableStream({
+      async pull(controller) {
+        for (;;) {
+          if (!reader) {
+            if (next >= parts.length) { controller.close(); return; }
+            reader = parts[next++].body.getReader();
+          }
+          const { done, value } = await reader.read();
+          if (done) { reader = null; continue; }
+          controller.enqueue(value);
+          return;
+        }
+      },
+      cancel() { return reader ? reader.cancel() : undefined; },
+    });
+    return new Response(body, { headers: { "content-length": String(meta.size), "content-type": meta.type || "application/octet-stream" } });
+  }
+
+  async put(key, response, progress) {
+    const cache = await this.cache();
+    const type = response.headers.get("content-type") || "application/octet-stream";
+    const total = Number(response.headers.get("content-length")) || 0;
+    const written = [];
+    let parts = 0, size = 0, filled = 0;
+    const buffer = new Uint8Array(PART);
+    const flush = async (length) => {
+      const name = `${key}?nex-part=${parts}`;
+      await cache.put(name, new Response(buffer.subarray(0, length)));
+      written.push(name);
+      parts++;
+      filled = 0;
+    };
+    try {
+      if (response.body) {
+        const reader = response.body.getReader();
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          for (let offset = 0; offset < value.length;) {
+            const count = Math.min(PART - filled, value.length - offset);
+            buffer.set(value.subarray(offset, offset + count), filled);
+            filled += count;
+            offset += count;
+            size += count;
+            if (filled === PART) await flush(PART);
+          }
+          if (progress) progress({ progress: total ? (size / total) * 100 : 0, loaded: size, total });
+        }
+      } else {
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        for (let offset = 0; offset < bytes.length; offset += PART) {
+          const piece = bytes.subarray(offset, offset + PART);
+          buffer.set(piece, 0);
+          filled = piece.length;
+          size += piece.length;
+          if (filled === PART) await flush(PART);
+        }
+      }
+      if (filled > 0 || parts === 0) await flush(filled);
+      await cache.put(`${key}?nex-meta`, new Response(JSON.stringify({ parts, size, type }), { headers: { "content-type": "application/json" } }));
+    } catch (error) {
+      for (const name of written) { try { await cache.delete(name); } catch (ignored) { /* it is gone anyway */ } }
+      throw error;
+    }
+  }
+
+  async delete(key) {
+    const cache = await this.cache();
+    let found = await cache.delete(key);
+    const note = await cache.match(`${key}?nex-meta`);
+    if (note) {
+      try { const meta = await note.json(); for (let i = 0; i < meta.parts; i++) await cache.delete(`${key}?nex-part=${i}`); } catch (error) { /* a damaged note */ }
+      found = (await cache.delete(`${key}?nex-meta`)) || found;
+    }
+    return found;
+  }
+}
+
 env.allowLocalModels = false;                     // only Hugging Face, never files of this server
 env.allowRemoteModels = true;
-env.useBrowserCache = true;                       // a model that was loaded once stays in the browser (Cache Storage)
+env.useBrowserCache = false;                      // not the plain Cache Storage: its limit for one file is too small (see PartsCache)
+env.useCustomCache = true;                        // a model that was loaded once stays in the browser
+env.customCache = new PartsCache("transformers-cache");
 env.useWasmCache = false;                         // the runtime comes from this server and the browser's own cache keeps it
 env.backends.onnx.wasm.wasmPaths = { mjs: `${BASE}ort-wasm-simd-threaded.asyncify.mjs`, wasm: `${BASE}ort-wasm-simd-threaded.asyncify.wasm` };
 env.backends.onnx.wasm.proxy = false;

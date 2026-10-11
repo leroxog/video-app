@@ -21,11 +21,15 @@ SMALL_FILES = ("config.json", "generation_config.json", "tokenizer.json", "token
                "added_tokens.json", "merges.txt", "vocab.json", "tokenizer.model")
 
 # `gpu` (made below) says that the model needs a graphics card with WebGPU (it has no variant that a normal processor can run).
-# The model the chat uses, best first (the page takes the first one that this computer can run).  Only models that were tried here and
-# answer well are listed: Gemma 3 (1 billion parameters) writes good German for its size.  Others that were tried (Qwen 2.5 in 0.5 and
-# 1.5 billion parameters, Llama 3.2, Phi 3.5) were not good enough or not tried, so they are not offered.
+# The models the chat uses, best first: the page takes the first one that this computer can run, and the next one when loading it fails
+# (too little memory).  `cpu: False` says that a model is too big for a computer without a graphics card (WebGPU).  Only models that were
+# tried here are listed: Gemma 3 with 1 billion parameters writes good German for its size, the small one (270 million) is the way out
+# for weak computers.  Others that were tried (Qwen 2.5 in 0.5 and 1.5 billion parameters, Llama 3.2, Phi 3.5) were not good enough or
+# not tried, so they are not offered.
 MODELS = [
-    {"id": "onnx-community/gemma-3-1b-it-ONNX", "name": "Gemma 3", "maker": "Google", "params": "1 Mrd.",
+    {"id": "onnx-community/gemma-3-1b-it-ONNX", "name": "Gemma 3", "maker": "Google", "params": "1 Mrd.", "cpu": False,
+     "license": "Gemma-Nutzungsbedingungen", "license_url": "https://ai.google.dev/gemma/terms", "commercial": True},
+    {"id": "onnx-community/gemma-3-270m-it-ONNX", "name": "Gemma 3 klein", "maker": "Google", "params": "270 Mio.", "cpu": True,
      "license": "Gemma-Nutzungsbedingungen", "license_url": "https://ai.google.dev/gemma/terms", "commercial": True},
 ]
 DTYPES = ("q4f16", "q4")

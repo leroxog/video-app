@@ -85,7 +85,7 @@ test("the time left is only said when it can be known", () => {
 });
 
 test("an error is explained in plain words", () => {
-  assert.match(C.friendlyError("Failed to allocate a buffer of size 123"), /Speicher/);
+  assert.match(C.friendlyError("Failed to allocate a buffer of size 123"), /speicher/i);
   assert.match(C.friendlyError("QuotaExceededError: storage"), /Platz/);
   assert.match(C.friendlyError("no WebGPU adapter"), /Grafikkarte/);
   assert.match(C.friendlyError("TypeError: Failed to fetch"), /Verbindung/);
@@ -167,4 +167,44 @@ test("the AI is the first model of the list (best first) that this computer can 
   assert.equal(C.bestModel([big], { webgpu: false, f16: false }), null);
   assert.equal(C.bestModel([], gpu), null);
   assert.match(C.SYSTEM_PROMPT, /Nex Ai/);
+});
+
+test("a model that is too big for a computer without a graphics card is not run there", () => {
+  const big = model({ cpu: false });
+  const small = model({ id: "x/small", cpu: true, dtypes: { q4f16: 3e8, q4: 3.5e8 } });
+  assert.equal(C.chooseRuntime({ webgpu: true, f16: true }, big).ok, true);
+  const r = C.chooseRuntime({ webgpu: false, f16: false }, big);
+  assert.equal(r.ok, false); assert.match(r.reason, /WebGPU/);
+  assert.equal(C.chooseRuntime({ webgpu: false, f16: false }, small).ok, true);
+  assert.equal(C.chooseRuntime({ webgpu: false, f16: false }, model()).ok, true);                  // without the note a model may run on the processor
+});
+
+test("when the best model did not load here the next one is taken, and nothing is left when all failed", () => {
+  const big = model({ id: "a/big", cpu: false });
+  const small = model({ id: "a/small", cpu: true, dtypes: { q4f16: 3e8, q4: 3.5e8 } });
+  const gpu = { webgpu: true, f16: true }, cpu = { webgpu: false, f16: false };
+  assert.equal(C.bestModel([big, small], gpu, []).id, "a/big");
+  assert.equal(C.bestModel([big, small], gpu, ["a/big"]).id, "a/small");
+  assert.equal(C.bestModel([big, small], cpu, []).id, "a/small");
+  assert.equal(C.bestModel([big, small], gpu, ["a/big", "a/small"]), null);
+});
+
+test("failures are remembered for two weeks and a damaged note is ignored", () => {
+  const now = 1_000_000_000_000, day = 86400000;
+  assert.deepEqual(C.activeSkips(JSON.stringify({ "a/big": now - 3 * day, "a/old": now - 20 * day, "a/future": now + 5 * day, "a/bad": "x" }), now), { "a/big": now - 3 * day });
+  for (const junk of [undefined, null, "", "{bad", "[]", "5", '"text"']) assert.deepEqual(C.activeSkips(junk, now), {});
+  assert.equal(C.SKIP_DAYS, 14);
+});
+
+test("only a matter of the computer is a reason for the smaller model, not the connection", () => {
+  for (const message of ["Failed to allocate memory", "Aborted(OOM)", "RangeError: Array buffer allocation failed", "Buffer size (900) exceeds the max buffer size limit", "WebGPU device lost", "no available backend found. ERR: wasm RuntimeError: unreachable"]) {
+    assert.equal(C.isDeviceTrouble(message), true, message);
+  }
+  for (const message of ["TypeError: Failed to fetch", "NetworkError when attempting to fetch resource", "HTTP 503", "", undefined]) {
+    assert.equal(C.isDeviceTrouble(message), false, String(message));
+  }
+});
+
+test("the note of a file in parts has the address the worker writes", () => {
+  assert.equal(C.chunkMetaUrl("https://huggingface.co/a/b/resolve/main/onnx/model.onnx_data"), "https://huggingface.co/a/b/resolve/main/onnx/model.onnx_data?nex-meta");
 });

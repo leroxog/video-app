@@ -116,13 +116,13 @@ def test_the_chat_puts_nothing_from_the_model_on_the_page_as_html_and_sends_noth
     assert code_of(CHAT_JS["regal-chat.js"]).count("postMessage(") == 3 and "app.worker" in CHAT_JS["regal-chat.js"]
 
 
-def test_the_chat_stores_only_the_chats_and_the_privacy_page_says_so():
+def test_the_chat_stores_only_the_chats_and_the_failed_models_and_the_privacy_page_says_so():
     legal = read("templates", "legal.html")
     for name, source in CHAT_JS.items():
         code = code_of(source)
         assert ("localStorage" in code) == (name == "regal-chat.js"), f"{name}: only regal-chat.js keeps something in the browser"
     keys = set(re.findall(r'"(regal\.[a-z.]+)"', code_of(CHAT_JS["regal-chat.js"])))
-    assert keys == {"regal.chats"} and "regal.chats" in legal
+    assert keys == {"regal.chats", "regal.skip"} and all(key in legal for key in keys)
     assert '"transformers-cache"' in CHAT_JS["regal-chat.js"] and "transformers-cache" in legal
 
 

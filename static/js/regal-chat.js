@@ -10,12 +10,14 @@
   const { h, put, fill, icon, logo, copyText, toast, confirmBox } = window.Regal;
   const Chat = window.RegalChatCore;
   const CHATS_KEY = "regal.chats";
+  const SKIP_KEY = "regal.skip";                            // the models that did not load on this computer ({id: time})
   const CACHE_NAME = "transformers-cache";                  // where Transformers.js keeps the files of a model in the browser
 
   const app = {
     models: [], gpu: { webgpu: false, f16: false }, cached: false, model: null, runtime: null,
     worker: null, ready: false, loading: false, problem: "", files: {}, started: 0, pending: "",
     chats: [], activeId: "", busy: false, current: null, savedNote: false,
+    skips: {}, detail: "", downgraded: false,
   };
   const el = {};                                            // the parts of the page that are painted again and again
   let root = null;
@@ -35,6 +37,12 @@
       try { app.chats = app.chats.slice(0, Math.max(1, Math.floor(app.chats.length / 2))); write(); } catch (again) { /* storage is full or not allowed: the chat still works, it is just not kept */ }
     }
   }
+  function loadSkips() {
+    try { app.skips = Chat.activeSkips(localStorage.getItem(SKIP_KEY)); } catch (error) { app.skips = {}; }
+  }
+  function saveSkips() {
+    try { if (Object.keys(app.skips).length) localStorage.setItem(SKIP_KEY, JSON.stringify(app.skips)); else localStorage.removeItem(SKIP_KEY); } catch (error) { /* not allowed: then it is not remembered */ }
+  }
   const activeChat = () => app.chats.find((chat) => chat.id === app.activeId) || null;
 
   // ------------------------------------------------------------------------------------------------ the computer
@@ -42,7 +50,13 @@
     const gpu = { webgpu: false, f16: false };
     try {
       const adapter = navigator.gpu ? await navigator.gpu.requestAdapter() : null;
-      if (adapter) { gpu.webgpu = true; gpu.f16 = adapter.features.has("shader-f16"); }
+      if (adapter) {
+        gpu.webgpu = true;
+        gpu.f16 = adapter.features.has("shader-f16");
+        const info = adapter.info || {};
+        gpu.name = [info.vendor, info.architecture, info.device].filter(Boolean).join(" ");
+        gpu.maxBuffer = adapter.limits ? adapter.limits.maxBufferSize : 0;
+      }
     } catch (error) { /* no graphics card for the browser */ }
     return gpu;
   }
@@ -52,7 +66,7 @@
     try {
       if (!app.model || !("caches" in window) || !(await caches.has(CACHE_NAME))) return false;
       const cache = await caches.open(CACHE_NAME);
-      const hits = await Promise.all(Chat.cacheUrls(app.model, app.runtime.dtype).map((url) => cache.match(url)));
+      const hits = await Promise.all(Chat.cacheUrls(app.model, app.runtime.dtype).map(async (url) => (await cache.match(url)) || (await cache.match(Chat.chunkMetaUrl(url)))));
       return hits.every(Boolean);
     } catch (error) { return false; }                        // storage is not available: then it does not count as loaded
   }
@@ -75,8 +89,9 @@
       h("div", { class: "side-foot" },
         h("button", { class: "side-link", type: "button", onclick: freeSpace }, icon("trash"), "Gespeicherte KI löschen"),
         h("button", { class: "side-link", type: "button", onclick: deleteAll }, icon("close"), "Alle Chats löschen"),
-        h("p", { class: "side-model" }, icon("pc"), `Nex Ai ist ${app.model ? app.model.name : "ein Sprachmodell"}${app.model && app.model.maker ? ` von ${app.model.maker}` : ""} und läuft auf deinem Gerät.`),
+        (el.sideModel = h("p", { class: "side-model" })),
         h("nav", { class: "legal-mini", "aria-label": "Mehr" }, h("a", { href: "/nutzungsbedingungen" }, "Bedingungen"), h("a", { href: "/datenschutz" }, "Datenschutz"), h("a", { href: "/impressum" }, "Impressum"))));
+    paintSideModel();
     el.top = h("header", { class: "topbar" });
     el.thread = h("main", { class: "thread", id: "main", tabindex: "-1" });
     el.bottom = h("div", { class: "bottom" });
@@ -84,6 +99,11 @@
     el.shell = h("div", { class: "shell" }, el.side, h("div", { class: "backdrop", onclick: closeDrawer }), h("div", { class: "main-col" }, el.top, el.stage));
     fill(root, el.shell);
     buildComposer();
+  }
+
+  function paintSideModel() {
+    const m = app.model;
+    fill(el.sideModel, icon("pc"), `Nex Ai ist ${m ? m.name : "ein Sprachmodell"}${m && m.maker ? ` von ${m.maker}` : ""} und läuft auf deinem Gerät.`);
   }
 
   /* On a phone the side bar is a drawer: choosing something in it closes it (on a computer it stays). */
@@ -157,7 +177,7 @@
     if (busyNow()) return;
     if (!(await confirmBox({ title: "Gespeicherte KI löschen?", text: "Die KI wird aus deinem Browser gelöscht und gibt Speicherplatz frei. Beim nächsten Mal wird sie noch einmal geladen.", yes: "Löschen", danger: true }))) return;
     stopWorker();
-    try { await caches.delete(CACHE_NAME); app.cached = false; toast("Gelöscht."); } catch (error) { toast("Das Löschen hat nicht geklappt."); }
+    try { await caches.delete(CACHE_NAME); app.cached = false; app.skips = {}; saveSkips(); toast("Gelöscht."); } catch (error) { toast("Das Löschen hat nicht geklappt."); }
     renderAll();
   }
 
@@ -173,7 +193,7 @@
   function startWorker() {
     const worker = new Worker(root.dataset.worker, { type: "module" });
     worker.addEventListener("message", (event) => onWorker(event.data || {}));
-    worker.addEventListener("error", () => fail("Das Programm für die KI konnte nicht gestartet werden. Nutze einen aktuellen Browser (Chrome, Edge, Firefox oder Safari)."));
+    worker.addEventListener("error", (event) => fail("Das Programm für die KI konnte nicht gestartet werden. Nutze einen aktuellen Browser (Chrome, Edge, Firefox oder Safari).", event && event.message));
     app.worker = worker;
     return worker;
   }
@@ -189,7 +209,16 @@
     startWorker().postMessage({ type: "load", id: app.model.id, device: app.runtime.device, dtype: app.runtime.dtype });
   }
 
-  function retry() { stopWorker(); startLoading(); }
+  /* "Noch einmal versuchen": from the top again, with the best model (what failed before is forgotten). */
+  function retry() {
+    stopWorker();
+    app.skips = {};
+    saveSkips();
+    app.downgraded = false;
+    app.model = Chat.bestModel(app.models, app.gpu) || app.model;
+    app.runtime = Chat.chooseRuntime(app.gpu, app.model);
+    findCached().then((cached) => { app.cached = cached; startLoading(); });
+  }
 
   function onWorker(message) {
     if (message.type === "progress") { app.files = message.files || {}; if (app.loading) paintProgress(); }
@@ -205,15 +234,49 @@
     else if (message.type === "token") onToken(message.text);
     else if (message.type === "done") onDone(message);
     else if (message.type === "error") {
-      if (message.stage === "load") fail(Chat.friendlyError(message.message));
+      if (message.stage === "load") onLoadError(message.message);
       else onGenerateError(Chat.friendlyError(message.message));
     }
   }
 
-  function fail(text) {
+  function fail(text, raw) {
     stopWorker();
     app.problem = text;
+    app.detail = details(raw);
     renderAll();
+  }
+
+  /* What a person can send us when it does not work: the model, how it was run, the computer and the error itself. */
+  function details(raw) {
+    const g = app.gpu || {};
+    return [
+      `Modell: ${app.model ? app.model.id : "-"}`,
+      `Ausgeführt auf: ${app.runtime && app.runtime.ok ? `${app.runtime.device} (${app.runtime.dtype})` : "-"}`,
+      `Grafikkarte: ${g.webgpu ? `ja${g.f16 ? ", 16 Bit" : ""}${g.name ? `, ${g.name}` : ""}${g.maxBuffer ? `, größter Puffer ${Chat.formatBytes(g.maxBuffer)}` : ""}` : "nein (kein WebGPU)"}`,
+      `Arbeitsspeicher laut Browser: ${navigator.deviceMemory ? `${navigator.deviceMemory} GB` : "unbekannt"}`,
+      `Browser: ${navigator.userAgent.replace(/^Mozilla\/5\.0 /, "").slice(0, 140)}`,
+      `Fehler: ${String(raw || "-").slice(0, 400)}`,
+    ].join("\n");
+  }
+
+  /* The model did not load.  When it is a matter of the computer (memory, graphics card), the next smaller model is tried, and the
+     failure is remembered for two weeks so that the next visit does not try the big one again.  A matter of the connection is only shown. */
+  function onLoadError(raw) {
+    if (Chat.isDeviceTrouble(raw) && app.model) {
+      app.skips[app.model.id] = Date.now();
+      saveSkips();
+      const next = Chat.bestModel(app.models, app.gpu, Object.keys(app.skips));
+      if (next) {
+        stopWorker();
+        app.model = next;
+        app.runtime = Chat.chooseRuntime(app.gpu, next);
+        app.downgraded = true;
+        app.detail = details(raw);
+        findCached().then((cached) => { app.cached = cached; startLoading(); });
+        return;
+      }
+    }
+    fail(Chat.friendlyError(raw), raw);
   }
 
   /* Loading was cancelled: the message that was waiting goes back into the field. */
@@ -234,6 +297,7 @@
       h("h2", {}, app.cached ? "Nex Ai wird gestartet" : "Nex Ai wird auf dein Gerät geladen"),
       el.barBox, el.barText,
       h("p", { class: "muted small" }, app.cached ? "Das dauert nur einen Moment." : "Das passiert nur beim ersten Mal. Du kannst dieses Fenster offen lassen und etwas anderes machen."),
+      app.downgraded ? h("p", { class: "notice" }, icon("info"), "Die größere Version hat auf deinem Gerät nicht funktioniert (zu wenig Speicher). Nex Ai nimmt deshalb die kleinere.") : null,
       app.pending ? h("p", { class: "pending" }, h("span", {}, "Deine Nachricht:"), app.pending) : null,
       h("button", { class: "btn ghost", type: "button", onclick: cancelLoading }, "Abbrechen"));
   }
@@ -251,7 +315,9 @@
 
   function problemCard() {
     return h("div", { class: "thread-inner center-card" }, icon("warn"), h("h2", {}, "Nex Ai läuft nicht"), h("p", { class: "muted" }, app.problem),
-      app.runtime && app.runtime.ok ? h("div", { class: "row" }, h("button", { class: "btn primary", type: "button", onclick: retry }, "Noch einmal versuchen")) : null);
+      app.runtime && app.runtime.ok ? h("div", { class: "row" }, h("button", { class: "btn primary", type: "button", onclick: retry }, "Noch einmal versuchen")) : null,
+      app.detail ? h("details", { class: "tech" }, h("summary", {}, "Technische Angaben"), h("pre", {}, app.detail),
+        h("button", { class: "btn ghost small", type: "button", onclick: async () => toast((await copyText(app.detail)) ? "Kopiert." : "Kopieren hat nicht geklappt.") }, icon("copy"), "Angaben kopieren")) : null);
   }
 
   // ------------------------------------------------------------------------------------------------------ chat
@@ -294,6 +360,9 @@
       notes.push(h("p", { class: "notice" }, icon("download"), `Beim ersten Mal lädt Nex Ai sich einmalig auf dein Gerät (${Chat.formatBytes(app.runtime.bytes)}), am besten im WLAN. Danach geht es schnell.`));
     }
     if (app.runtime && app.runtime.ok && app.runtime.speed === "slow") notes.push(h("p", { class: "notice" }, icon("warn"), app.runtime.reason));
+    if (app.ready && app.models.length && app.model && app.model.id !== app.models[0].id) {
+      notes.push(h("p", { class: "notice" }, icon("info"), "Du nutzt gerade die kleine Version von Nex Ai: Sie ist schnell, aber ungenauer, weil dein Gerät die größere nicht schafft."));
+    }
     if (app.ready && app.savedNote) notes.push(h("p", { class: "notice save-note" }, icon("info"), "Dein Browser hat die KI nicht gespeichert (vielleicht ist zu wenig Platz frei). Beim nächsten Mal muss sie noch einmal geladen werden."));
     fill(el.bottom, notes, app.runtime && app.runtime.ok && !app.problem ? el.composer : null);
   }
@@ -311,6 +380,7 @@
   }
 
   function renderAll() {
+    paintSideModel();
     renderTop();
     renderSidebar();
     renderThread();
@@ -462,8 +532,10 @@
       if (!response.ok) throw new Error(`Fehler ${response.status}`);
       app.models = (await response.json()).models;
       app.gpu = await probeGpu();
-      app.model = Chat.bestModel(app.models, app.gpu);
+      loadSkips();
+      app.model = Chat.bestModel(app.models, app.gpu, Object.keys(app.skips)) || Chat.bestModel(app.models, app.gpu);      // when everything failed before, from the top again
       app.runtime = Chat.chooseRuntime(app.gpu, app.model || app.models[0]);
+      app.downgraded = !!app.model && app.model.id !== (Chat.bestModel(app.models, app.gpu) || {}).id;
       app.cached = await findCached();
       loadChats();
       buildShell();

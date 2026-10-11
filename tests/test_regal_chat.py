@@ -50,10 +50,14 @@ def test_the_list_names_the_one_model_that_runs_on_every_kind_of_computer(models
     assert DATE_RE.match(models["generated"]) and models["library"]["name"] == "Transformers.js"
     ids = [m["id"] for m in models["models"]]
     assert len(ids) == len(set(ids)) and len(ids) >= 1
-    best = models["models"][0]
-    assert best["id"] == "onnx-community/gemma-3-1b-it-ONNX", "the first one is what everybody gets"
-    assert "q4" in best["dtypes"] and "q4f16" in best["dtypes"], "it must run without a graphics card, too, and be small with one"
-    assert best["license_url"].startswith("https://ai.google.dev/gemma/")
+    best, small = models["models"][0], models["models"][1]
+    assert best["id"] == "onnx-community/gemma-3-1b-it-ONNX", "the first one is what everybody gets who can run it"
+    assert best["cpu"] is False, "the big one is not for a computer without a graphics card"
+    assert small["id"] == "onnx-community/gemma-3-270m-it-ONNX" and small["cpu"] is True, "the way out for weak computers (and when the big one does not load)"
+    assert small["dtypes"]["q4"] < 400e6 and small["dtypes"]["q4f16"] < 350e6, "small enough for the memory of any computer"
+    for m in models["models"]:
+        assert "q4" in m["dtypes"] and "q4f16" in m["dtypes"], "q4 for computers without 16-bit graphics, q4f16 to be small with them"
+        assert m["license_url"].startswith("https://ai.google.dev/gemma/")
 
 
 def test_every_model_is_described_completely_and_has_a_download_a_normal_computer_can_take(models):
@@ -173,7 +177,7 @@ def test_the_archived_list_points_to_the_chat_and_the_sitemap_has_only_the_pages
 
 def test_the_legal_pages_say_where_the_chat_runs_and_what_it_keeps(client):
     privacy = client.get("/datenschutz").get_data(as_text=True)
-    for word in ("auf deinem Gerät", "transformers-cache", "regal.chats", "Transformers.js", "nicht an uns und nicht an Dritte", "Gemma 3"):
+    for word in ("auf deinem Gerät", "transformers-cache", "regal.chats", "regal.skip", "Transformers.js", "nicht an uns und nicht an Dritte", "Gemma 3"):
         assert word in privacy, word
     terms = client.get("/nutzungsbedingungen").get_data(as_text=True)
     for word in ("Gemma-Nutzungsbedingungen", "ai.google.dev/gemma/terms", "falsch, unvollständig oder unpassend", "NOTICE.txt"):
@@ -184,3 +188,15 @@ def test_the_font_of_the_site_is_served_as_a_font(client):
     response = client.get("/static/fonts/fraunces-latin-wght-normal.woff2")
     assert response.status_code == 200 and response.headers["Content-Type"] == "font/woff2" and "Set-Cookie" not in response.headers
     assert response.data[:4] == b"wOF2"
+
+
+def test_the_page_and_the_worker_agree_on_how_a_model_in_parts_is_noted():
+    """The worker writes the files of the model into the browser in parts of 48 MB and a note after the last part, because the browser
+    refuses a big file in one piece; the page looks for the note to know whether the model is there."""
+    with open(os.path.join(ROOT, "static", "js", "regal-chat-worker.js"), encoding="utf-8") as handle:
+        worker = handle.read()
+    with open(os.path.join(ROOT, "static", "js", "regal-chat-core.js"), encoding="utf-8") as handle:
+        core = handle.read()
+    assert "`${key}?nex-meta`" in worker and "`${key}?nex-part=${" in worker and "`${url}?nex-meta`" in core
+    assert "const PART = 48 * 1024 * 1024;" in worker and "env.customCache = new PartsCache(" in worker and "env.useBrowserCache = false" in worker
+    assert worker.index("await flush(filled)") < worker.index("`${key}?nex-meta`, new Response"), "the note is written last: a file is only there when the note is"

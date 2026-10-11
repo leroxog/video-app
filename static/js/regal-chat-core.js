@@ -30,6 +30,7 @@
     const webgpu = !!(gpu && gpu.webgpu), f16 = !!(gpu && gpu.f16);
     if (webgpu && f16 && sizes.q4f16) return { ok: true, device: "webgpu", dtype: "q4f16", bytes: sizes.q4f16, speed: "fast", reason: "" };
     if (webgpu && sizes.q4) return { ok: true, device: "webgpu", dtype: "q4", bytes: sizes.q4, speed: "fast", reason: "" };
+    if (!webgpu && model.cpu === false) return { ok: false, device: "", dtype: "", bytes: sizes.q4 || sizes.q4f16 || 0, speed: "none", reason: "Diese Version braucht eine Grafikkarte mit WebGPU." };
     if (sizes.q4) return { ok: true, device: "wasm", dtype: "q4", bytes: sizes.q4, speed: "slow", reason: "Dein Browser hat keine Grafikkarten-Beschleunigung (WebGPU). Das Modell läuft dann auf dem Prozessor und ist deutlich langsamer." };
     return { ok: false, device: "", dtype: "", bytes: sizes.q4f16 || 0, speed: "none", reason: "Dieses Modell braucht eine Grafikkarte mit WebGPU (zum Beispiel in aktuellem Chrome oder Edge am Computer). Hier ist keine verfügbar." };
   }
@@ -127,11 +128,11 @@
   /* What to tell a person when the model could not be loaded or did not answer. */
   function friendlyError(message) {
     const text = String(message || "");
-    if (/out of memory|oom|allocate|alloc|memory|buffer.*size|exceeds.*(limit|maximum)|mapAsync/i.test(text)) return "Dem Gerät ist der Speicher ausgegangen. Nimm ein kleineres Modell oder schließe andere Programme und Tabs.";
-    if (/quota|storage|disk/i.test(text)) return "Auf deinem Gerät ist nicht genug Platz, um das Modell zu speichern. Gib Speicher frei oder nimm ein kleineres Modell.";
-    if (/webgpu|adapter|gpu/i.test(text)) return "Die Grafikkarte konnte nicht benutzt werden. Versuche es mit einem anderen Modell, in Chrome oder Edge am Computer, oder nach einem Neustart des Browsers.";
-    if (/network|fetch|load failed|failed to load|timeout|abort|offline|http|40\d|50\d/i.test(text)) return "Das Modell konnte nicht geladen werden. Prüfe deine Verbindung und versuche es noch einmal; schon geladene Teile bleiben erhalten.";
-    return "Das hat nicht geklappt. Lade die Seite neu und versuche es mit einem anderen Modell.";
+    if (/out of memory|oom\b|allocate|alloc|memory|buffer.*size|exceeds.*(limit|maximum)|mapAsync/i.test(text)) return "Dem Gerät ist der Arbeitsspeicher ausgegangen. Schließe andere Programme und Tabs und versuche es noch einmal.";
+    if (/quota|storage|disk/i.test(text)) return "Auf deinem Gerät ist nicht genug Platz, um die KI zu speichern. Gib Speicher frei und versuche es noch einmal.";
+    if (/webgpu|adapter|gpu/i.test(text)) return "Die Grafikkarte konnte nicht benutzt werden. Versuche es in Chrome oder Edge am Computer, oder nach einem Neustart des Browsers.";
+    if (/network|fetch|load failed|failed to load|timeout|abort|offline|http|40\d|50\d/i.test(text)) return "Die KI konnte nicht geladen werden. Prüfe deine Verbindung und versuche es noch einmal; schon geladene Teile bleiben erhalten.";
+    return "Das hat nicht geklappt. Lade die Seite neu und versuche es noch einmal.";
   }
 
   /* "12,3 Wörter pro Sekunde" is not what people know: say it in words per second, roughly (a word is about 1.5 tokens in German). */
@@ -148,10 +149,32 @@
     return names.map((name) => `https://huggingface.co/${model.id}/resolve/main/${name}`);
   }
 
-  /* The model to use: the first of the list (best first) that this computer can run, or null when none can. */
-  function bestModel(models, gpu) {
-    return models.find((m) => chooseRuntime(gpu, m).ok) || null;
+  /* The model to use: the first of the list (best first) that this computer can run and that did not fail here before (`skip`: their ids),
+     or null when there is none. */
+  function bestModel(models, gpu, skip = []) {
+    return models.find((m) => !skip.includes(m.id) && chooseRuntime(gpu, m).ok) || null;
   }
+
+  /* Models that did not load on this computer are remembered for two weeks ({id: time}), so that the next visit starts with the one that works. */
+  const SKIP_DAYS = 14;
+  function activeSkips(raw, now = Date.now()) {
+    let data = raw;
+    if (typeof raw === "string") { try { data = JSON.parse(raw); } catch (error) { data = null; } }
+    if (!data || typeof data !== "object" || Array.isArray(data)) return {};
+    const out = {};
+    for (const [id, time] of Object.entries(data)) {
+      if (typeof id === "string" && Number.isFinite(time) && now - time < SKIP_DAYS * 86400000 && now - time > -86400000) out[id] = time;
+    }
+    return out;
+  }
+
+  /* Is this error one of a computer that cannot do it (memory, graphics card), and not one of the connection? */
+  function isDeviceTrouble(message) {
+    return /out of memory|oom\b|alloc|memory|buffer|webgpu|\bgpu\b|device|adapter|mapAsync|RangeError|Aborted|unreachable|RuntimeError|wasm|exceeds/i.test(String(message || ""));
+  }
+
+  /* The address of the note that the worker writes after the last part of a big file (regal-chat-worker.js, PartsCache). */
+  function chunkMetaUrl(url) { return `${url}?nex-meta`; }
 
   // ------------------------------------------------------------------------------------- the saved chats (only on this device)
   const MAX_CHATS = 40, MAX_MESSAGES = 80, MAX_MESSAGE_CHARS = 20000, MAX_STORE_CHARS = 1200000;
@@ -214,5 +237,5 @@
     return groups.filter(([, list]) => list.length).map(([label, list]) => ({ label, chats: list }));
   }
 
-  return { MAX_CHATS, MAX_MESSAGES, titleFrom, newChatId, sanitizeStore, trimChats, groupChats, SYSTEM_PROMPT, HISTORY_CHARS, MAX_INPUT, MAX_NEW_TOKENS, SUGGESTIONS, chooseRuntime, buildMessages, parseInline, parseBlocks, progressOf, remaining, friendlyError, speedText, cacheUrls, bestModel, formatBytes: Core.formatBytes };
+  return { MAX_CHATS, MAX_MESSAGES, titleFrom, newChatId, sanitizeStore, trimChats, groupChats, SYSTEM_PROMPT, HISTORY_CHARS, MAX_INPUT, MAX_NEW_TOKENS, SUGGESTIONS, chooseRuntime, buildMessages, parseInline, parseBlocks, progressOf, remaining, friendlyError, speedText, cacheUrls, bestModel, activeSkips, isDeviceTrouble, chunkMetaUrl, SKIP_DAYS, formatBytes: Core.formatBytes };
 });
