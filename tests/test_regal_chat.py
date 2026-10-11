@@ -178,3 +178,9 @@ def test_the_legal_pages_say_where_the_chat_runs_and_what_it_keeps(client):
     terms = client.get("/nutzungsbedingungen").get_data(as_text=True)
     for word in ("Gemma-Nutzungsbedingungen", "ai.google.dev/gemma/terms", "falsch, unvollständig oder unpassend", "NOTICE.txt"):
         assert word in terms, word
+
+
+def test_the_font_of_the_site_is_served_as_a_font(client):
+    response = client.get("/static/fonts/fraunces-latin-wght-normal.woff2")
+    assert response.status_code == 200 and response.headers["Content-Type"] == "font/woff2" and "Set-Cookie" not in response.headers
+    assert response.data[:4] == b"wOF2"

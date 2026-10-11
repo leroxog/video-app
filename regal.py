@@ -89,6 +89,8 @@ def register_routes(app):
     def regal_headers(response):
         if request.path == WORKER_PATH and response.status_code == 200:
             response.headers["Content-Security-Policy"] = WORKER_CONTENT_SECURITY_POLICY
+        elif request.path.endswith(".woff2") and response.status_code == 200:                  # the font of the site: Python does not know this type on every machine
+            response.headers["Content-Type"] = "font/woff2"
         elif request.path.startswith(VENDOR_PATH) and response.status_code == 200:           # the AI runtime: a module script and WebAssembly need the right types
             for ending, kind in VENDOR_TYPES.items():
                 if request.path.endswith(ending):
