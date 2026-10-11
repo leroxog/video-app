@@ -7,7 +7,7 @@
 })(typeof self !== "undefined" ? self : this, function (Core) {
   "use strict";
 
-  const SYSTEM_PROMPT = "Du bist ein freundlicher, hilfreicher Assistent. Antworte kurz und klar. Antworte auf Deutsch, außer die Frage ist in einer anderen Sprache. "
+  const SYSTEM_PROMPT = "Du bist KI-Regal, ein freundlicher, hilfreicher Assistent. Antworte kurz und klar. Antworte auf Deutsch, außer die Frage ist in einer anderen Sprache. "
     + "Wenn du etwas nicht sicher weißt, sag das ehrlich, statt etwas zu erfinden.";
   // What the model may read at most (letters, not tokens: a token is about three and a half letters).  The small models forget the
   // beginning of a long talk anyway, and a longer text makes every answer slower.
@@ -20,11 +20,6 @@
     "Schreibe eine freundliche E-Mail, die einen Termin absagt.",
     "Gib mir drei Ideen für ein Geschenk unter 20 Euro.",
     "Was ist der Unterschied zwischen Wetter und Klima?",
-  ];
-  const CODE_SUGGESTIONS = [
-    "Schreibe eine Python-Funktion, die prüft, ob ein Wort ein Palindrom ist.",
-    "Erkläre den Unterschied zwischen let und const in JavaScript.",
-    "Wie lese ich in Python eine Textdatei Zeile für Zeile?",
   ];
 
   /* How a model runs on this computer.  `gpu`: {webgpu, f16} from the browser.  The small variant of a model (q4f16) needs a graphics
@@ -153,14 +148,9 @@
     return names.map((name) => `https://huggingface.co/${model.id}/resolve/main/${name}`);
   }
 
-  function suggestionsFor(model) {
-    return model && /coder|code/i.test(`${model.id} ${model.tag}`) ? CODE_SUGGESTIONS : SUGGESTIONS;
-  }
-
-  /* The model to start with when nothing was chosen before: the first one that runs here and is not much to download. */
-  function defaultModel(models, gpu, remembered) {
-    const usable = models.filter((m) => chooseRuntime(gpu, m).ok);
-    return usable.find((m) => m.id === remembered) || usable.find((m) => chooseRuntime(gpu, m).bytes < 1e9 && m.german !== "einfach") || usable[0] || models[0];
+  /* The model to use: the first of the list (best first) that this computer can run, or null when none can. */
+  function bestModel(models, gpu) {
+    return models.find((m) => chooseRuntime(gpu, m).ok) || null;
   }
 
   // ------------------------------------------------------------------------------------- the saved chats (only on this device)
@@ -224,5 +214,5 @@
     return groups.filter(([, list]) => list.length).map(([label, list]) => ({ label, chats: list }));
   }
 
-  return { MAX_CHATS, MAX_MESSAGES, titleFrom, newChatId, sanitizeStore, trimChats, groupChats, SYSTEM_PROMPT, HISTORY_CHARS, MAX_INPUT, MAX_NEW_TOKENS, SUGGESTIONS, CODE_SUGGESTIONS, chooseRuntime, buildMessages, parseInline, parseBlocks, progressOf, remaining, friendlyError, speedText, cacheUrls, suggestionsFor, defaultModel, formatBytes: Core.formatBytes };
+  return { MAX_CHATS, MAX_MESSAGES, titleFrom, newChatId, sanitizeStore, trimChats, groupChats, SYSTEM_PROMPT, HISTORY_CHARS, MAX_INPUT, MAX_NEW_TOKENS, SUGGESTIONS, chooseRuntime, buildMessages, parseInline, parseBlocks, progressOf, remaining, friendlyError, speedText, cacheUrls, bestModel, formatBytes: Core.formatBytes };
 });

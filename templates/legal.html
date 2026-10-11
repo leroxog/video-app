@@ -29,39 +29,38 @@
     <p>Die Angaben zum Betreiber der Seite werden gerade ergänzt.</p>
   {%- endif %}
     <h2>Inhalte Dritter</h2>
-    <p>Die Modelle, die KI-Regal auflistet, stammen von ihren jeweiligen Urhebern und liegen bei Hugging Face. Wir hosten sie nicht und prüfen ihren Inhalt nicht im Einzelnen. Für die Modelle und ihre Lizenzen sind die Urheber verantwortlich.</p>
+    <p>Die KI, mit der du bei KI-Regal schreibst (das Sprachmodell Gemma 3), stammt von Google und wird von Hugging Face ausgeliefert. Wir hosten sie nicht und prüfen ihre Antworten nicht: Sie entstehen auf deinem Gerät. Für das Modell und seine Lizenz sind die Urheber verantwortlich.</p>
     <h2>Rechtswidrige Inhalte melden</h2>
-    <p>Wenn ein Eintrag falsch ist, ein Link nicht mehr geht oder ein Modell gegen das Gesetz oder Rechte Dritter verstößt, schreib uns{% if imprint and imprint.email %} (<a href="mailto:{{ imprint.email }}">{{ imprint.email }}</a>){% endif %} mit dem Namen des Modells (zum Beispiel „autor/modell“). Wir nehmen den Eintrag aus der Liste, sobald wir ihn geprüft haben. Das Modell selbst können nur seine Urheber oder Hugging Face entfernen.</p>
+    <p>Wenn etwas auf KI-Regal gegen das Gesetz oder Rechte Dritter verstößt oder nicht stimmt, schreib uns{% if imprint and imprint.email %} (<a href="mailto:{{ imprint.email }}">{{ imprint.email }}</a>){% endif %} mit einer kurzen Beschreibung. Wir prüfen es und handeln, sobald wir es geprüft haben. Das Modell selbst können nur seine Urheber oder Hugging Face entfernen.</p>
 {%- elif page == "terms" %}
     <h1>Nutzungsbedingungen</h1>
-    <p class="lead">KI-Regal ist eine kostenlose Liste von frei herunterladbaren KI-Modellen. Wir hosten die Modelle nicht, wir zeigen dir, was es gibt, wie groß es ist und was die Lizenz sagt. Stand: Oktober 2026.</p>
+    <p class="lead">KI-Regal ist ein Chat mit einer KI, die auf deinem eigenen Computer läuft. Es ist kostenlos und ohne Konto. Stand: Oktober 2026.</p>
 
     <h2>1. Was KI-Regal ist</h2>
-    <p>KI-Regal verlinkt Modelle und ihre Dateien bei Hugging Face. Wenn du etwas herunterlädst, kommt die Datei direkt von Hugging Face zu dir. Dafür gelten die Bedingungen von Hugging Face und die Lizenz des Modells. Die Liste ist eine Auswahl und ein Stand: Modelle können sich ändern, verschwinden oder gesperrt werden.</p>
+    <p>Bei KI-Regal schreibst du mit einer KI, dem Sprachmodell Gemma 3 von Google. Das Modell lädt dein Browser einmal von Hugging Face und führt es dann auf deinem Gerät aus. Unser Server liefert nur die Seite und das Programm, das das Modell ausführt. Deine Nachrichten werden nicht an uns gesendet. Für den Download gelten die Bedingungen von Hugging Face und die Lizenz des Modells.</p>
 
-    <h2>2. Lizenzen und erlaubte Nutzung</h2>
-    <p>Jedes Modell hat eine Lizenz seiner Urheber. Manche erlauben jede Nutzung, manche nur nicht-kommerzielle, manche haben Bedingungen (zum Beispiel für sehr große Firmen oder für bestimmte Zwecke). Was wir an einem Modell zur Lizenz zeigen, ist nur ein Hinweis. Verbindlich ist der Lizenztext des Modells. Du bist selbst dafür verantwortlich, ein Modell nur so zu benutzen, wie es die Lizenz und das Gesetz erlauben.</p>
+    <h2>2. Lizenz des Modells</h2>
+    <p>Gemma wird unter den Gemma-Nutzungsbedingungen von Google bereitgestellt (<a href="https://ai.google.dev/gemma/terms" target="_blank" rel="noopener noreferrer">ai.google.dev/gemma/terms</a>), einschließlich der dortigen Richtlinie zur unzulässigen Nutzung. Mit der Nutzung der KI erkennst du diese Lizenz an. Du bist selbst dafür verantwortlich, die KI nur so zu benutzen, wie die Lizenz und das Gesetz es erlauben.</p>
 
-    <h2>3. Wie du die Modelle benutzt</h2>
-    <p>Benutze KI-Modelle nicht, um anderen zu schaden: keine Täuschung, keine Belästigung, keine gefälschten Inhalte über echte Personen, keine rechtswidrigen Inhalte. Beachte beim Erzeugen von Bildern, Videos, Musik und Stimmen die Rechte anderer (Urheberrecht, Persönlichkeitsrechte) und kennzeichne KI-Inhalte, wo es verlangt wird.</p>
+    <h2>3. Wie du die KI benutzt</h2>
+    <p>Benutze die KI nicht, um anderen zu schaden: keine Täuschung, keine Belästigung, keine gefälschten Inhalte über echte Personen, keine rechtswidrigen Inhalte. Beachte die Rechte anderer (Urheberrecht, Persönlichkeitsrechte) und kennzeichne KI-Texte, wo es verlangt wird.</p>
 
-    <h2>4. Der Chat im Browser</h2>
-    <p>Unter <a href="/chat">/chat</a> kannst du mit einem kleinen KI-Modell schreiben, das in deinem Browser auf deinem Gerät läuft. Das Modell lädt dein Browser einmal von Hugging Face; für Modell und Lizenz gilt das Gleiche wie in Abschnitt 2. Antworten einer KI können falsch, unvollständig oder unpassend sein. Verlass dich bei wichtigen Dingen (Gesundheit, Recht, Geld, Sicherheit) nicht darauf und prüfe sie selbst. Gib keine Antworten der KI als menschliche Äußerung oder als geprüfte Auskunft aus. Das Modell braucht Speicherplatz (je nach Modell etwa 0,5 bis 2,5 GB) und Rechenleistung deines Geräts. Der Chat benutzt die Open-Source-Programme Transformers.js (Apache-2.0) und ONNX Runtime Web (MIT); ihre Lizenztexte liegen unter <a href="/static/vendor/transformers/NOTICE.txt">/static/vendor/transformers/NOTICE.txt</a>.</p>
+    <h2>4. Antworten der KI</h2>
+    <p>Antworten einer KI können falsch, unvollständig oder unpassend sein. Verlass dich bei wichtigen Dingen (Gesundheit, Recht, Geld, Sicherheit) nicht darauf und prüfe sie selbst. Gib Antworten der KI nicht als menschliche Äußerung oder als geprüfte Auskunft aus. Die KI braucht Speicherplatz (etwa 0,8 GB) und Rechenleistung deines Geräts. Der Chat benutzt die Open-Source-Programme Transformers.js (Apache-2.0) und ONNX Runtime Web (MIT); ihre Lizenztexte liegen unter <a href="/static/vendor/transformers/NOTICE.txt">/static/vendor/transformers/NOTICE.txt</a>.</p>
 
-    <h2>5. Programme und Befehle</h2>
-    <p>Wir zeigen dir Programme (zum Beispiel LM Studio, Ollama, ComfyUI) und Befehle, mit denen du Modelle starten kannst. Diese Programme stammen von Dritten. Lade sie nur von den Seiten ihrer Hersteller, die wir verlinken, und prüfe selbst, ob sie für dich geeignet sind. Große Modelle brauchen viel Speicherplatz und einen starken Rechner. Prüfe vor dem Herunterladen die Größe.</p>
-
-    <h2>6. Verfügbarkeit und Haftung</h2>
-    <p>KI-Regal ist ein privates Projekt ohne Gewähr. Es kann ausfallen, sich ändern oder eingestellt werden. Wir übernehmen keine Haftung für Modelle, ihre Ergebnisse, Programme Dritter oder verlinkte Seiten. Unsere Haftung ist bei leichter Fahrlässigkeit ausgeschlossen, außer bei der Verletzung von Leben, Körper und Gesundheit und bei wesentlichen Vertragspflichten. Zwingende gesetzliche Rechte bleiben unberührt.</p>
+    <h2>5. Verfügbarkeit und Haftung</h2>
+    <p>KI-Regal ist ein privates Projekt ohne Gewähr. Es kann ausfallen, sich ändern oder eingestellt werden. Wir übernehmen keine Haftung für Antworten der KI, ihre Folgen oder verlinkte Seiten. Unsere Haftung ist bei leichter Fahrlässigkeit ausgeschlossen, außer bei der Verletzung von Leben, Körper und Gesundheit und bei wesentlichen Vertragspflichten. Zwingende gesetzliche Rechte bleiben unberührt.</p>
 
     <h2>6. Änderungen</h2>
     <p>Wir können diese Bedingungen ändern. Die aktuelle Fassung steht immer hier.</p>
 
-    <h2>7. Das Archiv-Angebot yipi</h2>
+    <h2>7. Archiv-Angebote</h2>
+    <p>Unter <a href="/modelle-archiv">/modelle-archiv</a> liegt die frühere Liste von mehr als tausend frei herunterladbaren KI-Modellen. Wir hosten diese Modelle nicht; sie liegen bei Hugging Face, und für jedes gilt die Lizenz seiner Urheber (in der Liste nur ein Hinweis, verbindlich ist der Lizenztext des Modells).</p>
+    <p>Das Archiv-Angebot yipi:</p>
     <p>Unter <a href="/yipi-archiv">/yipi-archiv</a> gibt es noch das frühere Netzwerk yipi mit Konten. Dort gelten sinngemäß: Wer ein Konto hat, ist für seine Yips verantwortlich, kann sie und das Konto jederzeit löschen („Einstellungen, Dein Konto“) und Inhalte anderer melden („Melden“). Ein Konto bei yipi gibt es ab 16 Jahren, jüngere brauchen die Erlaubnis ihrer Eltern. Ein vergessenes Passwort kann bei yipi nicht zurückgesetzt werden.</p>
 {%- else %}
     <h1>Datenschutz</h1>
-    <p class="lead">Kurz und ehrlich: KI-Regal hat keine Konten, setzt keine Cookies und nutzt kein Tracking. Die Liste ist eine Datei auf unserem Server. Wenn du ein Modell herunterlädst, lädt dein Browser es von Hugging Face. Stand: Oktober 2026.</p>
+    <p class="lead">Kurz und ehrlich: KI-Regal hat keine Konten, setzt keine Cookies und nutzt kein Tracking. Die KI läuft auf deinem Gerät, deine Nachrichten werden nicht an uns gesendet. Das Modell lädt dein Browser einmal von Hugging Face. Stand: Oktober 2026.</p>
 
     <h2>Wer ist verantwortlich?</h2>
     <p>Der Betreiber, der im <a href="/impressum">Impressum</a> steht. Dort erreichst du ihn auch für Fragen zum Datenschutz.</p>
@@ -69,20 +68,17 @@
     <h2>Besuch der Seite</h2>
     <p>Beim Aufruf verarbeitet der Hoster der Seite technisch notwendige Daten, die dein Browser sendet (zum Beispiel IP-Adresse, Zeitpunkt, aufgerufene Adresse), um die Seite auszuliefern und missbräuchliche Zugriffe zu erkennen. Die Seite läuft bei Railway (Railway Corp., USA); dabei können Daten in Länder außerhalb der EU übertragen werden. Rechtsgrundlage ist unser berechtigtes Interesse am sicheren Betrieb (Art. 6 Abs. 1 lit. f DSGVO). Wir selbst speichern nichts über dich: kein Konto, keine Anmeldung, kein Cookie.</p>
 
-    <h2>Suchen und Filtern</h2>
-    <p>Die Liste der Modelle wird einmal geladen. Suchen, Filtern und Sortieren passieren in deinem Browser: Was du eingibst, wird nicht an uns gesendet. Die Einstellungen stehen nur in der Adresse der Seite (damit du sie teilen kannst).</p>
+    <h2>Die KI auf deinem Gerät</h2>
+    <p>Die KI (das Sprachmodell Gemma 3) läuft <strong>auf deinem Gerät</strong>, in deinem Browser. Was du schreibst und was die KI antwortet, wird nicht an uns und nicht an Dritte gesendet. Das Programm, das das Modell ausführt (Transformers.js und ONNX Runtime Web), liefern wir selbst von unserem Server aus. Das Modell lädt dein Browser einmal direkt von <strong>Hugging Face</strong> (huggingface.co, hf.co); dabei verarbeitet Hugging Face zum Beispiel deine IP-Adresse (siehe dessen Datenschutzhinweise). Das geschieht, sobald du deine erste Nachricht sendest, oder gleich beim Öffnen, wenn das Modell schon in deinem Browser liegt.</p>
 
     <h2>Was in deinem Browser liegt</h2>
-    <p>Wenn du Modelle mit dem Herz merkst, speichert dein Browser die Namen der gemerkten Modelle auf deinem Gerät (localStorage, Schlüssel <code>regal.fav</code>). Das ist für die Funktion technisch notwendig (§ 25 Abs. 2 TDDDG) und verlässt dein Gerät nicht. Du löschst es mit den Websitedaten deines Browsers.</p>
+    <p>Damit du deine früheren Chats in der Seitenleiste wiederfindest, speichert dein Browser sie auf deinem Gerät (localStorage, Schlüssel <code>regal.chats</code>); sie verlassen dein Gerät nie. Das geladene Modell bleibt im Cache-Speicher deines Browsers (Cache Storage, Name <code>transformers-cache</code>), damit du es nicht noch einmal laden musst. Beides ist für die Funktion technisch notwendig (§ 25 Abs. 2 TDDDG). Du löschst einen Chat mit dem Papierkorb-Symbol, alle mit „Alle Chats löschen“, das Modell mit „Gespeicherte KI löschen“ (beides in der Seitenleiste) oder alles mit den Websitedaten deines Browsers.</p>
 
-    <h2>Herunterladen von Modellen</h2>
-    <p>Wenn du ein Modell herunterlädst (mit „In einen Ordner speichern“ oder „Normal herunterladen“), ruft dein Browser die Datei direkt bei <strong>Hugging Face</strong> ab (huggingface.co und dessen Auslieferungsserver hf.co). Dabei verarbeitet Hugging Face, zum Beispiel deine IP-Adresse; das ist in dessen Datenschutzhinweisen geregelt. Wir sehen davon nichts. Erst wenn du auf einen Download oder einen Link zu Hugging Face klickst, entsteht diese Verbindung, vorher nicht. Beim Speichern in einen Ordner schreibt die Seite die Dateien nur in den Ordner, den du ausgewählt hast, und nur, solange du das erlaubst.</p>
-
-    <h2>Der Chat im Browser</h2>
-    <p>Beim Chat unter <a href="/chat">/chat</a> läuft das KI-Modell <strong>auf deinem Gerät</strong>, in deinem Browser. Was du schreibst und was die KI antwortet, wird nicht an uns und nicht an Dritte gesendet. Damit du deine früheren Chats in der Seitenleiste wiederfindest, speichert dein Browser sie auf deinem Gerät (localStorage, Schlüssel <code>regal.chats</code>); sie verlassen dein Gerät nie. Du löschst einen Chat mit dem Papierkorb-Symbol, alle mit „Alle Chats löschen“ in der Seitenleiste oder mit den Websitedaten deines Browsers. Das Programm, das das Modell ausführt (Transformers.js und ONNX Runtime Web), liefern wir selbst von unserem Server aus. Das Modell lädt dein Browser einmal direkt von <strong>Hugging Face</strong> (huggingface.co, hf.co); dabei verarbeitet Hugging Face zum Beispiel deine IP-Adresse (siehe dessen Datenschutzhinweise). Das geschieht erst, wenn du auf „Laden und starten“ klickst. Das geladene Modell bleibt im Cache-Speicher deines Browsers (Cache Storage, Name <code>transformers-cache</code>), damit du es nicht noch einmal laden musst. Du löschst es mit „Gespeicherte Modelle löschen“ auf der Chat-Seite oder mit den Websitedaten deines Browsers. Dein zuletzt gewähltes Modell merkt sich dein Browser (localStorage, Schlüssel <code>regal.chat.model</code>). Beides ist für die Funktion technisch notwendig (§ 25 Abs. 2 TDDDG) und verlässt dein Gerät nicht.</p>
+    <h2>Die frühere Modell-Liste</h2>
+    <p>Unter <a href="/modelle-archiv">/modelle-archiv</a> liegt die frühere Liste freier KI-Modelle. Suchen und Filtern passieren dort in deinem Browser; was du eingibst, wird nicht an uns gesendet. Wenn du Modelle mit dem Herz merkst, speichert dein Browser deren Namen auf deinem Gerät (localStorage, Schlüssel <code>regal.fav</code>). Wenn du dort ein Modell herunterlädst, ruft dein Browser die Datei direkt bei Hugging Face ab; wir sehen davon nichts.</p>
 
     <h2>Links</h2>
-    <p>Die Seite verlinkt Programme und Seiten Dritter (zum Beispiel GitHub, lmstudio.ai, ollama.com). Für deren Datenschutz sind wir nicht verantwortlich.</p>
+    <p>Die Seite verlinkt Seiten Dritter (zum Beispiel Hugging Face und Google, in der Modell-Liste auch GitHub, lmstudio.ai, ollama.com). Für deren Datenschutz sind wir nicht verantwortlich.</p>
 
     <h2>Kein Tracking, keine Weitergabe</h2>
     <p>KI-Regal nutzt keine Analyse- und Werbedienste, keine fremden Schriften und keine fremden Skripte (die Programme für den Chat liegen auf unserem eigenen Server). Wir geben keine Daten an Dritte weiter, außer wenn wir gesetzlich dazu verpflichtet sind.</p>
@@ -91,7 +87,7 @@
     <p>Unter <a href="/yipi-archiv">/yipi-archiv</a> gibt es noch das frühere soziale Netzwerk yipi. Es hat Konten und speichert, was dafür nötig ist: Nutzername und Anzeigename, optional eine E-Mail-Adresse (nur für die Anmeldung), das Passwort nur als Prüfwert, freiwillige Profilangaben, Yips, Antworten, Bilder, Likes, Lesezeichen und Nachrichten (nicht Ende-zu-Ende-verschlüsselt). Yips und Profile sind öffentlich. Nach der Anmeldung setzt yipi ein Cookie (<code>yipi_session</code>), das 30 Tage gültig ist (technisch notwendig, § 25 Abs. 2 TDDDG) und beim Abmelden entfernt wird. Im Browser liegen nur Einstellungen (<code>yipi.theme</code>, <code>yipi.feed</code>, <code>yipi.recent</code>). Unter „Einstellungen, Dein Konto“ kannst du dein Konto samt allen Inhalten sofort und endgültig löschen.</p>
 
     <h2>Löschen</h2>
-    <p>Bei KI-Regal speichern wir nichts über dich, das wir löschen könnten. Deine Merkliste, deine Chats und die geladenen Chat-Modelle löschst du in deinem Browser. Bei yipi löschst du dein Konto selbst.</p>
+    <p>Bei KI-Regal speichern wir nichts über dich, das wir löschen könnten. Deine Chats, die geladene KI und die Merkliste der Modell-Liste löschst du in deinem Browser. Bei yipi löschst du dein Konto selbst.</p>
 
     <h2>Deine Rechte</h2>
     <p>Du hast das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung, Datenübertragbarkeit und Widerspruch sowie darauf, eine Einwilligung jederzeit zu widerrufen. Du kannst dich außerdem bei einer Datenschutz-Aufsichtsbehörde beschweren. Schreib dafür an die Adresse im <a href="/impressum">Impressum</a>.</p>

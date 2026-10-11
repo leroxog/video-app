@@ -100,14 +100,13 @@ test("the speed is said in words per second, and not before there is anything to
   assert.equal(C.speedText(10, 4), "1,7 Wörter pro Sekunde");
 });
 
-test("a model counts as loaded only when all its big files are in the cache, and the suggestions suit the model", () => {
+test("a model counts as loaded only when all its big files are in the cache", () => {
   assert.deepEqual(C.cacheUrls(model(), "q4f16"), ["https://huggingface.co/onnx-community/Gemma/resolve/main/onnx/model_q4f16.onnx"]);
   const split = model({ files: { q4f16: ["onnx/model_q4f16.onnx", "onnx/model_q4f16.onnx_data", "onnx/model_q4f16.onnx_data_1"] } });
   assert.equal(C.cacheUrls(split, "q4f16").length, 3);
   assert.equal(C.cacheUrls(split, "q4f16")[1], "https://huggingface.co/onnx-community/Gemma/resolve/main/onnx/model_q4f16.onnx_data");
-  assert.equal(C.suggestionsFor(model({ id: "onnx-community/Qwen2.5-Coder-1.5B-Instruct", tag: "Zum Programmieren" })), C.CODE_SUGGESTIONS);
-  assert.equal(C.suggestionsFor(model()), C.SUGGESTIONS);
-  assert.equal(C.suggestionsFor(null), C.SUGGESTIONS);
+  assert.equal(C.SUGGESTIONS.length, 4);
+  assert.ok(C.SUGGESTIONS.every((text) => text.length > 20 && text.length < 80));
 });
 
 test("a chat gets its title from the first question", () => {
@@ -158,13 +157,14 @@ test("the chats are grouped by day for the side bar", () => {
   assert.deepEqual(C.groupChats([], now), []);
 });
 
-test("the model to start with is the remembered one, else a small one that speaks German, and never one that cannot run", () => {
-  const small = model({ id: "a/small", german: "einfach", dtypes: { q4f16: 4e8, q4: 7e8 } });
+test("the AI is the first model of the list (best first) that this computer can run, and nothing is left to choose", () => {
   const good = model({ id: "b/good" });
-  const big = model({ id: "c/big", german: "gut", dtypes: { q4f16: 2.3e9 } });
+  const big = model({ id: "c/big", dtypes: { q4f16: 2.3e9 } });
+  const small = model({ id: "a/small", dtypes: { q4f16: 4e8, q4: 7e8 } });
   const gpu = { webgpu: true, f16: true };
-  assert.equal(C.defaultModel([small, good, big], gpu, "").id, "b/good");
-  assert.equal(C.defaultModel([small, good, big], gpu, "c/big").id, "c/big");
-  assert.equal(C.defaultModel([small, good, big], { webgpu: false, f16: false }, "c/big").id, "b/good");
-  assert.equal(C.defaultModel([big], { webgpu: false, f16: false }, "").id, "c/big");
+  assert.equal(C.bestModel([big, good, small], gpu).id, "c/big");                                         // the best one, when it can run
+  assert.equal(C.bestModel([big, good, small], { webgpu: false, f16: false }).id, "b/good");               // a computer without a graphics card cannot run the big one
+  assert.equal(C.bestModel([big], { webgpu: false, f16: false }), null);
+  assert.equal(C.bestModel([], gpu), null);
+  assert.match(C.SYSTEM_PROMPT, /KI-Regal/);
 });

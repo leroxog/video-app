@@ -1,4 +1,4 @@
-"""Makes static/data/browser-models.json: the few models that the chat page of KI-Regal can run inside the visitor's browser.
+"""Makes static/data/browser-models.json: the model(s) that the chat page of KI-Regal runs inside the visitor's browser.
 
 These are not any models from the big list: they have to be in the ONNX format that Transformers.js (static/vendor/transformers) can run,
 small enough for a normal PC, and good enough to talk to.  For each model the sizes are read from Hugging Face (what the browser has
@@ -20,27 +20,13 @@ LIBRARY = {"name": "Transformers.js", "version": "4.3.0"}
 SMALL_FILES = ("config.json", "generation_config.json", "tokenizer.json", "tokenizer_config.json", "special_tokens_map.json", "chat_template.jinja",
                "added_tokens.json", "merges.txt", "vocab.json", "tokenizer.model")
 
-# The order is the order on the page.  `commercial` is only a hint (read the licence); `gpu` says that the model needs a graphics card with
-# WebGPU (it has no variant that a normal processor can run).
+# `gpu` (made below) says that the model needs a graphics card with WebGPU (it has no variant that a normal processor can run).
+# The model the chat uses, best first (the page takes the first one that this computer can run).  Only models that were tried here and
+# answer well are listed: Gemma 3 (1 billion parameters) writes good German for its size.  Others that were tried (Qwen 2.5 in 0.5 and
+# 1.5 billion parameters, Llama 3.2, Phi 3.5) were not good enough or not tried, so they are not offered.
 MODELS = [
-    {"id": "onnx-community/gemma-3-1b-it-ONNX", "name": "Gemma 3", "maker": "Google", "params": "1 Mrd.", "tag": "Empfohlen",
-     "note": "Antwortet für seine Größe ordentlich und flüssig, auch auf Deutsch. Der beste Einstieg.",
-     "german": "gut", "license": "Gemma-Nutzungsbedingungen", "commercial": True},
-    {"id": "onnx-community/Llama-3.2-1B-Instruct-ONNX", "name": "Llama 3.2", "maker": "Meta", "params": "1 Mrd.", "tag": "Allrounder",
-     "note": "Kann mehrere Sprachen, darunter Deutsch, und schreibt flüssig.",
-     "german": "gut", "license": "Llama-3.2-Lizenz", "commercial": True},
-    {"id": "onnx-community/Qwen2.5-1.5B-Instruct", "name": "Qwen 2.5", "maker": "Alibaba", "params": "1,5 Mrd.", "tag": "Etwas größer",
-     "note": "Mehr Wissen als die 1-Mrd.-Modelle, dafür ein größerer Download.",
-     "german": "ok", "license": "Apache 2.0", "commercial": True},
-    {"id": "onnx-community/Qwen2.5-Coder-1.5B-Instruct", "name": "Qwen 2.5 Coder", "maker": "Alibaba", "params": "1,5 Mrd.", "tag": "Zum Programmieren",
-     "note": "Schreibt und erklärt Code in vielen Sprachen. Für Alltagsfragen nimm lieber eins der anderen.",
-     "german": "ok", "license": "Apache 2.0", "commercial": True},
-    {"id": "onnx-community/Phi-3.5-mini-instruct-onnx-web", "name": "Phi 3.5 mini", "maker": "Microsoft", "params": "3,8 Mrd.", "tag": "Am stärksten, große Datei",
-     "note": "Das stärkste Modell hier, besonders bei Logik und Programmieren. Braucht eine Grafikkarte mit WebGPU und viel Speicher; Deutsch ist nicht seine Stärke.",
-     "german": "einfach", "license": "MIT", "commercial": True, "gpu": True},
-    {"id": "onnx-community/Qwen2.5-0.5B-Instruct", "name": "Qwen 2.5 winzig", "maker": "Alibaba", "params": "0,5 Mrd.", "tag": "Nur für schwache Geräte",
-     "note": "Sehr klein und schnell, aber auf Deutsch oft ungenau und bei längeren Antworten unzuverlässig. Nimm es nur, wenn die anderen nicht laufen.",
-     "german": "einfach", "license": "Apache 2.0", "commercial": True},
+    {"id": "onnx-community/gemma-3-1b-it-ONNX", "name": "Gemma 3", "maker": "Google", "params": "1 Mrd.",
+     "license": "Gemma-Nutzungsbedingungen", "license_url": "https://ai.google.dev/gemma/terms", "commercial": True},
 ]
 DTYPES = ("q4f16", "q4")
 

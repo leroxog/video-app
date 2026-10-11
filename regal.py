@@ -1,17 +1,19 @@
-"""KI-Regal: a shelf with more than a thousand free AI models to download to your own computer.  This is the home page of the site.
+"""KI-Regal: a chat with one AI that runs on the visitor's own computer.  This is the home page of the site.
 
-The models themselves are not here (that would be many terabytes): they live at Hugging Face, the usual public place for free models.
-What is here is the list (static/data/models.json, made by scripts/build_catalog.py): what each model does, how big it is, its licence,
-and the exact files.  The page lets people look for one, and download its files: either with the browser's normal download, or (in
-Chrome and Edge on a computer) straight into a folder they pick, such as the models folder of ComfyUI or LM Studio.  The files come from
-Hugging Face to the visitor's browser; our server is not involved, and it keeps no data about visitors: no accounts, no cookies.
-The scripts are static/js/regal*.js.
+There is nothing to choose: the page takes the best model that the computer can run (static/data/browser-models.json, made by
+scripts/build_browser_models.py), loads it once from Hugging Face into the browser, and a worker (static/js/regal-chat-worker.js) lets it
+write the answers on the graphics card or processor.  What people write never reaches this server: it delivers the page and the
+program that runs the model (static/vendor/transformers) and keeps no data about visitors: no accounts, no cookies.  The scripts are
+static/js/regal-chat*.js.
+
+The earlier home page, a list of more than a thousand free AI models to download (static/data/models.json, made by
+scripts/build_catalog.py), is still at /modelle-archiv (scripts static/js/regal*.js).
 """
 import gzip
 import json
 import os
 
-from flask import Response, make_response, render_template, request, send_file, send_from_directory
+from flask import Response, make_response, redirect, render_template, request, send_file, send_from_directory
 from werkzeug.utils import safe_join
 
 SITE_NAME = "KI-Regal"
@@ -24,7 +26,7 @@ CONTENT_SECURITY_POLICY = (
     "connect-src 'self' https://huggingface.co https://*.huggingface.co https://*.hf.co; manifest-src 'self'; worker-src 'self'; "
     "base-uri 'none'; object-src 'none'; form-action 'self'; frame-ancestors 'none'"
 )
-CHAT_DESCRIPTION = "Chat mit einer KI direkt im Browser: ohne App, ohne Konto, ohne Server. Das Modell läuft auf deinem eigenen Computer, deine Fragen verlassen ihn nie."
+CHAT_DESCRIPTION = "KI-Regal: Chat mit einer KI, die auf deinem eigenen Computer läuft. Ohne App, ohne Konto, ohne Server. Deine Fragen verlassen dein Gerät nie."
 # The worker that runs the model (static/js/regal-chat-worker.js) gets its own policy, because a worker is bound by the policy of its own
 # script and not by the page's: it may run WebAssembly (the AI runtime) and fetch the model from Hugging Face, and nothing else.
 WORKER_PATH = "/static/js/regal-chat-worker.js"
@@ -44,7 +46,7 @@ def base_url():
 
 def manifest():
     return {
-        "name": f"{SITE_NAME}: kostenlose KI-Modelle", "short_name": SITE_NAME, "description": DESCRIPTION, "lang": "de", "dir": "ltr",
+        "name": f"{SITE_NAME}: KI-Chat auf deinem Computer", "short_name": SITE_NAME, "description": CHAT_DESCRIPTION, "lang": "de", "dir": "ltr",
         "id": "/", "start_url": "/", "scope": "/", "display": "standalone", "orientation": "any",
         "background_color": "#0b0e14", "theme_color": "#0b0e14", "categories": ["utilities", "productivity"],
         "icons": [
@@ -101,13 +103,19 @@ def register_routes(app):
 
     @route("/", endpoint="pl_home")
     def regal_home():
-        count, generated = catalog_facts(app.root_path)
-        page = render_template("regal.html", description=DESCRIPTION, base=base_url(), count=count, generated=generated)
+        """The home page is the chat: one AI, nothing to choose, running on the visitor's own computer."""
+        page = render_template("regal_chat.html", description=CHAT_DESCRIPTION, base=base_url())
         return page_headers(make_response(page))
 
     @route("/chat", endpoint="regal_chat")
     def regal_chat():
-        page = render_template("regal_chat.html", description=CHAT_DESCRIPTION, base=base_url())
+        return redirect("/", code=301)                      # the chat used to live here
+
+    @route("/modelle-archiv", endpoint="regal_models_archive")
+    def regal_models_archive():
+        """The earlier home page: the list of more than a thousand free AI models to download (not linked any more)."""
+        count, generated = catalog_facts(app.root_path)
+        page = render_template("regal.html", description=DESCRIPTION, base=base_url(), count=count, generated=generated)
         return page_headers(make_response(page))
 
     @route("/static/vendor/transformers/<path:name>", endpoint="regal_vendor")

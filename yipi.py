@@ -88,7 +88,7 @@ CONTENT_SECURITY_POLICY = (
 )
 DESCRIPTION = "yipi: kurze Yips, Antworten, Reposts und Likes. Sag, was dich gerade bewegt."
 # Old home pages of the site that stay reachable but are not for search engines.
-ARCHIVE_PATHS = ("/yipi-archiv", "/gomat-archiv", "/ysound-archiv", "/sound-archiv", "/server-archiv", "/browser-archiv", "/ylib-archiv", "/ychat-archiv", "/nex-archiv")
+ARCHIVE_PATHS = ("/yipi-archiv", "/gomat-archiv", "/ysound-archiv", "/sound-archiv", "/server-archiv", "/browser-archiv", "/ylib-archiv", "/ychat-archiv", "/nex-archiv", "/modelle-archiv")
 ENDPOINTS = set()           # filled by register_routes: every endpoint of this module (the site's login gate must let them through)
 
 
@@ -1715,7 +1715,7 @@ def register_routes(app):
     @route("/sitemap.xml")
     def yipi_sitemap():
         root = base_url()
-        urls = "".join(f"  <url><loc>{root}{path}</loc></url>\n" for path in ("/", "/chat", "/datenschutz", "/impressum", "/nutzungsbedingungen"))
+        urls = "".join(f"  <url><loc>{root}{path}</loc></url>\n" for path in ("/", "/datenschutz", "/impressum", "/nutzungsbedingungen"))
         return Response(f'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n{urls}</urlset>\n', mimetype="application/xml")
 
     @app.errorhandler(404)

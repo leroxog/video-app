@@ -1,7 +1,7 @@
-/* KI-Regal chat: a chat like ChatGPT, Claude or Grok whose model runs inside the visitor's browser.  A side bar with the earlier chats, a
-   model picker on top, the talk in the middle, the message field below.  The page picks a small model that suits this computer, loads
-   it once (from Hugging Face, kept in the browser afterwards), and then every question is answered by the visitor's own graphics card
-   or processor, in a worker (regal-chat-worker.js).  What is written here never leaves the computer: this script sends nothing
+/* KI-Regal chat: a chat like ChatGPT whose AI runs inside the visitor's browser.  There is one AI and nothing to choose: the page takes
+   the best model that this computer can run, loads it once (from Hugging Face, kept in the browser afterwards), and then every question
+   is answered by the visitor's own graphics card or processor, in a worker (regal-chat-worker.js).  A side bar with the earlier chats,
+   the talk in the middle, the message field below.  What is written here never leaves the computer: this script sends nothing
    anywhere, the earlier chats are kept in this browser only, and the worker fetches only the model.  Everything that the model writes
    is put on the page as text, never as HTML. */
 (function () {
@@ -9,13 +9,12 @@
 
   const { h, put, fill, icon, logo, copyText, toast, confirmBox } = window.Regal;
   const Chat = window.RegalChatCore;
-  const MODEL_KEY = "regal.chat.model";
   const CHATS_KEY = "regal.chats";
   const CACHE_NAME = "transformers-cache";                  // where Transformers.js keeps the files of a model in the browser
 
   const app = {
-    models: [], gpu: { webgpu: false, f16: false }, cached: {}, model: null, runtime: null,
-    worker: null, ready: false, loading: false, problem: "", files: {}, started: 0,
+    models: [], gpu: { webgpu: false, f16: false }, cached: false, model: null, runtime: null,
+    worker: null, ready: false, loading: false, problem: "", files: {}, started: 0, pending: "",
     chats: [], activeId: "", busy: false, current: null, savedNote: false,
   };
   const el = {};                                            // the parts of the page that are painted again and again
@@ -23,9 +22,6 @@
   let frame = 0;
 
   // ---------------------------------------------------------------------------------------------------- storage
-  function remembered() { try { return localStorage.getItem(MODEL_KEY) || ""; } catch (error) { return ""; } }
-  function remember(id) { try { localStorage.setItem(MODEL_KEY, id); } catch (error) { /* not allowed: then it is not remembered */ } }
-
   function loadChats() {
     try {
       app.chats = Chat.sanitizeStore(localStorage.getItem(CHATS_KEY)).chats;
@@ -51,26 +47,20 @@
     return gpu;
   }
 
-  /* Which models are already in the browser (so that starting is quick). */
+  /* Is the model already in the browser (so that starting is quick and needs no download)? */
   async function findCached() {
-    const found = {};
     try {
-      if (!("caches" in window) || !(await caches.has(CACHE_NAME))) return found;
+      if (!app.model || !("caches" in window) || !(await caches.has(CACHE_NAME))) return false;
       const cache = await caches.open(CACHE_NAME);
-      for (const model of app.models) {
-        const runtime = Chat.chooseRuntime(app.gpu, model);
-        if (!runtime.ok) continue;
-        const hits = await Promise.all(Chat.cacheUrls(model, runtime.dtype).map((url) => cache.match(url)));
-        if (hits.every(Boolean)) found[model.id] = true;
-      }
-    } catch (error) { /* storage is not available: then nothing counts as loaded */ }
-    return found;
+      const hits = await Promise.all(Chat.cacheUrls(app.model, app.runtime.dtype).map((url) => cache.match(url)));
+      return hits.every(Boolean);
+    } catch (error) { return false; }                        // storage is not available: then it does not count as loaded
   }
 
   /* After loading: did the browser keep the model?  (With little free space it may not: then it has to be loaded again next time.) */
   async function checkSaved() {
     app.cached = await findCached();
-    app.savedNote = !app.cached[app.model.id];
+    app.savedNote = !app.cached;
     renderBottom();
   }
 
@@ -86,9 +76,9 @@
       h("button", { class: "new-chat", type: "button", onclick: newChat }, icon("edit"), "Neuer Chat"),
       el.history,
       h("div", { class: "side-foot" },
-        h("a", { class: "side-link", href: "/" }, icon("cube"), "Alle Modelle ansehen"),
-        h("button", { class: "side-link", type: "button", onclick: freeSpace }, icon("trash"), "Gespeicherte Modelle löschen"),
+        h("button", { class: "side-link", type: "button", onclick: freeSpace }, icon("trash"), "Gespeicherte KI löschen"),
         h("button", { class: "side-link", type: "button", onclick: deleteAll }, icon("close"), "Alle Chats löschen"),
+        h("p", { class: "side-model" }, icon("pc"), `Die KI ist ${app.model ? app.model.name : "ein Sprachmodell"}${app.model && app.model.maker ? ` von ${app.model.maker}` : ""}. Sie läuft auf deinem Gerät.`),
         h("nav", { class: "legal-mini", "aria-label": "Mehr" }, h("a", { href: "/nutzungsbedingungen" }, "Bedingungen"), h("a", { href: "/datenschutz" }, "Datenschutz"), h("a", { href: "/impressum" }, "Impressum"))));
     el.top = h("header", { class: "topbar" });
     el.thread = h("main", { class: "thread", id: "main", tabindex: "-1" });
@@ -103,54 +93,18 @@
   function closeDrawer() { el.shell.classList.remove("side-open"); }
 
   /* The side bar: on a phone it slides in over the page, on a computer it can be hidden. */
-  function toggleSide(open) {
+  function toggleSide() {
     const small = window.matchMedia("(max-width: 860px)").matches;
-    const shown = small ? el.shell.classList.contains("side-open") : !el.shell.classList.contains("side-hidden");
-    const next = typeof open === "boolean" ? open : !shown;
-    if (small) el.shell.classList.toggle("side-open", next); else el.shell.classList.toggle("side-hidden", !next);
+    if (small) el.shell.classList.toggle("side-open"); else el.shell.classList.toggle("side-hidden");
   }
 
   // ---------------------------------------------------------------------------------------------------- top bar
-  let pop = null;
-  function closeMenu() {
-    if (!pop) return;
-    pop.remove();
-    pop = null;
-    el.modelButton?.setAttribute("aria-expanded", "false");
-    document.removeEventListener("pointerdown", outside, true);
-    document.removeEventListener("keydown", escape, true);
-  }
-  function outside(event) { if (pop && !pop.contains(event.target) && !event.target.closest(".model-btn")) closeMenu(); }
-  function escape(event) { if (event.key === "Escape") { closeMenu(); el.modelButton?.focus(); } }
-
-  function openMenu() {
-    if (pop) { closeMenu(); return; }
-    pop = h("div", { class: "model-pop", role: "listbox", "aria-label": "Modell wählen" },
-      app.models.map((model) => {
-        const runtime = Chat.chooseRuntime(app.gpu, model);
-        const on = app.model && app.model.id === model.id;
-        return h("button", { class: `pop-row${on ? " on" : ""}`, type: "button", role: "option", "aria-selected": on ? "true" : "false", disabled: !runtime.ok, onclick: () => { closeMenu(); chooseModel(model); } },
-          h("span", { class: "pop-main" }, h("b", {}, model.name), h("span", { class: "pop-tag" }, model.tag)),
-          h("span", { class: "pop-size" }, runtime.ok ? [app.cached[model.id] ? h("span", { class: "pop-cached" }, icon("check"), "geladen") : null, Chat.formatBytes(runtime.bytes)] : "nicht möglich"));
-      }),
-      h("a", { class: "pop-link", href: "/" }, icon("cube"), "Alle Modelle im Regal ansehen"));
-    el.modelWrap.append(pop);
-    el.modelButton.setAttribute("aria-expanded", "true");
-    document.addEventListener("pointerdown", outside, true);
-    document.addEventListener("keydown", escape, true);
-  }
-
   function renderTop() {
-    closeMenu();
     const state = app.ready ? "ready" : app.loading ? "loading" : "idle";
-    el.modelButton = h("button", { class: "model-btn", type: "button", "aria-haspopup": "listbox", "aria-expanded": "false", onclick: openMenu },
-      h("span", { class: `dot ${state}`, "aria-hidden": "true" }), h("b", {}, app.model ? app.model.name : "Modell wählen"), icon("down"));
-    el.modelWrap = h("div", { class: "model-wrap" }, el.modelButton);
-    const status = app.ready ? (app.runtime.device === "webgpu" ? "auf deiner Grafikkarte" : "auf deinem Prozessor") : app.loading ? "wird geladen …" : "nicht gestartet";
+    const status = app.ready ? "bereit" : app.loading ? "wird gestartet …" : app.problem ? "nicht gestartet" : "startet mit deiner ersten Nachricht";
     fill(el.top,
-      h("button", { class: "icon-btn", type: "button", "aria-label": "Seitenleiste ein- oder ausblenden", "aria-controls": "side", onclick: () => toggleSide() }, icon("menu")),
-      el.modelWrap,
-      h("span", { class: "top-status" }, status),
+      h("button", { class: "icon-btn", type: "button", "aria-label": "Seitenleiste ein- oder ausblenden", "aria-controls": "side", onclick: toggleSide }, icon("menu")),
+      h("div", { class: "top-title" }, h("b", {}, "KI-Regal"), h("span", { class: "top-status" }, h("span", { class: `dot ${state}`, "aria-hidden": "true" }), status)),
       h("span", { class: "grow" }),
       h("button", { class: "icon-btn", type: "button", "aria-label": "Neuer Chat", title: "Neuer Chat", onclick: newChat }, icon("edit")));
   }
@@ -204,54 +158,11 @@
     renderAll();
   }
   async function freeSpace() {
-    if (!(await confirmBox({ title: "Gespeicherte Modelle löschen?", text: "Die Modelle werden aus deinem Browser gelöscht und geben Speicherplatz frei. Beim nächsten Mal musst du sie wieder laden.", yes: "Löschen", danger: true }))) return;
-    try { await caches.delete(CACHE_NAME); app.cached = {}; toast("Gelöscht."); } catch (error) { toast("Das Löschen hat nicht geklappt."); }
-    renderAll();
-  }
-
-  // ------------------------------------------------------------------------------------------ choosing a model
-  function chooseModel(model) {
-    const runtime = Chat.chooseRuntime(app.gpu, model);
-    if (!runtime.ok || (app.ready && app.model.id === model.id)) return;
     if (busyNow()) return;
-    const change = app.ready || app.loading;
-    app.model = model;
-    app.runtime = runtime;
-    remember(model.id);
-    if (change) startLoading(); else { renderTop(); renderThread(); }
-  }
-
-  function setupCard() {
-    const runtime = app.runtime;
-    const rows = app.models.map((model) => {
-      const r = Chat.chooseRuntime(app.gpu, model);
-      const on = app.model && app.model.id === model.id;
-      return h("label", { class: `pick${on ? " on" : ""}${r.ok ? "" : " off"}` },
-        h("input", { type: "radio", name: "model", value: model.id, checked: on, disabled: !r.ok, onchange: () => chooseModel(model) }),
-        h("span", { class: "pick-main" },
-          h("span", { class: "pick-head" }, h("b", {}, model.name), h("span", { class: "pick-tag" }, model.tag)),
-          h("span", { class: "pick-note" }, model.note),
-          h("span", { class: "pick-facts" }, `${model.maker} · ${model.params} Parameter · ${model.license}`),
-          r.ok ? null : h("span", { class: "pick-problem" }, icon("warn"), r.reason)),
-        h("span", { class: "pick-size" }, h("b", {}, r.ok ? Chat.formatBytes(r.bytes) : "–"), app.cached[model.id] ? h("span", { class: "pick-cached" }, icon("check"), "schon geladen") : h("span", {}, "Download")));
-    });
-    return h("div", { class: "thread-inner setup" },
-      h("div", { class: "setup-logo" }, logo()),
-      h("h1", {}, "Chat mit einer KI auf deinem Computer"),
-      h("p", { class: "lead" }, "Wie ChatGPT, nur ohne App, ohne Konto und ohne Server: Du lädst ein kleines Modell einmal in deinen Browser. Danach rechnet dein eigener Computer die Antworten aus. Deine Fragen verlassen ihn nie."),
-      h("ul", { class: "points" },
-        h("li", {}, icon("shield"), "Privat: nichts wird gesendet"),
-        h("li", {}, icon("download"), "Einmal laden, dann gespeichert"),
-        h("li", {}, icon("pc"), "Nutzt deine Grafikkarte")),
-      h("h2", {}, "Modell wählen"),
-      h("div", { class: "picks" }, rows),
-      h("div", { class: "start" },
-        runtime && runtime.ok
-          ? [h("button", { class: "btn primary big", type: "button", onclick: startLoading }, app.cached[app.model.id] ? "Starten" : `Laden und starten (${Chat.formatBytes(runtime.bytes)})`),
-            h("p", { class: "muted small" }, app.cached[app.model.id] ? "Das Modell ist schon in deinem Browser und startet in ein paar Sekunden." : "Der erste Download ist groß: am besten im WLAN. Danach bleibt das Modell in deinem Browser.")]
-          : h("p", { class: "pick-problem" }, icon("warn"), runtime ? runtime.reason : "Kein Modell verfügbar."),
-        runtime && runtime.ok && runtime.speed === "slow" ? h("p", { class: "notice" }, icon("warn"), runtime.reason) : null,
-        h("p", { class: "muted small device" }, icon("pc"), app.gpu.webgpu ? "Dein Browser kann die Grafikkarte benutzen (WebGPU): das ist am schnellsten." : "Dein Browser hat keine Grafikkarten-Beschleunigung (WebGPU). Es geht trotzdem, aber langsamer.")));
+    if (!(await confirmBox({ title: "Gespeicherte KI löschen?", text: "Die KI wird aus deinem Browser gelöscht und gibt Speicherplatz frei. Beim nächsten Mal wird sie noch einmal geladen.", yes: "Löschen", danger: true }))) return;
+    stopWorker();
+    try { await caches.delete(CACHE_NAME); app.cached = false; toast("Gelöscht."); } catch (error) { toast("Das Löschen hat nicht geklappt."); }
+    renderAll();
   }
 
   // --------------------------------------------------------------------------------------------------- the worker
@@ -260,20 +171,19 @@
     app.busy = false;
     app.current = null;
     app.ready = false;
+    app.loading = false;
   }
 
   function startWorker() {
     const worker = new Worker(root.dataset.worker, { type: "module" });
     worker.addEventListener("message", (event) => onWorker(event.data || {}));
-    worker.addEventListener("error", () => fail("Das Programm für das Modell konnte nicht gestartet werden. Nutze einen aktuellen Browser (Chrome, Edge, Firefox oder Safari)."));
+    worker.addEventListener("error", () => fail("Das Programm für die KI konnte nicht gestartet werden. Nutze einen aktuellen Browser (Chrome, Edge, Firefox oder Safari)."));
     app.worker = worker;
     return worker;
   }
 
   function startLoading() {
-    if (!app.runtime || !app.runtime.ok) return;
-    remember(app.model.id);
-    stopWorker();
+    if (!app.runtime || !app.runtime.ok || app.loading || app.ready) return;
     app.loading = true;
     app.problem = "";
     app.savedNote = false;
@@ -283,9 +193,19 @@
     startWorker().postMessage({ type: "load", id: app.model.id, device: app.runtime.device, dtype: app.runtime.dtype });
   }
 
+  function retry() { stopWorker(); startLoading(); }
+
   function onWorker(message) {
     if (message.type === "progress") { app.files = message.files || {}; if (app.loading) paintProgress(); }
-    else if (message.type === "ready") { app.loading = false; app.ready = true; renderAll(); checkSaved(); app.input?.focus({ preventScroll: true }); }
+    else if (message.type === "ready") {
+      app.loading = false;
+      app.ready = true;
+      renderAll();
+      checkSaved();
+      const pending = app.pending;
+      app.pending = "";
+      if (pending) submit(pending); else app.input?.focus({ preventScroll: true });
+    }
     else if (message.type === "token") onToken(message.text);
     else if (message.type === "done") onDone(message);
     else if (message.type === "error") {
@@ -296,8 +216,15 @@
 
   function fail(text) {
     stopWorker();
-    app.loading = false;
     app.problem = text;
+    renderAll();
+  }
+
+  /* Loading was cancelled: the message that was waiting goes back into the field. */
+  function cancelLoading() {
+    stopWorker();
+    if (app.pending) { app.input.value = app.pending; grow(); }
+    app.pending = "";
     renderAll();
   }
 
@@ -308,10 +235,11 @@
     el.barText = h("p", { class: "loading-text", "aria-live": "polite" }, "Es geht los …");
     return h("div", { class: "thread-inner center-card" },
       h("div", { class: "spinner" }),
-      h("h2", {}, `${app.model.name} wird geladen`),
+      h("h2", {}, app.cached ? "Die KI wird gestartet" : "Die KI wird auf dein Gerät geladen"),
       el.barBox, el.barText,
-      h("p", { class: "muted small" }, "Du kannst dieses Fenster offen lassen und etwas anderes machen. Schon geladene Teile bleiben erhalten."),
-      h("button", { class: "btn ghost", type: "button", onclick: () => { stopWorker(); app.loading = false; renderAll(); } }, "Abbrechen"));
+      h("p", { class: "muted small" }, app.cached ? "Das dauert nur einen Moment." : "Das passiert nur beim ersten Mal. Du kannst dieses Fenster offen lassen und etwas anderes machen."),
+      app.pending ? h("p", { class: "pending" }, h("span", {}, "Deine Nachricht:"), app.pending) : null,
+      h("button", { class: "btn ghost", type: "button", onclick: cancelLoading }, "Abbrechen"));
   }
 
   function paintProgress() {
@@ -320,15 +248,14 @@
     const percent = Math.round(progress.fraction * 100);
     el.barFill.style.width = `${percent}%`;
     el.barBox.setAttribute("aria-valuenow", String(percent));
-    if (progress.fraction >= 0.995) { el.barText.textContent = "Fast fertig: das Modell wird gestartet. Beim ersten Mal dauert das einen Moment."; return; }
+    if (progress.fraction >= 0.995) { el.barText.textContent = "Fast fertig: die KI wird gestartet. Beim ersten Mal dauert das einen Moment."; return; }
     const left = Chat.remaining(progress.loaded, progress.total, (performance.now() - app.started) / 1000);
     el.barText.textContent = `${Chat.formatBytes(progress.loaded)} von ${Chat.formatBytes(progress.total)} (${percent} %)${left ? ` · ${left}` : ""}`;
   }
 
   function problemCard() {
-    return h("div", { class: "thread-inner center-card" }, icon("warn"), h("h2", {}, "Das Modell läuft nicht"), h("p", { class: "muted" }, app.problem),
-      h("div", { class: "row" }, h("button", { class: "btn primary", type: "button", onclick: startLoading }, "Noch einmal versuchen"),
-        h("button", { class: "btn ghost", type: "button", onclick: () => { app.problem = ""; renderAll(); } }, "Anderes Modell wählen")));
+    return h("div", { class: "thread-inner center-card" }, icon("warn"), h("h2", {}, "Die KI läuft nicht"), h("p", { class: "muted" }, app.problem),
+      app.runtime && app.runtime.ok ? h("div", { class: "row" }, h("button", { class: "btn primary", type: "button", onclick: retry }, "Noch einmal versuchen")) : null);
   }
 
   // ------------------------------------------------------------------------------------------------------ chat
@@ -336,7 +263,7 @@
     return h("div", { class: "thread-inner welcome" },
       h("div", { class: "welcome-logo" }, logo()),
       h("h1", {}, "Womit kann ich helfen?"),
-      h("div", { class: "suggestions" }, Chat.suggestionsFor(app.model).map((text) => h("button", { class: "suggestion", type: "button", onclick: () => submit(text) }, text))));
+      h("div", { class: "suggestions" }, Chat.SUGGESTIONS.map((text) => h("button", { class: "suggestion", type: "button", onclick: () => submit(text) }, text))));
   }
 
   function buildComposer() {
@@ -359,23 +286,27 @@
     fill(el.send, icon(app.busy ? "stop" : "send"));
   }
 
+  /* Below the message field: what a person should know before the first message (a one-time download, a slow computer) or after it. */
   function renderBottom() {
-    const chat = activeChat();
-    if (app.ready) {
-      fill(el.bottom, app.savedNote ? h("p", { class: "notice save-note" }, icon("info"), "Dein Browser hat das Modell nicht gespeichert (vielleicht ist zu wenig Platz frei). Beim nächsten Mal muss es noch einmal geladen werden.") : null, el.composer);
-    } else if (chat && chat.messages.length && !app.loading && !app.problem) {
-      fill(el.bottom, h("div", { class: "loadbar" }, h("span", {}, "Starte ein Modell, um in diesem Chat weiterzuschreiben."), h("button", { class: "btn primary small", type: "button", onclick: startLoading }, "Modell starten")));
-    } else {
-      fill(el.bottom);
+    const notes = [];
+    if (app.runtime && app.runtime.ok && !app.ready && !app.loading && !app.cached && !app.problem) {
+      notes.push(h("p", { class: "notice" }, icon("download"), `Beim ersten Mal lädt KI-Regal die KI einmalig auf dein Gerät (${Chat.formatBytes(app.runtime.bytes)}), am besten im WLAN. Danach geht es schnell.`));
     }
+    if (app.runtime && app.runtime.ok && app.runtime.speed === "slow") notes.push(h("p", { class: "notice" }, icon("warn"), app.runtime.reason));
+    if (app.ready && app.savedNote) notes.push(h("p", { class: "notice save-note" }, icon("info"), "Dein Browser hat die KI nicht gespeichert (vielleicht ist zu wenig Platz frei). Beim nächsten Mal muss sie noch einmal geladen werden."));
+    fill(el.bottom, notes, app.runtime && app.runtime.ok && !app.problem ? el.composer : null);
   }
 
   function renderThread() {
     const chat = activeChat();
     if (app.loading) { fill(el.thread, loadingCard()); paintProgress(); return; }
-    if (app.problem) { fill(el.thread, problemCard()); return; }
+    if (app.problem || !app.runtime || !app.runtime.ok) {
+      if (!app.problem) app.problem = (app.runtime && app.runtime.reason) || "Dieses Gerät kann die KI nicht ausführen.";
+      fill(el.thread, problemCard());
+      return;
+    }
     if (chat && chat.messages.length) { paintMessages(chat); return; }
-    fill(el.thread, app.ready ? welcome() : setupCard());
+    fill(el.thread, welcome());
   }
 
   function renderAll() {
@@ -423,9 +354,17 @@
     return codeBlock(block);
   }
 
+  /* Sends a message.  When the AI is not started yet this starts it and the message waits until it is ready (one message at a time). */
   function submit(text) {
     const message = (text == null ? app.input.value : text).trim();
-    if (!message || app.busy || !app.ready || !app.worker) return;
+    if (!message || app.busy || !app.runtime || !app.runtime.ok || app.problem) return;
+    if (!app.ready) {
+      if (app.pending) { toast("Die KI startet noch. Deine erste Nachricht wartet schon."); return; }
+      app.pending = message;
+      if (text == null) { app.input.value = ""; grow(); paintSend(); }
+      startLoading();
+      return;
+    }
     let chat = activeChat();
     const fresh = !chat;
     if (!chat) {
@@ -435,15 +374,14 @@
     }
     chat.messages.push({ role: "user", content: message });
     chat.updated = Date.now();
-    app.input.value = "";
-    grow();
+    if (text == null) { app.input.value = ""; grow(); }
     saveChats();
     renderSidebar();
     if (fresh || !el.list || !el.list.isConnected) paintMessages(chat); else { put(el.list, messageNode(chat.messages[chat.messages.length - 1], false)); follow(true); }
     answer(chat);
   }
 
-  /* The model starts writing the next answer of `chat` (its last message is the question). */
+  /* The AI starts writing the next answer of `chat` (its last message is the question). */
   function answer(chat) {
     el.list.querySelectorAll(".regen").forEach((button) => button.remove());                // only the newest answer can be written again
     const body = h("div", { class: "answer streaming" }, h("span", { class: "typing", "aria-label": "Die KI schreibt" }, h("i"), h("i"), h("i")));
@@ -515,24 +453,25 @@
   // ------------------------------------------------------------------------------------------------------ start
   async function boot() {
     root = document.getElementById("app");
-    fill(root, h("div", { class: "page loading" }, h("div", { class: "spinner" }), h("p", {}, "Die Seite wird vorbereitet …")));
+    fill(root, h("div", { class: "page loading" }, h("div", { class: "spinner" }), h("p", {}, "KI-Regal wird vorbereitet …")));
     try {
       if (!supported()) throw new Error("unsupported");
       const response = await fetch(root.dataset.models, { credentials: "omit" });
       if (!response.ok) throw new Error(`Fehler ${response.status}`);
       app.models = (await response.json()).models;
       app.gpu = await probeGpu();
+      app.model = Chat.bestModel(app.models, app.gpu);
+      app.runtime = Chat.chooseRuntime(app.gpu, app.model || app.models[0]);
       app.cached = await findCached();
-      app.model = Chat.defaultModel(app.models, app.gpu, remembered());
-      app.runtime = Chat.chooseRuntime(app.gpu, app.model);
       loadChats();
       buildShell();
       renderAll();
+      if (app.cached && app.runtime.ok) startLoading();                          // already in the browser: no download, so it just starts
     } catch (error) {
       console.error(error);
       const old = error && error.message === "unsupported";
       fill(root, h("div", { class: "page loading" }, icon("warn"), h("h2", {}, old ? "Dein Browser ist zu alt" : "Die Seite konnte nicht geladen werden"),
-        h("p", {}, old ? "Für den Chat brauchst du einen aktuellen Browser, zum Beispiel Chrome, Edge, Firefox oder Safari." : "Prüfe deine Verbindung und versuche es noch einmal."),
+        h("p", {}, old ? "Für KI-Regal brauchst du einen aktuellen Browser, zum Beispiel Chrome, Edge, Firefox oder Safari." : "Prüfe deine Verbindung und versuche es noch einmal."),
         old ? null : h("button", { class: "btn primary", type: "button", onclick: boot }, "Noch einmal")));
     }
     document.querySelector(".skip")?.addEventListener("click", (event) => { event.preventDefault(); el.thread?.focus(); });

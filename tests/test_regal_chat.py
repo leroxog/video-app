@@ -46,26 +46,26 @@ def models():
 
 
 # ------------------------------------------------------------------------------------------- the list of models
-def test_the_list_has_models_for_every_kind_of_computer(models):
+def test_the_list_names_the_one_model_that_runs_on_every_kind_of_computer(models):
     assert DATE_RE.match(models["generated"]) and models["library"]["name"] == "Transformers.js"
     ids = [m["id"] for m in models["models"]]
-    assert len(ids) == len(set(ids)) and len(ids) >= 5
-    assert any("q4" in m["dtypes"] for m in models["models"]), "at least one model must run without a graphics card"
-    assert any("q4f16" in m["dtypes"] and "q4" in m["dtypes"] for m in models["models"])
-    assert any(re.search(r"coder|code", m["id"] + m["tag"], re.I) for m in models["models"]), "one to program with"
-    assert any(m["german"] == "gut" for m in models["models"]), "one that speaks German well"
+    assert len(ids) == len(set(ids)) and len(ids) >= 1
+    best = models["models"][0]
+    assert best["id"] == "onnx-community/gemma-3-1b-it-ONNX", "the first one is what everybody gets"
+    assert "q4" in best["dtypes"] and "q4f16" in best["dtypes"], "it must run without a graphics card, too, and be small with one"
+    assert best["license_url"].startswith("https://ai.google.dev/gemma/")
 
 
 def test_every_model_is_described_completely_and_has_a_download_a_normal_computer_can_take(models):
     for m in models["models"]:
         assert re.fullmatch(r"onnx-community/[\w.-]+", m["id"]), m["id"]
-        for key in ("name", "maker", "params", "tag", "note", "license"):
+        for key in ("name", "maker", "params", "license"):
             assert isinstance(m[key], str) and m[key].strip(), (m["id"], key)
-        assert m["german"] in ("gut", "ok", "einfach") and isinstance(m["commercial"], bool)
+        assert isinstance(m["commercial"], bool)
         assert m["dtypes"] and set(m["dtypes"]) <= {"q4f16", "q4"}, m["id"]
         assert set(m["files"]) == set(m["dtypes"]), "the big files of every variant are named (the page uses them to see that a model is in the browser)"
         for dtype, size in m["dtypes"].items():
-            assert 100e6 < size < 5e9, (m["id"], dtype, size)
+            assert 100e6 < size < 2e9, (m["id"], dtype, size)
             assert m["files"][dtype][0] == f"onnx/model_{dtype}.onnx" and all(re.fullmatch(rf"onnx/model_{dtype}\.onnx(_data(_\d+)?)?", name) for name in m["files"][dtype]), (m["id"], dtype)
         if "q4" in m["dtypes"] and "q4f16" in m["dtypes"]:
             assert m["dtypes"]["q4f16"] < m["dtypes"]["q4"], "the small variant is the smaller one"
@@ -106,15 +106,20 @@ def test_the_runtime_does_not_reach_for_other_servers_by_itself():
 
 
 # ---------------------------------------------------------------------------------------------------- the server
-def test_the_chat_page_is_there_and_a_visitor_gets_no_cookie(client):
-    response = client.get("/chat")
+def test_the_home_page_is_the_chat_and_a_visitor_gets_no_cookie(client):
+    response = client.get("/")
     text = response.get_data(as_text=True)
-    assert response.status_code == 200 and "Chat im Browser" in text and "Set-Cookie" not in response.headers
+    assert response.status_code == 200 and "Chat mit einer KI" in text and "Set-Cookie" not in response.headers
     assert 'data-models="/static/data/browser-models.json?v=' in text and 'data-worker="/static/js/regal-chat-worker.js?v=' in text
-    assert 'rel="canonical" href="http://localhost/chat"' in text
+    assert 'rel="canonical" href="http://localhost/"' in text and "regal-chat.js" in text and "models.json?v" not in text.replace("browser-models.json?v", "")
     csp = response.headers["Content-Security-Policy"]
     assert "script-src 'self'" in csp and "worker-src 'self'" in csp and "frame-ancestors 'none'" in csp
     assert client.get("/static/data/browser-models.json").status_code == 200
+
+
+def test_the_old_address_of_the_chat_leads_to_the_home_page(client):
+    response = client.get("/chat")
+    assert response.status_code == 301 and response.headers["Location"].endswith("/")
 
 
 def test_the_worker_has_its_own_policy_it_may_run_webassembly_and_load_the_model_and_nothing_else(client):
@@ -157,19 +162,19 @@ def test_the_big_runtime_files_are_sent_compressed_to_browsers_and_unpacked_for_
         assert plain_file.status_code == 200 and plain_file.headers["Content-Type"].startswith("text/javascript") and "Content-Encoding" not in plain_file.headers
 
 
-def test_the_home_page_points_to_the_chat_and_the_sitemap_lists_it(client):
+def test_the_archived_list_points_to_the_chat_and_the_sitemap_has_only_the_pages_to_find(client):
     with open(os.path.join(ROOT, "static", "js", "regal.js"), encoding="utf-8") as handle:
-        home = handle.read()
-    assert 'href: "/chat"' in home and "Chat im Browser" in home
+        archive = handle.read()
+    assert 'href: "/"' in archive and "KI-Chat im Browser" in archive and 'href: "/chat"' not in archive
     sitemap = ET.fromstring(client.get("/sitemap.xml", headers={"Host": "regal.example"}).data)
     urls = [e.text for e in sitemap.iter("{http://www.sitemaps.org/schemas/sitemap/0.9}loc")]
-    assert "http://regal.example/chat" in urls
+    assert "http://regal.example/" in urls and not any("archiv" in url or url.endswith("/chat") for url in urls)
 
 
 def test_the_legal_pages_say_where_the_chat_runs_and_what_it_keeps(client):
     privacy = client.get("/datenschutz").get_data(as_text=True)
-    for word in ("auf deinem Gerät", "transformers-cache", "regal.chat.model", "regal.chats", "Transformers.js", "nicht an uns und nicht an Dritte"):
+    for word in ("auf deinem Gerät", "transformers-cache", "regal.chats", "Transformers.js", "nicht an uns und nicht an Dritte", "Gemma 3"):
         assert word in privacy, word
     terms = client.get("/nutzungsbedingungen").get_data(as_text=True)
-    for word in ("Der Chat im Browser", "falsch, unvollständig oder unpassend", "NOTICE.txt"):
+    for word in ("Gemma-Nutzungsbedingungen", "ai.google.dev/gemma/terms", "falsch, unvollständig oder unpassend", "NOTICE.txt"):
         assert word in terms, word
