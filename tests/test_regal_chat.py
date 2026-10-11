@@ -53,7 +53,9 @@ def test_the_list_has_a_model_for_every_kind_of_computer_best_first(models):
     assert len(ids) == len(set(ids)) and len(ml) >= 2
     sizes = [m["dtypes"]["q4f16"] for m in ml]
     assert sizes == sorted(sizes, reverse=True) and len(set(sizes)) == len(sizes), "best first: the bigger a model, the earlier"
-    assert ml[-1]["cpu"] is True and ml[-1]["dtypes"]["q4"] < 400e6 and ml[-1]["dtypes"]["q4f16"] < 350e6, "the last one is for any computer: small enough for the memory and the processor"
+    assert ml[-1]["cpu"] is True and ml[-1]["dtypes"]["q4"] < 400e6 and ml[-1]["dtypes"]["q4f16"] < 350e6, "the last one is for any computer: small enough for the memory"
+    assert 1e9 < ml[-1]["dtypes"]["fp32"] < 1.3e9 and ml[-1]["files"]["fp32"][0] == "onnx/model.onnx", "and it has the full variant that a processor without graphics card can run"
+    assert all("fp32" not in m["dtypes"] for m in ml[:-1]), "the others are too big for a processor"
     assert all(m["cpu"] is False for m in ml[:-1]), "only the last one may run on a processor alone"
     assert ids[0] == "onnx-community/Qwen3-4B-Instruct-2507-ONNX" and "onnx-community/gemma-3-1b-it-ONNX" in ids and "onnx-community/gemma-3-270m-it-ONNX" == ids[-1]
     assert ml[0]["minBuffer"] >= 1e9 and ml[0]["minMemory"] >= 8 and list(ml[0]["dtypes"]) == ["q4f16"] and ml[0]["gpu"] is True
@@ -67,15 +69,17 @@ def test_every_model_is_described_completely_and_has_a_download_a_normal_compute
         for key in ("name", "maker", "params", "license"):
             assert isinstance(m[key], str) and m[key].strip(), (m["id"], key)
         assert isinstance(m["commercial"], bool)
-        assert m["dtypes"] and set(m["dtypes"]) <= {"q4f16", "q4"}, m["id"]
+        assert m["dtypes"] and set(m["dtypes"]) <= {"q4f16", "q4", "fp32"}, m["id"]
         assert set(m["files"]) == set(m["dtypes"]), "the big files of every variant are named (the page uses them to see that a model is in the browser)"
+        assert set(m["dtypes"]) <= {"q4f16", "q4", "fp32"}
         for dtype, size in m["dtypes"].items():
             assert 100e6 < size < 3.2e9, (m["id"], dtype, size)
-            assert m["files"][dtype][0] == f"onnx/model_{dtype}.onnx" and all(re.fullmatch(rf"onnx/model_{dtype}\.onnx(_data(_\d+)?)?", name) for name in m["files"][dtype]), (m["id"], dtype)
+            stem = "model" if dtype == "fp32" else f"model_{dtype}"
+            assert m["files"][dtype][0] == f"onnx/{stem}.onnx" and all(re.fullmatch(rf"onnx/{stem}\.onnx(_data(_\d+)?)?", name) for name in m["files"][dtype]), (m["id"], dtype)
         if "q4" in m["dtypes"] and "q4f16" in m["dtypes"]:
             assert m["dtypes"]["q4f16"] < m["dtypes"]["q4"], "the small variant is the smaller one"
         assert m.get("minBuffer", 0) < 2e9 and m.get("minMemory", 0) <= 8, "what a model asks of the computer must be possible at all"
-        assert (not m.get("gpu")) == ("q4" in m["dtypes"]), f"{m['id']}: `gpu` must say that there is no variant for the processor"
+        assert (not m.get("gpu")) == ("fp32" in m["dtypes"] or "q4" in m["dtypes"]), f"{m['id']}: `gpu` must say that there is no variant for the processor"
 
 
 def test_the_list_is_small_enough_to_load_at_once():

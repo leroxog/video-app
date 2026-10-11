@@ -10,14 +10,15 @@
   const { h, put, fill, icon, logo, copyText, toast, confirmBox } = window.Regal;
   const Chat = window.RegalChatCore;
   const CHATS_KEY = "regal.chats";
-  const SKIP_KEY = "regal.skip";                            // the models that did not load on this computer ({id: time})
+  const SKIP_KEY = "regal.skip";                            // the models that did not load on this computer ({id: time}), and "webgpu" when the graphics card is no use for the AI
+  const NO_GPU = "webgpu";
   const CACHE_NAME = "transformers-cache";                  // where Transformers.js keeps the files of a model in the browser
 
   const app = {
     models: [], gpu: { webgpu: false, f16: false }, cached: false, model: null, runtime: null,
     worker: null, ready: false, loading: false, problem: "", files: {}, started: 0, lastProgress: 0, watch: 0, pending: "",
     chats: [], activeId: "", busy: false, current: null, savedNote: false,
-    skips: {}, detail: "", downgraded: false,
+    skips: {}, detail: "", downgraded: false, realGpu: null, rawError: "",
   };
   const el = {};                                            // the parts of the page that are painted again and again
   let root = null;
@@ -271,6 +272,7 @@
     stopWorker();
     app.skips = {};
     saveSkips();
+    if (app.realGpu) app.gpu = app.realGpu;
     app.downgraded = false;
     app.model = Chat.bestModel(app.models, app.gpu) || app.model;
     app.runtime = Chat.chooseRuntime(app.gpu, app.model);
@@ -301,6 +303,7 @@
   function fail(text, raw) {
     stopWorker();
     app.problem = text;
+    app.rawError = String(raw || "").replace(/\s+/g, " ").slice(0, 220);
     app.detail = details(raw);
     renderAll();
   }
@@ -321,21 +324,31 @@
   /* The model did not load.  When it is a matter of the computer (memory, graphics card), the next smaller model is tried, and the
      failure is remembered for two weeks so that the next visit does not try the big one again.  A matter of the connection is only shown. */
   function onLoadError(raw) {
-    if (Chat.isDeviceTrouble(raw) && app.model) {
+    const onGpu = app.runtime && app.runtime.ok && app.runtime.device === "webgpu";
+    if (onGpu && Chat.isDeviceTrouble(raw) && !Chat.isMemoryTrouble(raw)) {
+      // the graphics card does not work for the AI here (not that the model is too big): from now on the processor, with a model that can use it
+      app.skips[NO_GPU] = Date.now();
+      saveSkips();
+      app.gpu = { ...app.gpu, webgpu: false, f16: false, bandwidth: null };
+      if (switchTo(Chat.bestModel(app.models, app.gpu, Object.keys(app.skips)), raw)) return;
+    } else if (Chat.isDeviceTrouble(raw) && app.model) {
       app.skips[app.model.id] = Date.now();
       saveSkips();
-      const next = Chat.bestModel(app.models, app.gpu, Object.keys(app.skips));
-      if (next) {
-        stopWorker();
-        app.model = next;
-        app.runtime = Chat.chooseRuntime(app.gpu, next);
-        app.downgraded = true;
-        app.detail = details(raw);
-        findCached().then((cached) => { app.cached = cached; startLoading(); });
-        return;
-      }
+      if (switchTo(Chat.bestModel(app.models, app.gpu, Object.keys(app.skips)), raw)) return;
     }
     fail(Chat.friendlyError(raw), raw);
+  }
+
+  /* Starts again with `next` (a model that this computer can run), if there is one. */
+  function switchTo(next, raw) {
+    if (!next) return false;
+    stopWorker();
+    app.model = next;
+    app.runtime = Chat.chooseRuntime(app.gpu, next);
+    app.downgraded = true;
+    app.detail = details(raw);
+    findCached().then((cached) => { app.cached = cached; startLoading(); });
+    return true;
   }
 
   /* Loading was cancelled: the message that was waiting goes back into the field. */
@@ -389,6 +402,7 @@
 
   function problemCard() {
     return h("div", { class: "thread-inner center-card" }, icon("warn"), h("h2", {}, "Nex Ai läuft nicht"), h("p", { class: "muted" }, app.problem),
+      app.rawError ? h("p", { class: "raw-error" }, app.rawError) : null,
       app.runtime && app.runtime.ok ? h("div", { class: "row" }, h("button", { class: "btn primary", type: "button", onclick: retry }, "Noch einmal versuchen")) : null,
       app.detail ? h("details", { class: "tech" }, h("summary", {}, "Technische Angaben"), h("pre", {}, app.detail),
         h("button", { class: "btn ghost small", type: "button", onclick: async () => toast((await copyText(app.detail)) ? "Kopiert." : "Kopieren hat nicht geklappt.") }, icon("copy"), "Angaben kopieren")) : null);
@@ -607,12 +621,14 @@
       if (!response.ok) throw new Error(`Fehler ${response.status}`);
       app.models = (await response.json()).models;
       app.gpu = await probeGpu();
+      app.realGpu = app.gpu;
       loadSkips();
+      if (app.skips[NO_GPU]) app.gpu = { ...app.gpu, webgpu: false, f16: false, bandwidth: null };               // the graphics card did not work for the AI here before
       const wished = new URLSearchParams(location.search).get("ai");              // not offered on the page: ?ai=qwen takes the first model whose name contains it
       const chosen = wished ? app.models.find((m) => m.id.toLowerCase().includes(wished.toLowerCase()) && Chat.chooseRuntime(app.gpu, m).ok) : null;
       app.model = chosen || Chat.bestModel(app.models, app.gpu, Object.keys(app.skips)) || Chat.bestModel(app.models, app.gpu);      // when everything failed before, from the top again
       app.runtime = Chat.chooseRuntime(app.gpu, app.model || app.models[0]);
-      app.downgraded = !!app.model && app.model.id !== (Chat.bestModel(app.models, app.gpu) || {}).id;
+      app.downgraded = !!app.model && (app.model.id !== (Chat.bestModel(app.models, app.gpu) || {}).id || !!app.skips[NO_GPU]);
       app.cached = await findCached();
       loadChats();
       buildShell();

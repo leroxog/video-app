@@ -146,6 +146,7 @@ ol.ans-list { list-style: decimal; }
 .notice.save-note svg { color: var(--warn); }
 .linklike { color: var(--text); text-decoration: underline; font: inherit; }
 .linklike:hover { color: var(--accent-2); }
+.raw-error { max-width: 560px; color: var(--faint); font-size: 12px; font-family: var(--mono); overflow-wrap: anywhere; }
 .tech { width: min(560px, 100%); margin-top: 6px; text-align: left; color: var(--muted); font-size: 13px; }
 .tech summary { cursor: pointer; text-align: center; color: var(--faint); }
 .tech pre { margin: 10px 0; padding: 12px 14px; border-radius: 10px; background: var(--bg-deep); font: 12px/1.55 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }

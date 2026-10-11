@@ -8,9 +8,10 @@ test("a model runs on the graphics card with the small variant, or else on the p
   assert.deepEqual(C.chooseRuntime({ webgpu: true, f16: true }, model()), { ok: true, device: "webgpu", dtype: "q4f16", bytes: 784e6, speed: "fast", reason: "" });
   const noF16 = C.chooseRuntime({ webgpu: true, f16: false }, model());
   assert.equal(noF16.device, "webgpu"); assert.equal(noF16.dtype, "q4"); assert.equal(noF16.bytes, 880e6);
-  const cpu = C.chooseRuntime({ webgpu: false, f16: false }, model());
-  assert.equal(cpu.device, "wasm"); assert.equal(cpu.dtype, "q4"); assert.equal(cpu.speed, "slow"); assert.match(cpu.reason, /langsamer/);
-  assert.equal(C.chooseRuntime(null, model()).device, "wasm");
+  const full = model({ dtypes: { q4f16: 3e8, q4: 3.5e8, fp32: 1.16e9 } });
+  const cpu = C.chooseRuntime({ webgpu: false, f16: false }, full);
+  assert.equal(cpu.device, "wasm"); assert.equal(cpu.dtype, "fp32"); assert.equal(cpu.speed, "slow"); assert.match(cpu.reason, /langsamer/);
+  assert.equal(C.chooseRuntime(null, full).device, "wasm");
 });
 
 test("a model that only has the small variant cannot run without the graphics card", () => {
@@ -160,7 +161,7 @@ test("the chats are grouped by day for the side bar", () => {
 test("the AI is the best model (the list is best first) that this computer can run, fits and is fast enough for", () => {
   const strong = model({ id: "c/strong", cpu: false, dtypes: { q4f16: 2.9e9 }, minBuffer: 1e9, minMemory: 8 });
   const good = model({ id: "b/good", cpu: false, minBuffer: 7e8, minMemory: 4 });
-  const small = model({ id: "a/small", cpu: true, dtypes: { q4f16: 3e8, q4: 3.5e8 } });
+  const small = model({ id: "a/small", cpu: true, dtypes: { q4f16: 3e8, q4: 3.5e8, fp32: 1.2e9 } });
   const list = [strong, good, small];
   const hw = (over = {}) => ({ webgpu: true, f16: true, bandwidth: 38, maxBuffer: 2147483644, deviceMemory: 16, ...over });
   assert.equal(C.bestModel(list, hw()).id, "b/good");                                              // a graphics card of 38 GB/s: the middle one is fast enough, the strong one is not
@@ -192,19 +193,21 @@ test("the speed of an AI is predicted from the memory speed of the graphics card
   assert.equal(C.fits({ webgpu: false, deviceMemory: 2 }, { minMemory: 4 }), false);
 });
 
-test("a model that is too big for a computer without a graphics card is not run there", () => {
+test("a model that is too big for a computer without a graphics card is not run there, and the others only in full size", () => {
   const big = model({ cpu: false });
-  const small = model({ id: "x/small", cpu: true, dtypes: { q4f16: 3e8, q4: 3.5e8 } });
+  const small = model({ id: "x/small", cpu: true, dtypes: { q4f16: 3e8, q4: 3.5e8, fp32: 1.16e9 } });
   assert.equal(C.chooseRuntime({ webgpu: true, f16: true }, big).ok, true);
   const r = C.chooseRuntime({ webgpu: false, f16: false }, big);
   assert.equal(r.ok, false); assert.match(r.reason, /WebGPU/);
-  assert.equal(C.chooseRuntime({ webgpu: false, f16: false }, small).ok, true);
-  assert.equal(C.chooseRuntime({ webgpu: false, f16: false }, model()).ok, true);                  // without the note a model may run on the processor
+  const cpu = C.chooseRuntime({ webgpu: false, f16: false }, small);
+  assert.equal(cpu.ok, true); assert.equal(cpu.device, "wasm"); assert.equal(cpu.dtype, "fp32"); assert.equal(cpu.bytes, 1.16e9); assert.equal(cpu.speed, "slow");
+  assert.equal(C.chooseRuntime({ webgpu: false, f16: false }, model()).ok, false, "the 4-bit variants cannot run on a processor");
+  assert.equal(C.chooseRuntime({ webgpu: true, f16: false }, small).dtype, "q4", "on a graphics card without 16-bit numbers the 4-bit variant");
 });
 
 test("when the best model did not load here the next one is taken, and nothing is left when all failed", () => {
   const big = model({ id: "a/big", cpu: false });
-  const small = model({ id: "a/small", cpu: true, dtypes: { q4f16: 3e8, q4: 3.5e8 } });
+  const small = model({ id: "a/small", cpu: true, dtypes: { q4f16: 3e8, q4: 3.5e8, fp32: 1.2e9 } });
   const gpu = { webgpu: true, f16: true }, cpu = { webgpu: false, f16: false };
   const fast = { ...gpu, bandwidth: 100 };
   assert.equal(C.bestModel([big, small], fast, []).id, "a/big");
@@ -231,4 +234,16 @@ test("only a matter of the computer is a reason for the smaller model, not the c
 
 test("the note of a file in parts has the address the worker writes", () => {
   assert.equal(C.chunkMetaUrl("https://huggingface.co/a/b/resolve/main/onnx/model.onnx_data"), "https://huggingface.co/a/b/resolve/main/onnx/model.onnx_data?nex-meta");
+});
+
+test("memory that ran out is told from a graphics card that does not work at all", () => {
+  for (const message of ["Failed to allocate memory", "Aborted(OOM)", "RangeError: Array buffer allocation failed", "Buffer size (900) exceeds the max buffer size limit"]) {
+    assert.equal(C.isMemoryTrouble(message), true, message);
+    assert.equal(C.isDeviceTrouble(message), true, message);
+  }
+  for (const message of ["WebGPU is not available in the worker: no graphics card adapter", "Failed to get GPU adapter. You may need to enable flag --enable-unsafe-webgpu", "GPUDevice lost", undefined, ""]) {
+    assert.equal(C.isMemoryTrouble(message), false, String(message));
+  }
+  assert.equal(C.isDeviceTrouble("WebGPU is not available in the worker: no graphics card adapter"), true);
+  assert.equal(C.isDeviceTrouble("Failed to get GPU adapter"), true);
 });

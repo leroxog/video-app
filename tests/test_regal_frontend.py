@@ -140,6 +140,16 @@ def test_a_download_that_hangs_is_noticed_and_can_be_started_again():
     assert "progress.fraction < 0.995" in code, "a computer that only prepares the AI after the download is not a hanging download"
 
 
+def test_a_graphics_card_that_does_not_work_means_the_processor_with_the_model_that_can_use_it():
+    code = code_of(CHAT_JS["regal-chat.js"])
+    worker = code_of(CHAT_JS[WORKER])
+    assert 'const NO_GPU = "webgpu"' in code and "app.skips[NO_GPU] = Date.now()" in code and "Chat.isMemoryTrouble(raw)" in code
+    assert "webgpu: false, f16: false, bandwidth: null" in code and "app.realGpu" in code, "the real graphics card is kept for 'Noch einmal versuchen'"
+    assert "if (app.skips[NO_GPU]) app.gpu =" in code, "the next visit starts on the processor straight away"
+    assert "navigator.gpu.requestAdapter()" in worker and "no graphics card adapter" in worker, "the worker says clearly when it cannot use the card the page found"
+    assert "app.rawError" in code and "raw-error" in CHAT_CSS, "the real error is on the page, not only behind 'Technische Angaben'"
+
+
 def test_the_chat_has_nothing_to_choose():
     code = code_of(CHAT_JS["regal-chat.js"])
     assert "bestModel(" in code and 'type: "radio"' not in code and "listbox" not in code, "one AI: the page takes the best one"

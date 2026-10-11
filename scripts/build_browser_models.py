@@ -23,7 +23,8 @@ SMALL_FILES = ("config.json", "generation_config.json", "tokenizer.json", "token
 # `gpu` (made below) says that the model needs a graphics card with WebGPU (it has no variant that a normal processor can run).
 # The models the chat uses, BEST FIRST: the page measures the graphics card of the visitor and takes the first one that fits into the memory
 # and will be fast enough (see bestModel in static/js/regal-chat-core.js), and the next one when loading it fails.  `cpu: False` says that a
-# model is too big for a computer without a graphics card (WebGPU); `dtypes` limits the variants offered; `minBuffer` (bytes, the biggest
+# model is too big for a computer without a graphics card (WebGPU), and a model that may run there needs its `fp32` variant (the shrunk
+# variants only run on a graphics card, see chooseRuntime); `dtypes` limits the variants offered; `minBuffer` (bytes, the biggest
 # single piece in graphics memory) and `minMemory` (GB of RAM) say what it needs.  Only models that were tried here are listed:
 # Gemma 3 with 1 billion parameters (writes good German for its size) for normal computers, and the small Gemma (270 million) as the
 # way out for weak ones, and Qwen3 4B (answers German best) for strong graphics cards.  Others that were tried (Qwen 2.5 in 0.5 and 1.5 billion parameters,
@@ -37,10 +38,11 @@ MODELS = [
     {"id": "onnx-community/gemma-3-1b-it-ONNX", "name": "Gemma 3", "maker": "Google", "params": "1 Mrd.", "cpu": False,
      "minBuffer": 700000000, "minMemory": 4,
      "license": "Gemma-Nutzungsbedingungen", "license_url": "https://ai.google.dev/gemma/terms", "commercial": True},
-    {"id": "onnx-community/gemma-3-270m-it-ONNX", "name": "Gemma 3 klein", "maker": "Google", "params": "270 Mio.", "cpu": True,
+    {"id": "onnx-community/gemma-3-270m-it-ONNX", "name": "Gemma 3 klein", "maker": "Google", "params": "270 Mio.", "cpu": True, "dtypes": ["q4f16", "q4", "fp32"],
      "license": "Gemma-Nutzungsbedingungen", "license_url": "https://ai.google.dev/gemma/terms", "commercial": True},
 ]
 DTYPES = ("q4f16", "q4")
+STEM = {"fp32": "model"}                   # transformers.js names the full variant model.onnx (the others model_q4f16.onnx ...)
 
 
 def get(model_id):
@@ -60,10 +62,11 @@ def variants(info, wanted=None):
     small = sum(size for name, size in files.items() if name in SMALL_FILES)
     result = {}
     for dtype in (wanted or DTYPES):
-        main = f"onnx/model_{dtype}.onnx"
+        stem = STEM.get(dtype, f"model_{dtype}")
+        main = f"onnx/{stem}.onnx"
         if main not in files:
             continue
-        pattern = re.compile(rf"^onnx/model_{dtype}\.onnx(_data(_\d+)?)?$")
+        pattern = re.compile(rf"^onnx/{stem}\.onnx(_data(_\d+)?)?$")
         names = sorted(name for name in files if pattern.match(name))
         result[dtype] = {"bytes": small + sum(files[name] for name in names), "files": names}
     return result
@@ -78,7 +81,7 @@ def main():
         sizes = variants(info, spec.get("dtypes"))
         if not sizes:
             sys.exit(f"{spec['id']}: no q4f16 or q4 file")
-        if spec.get("gpu") is None and "q4" not in sizes:
+        if spec.get("gpu") is None and "q4" not in sizes and "fp32" not in sizes:
             spec = {**spec, "gpu": True}
         models.append({**spec, "dtypes": {k: v["bytes"] for k, v in sizes.items()}, "files": {k: v["files"] for k, v in sizes.items()}, "updated": (info.get("lastModified") or "")[:10]})
         print(spec["id"], {k: (round(v["bytes"] / 1e6), len(v["files"])) for k, v in sizes.items()})

@@ -22,17 +22,18 @@
     "Was ist der Unterschied zwischen Wetter und Klima?",
   ];
 
-  /* How a model runs on this computer.  `gpu`: {webgpu, f16} from the browser.  The small variant of a model (q4f16) needs a graphics
-     card that can do 16-bit numbers; without it the plain 4-bit variant (q4) runs, on the graphics card if there is one, else on the
-     processor, which is much slower.  A model that only has the small variant cannot run without that card. */
+  /* How a model runs on this computer.  `gpu`: {webgpu, f16} from the browser.  On a graphics card (WebGPU): the small variant of a model
+     (q4f16) when the card can do 16-bit numbers, else the plain 4-bit variant (q4).  Without a graphics card the processor must do it,
+     and the shrunk variants (4 and 8 bit) cannot: they need a program step that only the graphics card has (tried: "Could not find an
+     implementation for GatherBlockQuantized").  There only the full variant (fp32) runs, which is big (four times the size) and much
+     slower, so only a small model has it. */
   function chooseRuntime(gpu, model) {
     const sizes = model.dtypes || {};
     const webgpu = !!(gpu && gpu.webgpu), f16 = !!(gpu && gpu.f16);
     if (webgpu && f16 && sizes.q4f16) return { ok: true, device: "webgpu", dtype: "q4f16", bytes: sizes.q4f16, speed: "fast", reason: "" };
     if (webgpu && sizes.q4) return { ok: true, device: "webgpu", dtype: "q4", bytes: sizes.q4, speed: "fast", reason: "" };
-    if (!webgpu && model.cpu === false) return { ok: false, device: "", dtype: "", bytes: sizes.q4 || sizes.q4f16 || 0, speed: "none", reason: "Diese Version braucht eine Grafikkarte mit WebGPU." };
-    if (sizes.q4) return { ok: true, device: "wasm", dtype: "q4", bytes: sizes.q4, speed: "slow", reason: "Dein Browser hat keine Grafikkarten-Beschleunigung (WebGPU). Das Modell läuft dann auf dem Prozessor und ist deutlich langsamer." };
-    return { ok: false, device: "", dtype: "", bytes: sizes.q4f16 || 0, speed: "none", reason: "Dieses Modell braucht eine Grafikkarte mit WebGPU (zum Beispiel in aktuellem Chrome oder Edge am Computer). Hier ist keine verfügbar." };
+    if (!webgpu && model.cpu !== false && sizes.fp32) return { ok: true, device: "wasm", dtype: "fp32", bytes: sizes.fp32, speed: "slow", reason: "Dein Browser kann die Grafikkarte nicht benutzen (WebGPU). Nex Ai läuft deshalb auf dem Prozessor und ist deutlich langsamer." };
+    return { ok: false, device: "", dtype: "", bytes: sizes.q4f16 || sizes.fp32 || 0, speed: "none", reason: "Diese Version braucht eine Grafikkarte mit WebGPU (zum Beispiel in aktuellem Chrome oder Edge am Computer). Hier ist keine verfügbar." };
   }
 
   /* The messages for the model: the instruction, then as much of the talk as fits, newest last.  The newest question is always
@@ -200,6 +201,12 @@
     return /out of memory|oom\b|alloc|memory|buffer|webgpu|\bgpu\b|device|adapter|mapAsync|RangeError|Aborted|unreachable|RuntimeError|wasm|exceeds/i.test(String(message || ""));
   }
 
+  /* Is it the memory that ran out (of the graphics card or of the computer)?  Then the AI is too big for this computer, but the graphics card
+     itself works; anything else that goes wrong with the graphics card means that it cannot be used for the AI at all. */
+  function isMemoryTrouble(message) {
+    return /out of memory|oom\b|alloc|memory|buffer|exceeds|mapAsync|RangeError/i.test(String(message || ""));
+  }
+
   /* The address of the note that the worker writes after the last part of a big file (regal-chat-worker.js, PartsCache). */
   function chunkMetaUrl(url) { return `${url}?nex-meta`; }
 
@@ -264,5 +271,5 @@
     return groups.filter(([, list]) => list.length).map(([label, list]) => ({ label, chats: list }));
   }
 
-  return { MAX_CHATS, MAX_MESSAGES, titleFrom, newChatId, sanitizeStore, trimChats, groupChats, SYSTEM_PROMPT, HISTORY_CHARS, MAX_INPUT, MAX_NEW_TOKENS, SUGGESTIONS, chooseRuntime, buildMessages, parseInline, parseBlocks, progressOf, remaining, friendlyError, speedText, cacheUrls, bestModel, predictedSpeed, speedFactor, fits, MIN_SPEED, activeSkips, isDeviceTrouble, chunkMetaUrl, SKIP_DAYS, formatBytes: Core.formatBytes };
+  return { MAX_CHATS, MAX_MESSAGES, titleFrom, newChatId, sanitizeStore, trimChats, groupChats, SYSTEM_PROMPT, HISTORY_CHARS, MAX_INPUT, MAX_NEW_TOKENS, SUGGESTIONS, chooseRuntime, buildMessages, parseInline, parseBlocks, progressOf, remaining, friendlyError, speedText, cacheUrls, bestModel, predictedSpeed, speedFactor, fits, MIN_SPEED, activeSkips, isDeviceTrouble, isMemoryTrouble, chunkMetaUrl, SKIP_DAYS, formatBytes: Core.formatBytes };
 });

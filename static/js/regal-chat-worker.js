@@ -138,6 +138,11 @@ async function unload() {
 
 async function load({ id, device, dtype }) {
   await unload();
+  if (device === "webgpu") {                         // the page found a graphics card, but a worker may not be allowed to use it (some browsers): say so clearly
+    let adapter = null;
+    try { adapter = self.navigator && navigator.gpu ? await navigator.gpu.requestAdapter() : null; } catch (error) { adapter = null; }
+    if (!adapter) throw new Error("WebGPU is not available in the worker: no graphics card adapter");
+  }
   let last = 0;
   generator = await pipeline("text-generation", id, {
     device,
