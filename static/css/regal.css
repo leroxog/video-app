@@ -1,31 +1,39 @@
-/* KI-Regal: the look.  Dark, with a violet-to-pink accent; a light version for people whose computer is set to light.  A page of cards:
-   what there is, a search with a few filters, the models, and what to do with them. */
+/* Nex Ai: the look (shared by the chat, the list of models, the legal pages and the error pages).  Dark like ChatGPT with one pink accent;
+   a light version for people whose computer is set to light. */
+
+@font-face { font-family: "Fraunces"; src: url("/static/fonts/fraunces-latin-wght-normal.woff2") format("woff2"); font-weight: 100 900; font-style: normal; font-display: swap; }
 
 :root {
-  --bg: #0f0f13;
-  --panel: #17171d;
-  --panel-2: #1e1e26;
-  --panel-3: #272731;
-  --line: #25252f;
-  --line-strong: #353542;
-  --text: #ececf2;
-  --muted: #9b9bab;
-  --accent: #7c6cf4;
-  --accent-2: #b4abff;
-  --grad: #6d5df0;
+  /* The look of Nex (the earlier project): the greys of ChatGPT, one pink accent, frosted glass, and an editorial serif (Fraunces). */
+  --bg: #212121;
+  --bg-deep: #171717;
+  --panel: #2f2f2f;
+  --panel-2: #3f3f3f;
+  --panel-3: #4a4a4a;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.17);
+  --text: #ececec;
+  --muted: #b4b4b4;
+  --faint: #8e8ea0;
+  --accent: #ff2d95;
+  --accent-2: #ff7ab8;
+  --grad: #ff2d95;
   --on-accent: #fff;
+  --glass: color-mix(in srgb, var(--bg-deep) 68%, transparent);
+  --glass-blur: blur(20px) saturate(1.4);
   --warn: #f59e0b;
   --bad: #f87171;
   --good: #34d399;
   --radius: 14px;
-  --font: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
-  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --font: "Fraunces", "Iowan Old Style", Georgia, "Times New Roman", serif;
+  --mono: "Consolas", "SF Mono", ui-monospace, SFMono-Regular, Menlo, "Liberation Mono", monospace;
   color-scheme: dark;
 }
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
-    --bg: #ffffff; --panel: #f7f7fa; --panel-2: #f0f0f5; --panel-3: #e6e6ee; --line: #e5e5ec; --line-strong: #cfcfda;
-    --text: #121218; --muted: #6a6a7a; --accent: #5b4be0; --accent-2: #5b4be0; --grad: #5b4be0; --warn: #b45309; --bad: #dc2626; --good: #059669; color-scheme: light;
+    --bg: #ffffff; --bg-deep: #f9f9f9; --panel: #f4f4f4; --panel-2: #ececec; --panel-3: #e3e3e3; --line: rgba(0, 0, 0, 0.1); --line-strong: rgba(0, 0, 0, 0.18);
+    --text: #0d0d0d; --muted: #5d5d5d; --faint: #6f7075; --accent: #ff2d95; --accent-2: #c80f6b; --grad: #ff2d95;
+    --warn: #b45309; --bad: #dc2626; --good: #059669; color-scheme: light;
   }
 }
 

@@ -1,4 +1,4 @@
-/* KI-Regal: the page -- loads the list of models (static/data/models.json), shows what kinds there are, lets people search and filter, and
+/* Nex Ai: the page -- loads the list of models (static/data/models.json), shows what kinds there are, lets people search and filter, and
    opens a model with its files, so that they can be downloaded to the computer (into a folder, or the normal way), with the commands and
    the programs to use it.  Nothing is sent to anybody except the files that a person chooses to download, which come from Hugging Face. */
 (function () {
@@ -233,7 +233,7 @@
     const faq = (q, a) => h("details", { class: "faq" }, h("summary", {}, q), h("p", {}, a));
     const root = document.getElementById("app");
     fill(root, h("div", { class: "page" },
-      h("header", { class: "top" }, h("a", { class: "brand", href: "/", "aria-label": "KI-Regal, Startseite" }, logo(), h("span", {}, "KI-Regal")),
+      h("header", { class: "top" }, h("a", { class: "brand", href: "/", "aria-label": "Nex Ai, Startseite" }, logo(), h("span", {}, "Nex Ai")),
         h("nav", { "aria-label": "Bereiche" }, h("a", { href: "/" }, "KI-Chat"), h("a", { href: "#modelle" }, "Modelle"), h("a", { href: "#so-gehts" }, "So geht’s"), h("a", { href: "#fragen" }, "Fragen"))),
       h("main", { id: "main" },
         h("section", { class: "hero" },
@@ -255,7 +255,7 @@
         h("section", { class: "faqs", id: "fragen" }, h("h2", {}, "Fragen"),
           faq("Kostet das etwas?", "Nein. Alle Modelle in der Liste kannst du kostenlos herunterladen, ohne Konto. Manche Lizenzen erlauben nur nicht-kommerzielle Nutzung: das steht an jedem Modell."),
           faq("Muss ich etwas installieren?", "Für den Chat nicht: Er läuft direkt in deinem Browser. Das Modell wird einmal geladen und bleibt dann dort gespeichert. Die Modelle in der Liste dagegen lädst du herunter und startest sie in einem Programm wie LM Studio."),
-          faq("Wo liegen die Modelle?", "Bei Hugging Face, dem üblichen öffentlichen Ort für freie Modelle. KI-Regal ist die Liste dazu: Die Dateien kommen von dort direkt zu dir, nicht über unseren Server."),
+          faq("Wo liegen die Modelle?", "Bei Hugging Face, dem üblichen öffentlichen Ort für freie Modelle. Nex Ai ist die Liste dazu: Die Dateien kommen von dort direkt zu dir, nicht über unseren Server."),
           faq("Welches Modell passt zu meinem PC?", "Als Faustregel sollte die Datei kleiner sein als dein Arbeitsspeicher oder der Speicher deiner Grafikkarte. Wähle oben „Mein PC hat“, dann zeigen wir nur passende. Bei Chat-Modellen heißt eine kleinere Datei (zum Beispiel Q4 statt Q8) etwas schlechtere Antworten, aber weniger Speicher."),
           faq("Was heißt GGUF, Safetensors, ONNX?", "Das sind Dateiformate. GGUF sind fertig verkleinerte Chat-Modelle für LM Studio, Ollama und llama.cpp. Safetensors ist das übliche sichere Format für Bilder, Videos und vieles mehr. ONNX ist ein Austauschformat für Programme."),
           faq("Ist das sicher?", "Wir listen nur Modelle in sicheren Dateiformaten (keine Pickle-Dateien, die Programme ausführen können), ohne Login-Pflicht und ohne Inhalte für Erwachsene. Trotzdem: Lade Programme nur von den offiziellen Seiten, die wir verlinken."),

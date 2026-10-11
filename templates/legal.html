@@ -3,18 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>{{ {"terms": "Nutzungsbedingungen", "privacy": "Datenschutz", "imprint": "Impressum"}[page] }} | KI-Regal</title>
-<meta name="description" content="{{ {"terms": "Die Regeln auf KI-Regal und was du von uns erwarten kannst.", "privacy": "Welche Daten KI-Regal verarbeitet (fast keine), wozu und wie du sie löschst.", "imprint": "Angaben zum Betreiber von KI-Regal."}[page] }}">
-<meta name="theme-color" content="#0b0e14">
+<title>{{ {"terms": "Nutzungsbedingungen", "privacy": "Datenschutz", "imprint": "Impressum"}[page] }} | Nex Ai</title>
+<meta name="description" content="{{ {"terms": "Die Regeln auf Nex Ai und was du von uns erwarten kannst.", "privacy": "Welche Daten Nex Ai verarbeitet (fast keine), wozu und wie du sie löschst.", "imprint": "Angaben zum Betreiber von Nex Ai."}[page] }}">
+<meta name="theme-color" content="#212121" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <meta name="color-scheme" content="dark light">
-<link rel="icon" href="{{ static_url('img/regal-icon.svg') }}" type="image/svg+xml">
-<link rel="icon" href="{{ static_url('img/regal-192.png') }}" type="image/png" sizes="192x192">
-<link rel="apple-touch-icon" href="{{ static_url('img/regal-180.png') }}">
+<link rel="icon" href="{{ static_url('img/nex-icon.svg') }}" type="image/svg+xml">
+<link rel="icon" href="{{ static_url('img/nex-192.png') }}" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="{{ static_url('img/nex-180.png') }}">
 <link rel="stylesheet" href="{{ static_url('css/regal.css') }}">
 </head>
 <body>
 <div class="legal-page">
-  <a class="legal-logo" href="/" aria-label="KI-Regal, zurück zur Startseite"><svg viewBox="0 0 48 48" aria-hidden="true" focusable="false"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b5cf6"/><stop offset="1" stop-color="#ec4899"/></linearGradient></defs><rect x="2" y="2" width="44" height="44" rx="12" fill="url(#lg)"/><rect x="9" y="12" width="9" height="13" rx="2" fill="#fff"/><rect x="20" y="8" width="9" height="17" rx="2" fill="#fff" opacity=".9"/><rect x="31" y="14" width="8" height="11" rx="2" fill="#fff" opacity=".8"/><path d="M7 28h34M10 28v10M38 28v10" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg><span>KI-Regal</span></a>
+  <a class="legal-logo" href="/" aria-label="Nex Ai, zurück zur Startseite">{% include "partials/_nex_mark.html" %}<span>Nex Ai</span></a>
   <main class="legal">
 {%- if page == "imprint" %}
     <h1>Impressum</h1>
@@ -29,15 +30,15 @@
     <p>Die Angaben zum Betreiber der Seite werden gerade ergänzt.</p>
   {%- endif %}
     <h2>Inhalte Dritter</h2>
-    <p>Die KI, mit der du bei KI-Regal schreibst (das Sprachmodell Gemma 3), stammt von Google und wird von Hugging Face ausgeliefert. Wir hosten sie nicht und prüfen ihre Antworten nicht: Sie entstehen auf deinem Gerät. Für das Modell und seine Lizenz sind die Urheber verantwortlich.</p>
+    <p>Die KI, mit der du bei Nex Ai schreibst (das Sprachmodell Gemma 3), stammt von Google und wird von Hugging Face ausgeliefert. Wir hosten sie nicht und prüfen ihre Antworten nicht: Sie entstehen auf deinem Gerät. Für das Modell und seine Lizenz sind die Urheber verantwortlich.</p>
     <h2>Rechtswidrige Inhalte melden</h2>
-    <p>Wenn etwas auf KI-Regal gegen das Gesetz oder Rechte Dritter verstößt oder nicht stimmt, schreib uns{% if imprint and imprint.email %} (<a href="mailto:{{ imprint.email }}">{{ imprint.email }}</a>){% endif %} mit einer kurzen Beschreibung. Wir prüfen es und handeln, sobald wir es geprüft haben. Das Modell selbst können nur seine Urheber oder Hugging Face entfernen.</p>
+    <p>Wenn etwas auf Nex Ai gegen das Gesetz oder Rechte Dritter verstößt oder nicht stimmt, schreib uns{% if imprint and imprint.email %} (<a href="mailto:{{ imprint.email }}">{{ imprint.email }}</a>){% endif %} mit einer kurzen Beschreibung. Wir prüfen es und handeln, sobald wir es geprüft haben. Das Modell selbst können nur seine Urheber oder Hugging Face entfernen.</p>
 {%- elif page == "terms" %}
     <h1>Nutzungsbedingungen</h1>
-    <p class="lead">KI-Regal ist ein Chat mit einer KI, die auf deinem eigenen Computer läuft. Es ist kostenlos und ohne Konto. Stand: Oktober 2026.</p>
+    <p class="lead">Nex Ai ist ein Chat mit einer KI, die auf deinem eigenen Computer läuft. Es ist kostenlos und ohne Konto. Stand: Oktober 2026.</p>
 
-    <h2>1. Was KI-Regal ist</h2>
-    <p>Bei KI-Regal schreibst du mit einer KI, dem Sprachmodell Gemma 3 von Google. Das Modell lädt dein Browser einmal von Hugging Face und führt es dann auf deinem Gerät aus. Unser Server liefert nur die Seite und das Programm, das das Modell ausführt. Deine Nachrichten werden nicht an uns gesendet. Für den Download gelten die Bedingungen von Hugging Face und die Lizenz des Modells.</p>
+    <h2>1. Was Nex Ai ist</h2>
+    <p>Bei Nex Ai schreibst du mit einer KI, dem Sprachmodell Gemma 3 von Google. Das Modell lädt dein Browser einmal von Hugging Face und führt es dann auf deinem Gerät aus. Unser Server liefert nur die Seite und das Programm, das das Modell ausführt. Deine Nachrichten werden nicht an uns gesendet. Für den Download gelten die Bedingungen von Hugging Face und die Lizenz des Modells.</p>
 
     <h2>2. Lizenz des Modells</h2>
     <p>Gemma wird unter den Gemma-Nutzungsbedingungen von Google bereitgestellt (<a href="https://ai.google.dev/gemma/terms" target="_blank" rel="noopener noreferrer">ai.google.dev/gemma/terms</a>), einschließlich der dortigen Richtlinie zur unzulässigen Nutzung. Mit der Nutzung der KI erkennst du diese Lizenz an. Du bist selbst dafür verantwortlich, die KI nur so zu benutzen, wie die Lizenz und das Gesetz es erlauben.</p>
@@ -49,7 +50,7 @@
     <p>Antworten einer KI können falsch, unvollständig oder unpassend sein. Verlass dich bei wichtigen Dingen (Gesundheit, Recht, Geld, Sicherheit) nicht darauf und prüfe sie selbst. Gib Antworten der KI nicht als menschliche Äußerung oder als geprüfte Auskunft aus. Die KI braucht Speicherplatz (etwa 0,8 GB) und Rechenleistung deines Geräts. Der Chat benutzt die Open-Source-Programme Transformers.js (Apache-2.0) und ONNX Runtime Web (MIT); ihre Lizenztexte liegen unter <a href="/static/vendor/transformers/NOTICE.txt">/static/vendor/transformers/NOTICE.txt</a>.</p>
 
     <h2>5. Verfügbarkeit und Haftung</h2>
-    <p>KI-Regal ist ein privates Projekt ohne Gewähr. Es kann ausfallen, sich ändern oder eingestellt werden. Wir übernehmen keine Haftung für Antworten der KI, ihre Folgen oder verlinkte Seiten. Unsere Haftung ist bei leichter Fahrlässigkeit ausgeschlossen, außer bei der Verletzung von Leben, Körper und Gesundheit und bei wesentlichen Vertragspflichten. Zwingende gesetzliche Rechte bleiben unberührt.</p>
+    <p>Nex Ai ist ein privates Projekt ohne Gewähr. Es kann ausfallen, sich ändern oder eingestellt werden. Wir übernehmen keine Haftung für Antworten der KI, ihre Folgen oder verlinkte Seiten. Unsere Haftung ist bei leichter Fahrlässigkeit ausgeschlossen, außer bei der Verletzung von Leben, Körper und Gesundheit und bei wesentlichen Vertragspflichten. Zwingende gesetzliche Rechte bleiben unberührt.</p>
 
     <h2>6. Änderungen</h2>
     <p>Wir können diese Bedingungen ändern. Die aktuelle Fassung steht immer hier.</p>
@@ -60,7 +61,7 @@
     <p>Unter <a href="/yipi-archiv">/yipi-archiv</a> gibt es noch das frühere Netzwerk yipi mit Konten. Dort gelten sinngemäß: Wer ein Konto hat, ist für seine Yips verantwortlich, kann sie und das Konto jederzeit löschen („Einstellungen, Dein Konto“) und Inhalte anderer melden („Melden“). Ein Konto bei yipi gibt es ab 16 Jahren, jüngere brauchen die Erlaubnis ihrer Eltern. Ein vergessenes Passwort kann bei yipi nicht zurückgesetzt werden.</p>
 {%- else %}
     <h1>Datenschutz</h1>
-    <p class="lead">Kurz und ehrlich: KI-Regal hat keine Konten, setzt keine Cookies und nutzt kein Tracking. Die KI läuft auf deinem Gerät, deine Nachrichten werden nicht an uns gesendet. Das Modell lädt dein Browser einmal von Hugging Face. Stand: Oktober 2026.</p>
+    <p class="lead">Kurz und ehrlich: Nex Ai hat keine Konten, setzt keine Cookies und nutzt kein Tracking. Die KI läuft auf deinem Gerät, deine Nachrichten werden nicht an uns gesendet. Das Modell lädt dein Browser einmal von Hugging Face. Stand: Oktober 2026.</p>
 
     <h2>Wer ist verantwortlich?</h2>
     <p>Der Betreiber, der im <a href="/impressum">Impressum</a> steht. Dort erreichst du ihn auch für Fragen zum Datenschutz.</p>
@@ -81,19 +82,19 @@
     <p>Die Seite verlinkt Seiten Dritter (zum Beispiel Hugging Face und Google, in der Modell-Liste auch GitHub, lmstudio.ai, ollama.com). Für deren Datenschutz sind wir nicht verantwortlich.</p>
 
     <h2>Kein Tracking, keine Weitergabe</h2>
-    <p>KI-Regal nutzt keine Analyse- und Werbedienste, keine fremden Schriften und keine fremden Skripte (die Programme für den Chat liegen auf unserem eigenen Server). Wir geben keine Daten an Dritte weiter, außer wenn wir gesetzlich dazu verpflichtet sind.</p>
+    <p>Nex Ai nutzt keine Analyse- und Werbedienste, keine fremden Schriften und keine fremden Skripte (die Programme für den Chat liegen auf unserem eigenen Server). Wir geben keine Daten an Dritte weiter, außer wenn wir gesetzlich dazu verpflichtet sind.</p>
 
     <h2>Das Archiv-Angebot yipi</h2>
     <p>Unter <a href="/yipi-archiv">/yipi-archiv</a> gibt es noch das frühere soziale Netzwerk yipi. Es hat Konten und speichert, was dafür nötig ist: Nutzername und Anzeigename, optional eine E-Mail-Adresse (nur für die Anmeldung), das Passwort nur als Prüfwert, freiwillige Profilangaben, Yips, Antworten, Bilder, Likes, Lesezeichen und Nachrichten (nicht Ende-zu-Ende-verschlüsselt). Yips und Profile sind öffentlich. Nach der Anmeldung setzt yipi ein Cookie (<code>yipi_session</code>), das 30 Tage gültig ist (technisch notwendig, § 25 Abs. 2 TDDDG) und beim Abmelden entfernt wird. Im Browser liegen nur Einstellungen (<code>yipi.theme</code>, <code>yipi.feed</code>, <code>yipi.recent</code>). Unter „Einstellungen, Dein Konto“ kannst du dein Konto samt allen Inhalten sofort und endgültig löschen.</p>
 
     <h2>Löschen</h2>
-    <p>Bei KI-Regal speichern wir nichts über dich, das wir löschen könnten. Deine Chats, die geladene KI und die Merkliste der Modell-Liste löschst du in deinem Browser. Bei yipi löschst du dein Konto selbst.</p>
+    <p>Bei Nex Ai speichern wir nichts über dich, das wir löschen könnten. Deine Chats, die geladene KI und die Merkliste der Modell-Liste löschst du in deinem Browser. Bei yipi löschst du dein Konto selbst.</p>
 
     <h2>Deine Rechte</h2>
     <p>Du hast das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung, Datenübertragbarkeit und Widerspruch sowie darauf, eine Einwilligung jederzeit zu widerrufen. Du kannst dich außerdem bei einer Datenschutz-Aufsichtsbehörde beschweren. Schreib dafür an die Adresse im <a href="/impressum">Impressum</a>.</p>
 {%- endif %}
   </main>
-  <footer class="legal-links"><a href="/">Zurück zu KI-Regal</a><a href="/nutzungsbedingungen">Nutzungsbedingungen</a><a href="/datenschutz">Datenschutz</a><a href="/impressum">Impressum</a></footer>
+  <footer class="legal-links"><a href="/">Zurück zu Nex Ai</a><a href="/nutzungsbedingungen">Nutzungsbedingungen</a><a href="/datenschutz">Datenschutz</a><a href="/impressum">Impressum</a></footer>
 </div>
 </body>
 </html>

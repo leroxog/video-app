@@ -166,5 +166,5 @@ test("the AI is the first model of the list (best first) that this computer can 
   assert.equal(C.bestModel([big, good, small], { webgpu: false, f16: false }).id, "b/good");               // a computer without a graphics card cannot run the big one
   assert.equal(C.bestModel([big], { webgpu: false, f16: false }), null);
   assert.equal(C.bestModel([], gpu), null);
-  assert.match(C.SYSTEM_PROMPT, /KI-Regal/);
+  assert.match(C.SYSTEM_PROMPT, /Nex Ai/);
 });

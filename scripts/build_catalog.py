@@ -1,4 +1,4 @@
-"""Builds the catalog of the KI-Regal: more than a thousand free AI models that people can download to their own computer.
+"""Builds the catalog of the Nex Ai: more than a thousand free AI models that people can download to their own computer.
 
     python scripts/build_catalog.py             # needs only Python and an internet connection; takes about ten minutes
 

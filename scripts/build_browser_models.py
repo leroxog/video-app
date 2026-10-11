@@ -1,4 +1,4 @@
-"""Makes static/data/browser-models.json: the model(s) that the chat page of KI-Regal runs inside the visitor's browser.
+"""Makes static/data/browser-models.json: the model(s) that the chat page of Nex Ai runs inside the visitor's browser.
 
 These are not any models from the big list: they have to be in the ONNX format that Transformers.js (static/vendor/transformers) can run,
 small enough for a normal PC, and good enough to talk to.  For each model the sizes are read from Hugging Face (what the browser has

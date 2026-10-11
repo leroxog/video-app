@@ -1,4 +1,4 @@
-/* KI-Regal chat: a chat like ChatGPT whose AI runs inside the visitor's browser.  There is one AI and nothing to choose: the page takes
+/* Nex Ai chat: a chat like ChatGPT whose AI runs inside the visitor's browser.  There is one AI and nothing to choose: the page takes
    the best model that this computer can run, loads it once (from Hugging Face, kept in the browser afterwards), and then every question
    is answered by the visitor's own graphics card or processor, in a worker (regal-chat-worker.js).  A side bar with the earlier chats,
    the talk in the middle, the message field below.  What is written here never leaves the computer: this script sends nothing
@@ -70,21 +70,18 @@
   function buildShell() {
     el.history = h("nav", { class: "history", "aria-label": "Frühere Chats" });
     el.side = h("aside", { class: "side", id: "side", "aria-label": "Seitenleiste" },
-      h("div", { class: "side-top" },
-        h("a", { class: "brand", href: "/", "aria-label": "KI-Regal, Startseite" }, logo(), h("span", {}, "KI-Regal")),
-        h("button", { class: "icon-btn side-close", type: "button", "aria-label": "Seitenleiste schließen", onclick: closeDrawer }, icon("close"))),
       h("button", { class: "new-chat", type: "button", onclick: newChat }, icon("edit"), "Neuer Chat"),
       el.history,
       h("div", { class: "side-foot" },
         h("button", { class: "side-link", type: "button", onclick: freeSpace }, icon("trash"), "Gespeicherte KI löschen"),
         h("button", { class: "side-link", type: "button", onclick: deleteAll }, icon("close"), "Alle Chats löschen"),
-        h("p", { class: "side-model" }, icon("pc"), `Die KI ist ${app.model ? app.model.name : "ein Sprachmodell"}${app.model && app.model.maker ? ` von ${app.model.maker}` : ""}. Sie läuft auf deinem Gerät.`),
+        h("p", { class: "side-model" }, icon("pc"), `Nex Ai ist ${app.model ? app.model.name : "ein Sprachmodell"}${app.model && app.model.maker ? ` von ${app.model.maker}` : ""} und läuft auf deinem Gerät.`),
         h("nav", { class: "legal-mini", "aria-label": "Mehr" }, h("a", { href: "/nutzungsbedingungen" }, "Bedingungen"), h("a", { href: "/datenschutz" }, "Datenschutz"), h("a", { href: "/impressum" }, "Impressum"))));
     el.top = h("header", { class: "topbar" });
     el.thread = h("main", { class: "thread", id: "main", tabindex: "-1" });
     el.bottom = h("div", { class: "bottom" });
-    el.shell = h("div", { class: "shell" }, el.side, h("div", { class: "backdrop", onclick: closeDrawer }),
-      h("div", { class: "main-col" }, el.top, el.thread, el.bottom));
+    el.stage = h("div", { class: "stage" }, el.thread, el.bottom);
+    el.shell = h("div", { class: "shell" }, el.side, h("div", { class: "backdrop", onclick: closeDrawer }), h("div", { class: "main-col" }, el.top, el.stage));
     fill(root, el.shell);
     buildComposer();
   }
@@ -92,19 +89,18 @@
   /* On a phone the side bar is a drawer: choosing something in it closes it (on a computer it stays). */
   function closeDrawer() { el.shell.classList.remove("side-open"); }
 
-  /* The side bar: on a phone it slides in over the page, on a computer it can be hidden. */
-  function toggleSide() {
-    const small = window.matchMedia("(max-width: 860px)").matches;
-    if (small) el.shell.classList.toggle("side-open"); else el.shell.classList.toggle("side-hidden");
-  }
+  /* The menu button (only on a phone): the side bar slides in over the page.  On a computer it is always there. */
+  function toggleSide() { el.shell.classList.toggle("side-open"); }
 
   // ---------------------------------------------------------------------------------------------------- top bar
   function renderTop() {
     const state = app.ready ? "ready" : app.loading ? "loading" : "idle";
-    const status = app.ready ? "bereit" : app.loading ? "wird gestartet …" : app.problem ? "nicht gestartet" : "startet mit deiner ersten Nachricht";
+    const status = app.ready ? "bereit" : app.loading ? "startet …" : app.problem ? "läuft nicht" : "";
     fill(el.top,
-      h("button", { class: "icon-btn", type: "button", "aria-label": "Seitenleiste ein- oder ausblenden", "aria-controls": "side", onclick: toggleSide }, icon("menu")),
-      h("div", { class: "top-title" }, h("b", {}, "KI-Regal"), h("span", { class: "top-status" }, h("span", { class: `dot ${state}`, "aria-hidden": "true" }), status)),
+      h("button", { class: "icon-btn menu-btn", type: "button", "aria-label": "Chats", "aria-controls": "side", onclick: toggleSide }, icon("menu")),
+      h("span", { class: "top-mark" }, logo()),
+      h("b", { class: "top-name" }, "Nex Ai"),
+      h("span", { class: "top-status", title: status }, h("span", { class: `dot ${state}`, "aria-hidden": "true" }), status ? h("span", {}, status) : null),
       h("span", { class: "grow" }),
       h("button", { class: "icon-btn", type: "button", "aria-label": "Neuer Chat", title: "Neuer Chat", onclick: newChat }, icon("edit")));
   }
@@ -235,7 +231,7 @@
     el.barText = h("p", { class: "loading-text", "aria-live": "polite" }, "Es geht los …");
     return h("div", { class: "thread-inner center-card" },
       h("div", { class: "spinner" }),
-      h("h2", {}, app.cached ? "Die KI wird gestartet" : "Die KI wird auf dein Gerät geladen"),
+      h("h2", {}, app.cached ? "Nex Ai wird gestartet" : "Nex Ai wird auf dein Gerät geladen"),
       el.barBox, el.barText,
       h("p", { class: "muted small" }, app.cached ? "Das dauert nur einen Moment." : "Das passiert nur beim ersten Mal. Du kannst dieses Fenster offen lassen und etwas anderes machen."),
       app.pending ? h("p", { class: "pending" }, h("span", {}, "Deine Nachricht:"), app.pending) : null,
@@ -248,21 +244,26 @@
     const percent = Math.round(progress.fraction * 100);
     el.barFill.style.width = `${percent}%`;
     el.barBox.setAttribute("aria-valuenow", String(percent));
-    if (progress.fraction >= 0.995) { el.barText.textContent = "Fast fertig: die KI wird gestartet. Beim ersten Mal dauert das einen Moment."; return; }
+    if (progress.fraction >= 0.995) { el.barText.textContent = "Fast fertig: Nex Ai wird gestartet. Beim ersten Mal dauert das einen Moment."; return; }
     const left = Chat.remaining(progress.loaded, progress.total, (performance.now() - app.started) / 1000);
     el.barText.textContent = `${Chat.formatBytes(progress.loaded)} von ${Chat.formatBytes(progress.total)} (${percent} %)${left ? ` · ${left}` : ""}`;
   }
 
   function problemCard() {
-    return h("div", { class: "thread-inner center-card" }, icon("warn"), h("h2", {}, "Die KI läuft nicht"), h("p", { class: "muted" }, app.problem),
+    return h("div", { class: "thread-inner center-card" }, icon("warn"), h("h2", {}, "Nex Ai läuft nicht"), h("p", { class: "muted" }, app.problem),
       app.runtime && app.runtime.ok ? h("div", { class: "row" }, h("button", { class: "btn primary", type: "button", onclick: retry }, "Noch einmal versuchen")) : null);
   }
 
   // ------------------------------------------------------------------------------------------------------ chat
+  function greeting() {
+    const hour = new Date().getHours();
+    return hour < 5 ? "Gute Nacht" : hour < 11 ? "Guten Morgen" : hour < 18 ? "Guten Tag" : hour < 23 ? "Guten Abend" : "Gute Nacht";
+  }
+
   function welcome() {
     return h("div", { class: "thread-inner welcome" },
       h("div", { class: "welcome-logo" }, logo()),
-      h("h1", {}, "Womit kann ich helfen?"),
+      h("h1", {}, greeting()),
       h("div", { class: "suggestions" }, Chat.SUGGESTIONS.map((text) => h("button", { class: "suggestion", type: "button", onclick: () => submit(text) }, text))));
   }
 
@@ -273,7 +274,7 @@
     el.send = h("button", { class: "send", type: "button", onclick: () => (app.busy ? app.worker?.postMessage({ type: "stop" }) : submit()) });
     el.composer = h("div", { class: "composer" },
       h("div", { class: "composer-box" }, app.input, el.send),
-      h("p", { class: "composer-note" }, "KI-Regal läuft auf deinem Gerät, nichts wird gesendet. KI kann Fehler machen."));
+      h("p", { class: "composer-note" }, "Nex Ai läuft auf deinem Gerät, nichts wird gesendet. Nex kann Fehler machen. Wichtiges überprüfen."));
     paintSend();
   }
 
@@ -290,7 +291,7 @@
   function renderBottom() {
     const notes = [];
     if (app.runtime && app.runtime.ok && !app.ready && !app.loading && !app.cached && !app.problem) {
-      notes.push(h("p", { class: "notice" }, icon("download"), `Beim ersten Mal lädt KI-Regal die KI einmalig auf dein Gerät (${Chat.formatBytes(app.runtime.bytes)}), am besten im WLAN. Danach geht es schnell.`));
+      notes.push(h("p", { class: "notice" }, icon("download"), `Beim ersten Mal lädt Nex Ai sich einmalig auf dein Gerät (${Chat.formatBytes(app.runtime.bytes)}), am besten im WLAN. Danach geht es schnell.`));
     }
     if (app.runtime && app.runtime.ok && app.runtime.speed === "slow") notes.push(h("p", { class: "notice" }, icon("warn"), app.runtime.reason));
     if (app.ready && app.savedNote) notes.push(h("p", { class: "notice save-note" }, icon("info"), "Dein Browser hat die KI nicht gespeichert (vielleicht ist zu wenig Platz frei). Beim nächsten Mal muss sie noch einmal geladen werden."));
@@ -299,14 +300,14 @@
 
   function renderThread() {
     const chat = activeChat();
-    if (app.loading) { fill(el.thread, loadingCard()); paintProgress(); return; }
-    if (app.problem || !app.runtime || !app.runtime.ok) {
+    let empty = false;
+    if (app.loading) { fill(el.thread, loadingCard()); paintProgress(); }
+    else if (app.problem || !app.runtime || !app.runtime.ok) {
       if (!app.problem) app.problem = (app.runtime && app.runtime.reason) || "Dieses Gerät kann die KI nicht ausführen.";
       fill(el.thread, problemCard());
-      return;
-    }
-    if (chat && chat.messages.length) { paintMessages(chat); return; }
-    fill(el.thread, welcome());
+    } else if (chat && chat.messages.length) paintMessages(chat);
+    else { fill(el.thread, welcome()); empty = true; }
+    el.stage.classList.toggle("is-empty", empty);
   }
 
   function renderAll() {
@@ -335,6 +336,7 @@
     el.list = h("div", { class: "msgs", role: "log", "aria-live": "polite", "aria-label": "Unterhaltung" },
       chat.messages.map((message, index) => messageNode(message, message.role === "assistant" && index === chat.messages.length - 1)));
     fill(el.thread, h("div", { class: "thread-inner" }, el.list));
+    el.stage.classList.remove("is-empty");
     follow(true);
   }
 
@@ -384,7 +386,7 @@
   /* The AI starts writing the next answer of `chat` (its last message is the question). */
   function answer(chat) {
     el.list.querySelectorAll(".regen").forEach((button) => button.remove());                // only the newest answer can be written again
-    const body = h("div", { class: "answer streaming" }, h("span", { class: "typing", "aria-label": "Die KI schreibt" }, h("i"), h("i"), h("i")));
+    const body = h("div", { class: "answer streaming" }, h("span", { class: "typing", "aria-label": "Nex schreibt" }, h("i"), h("i"), h("i")));
     const meta = h("div", { class: "msg-meta" });
     put(el.list, h("div", { class: "msg bot" }, h("div", { class: "avatar" }, logo()), h("div", { class: "bot-main" }, body, meta)));
     app.current = { chat, text: "", body, meta };
@@ -453,7 +455,7 @@
   // ------------------------------------------------------------------------------------------------------ start
   async function boot() {
     root = document.getElementById("app");
-    fill(root, h("div", { class: "page loading" }, h("div", { class: "spinner" }), h("p", {}, "KI-Regal wird vorbereitet …")));
+    fill(root, h("div", { class: "page loading" }, h("div", { class: "spinner" }), h("p", {}, "Nex Ai wird vorbereitet …")));
     try {
       if (!supported()) throw new Error("unsupported");
       const response = await fetch(root.dataset.models, { credentials: "omit" });
@@ -471,7 +473,7 @@
       console.error(error);
       const old = error && error.message === "unsupported";
       fill(root, h("div", { class: "page loading" }, icon("warn"), h("h2", {}, old ? "Dein Browser ist zu alt" : "Die Seite konnte nicht geladen werden"),
-        h("p", {}, old ? "Für KI-Regal brauchst du einen aktuellen Browser, zum Beispiel Chrome, Edge, Firefox oder Safari." : "Prüfe deine Verbindung und versuche es noch einmal."),
+        h("p", {}, old ? "Für Nex Ai brauchst du einen aktuellen Browser, zum Beispiel Chrome, Edge, Firefox oder Safari." : "Prüfe deine Verbindung und versuche es noch einmal."),
         old ? null : h("button", { class: "btn primary", type: "button", onclick: boot }, "Noch einmal")));
     }
     document.querySelector(".skip")?.addEventListener("click", (event) => { event.preventDefault(); el.thread?.focus(); });

@@ -3,18 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>{{ title }} | KI-Regal</title>
+<title>{{ title }} | Nex Ai</title>
 <meta name="robots" content="noindex">
-<meta name="theme-color" content="#0b0e14">
+<meta name="theme-color" content="#212121" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <meta name="color-scheme" content="dark light">
-<link rel="icon" href="{{ static_url('img/regal-icon.svg') }}" type="image/svg+xml">
-<link rel="icon" href="{{ static_url('img/regal-192.png') }}" type="image/png" sizes="192x192">
-<link rel="apple-touch-icon" href="{{ static_url('img/regal-180.png') }}">
+<link rel="icon" href="{{ static_url('img/nex-icon.svg') }}" type="image/svg+xml">
+<link rel="icon" href="{{ static_url('img/nex-192.png') }}" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="{{ static_url('img/nex-180.png') }}">
 <link rel="stylesheet" href="{{ static_url('css/regal.css') }}">
 </head>
 <body>
 <main class="error-page">
-  <a class="legal-logo" href="/" aria-label="KI-Regal, zur Startseite"><svg viewBox="0 0 48 48" aria-hidden="true" focusable="false"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b5cf6"/><stop offset="1" stop-color="#ec4899"/></linearGradient></defs><rect x="2" y="2" width="44" height="44" rx="12" fill="url(#lg)"/><rect x="9" y="12" width="9" height="13" rx="2" fill="#fff"/><rect x="20" y="8" width="9" height="17" rx="2" fill="#fff" opacity=".9"/><rect x="31" y="14" width="8" height="11" rx="2" fill="#fff" opacity=".8"/><path d="M7 28h34M10 28v10M38 28v10" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg><span>KI-Regal</span></a>
+  <a class="legal-logo" href="/" aria-label="Nex Ai, zur Startseite">{% include "partials/_nex_mark.html" %}<span>Nex Ai</span></a>
   <p class="error-code">{{ code }}</p>
   <h1>{{ title }}</h1>
   <p class="muted">{{ text }}</p>

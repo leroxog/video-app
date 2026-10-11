@@ -1,4 +1,4 @@
-/* KI-Regal chat core: the functions of the chat page that do not touch the page -- which way a model can run on this computer, what
+/* Nex Ai chat core: the functions of the chat page that do not touch the page -- which way a model can run on this computer, what
    is sent to the model, how the answer is cut into paragraphs and code, and what to say when something goes wrong.  They run in the
    browser and in Node (that is how they are tested, tests/regal_chat_core.test.js). */
 (function (root, factory) {
@@ -7,7 +7,7 @@
 })(typeof self !== "undefined" ? self : this, function (Core) {
   "use strict";
 
-  const SYSTEM_PROMPT = "Du bist KI-Regal, ein freundlicher, hilfreicher Assistent. Antworte kurz und klar. Antworte auf Deutsch, außer die Frage ist in einer anderen Sprache. "
+  const SYSTEM_PROMPT = "Du bist Nex Ai, ein freundlicher, hilfreicher Assistent. Antworte kurz und klar. Antworte auf Deutsch, außer die Frage ist in einer anderen Sprache. "
     + "Wenn du etwas nicht sicher weißt, sag das ehrlich, statt etwas zu erfinden.";
   // What the model may read at most (letters, not tokens: a token is about three and a half letters).  The small models forget the
   // beginning of a long talk anyway, and a longer text makes every answer slower.

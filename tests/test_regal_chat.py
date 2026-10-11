@@ -1,4 +1,4 @@
-"""KI-Regal's chat: the page, the list of models that can run in the browser, the program that runs them (third-party files that are
+"""Nex Ai's chat: the page, the list of models that can run in the browser, the program that runs them (third-party files that are
 copied as they are and must stay as they are), and what the server says about all that (types and security policies).  The chat logic
 is tested in regal_chat_core.test.js, the files of the page in test_regal_frontend.py."""
 import gzip

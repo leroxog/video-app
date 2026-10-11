@@ -1,4 +1,4 @@
-"""KI-Regal's earlier home page, now at /modelle-archiv: the list of free AI models (more than a thousand, with their files and sizes), the
+"""Nex Ai's earlier home page, now at /modelle-archiv: the list of free AI models (more than a thousand, with their files and sizes), the
 page that serves it, and the pages around it.  The searching and filtering is tested in regal_core.test.js, the files of the page in
 test_regal_frontend.py; the chat that is the home page now is tested in test_regal_chat.py."""
 import json
@@ -118,23 +118,23 @@ def test_the_page_may_talk_to_hugging_face_for_the_downloads_and_to_nobody_else(
 
 def test_the_manifest_and_the_images_exist(client):
     data = client.get("/manifest.webmanifest").get_json()
-    assert data["short_name"] == "KI-Regal" and data["start_url"] == "/" and data["display"] == "standalone" and "KI-Chat" in data["name"]
+    assert data["short_name"] == "Nex Ai" and data["start_url"] == "/" and data["display"] == "standalone" and "KI-Chat" in data["name"]
     assert {icon["purpose"] for icon in data["icons"]} == {"any", "maskable"}
     for icon in data["icons"]:
         assert client.get(icon["src"]).status_code == 200, icon["src"]
-    for name in ("regal-icon.svg", "regal-180.png", "regal-og.png"):
+    for name in ("nex-icon.svg", "nex-180.png", "nex-og.png"):
         assert client.get(f"/static/img/{name}").status_code == 200, name
 
 
 def test_the_old_home_pages_are_still_there_and_the_site_pages_are_those_of_the_chat(client):
     assert b"yipiBoot" in client.get("/yipi-archiv").data and b"gomatData" in client.get("/gomat-archiv").data
-    for path, words in (("/datenschutz", ("KI-Regal", "regal.fav", "regal.chats", "Hugging Face", "keine Cookies", "yipi_session")), ("/impressum", ("§ 5 DDG", "Rechtswidrige Inhalte melden")),
+    for path, words in (("/datenschutz", ("Nex Ai", "regal.fav", "regal.chats", "Hugging Face", "keine Cookies", "yipi_session")), ("/impressum", ("§ 5 DDG", "Rechtswidrige Inhalte melden")),
                         ("/nutzungsbedingungen", ("Lizenz", "Hugging Face", "16 Jahren", "yipi"))):
         page = client.get(path)
         text = page.get_data(as_text=True)
-        assert page.status_code == 200 and "| KI-Regal</title>" in text and "Set-Cookie" not in page.headers, path
+        assert page.status_code == 200 and "| Nex Ai</title>" in text and "Set-Cookie" not in page.headers, path
         for word in words:
             assert word in text, (path, word)
     error_page = client.get("/gibt-es-nicht-1234")
-    assert error_page.status_code == 404 and "KI-Regal" in error_page.get_data(as_text=True)
+    assert error_page.status_code == 404 and "Nex Ai" in error_page.get_data(as_text=True)
     assert "Sitemap:" in client.get("/robots.txt").get_data(as_text=True)

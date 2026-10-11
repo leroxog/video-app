@@ -1,4 +1,4 @@
-/* KI-Regal ui: the small building blocks of the page -- elements, icons, dialogs, menus, messages.  Text from the list is only ever put
+/* Nex Ai ui: the small building blocks of the page -- elements, icons, dialogs, menus, messages.  Text from the list is only ever put
    on the page as text, never as HTML; the icons are fixed drawings parsed as SVG. */
 (function () {
   "use strict";
@@ -80,14 +80,20 @@
     return svgElement(`<svg xmlns="${SVG_NS}" viewBox="0 0 24 24" ${LINE} aria-hidden="true" focusable="false">${ICONS[name] || ICONS.info}</svg>`);
   }
 
-  let logoCount = 0;
-  /* The logo: a shelf with three boxes (models) on a tile in a gradient from violet to pink. */
+  /* The mark of Nex Ai (the same as Nex had): a hexagon of six nodes round a seventh, white on a dark tile.  Fixed colours: a brand mark
+     does not follow the light or dark setting. */
   function logo() {
-    const id = `rg${++logoCount}`;
-    return svgElement(`<svg xmlns="${SVG_NS}" viewBox="0 0 48 48" aria-hidden="true" focusable="false"><defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b5cf6"/><stop offset="1" stop-color="#ec4899"/></linearGradient></defs>
-      <rect x="2" y="2" width="44" height="44" rx="12" fill="url(#${id})"/>
-      <rect x="9" y="12" width="9" height="13" rx="2" fill="#fff"/><rect x="20" y="8" width="9" height="17" rx="2" fill="#fff" opacity=".9"/><rect x="31" y="14" width="8" height="11" rx="2" fill="#fff" opacity=".8"/>
-      <path d="M7 28h34M10 28v10M38 28v10" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg>`);
+    return svgElement(`<svg xmlns="${SVG_NS}" viewBox="0 0 100 100" aria-hidden="true" focusable="false">
+      <rect width="100" height="100" rx="20" fill="#2f2f2f"/>
+      <g fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M50 19 L78.6 35.5 L78.6 68.5 L50 85 L21.4 68.5 L21.4 35.5 Z"/>
+        <path d="M50 52 L50 19 M50 52 L78.6 35.5 M50 52 L78.6 68.5 M50 52 L50 85 M50 52 L21.4 68.5 M50 52 L21.4 35.5"/>
+      </g>
+      <g fill="#2f2f2f" stroke="#fff" stroke-width="3">
+        <circle cx="50" cy="19" r="7.5"/><circle cx="78.6" cy="35.5" r="7.5"/><circle cx="78.6" cy="68.5" r="7.5"/>
+        <circle cx="50" cy="85" r="7.5"/><circle cx="21.4" cy="68.5" r="7.5"/><circle cx="21.4" cy="35.5" r="7.5"/>
+      </g>
+      <circle cx="50" cy="52" r="4.6" fill="#fff"/></svg>`);
   }
 
   /* Copies a text to the clipboard (resolves to whether it worked). */

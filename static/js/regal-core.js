@@ -1,4 +1,4 @@
-/* KI-Regal core: the small functions that do not touch the page -- the kinds of models and what they are for, how sizes and numbers are
+/* Nex Ai core: the small functions that do not touch the page -- the kinds of models and what they are for, how sizes and numbers are
    said, what a licence allows, searching, filtering and sorting the list, the address of a file, the commands to fetch it, and which
    program runs it.  They run in the browser and in Node (that is how they are tested, tests/regal_core.test.js). */
 (function (root, factory) {

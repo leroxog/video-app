@@ -1,4 +1,4 @@
-/* KI-Regal chat worker: loads one AI model and lets it write answers, inside the visitor's browser (on their graphics card, or else
+/* Nex Ai chat worker: loads one AI model and lets it write answers, inside the visitor's browser (on their graphics card, or else
    on their processor).  It runs in its own thread so that the page stays smooth.  The program that runs the model is Transformers.js
    with ONNX Runtime Web (static/vendor/transformers, from this server, never from a CDN).  The only thing this worker fetches from
    outside is the model itself, from Hugging Face; what people write goes to the model on their own computer and nowhere else.

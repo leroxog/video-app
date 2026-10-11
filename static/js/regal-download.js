@@ -1,4 +1,4 @@
-/* KI-Regal download: puts the files of a model straight into a folder on the computer (Chrome and Edge on a computer can do that: the
+/* Nex Ai download: puts the files of a model straight into a folder on the computer (Chrome and Edge on a computer can do that: the
    person picks a folder, the page writes the files into it while they arrive, with a progress bar).  The files come from Hugging Face to
    the browser; our server is not part of it.  Other browsers get the normal download of the browser (links), which this file does not
    need.  A file that is already in the folder with the right size is not fetched again. */

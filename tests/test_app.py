@@ -347,7 +347,7 @@ def _chat_id(client):
 
 def test_root_serves_regal_not_the_archived_pages(client):
     """The home page cycled Nex, browser, ychat, ylib, the browser again, NRS Server, NRS Sound, ysound, gomat, yipi and is now
-    KI-Regal (2026-10-11). The social network, maths course, song site, sound studio, server panel, browser, ylib, ychat and Nex UIs
+    Nex Ai (2026-10-11). The social network, maths course, song site, sound studio, server panel, browser, ylib, ychat and Nex UIs
     still fully work at /yipi-archiv, /gomat-archiv, /ysound-archiv, /sound-archiv, /server-archiv, /browser-archiv, /ylib-archiv,
     /ychat-archiv and /nex-archiv, unlinked from anywhere."""
     signup(client, "alice")

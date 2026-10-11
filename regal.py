@@ -1,4 +1,4 @@
-"""KI-Regal: a chat with one AI that runs on the visitor's own computer.  This is the home page of the site.
+"""Nex Ai: a chat with one AI that runs on the visitor's own computer.  This is the home page of the site.
 
 There is nothing to choose: the page takes the best model that the computer can run (static/data/browser-models.json, made by
 scripts/build_browser_models.py), loads it once from Hugging Face into the browser, and a worker (static/js/regal-chat-worker.js) lets it
@@ -16,8 +16,8 @@ import os
 from flask import Response, make_response, redirect, render_template, request, send_file, send_from_directory
 from werkzeug.utils import safe_join
 
-SITE_NAME = "KI-Regal"
-DESCRIPTION = "KI-Regal: über 1000 kostenlose KI-Modelle zum Herunterladen auf deinen PC. Zum Chatten, für Bilder, Videos, Musik, Sprache und mehr, mit Größe, Lizenz und allen Dateien."
+SITE_NAME = "Nex Ai"
+DESCRIPTION = "Nex Ai: über 1000 kostenlose KI-Modelle zum Herunterladen auf deinen PC. Zum Chatten, für Bilder, Videos, Musik, Sprache und mehr, mit Größe, Lizenz und allen Dateien."
 
 # The page asks Hugging Face for the files that people choose to download (never for anything else), and the CDN that Hugging Face
 # sends them from; that is all it may talk to besides this site.
@@ -26,7 +26,7 @@ CONTENT_SECURITY_POLICY = (
     "connect-src 'self' https://huggingface.co https://*.huggingface.co https://*.hf.co; manifest-src 'self'; worker-src 'self'; "
     "base-uri 'none'; object-src 'none'; form-action 'self'; frame-ancestors 'none'"
 )
-CHAT_DESCRIPTION = "KI-Regal: Chat mit einer KI, die auf deinem eigenen Computer läuft. Ohne App, ohne Konto, ohne Server. Deine Fragen verlassen dein Gerät nie."
+CHAT_DESCRIPTION = "Nex Ai: Chat mit einer KI, die auf deinem eigenen Computer läuft. Ohne App, ohne Konto, ohne Server. Deine Fragen verlassen dein Gerät nie."
 # The worker that runs the model (static/js/regal-chat-worker.js) gets its own policy, because a worker is bound by the policy of its own
 # script and not by the page's: it may run WebAssembly (the AI runtime) and fetch the model from Hugging Face, and nothing else.
 WORKER_PATH = "/static/js/regal-chat-worker.js"
@@ -48,11 +48,11 @@ def manifest():
     return {
         "name": f"{SITE_NAME}: KI-Chat auf deinem Computer", "short_name": SITE_NAME, "description": CHAT_DESCRIPTION, "lang": "de", "dir": "ltr",
         "id": "/", "start_url": "/", "scope": "/", "display": "standalone", "orientation": "any",
-        "background_color": "#0b0e14", "theme_color": "#0b0e14", "categories": ["utilities", "productivity"],
+        "background_color": "#212121", "theme_color": "#212121", "categories": ["utilities", "productivity"],
         "icons": [
-            {"src": "/static/img/regal-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
-            {"src": "/static/img/regal-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
-            {"src": "/static/img/regal-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
+            {"src": "/static/img/nex-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+            {"src": "/static/img/nex-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+            {"src": "/static/img/nex-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
         ],
     }
 

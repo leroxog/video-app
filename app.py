@@ -1240,7 +1240,7 @@ gomat.register_routes(app)
 gomat_accounts.register_routes(app)
 yipi.register_routes(app)
 _PUBLIC_ENDPOINTS.update(yipi.ENDPOINTS)       # yipi has accounts of its own and checks the sign-in itself
-# KI-Regal (the home page since 2026-10-11: a chat with one AI that runs on the visitor's computer; no accounts, no cookies).  The list of free AI models it began as is at /modelle-archiv.
+# Nex Ai (the home page since 2026-10-11: a chat with one AI that runs on the visitor's computer; no accounts, no cookies).  The list of free AI models it began as is at /modelle-archiv.
 regal.register_routes(app)
 _PUBLIC_ENDPOINTS.update(regal.ENDPOINTS)
 
