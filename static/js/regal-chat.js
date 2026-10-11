@@ -15,7 +15,7 @@
 
   const app = {
     models: [], gpu: { webgpu: false, f16: false }, cached: false, model: null, runtime: null,
-    worker: null, ready: false, loading: false, problem: "", files: {}, started: 0, pending: "",
+    worker: null, ready: false, loading: false, problem: "", files: {}, started: 0, lastProgress: 0, watch: 0, pending: "",
     chats: [], activeId: "", busy: false, current: null, savedNote: false,
     skips: {}, detail: "", downgraded: false,
   };
@@ -227,6 +227,8 @@
 
   // --------------------------------------------------------------------------------------------------- the worker
   function stopWorker() {
+    clearInterval(app.watch);
+    app.watch = 0;
     if (app.worker) { app.worker.terminate(); app.worker = null; }        // ends it and frees the memory of the graphics card
     app.busy = false;
     app.current = null;
@@ -249,6 +251,8 @@
     app.savedNote = false;
     app.files = {};
     app.started = performance.now();
+    app.lastProgress = app.started;
+    app.watch = setInterval(checkStall, 5000);
     renderAll();
     startWorker().postMessage({ type: "load", id: app.model.id, device: app.runtime.device, dtype: app.runtime.dtype });
   }
@@ -271,8 +275,10 @@
   }
 
   function onWorker(message) {
-    if (message.type === "progress") { app.files = message.files || {}; if (app.loading) paintProgress(); }
+    if (message.type === "progress") { app.files = message.files || {}; app.lastProgress = performance.now(); if (app.loading) paintProgress(); }
     else if (message.type === "ready") {
+      clearInterval(app.watch);
+      app.watch = 0;
       app.loading = false;
       app.ready = true;
       renderAll();
@@ -348,12 +354,27 @@
       el.barBox, el.barText,
       h("p", { class: "muted small" }, app.cached ? "Das dauert nur einen Moment." : "Das passiert nur beim ersten Mal. Du kannst dieses Fenster offen lassen und etwas anderes machen."),
       app.downgraded ? h("p", { class: "notice" }, icon("info"), "Die größere Version hat auf deinem Gerät nicht funktioniert (zu wenig Speicher). Nex Ai nimmt deshalb eine kleinere.") : null,
+      (el.stall = h("p", { class: "notice", hidden: true }, icon("warn"), h("span", {}, "Es geht gerade nicht weiter. Prüfe deine Verbindung. ", h("button", { class: "linklike", type: "button", onclick: restartLoading }, "Neu starten"), " (schon geladene Teile bleiben erhalten)"))),
       app.pending ? h("p", { class: "pending" }, h("span", {}, "Deine Nachricht:"), app.pending) : null,
       h("button", { class: "btn ghost", type: "button", onclick: cancelLoading }, "Abbrechen"));
   }
 
+  /* Nothing has been loaded for 40 seconds (a connection that hangs): say so, and offer to start again.  Not when the download is done and the
+     computer is only preparing the AI, which can take a while. */
+  function checkStall() {
+    if (!app.loading || !el.stall) return;
+    const progress = Chat.progressOf(app.files, app.runtime ? app.runtime.bytes : 0);
+    el.stall.hidden = !(performance.now() - app.lastProgress > 40000 && progress.fraction < 0.995);
+  }
+
+  function restartLoading() {
+    stopWorker();
+    startLoading();
+  }
+
   function paintProgress() {
     if (!el.barFill) return;
+    if (el.stall) el.stall.hidden = true;
     const progress = Chat.progressOf(app.files, app.runtime.bytes);
     const percent = Math.round(progress.fraction * 100);
     el.barFill.style.width = `${percent}%`;

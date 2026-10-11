@@ -133,6 +133,13 @@ def test_the_page_measures_the_graphics_card_and_takes_the_best_ai_for_it():
     assert "fetch(" in code and code.count("fetch(") == 1, "measuring needs no network"
 
 
+def test_a_download_that_hangs_is_noticed_and_can_be_started_again():
+    code = code_of(CHAT_JS["regal-chat.js"])
+    assert "checkStall" in code and "40000" in code and "setInterval(checkStall, 5000)" in code and "function restartLoading" in code and "clearInterval(app.watch)" in code
+    assert code.count("clearInterval(app.watch)") >= 2, "the watch ends when the AI is ready and when the worker is stopped"
+    assert "progress.fraction < 0.995" in code, "a computer that only prepares the AI after the download is not a hanging download"
+
+
 def test_the_chat_has_nothing_to_choose():
     code = code_of(CHAT_JS["regal-chat.js"])
     assert "bestModel(" in code and 'type: "radio"' not in code and "listbox" not in code, "one AI: the page takes the best one"
