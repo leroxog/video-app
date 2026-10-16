@@ -1,40 +1,52 @@
-"""Nex Ai: real AI that runs on the visitor's own computer.  The home page (`/`) is now several real passes of one on-device model,
-each reading what the pass before it wrote -- a first answer, a check of that answer, then the final one -- all visible as they are
-written (templates/regal_agents.html, static/js/regal-agents.js).  It briefly was a single-chat page, then for a few hours on
-2026-10-16 a page that asked Wikipedia and let small, non-AI "agents" argue over the result (see nstl.py); both earlier shapes still
-fully work, unlinked, as the user asked for "echte AIs" with the design and the name of Nex: the plain single chat at /nex-ai-archiv,
-the Wikipedia-swarm one at /nstl-archiv.
+"""Nex Ai: real AI, not on the visitor's own computer any more.  The home page (`/`) sends a question to this server, which asks Groq's
+hosted API (ai_assistant.py, the same one the site's other "Nex" chat already uses) in five short, independent passes -- four agents
+each write their own answer, then a fifth reads all four and writes the one the visitor sees -- and streams every word of every pass
+back to the page as it is written (templates/regal_agents.html, static/js/regal-agents.js), collapsed behind an "In Bearbeitung" row
+the visitor can open to watch the agents at work.  It was an on-device chat before (no download any more: that is the point of this
+change, made at the user's explicit request -- "ai's die nicht auf deinem pc laufen"), and for a few hours on 2026-10-16 a page that
+asked Wikipedia and let small, non-AI "agents" argue over the result (see nstl.py); both earlier shapes still fully work, unlinked: the
+on-device single chat at /nex-ai-archiv, the Wikipedia-swarm one at /nstl-archiv.
 
-There is nothing to choose: every pass takes the best model that the computer can run (static/data/browser-models.json, made by
-scripts/build_browser_models.py), loads it once from Hugging Face into the browser, and a worker (static/js/regal-chat-worker.js) lets it
-write on the graphics card or processor.  What people write never reaches this server: it delivers the page and the program that runs
-the model (static/vendor/transformers) and keeps no data about visitors: no accounts, no cookies.  The scripts are static/js/regal-chat*.js
-(the single chat, archived) and static/js/regal-agents.js (the home page), sharing static/js/regal-chat-core.js and the one worker.
+Five is a real, honest number, not the "10.000.000" the user asked for: that many real calls to a real AI, per question, has no
+realistic cost or latency on a hobby project (and this server runs one request at a time -- see AGENT_ROLES below -- so the five run
+one after another, not even in parallel). The page says so plainly rather than pretending otherwise.
 
 The even earlier home page, a list of more than a thousand free AI models to download (static/data/models.json, made by
 scripts/build_catalog.py), is still at /modelle-archiv (scripts static/js/regal*.js).
 """
 import gzip
 import json
+import logging
 import os
 
-from flask import Response, make_response, redirect, render_template, request, send_file, send_from_directory
+from flask import Response, jsonify, make_response, redirect, render_template, request, send_file, send_from_directory, stream_with_context
 from werkzeug.utils import safe_join
+
+import ai_assistant
+import siteauth
+
+logger = logging.getLogger(__name__)
 
 SITE_NAME = "Nex Ai"
 DESCRIPTION = "Nex Ai: über 1000 kostenlose KI-Modelle zum Herunterladen auf deinen PC. Zum Chatten, für Bilder, Videos, Musik, Sprache und mehr, mit Größe, Lizenz und allen Dateien."
 
 # The page asks Hugging Face for the files that people choose to download (never for anything else), and the CDN that Hugging Face
-# sends them from; that is all it may talk to besides this site.
+# sends them from; that is all it may talk to besides this site.  Only the archived single chat (/nex-ai-archiv) uses this any more.
 CONTENT_SECURITY_POLICY = (
     "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; "
     "connect-src 'self' https://huggingface.co https://*.huggingface.co https://*.hf.co; manifest-src 'self'; worker-src 'self'; "
     "base-uri 'none'; object-src 'none'; form-action 'self'; frame-ancestors 'none'"
 )
+# The home page only ever talks to its own server now (which in turn talks to Groq, not the visitor's browser): a plain, narrow policy.
+AGENTS_CONTENT_SECURITY_POLICY = (
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; "
+    "connect-src 'self'; manifest-src 'self'; base-uri 'none'; object-src 'none'; form-action 'self'; frame-ancestors 'none'"
+)
 CHAT_DESCRIPTION = "Nex Ai: Chat mit einer KI, die auf deinem eigenen Computer läuft. Ohne App, ohne Konto, ohne Server. Deine Fragen verlassen dein Gerät nie."
-AGENTS_DESCRIPTION = "Nex Ai: Stell eine Frage. Drei echte Durchgänge der KI, die auf deinem Computer läuft, prüfen sich gegenseitig, bevor du die Antwort bekommst – alles sichtbar, nichts wird gesendet."
+AGENTS_DESCRIPTION = "Nex Ai: Stell eine Frage. Fünf echte KI-Durchgänge arbeiten nacheinander daran und einigen sich auf die beste Antwort – du kannst live mitlesen, was sie schreiben. Ohne Download, ohne Konto."
 # The worker that runs the model (static/js/regal-chat-worker.js) gets its own policy, because a worker is bound by the policy of its own
 # script and not by the page's: it may run WebAssembly (the AI runtime) and fetch the model from Hugging Face, and nothing else.
+# Only the archived single chat (/nex-ai-archiv) loads this worker any more.
 WORKER_PATH = "/static/js/regal-chat-worker.js"
 WORKER_CONTENT_SECURITY_POLICY = (
     "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' https://huggingface.co https://*.huggingface.co https://*.hf.co"
@@ -43,6 +55,25 @@ VENDOR_PATH = "/static/vendor/"
 VENDOR_TYPES = {".mjs": "text/javascript", ".js": "text/javascript", ".wasm": "application/wasm", ".txt": "text/plain; charset=utf-8"}
 PERMISSIONS_POLICY = "camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), serial=(), hid=(), interest-cohort=()"
 ENDPOINTS = set()           # filled by register_routes: every endpoint of this module (the site's login gate must let them through)
+
+# ------------------------------------------------------------------------------------------- the five agents (/api/agents/ask)
+# Four independent takes on the question, then a fifth that has read all four and writes the one the visitor actually sees.  Kept
+# server-side (not sent by the client) so nobody can turn this into a free-form prompt box for an arbitrary system prompt.
+AGENT_ROLES = {
+    "direkt": "Du bist ein KI-Agent. Beantworte die folgende Frage direkt, klar und präzise, in wenigen Sätzen. Antworte auf Deutsch, außer die Frage ist in einer anderen Sprache. Sag ehrlich, wenn du etwas nicht sicher weißt.",
+    "gruendlich": "Du bist ein KI-Agent. Beantworte die folgende Frage besonders gründlich: nenne relevante Hintergründe oder Zusammenhänge, die eine ganz kurze Antwort auslassen würde. Antworte auf Deutsch, außer die Frage ist in einer anderen Sprache.",
+    "kritisch": "Du bist ein KI-Agent. Überlege bei der folgenden Frage, was an einer naheliegenden Antwort falsch, unvollständig oder missverständlich sein könnte, und worauf man achten sollte. Antworte auf Deutsch, außer die Frage ist in einer anderen Sprache.",
+    "praktisch": "Du bist ein KI-Agent. Beantworte die folgende Frage so, dass sie im Alltag sofort nützlich ist: konkret, mit einem Beispiel oder nächsten Schritt, wenn das passt. Antworte auf Deutsch, außer die Frage ist in einer anderen Sprache.",
+    "final": "Du bist der KI-Agent, der entscheidet. Du bekommst eine Frage und vier unabhängige Antworten anderer Agenten darauf. Schreib daraus die beste, klare Antwort für den Nutzer: nimm, was am meisten stimmt und am hilfreichsten ist, lass Widersprüchliches oder Falsches weg. Wiederhole die anderen Agenten nicht wörtlich und erwähne sie nicht. Antworte auf Deutsch, außer die Frage ist in einer anderen Sprache.",
+}
+AGENT_ORDER = ("direkt", "gruendlich", "kritisch", "praktisch")   # the four independent ones, in the order the page asks them
+AGENT_MAX_TOKENS = 380
+FINAL_MAX_TOKENS = 500
+# One visitor (by the address their own request claims) may ask at most 7 questions (35 agent calls) in 10 minutes; the whole site
+# together at most 10 questions a minute -- generous for normal use, a real ceiling against a script hammering the Groq key.
+AGENT_LIMITS = {"agents-ip": (35, 600), "agents-flood": (50, 60)}
+_agents_hits = {}
+_agents_limiter = siteauth.RateLimiter(AGENT_LIMITS, _agents_hits)
 
 
 def base_url():
@@ -78,6 +109,14 @@ def agents_manifest():
 
 def page_headers(response):
     response.headers["Content-Security-Policy"] = CONTENT_SECURITY_POLICY
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Cache-Control"] = "no-cache"
+    response.headers["Permissions-Policy"] = PERMISSIONS_POLICY
+    return response
+
+
+def agents_page_headers(response):
+    response.headers["Content-Security-Policy"] = AGENTS_CONTENT_SECURITY_POLICY
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Cache-Control"] = "no-cache"
     response.headers["Permissions-Policy"] = PERMISSIONS_POLICY
@@ -124,10 +163,43 @@ def register_routes(app):
 
     @route("/", endpoint="pl_home")
     def regal_agents_home():
-        """The home page: three real passes of the one on-device AI model, each reading what the pass before it wrote, all visible
-        as they are written."""
+        """The home page: a question runs through five real, server-side AI passes (see AGENT_ROLES), each reading what came
+        before it, all visible as they are written."""
         page = render_template("regal_agents.html", description=AGENTS_DESCRIPTION, base=base_url())
-        return page_headers(make_response(page))
+        return agents_page_headers(make_response(page))
+
+    @route("/api/agents/ask", endpoint="regal_agents_ask", methods=["POST"])
+    def regal_agents_ask():
+        """One agent's turn.  `role` picks its system prompt (AGENT_ROLES); `message` is the visitor's question; for role "final"
+        the client also sends `agents`, the other four agents' own answers, so the final pass can read and judge them.  Streams the
+        reply back as plain text, exactly like /api/ai/chats/<id>/stream -- but this one keeps no history and writes nothing to the
+        database: a visitor here has no account and the page promises not to remember the conversation."""
+        if not siteauth.same_origin():
+            return jsonify({"ok": False, "error": "bad_origin"}), 403
+        first, last = siteauth.client_addresses()
+        if _agents_limiter.too_many("agents-ip", first) or _agents_limiter.too_many("agents-flood", last):
+            return jsonify({"ok": False, "error": "rate_limited"}), 429
+        data = request.get_json(silent=True) or {}
+        role = data.get("role")
+        message = (data.get("message") or "").strip()[:2000]
+        if role not in AGENT_ROLES or not message:
+            return jsonify({"ok": False, "error": "bad_request"}), 400
+        parts = [f"Frage: {message}"]
+        if role == "final":
+            agents = data.get("agents") if isinstance(data.get("agents"), dict) else {}
+            for key in AGENT_ORDER:
+                text = str(agents.get(key, "")).strip()[:1500]
+                if text:
+                    parts.append(f"{key}: {text}")
+        combined = "\n\n".join(parts)
+        max_tokens = FINAL_MAX_TOKENS if role == "final" else AGENT_MAX_TOKENS
+
+        def generate():
+            try:
+                yield from ai_assistant.generate_custom_stream(AGENT_ROLES[role], combined, max_tokens=max_tokens)
+            except Exception:
+                logger.exception("Agenten-Durchgang (%s) fehlgeschlagen", role)        # the client reads a short/empty stream as "nothing came back"
+        return Response(stream_with_context(generate()), mimetype="text/plain")
 
     @route("/nex-ai-archiv", endpoint="regal_archive_home")
     def regal_home():

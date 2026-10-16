@@ -400,3 +400,31 @@ def generate_reply_stream(message, history=None, persona=DEFAULT_PERSONA):
             GROQ_MODEL, status, GROQ_FALLBACK_MODEL,
         )
         yield from _generate_groq_stream_with_model(GROQ_FALLBACK_MODEL, messages, MAX_REPLY_TOKENS, 0.7, api_key)
+
+
+def generate_custom_stream(system_prompt, message, max_tokens=600, temperature=0.7):
+    """Like generate_reply_stream, but for a caller with its own narrow, single-purpose system prompt instead of one of PERSONAS's
+    general-purpose identities (and their long artifact protocol, wasted tokens for a one-off instruction) -- used by regal.py's
+    agent passes (static/js/regal-agents.js), each of which is one short-lived role, not an open-ended conversation. `message` is the
+    one and only user turn; there is no multi-turn `history` here, by design: every call is independent."""
+    message = (message or "").strip()[:8000]              # a caller may pack other agents' answers in here as context
+    if not message:
+        return
+    api_key = os.environ.get("GROQ_API_KEY")
+    if not api_key:
+        raise RuntimeError(
+            "GROQ_API_KEY ist nicht gesetzt. Auf groq.com einen kostenlosen API-Key erstellen "
+            "und als Umgebungsvariable GROQ_API_KEY hinterlegen."
+        )
+    messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": message}]
+    try:
+        yield from _generate_groq_stream_with_model(GROQ_MODEL, messages, max_tokens, temperature, api_key)
+    except requests.exceptions.HTTPError as exc:
+        status = exc.response.status_code if exc.response is not None else None
+        if status not in (400, 404) or GROQ_MODEL == GROQ_FALLBACK_MODEL:
+            raise
+        logger.warning(
+            "Groq-Modell '%s' hat mit Status %s abgelehnt -- weiche einmalig auf Fallback '%s' aus.",
+            GROQ_MODEL, status, GROQ_FALLBACK_MODEL,
+        )
+        yield from _generate_groq_stream_with_model(GROQ_FALLBACK_MODEL, messages, max_tokens, temperature, api_key)

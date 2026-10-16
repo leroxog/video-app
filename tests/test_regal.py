@@ -117,11 +117,11 @@ def test_the_archived_chat_may_talk_to_hugging_face_for_the_downloads_and_to_nob
     assert client.get("/nex-ai-archiv", headers={"X-Forwarded-Proto": "https"}).headers["Strict-Transport-Security"].startswith("max-age=")
 
 
-def test_the_home_page_may_talk_to_hugging_face_for_the_model_and_to_nobody_else(client):
+def test_the_home_page_talks_only_to_its_own_server_the_browser_never_reaches_groq(client):
     response = client.get("/")
     csp = response.headers["Content-Security-Policy"]
-    assert "script-src 'self'" in csp and "worker-src 'self'" in csp and "frame-ancestors 'none'" in csp
-    assert "connect-src 'self' https://huggingface.co https://*.huggingface.co https://*.hf.co;" in csp
+    assert "script-src 'self'" in csp and "frame-ancestors 'none'" in csp
+    assert "connect-src 'self';" in csp and "huggingface" not in csp and "worker-src" not in csp
     assert response.headers["X-Frame-Options"] == "DENY" and response.headers["Permissions-Policy"].startswith("camera=()")
     assert response.headers["X-Content-Type-Options"] == "nosniff"
 

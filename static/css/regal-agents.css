@@ -1,12 +1,22 @@
-/* Nex Ai, mehrere Agenten: reuses almost everything from regal-chat.css (the shell, the message bubbles, the loading and problem
-   cards, the composer) -- this file only adds what tells the three passes apart: a small label above each one, a card around each
-   turn so they read as separate steps instead of one long answer, and a highlight on the last one (the actual answer). */
+/* Nex Ai, five agents: reuses almost everything from regal-chat.css (the shell, the message bubbles, the composer) -- this file adds
+   what is new here: the collapsible "In Bearbeitung" row and the card around each of the five turns, so they read as distinct, real
+   passes instead of one long answer. */
 
 .agent-turn { padding: 14px 16px; border-radius: var(--radius); background: var(--panel); border: 1px solid var(--line); }
 .agent-label { margin-bottom: 8px; color: var(--faint); font-size: 12px; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase; }
 .agent-final { background: color-mix(in srgb, var(--accent) 8%, var(--panel)); border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
 .agent-final .agent-label { color: var(--accent-2); }
 
+.status-row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 14px; border-radius: var(--radius); background: var(--panel); border: 1px solid var(--line); color: var(--muted); font-weight: 600; font-size: 14px; text-align: left; transition: background 0.15s; }
+.status-row:hover { background: var(--panel-2); }
+.status-row svg { width: 17px; height: 17px; flex: none; color: var(--muted); }
+.status-label { flex: 1; min-width: 0; }
+.chevron { display: inline-flex; transition: transform 0.15s ease; }
+.chevron.open { transform: rotate(180deg); }
+.spinner.small { width: 16px; height: 16px; border-width: 2px; flex: none; }
+
+.transcript { display: grid; gap: 10px; padding-left: 4px; border-left: 2px solid var(--line); margin-left: 8px; }
+
 @media (prefers-reduced-motion: reduce) {
-  .agent-turn { transition: none; }
+  .chevron { transition: none; }
 }
