@@ -13,6 +13,10 @@ Five is a real, honest number, not the "10.000.000" the user asked for: that man
 realistic cost or latency on a hobby project (and this server runs one request at a time -- see AGENT_ROLES below -- so the five run
 one after another, not even in parallel). The page says so plainly rather than pretending otherwise.
 
+Earlier chats are kept, only in the visitor's own browser (localStorage, key regal.agents.chats -- see regal-agents.js), each with a
+short (2 to 5 word) title a Groq call writes, and re-writes after every answer, not only the first one (/api/agents/title, same rate
+limit as a normal turn; reuses ai_assistant.generate_chat_title, already used for the exact same job elsewhere on this site).
+
 The even earlier home page, a list of more than a thousand free AI models to download (static/data/models.json, made by
 scripts/build_catalog.py), is still at /modelle-archiv (scripts static/js/regal*.js).
 """
@@ -70,23 +74,33 @@ ENDPOINTS = set()           # filled by register_routes: every endpoint of this 
 # are mutually legible to each other (and to the fifth agent that reads all four) while looking like nothing a visitor could
 # read at a glance.  It is genuinely more efficient too -- fewer tokens for the same content -- not just decoration.
 AGENT_NOTATION = (
-    "Schreib NICHT in ausformulierten Sätzen, sondern in der knappen Notiz-Sprache der Agenten: nur Stichworte, keine Füllwörter, "
-    "keine Artikel, kurze Symbole statt ganzer Wörter. '=' heißt ist/bedeutet, '>' heißt führt-zu/deshalb, '+' heißt spricht-dafür, "
-    "'-' heißt spricht-dagegen, '?' heißt unsicher/zu-prüfen, ';' trennt Punkte. Trotzdem inhaltlich vollständig und korrekt -- nur "
-    "extrem knapp notiert, wie eine Abkürzungs-Notiz für einen anderen Agenten, nicht für Menschen."
+    "Schreib NICHT in Sätzen und NICHT mit ausgeschriebenen Feldnamen (also nicht 'Bedeutung:', 'Beispiel:', 'Hinweis:' o.ä.), "
+    "sondern in der denkbar knappsten Notiz-Sprache: nur die wichtigsten Stichworte, durch Symbole verkettet, keine Füllwörter, "
+    "keine Artikel, keine ganzen Sätze. '=' heißt ist/bedeutet, '>' heißt führt-zu/deshalb, '+' heißt spricht-dafür, '-' heißt "
+    "spricht-dagegen, '?' heißt unsicher/zu-prüfen, '/' heißt oder/Alternative, ';' trennt Punkte. Lieber drei knappe "
+    "Stichwort-Ketten als ein ausformulierter Satz. Trotzdem inhaltlich vollständig und korrekt -- nur so knapp wie irgend möglich "
+    "notiert, wie eine Abkürzungs-Notiz für einen anderen Agenten, nicht für Menschen."
+)
+# "einfach die wahrscheinlichste Antwort, nicht drum rum reden" -- the user's complaint after watching a real answer hedge with a
+# list of five possible meanings instead of just picking one.  Applies to every role, not only the final one.
+AGENT_DECISIVE = (
+    "Entscheide dich für die wahrscheinlichste Deutung und Antwort, auch wenn die Frage kurz oder mehrdeutig ist -- zähl nicht "
+    "mehrere mögliche Bedeutungen auf und frag nicht nach, was gemeint ist. Antworte direkt mit der wahrscheinlichsten Antwort, "
+    "ohne Drumherum."
 )
 AGENT_ROLES = {
-    "direkt": "Du bist ein KI-Agent. Beantworte die folgende Frage direkt, klar und präzise, in wenigen Punkten. Antworte auf Deutsch, außer die Frage ist in einer anderen Sprache. Sag ehrlich, wenn du etwas nicht sicher weißt.\n\n" + AGENT_NOTATION,
-    "gruendlich": "Du bist ein KI-Agent. Beantworte die folgende Frage besonders gründlich: nenne relevante Hintergründe oder Zusammenhänge, die eine ganz kurze Antwort auslassen würde. Antworte auf Deutsch, außer die Frage ist in einer anderen Sprache.\n\n" + AGENT_NOTATION,
+    "direkt": "Du bist ein KI-Agent. Beantworte die folgende Frage direkt, klar und präzise, in wenigen Punkten. Antworte auf Deutsch, außer die Frage ist in einer anderen Sprache. Sag ehrlich, wenn du etwas nicht sicher weißt.\n\n" + AGENT_DECISIVE + "\n\n" + AGENT_NOTATION,
+    "gruendlich": "Du bist ein KI-Agent. Beantworte die folgende Frage besonders gründlich: nenne relevante Hintergründe oder Zusammenhänge, die eine ganz kurze Antwort auslassen würde. Antworte auf Deutsch, außer die Frage ist in einer anderen Sprache.\n\n" + AGENT_DECISIVE + "\n\n" + AGENT_NOTATION,
     "kritisch": "Du bist ein KI-Agent. Überlege bei der folgenden Frage, was an einer naheliegenden Antwort falsch, unvollständig oder missverständlich sein könnte, und worauf man achten sollte. Antworte auf Deutsch, außer die Frage ist in einer anderen Sprache.\n\n" + AGENT_NOTATION,
-    "praktisch": "Du bist ein KI-Agent. Beantworte die folgende Frage so, dass sie im Alltag sofort nützlich ist: konkret, mit einem Beispiel oder nächsten Schritt, wenn das passt. Antworte auf Deutsch, außer die Frage ist in einer anderen Sprache.\n\n" + AGENT_NOTATION,
+    "praktisch": "Du bist ein KI-Agent. Beantworte die folgende Frage so, dass sie im Alltag sofort nützlich ist: konkret, mit einem Beispiel oder nächsten Schritt, wenn das passt. Antworte auf Deutsch, außer die Frage ist in einer anderen Sprache.\n\n" + AGENT_DECISIVE + "\n\n" + AGENT_NOTATION,
     "final": (
         "Du bist der KI-Agent, der entscheidet. Du bekommst eine Frage und die Notizen von vier anderen Agenten, geschrieben in "
-        "ihrer knappen Notiz-Sprache ('=' ist/bedeutet, '>' führt-zu, '+' dafür, '-' dagegen, '?' unsicher, ';' trennt Punkte). Lies "
-        "die Notizen, verstehe ihren Inhalt, und schreib daraus die beste, klare Antwort für den Nutzer in ganz normaler, flüssiger "
-        "Sprache -- keine Symbole, keine Notiz-Form, nur normaler Text. Nimm, was am meisten stimmt und am hilfreichsten ist, lass "
-        "Widersprüchliches oder Falsches weg. Erwähne die anderen Agenten oder ihre Notation nicht. Antworte auf Deutsch, außer die "
-        "Frage ist in einer anderen Sprache."
+        "ihrer knappen Notiz-Sprache ('=' ist/bedeutet, '>' führt-zu, '+' dafür, '-' dagegen, '?' unsicher, '/' oder, ';' trennt "
+        "Punkte). Lies die Notizen, verstehe ihren Inhalt, und schreib daraus die beste Antwort für den Nutzer in ganz normaler, "
+        "flüssiger Sprache -- keine Symbole, keine Notiz-Form, nur normaler Text. " + AGENT_DECISIVE + " Nimm, was am meisten "
+        "stimmt und am hilfreichsten ist, lass Widersprüchliches oder Falsches weg. Keine langen Einleitungen, keine Liste "
+        "möglicher Bedeutungen, keine Rückfrage an den Nutzer -- entscheide dich und antworte. Erwähne die anderen Agenten oder "
+        "ihre Notation nicht. Antworte auf Deutsch, außer die Frage ist in einer anderen Sprache."
     ),
 }
 AGENT_ORDER = ("direkt", "gruendlich", "kritisch", "praktisch")   # the four independent ones, in the order the page asks them
@@ -228,6 +242,31 @@ def register_routes(app):
             except Exception:
                 logger.exception("Agenten-Durchgang (%s) fehlgeschlagen", role)        # the client reads a short/empty stream as "nothing came back"
         return Response(stream_with_context(generate()), mimetype="text/plain")
+
+    @route("/api/agents/title", endpoint="regal_agents_title", methods=["POST"])
+    def regal_agents_title():
+        """A short (2 to 5 word) title for a chat's side-bar row, asked again after every answer (not only the first one) so it
+        keeps matching where the conversation ended up.  Reuses ai_assistant.generate_chat_title, the exact function the site's
+        other "Nex" chat already uses for the same job; same rate limit as a normal agent turn, since it is one more Groq call."""
+        if not siteauth.same_origin():
+            return jsonify({"ok": False, "error": "bad_origin"}), 403
+        first, last = siteauth.client_addresses()
+        if _agents_limiter.too_many("agents-ip", first) or _agents_limiter.too_many("agents-flood", last):
+            return jsonify({"ok": False, "error": "rate_limited"}), 429
+        data = request.get_json(silent=True) or {}
+        raw = data.get("messages") if isinstance(data.get("messages"), list) else []
+        history = []
+        for item in raw[-20:]:
+            if isinstance(item, dict) and item.get("role") in ("user", "assistant") and isinstance(item.get("content"), str) and item["content"].strip():
+                history.append({"role": item["role"], "content": item["content"].strip()[:4000]})
+        if not history:
+            return jsonify({"ok": False, "error": "bad_request"}), 400
+        try:
+            title = ai_assistant.generate_chat_title(history)
+        except Exception:
+            logger.exception("Titel-Generierung für einen Agenten-Chat fehlgeschlagen")
+            title = ""
+        return jsonify({"ok": True, "title": title})
 
     @route("/nex-ai-archiv", endpoint="regal_archive_home")
     def regal_home():

@@ -42,7 +42,7 @@ def test_it_is_valid_javascript():
 
 def test_nothing_an_agent_writes_is_put_on_the_page_as_html_and_it_runs_no_foreign_code():
     code = code_of(JS)
-    for sink in ("innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", "eval(", "new Function", "document.cookie", "sessionStorage", "localStorage",
+    for sink in ("innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", "eval(", "new Function", "document.cookie", "sessionStorage",
                  "XMLHttpRequest", "sendBeacon", "WebSocket", "EventSource", "importScripts", "import(", "new Worker"):
         assert sink not in code, f"regal-agents.js uses {sink}"
     assert not re.findall(r"https?://[^\s\"'`)]+", code), "every address regal-agents.js uses is relative (its own server), never a third party"
@@ -52,10 +52,24 @@ def test_it_only_ever_fetches_its_own_api_and_never_groq_directly():
     # The page may say "Groq" out loud (it does, honestly, in the composer note) -- what must never appear is Groq's own address
     # or a key for it: the browser only ever talks to this site's own server, which alone knows how to reach Groq.
     code = code_of(JS)
-    assert code.count("fetch(") == 1
-    assert 'const ASK_URL = "/api/agents/ask"' in code
-    assert 'credentials: "omit"' in code, "an anonymous page sends no cookie even though it has none to send"
+    assert code.count("fetch(") == 2, "one for an agent turn, one to re-title the chat"
+    assert 'const ASK_URL = "/api/agents/ask"' in code and 'const TITLE_URL = "/api/agents/title"' in code
+    assert code.count('credentials: "omit"') == 2, "an anonymous page sends no cookie on either call even though it has none to send"
     assert "api.groq.com" not in code and "GROQ_API_KEY" not in code
+
+
+def test_chats_are_kept_only_in_this_browser_reusing_the_archived_chats_own_storage_helpers():
+    code = code_of(JS)
+    assert 'const CHATS_KEY = "regal.agents.chats"' in code, "its own key, distinct from the archived chat's regal.chats"
+    for helper in ("Chat.sanitizeStore(", "Chat.trimChats(", "Chat.groupChats(", "Chat.newChatId(", "Chat.titleFrom("):
+        assert helper in code, f"reuses {helper} instead of reinventing chat storage"
+    assert "localStorage.getItem(CHATS_KEY)" in code and "localStorage.setItem(CHATS_KEY" in code
+
+
+def test_a_chats_title_is_asked_for_again_after_every_answer():
+    code = code_of(JS)
+    assert "function regenerateTitle(chat)" in code
+    assert "regenerateTitle(chat)" in code.split("function saveTurn")[1].split("function regenerateTitle")[0], "called from inside saveTurn, which runs after every finished answer"
 
 
 def test_five_real_passes_stream_to_the_page_as_text_four_independent_then_one_final():

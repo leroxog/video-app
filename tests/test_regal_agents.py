@@ -150,7 +150,8 @@ def test_a_request_from_another_site_is_refused(client, monkeypatch):
 
 
 def test_nothing_is_written_to_the_database(client, monkeypatch):
-    """No account, no chat history: a question here must leave the database exactly as it found it."""
+    """No account, no server-side history: a question here must leave the database exactly as it found it. (Earlier chats are kept
+    only in the visitor's own browser -- see test_regal_agents_frontend.py for that part.)"""
     from models import AiChat, AiChatMessage
     _mock_groq(monkeypatch, "Antwort.")
     _post(client, role="direkt", message="Frage?")
@@ -165,3 +166,51 @@ def test_a_failed_groq_call_ends_the_stream_instead_of_leaking_an_error(client, 
     monkeypatch.setattr(ai_assistant, "generate_custom_stream", boom)
     response = _post(client, role="direkt", message="Hallo")
     assert response.status_code == 200 and response.get_data(as_text=True) == ""
+
+
+# -------------------------------------------------------------------------------------------- /api/agents/title (chat history)
+def _title(client, **body):
+    return client.post("/api/agents/title", json=body)
+
+
+def test_a_chat_gets_a_short_title_from_its_own_question_and_answer(client, monkeypatch):
+    monkeypatch.setattr(ai_assistant, "generate_chat_title", lambda history: "Kühlschrank Funktionsweise")
+    response = _title(client, messages=[{"role": "user", "content": "Wie funktioniert ein Kühlschrank?"}, {"role": "assistant", "content": "..."}])
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["ok"] is True and data["title"] == "Kühlschrank Funktionsweise"
+    assert "Set-Cookie" not in response.headers
+
+
+def test_the_title_call_reuses_the_exact_function_the_sites_other_chat_already_uses(client, monkeypatch):
+    seen = []
+    monkeypatch.setattr(ai_assistant, "generate_chat_title", lambda history: (seen.append(history), "Titel")[1])
+    _title(client, messages=[{"role": "user", "content": "Frage"}, {"role": "assistant", "content": "Antwort"}, {"role": "user", "content": "Noch eine"}, {"role": "assistant", "content": "Zweite Antwort"}])
+    assert seen == [[{"role": "user", "content": "Frage"}, {"role": "assistant", "content": "Antwort"}, {"role": "user", "content": "Noch eine"}, {"role": "assistant", "content": "Zweite Antwort"}]]
+
+
+def test_an_empty_or_malformed_messages_list_is_refused(client, monkeypatch):
+    monkeypatch.setattr(ai_assistant, "generate_chat_title", lambda history: "Titel")
+    assert _title(client, messages=[]).status_code == 400
+    assert _title(client).status_code == 400
+    assert _title(client, messages=[{"role": "system", "content": "nope"}]).status_code == 400
+    assert _title(client, messages="not a list").status_code == 400
+
+
+def test_the_title_endpoint_shares_the_same_rate_limit_and_origin_check(client, monkeypatch):
+    monkeypatch.setattr(ai_assistant, "generate_chat_title", lambda history: "Titel")
+    refused = client.post("/api/agents/title", data=json.dumps({"messages": [{"role": "user", "content": "Hi"}]}),
+                           content_type="application/json", headers={"Origin": "https://not-this-site.example"})
+    assert refused.status_code == 403
+    limit = regal.AGENT_LIMITS["agents-ip"][0]
+    for _ in range(limit):
+        assert _title(client, messages=[{"role": "user", "content": "Hi"}]).status_code == 200
+    assert _title(client, messages=[{"role": "user", "content": "Hi"}]).status_code == 429
+
+
+def test_a_failed_title_call_comes_back_as_an_empty_title_not_an_error(client, monkeypatch):
+    def boom(history):
+        raise RuntimeError("Groq ist down")
+    monkeypatch.setattr(ai_assistant, "generate_chat_title", boom)
+    response = _title(client, messages=[{"role": "user", "content": "Hi"}])
+    assert response.status_code == 200 and response.get_json() == {"ok": True, "title": ""}
