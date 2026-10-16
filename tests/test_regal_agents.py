@@ -108,6 +108,32 @@ def test_the_final_agent_reads_the_question_and_all_four_other_answers(client, m
         assert f"{key}: {text}" in message
 
 
+# -------------------------------------------------------------------------------- the agents' own notation ("alles besser machen")
+def test_the_four_independent_agents_are_told_to_write_in_the_shared_notation():
+    for role in regal.AGENT_ORDER:
+        assert regal.AGENT_NOTATION in regal.AGENT_ROLES[role], role
+
+
+def test_the_final_agent_is_not_told_to_write_in_the_notation_but_to_decode_it_into_plain_language():
+    final = regal.AGENT_ROLES["final"]
+    assert regal.AGENT_NOTATION not in final
+    assert "normaler" in final.lower() or "normale" in final.lower()
+    assert "keine Symbole" in final
+
+
+def test_the_notation_is_the_same_for_every_agent_so_they_can_actually_read_each_other(client, monkeypatch):
+    """The whole point of a *shared* notation is that it is the one and only definition -- not each agent improvising its own
+    private shorthand, which the next, independent call could not reliably parse."""
+    seen = []
+    _mock_groq(monkeypatch, capture=seen)
+    for role in regal.AGENT_ORDER:
+        _post(client, role=role, message="Testfrage")
+    systems = [system for system, _ in seen]
+    assert len(systems) == len(regal.AGENT_ORDER)
+    for system in systems:
+        assert regal.AGENT_NOTATION in system, "every agent gets the identical, verbatim notation definition -- not its own invention"
+
+
 def test_a_visitor_who_asks_too_often_is_rate_limited(client, monkeypatch):
     _mock_groq(monkeypatch)
     limit = regal.AGENT_LIMITS["agents-ip"][0]

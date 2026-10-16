@@ -123,7 +123,9 @@
     el.list = h("div", { class: "msgs", role: "log", "aria-live": "polite", "aria-label": "Die Agenten" },
       h("div", { class: "msg user" }, h("div", { class: "bubble" }, app.question)),
       started || app.busy ? statusRow() : null,
-      app.expanded ? h("div", { class: "transcript" }, ORDER.map((key) => agentNode(key))) : null,
+      app.expanded ? h("div", { class: "transcript" },
+        h("p", { class: "muted small notation-note" }, "Die vier Agenten schreiben sich in einer knappen Notiz-Sprache (Symbole statt Sätze) – effizienter, aber nicht auf Anhieb lesbar. Der fünfte übersetzt alles in die normale Antwort unten."),
+        ORDER.map((key) => agentNode(key))) : null,
       app.error ? h("p", { class: "bad" }, icon("warn"), app.error) : null,
       showFinal ? finalNode() : null);
     fill(el.thread, h("div", { class: "thread-inner" }, el.list));

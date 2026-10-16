@@ -73,6 +73,12 @@ def test_the_in_bearbeitung_row_can_be_opened_to_show_the_agents_talking():
     assert "onclick: toggleExpanded" in code, "the status row itself is the thing a visitor clicks to open it"
 
 
+def test_the_transcript_says_plainly_that_the_notation_is_not_meant_to_be_readable():
+    code = code_of(JS)
+    assert "notation-note" in code and "Notiz-Sprache" in code
+    assert ".transcript .answer" in AGENTS_CSS, "a monospace look for the four agents' notes, distinct from the plain final answer"
+
+
 def test_asking_can_be_stopped_mid_answer():
     code = code_of(JS)
     assert "AbortController" in code and "app.controller.signal" in code and "app.controller?.abort()" in code

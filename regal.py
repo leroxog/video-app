@@ -1,11 +1,13 @@
 """Nex Ai: real AI, not on the visitor's own computer any more.  The home page (`/`) sends a question to this server, which asks Groq's
 hosted API (ai_assistant.py, the same one the site's other "Nex" chat already uses) in five short, independent passes -- four agents
-each write their own answer, then a fifth reads all four and writes the one the visitor sees -- and streams every word of every pass
-back to the page as it is written (templates/regal_agents.html, static/js/regal-agents.js), collapsed behind an "In Bearbeitung" row
-the visitor can open to watch the agents at work.  It was an on-device chat before (no download any more: that is the point of this
-change, made at the user's explicit request -- "ai's die nicht auf deinem pc laufen"), and for a few hours on 2026-10-16 a page that
-asked Wikipedia and let small, non-AI "agents" argue over the result (see nstl.py); both earlier shapes still fully work, unlinked: the
-on-device single chat at /nex-ai-archiv, the Wikipedia-swarm one at /nstl-archiv.
+each write their own answer in a shared, terse symbol notation (AGENT_NOTATION: no grammar, no prose, fewer tokens for the same
+content), then a fifth reads all four notes and translates them into the one plain-language answer the visitor sees -- and streams
+every word of every pass back to the page as it is written (templates/regal_agents.html, static/js/regal-agents.js), collapsed behind
+an "In Bearbeitung" row the visitor can open to watch the agents at work (in their own notation; the final answer below it is always
+plain language).  It was an on-device chat before (no download any more: that is the point of this change, made at the user's explicit
+request -- "ai's die nicht auf deinem pc laufen"), and for a few hours on 2026-10-16 a page that asked Wikipedia and let small, non-AI
+"agents" argue over the result (see nstl.py); both earlier shapes still fully work, unlinked: the on-device single chat at
+/nex-ai-archiv, the Wikipedia-swarm one at /nstl-archiv.
 
 Five is a real, honest number, not the "10.000.000" the user asked for: that many real calls to a real AI, per question, has no
 realistic cost or latency on a hobby project (and this server runs one request at a time -- see AGENT_ROLES below -- so the five run
@@ -59,16 +61,42 @@ ENDPOINTS = set()           # filled by register_routes: every endpoint of this 
 # ------------------------------------------------------------------------------------------- the five agents (/api/agents/ask)
 # Four independent takes on the question, then a fifth that has read all four and writes the one the visitor actually sees.  Kept
 # server-side (not sent by the client) so nobody can turn this into a free-form prompt box for an arbitrary system prompt.
+#
+# The user asked, after seeing the four agents write plain German, for them to talk "in ihrer effizienten Sprache die niemand
+# versteht außer sie selber" (their efficient language that nobody understands but them) -- the same idea behind the very first
+# version of this page (the agent swarm, now archived at /nstl-archiv), applied to real AI this time.  A real model does not
+# spontaneously invent a shared language between separate, stateless API calls; what IS real and buildable is a fixed, terse
+# notation (symbols instead of grammar) that every one of the four agents is given the SAME definition of, so their notes really
+# are mutually legible to each other (and to the fifth agent that reads all four) while looking like nothing a visitor could
+# read at a glance.  It is genuinely more efficient too -- fewer tokens for the same content -- not just decoration.
+AGENT_NOTATION = (
+    "Schreib NICHT in ausformulierten Sätzen, sondern in der knappen Notiz-Sprache der Agenten: nur Stichworte, keine Füllwörter, "
+    "keine Artikel, kurze Symbole statt ganzer Wörter. '=' heißt ist/bedeutet, '>' heißt führt-zu/deshalb, '+' heißt spricht-dafür, "
+    "'-' heißt spricht-dagegen, '?' heißt unsicher/zu-prüfen, ';' trennt Punkte. Trotzdem inhaltlich vollständig und korrekt -- nur "
+    "extrem knapp notiert, wie eine Abkürzungs-Notiz für einen anderen Agenten, nicht für Menschen."
+)
 AGENT_ROLES = {
-    "direkt": "Du bist ein KI-Agent. Beantworte die folgende Frage direkt, klar und präzise, in wenigen Sätzen. Antworte auf Deutsch, außer die Frage ist in einer anderen Sprache. Sag ehrlich, wenn du etwas nicht sicher weißt.",
-    "gruendlich": "Du bist ein KI-Agent. Beantworte die folgende Frage besonders gründlich: nenne relevante Hintergründe oder Zusammenhänge, die eine ganz kurze Antwort auslassen würde. Antworte auf Deutsch, außer die Frage ist in einer anderen Sprache.",
-    "kritisch": "Du bist ein KI-Agent. Überlege bei der folgenden Frage, was an einer naheliegenden Antwort falsch, unvollständig oder missverständlich sein könnte, und worauf man achten sollte. Antworte auf Deutsch, außer die Frage ist in einer anderen Sprache.",
-    "praktisch": "Du bist ein KI-Agent. Beantworte die folgende Frage so, dass sie im Alltag sofort nützlich ist: konkret, mit einem Beispiel oder nächsten Schritt, wenn das passt. Antworte auf Deutsch, außer die Frage ist in einer anderen Sprache.",
-    "final": "Du bist der KI-Agent, der entscheidet. Du bekommst eine Frage und vier unabhängige Antworten anderer Agenten darauf. Schreib daraus die beste, klare Antwort für den Nutzer: nimm, was am meisten stimmt und am hilfreichsten ist, lass Widersprüchliches oder Falsches weg. Wiederhole die anderen Agenten nicht wörtlich und erwähne sie nicht. Antworte auf Deutsch, außer die Frage ist in einer anderen Sprache.",
+    "direkt": "Du bist ein KI-Agent. Beantworte die folgende Frage direkt, klar und präzise, in wenigen Punkten. Antworte auf Deutsch, außer die Frage ist in einer anderen Sprache. Sag ehrlich, wenn du etwas nicht sicher weißt.\n\n" + AGENT_NOTATION,
+    "gruendlich": "Du bist ein KI-Agent. Beantworte die folgende Frage besonders gründlich: nenne relevante Hintergründe oder Zusammenhänge, die eine ganz kurze Antwort auslassen würde. Antworte auf Deutsch, außer die Frage ist in einer anderen Sprache.\n\n" + AGENT_NOTATION,
+    "kritisch": "Du bist ein KI-Agent. Überlege bei der folgenden Frage, was an einer naheliegenden Antwort falsch, unvollständig oder missverständlich sein könnte, und worauf man achten sollte. Antworte auf Deutsch, außer die Frage ist in einer anderen Sprache.\n\n" + AGENT_NOTATION,
+    "praktisch": "Du bist ein KI-Agent. Beantworte die folgende Frage so, dass sie im Alltag sofort nützlich ist: konkret, mit einem Beispiel oder nächsten Schritt, wenn das passt. Antworte auf Deutsch, außer die Frage ist in einer anderen Sprache.\n\n" + AGENT_NOTATION,
+    "final": (
+        "Du bist der KI-Agent, der entscheidet. Du bekommst eine Frage und die Notizen von vier anderen Agenten, geschrieben in "
+        "ihrer knappen Notiz-Sprache ('=' ist/bedeutet, '>' führt-zu, '+' dafür, '-' dagegen, '?' unsicher, ';' trennt Punkte). Lies "
+        "die Notizen, verstehe ihren Inhalt, und schreib daraus die beste, klare Antwort für den Nutzer in ganz normaler, flüssiger "
+        "Sprache -- keine Symbole, keine Notiz-Form, nur normaler Text. Nimm, was am meisten stimmt und am hilfreichsten ist, lass "
+        "Widersprüchliches oder Falsches weg. Erwähne die anderen Agenten oder ihre Notation nicht. Antworte auf Deutsch, außer die "
+        "Frage ist in einer anderen Sprache."
+    ),
 }
 AGENT_ORDER = ("direkt", "gruendlich", "kritisch", "praktisch")   # the four independent ones, in the order the page asks them
-AGENT_MAX_TOKENS = 380
-FINAL_MAX_TOKENS = 500
+#  GROQ_MODEL currently rejects every call (see ai_assistant.py's comment on generate_chat_title), so every one of these actually runs
+#  on GROQ_FALLBACK_MODEL, a reasoning model that spends an unpredictable chunk of max_tokens on its own hidden "reasoning" before
+#  writing anything visible -- a low budget here does NOT mean a short visible notation, it means the reasoning eats the whole budget
+#  and nothing visible comes out at all (found live: 3 of 4 agents came back empty at 260). Terse output needs just as much headroom
+#  as verbose prose did, because the hidden part dwarfs it; these numbers mirror what ai_assistant.py already found necessary.
+AGENT_MAX_TOKENS = 600
+FINAL_MAX_TOKENS = 700
 # One visitor (by the address their own request claims) may ask at most 7 questions (35 agent calls) in 10 minutes; the whole site
 # together at most 10 questions a minute -- generous for normal use, a real ceiling against a script hammering the Groq key.
 AGENT_LIMITS = {"agents-ip": (35, 600), "agents-flood": (50, 60)}
