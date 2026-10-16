@@ -3,19 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>{{ {"terms": "Nutzungsbedingungen", "privacy": "Datenschutz", "imprint": "Impressum"}[page] }} | NSTL</title>
-<meta name="description" content="{{ {"terms": "Die Regeln auf NSTL und was du von uns erwarten kannst.", "privacy": "Welche Daten NSTL verarbeitet (fast keine), wozu und wie du sie löschst.", "imprint": "Angaben zum Betreiber von NSTL."}[page] }}">
+<title>{{ {"terms": "Nutzungsbedingungen", "privacy": "Datenschutz", "imprint": "Impressum"}[page] }} | Nex Ai</title>
+<meta name="description" content="{{ {"terms": "Die Regeln auf Nex Ai und was du von uns erwarten kannst.", "privacy": "Welche Daten Nex Ai verarbeitet (fast keine), wozu und wie du sie löschst.", "imprint": "Angaben zum Betreiber von Nex Ai."}[page] }}">
 <meta name="theme-color" content="#212121" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <meta name="color-scheme" content="dark light">
-<link rel="icon" href="{{ static_url('img/nstl-icon.svg') }}" type="image/svg+xml">
-<link rel="icon" href="{{ static_url('img/nstl-192.png') }}" type="image/png" sizes="192x192">
-<link rel="apple-touch-icon" href="{{ static_url('img/nstl-180.png') }}">
+<link rel="icon" href="{{ static_url('img/nex-icon.svg') }}" type="image/svg+xml">
+<link rel="icon" href="{{ static_url('img/nex-192.png') }}" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="{{ static_url('img/nex-180.png') }}">
 <link rel="stylesheet" href="{{ static_url('css/regal.css') }}">
 </head>
 <body>
 <div class="legal-page">
-  <a class="legal-logo" href="/" aria-label="NSTL, zurück zur Startseite">{% include "partials/_nstl_mark.html" %}<span>NSTL</span></a>
+  <a class="legal-logo" href="/" aria-label="Nex Ai, zurück zur Startseite">{% include "partials/_nex_mark.html" %}<span>Nex Ai</span></a>
   <main class="legal">
 {%- if page == "imprint" %}
     <h1>Impressum</h1>
@@ -30,39 +30,40 @@
     <p>Die Angaben zum Betreiber der Seite werden gerade ergänzt.</p>
   {%- endif %}
     <h2>Inhalte Dritter</h2>
-    <p>Die Treffer, die NSTL zeigt, sind Auszüge aus der Wikipedia (Wikimedia Foundation); sie kommen über deren öffentliche Programmierschnittstelle direkt in deinen Browser, nicht über unseren Server. Für ihren Inhalt sind die Autorinnen und Autoren der jeweiligen Wikipedia-Artikel verantwortlich (Lizenz: CC BY-SA, siehe wikipedia.org). Die KI des Archiv-Angebots <a href="/nex-ai-archiv">/nex-ai-archiv</a> (das Sprachmodell Gemma 3 oder Qwen3), stammt von Google beziehungsweise Alibaba und wird von Hugging Face ausgeliefert; wir hosten sie nicht und prüfen ihre Antworten nicht, sie entstehen auf dem jeweiligen Gerät. Für die Modelle und ihre Lizenz sind die Urheber verantwortlich.</p>
+    <p>Die KI, mit der du bei Nex Ai schreibst (das Sprachmodell Gemma 3 oder Qwen3, je nach Gerät), stammt von Google beziehungsweise Alibaba und wird von Hugging Face ausgeliefert. Wir hosten sie nicht und prüfen ihre Antworten nicht: Sie entstehen auf deinem Gerät. Für die Modelle und ihre Lizenz sind die Urheber verantwortlich.</p>
     <h2>Rechtswidrige Inhalte melden</h2>
-    <p>Wenn etwas auf NSTL oder einem seiner Archiv-Angebote gegen das Gesetz oder Rechte Dritter verstößt oder nicht stimmt, schreib uns{% if imprint and imprint.email %} (<a href="mailto:{{ imprint.email }}">{{ imprint.email }}</a>){% endif %} mit einer kurzen Beschreibung. Wir prüfen es und handeln, sobald wir es geprüft haben. Die Wikipedia-Inhalte selbst können nur die Wikipedia-Gemeinschaft ändern, das Sprachmodell des Archivs nur seine Urheber oder Hugging Face entfernen.</p>
+    <p>Wenn etwas auf Nex Ai oder einem seiner Archiv-Angebote gegen das Gesetz oder Rechte Dritter verstößt oder nicht stimmt, schreib uns{% if imprint and imprint.email %} (<a href="mailto:{{ imprint.email }}">{{ imprint.email }}</a>){% endif %} mit einer kurzen Beschreibung. Wir prüfen es und handeln, sobald wir es geprüft haben. Das Modell selbst können nur seine Urheber oder Hugging Face entfernen.</p>
 {%- elif page == "terms" %}
     <h1>Nutzungsbedingungen</h1>
-    <p class="lead">NSTL ist eine einfache Startseite ohne Anmeldung: Du stellst eine Frage, ein Schwarm aus vielen kleinen Agenten einigt sich dazu in deinem Browser auf eine Antwort aus der Wikipedia. Kostenlos und ohne Konto. Stand: Oktober 2026.</p>
+    <p class="lead">Nex Ai ist ein Chat mit einer KI, die auf deinem eigenen Computer läuft. Es ist kostenlos und ohne Konto. Stand: Oktober 2026.</p>
 
-    <h2>1. Was NSTL ist</h2>
-    <p>Auf NSTL gibst du eine Frage ein. Dein Browser fragt daraufhin direkt die Wikipedia (Deutsch und Englisch); die Treffer gibt er an einen Schwarm aus bis zu 10 Millionen kleinen, immer gleichen Programmen (Agenten), der ebenfalls in deinem Browser rechnet, in einem Web Worker, ohne die Seite zu blockieren. Die Agenten sind keine Sprachmodelle: jeder vergleicht nur ein paar gemessene Eigenschaften der Wikipedia-Treffer, redet darüber mit zufälligen anderen Agenten in kurzen, erfundenen Wörtern, auf die sie sich nach und nach einigen, und am Ende setzt sich im Schwarm eine Antwort durch. Die Seite zeigt diesen Vorgang, während er läuft (eine Karte und ein Fenster mit echten Beispielen aus dem Schwarm), und danach den Wikipedia-Auszug, auf den sich der Schwarm geeinigt hat. Deine Frage wird dafür nicht an unseren Server gesendet.</p>
+    <h2>1. Was Nex Ai ist</h2>
+    <p>Auf Nex Ai stellst du eine Frage. Die KI, die auf deinem Gerät läuft (welche, entscheidet die Seite nach deinem Gerät: ein größeres Modell, Qwen3 4B von Alibaba, für starke Grafikkarten, Gemma 3 von Google für normale Computer, eine kleinere Version von Gemma 3 für schwache), beantwortet sie in drei echten, nacheinander laufenden Durchgängen: eine erste Antwort, eine Prüfung dieser Antwort, dann die eigentliche, fertige Antwort – jeder Durchgang liest, was der davor geschrieben hat, und du siehst alle drei beim Schreiben zu. Dafür misst die Seite kurz, wie schnell deine Grafikkarte ist; das Ergebnis verlässt dein Gerät nicht. Das Modell lädt dein Browser einmal von Hugging Face und führt es dann auf deinem Gerät aus. Unser Server liefert nur die Seite und das Programm, das das Modell ausführt. Deine Fragen werden nicht an uns gesendet. Für den Download gelten die Bedingungen von Hugging Face und die Lizenz des Modells.</p>
 
-    <h2>2. Wikipedia-Inhalte</h2>
-    <p>Die Antworten sind Auszüge aus der Wikipedia und stehen unter der Lizenz Creative Commons Namensnennung – Weitergabe unter gleichen Bedingungen (CC BY-SA); die jeweilige Seite verlinkt NSTL bei der Antwort. Für ihren Inhalt sind die Autorinnen und Autoren der Wikipedia verantwortlich, nicht wir.</p>
+    <h2>2. Lizenz des Modells</h2>
+    <p>Gemma wird unter den Gemma-Nutzungsbedingungen von Google bereitgestellt (<a href="https://ai.google.dev/gemma/terms" target="_blank" rel="noopener noreferrer">ai.google.dev/gemma/terms</a>), einschließlich der dortigen Richtlinie zur unzulässigen Nutzung. Qwen3 steht unter der Apache-Lizenz 2.0 (<a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener noreferrer">apache.org/licenses/LICENSE-2.0</a>). Mit der Nutzung der KI erkennst du die Lizenz des Modells an, das auf deinem Gerät läuft. Du bist selbst dafür verantwortlich, die KI nur so zu benutzen, wie die Lizenz und das Gesetz es erlauben.</p>
 
-    <h2>3. Wie du NSTL benutzt</h2>
-    <p>Benutze NSTL nicht, um anderen zu schaden oder die Wikipedia beziehungsweise diese Seite mit automatisierten Massenabfragen zu stören. Beachte die Rechte anderer und die Lizenz der Wikipedia-Inhalte, wenn du sie weiterverwendest.</p>
+    <h2>3. Wie du die KI benutzt</h2>
+    <p>Benutze die KI nicht, um anderen zu schaden: keine Täuschung, keine Belästigung, keine gefälschten Inhalte über echte Personen, keine rechtswidrigen Inhalte. Beachte die Rechte anderer (Urheberrecht, Persönlichkeitsrechte) und kennzeichne KI-Texte, wo es verlangt wird.</p>
 
-    <h2>4. Antworten des Schwarms</h2>
-    <p>Die Antworten sind Wikipedia-Auszüge, die ein vereinfachtes Simulationsmodell ausgewählt hat, kein geprüftes Fachwissen: Agenten sind kleine Programme, keine Sprachmodelle, und ihre Auswahl kann danebenliegen. Antworten können falsch, unvollständig oder unpassend sein. Verlass dich bei wichtigen Dingen (Gesundheit, Recht, Geld, Sicherheit) nicht darauf und prüfe sie selbst. Die Simulation braucht etwas Arbeitsspeicher (auf schwächeren Geräten läuft sie deshalb mit weniger Agenten) und kann ein bis drei Minuten dauern.</p>
+    <h2>4. Antworten der KI</h2>
+    <p>Antworten einer KI können falsch, unvollständig oder unpassend sein, auch nach einer Prüfung durch einen zweiten Durchgang derselben KI – das ist keine unabhängige zweite Meinung, sondern dasselbe Modell noch einmal. Verlass dich bei wichtigen Dingen (Gesundheit, Recht, Geld, Sicherheit) nicht darauf und prüfe sie selbst. Gib Antworten der KI nicht als menschliche Äußerung oder als geprüfte Auskunft aus. Die KI braucht Speicherplatz (je nach Version etwa 0,3 bis 3 GB) und Rechenleistung deines Geräts. Der Chat benutzt die Open-Source-Programme Transformers.js (Apache-2.0) und ONNX Runtime Web (MIT); ihre Lizenztexte liegen unter <a href="/static/vendor/transformers/NOTICE.txt">/static/vendor/transformers/NOTICE.txt</a>.</p>
 
     <h2>5. Verfügbarkeit und Haftung</h2>
-    <p>NSTL ist ein privates Projekt ohne Gewähr. Es kann ausfallen, sich ändern oder eingestellt werden. Wir übernehmen keine Haftung für Antworten des Schwarms, ihre Folgen oder verlinkte Seiten. Unsere Haftung ist bei leichter Fahrlässigkeit ausgeschlossen, außer bei der Verletzung von Leben, Körper und Gesundheit und bei wesentlichen Vertragspflichten. Zwingende gesetzliche Rechte bleiben unberührt.</p>
+    <p>Nex Ai ist ein privates Projekt ohne Gewähr. Es kann ausfallen, sich ändern oder eingestellt werden. Wir übernehmen keine Haftung für Antworten der KI, ihre Folgen oder verlinkte Seiten. Unsere Haftung ist bei leichter Fahrlässigkeit ausgeschlossen, außer bei der Verletzung von Leben, Körper und Gesundheit und bei wesentlichen Vertragspflichten. Zwingende gesetzliche Rechte bleiben unberührt.</p>
 
     <h2>6. Änderungen</h2>
     <p>Wir können diese Bedingungen ändern. Die aktuelle Fassung steht immer hier.</p>
 
     <h2>7. Archiv-Angebote</h2>
-    <p>Unter <a href="/nex-ai-archiv">/nex-ai-archiv</a> gibt es noch die frühere Startseite „Nex Ai“: ein Chat mit einer KI, die auf deinem eigenen Gerät läuft (Gemma 3 von Google oder Qwen3 von Alibaba, je nach Gerät). Gemma wird unter den Gemma-Nutzungsbedingungen von Google bereitgestellt (<a href="https://ai.google.dev/gemma/terms" target="_blank" rel="noopener noreferrer">ai.google.dev/gemma/terms</a>); Qwen3 steht unter der Apache-Lizenz 2.0 (<a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener noreferrer">apache.org/licenses/LICENSE-2.0</a>). Mit der Nutzung erkennst du die Lizenz des Modells an, das dort auf deinem Gerät läuft. Auch dort gilt: Antworten einer KI können falsch, unvollständig oder unpassend sein. Der Chat benutzt die Open-Source-Programme Transformers.js (Apache-2.0) und ONNX Runtime Web (MIT); ihre Lizenztexte liegen unter <a href="/static/vendor/transformers/NOTICE.txt">/static/vendor/transformers/NOTICE.txt</a>.</p>
+    <p>Unter <a href="/nex-ai-archiv">/nex-ai-archiv</a> gibt es noch die frühere, einfache Version: ein Chat mit nur einem Durchgang pro Frage, sonst mit derselben KI und denselben Modellen.</p>
+    <p>Unter <a href="/nstl-archiv">/nstl-archiv</a> liegt eine noch frühere Version namens „NSTL“: dort beantwortete kein Sprachmodell die Frage, sondern ein Schwarm aus bis zu 10 Millionen kleinen Programmen wählte den passendsten Wikipedia-Artikel aus und einigte sich dabei auf eine selbst erfundene, kurze Sprache. Die Wikipedia-Auszüge dort stehen unter CC BY-SA (wikipedia.org); verantwortlich für ihren Inhalt sind die Autorinnen und Autoren der Wikipedia.</p>
     <p>Unter <a href="/modelle-archiv">/modelle-archiv</a> liegt die noch frühere Liste von mehr als tausend frei herunterladbaren KI-Modellen. Wir hosten diese Modelle nicht; sie liegen bei Hugging Face, und für jedes gilt die Lizenz seiner Urheber (in der Liste nur ein Hinweis, verbindlich ist der Lizenztext des Modells).</p>
     <p>Das Archiv-Angebot yipi:</p>
     <p>Unter <a href="/yipi-archiv">/yipi-archiv</a> gibt es noch das frühere Netzwerk yipi mit Konten. Dort gelten sinngemäß: Wer ein Konto hat, ist für seine Yips verantwortlich, kann sie und das Konto jederzeit löschen („Einstellungen, Dein Konto“) und Inhalte anderer melden („Melden“). Ein Konto bei yipi gibt es ab 16 Jahren, jüngere brauchen die Erlaubnis ihrer Eltern. Ein vergessenes Passwort kann bei yipi nicht zurückgesetzt werden.</p>
 {%- else %}
     <h1>Datenschutz</h1>
-    <p class="lead">Kurz und ehrlich: NSTL hat keine Konten, setzt keine Cookies und nutzt kein Tracking. Deine Frage geht direkt aus deinem Browser an die Wikipedia, der Agentenschwarm rechnet ebenfalls dort; beides wird nicht an uns gesendet. Stand: Oktober 2026.</p>
+    <p class="lead">Kurz und ehrlich: Nex Ai hat keine Konten, setzt keine Cookies und nutzt kein Tracking. Die KI läuft auf deinem Gerät, deine Fragen werden nicht an uns gesendet. Das Modell lädt dein Browser einmal von Hugging Face. Stand: Oktober 2026.</p>
 
     <h2>Wer ist verantwortlich?</h2>
     <p>Der Betreiber, der im <a href="/impressum">Impressum</a> steht. Dort erreichst du ihn auch für Fragen zum Datenschutz.</p>
@@ -70,31 +71,38 @@
     <h2>Besuch der Seite</h2>
     <p>Beim Aufruf verarbeitet der Hoster der Seite technisch notwendige Daten, die dein Browser sendet (zum Beispiel IP-Adresse, Zeitpunkt, aufgerufene Adresse), um die Seite auszuliefern und missbräuchliche Zugriffe zu erkennen. Die Seite läuft bei Railway (Railway Corp., USA); dabei können Daten in Länder außerhalb der EU übertragen werden. Rechtsgrundlage ist unser berechtigtes Interesse am sicheren Betrieb (Art. 6 Abs. 1 lit. f DSGVO). Wir selbst speichern nichts über dich: kein Konto, keine Anmeldung, kein Cookie.</p>
 
-    <h2>Deine Frage und der Schwarm</h2>
-    <p>Wenn du eine Frage stellst, schickt dein Browser sie direkt an die Wikipedia-Programmierschnittstelle (de.wikipedia.org, en.wikipedia.org); dabei verarbeitet die Wikimedia Foundation zum Beispiel deine IP-Adresse (siehe deren Datenschutzhinweise). Der Agentenschwarm, der aus den Treffern eine Antwort wählt, rechnet danach vollständig in deinem Browser (in einem Web Worker); weder deine Frage noch das Ergebnis werden an uns gesendet. NSTL speichert dabei nichts in deinem Browser: Nach einem Neuladen der Seite ist die Frage weg, du kannst sie einfach neu stellen.</p>
+    <h2>Die KI auf deinem Gerät</h2>
+    <p>Die KI (je nach deinem Gerät Qwen3 4B, Gemma 3 oder die kleine Version von Gemma 3) läuft <strong>auf deinem Gerät</strong>, in deinem Browser, in drei nacheinander laufenden Durchgängen pro Frage. Was du schreibst und was die KI in jedem Durchgang antwortet, wird nicht an uns und nicht an Dritte gesendet. Das Programm, das das Modell ausführt (Transformers.js und ONNX Runtime Web), liefern wir selbst von unserem Server aus. Das Modell lädt dein Browser einmal direkt von <strong>Hugging Face</strong> (huggingface.co, hf.co); dabei verarbeitet Hugging Face zum Beispiel deine IP-Adresse (siehe dessen Datenschutzhinweise). Das geschieht, sobald du deine erste Frage sendest, oder gleich beim Öffnen, wenn das Modell schon in deinem Browser liegt.</p>
+
+    <h2>Was in deinem Browser liegt</h2>
+    <p>Nex Ai merkt sich deine Frage und die drei Antworten nur, solange die Seite offen ist; nach einem Neuladen sind sie weg. Das geladene Modell bleibt in Teilen im Cache-Speicher deines Browsers (Cache Storage, Name <code>transformers-cache</code>), damit du es nicht noch einmal laden musst. Damit die Seite die beste KI für dein Gerät wählt, misst sie beim Öffnen eine halbe Sekunde lang die Speichergeschwindigkeit deiner Grafikkarte und liest ihre Grenzen und den Arbeitsspeicher aus, den dein Browser nennt; das wird nur dafür auf deinem Gerät benutzt und nirgends gespeichert oder gesendet. Hat die größere Version der KI auf deinem Gerät nicht geladen (zu wenig Speicher), merkt sich dein Browser das zwei Wochen lang, damit die nächste Seite gleich mit der kleineren startet (localStorage, Schlüssel <code>regal.skip</code>). Alles das ist für die Funktion technisch notwendig (§ 25 Abs. 2 TDDDG).</p>
 
     <h2>Links</h2>
-    <p>Die Seite verlinkt Seiten Dritter (die Wikipedia, im Archiv-Angebot auch Hugging Face und Google). Für deren Datenschutz sind wir nicht verantwortlich.</p>
+    <p>Die Seite verlinkt Seiten Dritter (zum Beispiel Hugging Face und Google, in den Archiv-Angeboten auch die Wikipedia, GitHub, lmstudio.ai, ollama.com). Für deren Datenschutz sind wir nicht verantwortlich.</p>
 
     <h2>Kein Tracking, keine Weitergabe</h2>
-    <p>NSTL nutzt keine Analyse- und Werbedienste, keine fremden Schriften und keine fremden Skripte (die Programme der Seite liegen auf unserem eigenen Server). Wir geben keine Daten an Dritte weiter, außer wenn wir gesetzlich dazu verpflichtet sind.</p>
+    <p>Nex Ai nutzt keine Analyse- und Werbedienste, keine fremden Schriften und keine fremden Skripte (die Programme für den Chat liegen auf unserem eigenen Server). Wir geben keine Daten an Dritte weiter, außer wenn wir gesetzlich dazu verpflichtet sind.</p>
 
-    <h2>Archiv: Nex Ai (/nex-ai-archiv)</h2>
-    <p>Die KI (je nach deinem Gerät Qwen3 4B, Gemma 3 oder die kleine Version von Gemma 3) läuft <strong>auf deinem Gerät</strong>, in deinem Browser. Was du schreibst und was die KI antwortet, wird nicht an uns und nicht an Dritte gesendet. Das Programm, das das Modell ausführt (Transformers.js und ONNX Runtime Web), liefern wir selbst von unserem Server aus. Das Modell lädt dein Browser einmal direkt von <strong>Hugging Face</strong> (huggingface.co, hf.co); dabei verarbeitet Hugging Face zum Beispiel deine IP-Adresse (siehe dessen Datenschutzhinweise). Das geschieht, sobald du deine erste Nachricht sendest, oder gleich beim Öffnen, wenn das Modell schon in deinem Browser liegt.</p>
-    <p>Damit du deine früheren Chats in der Seitenleiste wiederfindest, speichert dein Browser sie auf deinem Gerät (localStorage, Schlüssel <code>regal.chats</code>); sie verlassen dein Gerät nie. Das geladene Modell bleibt in Teilen im Cache-Speicher deines Browsers (Cache Storage, Name <code>transformers-cache</code>), damit du es nicht noch einmal laden musst. Damit die Seite die beste KI für dein Gerät wählt, misst sie beim Öffnen eine halbe Sekunde lang die Speichergeschwindigkeit deiner Grafikkarte und liest ihre Grenzen und den Arbeitsspeicher aus, den dein Browser nennt; das wird nur dafür auf deinem Gerät benutzt und nirgends gespeichert oder gesendet. Hat die größere Version der KI auf deinem Gerät nicht geladen (zu wenig Speicher), merkt sich dein Browser das zwei Wochen lang, damit die nächste Seite gleich mit der kleineren startet (localStorage, Schlüssel <code>regal.skip</code>). Alles das ist für die Funktion technisch notwendig (§ 25 Abs. 2 TDDDG). Du löschst einen Chat mit dem Papierkorb-Symbol, alle mit „Alle Chats löschen“, das Modell mit „Gespeicherte KI löschen“ (beides in der Seitenleiste) oder alles mit den Websitedaten deines Browsers.</p>
-    <p>Unter <a href="/modelle-archiv">/modelle-archiv</a> liegt die noch frühere Liste freier KI-Modelle. Suchen und Filtern passieren dort in deinem Browser; was du eingibst, wird nicht an uns gesendet. Wenn du Modelle mit dem Herz merkst, speichert dein Browser deren Namen auf deinem Gerät (localStorage, Schlüssel <code>regal.fav</code>). Wenn du dort ein Modell herunterlädst, ruft dein Browser die Datei direkt bei Hugging Face ab; wir sehen davon nichts.</p>
+    <h2>Archiv: Nex Ai, die einfache Version (/nex-ai-archiv)</h2>
+    <p>Dieselbe KI wie oben, nur mit einem Durchgang pro Frage statt drei und mit einem Verlauf früherer Chats. Damit du deine früheren Chats in der Seitenleiste wiederfindest, speichert dein Browser sie auf deinem Gerät (localStorage, Schlüssel <code>regal.chats</code>); sie verlassen dein Gerät nie. Du löschst einen Chat mit dem Papierkorb-Symbol, alle mit „Alle Chats löschen“, das Modell mit „Gespeicherte KI löschen“ (beides in der Seitenleiste) oder alles mit den Websitedaten deines Browsers.</p>
+
+    <h2>Archiv: NSTL (/nstl-archiv)</h2>
+    <p>Dort stellst du eine Frage direkt an die Wikipedia (de.wikipedia.org, en.wikipedia.org; dabei verarbeitet die Wikimedia Foundation zum Beispiel deine IP-Adresse), nicht an eine KI. Ein Schwarm aus Programmen, keine Sprachmodelle, wählt danach in deinem Browser einen Wikipedia-Auszug aus. Auch dort wird nichts in deinem Browser gespeichert.</p>
+
+    <h2>Die frühere Modell-Liste (/modelle-archiv)</h2>
+    <p>Suchen und Filtern passieren dort in deinem Browser; was du eingibst, wird nicht an uns gesendet. Wenn du Modelle mit dem Herz merkst, speichert dein Browser deren Namen auf deinem Gerät (localStorage, Schlüssel <code>regal.fav</code>). Wenn du dort ein Modell herunterlädst, ruft dein Browser die Datei direkt bei Hugging Face ab; wir sehen davon nichts.</p>
 
     <h2>Das Archiv-Angebot yipi</h2>
     <p>Unter <a href="/yipi-archiv">/yipi-archiv</a> gibt es noch das frühere soziale Netzwerk yipi. Es hat Konten und speichert, was dafür nötig ist: Nutzername und Anzeigename, optional eine E-Mail-Adresse (nur für die Anmeldung), das Passwort nur als Prüfwert, freiwillige Profilangaben, Yips, Antworten, Bilder, Likes, Lesezeichen und Nachrichten (nicht Ende-zu-Ende-verschlüsselt). Yips und Profile sind öffentlich. Nach der Anmeldung setzt yipi ein Cookie (<code>yipi_session</code>), das 30 Tage gültig ist (technisch notwendig, § 25 Abs. 2 TDDDG) und beim Abmelden entfernt wird. Im Browser liegen nur Einstellungen (<code>yipi.theme</code>, <code>yipi.feed</code>, <code>yipi.recent</code>). Unter „Einstellungen, Dein Konto“ kannst du dein Konto samt allen Inhalten sofort und endgültig löschen.</p>
 
     <h2>Löschen</h2>
-    <p>Bei NSTL speichern wir nichts über dich, das wir löschen könnten. Im Archiv-Angebot Nex Ai löschst du deine Chats, die geladene KI und die Merkliste der Modell-Liste in deinem Browser. Bei yipi löschst du dein Konto selbst.</p>
+    <p>Bei Nex Ai speichern wir nichts über dich, das wir löschen könnten. Die geladene KI und die Merkliste der Modell-Liste löschst du in deinem Browser. Bei yipi löschst du dein Konto selbst.</p>
 
     <h2>Deine Rechte</h2>
     <p>Du hast das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung, Datenübertragbarkeit und Widerspruch sowie darauf, eine Einwilligung jederzeit zu widerrufen. Du kannst dich außerdem bei einer Datenschutz-Aufsichtsbehörde beschweren. Schreib dafür an die Adresse im <a href="/impressum">Impressum</a>.</p>
 {%- endif %}
   </main>
-  <footer class="legal-links"><a href="/">Zurück zu NSTL</a><a href="/nutzungsbedingungen">Nutzungsbedingungen</a><a href="/datenschutz">Datenschutz</a><a href="/impressum">Impressum</a></footer>
+  <footer class="legal-links"><a href="/">Zurück zu Nex Ai</a><a href="/nutzungsbedingungen">Nutzungsbedingungen</a><a href="/datenschutz">Datenschutz</a><a href="/impressum">Impressum</a></footer>
 </div>
 </body>
 </html>

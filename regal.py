@@ -1,11 +1,15 @@
-"""Nex Ai: a chat with one AI that runs on the visitor's own computer.  This was the home page of the site until NSTL (nstl.py) took
-over on 2026-10-16; the chat still fully works, now at /nex-ai-archiv, unlinked from anywhere.
+"""Nex Ai: real AI that runs on the visitor's own computer.  The home page (`/`) is now several real passes of one on-device model,
+each reading what the pass before it wrote -- a first answer, a check of that answer, then the final one -- all visible as they are
+written (templates/regal_agents.html, static/js/regal-agents.js).  It briefly was a single-chat page, then for a few hours on
+2026-10-16 a page that asked Wikipedia and let small, non-AI "agents" argue over the result (see nstl.py); both earlier shapes still
+fully work, unlinked, as the user asked for "echte AIs" with the design and the name of Nex: the plain single chat at /nex-ai-archiv,
+the Wikipedia-swarm one at /nstl-archiv.
 
-There is nothing to choose: the page takes the best model that the computer can run (static/data/browser-models.json, made by
+There is nothing to choose: every pass takes the best model that the computer can run (static/data/browser-models.json, made by
 scripts/build_browser_models.py), loads it once from Hugging Face into the browser, and a worker (static/js/regal-chat-worker.js) lets it
-write the answers on the graphics card or processor.  What people write never reaches this server: it delivers the page and the
-program that runs the model (static/vendor/transformers) and keeps no data about visitors: no accounts, no cookies.  The scripts are
-static/js/regal-chat*.js.
+write on the graphics card or processor.  What people write never reaches this server: it delivers the page and the program that runs
+the model (static/vendor/transformers) and keeps no data about visitors: no accounts, no cookies.  The scripts are static/js/regal-chat*.js
+(the single chat, archived) and static/js/regal-agents.js (the home page), sharing static/js/regal-chat-core.js and the one worker.
 
 The even earlier home page, a list of more than a thousand free AI models to download (static/data/models.json, made by
 scripts/build_catalog.py), is still at /modelle-archiv (scripts static/js/regal*.js).
@@ -28,6 +32,7 @@ CONTENT_SECURITY_POLICY = (
     "base-uri 'none'; object-src 'none'; form-action 'self'; frame-ancestors 'none'"
 )
 CHAT_DESCRIPTION = "Nex Ai: Chat mit einer KI, die auf deinem eigenen Computer läuft. Ohne App, ohne Konto, ohne Server. Deine Fragen verlassen dein Gerät nie."
+AGENTS_DESCRIPTION = "Nex Ai: Stell eine Frage. Drei echte Durchgänge der KI, die auf deinem Computer läuft, prüfen sich gegenseitig, bevor du die Antwort bekommst – alles sichtbar, nichts wird gesendet."
 # The worker that runs the model (static/js/regal-chat-worker.js) gets its own policy, because a worker is bound by the policy of its own
 # script and not by the page's: it may run WebAssembly (the AI runtime) and fetch the model from Hugging Face, and nothing else.
 WORKER_PATH = "/static/js/regal-chat-worker.js"
@@ -49,6 +54,19 @@ def manifest():
     return {
         "name": f"{SITE_NAME}: KI-Chat auf deinem Computer", "short_name": SITE_NAME, "description": CHAT_DESCRIPTION, "lang": "de", "dir": "ltr",
         "id": "/nex-ai-archiv", "start_url": "/nex-ai-archiv", "scope": "/nex-ai-archiv", "display": "standalone", "orientation": "any",
+        "background_color": "#212121", "theme_color": "#212121", "categories": ["utilities", "productivity"],
+        "icons": [
+            {"src": "/static/img/nex-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+            {"src": "/static/img/nex-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+            {"src": "/static/img/nex-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
+        ],
+    }
+
+
+def agents_manifest():
+    return {
+        "name": f"{SITE_NAME}: mehrere KI-Agenten", "short_name": SITE_NAME, "description": AGENTS_DESCRIPTION, "lang": "de", "dir": "ltr",
+        "id": "/", "start_url": "/", "scope": "/", "display": "standalone", "orientation": "any",
         "background_color": "#212121", "theme_color": "#212121", "categories": ["utilities", "productivity"],
         "icons": [
             {"src": "/static/img/nex-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
@@ -104,16 +122,23 @@ def register_routes(app):
                 response.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
         return response
 
+    @route("/", endpoint="pl_home")
+    def regal_agents_home():
+        """The home page: three real passes of the one on-device AI model, each reading what the pass before it wrote, all visible
+        as they are written."""
+        page = render_template("regal_agents.html", description=AGENTS_DESCRIPTION, base=base_url())
+        return page_headers(make_response(page))
+
     @route("/nex-ai-archiv", endpoint="regal_archive_home")
     def regal_home():
-        """The chat: one AI, nothing to choose, running on the visitor's own computer.  No longer the home page (see nstl.py);
-        still fully reachable here, just unlinked from the current home page."""
+        """The plain single chat: one AI, nothing to choose, running on the visitor's own computer.  No longer the home page;
+        still fully reachable here, just unlinked from it."""
         page = render_template("regal_chat.html", description=CHAT_DESCRIPTION, base=base_url())
         return page_headers(make_response(page))
 
     @route("/chat", endpoint="regal_chat")
     def regal_chat():
-        return redirect("/nex-ai-archiv", code=301)          # the chat used to live at "/", then here
+        return redirect("/", code=301)                       # the chat (now the multi-agent page) lives at "/" again
 
     @route("/modelle-archiv", endpoint="regal_models_archive")
     def regal_models_archive():
@@ -143,3 +168,7 @@ def register_routes(app):
     @route("/nex-ai-archiv/manifest.webmanifest", endpoint="regal_manifest")
     def regal_manifest():
         return Response(json.dumps(manifest(), ensure_ascii=False), mimetype="application/manifest+json")
+
+    @route("/manifest.webmanifest", endpoint="regal_agents_manifest")
+    def regal_agents_manifest_route():
+        return Response(json.dumps(agents_manifest(), ensure_ascii=False), mimetype="application/manifest+json")

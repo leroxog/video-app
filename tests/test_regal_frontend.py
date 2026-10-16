@@ -19,8 +19,9 @@ os.environ["NRS_AUTO_INDEX"] = "0"
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 JS_DIR = os.path.join(ROOT, "static", "js")
 SCRIPTS = ["regal-core.js", "regal-ui.js", "regal-download.js", "regal.js"]
-CHAT_SCRIPTS = ["regal-core.js", "regal-ui.js", "regal-chat-core.js", "regal-chat.js"]       # what the chat page loads
-WORKER = "regal-chat-worker.js"                                                              # runs the model (loaded by regal-chat.js as a worker)
+CHAT_SCRIPTS = ["regal-core.js", "regal-ui.js", "regal-chat-core.js", "regal-chat.js"]       # what the archived single chat page loads
+AGENTS_SCRIPTS = ["regal-core.js", "regal-ui.js", "regal-chat-core.js", "regal-agents.js"]   # what the home page (three passes) loads
+WORKER = "regal-chat-worker.js"                                                              # runs the model (loaded by regal-chat.js and regal-agents.js as a worker)
 NODE = shutil.which("node")
 
 
@@ -48,7 +49,11 @@ def test_the_template_loads_the_scripts_in_dependency_order_and_nothing_inline()
     assert re.findall(r"<script src=\"\{\{ static_url\('js/([\w-]+\.js)'\) \}\}\"></script>", chat_html) == CHAT_SCRIPTS
     for tag in re.findall(r"<script\b[^>]*>", chat_html):
         assert "src=" in tag, f"an inline script would break the content security policy: {tag}"
-    for name in ("regal.html", "regal_chat.html", "legal.html", "error.html"):
+    agents_html = read("templates", "regal_agents.html")
+    assert re.findall(r"<script src=\"\{\{ static_url\('js/([\w-]+\.js)'\) \}\}\"></script>", agents_html) == AGENTS_SCRIPTS
+    for tag in re.findall(r"<script\b[^>]*>", agents_html):
+        assert "src=" in tag, f"an inline script would break the content security policy: {tag}"
+    for name in ("regal.html", "regal_chat.html", "regal_agents.html", "legal.html", "error.html"):
         text = read("templates", name)
         assert not re.search(r"\son[a-z]+\s*=", text), f"{name}: inline event handler"
         assert 'style="' not in text and "javascript:" not in text, name
@@ -58,7 +63,7 @@ def test_the_template_loads_the_scripts_in_dependency_order_and_nothing_inline()
 
 def test_every_script_is_listed_in_the_template_and_is_valid_javascript():
     on_disk = sorted(os.path.basename(path) for path in glob.glob(os.path.join(JS_DIR, "regal*.js")))
-    assert on_disk == sorted(set(SCRIPTS + CHAT_SCRIPTS + [WORKER])), "a regal script that no page loads (or the other way round)"
+    assert on_disk == sorted(set(SCRIPTS + CHAT_SCRIPTS + AGENTS_SCRIPTS + [WORKER])), "a regal script that no page loads (or the other way round)"
     if NODE is None:
         pytest.skip("Node.js is not installed")
     for name in on_disk:

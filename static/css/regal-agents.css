@@ -1,0 +1,12 @@
+/* Nex Ai, mehrere Agenten: reuses almost everything from regal-chat.css (the shell, the message bubbles, the loading and problem
+   cards, the composer) -- this file only adds what tells the three passes apart: a small label above each one, a card around each
+   turn so they read as separate steps instead of one long answer, and a highlight on the last one (the actual answer). */
+
+.agent-turn { padding: 14px 16px; border-radius: var(--radius); background: var(--panel); border: 1px solid var(--line); }
+.agent-label { margin-bottom: 8px; color: var(--faint); font-size: 12px; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase; }
+.agent-final { background: color-mix(in srgb, var(--accent) 8%, var(--panel)); border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
+.agent-final .agent-label { color: var(--accent-2); }
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-turn { transition: none; }
+}

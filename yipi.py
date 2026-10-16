@@ -88,7 +88,7 @@ CONTENT_SECURITY_POLICY = (
 )
 DESCRIPTION = "yipi: kurze Yips, Antworten, Reposts und Likes. Sag, was dich gerade bewegt."
 # Old home pages of the site that stay reachable but are not for search engines.
-ARCHIVE_PATHS = ("/yipi-archiv", "/gomat-archiv", "/ysound-archiv", "/sound-archiv", "/server-archiv", "/browser-archiv", "/ylib-archiv", "/ychat-archiv", "/nex-archiv", "/modelle-archiv", "/nex-ai-archiv")
+ARCHIVE_PATHS = ("/yipi-archiv", "/gomat-archiv", "/ysound-archiv", "/sound-archiv", "/server-archiv", "/browser-archiv", "/ylib-archiv", "/ychat-archiv", "/nex-archiv", "/modelle-archiv", "/nex-ai-archiv", "/nstl-archiv")
 ENDPOINTS = set()           # filled by register_routes: every endpoint of this module (the site's login gate must let them through)
 
 

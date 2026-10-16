@@ -1,7 +1,8 @@
-"""NSTL: the home page since 2026-10-16.  No accounts.  You ask a question; the page (in your browser, not on this server) asks
-Wikipedia and hands what it finds to a swarm of agents (static/js/nstl-swarm-core.js, tested in tests/nstl_swarm.test.js; the Wikipedia
-side of things in static/js/nstl-core.js, tested in tests/nstl_core.test.js) that argue their way to an answer.  The files of the page
-are checked in test_nstl_frontend.py; the chat that was the home page before it is tested in test_regal_chat.py."""
+"""NSTL: the home page for a few hours on 2026-10-16, now archived at /nstl-archiv (the user asked for "echte AIs" instead -- see
+regal.py / test_regal_agents.py for what replaced it).  No accounts.  You ask a question; the page (in your browser, not on this
+server) asks Wikipedia and hands what it finds to a swarm of agents (static/js/nstl-swarm-core.js, tested in tests/nstl_swarm.test.js;
+the Wikipedia side of things in static/js/nstl-core.js, tested in tests/nstl_core.test.js) that argue their way to an answer.  The
+files of the page are checked in test_nstl_frontend.py; the chat that was the home page before it is tested in test_regal_chat.py."""
 import os
 import subprocess
 import sys
@@ -33,12 +34,12 @@ def client():
         db.drop_all()
 
 
-def test_the_home_page_is_nstl_and_a_visitor_gets_no_cookie(client):
-    response = client.get("/")
+def test_the_archived_page_is_still_nstl_and_a_visitor_gets_no_cookie(client):
+    response = client.get("/nstl-archiv")
     text = response.get_data(as_text=True)
     assert response.status_code == 200 and "Set-Cookie" not in response.headers
     assert 'data-worker="/static/js/nstl-swarm-worker.js?v=' in text
-    assert 'rel="canonical" href="http://localhost/"' in text and "nstl-core.js" in text and "nstl.js" in text
+    assert 'rel="canonical" href="http://localhost/nstl-archiv"' in text and "nstl-core.js" in text and "nstl.js" in text
     assert 'id="ask-form"' in text and 'id="question"' in text
     csp = response.headers["Content-Security-Policy"]
     assert "script-src 'self'" in csp and "worker-src 'self'" in csp and "frame-ancestors 'none'" in csp
@@ -54,8 +55,8 @@ def test_the_worker_has_a_strict_policy_and_the_page_script_has_none(client):
 
 
 def test_the_manifest_describes_nstl(client):
-    data = client.get("/manifest.webmanifest").get_json()
-    assert data["short_name"] == "NSTL" and data["start_url"] == "/" and data["display"] == "standalone"
+    data = client.get("/nstl-archiv/manifest.webmanifest").get_json()
+    assert data["short_name"] == "NSTL" and data["start_url"] == "/nstl-archiv" and data["display"] == "standalone"
     assert {icon["purpose"] for icon in data["icons"]} == {"any", "maskable"}
     for icon in data["icons"]:
         assert client.get(icon["src"]).status_code == 200, icon["src"]
@@ -63,7 +64,7 @@ def test_the_manifest_describes_nstl(client):
 
 def test_no_page_asks_for_a_password_or_an_account(client):
     """NSTL was explicitly asked for "ohne Anmeldung" (no sign-in)."""
-    text = client.get("/").get_data(as_text=True)
+    text = client.get("/nstl-archiv").get_data(as_text=True)
     for word in ("password", "passwort", "login", "anmelden", "registrieren", "konto"):
         assert word not in text.lower()
 

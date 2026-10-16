@@ -117,42 +117,52 @@ def test_the_archived_chat_may_talk_to_hugging_face_for_the_downloads_and_to_nob
     assert client.get("/nex-ai-archiv", headers={"X-Forwarded-Proto": "https"}).headers["Strict-Transport-Security"].startswith("max-age=")
 
 
-def test_the_home_page_may_talk_to_wikipedia_and_to_nobody_else(client):
+def test_the_home_page_may_talk_to_hugging_face_for_the_model_and_to_nobody_else(client):
     response = client.get("/")
     csp = response.headers["Content-Security-Policy"]
     assert "script-src 'self'" in csp and "worker-src 'self'" in csp and "frame-ancestors 'none'" in csp
-    assert "connect-src 'self' https://de.wikipedia.org https://en.wikipedia.org;" in csp
+    assert "connect-src 'self' https://huggingface.co https://*.huggingface.co https://*.hf.co;" in csp
     assert response.headers["X-Frame-Options"] == "DENY" and response.headers["Permissions-Policy"].startswith("camera=()")
     assert response.headers["X-Content-Type-Options"] == "nosniff"
 
 
+def test_the_archived_swarm_page_may_talk_to_wikipedia_and_to_nobody_else(client):
+    response = client.get("/nstl-archiv")
+    csp = response.headers["Content-Security-Policy"]
+    assert "connect-src 'self' https://de.wikipedia.org https://en.wikipedia.org;" in csp
+
+
 def test_the_manifest_and_the_images_exist(client):
     data = client.get("/manifest.webmanifest").get_json()
-    assert data["short_name"] == "NSTL" and data["start_url"] == "/" and data["display"] == "standalone" and "Agentenschwarm" in data["name"]
+    assert data["short_name"] == "Nex Ai" and data["start_url"] == "/" and data["display"] == "standalone" and "KI-Agenten" in data["name"]
     assert {icon["purpose"] for icon in data["icons"]} == {"any", "maskable"}
     for icon in data["icons"]:
         assert client.get(icon["src"]).status_code == 200, icon["src"]
-    for name in ("nstl-icon.svg", "nstl-180.png", "nstl-og.png"):
+    for name in ("nex-icon.svg", "nex-180.png", "nex-og.png"):
         assert client.get(f"/static/img/{name}").status_code == 200, name
 
     archived = client.get("/nex-ai-archiv/manifest.webmanifest").get_json()
     assert archived["short_name"] == "Nex Ai" and archived["start_url"] == "/nex-ai-archiv" and "KI-Chat" in archived["name"]
     for icon in archived["icons"]:
         assert client.get(icon["src"]).status_code == 200, icon["src"]
-    for name in ("nex-icon.svg", "nex-180.png", "nex-og.png"):
+
+    swarm = client.get("/nstl-archiv/manifest.webmanifest").get_json()
+    assert swarm["short_name"] == "NSTL" and swarm["start_url"] == "/nstl-archiv" and "Agentenschwarm" in swarm["name"]
+    for name in ("nstl-icon.svg", "nstl-180.png", "nstl-og.png"):
         assert client.get(f"/static/img/{name}").status_code == 200, name
 
 
-def test_the_old_home_pages_are_still_there_and_the_site_pages_are_those_of_nstl(client):
+def test_the_old_home_pages_are_still_there_and_the_site_pages_are_those_of_nex_ai(client):
     assert b"yipiBoot" in client.get("/yipi-archiv").data and b"gomatData" in client.get("/gomat-archiv").data
     assert b"regal-core.js" in client.get("/nex-ai-archiv").data
+    assert b"nstl-swarm-worker.js" in client.get("/nstl-archiv").data
     for path, words in (("/datenschutz", ("Nex Ai", "regal.fav", "regal.chats", "Hugging Face", "keine Cookies", "yipi_session")), ("/impressum", ("§ 5 DDG", "Rechtswidrige Inhalte melden")),
                         ("/nutzungsbedingungen", ("Lizenz", "Hugging Face", "16 Jahren", "yipi"))):
         page = client.get(path)
         text = page.get_data(as_text=True)
-        assert page.status_code == 200 and "| NSTL</title>" in text and "Set-Cookie" not in page.headers, path
+        assert page.status_code == 200 and "| Nex Ai</title>" in text and "Set-Cookie" not in page.headers, path
         for word in words:
             assert word in text, (path, word)
     error_page = client.get("/gibt-es-nicht-1234")
-    assert error_page.status_code == 404 and "NSTL" in error_page.get_data(as_text=True)
+    assert error_page.status_code == 404 and "Nex Ai" in error_page.get_data(as_text=True)
     assert "Sitemap:" in client.get("/robots.txt").get_data(as_text=True)
