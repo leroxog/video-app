@@ -38,6 +38,7 @@ import gomat
 import gomat_accounts
 import siteauth  # noqa: F401  (its table is made together with the others)
 import regal
+import nstl
 import yipi
 import ysound
 
@@ -527,7 +528,7 @@ def _make_session_permanent():
     # lifetime gives it a real expiry date instead.
     # gomat keeps nothing on the server, so its pages and API never set a cookie at all.
     # Nor do static files (scripts, styles, images): a cookie on those would be set on every visit to a page that says it uses none.
-    if request.endpoint is None or request.endpoint == "static" or request.endpoint in gomat.NO_COOKIE_ENDPOINTS or request.endpoint in yipi.ENDPOINTS or request.endpoint in regal.ENDPOINTS:
+    if request.endpoint is None or request.endpoint == "static" or request.endpoint in gomat.NO_COOKIE_ENDPOINTS or request.endpoint in yipi.ENDPOINTS or request.endpoint in regal.ENDPOINTS or request.endpoint in nstl.ENDPOINTS:
         return
     session.permanent = True
 
@@ -1240,9 +1241,15 @@ gomat.register_routes(app)
 gomat_accounts.register_routes(app)
 yipi.register_routes(app)
 _PUBLIC_ENDPOINTS.update(yipi.ENDPOINTS)       # yipi has accounts of its own and checks the sign-in itself
-# Nex Ai (the home page since 2026-10-11: a chat with one AI that runs on the visitor's computer; no accounts, no cookies).  The list of free AI models it began as is at /modelle-archiv.
+# Nex Ai (the home page from 2026-10-11 to 2026-10-16: a chat with one AI that runs on the visitor's computer; no accounts, no cookies).
+# Archived at /nex-ai-archiv now that NSTL is the home page (below). The list of free AI models it began as is still at /modelle-archiv.
 regal.register_routes(app)
 _PUBLIC_ENDPOINTS.update(regal.ENDPOINTS)
+
+# NSTL (the home page since 2026-10-16: no accounts; you ask a question and a swarm of agents argues its way to a Wikipedia answer,
+# all of it running in the visitor's own browser) -- see nstl.py.
+nstl.register_routes(app)
+_PUBLIC_ENDPOINTS.update(nstl.ENDPOINTS)
 
 
 # ==========================================================================

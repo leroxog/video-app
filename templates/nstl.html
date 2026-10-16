@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NSTL: ein Agentenschwarm sucht deine Antwort</title>
+<meta name="description" content="{{ description }}">
+<meta name="theme-color" content="#212121" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="color-scheme" content="dark light">
+<link rel="canonical" href="{{ base }}/">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="{{ static_url('img/nstl-icon.svg') }}" type="image/svg+xml">
+<link rel="icon" href="{{ static_url('img/nstl-192.png') }}" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="{{ static_url('img/nstl-180.png') }}">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="NSTL">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="NSTL">
+<meta property="og:locale" content="de_DE">
+<meta property="og:title" content="NSTL: ein Agentenschwarm sucht deine Antwort">
+<meta property="og:description" content="{{ description }}">
+<meta property="og:url" content="{{ base }}/">
+<meta property="og:image" content="{{ base }}/static/img/nstl-og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="{{ static_url('css/regal.css') }}">
+<link rel="stylesheet" href="{{ static_url('css/nstl.css') }}">
+</head>
+<body>
+<a class="skip" href="#main">Zum Inhalt springen</a>
+<div id="app" data-worker="{{ static_url('js/nstl-swarm-worker.js') }}">
+  <header class="top">
+    <a class="brand" href="/" aria-label="NSTL, zur Startseite">{% include "partials/_nstl_mark.html" %}<span>NSTL</span></a>
+  </header>
+  <main id="main" class="page">
+    <section class="intro">
+      <h1>Frag den Schwarm</h1>
+      <p class="lead">Stell eine Frage. Bis zu 10 Millionen winzige Agenten – keine Sprachmodelle – lesen dazu passende Wikipedia-Artikel, reden live miteinander in einer Sprache, die sie sich dabei selbst ausdenken, und einigen sich auf eine Antwort.</p>
+    </section>
+    <form id="ask-form" class="ask">
+      <label class="offscreen" for="question">Deine Frage</label>
+      <input id="question" class="field" name="question" type="text" placeholder="Zum Beispiel: Wie funktioniert ein Kühlschrank?" autocomplete="off" required maxlength="200">
+      <button id="start" class="btn primary" type="submit">Schwarm fragen</button>
+    </form>
+    <p class="hint">Ohne Anmeldung. Deine Frage geht direkt aus deinem Browser an die Wikipedia (Deutsch und Englisch), nicht über unseren Server. Eine Simulation kann ein bis drei Minuten dauern.</p>
+    <p id="message" class="message" role="status" aria-live="polite"></p>
+
+    <section id="run" class="run" hidden aria-label="Der Schwarm bei der Arbeit">
+      <div class="stats">
+        <div><span class="stat-label">Runde</span><span id="stat-round">0</span></div>
+        <div><span class="stat-label">Agenten</span><span id="stat-agents">–</span></div>
+        <div><span class="stat-label">Verständigung</span><span id="stat-understanding">0,0 %</span></div>
+        <div><span class="stat-label">Einigkeit</span><span id="stat-consensus">0,0 %</span></div>
+        <div><span class="stat-label">Führendes Wort</span><span id="stat-word">–</span></div>
+        <div><span class="stat-label">Dialekte</span><span id="stat-dialects">–</span></div>
+      </div>
+      <div class="progress-track"><div id="progress-bar" class="progress-bar"></div></div>
+      <div class="map-row">
+        <canvas id="map" class="map" width="220" height="140" aria-label="Karte des Schwarms: jeder Punkt eine Gruppe von Agenten"></canvas>
+        <div class="map-toggle" role="group" aria-label="Was die Karte einfärbt">
+          <button id="mode-opinion" type="button" aria-pressed="true">Meinung</button>
+          <button id="mode-word" type="button" aria-pressed="false">Sprache</button>
+        </div>
+      </div>
+      <button id="stop" class="btn" type="button" hidden>Schwarm stoppen</button>
+      <h2 class="chat-title">Was die Agenten gerade sagen</h2>
+      <div class="chat-window"><ul id="chat-list" role="log" aria-live="off"></ul></div>
+    </section>
+
+    <section id="result" class="result" hidden aria-label="Antwort des Schwarms">
+      <h2>Antwort des Schwarms</h2>
+      <p id="answer-status" class="muted"></p>
+      <blockquote id="answer-text"></blockquote>
+      <p id="answer-source"></p>
+      <p id="answer-meta" class="small muted"></p>
+      <p class="honesty">Ehrlich gesagt: Diese Antwort hat kein Sprachmodell geschrieben. Kleine, immer gleiche Programme haben nur verglichen, welcher Wikipedia-Treffer am besten zur Frage passt, und sich per Mehrheit geeinigt. Die Zahlen oben sind gemessen, nicht behauptet – es wird nirgends behauptet, ihre selbst entwickelte Sprache sei „besser als alle, die es gibt“.</p>
+    </section>
+  </main>
+</div>
+<noscript>
+  <div class="noscript">
+    <h1>NSTL</h1>
+    <p>NSTL braucht JavaScript. Bitte schalte es in deinem Browser ein.</p>
+  </div>
+</noscript>
+<script src="{{ static_url('js/nstl-core.js') }}"></script>
+<script src="{{ static_url('js/nstl.js') }}"></script>
+</body>
+</html>

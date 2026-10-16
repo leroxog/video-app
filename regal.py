@@ -1,4 +1,5 @@
-"""Nex Ai: a chat with one AI that runs on the visitor's own computer.  This is the home page of the site.
+"""Nex Ai: a chat with one AI that runs on the visitor's own computer.  This was the home page of the site until NSTL (nstl.py) took
+over on 2026-10-16; the chat still fully works, now at /nex-ai-archiv, unlinked from anywhere.
 
 There is nothing to choose: the page takes the best model that the computer can run (static/data/browser-models.json, made by
 scripts/build_browser_models.py), loads it once from Hugging Face into the browser, and a worker (static/js/regal-chat-worker.js) lets it
@@ -6,7 +7,7 @@ write the answers on the graphics card or processor.  What people write never re
 program that runs the model (static/vendor/transformers) and keeps no data about visitors: no accounts, no cookies.  The scripts are
 static/js/regal-chat*.js.
 
-The earlier home page, a list of more than a thousand free AI models to download (static/data/models.json, made by
+The even earlier home page, a list of more than a thousand free AI models to download (static/data/models.json, made by
 scripts/build_catalog.py), is still at /modelle-archiv (scripts static/js/regal*.js).
 """
 import gzip
@@ -47,7 +48,7 @@ def base_url():
 def manifest():
     return {
         "name": f"{SITE_NAME}: KI-Chat auf deinem Computer", "short_name": SITE_NAME, "description": CHAT_DESCRIPTION, "lang": "de", "dir": "ltr",
-        "id": "/", "start_url": "/", "scope": "/", "display": "standalone", "orientation": "any",
+        "id": "/nex-ai-archiv", "start_url": "/nex-ai-archiv", "scope": "/nex-ai-archiv", "display": "standalone", "orientation": "any",
         "background_color": "#212121", "theme_color": "#212121", "categories": ["utilities", "productivity"],
         "icons": [
             {"src": "/static/img/nex-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
@@ -103,15 +104,16 @@ def register_routes(app):
                 response.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
         return response
 
-    @route("/", endpoint="pl_home")
+    @route("/nex-ai-archiv", endpoint="regal_archive_home")
     def regal_home():
-        """The home page is the chat: one AI, nothing to choose, running on the visitor's own computer."""
+        """The chat: one AI, nothing to choose, running on the visitor's own computer.  No longer the home page (see nstl.py);
+        still fully reachable here, just unlinked from the current home page."""
         page = render_template("regal_chat.html", description=CHAT_DESCRIPTION, base=base_url())
         return page_headers(make_response(page))
 
     @route("/chat", endpoint="regal_chat")
     def regal_chat():
-        return redirect("/", code=301)                      # the chat used to live here
+        return redirect("/nex-ai-archiv", code=301)          # the chat used to live at "/", then here
 
     @route("/modelle-archiv", endpoint="regal_models_archive")
     def regal_models_archive():
@@ -138,6 +140,6 @@ def register_routes(app):
         response.headers["Vary"] = "Accept-Encoding"
         return response
 
-    @route("/manifest.webmanifest", endpoint="regal_manifest")
+    @route("/nex-ai-archiv/manifest.webmanifest", endpoint="regal_manifest")
     def regal_manifest():
         return Response(json.dumps(manifest(), ensure_ascii=False), mimetype="application/manifest+json")

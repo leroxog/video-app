@@ -233,8 +233,8 @@
     const faq = (q, a) => h("details", { class: "faq" }, h("summary", {}, q), h("p", {}, a));
     const root = document.getElementById("app");
     fill(root, h("div", { class: "page" },
-      h("header", { class: "top" }, h("a", { class: "brand", href: "/", "aria-label": "Nex Ai, Startseite" }, logo(), h("span", {}, "Nex Ai")),
-        h("nav", { "aria-label": "Bereiche" }, h("a", { href: "/" }, "KI-Chat"), h("a", { href: "#modelle" }, "Modelle"), h("a", { href: "#so-gehts" }, "So geht’s"), h("a", { href: "#fragen" }, "Fragen"))),
+      h("header", { class: "top" }, h("a", { class: "brand", href: "/nex-ai-archiv", "aria-label": "Nex Ai, Startseite" }, logo(), h("span", {}, "Nex Ai")),
+        h("nav", { "aria-label": "Bereiche" }, h("a", { href: "/nex-ai-archiv" }, "KI-Chat"), h("a", { href: "#modelle" }, "Modelle"), h("a", { href: "#so-gehts" }, "So geht’s"), h("a", { href: "#fragen" }, "Fragen"))),
       h("main", { id: "main" },
         h("section", { class: "hero" },
           h("p", { class: "eyebrow" }, "Gratis. Auf deinem PC. Ohne Konto."),
@@ -244,7 +244,7 @@
         h("section", { class: "try", "aria-label": "Direkt ausprobieren" },
           h("div", { class: "try-icon" }, icon("chat")),
           h("div", { class: "try-text" }, h("h2", {}, "Gleich ausprobieren: KI-Chat im Browser"), h("p", {}, "Ohne App und ohne etwas herunterzuladen: Ein kleines Modell läuft direkt in deinem Browser, auf deinem Computer. Wie ChatGPT, nur privat und gratis.")),
-          h("a", { class: "btn primary big", href: "/" }, "Chat öffnen")),
+          h("a", { class: "btn primary big", href: "/nex-ai-archiv" }, "Chat öffnen")),
         h("section", { class: "tiles", "aria-label": "Was es gibt" }, h("h2", {}, "Was es gibt"), h("div", { class: "tile-grid" }, app.tiles)),
         app.results,
         h("section", { class: "steps", id: "so-gehts" }, h("h2", {}, "So geht’s"), h("ol", {},

@@ -1,6 +1,7 @@
 """Nex Ai's earlier home page, now at /modelle-archiv: the list of free AI models (more than a thousand, with their files and sizes), the
 page that serves it, and the pages around it.  The searching and filtering is tested in regal_core.test.js, the files of the page in
-test_regal_frontend.py; the chat that is the home page now is tested in test_regal_chat.py."""
+test_regal_frontend.py; the chat that was the home page after it (now archived at /nex-ai-archiv) is tested in test_regal_chat.py; the
+current home page (NSTL) is tested in test_nstl.py."""
 import json
 import os
 import re
@@ -106,35 +107,52 @@ def test_the_list_of_models_is_an_archive_page_and_a_visitor_gets_no_cookie(clie
     assert "Disallow: /modelle-archiv" in client.get("/robots.txt").get_data(as_text=True)
 
 
-def test_the_page_may_talk_to_hugging_face_for_the_downloads_and_to_nobody_else(client):
-    response = client.get("/")
+def test_the_archived_chat_may_talk_to_hugging_face_for_the_downloads_and_to_nobody_else(client):
+    response = client.get("/nex-ai-archiv")
     csp = response.headers["Content-Security-Policy"]
     assert "script-src 'self'" in csp and "'unsafe-inline'" not in csp.split("style-src")[0] and "frame-ancestors 'none'" in csp
     assert "connect-src 'self' https://huggingface.co https://*.huggingface.co https://*.hf.co;" in csp
     assert response.headers["X-Frame-Options"] == "DENY" and response.headers["Permissions-Policy"].startswith("camera=()")
     assert response.headers["X-Content-Type-Options"] == "nosniff"
-    assert client.get("/", headers={"X-Forwarded-Proto": "https"}).headers["Strict-Transport-Security"].startswith("max-age=")
+    assert client.get("/nex-ai-archiv", headers={"X-Forwarded-Proto": "https"}).headers["Strict-Transport-Security"].startswith("max-age=")
+
+
+def test_the_home_page_may_talk_to_wikipedia_and_to_nobody_else(client):
+    response = client.get("/")
+    csp = response.headers["Content-Security-Policy"]
+    assert "script-src 'self'" in csp and "worker-src 'self'" in csp and "frame-ancestors 'none'" in csp
+    assert "connect-src 'self' https://de.wikipedia.org https://en.wikipedia.org;" in csp
+    assert response.headers["X-Frame-Options"] == "DENY" and response.headers["Permissions-Policy"].startswith("camera=()")
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
 
 
 def test_the_manifest_and_the_images_exist(client):
     data = client.get("/manifest.webmanifest").get_json()
-    assert data["short_name"] == "Nex Ai" and data["start_url"] == "/" and data["display"] == "standalone" and "KI-Chat" in data["name"]
+    assert data["short_name"] == "NSTL" and data["start_url"] == "/" and data["display"] == "standalone" and "Agentenschwarm" in data["name"]
     assert {icon["purpose"] for icon in data["icons"]} == {"any", "maskable"}
     for icon in data["icons"]:
+        assert client.get(icon["src"]).status_code == 200, icon["src"]
+    for name in ("nstl-icon.svg", "nstl-180.png", "nstl-og.png"):
+        assert client.get(f"/static/img/{name}").status_code == 200, name
+
+    archived = client.get("/nex-ai-archiv/manifest.webmanifest").get_json()
+    assert archived["short_name"] == "Nex Ai" and archived["start_url"] == "/nex-ai-archiv" and "KI-Chat" in archived["name"]
+    for icon in archived["icons"]:
         assert client.get(icon["src"]).status_code == 200, icon["src"]
     for name in ("nex-icon.svg", "nex-180.png", "nex-og.png"):
         assert client.get(f"/static/img/{name}").status_code == 200, name
 
 
-def test_the_old_home_pages_are_still_there_and_the_site_pages_are_those_of_the_chat(client):
+def test_the_old_home_pages_are_still_there_and_the_site_pages_are_those_of_nstl(client):
     assert b"yipiBoot" in client.get("/yipi-archiv").data and b"gomatData" in client.get("/gomat-archiv").data
+    assert b"regal-core.js" in client.get("/nex-ai-archiv").data
     for path, words in (("/datenschutz", ("Nex Ai", "regal.fav", "regal.chats", "Hugging Face", "keine Cookies", "yipi_session")), ("/impressum", ("§ 5 DDG", "Rechtswidrige Inhalte melden")),
                         ("/nutzungsbedingungen", ("Lizenz", "Hugging Face", "16 Jahren", "yipi"))):
         page = client.get(path)
         text = page.get_data(as_text=True)
-        assert page.status_code == 200 and "| Nex Ai</title>" in text and "Set-Cookie" not in page.headers, path
+        assert page.status_code == 200 and "| NSTL</title>" in text and "Set-Cookie" not in page.headers, path
         for word in words:
             assert word in text, (path, word)
     error_page = client.get("/gibt-es-nicht-1234")
-    assert error_page.status_code == 404 and "Nex Ai" in error_page.get_data(as_text=True)
+    assert error_page.status_code == 404 and "NSTL" in error_page.get_data(as_text=True)
     assert "Sitemap:" in client.get("/robots.txt").get_data(as_text=True)

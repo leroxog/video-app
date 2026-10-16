@@ -116,20 +116,20 @@ def test_the_runtime_does_not_reach_for_other_servers_by_itself():
 
 
 # ---------------------------------------------------------------------------------------------------- the server
-def test_the_home_page_is_the_chat_and_a_visitor_gets_no_cookie(client):
-    response = client.get("/")
+def test_the_archived_chat_is_still_the_chat_and_a_visitor_gets_no_cookie(client):
+    response = client.get("/nex-ai-archiv")
     text = response.get_data(as_text=True)
     assert response.status_code == 200 and "Chat mit einer KI" in text and "Set-Cookie" not in response.headers
     assert 'data-models="/static/data/browser-models.json?v=' in text and 'data-worker="/static/js/regal-chat-worker.js?v=' in text
-    assert 'rel="canonical" href="http://localhost/"' in text and "regal-chat.js" in text and "models.json?v" not in text.replace("browser-models.json?v", "")
+    assert 'rel="canonical" href="http://localhost/nex-ai-archiv"' in text and "regal-chat.js" in text and "models.json?v" not in text.replace("browser-models.json?v", "")
     csp = response.headers["Content-Security-Policy"]
     assert "script-src 'self'" in csp and "worker-src 'self'" in csp and "frame-ancestors 'none'" in csp
     assert client.get("/static/data/browser-models.json").status_code == 200
 
 
-def test_the_old_address_of_the_chat_leads_to_the_home_page(client):
+def test_the_old_address_of_the_chat_leads_to_the_archived_chat(client):
     response = client.get("/chat")
-    assert response.status_code == 301 and response.headers["Location"].endswith("/")
+    assert response.status_code == 301 and response.headers["Location"].endswith("/nex-ai-archiv")
 
 
 def test_the_worker_has_its_own_policy_it_may_run_webassembly_and_load_the_model_and_nothing_else(client):
@@ -172,10 +172,10 @@ def test_the_big_runtime_files_are_sent_compressed_to_browsers_and_unpacked_for_
         assert plain_file.status_code == 200 and plain_file.headers["Content-Type"].startswith("text/javascript") and "Content-Encoding" not in plain_file.headers
 
 
-def test_the_archived_list_points_to_the_chat_and_the_sitemap_has_only_the_pages_to_find(client):
+def test_the_archived_list_points_to_the_archived_chat_and_the_sitemap_has_only_the_pages_to_find(client):
     with open(os.path.join(ROOT, "static", "js", "regal.js"), encoding="utf-8") as handle:
         archive = handle.read()
-    assert 'href: "/"' in archive and "KI-Chat im Browser" in archive and 'href: "/chat"' not in archive
+    assert 'href: "/nex-ai-archiv"' in archive and "KI-Chat im Browser" in archive and 'href: "/chat"' not in archive
     sitemap = ET.fromstring(client.get("/sitemap.xml", headers={"Host": "regal.example"}).data)
     urls = [e.text for e in sitemap.iter("{http://www.sitemaps.org/schemas/sitemap/0.9}loc")]
     assert "http://regal.example/" in urls and not any("archiv" in url or url.endswith("/chat") for url in urls)

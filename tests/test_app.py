@@ -72,12 +72,13 @@ def test_nex_archived_redirects_to_login_when_logged_out(client):
     assert "/login" in r.headers["Location"]
 
 
-def test_signup_then_land_on_regal(client):
+def test_signup_then_land_on_nstl(client):
     r = signup(client, "alice")
     assert r.status_code in (302, 303)
     home = client.get("/")
     assert home.status_code == 200
-    assert b"regal-core.js" in home.data and b"yipiBoot" not in home.data and b"gomatData" not in home.data and b"createForm" not in home.data and b"msNav" not in home.data
+    assert b"nstl-swarm-worker.js" in home.data and b"yipiBoot" not in home.data and b"gomatData" not in home.data and b"createForm" not in home.data and b"msNav" not in home.data
+    assert b"regal-core.js" in client.get("/nex-ai-archiv").data
     assert b"yipiBoot" in client.get("/yipi-archiv").data
     assert b"gomatData" in client.get("/gomat-archiv").data
     assert b"msNav" in client.get("/sound-archiv").data
@@ -345,16 +346,17 @@ def _chat_id(client):
     return client.post("/api/ai/chats").get_json()["chat"]["id"]
 
 
-def test_root_serves_regal_not_the_archived_pages(client):
-    """The home page cycled Nex, browser, ychat, ylib, the browser again, NRS Server, NRS Sound, ysound, gomat, yipi and is now
-    Nex Ai (2026-10-11). The social network, maths course, song site, sound studio, server panel, browser, ylib, ychat and Nex UIs
-    still fully work at /yipi-archiv, /gomat-archiv, /ysound-archiv, /sound-archiv, /server-archiv, /browser-archiv, /ylib-archiv,
-    /ychat-archiv and /nex-archiv, unlinked from anywhere."""
+def test_root_serves_nstl_not_the_archived_pages(client):
+    """The home page cycled Nex, browser, ychat, ylib, the browser again, NRS Server, NRS Sound, ysound, gomat, yipi, Nex Ai
+    (2026-10-11) and is now NSTL (2026-10-16). The social network, maths course, song site, sound studio, server panel, browser,
+    ylib, ychat, Nex and Nex Ai UIs still fully work at /yipi-archiv, /gomat-archiv, /ysound-archiv, /sound-archiv, /server-archiv,
+    /browser-archiv, /ylib-archiv, /ychat-archiv, /nex-archiv and /nex-ai-archiv, unlinked from anywhere."""
     signup(client, "alice")
     home = client.get("/")
     assert home.status_code == 200
     assert (
-        b"regal-core.js" in home.data
+        b"nstl-swarm-worker.js" in home.data
+        and b"regal-core.js" not in home.data
         and b"yipiBoot" not in home.data
         and b"gomatData" not in home.data
         and b"createForm" not in home.data
@@ -365,6 +367,7 @@ def test_root_serves_regal_not_the_archived_pages(client):
         and b"ycFeed" not in home.data
         and b"nxMsgs" not in home.data
     )
+    assert b"regal-core.js" in client.get("/nex-ai-archiv").data
     assert b"yipiBoot" in client.get("/yipi-archiv").data
     assert b"gomatData" in client.get("/gomat-archiv").data
 

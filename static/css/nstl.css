@@ -1,0 +1,43 @@
+/* NSTL: the question box, the swarm's live map and chat window, and the final answer card.  Shares the look (colours, font, buttons)
+   with static/css/regal.css; this file only adds what is new here. */
+
+.intro { padding: 28px 0 6px; max-width: 680px; }
+.intro h1 { font-size: clamp(28px, 4.4vw, 42px); font-weight: 700; letter-spacing: -0.03em; margin-bottom: 10px; }
+
+.ask { display: flex; flex-wrap: wrap; gap: 10px; max-width: 680px; margin-top: 10px; }
+.ask .field { flex: 1; min-width: 220px; }
+.hint { max-width: 680px; margin: 10px 0 0; color: var(--muted); font-size: 13px; }
+.message { min-height: 1.4em; margin: 14px 0 0; font-weight: 600; }
+.message.bad { color: var(--bad); }
+
+.run { margin-top: 28px; display: grid; gap: 16px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.stats > div { padding: 10px 12px; border-radius: var(--radius); background: var(--panel); border: 1px solid var(--line); display: grid; gap: 2px; }
+.stat-label { display: block; font-size: 12px; color: var(--muted); font-weight: 700; }
+.stats span:last-child { font-size: 15px; font-weight: 700; }
+
+.progress-track { height: 8px; border-radius: 999px; background: var(--panel-2); overflow: hidden; }
+.progress-bar { height: 100%; width: 0; background: var(--accent); transition: width 0.3s ease; border-radius: inherit; }
+@media (prefers-reduced-motion: reduce) { .progress-bar { transition: none; } }
+
+.map-row { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; }
+.map { width: min(100%, 520px); aspect-ratio: 220 / 140; background: var(--bg-deep); border: 1px solid var(--line); border-radius: var(--radius); image-rendering: pixelated; image-rendering: crisp-edges; }
+.map-toggle { display: inline-flex; gap: 6px; border: 1px solid var(--line); border-radius: 999px; padding: 4px; }
+.map-toggle button { padding: 6px 14px; border-radius: 999px; font-weight: 600; font-size: 14px; color: var(--muted); }
+.map-toggle button[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); }
+
+.chat-title { font-size: 16px; font-weight: 700; margin: 4px 0 8px; }
+.chat-window { max-height: 260px; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); padding: 4px 0; }
+#chat-list { display: grid; }
+#chat-list li { padding: 7px 14px; font-size: 13.5px; color: var(--muted); border-bottom: 1px solid var(--line); line-height: 1.4; }
+#chat-list li:last-child { border-bottom: 0; color: var(--text); }
+
+.result { margin-top: 30px; max-width: 720px; padding: 20px; border-radius: var(--radius); background: var(--panel); border: 1px solid var(--line); display: grid; gap: 10px; }
+.result h2 { font-size: 20px; font-weight: 700; }
+.result blockquote { margin: 0; padding-left: 14px; border-left: 3px solid var(--accent); font-size: 17px; line-height: 1.55; }
+.result .honesty { font-size: 13px; color: var(--faint); font-style: italic; }
+
+@media (max-width: 560px) {
+  .ask { flex-direction: column; }
+  .ask .btn { width: 100%; }
+}
