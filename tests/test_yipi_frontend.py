@@ -227,7 +227,7 @@ def test_every_theme_defines_the_same_colours():
 
 def test_every_animation_has_its_keyframes():
     keyframes = set(re.findall(r"@keyframes\s+([\w-]+)", CSS))
-    assert keyframes == {"spin", "fade", "rise", "pop", "shimmer", "toast-in", "drop", "drift", "breathe", "blink", "sheet"}
+    assert keyframes == {"spin", "fade", "rise", "pop", "shimmer", "toast-in", "drop", "drift", "blink", "sheet"}
     for name in keyframes:
         assert re.search(rf"animation:[^;]*\b{name}\b", CSS), f"{name} is defined but never used"
     for declaration in re.findall(r"animation:\s*([a-z][\w-]*)", CSS):
@@ -293,6 +293,27 @@ def test_the_notification_tabs_ask_the_server_for_what_it_offers():
     views = JS["yipi-views.js"]
     assert '["all", "Alle"], ["mentions", "Erwähnungen"]' in views and 'filter: only === "mentions" ? "mentions" : ""' in views
     assert 'request.args.get("filter") == "mentions"' in read("yipi.py")
+
+
+def test_the_timeline_is_a_flat_column_like_on_x_the_width_is_used_and_nothing_is_offered_twice():
+    center = CSS.split(".center {")[1].split("}")[0]
+    assert "border-radius" not in center and "margin: 0" in center and "border-left: 1px solid" in center and "box-shadow" not in center
+    for name in ("side", "rail", "center"):
+        assert f"--{name}: clamp(" in CSS, "the columns grow with a wide screen instead of leaving big margins"
+    assert "side-guest" not in CSS and "side-guest" not in JS["yipi.js"], "the buttons to sign up are in the right column (or in the intro on a small screen), not three times"
+    assert ".hero .hero-actions { display: none; }" in CSS
+    assert ".nav-item.active { font-weight: 800; }" in CSS, "the active menu entry is bold, not boxed"
+    assert ".card { border: 0;" in CSS
+
+
+def test_the_materials_give_depth_without_playful_colours():
+    for name in ("--hl", "--sheen", "--shadow", "--glow"):
+        for theme in ("dark", "dim", "light"):
+            assert name in re.search(rf':root\[data-theme="{theme}"\]\s*\{{(.*?)\}}', CSS, re.S).group(1), (name, theme)
+    assert "--btn-3d:" in CSS and ".btn.primary { background: var(--grad); color: var(--on-accent); text-shadow" in CSS
+    assert "radial-gradient(circle at 32% 24%" in CSS, "Nex is a sphere"
+    assert "var(--grad): linear" not in CSS and "--grad: linear-gradient(180deg, #639eff 0%, #3a6ee8 100%)" in CSS, "one calm blue, lit from above"
+    assert "135deg, #8b5cf6" not in CSS and "#22d3ee" not in CSS.split("*, *::before")[0], "no violet-to-cyan rainbow in the colours of the page"
 
 
 def test_the_bottom_bar_of_a_phone_has_nex_in_the_middle():

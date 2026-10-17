@@ -255,8 +255,8 @@
     return box;
   }
 
-  const ACCENTS = [["pulse", "Pulse (Violett, Blau, Cyan)", "linear-gradient(135deg, #8b5cf6, #22d3ee)"], ["violet", "Violett", "linear-gradient(135deg, #7c3aed, #e879f9)"],
-    ["pink", "Pink", "linear-gradient(135deg, #ff4f9a, #ffb347)"], ["orange", "Orange", "linear-gradient(135deg, #f97316, #f43f5e)"], ["green", "Grün", "linear-gradient(135deg, #10b981, #38bdf8)"]];
+  const ACCENTS = [["pulse", "Blau (Standard)", "linear-gradient(180deg, #639eff, #3a6ee8)"], ["violet", "Violett", "linear-gradient(180deg, #a48aff, #6a47e0)"],
+    ["pink", "Pink", "linear-gradient(180deg, #ff6ea4, #de3374)"], ["orange", "Orange", "linear-gradient(180deg, #ffa04a, #e0701a)"], ["green", "Grün", "linear-gradient(180deg, #3cd0a0, #139a70)"]];
 
   function displaySection() {
     let current = "auto";

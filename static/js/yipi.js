@@ -136,8 +136,7 @@
       h("div", { class: "side-inner" },
         link(Y.HOME, { class: "brand", "aria-label": "Pulse, zur Startseite" }, Icons.logo(), h("span", { class: "brand-name" }, "Pulse")),
         h("nav", { class: "nav", "aria-label": "Hauptmenü" }, items.map((entry) => navItem(entry, false))),
-        Y.me ? h("button", { class: "btn primary compose-btn", type: "button", "aria-label": "Neuer Beitrag", onclick: () => Y.compose() }, h("span", { class: "cb-text" }, "Posten"), h("span", { class: "cb-icon" }, icon("feather")))
-             : h("div", { class: "side-guest" }, link("/i/signup", { class: "btn primary" }, "Registrieren"), link("/i/login", { class: "btn ghost" }, "Anmelden")),
+        Y.me ? h("button", { class: "btn primary compose-btn", type: "button", "aria-label": "Neuer Beitrag", onclick: () => Y.compose() }, h("span", { class: "cb-text" }, "Posten"), h("span", { class: "cb-icon" }, icon("feather"))) : null,
         h("div", { class: "side-spacer" }),
         Y.me ? accountChip() : null));
     const tabbar = h("nav", { class: "tabbar", "aria-label": "Hauptmenü" },
