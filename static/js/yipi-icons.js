@@ -1,6 +1,6 @@
 /* Pulse icons (the file keeps the name yipi-icons.js): the small pictures of the page and the logo, drawn in code (all original).
    `YipiIcons.icon(name)` gives an <svg> element that takes the colour of the text around it; `YipiIcons.logo()` the heartbeat on its
-   violet-to-cyan tile. The only place in the page that uses innerHTML is here, for these fixed drawings. */
+   violet tile. The only place in the page that uses innerHTML is here, for these fixed drawings. */
 (function () {
   "use strict";
 
@@ -59,6 +59,12 @@
     text: S('<path d="M5 6.500V5h14v1.500M12 5v14M9 19h6"/>'),
     stop: S('<rect x="6" y="6" width="12" height="12" rx="2.500"/>', `${FILL} stroke="currentColor" stroke-width="2" stroke-linejoin="round"`),
     refresh: S('<path d="M20 11a8 8 0 10-2.300 6.300"/><path d="M20 4v7h-7"/>'),
+    views: S('<path d="M5 20v-8M12 20V5M19 20v-5"/>'),
+    poll: S('<rect x="3" y="4" width="14" height="4" rx="2"/><rect x="3" y="10" width="18" height="4" rx="2"/><rect x="3" y="16" width="9" height="4" rx="2"/>'),
+    moreCircle: S('<circle cx="12" cy="12" r="9"/><circle cx="8" cy="12" r="1.100" fill="currentColor"/><circle cx="12" cy="12" r="1.100" fill="currentColor"/><circle cx="16" cy="12" r="1.100" fill="currentColor"/>'),
+    pushpin: S('<path d="M9 4h6l-1 5 3 3v2H7v-2l3-3z"/><path d="M12 14v6"/>'),
+    list: S('<path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1" fill="currentColor"/><circle cx="4" cy="12" r="1" fill="currentColor"/><circle cx="4" cy="18" r="1" fill="currentColor"/>'),
+    help: S('<circle cx="12" cy="12" r="9"/><path d="M9.500 9.500a2.500 2.500 0 114 2c-.9.6-1.500 1.100-1.500 2.200"/><circle cx="12" cy="17" r=".9" fill="currentColor"/>'),
     users: S('<circle cx="9" cy="8" r="3.500"/><path d="M2.500 20c.8-3.500 3.200-5.500 6.500-5.500s5.700 2 6.500 5.500"/><path d="M16 4.800a3.500 3.500 0 010 6.400M18 14.800c2 .6 3.200 2.300 3.600 4.700"/>'),
   };
 
@@ -70,11 +76,11 @@
 
   let counter = 0;
 
-  /* The heartbeat of Pulse on a violet-to-cyan tile (the same drawing as static/img/pulse-icon.svg). */
+  /* The heartbeat of Pulse on a violet tile (the same drawing as static/img/pulse-icon.svg). */
   function logo() {
     const id = `pg${++counter}`;
     const holder = document.createElement("span");
-    holder.innerHTML = `<svg viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b5cf6"/><stop offset="0.5" stop-color="#3b82f6"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs>
+    holder.innerHTML = `<svg viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a78bfa"/><stop offset="0.5" stop-color="#7c3aed"/><stop offset="1" stop-color="#4c1d95"/></linearGradient></defs>
       <rect x="2.500" y="2.500" width="59" height="59" rx="16" fill="url(#${id})"/>
       <path d="M11.800 33.700L22.800 33.700L27.800 19.400L36.200 46.300L41.200 30.300L45.400 33.700L52.200 33.700" fill="none" stroke="#fff" stroke-width="5.500" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     return holder.firstElementChild;

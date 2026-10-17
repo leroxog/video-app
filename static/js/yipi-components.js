@@ -66,6 +66,56 @@
     entry.box.querySelector(".dialog-actions .btn").disabled = true;
   }
 
+  // ---------------------------------------------------------------------------------------- hover cards
+  /* On a computer a pause of the pointer over a name or a picture opens a small card of the person (like on X); it is not for touch. */
+  const profiles = new Map();                                      // handle -> {user, at}: kept for a minute
+  let hoverCard = null;
+  let showTimer = null;
+  let hideTimer = null;
+
+  function closeHover() {
+    clearTimeout(showTimer);
+    clearTimeout(hideTimer);
+    if (hoverCard) { hoverCard.remove(); hoverCard = null; }
+  }
+
+  async function openHover(anchor, handle) {
+    let entry = profiles.get(handle);
+    if (!entry || Date.now() - entry.at > 60000) {
+      const reply = await Api.get(`/users/${handle}`);
+      if (!reply.ok || !reply.data.user.createdAt) return;
+      entry = { user: reply.data.user, at: Date.now() };
+      profiles.set(handle, entry);
+    }
+    if (!anchor.isConnected || !anchor.matches(":hover")) return;
+    const user = entry.user;
+    if (hoverCard) hoverCard.remove();
+    const box = h("div", { class: "hovercard", role: "tooltip" },
+      h("div", { class: "hc-top" }, link(`/${user.handle}`, { class: "hc-av", tabindex: "-1", "aria-hidden": "true" }, avatar(user, "lg")), followButton(user)),
+      link(`/${user.handle}`, { class: "hc-name" }, h("b", {}, user.name), h("span", { class: "handle" }, `@${user.handle}`)),
+      user.bio ? h("p", { class: "hc-bio" }, richText(user.bio)) : null,
+      h("div", { class: "hc-counts" }, link(`/${user.handle}/following`, {}, h("b", {}, Core.formatCount(user.following)), " Folge ich"), link(`/${user.handle}/followers`, {}, h("b", {}, Core.formatCount(user.followers)), " Follower")));
+    box.addEventListener("mouseenter", () => clearTimeout(hideTimer));
+    box.addEventListener("mouseleave", () => { hideTimer = setTimeout(closeHover, 200); });
+    box.addEventListener("click", (event) => { if (event.target.closest("a")) closeHover(); });
+    document.body.append(box);
+    const place = anchor.getBoundingClientRect();
+    const left = Math.max(8, Math.min(window.innerWidth - box.offsetWidth - 8, place.left));
+    const top = place.bottom + 8 + box.offsetHeight > window.innerHeight ? Math.max(8, place.top - box.offsetHeight - 8) : place.bottom + 8;
+    box.style.left = `${left}px`;
+    box.style.top = `${top}px`;
+    hoverCard = box;
+  }
+
+  function hoverable(element, handle) {
+    if (!matchMedia("(hover: hover) and (pointer: fine)").matches) return element;
+    element.addEventListener("mouseenter", () => { clearTimeout(hideTimer); clearTimeout(showTimer); showTimer = setTimeout(() => openHover(element, handle), 450); });
+    element.addEventListener("mouseleave", () => { clearTimeout(showTimer); hideTimer = setTimeout(closeHover, 220); });
+    element.addEventListener("click", closeHover);
+    return element;
+  }
+  window.addEventListener("scroll", closeHover, { passive: true });
+
   // ------------------------------------------------------------------------------------------ people
   function followButton(user, options = {}) {
     if (user.isMe) return null;
@@ -106,9 +156,9 @@
   /* A line for a person: picture, name, @handle, a short description and the follow button. */
   function userRow(user, options = {}) {
     const row = h("div", { class: "user-row" },
-      link(`/${user.handle}`, { class: "ur-av", tabindex: "-1", "aria-hidden": "true" }, avatar(user, "md")),
+      hoverable(link(`/${user.handle}`, { class: "ur-av", tabindex: "-1", "aria-hidden": "true" }, avatar(user, "md")), user.handle),
       h("div", { class: "ur-main" },
-        link(`/${user.handle}`, { class: "ur-name" }, h("b", {}, user.name), h("span", { class: "handle" }, `@${user.handle}`)),
+        hoverable(link(`/${user.handle}`, { class: "ur-name" }, h("b", {}, user.name), h("span", { class: "handle" }, `@${user.handle}`)), user.handle),
         options.bio !== false && user.bio ? h("p", { class: "ur-bio" }, richText(user.bio)) : null),
       options.action === undefined ? followButton(user) : options.action);
     return row;
@@ -184,6 +234,126 @@
     return card;
   }
 
+  // ---------------------------------------------------------------------------------------------- views
+  /* A post counts as seen when at least half of it has been on screen for a moment; the page tells the server in batches, once per post
+     and page view, and only for people who are signed in. */
+  const seenViews = new Set();
+  const viewQueue = new Set();
+  let viewTimer = null;
+
+  async function flushViews() {
+    viewTimer = null;
+    const ids = [...viewQueue].slice(0, 40);
+    ids.forEach((id) => viewQueue.delete(id));
+    if (ids.length) await Api.post("/posts/views", { ids });
+    if (viewQueue.size && !viewTimer) viewTimer = setTimeout(flushViews, 4000);
+  }
+
+  function queueView(id) {
+    if (!Y.me || seenViews.has(id)) return;
+    seenViews.add(id);
+    viewQueue.add(id);
+    if (!viewTimer) viewTimer = setTimeout(flushViews, 4000);
+  }
+  document.addEventListener("visibilitychange", () => { if (document.hidden && viewQueue.size) flushViews(); });
+
+  const watcher = "IntersectionObserver" in window ? new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      const element = entry.target;
+      clearTimeout(element._viewTimer);
+      if (entry.isIntersecting) element._viewTimer = setTimeout(() => { queueView(Number(element.dataset.id)); watcher.unobserve(element); }, 900);
+    }
+  }, { threshold: [0.5] }) : null;
+
+  // ----------------------------------------------------------------------------------------------- polls
+  /* The poll of a post: buttons to choose from while it is open and nobody has voted, bars with percentages after that. */
+  function pollView(item) {
+    const holder = h("div", { class: "poll-holder" });
+
+    async function vote(optionId) {
+      if (!Y.requireLogin("Melde dich an, um abzustimmen.")) return;
+      const reply = await Api.post(`/posts/${item.id}/vote`, { optionId });
+      if (!reply.ok) {
+        toast(Api.message(reply));
+        const fresh = await Api.get(`/posts/${item.id}`);
+        if (fresh.ok && fresh.data.post.poll) { item.poll = fresh.data.post.poll; draw(); }
+        return;
+      }
+      item.poll = reply.data.post.poll;
+      draw();
+    }
+
+    function draw() {
+      const poll = item.poll;
+      const left = Core.pollTimeLeft(poll.endsAt);
+      const ended = poll.ended || left.ended;
+      const open = !ended && !poll.showResults;                  // somebody who may still vote (or has to sign in first)
+      const leader = poll.showResults ? Math.max(0, ...poll.options.map((option) => option.votes || 0)) : 0;
+      const rows = poll.options.map((option) => {
+        if (open) return h("button", { class: "poll-opt", type: "button", onclick: (event) => { event.stopPropagation(); vote(option.id); } }, option.text);
+        const votes = option.votes || 0;
+        const percent = poll.showResults ? Core.pollPercent(votes, poll.total) : 0;
+        return h("div", { class: `poll-row${leader > 0 && votes === leader ? " lead" : ""}${option.mine ? " mine" : ""}`, role: "img", "aria-label": `${option.text}${poll.showResults ? `: ${percent} Prozent` : ""}${option.mine ? ", deine Stimme" : ""}` },
+          h("span", { class: "poll-fill", style: `width:${percent}%` }),
+          h("span", { class: "poll-label" }, option.text, option.mine ? icon("check") : null),
+          poll.showResults ? h("span", { class: "poll-pct" }, `${percent} %`) : null);
+      });
+      fill(holder, h("div", { class: "poll", role: "group", "aria-label": "Umfrage" }, rows, h("p", { class: "poll-foot" }, `${Core.pollVotes(poll.total)} · ${ended ? "Beendet" : left.text}`)));
+    }
+    draw();
+    return holder;
+  }
+
+  // ------------------------------------------------------------------------------------------- dialogs
+  /* The people behind a number ("Gefällt mir", "Reposts"): a dialog with a list that loads more as you scroll. */
+  function peopleDialog(title, path) {
+    const list = pager({ load: Y.listLoader((cursor) => Y.qs(path, { page: cursor || 1 }), "users"), render: (user) => userRow(user), empty: Y.emptyState("Noch niemand", "") });
+    const entry = dialog({ title, body: h("div", { class: "people-dialog" }, list.element), onClose: () => list.destroy() });
+    list.element.addEventListener("click", (event) => { if (event.target.closest("a")) entry.close(); });
+    return entry;
+  }
+
+  /* "Per Nachricht senden": pick a person (the people you write with, or search), the link to the post goes to them as a message. */
+  function sendPostDialog(item) {
+    if (!Y.requireLogin("Melde dich an, um Beiträge zu senden.")) return;
+    const address = absolute(postPath(item));
+    const note = h("textarea", { class: "field-area", rows: 2, maxlength: 300, placeholder: "Nachricht hinzufügen (freiwillig)", "aria-label": "Nachricht dazu" });
+    const search = h("input", { class: "field", type: "search", placeholder: "Nach Namen oder @Nutzernamen suchen", "aria-label": "Person suchen", autocomplete: "off", maxlength: 50 });
+    const results = h("div", { class: "pick-list" }, Y.skeleton(1));
+    let entry = null;
+    let timer = null;
+    let token = 0;
+
+    async function send(user) {
+      const text = Core.cleanText(`${Core.cleanText(note.value)}\n${address}`);
+      const reply = await Api.post(`/messages/${user.handle}`, { text });
+      if (!reply.ok) { toast(Api.message(reply)); return; }
+      entry.close();
+      toast(`An @${user.handle} gesendet`, { label: "Ansehen", run: () => Y.navigate(`/messages/${user.handle}`) });
+    }
+    const row = (user) => h("button", { class: "pick", type: "button", onclick: () => send(user) }, avatar(user, "md"), h("span", { class: "pick-main" }, h("b", {}, user.name), h("span", { class: "handle" }, `@${user.handle}`)));
+    function show(users, empty) { fill(results, ...(users.length ? users.map(row) : [h("p", { class: "muted" }, empty)])); }
+
+    (async () => {
+      const reply = await Api.get("/messages");
+      if (token) return;
+      show(reply.ok ? reply.data.items.map((entry) => entry.user) : [], "Suche eine Person, um ihr den Beitrag zu schicken.");
+    })();
+    search.addEventListener("input", () => {
+      clearTimeout(timer);
+      const term = Core.cleanText(search.value).replace(/^@/, "");
+      const mine = ++token;
+      if (term.length < 2) { show([], "Tippe mindestens zwei Zeichen."); return; }
+      timer = setTimeout(async () => {
+        const reply = await Api.get(`/search?q=${encodeURIComponent(term)}&type=people`);
+        if (mine !== token) return;
+        show(reply.ok ? reply.data.users.filter((user) => !user.isMe) : [], reply.ok ? "Niemanden gefunden." : Api.message(reply));
+      }, 280);
+    });
+    entry = dialog({ title: "Per Nachricht senden", body: h("div", {}, note, h("div", { class: "field-label" }, search), results), initialFocus: search });
+    return entry;
+  }
+
   /* One post. Options: detail (the big version on its own page), noReplyLine, onDelete(card), onReply(post). */
   function postCard(item, options = {}) {
     if (item.deleted) {
@@ -198,7 +368,9 @@
     const repostButton = actionButton({ kind: "repost", label: "Reposten", off: "repost" });
     const likeButton = actionButton({ kind: "like", label: "Gefällt mir", off: "heart", on: "heartFill" });
     const bookmarkButton = actionButton({ kind: "bookmark", label: "Lesezeichen", off: "bookmark", on: "bookmarkFill" });
-    const shareButton = h("button", { class: "act share", type: "button", "aria-label": "Teilen" }, h("span", { class: "act-icon" }, icon("share")));
+    const shareButton = h("button", { class: "act share", type: "button", "aria-label": "Teilen", "aria-haspopup": "menu" }, h("span", { class: "act-icon" }, icon("share")));
+    const viewCount = h("span", { class: "act-count" });
+    const viewsStat = h("span", { class: "act views", title: "Aufrufe" }, h("span", { class: "act-icon" }, icon("views")), viewCount);
     const moreButton = h("button", { class: "more icon-btn small", type: "button", "aria-label": "Mehr", "aria-haspopup": "menu" }, icon("more"));
     const stats = h("div", { class: "post-stats" });
 
@@ -208,10 +380,14 @@
       repostButton.classList.toggle("on", state.viewer.reposted);
       likeButton.draw(state.viewer.liked, detail ? 0 : state.counts.likes, state.viewer.liked ? "Gefällt mir nicht mehr" : "Gefällt mir");
       bookmarkButton.draw(state.viewer.bookmarked, 0, state.viewer.bookmarked ? "Lesezeichen entfernen" : "Lesezeichen");
+      const views = item.views || 0;
+      viewCount.textContent = views ? Core.formatCount(views) : "";
+      viewsStat.setAttribute("aria-label", `${views} ${views === 1 ? "Aufruf" : "Aufrufe"}`);
       if (detail) {
-        fill(stats, 
-          state.counts.reposts ? h("span", {}, h("b", {}, Core.formatCount(state.counts.reposts)), ` ${state.counts.reposts === 1 ? "Repost" : "Reposts"}`) : null,
-          state.counts.likes ? h("span", {}, h("b", {}, Core.formatCount(state.counts.likes)), " Gefällt mir") : null,
+        fill(stats,
+          views ? h("span", {}, h("b", {}, Core.formatCount(views)), ` ${views === 1 ? "Aufruf" : "Aufrufe"}`) : null,
+          state.counts.reposts ? h("button", { class: "stat-link", type: "button", onclick: () => peopleDialog("Reposts von", `/posts/${item.id}/reposts`) }, h("b", {}, Core.formatCount(state.counts.reposts)), ` ${state.counts.reposts === 1 ? "Repost" : "Reposts"}`) : null,
+          state.counts.likes ? h("button", { class: "stat-link", type: "button", onclick: () => peopleDialog("Gefällt mir von", `/posts/${item.id}/likes`) }, h("b", {}, Core.formatCount(state.counts.likes)), " Gefällt mir") : null,
           state.counts.replies ? h("span", {}, h("b", {}, Core.formatCount(state.counts.replies)), ` ${state.counts.replies === 1 ? "Antwort" : "Antworten"}`) : null);
         stats.hidden = !stats.children.length;
       }
@@ -262,12 +438,15 @@
         { label: "Zitieren", icon: "pencil", run: () => Y.compose({ quoteOf: item }) },
       ]);
     });
-    shareButton.addEventListener("click", async (event) => {
+    shareButton.addEventListener("click", (event) => {
       event.stopPropagation();
-      if (navigator.share && matchMedia("(pointer: coarse)").matches) {
-        try { await navigator.share({ url: absolute(postPath(item)), title: `${item.user.name} auf Pulse` }); return; } catch (error) { if (error && error.name === "AbortError") return; }
-      }
-      copyLink(postPath(item));
+      menu(shareButton, [
+        { label: "Link kopieren", icon: "link", run: () => copyLink(postPath(item)) },
+        { label: "Per Nachricht senden", icon: "mail", run: () => sendPostDialog(item) },
+        navigator.share && matchMedia("(pointer: coarse)").matches ? { label: "Teilen …", icon: "share", run: async () => {
+          try { await navigator.share({ url: absolute(postPath(item)), title: `${item.user.name} auf Pulse` }); } catch (error) { /* closed */ }
+        } } : null,
+      ]);
     });
     moreButton.addEventListener("click", (event) => {
       event.stopPropagation();
@@ -275,6 +454,9 @@
       menu(moreButton, [
         { label: "Link kopieren", icon: "link", run: () => copyLink(postPath(item)) },
         item.text ? { label: "Mit Nex erklären", icon: "sparkle", run: () => Y.navigate(Core.buildPath({ name: "nex", post: item.id })) } : null,
+        mine && !item.replyTo ? (Y.me.pinnedPostId === item.id
+          ? { label: "Von deinem Profil lösen", icon: "pushpin", run: async () => { const reply = await Api.del(`/posts/${item.id}/pin`); if (reply.ok) { Y.me.pinnedPostId = reply.data.pinnedPostId; toast("Der Beitrag ist nicht mehr angeheftet."); Y.refreshView?.(); } else toast(Api.message(reply)); } }
+          : { label: "An dein Profil anheften", icon: "pushpin", run: async () => { const reply = await Api.post(`/posts/${item.id}/pin`); if (reply.ok) { Y.me.pinnedPostId = reply.data.pinnedPostId; toast("Der Beitrag ist an dein Profil angeheftet.", { label: "Ansehen", run: () => Y.navigate(`/${Y.me.handle}`) }); Y.refreshView?.(); } else toast(Api.message(reply)); } }) : null,
         mine ? { label: "Beitrag löschen", icon: "trash", danger: true, run: async () => {
           if (!(await confirmBox({ title: "Beitrag löschen?", text: "Das lässt sich nicht rückgängig machen.", yes: "Löschen", danger: true }))) return;
           const reply = await Api.del(`/posts/${item.id}`);
@@ -294,7 +476,7 @@
     });
 
     const head = h("div", { class: "post-head" },
-      link(`/${item.user.handle}`, { class: "post-name" }, h("b", {}, item.user.name), detail ? null : h("span", { class: "handle" }, `@${item.user.handle}`)),
+      hoverable(link(`/${item.user.handle}`, { class: "post-name" }, h("b", {}, item.user.name), detail ? null : h("span", { class: "handle" }, `@${item.user.handle}`)), item.user.handle),
       detail ? null : [h("span", { class: "dot" }, "·"), link(postPath(item), { class: "post-time" }, timeEl(item.createdAt))],
       detail ? null : moreButton);
 
@@ -302,10 +484,13 @@
       item.replyTo && item.replyTo.handle && !options.noReplyLine && !detail ? h("p", { class: "reply-line" }, "Antwort an ", link(`/${item.replyTo.handle}`, { class: "tok" }, `@${item.replyTo.handle}`)) : null,
       item.text ? h("div", { class: "post-text" }, richText(item.text)) : null,
       item.media && item.media.length ? mediaGrid(item.media) : null,
+      item.poll ? pollView(item) : null,
       item.quote ? quoteCard(item.quote) : null);
 
-    const bar = h("div", { class: "post-actions", role: "group", "aria-label": "Aktionen" }, replyButton, repostButton, likeButton, bookmarkButton, shareButton);
+    const bar = h("div", { class: "post-actions", role: "group", "aria-label": "Aktionen" }, replyButton, repostButton, likeButton, viewsStat, h("span", { class: "act-group" }, bookmarkButton, shareButton));
     draw();
+
+    if (item.pinned) put(card, h("div", { class: "post-context" }, h("span", { class: "ctx-ic" }, icon("pushpin")), "Angeheftet"));
 
     if (item.repostedBy) {
       const own = Y.me && Y.me.handle === item.repostedBy.handle;
@@ -318,11 +503,13 @@
           h("div", { class: "detail-who" }, link(`/${item.user.handle}`, { class: "post-name" }, h("b", {}, item.user.name)), h("span", { class: "handle" }, `@${item.user.handle}`)), moreButton),
         item.replyTo && item.replyTo.handle ? h("p", { class: "reply-line" }, "Antwort an ", link(`/${item.replyTo.handle}`, { class: "tok" }, `@${item.replyTo.handle}`)) : null,
         body, h("div", { class: "detail-time" }, timeEl(item.createdAt, true)), stats, bar);
+      queueView(item.id);
     } else {
-      put(card, h("div", { class: "post-row" }, link(`/${item.user.handle}`, { class: "post-av", tabindex: "-1" }, avatar(item.user, "md")), h("div", { class: "post-main" }, head, body, bar)));
+      put(card, h("div", { class: "post-row" }, hoverable(link(`/${item.user.handle}`, { class: "post-av", tabindex: "-1" }, avatar(item.user, "md")), item.user.handle), h("div", { class: "post-main" }, head, body, bar)));
+      if (watcher && !item.deleted) watcher.observe(card);
       const open = () => Y.navigate(postPath(item));
       card.addEventListener("click", (event) => {
-        if (event.target.closest("a, button, .menu, .quote")) return;
+        if (event.target.closest("a, button, .menu, .quote, .poll")) return;
         if (window.getSelection && String(window.getSelection())) return;
         open();
       });
@@ -352,6 +539,7 @@
     const { replyTo, quoteOf, compact, onPosted } = options;
     const draftKey = `yipi.draft.${options.draftKey || (replyTo ? `r${replyTo.id}` : quoteOf ? `q${quoteOf.id}` : "new")}`;
     const picked = [];                                   // {blob, url, alt, uploaded, gif}: up to 4 photos, or one GIF
+    let poll = null;                                     // {options: [...], minutes} while a poll is being written (instead of pictures)
     let busy = false;
 
     const textarea = h("textarea", { class: "compose-text", rows: 1, maxlength: 1000, placeholder: options.placeholder || (replyTo ? "Deine Antwort" : quoteOf ? "Füge einen Kommentar hinzu" : "Was gibt's Neues?"), "aria-label": replyTo ? "Deine Antwort" : "Text deines Beitrags" });
@@ -363,6 +551,28 @@
     const photoButton = h("button", { class: "icon-btn tool", type: "button", "aria-label": "Foto hinzufügen" }, icon("image"));
     const gifButton = h("button", { class: "icon-btn tool", type: "button", "aria-label": "GIF hinzufügen", "aria-haspopup": "dialog" }, icon("gif"));
     const emojiButton = h("button", { class: "icon-btn tool", type: "button", "aria-label": "Emoji einfügen", "aria-haspopup": "dialog" }, icon("emoji"));
+    const pollButton = h("button", { class: "icon-btn tool", type: "button", "aria-label": "Umfrage hinzufügen", hidden: !!(replyTo || quoteOf) }, icon("poll"));
+    const pollBox = h("div", { class: "poll-editor", hidden: true });
+
+    function drawPoll() {
+      pollBox.hidden = !poll;
+      if (!poll) { fill(pollBox); return; }
+      const rows = poll.options.map((value, index) => {
+        const input = h("input", { class: "field", maxlength: Core.MAX_POLL_OPTION, placeholder: `Antwort ${index + 1}${index >= Core.POLL_OPTIONS[0] ? " (freiwillig)" : ""}`, "aria-label": `Antwort ${index + 1}`, autocomplete: "off" });
+        input.value = value;
+        input.addEventListener("input", () => { poll.options[index] = input.value; update(); });
+        return h("div", { class: "poll-input" }, input,
+          index >= Core.POLL_OPTIONS[0] ? h("button", { class: "icon-btn tiny", type: "button", "aria-label": `Antwort ${index + 1} entfernen`, onclick: () => { poll.options.splice(index, 1); drawPoll(); update(); } }, icon("close")) : null);
+      });
+      const length = h("select", { class: "field poll-length", "aria-label": "Dauer der Umfrage" }, Core.POLL_LENGTHS.map(([minutes, label]) => h("option", { value: String(minutes) }, label)));
+      length.value = String(poll.minutes);
+      length.addEventListener("change", () => { poll.minutes = Number(length.value); });
+      fill(pollBox,
+        h("div", { class: "poll-head" }, h("b", {}, "Umfrage"), h("button", { class: "btn ghost small", type: "button", onclick: () => { poll = null; drawPoll(); update(); } }, "Entfernen")),
+        rows,
+        poll.options.length < Core.POLL_OPTIONS[1] ? h("button", { class: "poll-add", type: "button", onclick: () => { poll.options.push(""); drawPoll(); update(); pollBox.querySelectorAll("input")[poll.options.length - 1]?.focus(); } }, icon("plus"), "Antwort hinzufügen") : null,
+        h("label", { class: "poll-duration" }, h("span", {}, "Dauer"), length));
+    }
 
     function update() {
       const text = textarea.value;
@@ -372,9 +582,12 @@
       gauge.svg.dataset.state = state;
       left.textContent = state === "ok" ? "" : String(Core.MAX_POST - count);
       left.dataset.state = state;
-      submit.disabled = busy || state === "over" || (!count && !picked.length);
-      photoButton.disabled = busy || (picked.length >= Core.MAX_MEDIA && !picked.some((entry) => entry.gif));
-      gifButton.disabled = busy;
+      const pollReady = !poll || (count > 0 && Core.pollAnswers(poll.options).valid);        // a poll needs its question and two answers
+      submit.disabled = busy || state === "over" || (!count && !picked.length && !poll) || !pollReady;
+      photoButton.disabled = busy || !!poll || (picked.length >= Core.MAX_MEDIA && !picked.some((entry) => entry.gif));
+      gifButton.disabled = busy || !!poll;
+      pollButton.disabled = busy || picked.length > 0;
+      pollButton.classList.toggle("on", !!poll);
       textarea.style.height = "auto";
       textarea.style.height = `${Math.min(textarea.scrollHeight, compact ? 220 : 340)}px`;
       try { if (text) sessionStorage.setItem(draftKey, text); else sessionStorage.removeItem(draftKey); } catch (error) { /* storage blocked */ }
@@ -397,6 +610,7 @@
     }
 
     async function addFiles(files) {
+      if (poll) { toast("Zu einer Umfrage gehören keine Fotos."); return; }
       for (const file of files) {
         if (file.type.startsWith("video/") || /\.(mp4|m4v|mov|webm|mkv|avi|wmv|3gp|mpe?g)$/i.test(file.name || "")) { toast(Api.MESSAGES.no_video); continue; }
         if (picked.some((entry) => entry.gif)) picked.splice(0, picked.length);          // photos take the place of a GIF
@@ -418,6 +632,7 @@
 
     /* A GIF of the library: its bytes are copied into a picture of the sender (on the server), and that picture goes into the post. */
     async function addGif(gif) {
+      if (poll) { toast("Zu einer Umfrage gehört kein GIF."); return; }
       const reply = await Api.post(`/gifs/${gif.id}/use`);
       if (!reply.ok) { toast(Api.message(reply)); return; }
       picked.forEach((entry) => URL.revokeObjectURL(entry.url));
@@ -431,6 +646,8 @@
       picked.forEach((entry) => URL.revokeObjectURL(entry.url));
       picked.length = 0;
       textarea.value = "";
+      poll = null;
+      drawPoll();
       drawPreviews();
       update();
     }
@@ -438,6 +655,8 @@
     async function send() {
       const text = Core.cleanText(textarea.value);
       if (busy || (!text && !picked.length) || Core.charCount(text) > Core.MAX_POST) return;
+      const answers = poll ? Core.pollAnswers(poll.options) : null;
+      if (answers && (!answers.valid || !text)) { toast(answers.problem || "Eine Umfrage braucht eine Frage."); return; }
       busy = true;
       submit.disabled = true;
       submit.classList.add("busy");
@@ -452,6 +671,7 @@
         ids.push(entry.uploaded);
       }
       const body = { text, media: ids };
+      if (answers) body.poll = { options: answers.options, minutes: poll.minutes };
       if (replyTo) body.replyTo = replyTo.id;
       if (quoteOf) body.quoteOf = quoteOf.id;
       const reply = await Api.post("/posts", body);
@@ -470,6 +690,12 @@
     });
     submit.addEventListener("click", send);
     photoButton.addEventListener("click", () => picker.click());
+    pollButton.addEventListener("click", () => {
+      poll = poll ? null : { options: ["", ""], minutes: 1440 };
+      drawPoll();
+      update();
+      if (poll) pollBox.querySelector("input")?.focus();
+    });
     gifButton.addEventListener("click", () => Y.gifPicker({ onPick: addGif }));
     picker.addEventListener("change", () => { addFiles([...picker.files]); picker.value = ""; });
     emojiButton.addEventListener("click", (event) => {
@@ -485,8 +711,8 @@
 
     const root = h("div", { class: `composer${compact ? " compact" : ""}` },
       avatar(Y.me, "md"),
-      h("div", { class: "compose-main" }, textarea, previews,
-        h("div", { class: "compose-bar" }, h("div", { class: "tools" }, photoButton, gifButton, emojiButton, picker),
+      h("div", { class: "compose-main" }, textarea, previews, pollBox,
+        h("div", { class: "compose-bar" }, h("div", { class: "tools" }, photoButton, gifButton, pollButton, emojiButton, picker),
           h("div", { class: "send" }, left, gauge.svg, submit))));
     root.addEventListener("dragover", (event) => { if ([...(event.dataTransfer ? event.dataTransfer.types : [])].includes("Files")) { event.preventDefault(); root.classList.add("drop"); } });
     root.addEventListener("dragleave", () => root.classList.remove("drop"));
@@ -521,5 +747,5 @@
     return entry;
   };
 
-  Object.assign(Y, { postCard, composer, userRow, followButton, reportDialog, prepareImage, copyLink, postPath });
+  Object.assign(Y, { postCard, composer, userRow, followButton, reportDialog, prepareImage, copyLink, postPath, peopleDialog, sendPostDialog, hoverable });
 })();

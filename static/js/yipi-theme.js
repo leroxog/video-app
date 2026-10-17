@@ -12,7 +12,7 @@
   document.documentElement.setAttribute("data-theme", theme);
   try {
     var accent = window.localStorage.getItem("yipi.accent");
-    if (accent === "pink" || accent === "green" || accent === "orange" || accent === "violet") document.documentElement.setAttribute("data-accent", accent);
+    if (accent === "indigo" || accent === "orchid" || accent === "lilac") document.documentElement.setAttribute("data-accent", accent);
   } catch (error) { /* storage blocked: the standard colour */ }
   var meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute("content", { light: "#eef1f8", dim: "#0c1220", dark: "#07080d" }[theme]);

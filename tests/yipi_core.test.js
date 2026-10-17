@@ -124,10 +124,12 @@ test("the full time and the join date", () => {
 test("every address of the page is read and built the same way", () => {
   const cases = [
     ["/", "", { name: "home" }], ["/yipi-archiv", "", { name: "notfound" }], ["/i/nex", "", { name: "nex", q: "", post: 0 }], ["/i/nex", "?post=42", { name: "nex", q: "", post: 42 }],
-    ["/i/nex", "?q=Hallo%20Nex", { name: "nex", q: "Hallo Nex", post: 0 }], ["/explore", "", { name: "explore" }], ["/notifications", "", { name: "notifications" }], ["/messages", "", { name: "messages" }],
+    ["/i/nex", "?q=Hallo%20Nex", { name: "nex", q: "Hallo Nex", post: 0 }], ["/explore", "", { name: "explore", tab: "" }], ["/explore", "?tab=trends", { name: "explore", tab: "trends" }], ["/explore", "?tab=media", { name: "explore", tab: "media" }], ["/explore", "?tab=nonsense", { name: "explore", tab: "" }], ["/notifications", "", { name: "notifications" }], ["/messages", "", { name: "messages" }],
     ["/messages/mia", "", { name: "thread", handle: "mia" }], ["/bookmarks", "", { name: "bookmarks" }], ["/settings", "", { name: "settings", section: "" }],
     ["/settings/account", "", { name: "settings", section: "account" }], ["/moderation", "", { name: "moderation" }], ["/i/login", "", { name: "login" }], ["/i/signup", "", { name: "signup" }],
-    ["/search", "?q=hallo%20welt", { name: "search", q: "hallo welt", type: "posts" }], ["/search", "?q=%23tag&type=people", { name: "search", q: "#tag", type: "people" }],
+    ["/search", "?q=hallo%20welt", { name: "search", q: "hallo welt", type: "posts", sort: "top" }], ["/search", "?q=%23tag&type=people", { name: "search", q: "#tag", type: "people", sort: "top" }],
+    ["/search", "?q=katze&sort=new", { name: "search", q: "katze", type: "posts", sort: "new" }], ["/search", "?q=katze&type=media", { name: "search", q: "katze", type: "media", sort: "top" }],
+    ["/search", "?q=katze&type=media&sort=new", { name: "search", q: "katze", type: "media", sort: "new" }],
     ["/mia", "", { name: "profile", handle: "mia" }], ["/Mia_1", "", { name: "profile", handle: "Mia_1" }], ["/mia/status/42", "", { name: "post", handle: "mia", id: 42 }],
     ["/mia/followers", "", { name: "followers", handle: "mia" }], ["/mia/following", "", { name: "following", handle: "mia" }],
   ];
@@ -137,7 +139,7 @@ test("every address of the page is read and built the same way", () => {
     const [built, query] = core.buildPath(route).split("?");
     assert.deepEqual(core.parsePath(built, query ? `?${query}` : ""), route, `${path} (built again)`);
   }
-  assert.deepEqual(core.parsePath("/explore/"), { name: "explore" });
+  assert.deepEqual(core.parsePath("/explore/"), { name: "explore", tab: "" });
   for (const path of ["/ab", "/mia/status/x", "/mia/status/1/2", "/mia/other", "/a b", "/mia/followers/x", "/a".repeat(20), "/settings/Konto", "/mía"]) assert.equal(core.parsePath(path).name, "notfound", path);
   assert.equal(core.buildPath({ name: "nonsense" }), "/");
   assert.equal(core.HOME, "/");
@@ -249,4 +251,50 @@ test("GIFs are laid out in columns, each into the shortest one", () => {
   assert.equal(all.flat().length, 25);
   const heights = all.map((column) => column.reduce((sum, item) => sum + item.height / item.width, 0));
   assert.ok(Math.max(...heights) - Math.min(...heights) < 3, "the columns end about equally tall");
+});
+
+// ------------------------------------------------------------------------------------------------ polls
+test("the time that is left of a poll is said in German and the poll ends on the second", () => {
+  const now = Date.parse("2026-10-17T12:00:00Z");
+  const at = (seconds) => new Date(now + seconds * 1000).toISOString();
+  assert.deepEqual(core.pollTimeLeft(at(-1), now), { ended: true, text: "Beendet" });
+  assert.deepEqual(core.pollTimeLeft(at(0), now), { ended: true, text: "Beendet" });
+  assert.equal(core.pollTimeLeft(at(20), now).text, "noch weniger als 1 Min.");
+  assert.equal(core.pollTimeLeft(at(60), now).text, "noch 1 Min.");
+  assert.equal(core.pollTimeLeft(at(61), now).text, "noch 2 Min.");
+  assert.equal(core.pollTimeLeft(at(3599), now).text, "noch 60 Min.");
+  assert.equal(core.pollTimeLeft(at(3601), now).text, "noch 2 Std.");
+  assert.equal(core.pollTimeLeft(at(86399), now).text, "noch 24 Std.");
+  assert.equal(core.pollTimeLeft(at(86400), now).text, "noch 1 Tag");
+  assert.equal(core.pollTimeLeft(at(86401), now).text, "noch 2 Tage");
+  assert.equal(core.pollTimeLeft(at(86400 * 7), now).text, "noch 7 Tage");
+  assert.equal(core.pollTimeLeft(at(10), now).ended, false);
+  assert.deepEqual(core.pollTimeLeft("nonsense", now), { ended: true, text: "Beendet" });
+});
+
+test("the share of an answer is a whole percent and nobody dividing by nothing", () => {
+  assert.equal(core.pollPercent(1, 3), 33);
+  assert.equal(core.pollPercent(2, 3), 67);
+  assert.equal(core.pollPercent(3, 3), 100);
+  assert.equal(core.pollPercent(0, 0), 0);
+  assert.equal(core.pollPercent(5, 0), 0);
+  assert.equal(core.pollPercent(-4, 10), 0);
+  assert.equal(core.pollVotes(1), "1 Stimme");
+  assert.equal(core.pollVotes(0), "0 Stimmen");
+  assert.equal(core.pollVotes(1500), "1,5 Tsd. Stimmen");
+});
+
+test("the answers of a poll are tidied and checked the way the server checks them", () => {
+  assert.deepEqual(core.pollAnswers([" Tee ", "", "Kaffee  mit   Milch", "  "]), { options: ["Tee", "Kaffee mit Milch"], valid: true, problem: "" });
+  assert.equal(core.pollAnswers(["nur eine"]).valid, false);
+  assert.equal(core.pollAnswers([]).valid, false);
+  assert.equal(core.pollAnswers(null).valid, false);
+  assert.match(core.pollAnswers(["Tee", "tee"]).problem, /verschieden/);
+  assert.equal(core.pollAnswers(["x".repeat(25), "y"]).valid, true);
+  assert.match(core.pollAnswers(["x".repeat(26), "y"]).problem, /25 Zeichen/);
+  assert.equal(core.pollAnswers(["😀".repeat(25), "b"]).valid, true, "characters, not code units");
+  assert.deepEqual(core.POLL_OPTIONS, [2, 4]);
+  assert.equal(core.MAX_POLL_OPTION, 25);
+  assert.ok(core.POLL_LENGTHS.every(([minutes, label]) => minutes >= 5 && minutes <= 10080 && label.length > 3));
+  assert.ok(core.POLL_LENGTHS.some(([minutes]) => minutes === 1440), "one day is on the list");
 });

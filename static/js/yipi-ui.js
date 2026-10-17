@@ -76,7 +76,11 @@
       if (piece.type === "text") out.append(piece.text);
       else if (piece.type === "mention") out.append(link(`/${piece.handle}`, { class: "tok" }, piece.text));
       else if (piece.type === "hashtag") out.append(link(`/search?q=${encodeURIComponent(`#${piece.tag}`)}`, { class: "tok" }, piece.text));
-      else out.append(h("a", { class: "tok", href: piece.href, target: "_blank", rel: "noopener noreferrer nofollow ugc" }, piece.text));
+      else {
+        let inside = null;                                             // a link to a page of Pulse itself stays inside the app
+        try { const url = new URL(piece.href); if (url.origin === location.origin) inside = url.pathname + url.search; } catch (error) { inside = null; }
+        out.append(inside ? link(inside, { class: "tok" }, piece.text) : h("a", { class: "tok", href: piece.href, target: "_blank", rel: "noopener noreferrer nofollow ugc" }, piece.text));
+      }
     }
     return out;
   }

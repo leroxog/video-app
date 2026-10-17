@@ -281,6 +281,8 @@ def ensure_sqlite_columns_exist():
         "yipi_message": [("gif_id", "VARCHAR(32)")],
         "yipi_report": [("gif_id", "VARCHAR(32)")],
         "yipi_media": [("gif_id", "VARCHAR(32)")],
+        "yipi_post": [("view_count", "INTEGER NOT NULL DEFAULT 0")],
+        "yipi_user": [("pinned_post_id", "BIGINT")],
     }
     with db.engine.connect() as conn:
         for table, columns in wanted.items():
@@ -372,6 +374,9 @@ def ensure_columns_exist():
         "ALTER TABLE yipi_message ADD COLUMN IF NOT EXISTS gif_id VARCHAR(32)",
         "ALTER TABLE yipi_report ADD COLUMN IF NOT EXISTS gif_id VARCHAR(32)",
         "ALTER TABLE yipi_media ADD COLUMN IF NOT EXISTS gif_id VARCHAR(32)",
+        # Pulse (2026-10-17, evening): views of a post and the post pinned to a profile.
+        "ALTER TABLE yipi_post ADD COLUMN IF NOT EXISTS view_count INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE yipi_user ADD COLUMN IF NOT EXISTS pinned_post_id BIGINT",
     ]
     with db.engine.connect() as conn:
         for statement in statements:

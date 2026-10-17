@@ -6,7 +6,7 @@
   const Y = window.Yipi;
   const Core = window.YipiCore;
   const Api = window.YipiApi;
-  const { fill, put, h, icon, link, avatar, toast, dialog, confirmBox, pager } = Y;
+  const { fill, put, h, icon, link, avatar, richText, toast, dialog, confirmBox, pager } = Y;
   const { qs, listLoader, emptyState, errorState, topbar, snippet } = Y;
   const views = Y.views;
 
@@ -124,7 +124,7 @@
             h("button", { class: "bubble-gif", type: "button", "aria-label": `GIF vergrößern${gif.title ? `: ${gif.title}` : ""}`, onclick: () => Y.viewer([{ url: gif.url, alt: gif.title || "GIF" }], 0) }, h("img", { src: gif.url, alt: gif.title || "GIF", width: gif.width, height: gif.height, loading: "lazy" })),
             Y.gifStar(gif)) : null,
           message.gif && message.gif.gone ? h("div", { class: "bubble-text gone" }, "Dieses GIF gibt es nicht mehr.") : null,
-          message.text ? h("div", { class: "bubble-text" }, message.text) : null,
+          message.text ? h("div", { class: "bubble-text" }, richText(message.text)) : null,
           endOfGroup ? h("span", { class: "bubble-time" }, clock(message.createdAt)) : null));
         previous = message;
       }
@@ -214,7 +214,7 @@
   };
 
   // ---------------------------------------------------------------------------------------- settings
-  const THEMES = [["auto", "Wie das Gerät", "Folgt der Einstellung deines Geräts."], ["light", "Hell", "Weißer Hintergrund."], ["dim", "Gedimmt", "Dunkelblau, schonend für die Augen."], ["dark", "Dunkel", "Tiefschwarz, spart Strom auf OLED-Bildschirmen."]];
+  const THEMES = [["auto", "Wie das Gerät", "Folgt der Einstellung deines Geräts."], ["light", "Hell", "Weiß mit Lila."], ["dim", "Gedimmt", "Dunkles Lila, schonend für die Augen."], ["dark", "Schwarz", "Tiefschwarz mit Lila, spart Strom auf OLED-Bildschirmen."]];
 
   function accountSection() {
     const box = h("div", { class: "settings-body" });
@@ -255,8 +255,8 @@
     return box;
   }
 
-  const ACCENTS = [["pulse", "Blau (Standard)", "linear-gradient(180deg, #639eff, #3a6ee8)"], ["violet", "Violett", "linear-gradient(180deg, #a48aff, #6a47e0)"],
-    ["pink", "Pink", "linear-gradient(180deg, #ff6ea4, #de3374)"], ["orange", "Orange", "linear-gradient(180deg, #ffa04a, #e0701a)"], ["green", "Grün", "linear-gradient(180deg, #3cd0a0, #139a70)"]];
+  const ACCENTS = [["pulse", "Violett (Standard)", "linear-gradient(180deg, #9a72ff, #6d3df0)"], ["indigo", "Indigo", "linear-gradient(180deg, #8b8cf8, #4f46e5)"],
+    ["orchid", "Orchidee", "linear-gradient(180deg, #d58cf5, #a21caf)"], ["lilac", "Flieder", "linear-gradient(180deg, #c4b5fd, #8b5cf6)"]];
 
   function displaySection() {
     let current = "auto";

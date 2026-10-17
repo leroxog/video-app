@@ -36,7 +36,7 @@
   };
   matchMedia("(prefers-color-scheme: light)").addEventListener?.("change", applyTheme);
 
-  /* The colour of the accent: "pulse" (the standard), "pink", "green", "orange" or "violet". */
+  /* The colour of the accent: "pulse" (the standard violet), "indigo", "orchid" or "lilac". */
   Y.setAccent = (name) => {
     try { if (name === "pulse") localStorage.removeItem("yipi.accent"); else localStorage.setItem("yipi.accent", name); } catch (error) { /* storage blocked */ }
     if (name === "pulse") document.documentElement.removeAttribute("data-accent"); else document.documentElement.setAttribute("data-accent", name);
@@ -50,8 +50,8 @@
     { id: "messages", label: "Nachrichten", path: () => "/messages", icon: "mail", on: "mailFill", auth: true, badge: true },
     { id: "nex", label: "Nex", path: () => "/i/nex", icon: "sparkle", on: "sparkleFill" },
     { id: "bookmarks", label: "Lesezeichen", path: () => "/bookmarks", icon: "bookmark", on: "bookmarkFill", auth: true },
-    { id: "profile", label: "Profil", path: () => `/${Y.me.handle}`, icon: "user", on: "userFill", auth: true },
-    { id: "settings", label: "Einstellungen", path: () => "/settings", icon: "settings", on: "settings" },
+    { id: "profile", label: "Profil", path: () => (Y.me ? `/${Y.me.handle}` : "/i/login"), icon: "user", on: "userFill" },
+    { id: "more", label: "Mehr", icon: "moreCircle", on: "moreCircle", menu: true },        // settings, display, help and the legal pages are in here, like on X
   ];
   const TABBAR = ["home", "explore", "nex", "notifications", "messages"];       // the bar of a phone held upright, Nex in the middle
 
@@ -61,11 +61,26 @@
   let railLoaded = 0;
   let shellKey = "";
 
+  /* The "Mehr" menu: everything that has no place of its own in the side bar. */
+  function openMore(anchor) {
+    menu(anchor, [
+      { label: "Einstellungen", icon: "settings", run: () => Y.navigate("/settings") },
+      { label: "Darstellung und Farbe", icon: "sun", run: () => Y.navigate("/settings/display") },
+      { label: "Hilfe und Rechtliches", icon: "help", run: () => Y.navigate("/settings/about") },
+      { label: "Tastenkürzel", icon: "list", run: () => Y.shortcutsDialog() },
+      Y.me && Y.me.isAdmin ? { label: "Moderation", icon: "shield", run: () => Y.navigate("/moderation") } : null,
+      Y.me ? { label: `@${Y.me.handle} abmelden`, icon: "logout", run: () => Y.logout() } : { label: "Anmelden", icon: "user", run: () => Y.navigate("/i/login") },
+    ]);
+  }
+
   function navItem(entry, bar) {
     const iconBox = h("span", { class: "nav-ic" }, icon(entry.icon));
     const badge = entry.badge ? h("span", { class: "badge", hidden: true }) : null;
     if (badge) iconBox.append(badge);
-    const el = link(entry.path(), { class: "nav-item", "data-nav": entry.id, "aria-label": entry.label }, iconBox, bar ? null : h("span", { class: "nav-label" }, entry.label));
+    const label = bar ? null : h("span", { class: "nav-label" }, entry.label);
+    const el = entry.menu
+      ? h("button", { class: "nav-item", type: "button", "data-nav": entry.id, "aria-label": entry.label, "aria-haspopup": "menu", onclick: (event) => openMore(event.currentTarget) }, iconBox, label)
+      : link(entry.path(), { class: "nav-item", "data-nav": entry.id, "aria-label": entry.label }, iconBox, label);
     el._icon = iconBox;
     return el;
   }
@@ -113,9 +128,9 @@
     if (!railBox) return;
     if (trends.ok && trends.data.trends.length) {
       fill(railCard("trends"), h("h2", {}, "Im Trend"), trends.data.trends.slice(0, 5).map((trend) => link(`/search?q=${encodeURIComponent(`#${trend.tag}`)}`, { class: "trend" },
-        h("span", { class: "t-kicker" }, "Trend"), h("b", {}, `#${trend.tag}`), h("span", { class: "t-count" }, `${Core.formatCount(trend.posts)} ${trend.posts === 1 ? "Beitrag" : "Beiträge"}`))));
+        h("span", { class: "t-kicker" }, "Trend"), h("b", {}, `#${trend.tag}`), h("span", { class: "t-count" }, `${Core.formatCount(trend.posts)} ${trend.posts === 1 ? "Beitrag" : "Beiträge"}`))), link("/explore?tab=trends", { class: "card-more" }, "Mehr anzeigen"));
     } else railBox.querySelector('[data-rail="trends"]')?.remove();
-    if (people.ok && people.data.users.length) fill(railCard("people"), h("h2", {}, "Wem folgen"), people.data.users.map((user) => Y.userRow(user, { bio: false })));
+    if (people.ok && people.data.users.length) fill(railCard("people"), h("h2", {}, "Wem folgen"), people.data.users.map((user) => Y.userRow(user, { bio: false })), link("/explore?tab=people", { class: "card-more" }, "Mehr anzeigen"));
     else railBox.querySelector('[data-rail="people"]')?.remove();
   }
 
@@ -131,7 +146,7 @@
     main = h("main", { id: "main", class: "main", tabindex: "-1" });
     if (bare) { app.append(main, announcer); return; }
     const items = NAV.filter((entry) => (!entry.auth || Y.me));
-    if (Y.me && Y.me.isAdmin) items.push({ id: "moderation", label: "Moderation", path: () => "/moderation", icon: "shield", on: "shield" });
+    if (Y.me && Y.me.isAdmin) items.splice(items.length - 1, 0, { id: "moderation", label: "Moderation", path: () => "/moderation", icon: "shield", on: "shield" });
     const side = h("header", { class: "side" },
       h("div", { class: "side-inner" },
         link(Y.HOME, { class: "brand", "aria-label": "Pulse, zur Startseite" }, Icons.logo(), h("span", { class: "brand-name" }, "Pulse")),
@@ -329,6 +344,41 @@
       Y.me.isAdmin ? { label: "Moderation", icon: "shield", run: () => Y.navigate("/moderation") } : null,
       { label: `@${Y.me.handle} abmelden`, icon: "logout", run: () => Y.logout() },
     ]);
+  };
+
+  /* The page that is shown is asked to load itself again (after a post was pinned, for instance). */
+  Y.refreshView = () => { current?.view.refresh?.(); };
+
+  /* The menu of a phone, from the left (the picture in the top bar opens it): profile, bookmarks, settings and the rest. */
+  Y.openDrawer = () => {
+    if (!Y.me || document.querySelector(".drawer-back")) return;
+    const me = Y.me;
+    const back = h("div", { class: "drawer-back" });
+    const panel = h("aside", { class: "drawer", role: "dialog", "aria-modal": "true", "aria-label": "Menü" });
+    const onKey = (event) => { if (event.key === "Escape") { event.stopPropagation(); close(); } };
+    function close() {
+      document.removeEventListener("keydown", onKey, true);
+      back.classList.add("closing");
+      document.body.classList.remove("modal-open");
+      setTimeout(() => back.remove(), 200);
+    }
+    const entry = (path, name, label) => link(path, { class: "drawer-item" }, icon(name), h("span", {}, label));
+    panel.append(
+      h("div", { class: "drawer-head" }, link(`/${me.handle}`, { class: "dr-av", "aria-label": "Zum Profil" }, avatar(me, "lg")), h("button", { class: "icon-btn", type: "button", "aria-label": "Menü schließen", onclick: close }, icon("close"))),
+      link(`/${me.handle}`, { class: "dr-name" }, h("b", {}, me.name), h("span", { class: "handle" }, `@${me.handle}`)),
+      h("div", { class: "dr-counts" }, link(`/${me.handle}/following`, {}, h("b", {}, Core.formatCount(me.following)), " Folge ich"), link(`/${me.handle}/followers`, {}, h("b", {}, Core.formatCount(me.followers)), " Follower")),
+      h("nav", { class: "drawer-nav", "aria-label": "Menü" },
+        entry(`/${me.handle}`, "user", "Profil"), entry("/bookmarks", "bookmark", "Lesezeichen"), entry("/i/nex", "sparkle", "Nex"),
+        entry("/settings", "settings", "Einstellungen"), entry("/settings/display", "sun", "Darstellung und Farbe"), entry("/settings/about", "help", "Hilfe und Rechtliches"),
+        me.isAdmin ? entry("/moderation", "shield", "Moderation") : null),
+      h("button", { class: "drawer-item logout", type: "button", onclick: () => { close(); Y.logout(); } }, icon("logout"), h("span", {}, `@${me.handle} abmelden`)));
+    panel.addEventListener("click", (event) => { if (event.target.closest("a")) close(); });
+    back.addEventListener("click", (event) => { if (event.target === back) close(); });
+    back.append(panel);
+    document.body.append(back);
+    document.body.classList.add("modal-open");
+    document.addEventListener("keydown", onKey, true);
+    panel.querySelector("a")?.focus();
   };
 
   Y.requireLogin = (message) => {

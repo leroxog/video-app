@@ -65,6 +65,10 @@ MAX_GIF_TOTAL_PIXELS = 40_000_000                # all pictures of a GIF togethe
 MAX_GIF_FRAMES = 200
 MAX_GIF_TITLE = 40
 GIF_PAGE = 24
+MAX_POLL_OPTION = 25                             # characters of one answer of a poll
+POLL_OPTIONS = (2, 4)                            # fewest and most answers
+POLL_MINUTES = (5, 7 * 24 * 60, 24 * 60)         # shortest, longest and usual running time of a poll
+MAX_VIEWS_AT_ONCE = 40
 NEX_TURNS = 12                                   # how many of the last messages of a Nex conversation are sent along
 MAX_NEX_MESSAGE = 1500
 MIN_PASSWORD = 8
@@ -96,7 +100,7 @@ LIMITS = {
     "post-burst": (12, 60), "post-hour": (150, 3600), "like": (400, 3600), "follow": (120, 3600), "media": (40, 3600), "dm": (120, 3600),
     "report": (20, 3600), "profile": (30, 3600), "search": (120, 600), "block": (60, 3600),
     "gif-make": (20, 3600), "gif-fav": (400, 3600), "gif-use": (300, 3600), "gif-list": (600, 600),
-    "nex": (40, 600), "nex-flood": (80, 60),
+    "nex": (40, 600), "nex-flood": (80, 60), "views": (90, 600), "vote": (200, 3600), "pin": (60, 3600),
 }
 _hits = {}
 limiter = RateLimiter(LIMITS, _hits)
@@ -144,6 +148,7 @@ class YipiUser(db.Model):
     avatar_id = db.Column(db.String(32), nullable=True)
     banner_id = db.Column(db.String(32), nullable=True)
     session_gen = db.Column(db.Integer, nullable=False, default=0)
+    pinned_post_id = db.Column(BigId, nullable=True)                  # the post shown first on the profile
     suspended = db.Column(db.Boolean, nullable=False, default=False)
     followers_count = db.Column(db.Integer, nullable=False, default=0)
     following_count = db.Column(db.Integer, nullable=False, default=0)
@@ -172,6 +177,7 @@ class YipiPost(db.Model):
     reply_count = db.Column(db.Integer, nullable=False, default=0)
     repost_count = db.Column(db.Integer, nullable=False, default=0)
     quote_count = db.Column(db.Integer, nullable=False, default=0)
+    view_count = db.Column(db.Integer, nullable=False, default=0)
     deleted = db.Column(db.Boolean, nullable=False, default=False)
 
 
@@ -278,6 +284,34 @@ class YipiReport(db.Model):
     note = db.Column(db.String(300), nullable=False, default="")
     created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
     handled = db.Column(db.Boolean, nullable=False, default=False)
+
+
+class YipiPoll(db.Model):
+    """The poll of a post: answers (yipi_poll_option), who voted for what (yipi_poll_vote), and when it ends."""
+    __tablename__ = "yipi_poll"
+    id = db.Column(db.Integer, primary_key=True)
+    post_id = db.Column(BigId, nullable=False, unique=True, index=True)
+    ends_at = db.Column(db.DateTime, nullable=False)
+    total = db.Column(db.Integer, nullable=False, default=0)
+
+
+class YipiPollOption(db.Model):
+    __tablename__ = "yipi_poll_option"
+    id = db.Column(db.Integer, primary_key=True)
+    poll_id = db.Column(db.Integer, nullable=False, index=True)
+    position = db.Column(db.Integer, nullable=False, default=0)
+    text = db.Column(db.String(MAX_POLL_OPTION), nullable=False)
+    votes = db.Column(db.Integer, nullable=False, default=0)
+
+
+class YipiPollVote(db.Model):
+    __tablename__ = "yipi_poll_vote"
+    __table_args__ = (db.UniqueConstraint("poll_id", "user_id"),)
+    id = db.Column(db.Integer, primary_key=True)
+    poll_id = db.Column(db.Integer, nullable=False, index=True)
+    user_id = db.Column(db.Integer, nullable=False, index=True)
+    option_id = db.Column(db.Integer, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
 
 
 class PulseGif(db.Model):
@@ -625,7 +659,7 @@ def user_dict(user, viewer=None, relations=None):
         "id": user.id, "handle": user.handle, "name": user.name, "bio": user.bio, "location": user.location, "website": user.website,
         "avatar": media_url(user.avatar_id), "banner": media_url(user.banner_id), "createdAt": iso(user.created_at),
         "followers": user.followers_count, "following": user.following_count, "posts": user.posts_count,
-        "isMe": bool(viewer and viewer.id == user.id), "suspended": user.suspended,
+        "isMe": bool(viewer and viewer.id == user.id), "suspended": user.suspended, "pinnedPostId": user.pinned_post_id,
     }
     if viewer and viewer.id != user.id:
         rel = relations or relations_to(viewer, [user.id])
@@ -672,6 +706,7 @@ def feed_items(rows, viewer):
         entry = media_json(item)
         entry["gifFavorite"] = item.gif_id in starred
         media.setdefault(item.post_id, []).append(entry)
+    polls = poll_states([p for p in posts.values() if not p.deleted], viewer)
     liked = bookmarked = reposted = set()
     hidden = hidden_user_ids(viewer)
     if viewer:
@@ -707,12 +742,46 @@ def feed_items(rows, viewer):
                 "quote": brief(everything.get(post.quote_of_id)) if post.quote_of_id else None,
                 "counts": {"replies": post.reply_count, "reposts": post.repost_count + post.quote_count, "likes": post.like_count},
                 "viewer": {"liked": post.id in liked, "reposted": post.id in reposted, "bookmarked": post.id in bookmarked},
+                "views": post.view_count,
             }
+            if post.id in polls:
+                item["poll"] = polls[post.id]
         item["cursor"] = row.id
         if row.repost_of_id:
             item["repostedBy"] = user_brief(users[row.user_id]) if row.user_id in users else None
         items.append(item)
     return items
+
+
+def poll_states(posts, viewer):
+    """{post id: the poll as the viewer sees it}.  The numbers per answer are only handed out to somebody who may see them: the author,
+    anybody who has voted, and everybody once the poll is over."""
+    ids = [post.id for post in posts]
+    if not ids:
+        return {}
+    rows = {poll.post_id: poll for poll in YipiPoll.query.filter(YipiPoll.post_id.in_(ids))}
+    if not rows:
+        return {}
+    options = {}
+    for option in YipiPollOption.query.filter(YipiPollOption.poll_id.in_([poll.id for poll in rows.values()])).order_by(YipiPollOption.position, YipiPollOption.id):
+        options.setdefault(option.poll_id, []).append(option)
+    mine = {}
+    if viewer is not None:
+        mine = {vote.poll_id: vote.option_id for vote in YipiPollVote.query.filter(YipiPollVote.user_id == viewer.id, YipiPollVote.poll_id.in_([poll.id for poll in rows.values()]))}
+    owners = {post.id: post.user_id for post in posts}
+    now = utcnow()
+    states = {}
+    for post_id, poll in rows.items():
+        ended = poll.ends_at <= now
+        voted = poll.id in mine
+        author = viewer is not None and owners.get(post_id) == viewer.id
+        show = ended or voted or author
+        states[post_id] = {
+            "id": poll.id, "total": poll.total, "endsAt": iso(poll.ends_at), "ended": ended, "voted": voted, "showResults": show,
+            "canVote": bool(viewer is not None and not ended and not voted and not author),
+            "options": [{"id": option.id, "text": option.text, "votes": option.votes if show else None, "mine": mine.get(poll.id) == option.id} for option in options.get(poll.id, [])],
+        }
+    return states
 
 
 def feed_page(query, viewer, descending=True):
@@ -771,8 +840,15 @@ def remove_post(post, by_admin=False):
     YipiTag.query.filter_by(post_id=post.id).delete()
     YipiMedia.query.filter_by(post_id=post.id).delete()
     YipiNotification.query.filter_by(post_id=post.id).delete()
+    poll = YipiPoll.query.filter_by(post_id=post.id).first()
+    if poll is not None:
+        YipiPollVote.query.filter_by(poll_id=poll.id).delete()
+        YipiPollOption.query.filter_by(poll_id=poll.id).delete()
+        db.session.delete(poll)
     if author:
         bump(YipiUser, author.id, YipiUser.posts_count, -1)
+        if author.pinned_post_id == post.id:
+            author.pinned_post_id = None
     if post.reply_count > 0 and not post.repost_of_id:
         post.deleted = True
         post.text = ""
@@ -799,6 +875,10 @@ def purge_user(user):
         else:
             bump(YipiUser, other, YipiUser.following_count, -1)
         db.session.delete(follow)
+    for vote in YipiPollVote.query.filter_by(user_id=uid).all():
+        bump(YipiPollOption, vote.option_id, YipiPollOption.votes, -1)
+        bump(YipiPoll, vote.poll_id, YipiPoll.total, -1)
+        db.session.delete(vote)
     YipiBookmark.query.filter_by(user_id=uid).delete()
     YipiBlock.query.filter(or_(YipiBlock.blocker_id == uid, YipiBlock.blocked_id == uid)).delete()
     YipiMute.query.filter(or_(YipiMute.muter_id == uid, YipiMute.muted_id == uid)).delete()
@@ -1143,6 +1223,23 @@ def register_routes(app):
             return None, fail("bad_media")
         if not text and not media_ids:
             return None, fail("empty")
+        poll_options, poll_minutes = None, POLL_MINUTES[2]
+        if data.get("poll") is not None:
+            poll = data["poll"]
+            if not isinstance(poll, dict) or media_ids or data.get("replyTo") is not None or data.get("quoteOf") is not None:
+                return None, fail("bad_poll")                    # a poll is a post of its own: no photos, not a reply, not a quote
+            if not text:
+                return None, fail("poll_text")
+            raw = poll.get("options")
+            if not isinstance(raw, list) or not POLL_OPTIONS[0] <= len(raw) <= POLL_OPTIONS[1]:
+                return None, fail("bad_poll")
+            poll_options = [clean_text(option, MAX_POLL_OPTION, keep_newlines=False) for option in raw]
+            if any(not option for option in poll_options) or len({option.lower() for option in poll_options}) != len(poll_options):
+                return None, fail("bad_poll")
+            minutes = poll.get("minutes", POLL_MINUTES[2])
+            if isinstance(minutes, bool) or not isinstance(minutes, int) or not POLL_MINUTES[0] <= minutes <= POLL_MINUTES[1]:
+                return None, fail("bad_poll")
+            poll_minutes = minutes
         if limiter.too_many("post-burst", str(user.id)) or limiter.too_many("post-hour", str(user.id)):
             return None, fail("too_many", 429)
         reply_to = quote_of = None
@@ -1183,6 +1280,12 @@ def register_routes(app):
             item.position = position
         for tag in extract_tags(text):
             db.session.add(YipiTag(tag=tag, post_id=post.id, user_id=user.id))
+        if poll_options:
+            poll_row = YipiPoll(post_id=post.id, ends_at=utcnow() + timedelta(minutes=poll_minutes))
+            db.session.add(poll_row)
+            db.session.flush()
+            for position, option in enumerate(poll_options):
+                db.session.add(YipiPollOption(poll_id=poll_row.id, position=position, text=option))
         bump(YipiUser, user.id, YipiUser.posts_count, 1)
         told = set()
         if reply_to:
@@ -1258,6 +1361,117 @@ def register_routes(app):
         more = len(rows) > PAGE
         rows = rows[:PAGE]
         return jsonify({"ok": True, "items": feed_items(rows, viewer), "next": rows[-1].id if more and rows else None})
+
+    @route("/api/yipi/posts/<int(min=1, max=4611686018427387904):post_id>/vote", methods=["POST"])
+    def yipi_vote(post_id):
+        user, problem = need_user()
+        if problem:
+            return problem
+        data, problem = body()
+        if problem:
+            return problem
+        if limiter.too_many("vote", str(user.id)):
+            return fail("too_many", 429)
+        post = get_post_or_none(post_id, user)
+        if post is None or post.deleted:
+            return fail("not_found", 404)
+        if post.user_id in hidden_user_ids(user) and post.user_id != user.id:
+            return fail("blocked", 403)
+        poll = YipiPoll.query.filter_by(post_id=post.id).first()
+        if poll is None:
+            return fail("not_found", 404)
+        if poll.ends_at <= utcnow():
+            return fail("poll_closed", 409)
+        if post.user_id == user.id:
+            return fail("self", 400)
+        option_id = data.get("optionId")
+        option = YipiPollOption.query.filter_by(id=option_id, poll_id=poll.id).first() if isinstance(option_id, int) and not isinstance(option_id, bool) else None
+        if option is None:
+            return fail("bad_option")
+        try:
+            db.session.add(YipiPollVote(poll_id=poll.id, user_id=user.id, option_id=option.id))
+            bump(YipiPollOption, option.id, YipiPollOption.votes, 1)
+            bump(YipiPoll, poll.id, YipiPoll.total, 1)
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            return fail("already_voted", 409)
+        return jsonify({"ok": True, "post": feed_items([post], user)[0]})
+
+    @route("/api/yipi/posts/views", methods=["POST"], endpoint="yipi_views")
+    def yipi_views():
+        """The page tells which posts were really on screen (a batch, once per post and page view): the counter "Aufrufe" of each goes up."""
+        user, problem = need_user()
+        if problem:
+            return problem
+        data, problem = body()
+        if problem:
+            return problem
+        if limiter.too_many("views", str(user.id)):
+            return fail("too_many", 429)
+        raw = data.get("ids")
+        if not isinstance(raw, list):
+            return fail("bad_request")
+        ids = {clamp_cursor(value) for value in raw[:MAX_VIEWS_AT_ONCE] if isinstance(value, int) and not isinstance(value, bool)}
+        ids.discard(None)
+        ids.discard(0)
+        counted = 0
+        if ids:
+            for post in YipiPost.query.filter(YipiPost.id.in_(ids), YipiPost.deleted.is_(False), YipiPost.repost_of_id.is_(None), YipiPost.user_id != user.id):
+                bump(YipiPost, post.id, YipiPost.view_count, 1)
+                counted += 1
+            db.session.commit()
+        return jsonify({"ok": True, "counted": counted})
+
+    @route("/api/yipi/posts/<int(min=1, max=4611686018427387904):post_id>/likes")
+    def yipi_post_likes(post_id):
+        viewer = current_user()
+        post = get_post_or_none(post_id, viewer)
+        if post is None or post.deleted:
+            return fail("not_found", 404)
+        query = YipiLike.query.filter_by(post_id=post.id)
+        hidden = hidden_user_ids(viewer)
+        if hidden:
+            query = query.filter(~YipiLike.user_id.in_(hidden))
+        return people_page(query.order_by(YipiLike.id.desc()), viewer, "user_id")
+
+    @route("/api/yipi/posts/<int(min=1, max=4611686018427387904):post_id>/reposts")
+    def yipi_post_reposts(post_id):
+        viewer = current_user()
+        post = get_post_or_none(post_id, viewer)
+        if post is None or post.deleted:
+            return fail("not_found", 404)
+        query = YipiPost.query.filter(YipiPost.repost_of_id == post.id)
+        hidden = hidden_user_ids(viewer)
+        if hidden:
+            query = query.filter(~YipiPost.user_id.in_(hidden))
+        return people_page(query.order_by(YipiPost.id.desc()), viewer, "user_id")
+
+    def set_pin(post_id, on):
+        user, problem = need_user()
+        if problem:
+            return problem
+        if limiter.too_many("pin", str(user.id)):
+            return fail("too_many", 429)
+        post = db.session.get(YipiPost, post_id)
+        if post is None or post.deleted or post.user_id != user.id:
+            return fail("not_found", 404)
+        if on:
+            if post.reply_to_id or post.repost_of_id:
+                return fail("bad_request")                        # a reply or a repost cannot be pinned
+            user.pinned_post_id = post.id
+        elif user.pinned_post_id == post.id:
+            user.pinned_post_id = None
+        db.session.commit()
+        return jsonify({"ok": True, "pinnedPostId": user.pinned_post_id})
+
+    @route("/api/yipi/posts/<int(min=1, max=4611686018427387904):post_id>/pin", methods=["POST"], endpoint="yipi_pin")
+    def yipi_pin(post_id):
+        return set_pin(post_id, True)
+
+    @route("/api/yipi/posts/<int(min=1, max=4611686018427387904):post_id>/pin", methods=["DELETE"], endpoint="yipi_unpin")
+    def yipi_unpin(post_id):
+        return set_pin(post_id, False)
 
     @route("/api/yipi/posts/<int(min=1, max=4611686018427387904):post_id>", methods=["DELETE"])
     def yipi_post_delete(post_id):
@@ -1377,6 +1591,8 @@ def register_routes(app):
                 query = query.filter(or_(YipiPost.repost_of_id.is_(None), ~YipiPost.repost_of_id.in_(originals)))
         else:
             query = visible_posts(viewer).filter(YipiPost.reply_to_id.is_(None), YipiPost.repost_of_id.is_(None))
+            if feed == "media":                                   # Explore, "Medien": posts with photos or a GIF
+                query = query.filter(YipiPost.id.in_(select(YipiMedia.post_id).where(YipiMedia.post_id.isnot(None))))
         if cursor:
             query = query.filter(YipiPost.id < cursor)
         return jsonify(feed_page(query, viewer))
@@ -1445,9 +1661,21 @@ def register_routes(app):
             query = query.filter(YipiPost.repost_of_id.is_(None), YipiPost.id.in_(select(YipiMedia.post_id).where(YipiMedia.post_id.isnot(None))))
         else:
             query = query.filter(YipiPost.reply_to_id.is_(None))
+        pinned = None
+        if tab == "posts" and not cursor and user.pinned_post_id:
+            candidate = db.session.get(YipiPost, user.pinned_post_id)
+            if candidate is not None and not candidate.deleted and candidate.user_id == user.id and not candidate.reply_to_id and not candidate.repost_of_id:
+                pinned = candidate
+                query = query.filter(YipiPost.id != pinned.id)
         if cursor:
             query = query.filter(YipiPost.id < cursor)
-        return jsonify(feed_page(query, viewer))
+        page = feed_page(query, viewer)
+        if pinned is not None:
+            first = feed_items([pinned], viewer)
+            if first:
+                first[0]["pinned"] = True
+                page["items"].insert(0, first[0])
+        return jsonify(page)
 
     # --------------------------------------------------------------------------------------- people
     def people_page(query, viewer, key):
@@ -1603,7 +1831,14 @@ def register_routes(app):
             query = query.filter(YipiPost.id.in_(select(YipiTag.post_id).where(YipiTag.tag == tag)))
         else:
             query = query.filter(YipiPost.text.ilike(like_pattern(query_text), escape="\\"))
+        if kind == "media":
+            query = query.filter(YipiPost.id.in_(select(YipiMedia.post_id).where(YipiMedia.post_id.isnot(None))))
         cursor = clamp_cursor(request.args.get("cursor"))
+        if request.args.get("sort") == "top":                      # "Top": by what people did with it; the cursor is a place in that list
+            start = min(cursor or 0, 1000)
+            rows = query.order_by((YipiPost.like_count + 2 * YipiPost.repost_count + 2 * YipiPost.quote_count + YipiPost.reply_count).desc(), YipiPost.id.desc()).offset(start).limit(PAGE + 1).all()
+            more = len(rows) > PAGE and start + PAGE < 1000
+            return jsonify({"ok": True, "items": feed_items(rows[:PAGE], viewer), "users": [], "next": start + PAGE if more else None})
         if cursor:
             query = query.filter(YipiPost.id < cursor)
         page = feed_page(query, viewer)
@@ -1615,7 +1850,7 @@ def register_routes(app):
         since = utcnow() - timedelta(hours=24)
         rows = (db.session.query(YipiTag.tag, func.count(func.distinct(YipiTag.post_id)).label("n"), func.count(func.distinct(YipiTag.user_id)).label("people"))
                 .join(YipiPost, YipiPost.id == YipiTag.post_id).filter(YipiTag.created_at > since, YipiPost.deleted.is_(False))
-                .group_by(YipiTag.tag).order_by(func.count(func.distinct(YipiTag.post_id)).desc(), YipiTag.tag).limit(8).all())
+                .group_by(YipiTag.tag).order_by(func.count(func.distinct(YipiTag.post_id)).desc(), YipiTag.tag).limit(min(max(clamp_cursor(request.args.get("limit")) or 8, 1), 30)).all())
         return jsonify({"ok": True, "trends": [{"tag": tag, "posts": n, "people": people} for tag, n, people in rows]})
 
     @route("/api/yipi/suggestions")
@@ -1625,9 +1860,18 @@ def register_routes(app):
         if viewer:
             skip = {viewer.id} | {r.followee_id for r in YipiFollow.query.filter_by(follower_id=viewer.id)} | hidden_user_ids(viewer)
             query = query.filter(~YipiUser.id.in_(skip))
-        people = query.order_by(YipiUser.followers_count.desc(), YipiUser.posts_count.desc(), YipiUser.id.desc()).limit(3).all()
+        people = query.order_by(YipiUser.followers_count.desc(), YipiUser.posts_count.desc(), YipiUser.id.desc()).limit(min(max(clamp_cursor(request.args.get("limit")) or 3, 1), 20)).all()
         relations = relations_to(viewer, [u.id for u in people])
         return jsonify({"ok": True, "users": [user_dict(u, viewer, relations) for u in people]})
+
+    @route("/api/yipi/bookmarks", methods=["DELETE"], endpoint="yipi_bookmarks_clear")
+    def yipi_bookmarks_clear():
+        user, problem = need_user()
+        if problem:
+            return problem
+        removed = YipiBookmark.query.filter_by(user_id=user.id).delete()
+        db.session.commit()
+        return jsonify({"ok": True, "removed": removed})
 
     @route("/api/yipi/bookmarks")
     def yipi_bookmarks():

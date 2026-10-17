@@ -1,4 +1,4 @@
-"""Draws Pulse's app icons (a heartbeat line on a violet-to-cyan tile) and the link-preview picture with Pillow.
+"""Draws Pulse's app icons (a heartbeat line on a violet tile) and the link-preview picture with Pillow.
 
     python scripts/make_pulse_icons.py
 
@@ -12,7 +12,7 @@ from PIL import Image, ImageDraw, ImageFont
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 OUT = os.path.join(ROOT, "static", "img")
 FONT = os.path.join(ROOT, "static", "fonts", "Nunito-Variable.ttf")
-VIOLET, BLUE, CYAN, WHITE, NIGHT = (139, 92, 246), (59, 130, 246), (34, 211, 238), (255, 255, 255), (7, 8, 13)
+VIOLET, BLUE, CYAN, WHITE, NIGHT = (167, 139, 250), (124, 58, 237), (76, 29, 149), (255, 255, 255), (4, 3, 8)
 SUPER = 4
 
 LINE = [(8, 34), (21, 34), (27, 17), (37, 49), (43, 30), (48, 34), (56, 34)]     # the beat, on a 64 x 64 grid
@@ -24,7 +24,7 @@ def lerp(a, b, t):
 
 
 def gradient(size):
-    """A square diagonal gradient: violet, blue, cyan."""
+    """A square diagonal gradient: light violet, violet, deep purple."""
     image = Image.new("RGB", (size, size))
     pixels = image.load()
     for py in range(size):
@@ -85,8 +85,8 @@ def og_image():
     glow = Image.new("RGBA", (width, height), (0, 0, 0, 0))
     draw = ImageDraw.Draw(glow)
     draw.ellipse([-200, -260, 620, 560], fill=VIOLET + (150,))
-    draw.ellipse([640, 120, 1400, 880], fill=CYAN + (110,))
-    draw.ellipse([300, 380, 900, 900], fill=BLUE + (110,))
+    draw.ellipse([640, 120, 1400, 880], fill=CYAN + (170,))
+    draw.ellipse([300, 380, 900, 900], fill=BLUE + (90,))
     from PIL import ImageFilter
     image = Image.alpha_composite(image, glow.filter(ImageFilter.GaussianBlur(120)))
     panel = Image.new("RGBA", (width, height), (0, 0, 0, 0))
@@ -103,7 +103,7 @@ def og_image():
 
 
 SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b5cf6"/><stop offset="0.5" stop-color="#3b82f6"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs>
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a78bfa"/><stop offset="0.5" stop-color="#7c3aed"/><stop offset="1" stop-color="#4c1d95"/></linearGradient></defs>
   <rect x="2.5" y="2.5" width="59" height="59" rx="16" fill="url(#g)"/>
   <path d="M{points}" fill="none" stroke="#fff" stroke-width="{width}" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

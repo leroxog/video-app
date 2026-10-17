@@ -139,9 +139,10 @@
     const path = String(pathname || "/").replace(/\/+$/, "") || "/";
     const params = new URLSearchParams(search);
     const fixed = { "/": "home", "/explore": "explore", "/notifications": "notifications", "/messages": "messages", "/bookmarks": "bookmarks", "/moderation": "moderation", "/i/login": "login", "/i/signup": "signup" };
+    if (path === "/explore") return { name: "explore", tab: ["trends", "media", "people"].includes(params.get("tab")) ? params.get("tab") : "" };
     if (fixed[path]) return { name: fixed[path] };
     if (path === "/i/nex") return { name: "nex", q: (params.get("q") || "").slice(0, 500), post: /^\d{1,18}$/.test(params.get("post") || "") ? Number(params.get("post")) : 0 };
-    if (path === "/search") return { name: "search", q: params.get("q") || "", type: params.get("type") === "people" ? "people" : "posts" };
+    if (path === "/search") return { name: "search", q: params.get("q") || "", type: ["people", "media"].includes(params.get("type")) ? params.get("type") : "posts", sort: params.get("sort") === "new" ? "new" : "top" };
     if (path === "/settings") return { name: "settings", section: "" };
     let match = /^\/settings\/([a-z]+)$/.exec(path);
     if (match) return { name: "settings", section: match[1] };
@@ -159,11 +160,12 @@
   function buildPath(route) {
     switch (route.name) {
       case "home": return HOME;
-      case "explore": case "notifications": case "messages": case "bookmarks": case "moderation": return `/${route.name}`;
+      case "explore": return route.tab ? `/explore?tab=${route.tab}` : "/explore";
+      case "notifications": case "messages": case "bookmarks": case "moderation": return `/${route.name}`;
       case "nex": return route.post ? `/i/nex?post=${route.post}` : route.q ? `/i/nex?q=${encodeURIComponent(route.q)}` : "/i/nex";
       case "login": return "/i/login";
       case "signup": return "/i/signup";
-      case "search": return `/search?q=${encodeURIComponent(route.q || "")}${route.type === "people" ? "&type=people" : ""}`;
+      case "search": return `/search?q=${encodeURIComponent(route.q || "")}${route.type === "people" ? "&type=people" : route.type === "media" ? "&type=media" : ""}${route.sort === "new" && route.type !== "people" ? "&sort=new" : ""}`;
       case "settings": return route.section ? `/settings/${route.section}` : "/settings";
       case "thread": return `/messages/${route.handle}`;
       case "profile": return `/${route.handle}`;
@@ -222,6 +224,42 @@
     const words = String(name || "").trim().split(/\s+/).filter(Boolean);
     const letters = words.length > 1 ? Array.from(words[0])[0] + Array.from(words[1])[0] : Array.from(words[0] || String(handle || "?"))[0];
     return letters.toUpperCase();
+  }
+
+  // ------------------------------------------------------------------------------------------------ polls
+  const MAX_POLL_OPTION = 25;                           // characters of an answer (yipi.py: MAX_POLL_OPTION)
+  const POLL_OPTIONS = [2, 4];                          // fewest and most answers
+  const POLL_LENGTHS = [[30, "30 Minuten"], [60, "1 Stunde"], [360, "6 Stunden"], [1440, "1 Tag"], [4320, "3 Tage"], [10080, "7 Tage"]];
+
+  /* What is left of a poll: {ended, text}: "noch 5 Min.", "noch 3 Std.", "noch 2 Tage", "Beendet". */
+  function pollTimeLeft(endsAt, now = Date.now()) {
+    const ends = new Date(endsAt).getTime();
+    if (Number.isNaN(ends) || ends <= now) return { ended: true, text: "Beendet" };
+    const seconds = Math.ceil((ends - now) / 1000);
+    if (seconds < 60) return { ended: false, text: "noch weniger als 1 Min." };
+    if (seconds < 3600) return { ended: false, text: `noch ${Math.ceil(seconds / 60)} Min.` };
+    if (seconds < 86400) return { ended: false, text: `noch ${Math.ceil(seconds / 3600)} Std.` };
+    const days = Math.ceil(seconds / 86400);
+    return { ended: false, text: `noch ${days} ${days === 1 ? "Tag" : "Tage"}` };
+  }
+
+  /* The share of an answer in percent (whole numbers, 0 when nobody voted). */
+  function pollPercent(votes, total) {
+    return total > 0 ? Math.round((Math.max(0, votes) / total) * 100) : 0;
+  }
+
+  /* "3 Stimmen", "1 Stimme" */
+  const pollVotes = (total) => `${formatCount(total)} ${total === 1 ? "Stimme" : "Stimmen"}`;
+
+  /* The answers the person typed, cleaned and without the empty ones: {options, valid, problem}. A poll needs 2 to 4 different answers. */
+  function pollAnswers(inputs) {
+    const options = (Array.isArray(inputs) ? inputs : []).map((entry) => cleanText(entry).replace(/\s+/g, " ")).filter(Boolean);
+    const unique = new Set(options.map((option) => option.toLowerCase()));
+    let problem = "";
+    if (options.length < POLL_OPTIONS[0]) problem = "Eine Umfrage braucht mindestens zwei Antworten.";
+    else if (unique.size !== options.length) problem = "Die Antworten müssen verschieden sein.";
+    else if (options.some((option) => Array.from(option).length > MAX_POLL_OPTION)) problem = `Eine Antwort darf höchstens ${MAX_POLL_OPTION} Zeichen haben.`;
+    return { options, valid: !problem, problem };
   }
 
   // --------------------------------------------------------------------------------------------- Nex
@@ -283,7 +321,7 @@
   }
 
   return {
-    HOME, MAX_POST, MAX_MEDIA, NEX_TURNS, NEX_KEEP, nexMessages, nexBlocks, gifQuery, gifColumns, cleanText, charCount, counterState, tokenize, shortUrl, formatCount, relativeTime, fullTime, joinedLabel,
+    HOME, MAX_POST, MAX_MEDIA, MAX_POLL_OPTION, POLL_OPTIONS, POLL_LENGTHS, pollTimeLeft, pollPercent, pollVotes, pollAnswers, NEX_TURNS, NEX_KEEP, nexMessages, nexBlocks, gifQuery, gifColumns, cleanText, charCount, counterState, tokenize, shortUrl, formatCount, relativeTime, fullTime, joinedLabel,
     isHandle, parsePath, buildPath, groupNotifications, fitSize, coverCrop, avatarHue, initials,
   };
 });

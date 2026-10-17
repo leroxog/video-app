@@ -227,7 +227,7 @@ def test_every_theme_defines_the_same_colours():
 
 def test_every_animation_has_its_keyframes():
     keyframes = set(re.findall(r"@keyframes\s+([\w-]+)", CSS))
-    assert keyframes == {"spin", "fade", "rise", "pop", "shimmer", "toast-in", "drop", "drift", "blink", "sheet"}
+    assert keyframes == {"spin", "fade", "rise", "pop", "shimmer", "toast-in", "drop", "blink", "sheet", "drawer-in"}
     for name in keyframes:
         assert re.search(rf"animation:[^;]*\b{name}\b", CSS), f"{name} is defined but never used"
     for declaration in re.findall(r"animation:\s*([a-z][\w-]*)", CSS):
@@ -281,7 +281,7 @@ def test_the_look_is_glass_on_every_surface():
 
 def test_the_accent_colours_of_the_settings_the_theme_script_and_the_style_agree():
     named = re.findall(r'\[\"(\w+)\", \"[^\"]+\", \"linear-gradient', JS["yipi-pages.js"])
-    assert named == ["pulse", "violet", "pink", "orange", "green"]
+    assert named == ["pulse", "indigo", "orchid", "lilac"], "the standard purple and three purples more: Pulse is black and purple"
     in_css = set(re.findall(r':root\[data-accent=\"(\w+)\"\]', CSS))
     assert in_css == set(named) - {"pulse"}, "the standard colour is the one without an attribute"
     assert in_css == set(re.findall(r'accent === \"(\w+)\"', JS["yipi-theme.js"]))
@@ -312,8 +312,56 @@ def test_the_materials_give_depth_without_playful_colours():
             assert name in re.search(rf':root\[data-theme="{theme}"\]\s*\{{(.*?)\}}', CSS, re.S).group(1), (name, theme)
     assert "--btn-3d:" in CSS and ".btn.primary { background: var(--grad); color: var(--on-accent); text-shadow" in CSS
     assert "radial-gradient(circle at 32% 24%" in CSS, "Nex is a sphere"
-    assert "var(--grad): linear" not in CSS and "--grad: linear-gradient(180deg, #639eff 0%, #3a6ee8 100%)" in CSS, "one calm blue, lit from above"
+    assert "var(--grad): linear" not in CSS and "--grad: linear-gradient(180deg, #9d78ff 0%, #6d3df0 100%)" in CSS, "one purple, lit from above"
     assert "135deg, #8b5cf6" not in CSS and "#22d3ee" not in CSS.split("*, *::before")[0], "no violet-to-cyan rainbow in the colours of the page"
+
+
+def test_the_page_is_black_and_purple_and_nothing_else():
+    assert "--bg: #000;" in CSS.split(':root[data-theme="dark"]')[1].split("}")[0], "the standard look is black"
+    for blue in ("#639eff", "#3a6ee8", "#22d3ee", "#3b82f6", "#2c5bd1", "#c3dbff"):
+        assert blue not in CSS, blue
+    assert "--accent: #8b5cf6;" in CSS and "#9d78ff" in CSS and "#6d3df0" in CSS
+    for name in ("pink", "orange", "green"):
+        assert f'data-accent="{name}"' not in CSS
+    icons = read("scripts", "make_pulse_icons.py")
+    assert "(167, 139, 250), (124, 58, 237), (76, 29, 149)" in icons and "#a78bfa" in JS["yipi-icons.js"] and "#22d3ee" not in JS["yipi-icons.js"]
+    gifs = read("scripts", "make_pulse_gifs.py")
+    assert "Pulse is black and purple" in gifs and "(255, 215, 60)" not in gifs and "(46, 204, 113)" not in gifs
+
+
+def test_the_menu_is_where_it_is_on_x():
+    shell = JS["yipi.js"]
+    ids = re.findall(r'\{ id: "(\w+)", label: "([^"]+)"', shell.split("const NAV = [")[1].split("];")[0])
+    assert [name for name, _ in ids] == ["home", "explore", "notifications", "messages", "nex", "bookmarks", "profile", "more"]
+    assert dict(ids)["profile"] == "Profil" and "settings" not in dict(ids) and dict(ids)["more"] == "Mehr"
+    assert '"/i/login"' in shell.split("const NAV = [")[1].split("];")[0], "somebody not signed in who taps Profil is asked to sign in"
+    for entry in ("/settings", "/settings/display", "/settings/about"):
+        assert f'Y.navigate("{entry}")' in shell, entry
+    assert "Y.openDrawer = " in shell and "drawer-back" in shell and ".drawer {" in CSS
+    assert 'Y.openDrawer()' in JS["yipi-views.js"], "the picture in the top bar of a phone opens the menu"
+    assert 'class: "home-search"' in JS["yipi-views.js"] and ".home-search { display: none;" in CSS
+    assert "(max-width: 1050px), (min-width: 561px) and (max-height: 499px) { .home-search { display: block; } }" in CSS, "a search line above the posts where there is no right column"
+
+
+def test_the_polls_of_the_page_and_the_server_agree():
+    core = JS["yipi-core.js"]
+    assert f"MAX_POLL_OPTION = {yipi.MAX_POLL_OPTION}" in core and f"POLL_OPTIONS = [{yipi.POLL_OPTIONS[0]}, {yipi.POLL_OPTIONS[1]}]" in core
+    lengths = [int(minutes) for minutes in re.findall(r"\[(\d+), \"[^\"]+\"\]", re.search(r"POLL_LENGTHS = \[(.*?)\];", core).group(1))]
+    assert lengths and all(yipi.POLL_MINUTES[0] <= minutes <= yipi.POLL_MINUTES[1] for minutes in lengths) and yipi.POLL_MINUTES[2] in lengths
+    components = JS["yipi-components.js"]
+    assert "Core.pollAnswers(poll.options)" in components and "body.poll = { options: answers.options, minutes: poll.minutes }" in components
+    assert "`/posts/${item.id}/vote`" in components and "`/posts/${item.id}/pin`" in components and 'Api.post("/posts/views"' in components
+    assert "MAX_VIEWS_AT_ONCE = 40" in read("yipi.py") and "slice(0, 40)" in components
+
+
+def test_what_the_page_offers_for_search_and_explore_exists_on_the_server():
+    views = JS["yipi-views.js"]
+    for text in ('["top", "Top"], ["new", "Neueste"], ["people", "Personen"], ["media", "Medien"]', '["foryou", "Für dich"], ["trends", "Trends"], ["media", "Medien"], ["people", "Personen"]',
+                 'feed: "media"', '"/trends?limit=20"', '"/suggestions?limit=20"', 'Api.del("/bookmarks")'):
+        assert text in views, text
+    server = read("yipi.py")
+    for text in ('request.args.get("sort") == "top"', 'kind == "media"', 'feed == "media"', 'def yipi_bookmarks_clear'):
+        assert text in server, text
 
 
 def test_the_bottom_bar_of_a_phone_has_nex_in_the_middle():

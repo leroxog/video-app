@@ -46,6 +46,11 @@
     dm_closed: "Diese Person nimmt nur Nachrichten von Leuten an, denen sie folgt.",
     bad_reason: "Bitte wähle einen Grund.",
     bad_action: "Das kennt Pulse nicht.",
+    bad_poll: "Mit der Umfrage stimmt etwas nicht: sie braucht zwei bis vier verschiedene Antworten.",
+    poll_text: "Schreib zur Umfrage eine Frage.",
+    poll_closed: "Diese Umfrage ist schon beendet.",
+    already_voted: "Du hast bei dieser Umfrage schon abgestimmt.",
+    bad_option: "Diese Antwort gibt es nicht.",
   };
 
   async function call(method, path, body, form) {
