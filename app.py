@@ -278,6 +278,9 @@ def ensure_sqlite_columns_exist():
             ("thumb_name", "VARCHAR(64)"),
         ],
         "ysong": [("tags", "VARCHAR(300)")],
+        "yipi_message": [("gif_id", "VARCHAR(32)")],
+        "yipi_report": [("gif_id", "VARCHAR(32)")],
+        "yipi_media": [("gif_id", "VARCHAR(32)")],
     }
     with db.engine.connect() as conn:
         for table, columns in wanted.items():
@@ -365,6 +368,10 @@ def ensure_columns_exist():
         "ALTER TABLE ylib_item ADD COLUMN IF NOT EXISTS youtube_video_id VARCHAR(20)",
         "ALTER TABLE ylib_item ADD COLUMN IF NOT EXISTS thumb_name VARCHAR(64)",
         "ALTER TABLE ysong ADD COLUMN IF NOT EXISTS tags VARCHAR(300)",
+        # Pulse (2026-10-17): a GIF of the library can be sent in a message and reported.
+        "ALTER TABLE yipi_message ADD COLUMN IF NOT EXISTS gif_id VARCHAR(32)",
+        "ALTER TABLE yipi_report ADD COLUMN IF NOT EXISTS gif_id VARCHAR(32)",
+        "ALTER TABLE yipi_media ADD COLUMN IF NOT EXISTS gif_id VARCHAR(32)",
     ]
     with db.engine.connect() as conn:
         for statement in statements:
@@ -1239,14 +1246,17 @@ ysound.register_routes(app, current_user, _pl_store_media, _pl_media_url, _pl_de
 # gomat (the home page: a maths course, progress lives in the browser) -- see gomat.py.
 gomat.register_routes(app)
 gomat_accounts.register_routes(app)
+# Pulse (the home page since 2026-10-17: an X-style social network with a GIF library and Nex, the assistant; it began as yipi, whose
+# module, tables, cookie and /api/yipi/ addresses keep that name) -- see yipi.py.
 yipi.register_routes(app)
-_PUBLIC_ENDPOINTS.update(yipi.ENDPOINTS)       # yipi has accounts of its own and checks the sign-in itself
-# Nex Ai (the home page from 2026-10-11 to 2026-10-16: a chat with one AI that runs on the visitor's computer; no accounts, no cookies).
-# Archived at /nex-ai-archiv now that NSTL is the home page (below). The list of free AI models it began as is still at /modelle-archiv.
+_PUBLIC_ENDPOINTS.update(yipi.ENDPOINTS)       # Pulse has accounts of its own and checks the sign-in itself
+# Nex Ai (the home page from 2026-10-11 to 2026-10-16, a chat with one AI on the visitor's computer, then five server-side agents; no
+# accounts, no cookies).  The agents page is archived at /nex-agenten-archiv, the on-device chat at /nex-ai-archiv, and the list of free
+# AI models it began as is still at /modelle-archiv.
 regal.register_routes(app)
 _PUBLIC_ENDPOINTS.update(regal.ENDPOINTS)
 
-# NSTL (the home page since 2026-10-16: no accounts; you ask a question and a swarm of agents argues its way to a Wikipedia answer,
+# NSTL (the home page on the evening of 2026-10-16 only, archived at /nstl-archiv: no accounts; you ask a question and a swarm of agents argues its way to a Wikipedia answer,
 # all of it running in the visitor's own browser) -- see nstl.py.
 nstl.register_routes(app)
 _PUBLIC_ENDPOINTS.update(nstl.ENDPOINTS)

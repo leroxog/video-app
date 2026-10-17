@@ -1,0 +1,92 @@
+[
+ {
+  "slug": "hallo",
+  "title": "Hallo",
+  "file": "hallo.gif"
+ },
+ {
+  "slug": "lol",
+  "title": "Lol",
+  "file": "lol.gif"
+ },
+ {
+  "slug": "haha",
+  "title": "Haha",
+  "file": "haha.gif"
+ },
+ {
+  "slug": "wow",
+  "title": "Wow",
+  "file": "wow.gif"
+ },
+ {
+  "slug": "danke",
+  "title": "Danke",
+  "file": "danke.gif"
+ },
+ {
+  "slug": "ja",
+  "title": "Ja",
+  "file": "ja.gif"
+ },
+ {
+  "slug": "nein",
+  "title": "Nein",
+  "file": "nein.gif"
+ },
+ {
+  "slug": "herz",
+  "title": "Herz Liebe",
+  "file": "herz.gif"
+ },
+ {
+  "slug": "party",
+  "title": "Party",
+  "file": "party.gif"
+ },
+ {
+  "slug": "bravo",
+  "title": "Bravo Applaus",
+  "file": "bravo.gif"
+ },
+ {
+  "slug": "hmm",
+  "title": "Hmm",
+  "file": "hmm.gif"
+ },
+ {
+  "slug": "feuer",
+  "title": "Feuer heiß",
+  "file": "feuer.gif"
+ },
+ {
+  "slug": "gluckwunsch",
+  "title": "Glückwunsch",
+  "file": "gluckwunsch.gif"
+ },
+ {
+  "slug": "cool",
+  "title": "Cool",
+  "file": "cool.gif"
+ },
+ {
+  "slug": "nacht",
+  "title": "Gute Nacht",
+  "file": "nacht.gif"
+ },
+ {
+  "slug": "zzz",
+  "title": "Müde Schlafen",
+  "file": "zzz.gif"
+ },
+ {
+  "slug": "spaeter",
+  "title": "Bis später",
+  "file": "spaeter.gif"
+ },
+ {
+  "slug": "pulse",
+  "title": "Pulse",
+  "file": "pulse.gif"
+ }
+]

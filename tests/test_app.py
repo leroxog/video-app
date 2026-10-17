@@ -72,15 +72,17 @@ def test_nex_archived_redirects_to_login_when_logged_out(client):
     assert "/login" in r.headers["Location"]
 
 
-def test_signup_then_land_on_the_agents_page(client):
+def test_signup_then_land_on_pulse(client):
     r = signup(client, "alice")
     assert r.status_code in (302, 303)
     home = client.get("/")
     assert home.status_code == 200
-    assert b"regal-agents.js" in home.data and b"yipiBoot" not in home.data and b"gomatData" not in home.data and b"createForm" not in home.data and b"msNav" not in home.data
+    assert b"yipiBoot" in home.data and b"regal-agents.js" not in home.data and b"gomatData" not in home.data and b"createForm" not in home.data and b"msNav" not in home.data
+    assert b"regal-agents.js" in client.get("/nex-agenten-archiv").data
     assert b"regal-core.js" in client.get("/nex-ai-archiv").data
     assert b"nstl-swarm-worker.js" in client.get("/nstl-archiv").data
-    assert b"yipiBoot" in client.get("/yipi-archiv").data
+    old = client.get("/yipi-archiv")
+    assert old.status_code == 301 and old.headers["Location"].endswith("/")
     assert b"gomatData" in client.get("/gomat-archiv").data
     assert b"msNav" in client.get("/sound-archiv").data
     assert b"createForm" in client.get("/ysound-archiv").data
@@ -347,19 +349,19 @@ def _chat_id(client):
     return client.post("/api/ai/chats").get_json()["chat"]["id"]
 
 
-def test_root_serves_the_agents_page_not_the_archived_pages(client):
+def test_root_serves_pulse_not_the_archived_pages(client):
     """The home page cycled Nex, browser, ychat, ylib, the browser again, NRS Server, NRS Sound, ysound, gomat, yipi, Nex Ai
-    (2026-10-11), NSTL (2026-10-16, a few hours) and is now Nex Ai again, with real AI agents (2026-10-16). The social network,
-    maths course, song site, sound studio, server panel, browser, ylib, ychat, Nex, plain Nex Ai and NSTL UIs still fully work at
-    /yipi-archiv, /gomat-archiv, /ysound-archiv, /sound-archiv, /server-archiv, /browser-archiv, /ylib-archiv, /ychat-archiv,
-    /nex-archiv, /nex-ai-archiv and /nstl-archiv, unlinked from anywhere."""
+    (2026-10-11), NSTL (2026-10-16, a few hours), Nex Ai again with real AI agents (2026-10-16) and is now Pulse (2026-10-17, the old
+    yipi grown up: GIFs, Nex, glass). The maths course, song site, sound studio, server panel, browser, ylib, ychat, Nex, plain Nex Ai,
+    the five agents and NSTL UIs still fully work at /gomat-archiv, /ysound-archiv, /sound-archiv, /server-archiv, /browser-archiv,
+    /ylib-archiv, /ychat-archiv, /nex-archiv, /nex-ai-archiv, /nex-agenten-archiv and /nstl-archiv, unlinked from anywhere."""
     signup(client, "alice")
     home = client.get("/")
     assert home.status_code == 200
     assert (
-        b"regal-agents.js" in home.data
+        b"yipiBoot" in home.data
         and b"regal-chat.js" not in home.data
-        and b"yipiBoot" not in home.data
+        and b"regal-agents.js" not in home.data
         and b"gomatData" not in home.data
         and b"createForm" not in home.data
         and b"msNav" not in home.data
@@ -370,8 +372,9 @@ def test_root_serves_the_agents_page_not_the_archived_pages(client):
         and b"nxMsgs" not in home.data
     )
     assert b"regal-core.js" in client.get("/nex-ai-archiv").data
+    assert b"regal-agents.js" in client.get("/nex-agenten-archiv").data
     assert b"nstl-swarm-worker.js" in client.get("/nstl-archiv").data
-    assert b"yipiBoot" in client.get("/yipi-archiv").data
+    assert client.get("/yipi-archiv").status_code == 301
     assert b"gomatData" in client.get("/gomat-archiv").data
 
 

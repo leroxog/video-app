@@ -127,9 +127,9 @@ def test_the_archived_chat_is_still_the_chat_and_a_visitor_gets_no_cookie(client
     assert client.get("/static/data/browser-models.json").status_code == 200
 
 
-def test_the_old_address_of_the_chat_leads_to_the_home_page(client):
+def test_the_old_address_of_the_chat_leads_to_nex_inside_pulse(client):
     response = client.get("/chat")
-    assert response.status_code == 301 and response.headers["Location"].endswith("/")
+    assert response.status_code == 301 and response.headers["Location"].endswith("/i/nex")
 
 
 def test_the_worker_has_its_own_policy_it_may_run_webassembly_and_load_the_model_and_nothing_else(client):

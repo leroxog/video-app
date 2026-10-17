@@ -1,21 +1,22 @@
 <!doctype html>
-<html lang="de">
+<html lang="de" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>{{ {"terms": "Nutzungsbedingungen", "privacy": "Datenschutz", "imprint": "Impressum"}[page] }} | Nex Ai</title>
-<meta name="description" content="{{ {"terms": "Die Regeln auf Nex Ai und was du von uns erwarten kannst.", "privacy": "Welche Daten Nex Ai verarbeitet und wie du sie löschst.", "imprint": "Angaben zum Betreiber von Nex Ai."}[page] }}">
-<meta name="theme-color" content="#212121" media="(prefers-color-scheme: dark)">
-<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<title>{{ {"terms": "Nutzungsbedingungen", "privacy": "Datenschutz", "imprint": "Impressum"}[page] }} | Pulse</title>
+<meta name="description" content="{{ {"terms": "Die Regeln auf Pulse und was du von uns erwarten kannst.", "privacy": "Welche Daten Pulse verarbeitet und wie du sie löschst.", "imprint": "Angaben zum Betreiber von Pulse."}[page] }}">
+<meta name="theme-color" content="#07080d">
 <meta name="color-scheme" content="dark light">
-<link rel="icon" href="{{ static_url('img/nex-icon.svg') }}" type="image/svg+xml">
-<link rel="icon" href="{{ static_url('img/nex-192.png') }}" type="image/png" sizes="192x192">
-<link rel="apple-touch-icon" href="{{ static_url('img/nex-180.png') }}">
-<link rel="stylesheet" href="{{ static_url('css/regal.css') }}">
+<link rel="icon" href="{{ static_url('img/pulse-icon.svg') }}" type="image/svg+xml">
+<link rel="icon" href="{{ static_url('img/pulse-192.png') }}" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="{{ static_url('img/pulse-180.png') }}">
+<link rel="stylesheet" href="{{ static_url('css/yipi.css') }}">
+<script src="{{ static_url('js/yipi-theme.js') }}"></script>
 </head>
 <body>
+<div class="orbs" aria-hidden="true"></div>
 <div class="legal-page">
-  <a class="legal-logo" href="/" aria-label="Nex Ai, zurück zur Startseite">{% include "partials/_nex_mark.html" %}<span>Nex Ai</span></a>
+  <a class="legal-logo" href="/" aria-label="Pulse, zurück zur Startseite">{% include "partials/_pulse_mark.html" %}<span>Pulse</span></a>
   <main class="legal">
 {%- if page == "imprint" %}
     <h1>Impressum</h1>
@@ -30,79 +31,96 @@
     <p>Die Angaben zum Betreiber der Seite werden gerade ergänzt.</p>
   {%- endif %}
     <h2>Inhalte Dritter</h2>
-    <p>Die Antworten auf Nex Ai schreibt ein KI-Dienst von Groq, Inc. (USA); wir hosten ihn nicht und prüfen seine Antworten nicht. Im Archiv-Angebot <a href="/nex-ai-archiv">/nex-ai-archiv</a> läuft stattdessen ein Sprachmodell (Gemma 3 oder Qwen3, je nach Gerät) direkt auf deinem eigenen Gerät; es stammt von Google beziehungsweise Alibaba und wird von Hugging Face ausgeliefert. Für die jeweiligen Modelle und ihre Lizenz sind die Urheber verantwortlich.</p>
+    <p>Beiträge, Fotos, GIFs und Profile auf Pulse schreiben und laden die Nutzerinnen und Nutzer selbst hoch; für ihren Inhalt sind sie verantwortlich. Die Antworten von Nex schreibt ein KI-Dienst von Groq, Inc. (USA); wir hosten ihn nicht und prüfen seine Antworten nicht. In den Archiv-Angeboten läuft teils stattdessen ein Sprachmodell (Gemma 3 oder Qwen3, je nach Gerät) direkt auf deinem eigenen Gerät; es stammt von Google beziehungsweise Alibaba und wird von Hugging Face ausgeliefert. Für die jeweiligen Modelle und ihre Lizenz sind die Urheber verantwortlich.</p>
     <h2>Rechtswidrige Inhalte melden</h2>
-    <p>Wenn etwas auf Nex Ai oder einem seiner Archiv-Angebote gegen das Gesetz oder Rechte Dritter verstößt oder nicht stimmt, schreib uns{% if imprint and imprint.email %} (<a href="mailto:{{ imprint.email }}">{{ imprint.email }}</a>){% endif %} mit einer kurzen Beschreibung. Wir prüfen es und handeln, sobald wir es geprüft haben. Antworten des KI-Dienstes können nur Groq selbst ändern, das Modell des Archivs nur seine Urheber oder Hugging Face entfernen.</p>
+    <p>Wenn etwas auf Pulse oder einem der Archiv-Angebote gegen das Gesetz oder Rechte Dritter verstößt oder nicht stimmt, melde es direkt bei dem Beitrag, dem GIF oder dem Profil über „Melden“, oder schreib uns{% if imprint and imprint.email %} (<a href="mailto:{{ imprint.email }}">{{ imprint.email }}</a>){% endif %} mit einer kurzen Beschreibung. Wir prüfen es und handeln, sobald wir es geprüft haben. Antworten des KI-Dienstes können nur Groq selbst ändern, das Modell des Archivs nur seine Urheber oder Hugging Face entfernen.</p>
 {%- elif page == "terms" %}
     <h1>Nutzungsbedingungen</h1>
-    <p class="lead">Nex Ai beantwortet deine Frage mit fünf echten, nacheinander laufenden KI-Durchgängen. Kostenlos und ohne Konto. Stand: Oktober 2026.</p>
+    <p class="lead">Pulse ist ein soziales Netzwerk für kurze Beiträge, Fotos und GIFs, mit Nex, einer KI, die dir weiterhilft. Kostenlos. Stand: Oktober 2026.</p>
 
-    <h2>1. Was Nex Ai ist</h2>
-    <p>Auf Nex Ai stellst du eine Frage. Sie läuft durch fünf kurze, unabhängige KI-Durchgänge: vier schreiben je eine eigene Antwort (direkt, gründlich, kritisch, praktisch) in einer knappen Notiz-Sprache aus Symbolen statt Sätzen, die alle vier gleich benutzen; ein fünfter liest alle vier Notizen und schreibt daraus die Antwort in normaler Sprache, die du siehst. Über „In Bearbeitung“ kannst du öffnen, was jeder Durchgang schreibt, während er schreibt – die vier Notizen sind absichtlich knapp und nicht auf Anhieb lesbar, die Antwort darunter ist es immer. Fünf ist die echte Zahl, keine Marketing-Zahl: Die KI läuft dafür nicht mehr auf deinem Gerät, sondern auf unserem Server, der jeden Durchgang an einen KI-Dienst von Groq, Inc. weitergibt.</p>
+    <h2>1. Was Pulse ist</h2>
+    <p>Auf Pulse schreibst du Beiträge mit bis zu 280 Zeichen, dazu bis zu vier Fotos oder ein GIF, antwortest auf Beiträge, reposts und zitierst sie, magst und speicherst sie, folgst anderen und schreibst ihnen privat. Videos gibt es bei Pulse nicht. Du kannst GIFs aus der gemeinsamen Bibliothek nehmen, eigene machen oder hochladen, mit einem Stern merken und verschicken. Nex ist die KI von Pulse: du fragst, Nex antwortet Wort für Wort. Pulse hieß früher yipi; Konten und Beiträge sind dieselben geblieben.</p>
 
-    <h2>2. Wie du Nex Ai benutzt</h2>
-    <p>Benutze Nex Ai nicht, um anderen zu schaden: keine Täuschung, keine Belästigung, keine gefälschten Inhalte über echte Personen, keine rechtswidrigen Inhalte, keine automatisierten Massenabfragen. Beachte die Rechte anderer (Urheberrecht, Persönlichkeitsrechte) und kennzeichne KI-Texte, wo es verlangt wird. Aus technischen Gründen ist die Zahl der Fragen pro Adresse und Zeitspanne begrenzt (siehe Datenschutz).</p>
+    <h2>2. Konto und Alter</h2>
+    <p>Ein Konto gibt es ab 16 Jahren. Jüngere brauchen die Erlaubnis ihrer Eltern. Du wählst einen Nutzernamen und ein Passwort und bist dafür verantwortlich, das Passwort geheim zu halten. Pulse verschickt keine E-Mails: ein vergessenes Passwort kann nicht zurückgesetzt werden. Ein Konto darf nicht übertragen oder verkauft werden; wer sich als jemand anderes ausgibt, wird gesperrt.</p>
 
-    <h2>3. Antworten der Agenten</h2>
-    <p>Antworten können falsch, unvollständig oder unpassend sein, auch nachdem ein vierter Durchgang sie geprüft hat – die vier Durchgänge sind unabhängig, aber keine Garantie. Verlass dich bei wichtigen Dingen (Gesundheit, Recht, Geld, Sicherheit) nicht darauf und prüfe sie selbst. Gib Antworten nicht als menschliche Äußerung oder als geprüfte Auskunft aus.</p>
+    <h2>3. Deine Inhalte</h2>
+    <p>Beiträge, Antworten, Fotos, GIFs und Profile sind öffentlich. Du bist für das verantwortlich, was du schreibst, hochlädst und verschickst, und darfst nur Inhalte verwenden, an denen du die Rechte hast oder die du verwenden darfst. Du räumst Pulse das Recht ein, sie im Rahmen des Dienstes zu speichern und anzuzeigen, solange sie online sind; mehr nicht. Du kannst deine Beiträge, GIFs und dein Konto jederzeit löschen („Einstellungen, Dein Konto“ und das Menü am Beitrag).</p>
 
-    <h2>4. Verfügbarkeit und Haftung</h2>
-    <p>Nex Ai ist ein privates Projekt ohne Gewähr. Es kann ausfallen, sich ändern oder eingestellt werden. Wir übernehmen keine Haftung für Antworten der KI, ihre Folgen oder verlinkte Seiten. Unsere Haftung ist bei leichter Fahrlässigkeit ausgeschlossen, außer bei der Verletzung von Leben, Körper und Gesundheit und bei wesentlichen Vertragspflichten. Zwingende gesetzliche Rechte bleiben unberührt.</p>
+    <h2>4. Regeln</h2>
+    <p>Keine Beleidigung und Belästigung, keine Hetze, keine Drohungen oder Aufrufe zur Gewalt, keine Bedrohung von Kindern, keine sexuellen Inhalte mit Minderjährigen, keine Verherrlichung von Selbstverletzung, keine rechtswidrigen Inhalte, kein Spam, keine Täuschung und keine automatisierten Massenaktionen. Beachte Urheber- und Persönlichkeitsrechte; Fotos und GIFs von anderen Personen nur mit Erlaubnis. Wer gegen die Regeln verstößt, dessen Inhalte können wir entfernen und dessen Konto können wir sperren.</p>
 
-    <h2>5. Änderungen</h2>
+    <h2>5. Melden</h2>
+    <p>Etwas Unpassendes siehst du? Tippe bei einem Beitrag, einem GIF oder einem Profil auf „Melden“. Meldungen sieht nur das Team. Du kannst Konten außerdem stummschalten und blockieren.</p>
+
+    <h2>6. Die GIF-Bibliothek</h2>
+    <p>Ein GIF, das du machst oder hochlädst, kommt in die gemeinsame Bibliothek: Alle, die angemeldet sind, können es finden, mit einem Stern merken und in ihren Beiträgen und Nachrichten verwenden. Du kannst es jederzeit wieder löschen; Beiträge, in die es schon eingefügt wurde, behalten ihre eigene Kopie. Die Start-GIFs hat Pulse selbst gezeichnet. Ein GIF darf höchstens 3 MB groß sein.</p>
+
+    <h2>7. Nex, die KI</h2>
+    <p>Die Antworten von Nex schreibt ein KI-Dienst von Groq, Inc. (USA). Sie können falsch, unvollständig oder unpassend sein. Verlass dich bei wichtigen Dingen (Gesundheit, Recht, Geld, Sicherheit) nicht darauf und prüfe sie selbst. Gib sie nicht als menschliche Äußerung oder als geprüfte Auskunft aus und kennzeichne KI-Texte, wo es verlangt wird. Aus technischen Gründen ist die Zahl der Fragen pro Konto und Zeitspanne begrenzt.</p>
+
+    <h2>8. Verfügbarkeit und Haftung</h2>
+    <p>Pulse ist ein privates Projekt ohne Gewähr. Es kann ausfallen, sich ändern oder eingestellt werden. Wir übernehmen keine Haftung für Inhalte der Nutzerinnen und Nutzer, für Antworten der KI, ihre Folgen oder verlinkte Seiten. Unsere Haftung ist bei leichter Fahrlässigkeit ausgeschlossen, außer bei der Verletzung von Leben, Körper und Gesundheit und bei wesentlichen Vertragspflichten. Zwingende gesetzliche Rechte bleiben unberührt.</p>
+
+    <h2>9. Änderungen</h2>
     <p>Wir können diese Bedingungen ändern. Die aktuelle Fassung steht immer hier.</p>
 
-    <h2>6. Archiv-Angebote</h2>
-    <p>Unter <a href="/nex-ai-archiv">/nex-ai-archiv</a> gibt es noch die frühere, einfache Version: ein Chat, bei dem eine KI direkt auf deinem eigenen Gerät läuft, nicht auf unserem Server (ein größeres Modell, Qwen3 4B von Alibaba, für starke Grafikkarten, Gemma 3 von Google für normale Computer, eine kleinere Version von Gemma 3 für schwache). Gemma wird unter den Gemma-Nutzungsbedingungen von Google bereitgestellt (<a href="https://ai.google.dev/gemma/terms" target="_blank" rel="noopener noreferrer">ai.google.dev/gemma/terms</a>), einschließlich der dortigen Richtlinie zur unzulässigen Nutzung; Qwen3 steht unter der Apache-Lizenz 2.0 (<a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener noreferrer">apache.org/licenses/LICENSE-2.0</a>). Mit der Nutzung dort erkennst du die Lizenz des jeweiligen Modells an. Antworten können auch dort falsch, unvollständig oder unpassend sein. Der Chat benutzt die Open-Source-Programme Transformers.js (Apache-2.0) und ONNX Runtime Web (MIT); ihre Lizenztexte liegen unter <a href="/static/vendor/transformers/NOTICE.txt">/static/vendor/transformers/NOTICE.txt</a>.</p>
+    <h2>10. Archiv-Angebote</h2>
+    <p>Die früheren Startseiten dieser Adresse sind als Archiv noch erreichbar. Sie sind nicht für Suchmaschinen und nicht mehr verlinkt:</p>
+    <p>Unter <a href="/nex-agenten-archiv">/nex-agenten-archiv</a> liegt die Version von Nex Ai, bei der fünf KI-Durchgänge eine Frage beantworten, ohne Konto: vier schreiben je eine knappe Notiz, ein fünfter schreibt daraus die Antwort. Auch dort schreibt ein KI-Dienst von Groq, Inc. die Antworten, die falsch sein können.</p>
+    <p>Unter <a href="/nex-ai-archiv">/nex-ai-archiv</a> gibt es noch die einfache Version: ein Chat, bei dem eine KI direkt auf deinem eigenen Gerät läuft, nicht auf unserem Server (ein größeres Modell, Qwen3 4B von Alibaba, für starke Grafikkarten, Gemma 3 von Google für normale Computer, eine kleinere Version von Gemma 3 für schwache). Gemma wird unter den Gemma-Nutzungsbedingungen von Google bereitgestellt (<a href="https://ai.google.dev/gemma/terms" target="_blank" rel="noopener noreferrer">ai.google.dev/gemma/terms</a>), einschließlich der dortigen Richtlinie zur unzulässigen Nutzung; Qwen3 steht unter der Apache-Lizenz 2.0 (<a href="https://www.apache.org/licenses/LICENSE-2.0" target="_blank" rel="noopener noreferrer">apache.org/licenses/LICENSE-2.0</a>). Mit der Nutzung dort erkennst du die Lizenz des jeweiligen Modells an. Antworten können auch dort falsch, unvollständig oder unpassend sein. Der Chat benutzt die Open-Source-Programme Transformers.js (Apache-2.0) und ONNX Runtime Web (MIT); ihre Lizenztexte liegen unter <a href="/static/vendor/transformers/NOTICE.txt">/static/vendor/transformers/NOTICE.txt</a>.</p>
     <p>Unter <a href="/nstl-archiv">/nstl-archiv</a> liegt eine noch frühere Version namens „NSTL“: dort beantwortete kein Sprachmodell die Frage, sondern ein Schwarm aus bis zu 10 Millionen kleinen Programmen wählte den passendsten Wikipedia-Artikel aus und einigte sich dabei auf eine selbst erfundene, kurze Sprache. Die Wikipedia-Auszüge dort stehen unter CC BY-SA (wikipedia.org); verantwortlich für ihren Inhalt sind die Autorinnen und Autoren der Wikipedia.</p>
     <p>Unter <a href="/modelle-archiv">/modelle-archiv</a> liegt die noch frühere Liste von mehr als tausend frei herunterladbaren KI-Modellen. Wir hosten diese Modelle nicht; sie liegen bei Hugging Face, und für jedes gilt die Lizenz seiner Urheber (in der Liste nur ein Hinweis, verbindlich ist der Lizenztext des Modells).</p>
-    <p>Das Archiv-Angebot yipi:</p>
-    <p>Unter <a href="/yipi-archiv">/yipi-archiv</a> gibt es noch das frühere Netzwerk yipi mit Konten. Dort gelten sinngemäß: Wer ein Konto hat, ist für seine Yips verantwortlich, kann sie und das Konto jederzeit löschen („Einstellungen, Dein Konto“) und Inhalte anderer melden („Melden“). Ein Konto bei yipi gibt es ab 16 Jahren, jüngere brauchen die Erlaubnis ihrer Eltern. Ein vergessenes Passwort kann bei yipi nicht zurückgesetzt werden.</p>
+    <p>Weiter liegen dort der Mathe-Kurs „gomat“ (<a href="/gomat-archiv">/gomat-archiv</a>) und weitere frühere Angebote der Seite. Für sie gelten sinngemäß dieselben Regeln, ihre eigenen Hinweise stehen jeweils dort.</p>
 {%- else %}
     <h1>Datenschutz</h1>
-    <p class="lead">Nex Ai hat keine Konten und setzt keine Cookies, aber anders als vorher läuft die KI nicht mehr auf deinem Gerät: Deine Frage geht an unseren Server und von dort an einen KI-Dienst. Wir speichern sie trotzdem nicht. Stand: Oktober 2026.</p>
+    <p class="lead">Pulse speichert, was ein soziales Netzwerk braucht, und sonst nichts. Kein Tracking, keine Werbung, keine fremden Skripte. Stand: Oktober 2026.</p>
 
     <h2>Wer ist verantwortlich?</h2>
     <p>Der Betreiber, der im <a href="/impressum">Impressum</a> steht. Dort erreichst du ihn auch für Fragen zum Datenschutz.</p>
 
     <h2>Besuch der Seite</h2>
-    <p>Beim Aufruf verarbeitet der Hoster der Seite technisch notwendige Daten, die dein Browser sendet (zum Beispiel IP-Adresse, Zeitpunkt, aufgerufene Adresse), um die Seite auszuliefern und missbräuchliche Zugriffe zu erkennen. Die Seite läuft bei Railway (Railway Corp., USA); dabei können Daten in Länder außerhalb der EU übertragen werden. Rechtsgrundlage ist unser berechtigtes Interesse am sicheren Betrieb (Art. 6 Abs. 1 lit. f DSGVO). Wir selbst speichern nichts über dich: kein Konto, keine Anmeldung, kein Cookie.</p>
+    <p>Beim Aufruf verarbeitet der Hoster der Seite technisch notwendige Daten, die dein Browser sendet (zum Beispiel IP-Adresse, Zeitpunkt, aufgerufene Adresse), um die Seite auszuliefern und missbräuchliche Zugriffe zu erkennen. Die Seite läuft bei Railway (Railway Corp., USA); dabei können Daten in Länder außerhalb der EU übertragen werden. Rechtsgrundlage ist unser berechtigtes Interesse am sicheren Betrieb (Art. 6 Abs. 1 lit. f DSGVO). Ohne Konto speichern wir nichts über dich und setzen kein Cookie.</p>
 
-    <h2>Deine Frage und die Agenten</h2>
-    <p>Wenn du eine Frage stellst, sendet dein Browser sie an unseren Server, der sie in fünf kurzen Durchgängen an einen KI-Dienst von Groq, Inc. (USA) weitergibt und die Antworten zurückstreamt. Dabei verarbeiten wir die Frage und deine IP-Adresse kurzzeitig, speichern aber keines von beidem dauerhaft – nach der Antwort ist nichts mehr davon bei uns gespeichert, kein Verlauf, kein Konto. Groq verarbeitet die Frage auf eigenen Servern in den USA, um die Antworten zu erzeugen (siehe Groqs eigene Datenschutzhinweise); dabei können Daten in Länder außerhalb der EU übertragen werden. Rechtsgrundlage ist unser berechtigtes Interesse an einem funktionierenden, kostenlosen Angebot (Art. 6 Abs. 1 lit. f DSGVO).</p>
+    <h2>Dein Konto</h2>
+    <p>Wenn du ein Konto erstellst, speichern wir: Nutzernamen und Anzeigenamen, optional eine E-Mail-Adresse (nur für die Anmeldung), das Passwort nur als Prüfwert (nicht lesbar), freiwillige Profilangaben (Beschreibung, Ort, Webseite, Profil- und Titelbild), wann du zuletzt da warst, wem du folgst und wer dir folgt, wen du blockiert oder stummgeschaltet hast. Rechtsgrundlage ist die Erfüllung der Nutzung, die du mit dem Konto wünschst (Art. 6 Abs. 1 lit. b DSGVO).</p>
 
-    <h2>Schutz vor Missbrauch</h2>
-    <p>Damit niemand den KI-Dienst mit automatisierten Anfragen überlastet, zählen wir kurzzeitig, wie oft eine Adresse in den letzten Minuten gefragt hat (eine Zahl pro Adresse, die nach kurzer Zeit wieder vergessen wird, kein Profil). Wer das Limit überschreitet, bekommt eine Fehlermeldung statt einer Antwort.</p>
+    <h2>Beiträge, Fotos, GIFs und Nachrichten</h2>
+    <p>Wir speichern deine Beiträge, Antworten, Reposts, Zitate, Likes und Lesezeichen, deine hochgeladenen Fotos und GIFs sowie deine privaten Nachrichten (auch GIFs darin; die Nachrichten sind nicht Ende-zu-Ende-verschlüsselt, nur die beiden Beteiligten sehen sie). Beiträge, Fotos, GIFs und Profile sind öffentlich. Fotos werden vor dem Hochladen in deinem Browser neu gespeichert, wodurch Ort und Kameradaten entfallen; GIFs bleiben, wie sie sind. Videos nimmt Pulse nicht an. Ein GIF, das du in die Bibliothek stellst, sehen alle, die angemeldet sind; es wird mit deinem Konto verknüpft, damit du es löschen kannst. Likes, Reposts, Antworten, Erwähnungen und neue Follower zeigen wir dir als Benachrichtigung; Lesezeichen sieht nur, wer sie setzt, und Meldungen nur das Team.</p>
+
+    <h2>Nex</h2>
+    <p>Wenn du Nex etwas fragst oder dir einen Beitrag erklären lässt, sendet dein Browser die letzten Nachrichten des Gesprächs (und bei „Mit Nex erklären“ den Text des Beitrags) an unseren Server, der sie an einen KI-Dienst von Groq, Inc. (USA) weitergibt und die Antwort zurückstreamt. Wir speichern weder das Gespräch noch die Antwort; Groq verarbeitet sie auf eigenen Servern in den USA (siehe Groqs eigene Datenschutzhinweise), dabei können Daten in Länder außerhalb der EU übertragen werden. Rechtsgrundlage ist unser berechtigtes Interesse an einem funktionierenden, kostenlosen Angebot (Art. 6 Abs. 1 lit. f DSGVO). Das Gespräch selbst liegt nur in deinem Browser (siehe unten) und lässt sich dort jederzeit löschen.</p>
+
+    <h2>Cookie</h2>
+    <p>Nach der Anmeldung setzt Pulse ein Cookie (<code>yipi_session</code>, so heißt es technisch noch aus der Zeit, als die App yipi hieß). Es ist 30 Tage gültig, enthält nur eine signierte Kennung deines Kontos, ist technisch notwendig (§ 25 Abs. 2 TDDDG) und wird beim Abmelden entfernt. Ohne Anmeldung setzt Pulse kein Cookie.</p>
 
     <h2>Was in deinem Browser liegt</h2>
-    <p>Damit du deine früheren Chats in der Seitenleiste wiederfindest, speichert dein Browser sie auf deinem Gerät (localStorage, Schlüssel <code>regal.agents.chats</code>); sie verlassen dein Gerät nie und werden auch nicht an uns oder Groq zur Speicherung übergeben, nur jede einzelne Frage läuft zum Beantworten durch, wie oben beschrieben. Nach jeder Antwort wird außerdem ein kurzer Titel für den Chat erbeten (noch ein kleiner Groq-Durchgang, derselbe Mechanismus); dafür liest Groq die Fragen und Antworten dieses Chats noch einmal, ohne sie zu speichern. Du löschst einen Chat mit dem Papierkorb-Symbol oder alle mit „Alle Chats löschen“ (beides in der Seitenleiste), oder alles mit den Websitedaten deines Browsers.</p>
+    <p>Dein Browser speichert auf deinem Gerät: dein Erscheinungsbild und die Farbe (<code>yipi.theme</code>, <code>yipi.accent</code>), welche Liste du auf der Startseite zuletzt gesehen hast (<code>yipi.feed</code>), deine letzten Suchen (<code>yipi.recent</code>), dein Gespräch mit Nex (<code>yipi.nex</code>, nur für dein Konto), und nur für die Dauer des Tabs angefangene Texte (<code>yipi.draft</code>, sessionStorage). Das verlässt dein Gerät nicht und lässt sich mit den Websitedaten deines Browsers löschen; das Gespräch mit Nex auch mit dem Stift-Symbol auf der Nex-Seite.</p>
+
+    <h2>Schutz vor Missbrauch</h2>
+    <p>Damit niemand den Dienst überlastet, zählen wir kurzzeitig, wie oft eine Adresse oder ein Konto etwas versucht hat (anmelden, posten, ein GIF hochladen, Nex fragen): eine Zahl pro Adresse oder Konto, die nach kurzer Zeit wieder vergessen wird, kein Profil. Wer das Limit überschreitet, bekommt eine Fehlermeldung.</p>
 
     <h2>Links</h2>
-    <p>Die Seite verlinkt Seiten Dritter (im Archiv-Angebot auch Hugging Face, Google, die Wikipedia, GitHub, lmstudio.ai, ollama.com). Für deren Datenschutz sind wir nicht verantwortlich.</p>
+    <p>In Beiträgen können Links zu Seiten Dritter stehen; sie öffnen in einem neuen Tab und geben deine Seite nicht weiter. Für deren Datenschutz sind wir nicht verantwortlich.</p>
 
     <h2>Kein Tracking, keine Weitergabe</h2>
-    <p>Nex Ai nutzt keine Analyse- und Werbedienste, keine fremden Schriften und keine fremden Skripte (die Programme der Seite liegen auf unserem eigenen Server). Wir geben keine Daten an Dritte weiter, außer der Weitergabe deiner Frage an Groq zur Beantwortung (oben beschrieben) und wenn wir gesetzlich dazu verpflichtet sind.</p>
+    <p>Pulse nutzt keine Analyse- und Werbedienste, keine fremden Schriften und keine fremden Skripte (die Programme der Seite liegen auf unserem eigenen Server). Wir geben keine Daten an Dritte weiter, außer der Weitergabe deiner Fragen an Groq zur Beantwortung durch Nex (oben beschrieben) und wenn wir gesetzlich dazu verpflichtet sind.</p>
 
-    <h2>Archiv: Nex Ai, die einfache Version (/nex-ai-archiv)</h2>
-    <p>Dort läuft die KI (je nach deinem Gerät Qwen3 4B, Gemma 3 oder die kleine Version von Gemma 3) <strong>auf deinem Gerät</strong>, in deinem Browser, in einem Durchgang pro Frage – nicht auf unserem Server. Was du dort schreibst und was die KI antwortet, wird nicht an uns und nicht an Dritte gesendet. Das Programm, das das Modell ausführt (Transformers.js und ONNX Runtime Web), liefern wir selbst von unserem Server aus. Das Modell lädt dein Browser einmal direkt von Hugging Face (huggingface.co, hf.co); dabei verarbeitet Hugging Face zum Beispiel deine IP-Adresse (siehe dessen Datenschutzhinweise). Damit du deine früheren Chats dort wiederfindest, speichert dein Browser sie auf deinem Gerät (localStorage, Schlüssel <code>regal.chats</code>); sie verlassen dein Gerät nie. Das geladene Modell bleibt in Teilen im Cache-Speicher deines Browsers (Cache Storage, Name <code>transformers-cache</code>). Damit die Seite dort die beste KI für dein Gerät wählt, misst sie beim Öffnen kurz die Speichergeschwindigkeit deiner Grafikkarte; das Ergebnis verlässt dein Gerät nicht. Hat die größere Version dort nicht geladen, merkt sich dein Browser das zwei Wochen lang (localStorage, Schlüssel <code>regal.skip</code>). Du löschst einen Chat mit dem Papierkorb-Symbol, alle mit „Alle Chats löschen“, das Modell mit „Gespeicherte KI löschen“.</p>
-
-    <h2>Archiv: NSTL (/nstl-archiv)</h2>
-    <p>Dort stellst du eine Frage direkt an die Wikipedia (de.wikipedia.org, en.wikipedia.org; dabei verarbeitet die Wikimedia Foundation zum Beispiel deine IP-Adresse), nicht an eine KI. Ein Schwarm aus Programmen, keine Sprachmodelle, wählt danach in deinem Browser einen Wikipedia-Auszug aus. Auch dort wird nichts in deinem Browser gespeichert.</p>
-
-    <h2>Die frühere Modell-Liste (/modelle-archiv)</h2>
-    <p>Suchen und Filtern passieren dort in deinem Browser; was du eingibst, wird nicht an uns gesendet. Wenn du Modelle mit dem Herz merkst, speichert dein Browser deren Namen auf deinem Gerät (localStorage, Schlüssel <code>regal.fav</code>). Wenn du dort ein Modell herunterlädst, ruft dein Browser die Datei direkt bei Hugging Face ab; wir sehen davon nichts.</p>
-
-    <h2>Das Archiv-Angebot yipi</h2>
-    <p>Unter <a href="/yipi-archiv">/yipi-archiv</a> gibt es noch das frühere soziale Netzwerk yipi. Es hat Konten und speichert, was dafür nötig ist: Nutzername und Anzeigename, optional eine E-Mail-Adresse (nur für die Anmeldung), das Passwort nur als Prüfwert, freiwillige Profilangaben, Yips, Antworten, Bilder, Likes, Lesezeichen und Nachrichten (nicht Ende-zu-Ende-verschlüsselt). Yips und Profile sind öffentlich. Nach der Anmeldung setzt yipi ein Cookie (<code>yipi_session</code>), das 30 Tage gültig ist (technisch notwendig, § 25 Abs. 2 TDDDG) und beim Abmelden entfernt wird. Im Browser liegen nur Einstellungen (<code>yipi.theme</code>, <code>yipi.feed</code>, <code>yipi.recent</code>). Unter „Einstellungen, Dein Konto“ kannst du dein Konto samt allen Inhalten sofort und endgültig löschen.</p>
+    <h2>Archiv-Angebote</h2>
+    <p><strong>Nex Ai mit fünf Agenten (/nex-agenten-archiv):</strong> Deine Frage geht an unseren Server und in fünf kurzen Durchgängen an Groq; wir speichern sie nicht. Frühere Chats dort liegen nur in deinem Browser (localStorage, Schlüssel <code>regal.agents.chats</code>), ein kurzer Titel pro Chat wird mit einem weiteren kleinen Groq-Durchgang erbeten.</p>
+    <p><strong>Nex Ai, die einfache Version (/nex-ai-archiv):</strong> Dort läuft die KI (je nach deinem Gerät Qwen3 4B, Gemma 3 oder die kleine Version von Gemma 3) <strong>auf deinem Gerät</strong>, in deinem Browser, in einem Durchgang pro Frage – nicht auf unserem Server. Was du dort schreibst und was die KI antwortet, wird nicht an uns und nicht an Dritte gesendet. Das Programm, das das Modell ausführt (Transformers.js und ONNX Runtime Web), liefern wir selbst von unserem Server aus. Das Modell lädt dein Browser einmal direkt von Hugging Face (huggingface.co, hf.co); dabei verarbeitet Hugging Face zum Beispiel deine IP-Adresse (siehe dessen Datenschutzhinweise). Damit du deine früheren Chats dort wiederfindest, speichert dein Browser sie auf deinem Gerät (localStorage, Schlüssel <code>regal.chats</code>); sie verlassen dein Gerät nie. Das geladene Modell bleibt in Teilen im Cache-Speicher deines Browsers (Cache Storage, Name <code>transformers-cache</code>). Damit die Seite dort die beste KI für dein Gerät wählt, misst sie beim Öffnen kurz die Speichergeschwindigkeit deiner Grafikkarte; das Ergebnis verlässt dein Gerät nicht. Hat die größere Version dort nicht geladen, merkt sich dein Browser das zwei Wochen lang (localStorage, Schlüssel <code>regal.skip</code>). Du löschst einen Chat mit dem Papierkorb-Symbol, alle mit „Alle Chats löschen“, das Modell mit „Gespeicherte KI löschen“.</p>
+    <p><strong>NSTL (/nstl-archiv):</strong> Dort stellst du eine Frage direkt an die Wikipedia (de.wikipedia.org, en.wikipedia.org; dabei verarbeitet die Wikimedia Foundation zum Beispiel deine IP-Adresse), nicht an eine KI. Ein Schwarm aus Programmen, keine Sprachmodelle, wählt danach in deinem Browser einen Wikipedia-Auszug aus. Auch dort wird nichts in deinem Browser gespeichert.</p>
+    <p><strong>Die frühere Modell-Liste (/modelle-archiv):</strong> Suchen und Filtern passieren dort in deinem Browser; was du eingibst, wird nicht an uns gesendet. Wenn du Modelle mit dem Herz merkst, speichert dein Browser deren Namen auf deinem Gerät (localStorage, Schlüssel <code>regal.fav</code>). Wenn du dort ein Modell herunterlädst, ruft dein Browser die Datei direkt bei Hugging Face ab; wir sehen davon nichts.</p>
+    <p>Die Nex-Ai-Archive und der NSTL-Archiv-Bereich haben keine Konten und setzen keine Cookies: dort gibt es keine Cookies, nur die genannten Einträge in deinem Browser.</p>
 
     <h2>Löschen</h2>
-    <p>Bei Nex Ai speichern wir nichts über dich, das wir löschen könnten. Im Archiv-Angebot Nex Ai löschst du die geladene KI und die Merkliste der Modell-Liste in deinem Browser. Bei yipi löschst du dein Konto selbst.</p>
+    <p>Unter „Einstellungen, Dein Konto“ kannst du dein Konto samt Profil, Beiträgen, Fotos, GIFs, Nachrichten und Likes sofort und endgültig löschen. Einzelne Beiträge und GIFs löschst du über ihr Menü. Löschen im Browser: siehe oben.</p>
 
     <h2>Deine Rechte</h2>
     <p>Du hast das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung, Datenübertragbarkeit und Widerspruch sowie darauf, eine Einwilligung jederzeit zu widerrufen. Du kannst dich außerdem bei einer Datenschutz-Aufsichtsbehörde beschweren. Schreib dafür an die Adresse im <a href="/impressum">Impressum</a>.</p>
 {%- endif %}
   </main>
-  <footer class="legal-links"><a href="/">Zurück zu Nex Ai</a><a href="/nutzungsbedingungen">Nutzungsbedingungen</a><a href="/datenschutz">Datenschutz</a><a href="/impressum">Impressum</a></footer>
+  <footer class="legal-links"><a href="/">Zurück zu Pulse</a><a href="/nutzungsbedingungen">Nutzungsbedingungen</a><a href="/datenschutz">Datenschutz</a><a href="/impressum">Impressum</a></footer>
 </div>
 </body>
 </html>

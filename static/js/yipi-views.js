@@ -1,6 +1,6 @@
-/* yipi views, part 1: the pages that show Yips -- home, explore, search, notifications, bookmarks, profiles, a single Yip, and the
-   lists of followers. Each view is a function (route, ctx) that answers at once with {element, title, ...} and fills itself when
-   the data arrives. `keep: true` lets the router keep the page (and its scroll position) when you go on to a Yip and come back. */
+/* Pulse views, part 1 (the file keeps the name yipi-views.js): the pages that show posts -- home, explore, search, notifications,
+   bookmarks, profiles, a single post, and the lists of followers. Each view is a function (route, ctx) that answers at once with {element, title, ...} and fills itself when
+   the data arrives. `keep: true` lets the router keep the page (and its scroll position) when you go on to a post and come back. */
 (function () {
   "use strict";
 
@@ -80,8 +80,8 @@
   function welcomeCard() {
     return h("section", { class: "hero" },
       h("span", { class: "hero-logo" }, window.YipiIcons.logo()),
-      h("h2", {}, "Sag, was dich bewegt."),
-      h("p", {}, "Auf yipi teilst du kurze Yips, antwortest, reposts und folgst Leuten, die dich interessieren. Ohne Werbung und ohne Tracking."),
+      h("h2", {}, "Was gerade passiert."),
+      h("p", {}, "Auf Pulse teilst du kurze Beiträge, Fotos und GIFs, antwortest, reposts und folgst Leuten, die dich interessieren. Und Nex, die KI, hilft dir weiter. Ohne Werbung und ohne Tracking."),
       h("div", { class: "hero-actions" },
         link("/i/signup", { class: "btn primary" }, "Konto erstellen"),
         link("/i/login", { class: "btn ghost" }, "Anmelden")));
@@ -109,7 +109,7 @@
     const el = h("div", { class: "view home-view" }, bar, pill);
 
     function drawTabs() {
-      if (!signedIn) { fill(tabBox, h("div", { class: "tabs single" }, h("span", { class: "tab on" }, h("span", {}, "Neueste Yips")))); return; }
+      if (!signedIn) { fill(tabBox, h("div", { class: "tabs single" }, h("span", { class: "tab on" }, h("span", {}, "Neueste Beiträge")))); return; }
       fill(tabBox, tabs([["foryou", "Für dich"], ["following", "Folge ich"]], feed, (id) => {
         if (id === feed) { feedPager.reload(); window.scrollTo(0, 0); return; }
         feed = id;
@@ -128,8 +128,8 @@
         render: (item) => Y.postCard(item),
         first: (reply) => { firstCursor = reply.items.length ? Math.max(...reply.items.map((item) => item.cursor || 0)) : 0; },
         empty: feed === "following"
-          ? emptyState("Hier ist noch nichts los", "Folge Leuten, um ihre Yips hier zu sehen.", link("/explore", { class: "btn primary" }, "Leute entdecken"))
-          : emptyState("Noch keine Yips", signedIn ? "Schreib den ersten." : "Erstelle ein Konto und schreib den ersten.", null),
+          ? emptyState("Hier ist noch nichts los", "Folge Leuten, um ihre Beiträge hier zu sehen.", link("/explore", { class: "btn primary" }, "Leute entdecken"))
+          : emptyState("Noch keine Beiträge", signedIn ? "Schreib den ersten." : "Erstelle ein Konto und schreib den ersten.", null),
       });
       fill(feedBox, feedPager.element);
     }
@@ -138,7 +138,7 @@
       if (!visible || document.hidden || !firstCursor) return;
       const reply = await Api.get(qs("/timeline/new", { feed, after: firstCursor }));
       if (!reply.ok || !visible || !reply.data.count) return;
-      pill.textContent = reply.data.count === 1 ? "1 neuer Yip" : `${reply.data.count} neue Yips`;
+      pill.textContent = reply.data.count === 1 ? "1 neuer Beitrag" : `${reply.data.count} neue Beiträge`;
       pill.hidden = false;
     }
 
@@ -147,7 +147,7 @@
       put(el, Y.composer({ draftKey: "home", onPosted: (post) => {
         firstCursor = Math.max(firstCursor, post.cursor || 0);
         feedPager.prepend(Y.postCard(post));
-        Y.toast("Dein Yip wurde gesendet.", { label: "Anzeigen", run: () => Y.navigate(Y.postPath(post)) });
+        Y.toast("Dein Beitrag wurde gesendet.", { label: "Anzeigen", run: () => Y.navigate(Y.postPath(post)) });
       } }));
     } else {
       put(el, welcomeCard());
@@ -157,7 +157,7 @@
     timer = setInterval(check, 30000);
 
     return {
-      element: el, title: "Startseite", keep: true,
+      element: el, title: "Pulse", keep: true,
       onShow() { visible = true; check(); },
       onHide() { visible = false; },
       refresh() { feedPager.reload(); },
@@ -174,11 +174,11 @@
   views.explore = function explore(route, ctx) {
     const trendBox = h("section", { class: "card" }, h("h2", {}, "Im Trend"), Y.skeleton(2));
     const peopleBox = h("section", { class: "card" }, h("h2", {}, "Wem folgen"), Y.skeleton(2));
-    const feedPager = pager({ load: listLoader((cursor) => qs("/timeline", { feed: "foryou", cursor })), render: (item) => Y.postCard(item), empty: emptyState("Noch keine Yips", Y.me ? "Schreib den ersten." : "Erstelle ein Konto und schreib den ersten.") });
+    const feedPager = pager({ load: listLoader((cursor) => qs("/timeline", { feed: "foryou", cursor })), render: (item) => Y.postCard(item), empty: emptyState("Noch keine Beiträge", Y.me ? "Schreib den ersten." : "Erstelle ein Konto und schreib den ersten.") });
     const el = h("div", { class: "view" },
       topbar({ title: "Entdecken", className: "search-bar", extra: h("div", { class: "topbar-search" }, searchForm("")) }),
       h("div", { class: "explore-cards" }, trendBox, peopleBox),
-      h("h2", { class: "section-title" }, "Neueste Yips"), feedPager.element);
+      h("h2", { class: "section-title" }, "Neueste Beiträge"), feedPager.element);
 
     (async () => {
       const [trends, people] = await Promise.all([Api.get("/trends"), Api.get("/suggestions")]);
@@ -186,7 +186,7 @@
         fill(trendBox, h("h2", {}, "Im Trend"), trends.data.trends.length
           ? h("ol", { class: "trend-list" }, trends.data.trends.map((trend, index) => h("li", {}, link(`/search?q=${encodeURIComponent(`#${trend.tag}`)}`, { class: "trend" },
               h("span", { class: "t-kicker" }, `${index + 1} · Trend der letzten 24 Std.`), h("b", {}, `#${trend.tag}`),
-              h("span", { class: "t-count" }, `${Core.formatCount(trend.posts)} ${trend.posts === 1 ? "Yip" : "Yips"}`)))))
+              h("span", { class: "t-count" }, `${Core.formatCount(trend.posts)} ${trend.posts === 1 ? "Beitrag" : "Beiträge"}`)))))
           : h("p", { class: "muted" }, "Gerade gibt es keine Trends. Probier einen #Hashtag aus."));
       } else fill(trendBox, h("h2", {}, "Im Trend"), h("p", { class: "muted" }, Api.message(trends)));
       if (people.ok && people.data.users.length) fill(peopleBox, h("h2", {}, "Wem folgen"), people.data.users.map((user) => Y.userRow(user, { bio: false })));
@@ -202,13 +202,13 @@
     const type = route.type;
     const form = searchForm(query, { autofocus: !query, type });
     const body = h("div", { class: "search-body" });
-    const switcher = tabs([["posts", "Yips"], ["people", "Personen"]], type, (id) => Y.navigate(Core.buildPath({ name: "search", q: query, type: id }), { replace: true }), "Suchergebnisse");
+    const switcher = tabs([["posts", "Beiträge"], ["people", "Personen"]], type, (id) => Y.navigate(Core.buildPath({ name: "search", q: query, type: id }), { replace: true }), "Suchergebnisse");
     const el = h("div", { class: "view" }, topbar({ back: true, title: "Suche", className: "search-bar", extra: h("div", {}, h("div", { class: "topbar-search" }, form), query ? switcher : null) }), body);
     let listPager = null;
 
     function recent() {
       const entries = Y.readJson("yipi.recent", []);
-      if (!entries.length) { fill(body, emptyState("Suche nach Yips, Leuten und #Hashtags", "Gib mindestens zwei Zeichen ein.")); return; }
+      if (!entries.length) { fill(body, emptyState("Suche nach Beiträgen, Leuten und #Hashtags", "Gib mindestens zwei Zeichen ein.")); return; }
       fill(body, h("div", { class: "recent" },
         h("div", { class: "recent-head" }, h("h2", {}, "Zuletzt gesucht"), h("button", { class: "btn ghost small", type: "button", onclick: () => { Y.writeJson("yipi.recent", []); recent(); } }, "Löschen")),
         entries.map((entry) => link(Core.buildPath({ name: "search", q: entry }), { class: "recent-item" }, icon("search"), h("span", {}, entry)))));
@@ -223,7 +223,7 @@
     if (type === "people") {
       listPager = pager({ load: listLoader(() => qs("/search", { q: query, type: "people" }), "users"), render: (user) => Y.userRow(user), empty: emptyState(`Keine Personen für „${query}“`, "Probier einen anderen Namen.") });
     } else {
-      listPager = pager({ load: listLoader((cursor) => qs("/search", { q: query, type: "posts", cursor })), render: (item) => Y.postCard(item), empty: emptyState(`Keine Yips für „${query}“`, "Probier andere Wörter oder einen #Hashtag.") });
+      listPager = pager({ load: listLoader((cursor) => qs("/search", { q: query, type: "posts", cursor })), render: (item) => Y.postCard(item), empty: emptyState(`Keine Beiträge für „${query}“`, "Probier andere Wörter oder einen #Hashtag.") });
     }
     fill(body, listPager.element);
     return { element: el, title: `${query} – Suche`, keep: true, destroy() { listPager.destroy(); } };
@@ -239,17 +239,17 @@
     const main = h("div", { class: "note-main" });
     const faces = h("div", { class: "note-faces" }, group.actors.slice(0, 7).map((actor) => link(`/${actor.handle}`, { "aria-label": actor.name }, avatar(actor, "sm"))));
     if (group.kind === "reply" || group.kind === "mention" || group.kind === "quote") {
-      const verb = { reply: "hat dir geantwortet", mention: "hat dich erwähnt", quote: "hat deinen Yip zitiert" }[group.kind];
+      const verb = { reply: "hat dir geantwortet", mention: "hat dich erwähnt", quote: "hat deinen Beitrag zitiert" }[group.kind];
       put(main, h("p", { class: "note-text" }, peopleLine(group.actors), ` ${verb}`), Y.postCard(group.post, { noReplyLine: true }));
       row.classList.add("with-post");
     } else {
       const text = {
-        like: group.actors.length === 1 ? " gefällt dein Yip" : " gefällt dein Yip",
-        repost: group.actors.length === 1 ? " hat deinen Yip repostet" : " haben deinen Yip repostet",
+        like: group.actors.length === 1 ? " gefällt dein Beitrag" : " gefällt dein Beitrag",
+        repost: group.actors.length === 1 ? " hat deinen Beitrag repostet" : " haben deinen Beitrag repostet",
         follow: group.actors.length === 1 ? " folgt dir jetzt" : " folgen dir jetzt",
       }[group.kind] || "";
       put(main, faces, h("p", { class: "note-text" }, peopleLine(group.actors), text, h("span", { class: "dot" }, " · "), Y.timeEl(group.createdAt)));
-      if (group.post) put(main, link(Y.postPath(group.post), { class: "note-snippet" }, group.post.text ? snippet(group.post.text) : "Yip mit Bild"));
+      if (group.post) put(main, link(Y.postPath(group.post), { class: "note-snippet" }, group.post.text ? snippet(group.post.text) : group.post.media && group.post.media[0] && group.post.media[0].gif ? "GIF" : "Beitrag mit Bild"));
       if (group.kind === "follow" && group.actors.length === 1 && group.actors[0].bio) put(main, h("p", { class: "note-snippet plain" }, snippet(group.actors[0].bio, 100)));
     }
     put(row, side, main);
@@ -258,9 +258,26 @@
 
   views.notifications = function notifications(route, ctx) {
     let marked = false;
-    const feedPager = pager({
+    let only = "all";                                          // "all" or "mentions"
+    const tabBox = h("div", { class: "note-tabs" });
+    const listBox = h("div", { class: "note-list" });
+    let feedPager = null;
+    function mount() {
+      feedPager?.destroy();
+      feedPager = makePager();
+      fill(listBox, feedPager.element);
+    }
+    function drawTabs() {
+      fill(tabBox, tabs([["all", "Alle"], ["mentions", "Erwähnungen"]], only, (id) => {
+        if (id === only) { feedPager.reload(); window.scrollTo(0, 0); return; }
+        only = id;
+        drawTabs();
+        mount();
+      }, "Benachrichtigungen"));
+    }
+    const makePager = () => pager({
       load: async (cursor) => {
-        const reply = await listLoader((c) => qs("/notifications", { cursor: c }))(cursor);
+        const reply = await listLoader((c) => qs("/notifications", { cursor: c, filter: only === "mentions" ? "mentions" : "" }))(cursor);
         if (reply.ok) reply.items = Core.groupNotifications(reply.items);
         return reply;
       },
@@ -274,9 +291,12 @@
           Y.updateBadges();
         }
       },
-      empty: emptyState("Noch nichts passiert", "Wenn dir jemand folgt, antwortet oder deine Yips mag, siehst du es hier."),
+      empty: only === "mentions" ? emptyState("Keine Erwähnungen", "Wenn dich jemand erwähnt, dir antwortet oder dich zitiert, siehst du es hier.")
+        : emptyState("Noch nichts passiert", "Wenn dir jemand folgt, antwortet oder deine Beiträge mag, siehst du es hier."),
     });
-    const el = h("div", { class: "view" }, topbar({ title: "Benachrichtigungen" }), feedPager.element);
+    drawTabs();
+    mount();
+    const el = h("div", { class: "view" }, topbar({ title: "Benachrichtigungen", extra: tabBox }), listBox);
     return { element: el, title: "Benachrichtigungen", refresh() { marked = false; feedPager.reload(); }, destroy() { feedPager.destroy(); } };
   };
 
@@ -285,7 +305,7 @@
     const feedPager = pager({
       load: listLoader((cursor) => qs("/bookmarks", { cursor })),
       render: (item) => Y.postCard(item, { onBookmark: (on, card) => { if (!on) card.classList.add("faded"); } }),
-      empty: emptyState("Speichere Yips für später", "Tippe bei einem Yip auf das Lesezeichen, dann findest du ihn hier wieder."),
+      empty: emptyState("Speichere Beiträge für später", "Tippe bei einem Beitrag auf das Lesezeichen, dann findest du ihn hier wieder."),
     });
     const el = h("div", { class: "view" }, topbar({ title: "Lesezeichen", sub: Y.me ? `@${Y.me.handle}` : "" }), feedPager.element);
     return { element: el, title: "Lesezeichen", keep: true, refresh() { feedPager.reload(); }, destroy() { feedPager.destroy(); } };
@@ -325,7 +345,7 @@
       const file = picker.files[0];
       picker.value = "";
       if (!file || !picking) return;
-      if (!/^image\/(jpeg|png|gif|webp)$/.test(file.type)) { toast("Das ist kein Bild, das yipi kennt (JPEG, PNG, GIF oder WebP)."); return; }
+      if (!/^image\/(jpeg|png|gif|webp)$/.test(file.type)) { toast("Das ist kein Foto, das Pulse kennt (JPEG, PNG, GIF oder WebP)."); return; }
       try {
         const blob = await Y.prepareImage(file, { crop: picking === "avatar" ? { width: 400, height: 400 } : { width: 1500, height: 500 } });
         const old = draft[picking];
@@ -387,15 +407,15 @@
     function mountList() {
       listPager?.destroy();
       if (user.blockedByMe || user.blockedMe) { fill(listBox); return; }
-      const labels = { posts: ["Noch keine Yips", user.isMe ? "Wenn du etwas yippst, erscheint es hier." : `@${user.handle} hat noch nichts geyippt.`],
-        replies: ["Noch keine Antworten", "Antworten erscheinen hier."], media: ["Noch keine Bilder", "Yips mit Bildern erscheinen hier."], likes: ["Noch nichts gemocht", "Yips, die dir gefallen, erscheinen hier. Nur du siehst diese Liste."] };
+      const labels = { posts: ["Noch keine Beiträge", user.isMe ? "Wenn du etwas postest, erscheint es hier." : `@${user.handle} hat noch nichts gepostet.`],
+        replies: ["Noch keine Antworten", "Antworten erscheinen hier."], media: ["Noch keine Bilder", "Beiträge mit Bildern erscheinen hier."], likes: ["Noch nichts gemocht", "Beiträge, die dir gefallen, erscheinen hier. Nur du siehst diese Liste."] };
       listPager = pager({ load: listLoader((cursor) => qs(`/users/${handle}/posts`, { tab, cursor })), render: (item) => Y.postCard(item), empty: emptyState(...labels[tab]) });
       fill(listBox, listPager.element);
     }
 
     function drawTabs() {
       if (user.blockedByMe || user.blockedMe) { fill(tabBox); return; }
-      const entries = [["posts", "Yips"], ["replies", "Antworten"], ["media", "Medien"]];
+      const entries = [["posts", "Beiträge"], ["replies", "Antworten"], ["media", "Medien"]];
       if (user.isMe) entries.push(["likes", "Gefällt mir"]);
       fill(tabBox, tabs(entries, tab, (id) => { tab = id; drawTabs(); mountList(); }, "Profil"));
     }
@@ -405,7 +425,7 @@
       banner.style.setProperty("--hue", Core.avatarHue(user.handle));
       const actions = h("div", { class: "ph-actions" });
       if (user.isMe) {
-        put(actions, h("button", { class: "btn ghost", type: "button", onclick: () => editProfile(user, (me) => { Object.assign(user, { name: me.name, bio: me.bio, location: me.location, website: me.website, avatar: me.avatar, banner: me.banner }); drawHead(); bar.set(user.name, `${Core.formatCount(user.posts)} Yips`); result.title = `${user.name} (@${user.handle})`; ctx.setTitle(result.title); }) }, "Profil bearbeiten"));
+        put(actions, h("button", { class: "btn ghost", type: "button", onclick: () => editProfile(user, (me) => { Object.assign(user, { name: me.name, bio: me.bio, location: me.location, website: me.website, avatar: me.avatar, banner: me.banner }); drawHead(); bar.set(user.name, `${Core.formatCount(user.posts)} Beiträge`); result.title = `${user.name} (@${user.handle})`; ctx.setTitle(result.title); }) }, "Profil bearbeiten"));
       } else {
         const more = h("button", { class: "icon-btn outlined", type: "button", "aria-label": "Mehr", "aria-haspopup": "menu" }, icon("more"));
         more.addEventListener("click", () => menu(more, [
@@ -415,7 +435,7 @@
             if (reply.ok) { Object.assign(user, reply.data.user); drawHead(); toast(user.mutedByMe ? `@${user.handle} ist stummgeschaltet.` : "Stummschaltung aufgehoben."); } else toast(Api.message(reply));
           } } : null,
           Y.me ? { label: user.blockedByMe ? `@${user.handle} nicht mehr blockieren` : `@${user.handle} blockieren`, icon: "block", danger: !user.blockedByMe, run: async () => {
-            if (!user.blockedByMe && !(await confirmBox({ title: `@${user.handle} blockieren?`, text: "Ihr seht die Yips des anderen nicht mehr und könnt euch nicht mehr folgen oder schreiben.", yes: "Blockieren", danger: true }))) return;
+            if (!user.blockedByMe && !(await confirmBox({ title: `@${user.handle} blockieren?`, text: "Ihr seht die Beiträge des anderen nicht mehr und könnt euch nicht mehr folgen oder schreiben.", yes: "Blockieren", danger: true }))) return;
             const reply = user.blockedByMe ? await Api.del(`/users/${user.handle}/block`) : await Api.post(`/users/${user.handle}/block`);
             if (reply.ok) { Object.assign(user, reply.data.user); relationChanged(); toast(user.blockedByMe ? `@${user.handle} ist blockiert.` : "Blockierung aufgehoben."); } else toast(Api.message(reply));
           } } : null,
@@ -438,8 +458,8 @@
           h("div", { class: "ph-counts" },
             link(`/${user.handle}/following`, {}, h("b", {}, Core.formatCount(user.following)), " Folge ich"),
             link(`/${user.handle}/followers`, {}, h("b", {}, Core.formatCount(user.followers)), user.followers === 1 ? " Follower" : " Follower")),
-          user.blockedMe ? h("p", { class: "notice" }, `@${user.handle} hat dich blockiert. Du kannst die Yips nicht sehen und @${user.handle} nicht folgen.`) : null,
-          user.blockedByMe ? h("p", { class: "notice" }, `Du hast @${user.handle} blockiert. Du siehst die Yips nicht.`) : null));
+          user.blockedMe ? h("p", { class: "notice" }, `@${user.handle} hat dich blockiert. Du kannst die Beiträge nicht sehen und @${user.handle} nicht folgen.`) : null,
+          user.blockedByMe ? h("p", { class: "notice" }, `Du hast @${user.handle} blockiert. Du siehst die Beiträge nicht.`) : null));
     }
 
     (async () => {
@@ -448,32 +468,32 @@
       user = reply.data.user;
       if (user.suspended && !user.createdAt) {
         bar.set(`@${user.handle}`);
-        fill(head, emptyState("Dieses Konto ist gesperrt", `@${user.handle} hat gegen die Regeln von yipi verstoßen.`));
+        fill(head, emptyState("Dieses Konto ist gesperrt", `@${user.handle} hat gegen die Regeln von Pulse verstoßen.`));
         return;
       }
       result.title = `${user.name} (@${user.handle})`;
       ctx.setTitle(result.title);
-      bar.set(user.name, `${Core.formatCount(user.posts)} ${user.posts === 1 ? "Yip" : "Yips"}`);
+      bar.set(user.name, `${Core.formatCount(user.posts)} ${user.posts === 1 ? "Beitrag" : "Beiträge"}`);
       drawHead();
       shownState = relationState();
       drawTabs();
       mountList();
     })();
 
-    result.onPosted = (post, info) => { if (user && user.isMe && tab === "posts" && !info.replyTo) { user.posts += 1; listPager.prepend(Y.postCard(post)); bar.set(user.name, `${Core.formatCount(user.posts)} Yips`); } };
+    result.onPosted = (post, info) => { if (user && user.isMe && tab === "posts" && !info.replyTo) { user.posts += 1; listPager.prepend(Y.postCard(post)); bar.set(user.name, `${Core.formatCount(user.posts)} Beiträge`); } };
     return result;
   };
 
-  // ---------------------------------------------------------------------------------------- single Yip
+  // ---------------------------------------------------------------------------------------- single post
   views.post = function postView(route, ctx) {
     const above = h("div", { class: "thread-above" });
     const main = h("div", { class: "thread-main" }, Y.skeleton(1));
     const replyBox = h("div", { class: "reply-box" });
     const repliesBox = h("div", { class: "replies" });
-    const el = h("div", { class: "view" }, topbar({ back: true, title: "Yip" }), above, main, replyBox, repliesBox);
+    const el = h("div", { class: "view" }, topbar({ back: true, title: "Beitrag" }), above, main, replyBox, repliesBox);
     let replies = null;
     let detail = null;
-    const result = { element: el, title: "Yip", keep: true, destroy() { replies?.destroy(); } };
+    const result = { element: el, title: "Beitrag", keep: true, destroy() { replies?.destroy(); } };
 
     async function load() {
       const reply = await Api.get(`/posts/${route.id}`);
@@ -484,7 +504,7 @@
       detail = Y.postCard(item, { detail: true, onDelete: () => Y.back(Y.HOME), onReply: (post) => { replies.prepend(Y.postCard(post, { noReplyLine: true })); } });
       fill(main, detail);
       if (item.user) {
-        result.title = `${item.user.name} auf yipi: „${snippet(item.text || "Yip mit Bild", 60)}“`;
+        result.title = `${item.user.name} auf Pulse: „${snippet(item.text || (item.media && item.media[0] && item.media[0].gif ? "GIF" : "Beitrag mit Bild"), 60)}“`;
         ctx.setTitle(result.title);
       }
       if (!item.deleted) {

@@ -123,7 +123,8 @@ test("the full time and the join date", () => {
 // ----------------------------------------------------------------------------------------- addresses
 test("every address of the page is read and built the same way", () => {
   const cases = [
-    ["/yipi-archiv", "", { name: "home" }], ["/", "", { name: "notfound" }], ["/explore", "", { name: "explore" }], ["/notifications", "", { name: "notifications" }], ["/messages", "", { name: "messages" }],
+    ["/", "", { name: "home" }], ["/yipi-archiv", "", { name: "notfound" }], ["/i/nex", "", { name: "nex", q: "", post: 0 }], ["/i/nex", "?post=42", { name: "nex", q: "", post: 42 }],
+    ["/i/nex", "?q=Hallo%20Nex", { name: "nex", q: "Hallo Nex", post: 0 }], ["/explore", "", { name: "explore" }], ["/notifications", "", { name: "notifications" }], ["/messages", "", { name: "messages" }],
     ["/messages/mia", "", { name: "thread", handle: "mia" }], ["/bookmarks", "", { name: "bookmarks" }], ["/settings", "", { name: "settings", section: "" }],
     ["/settings/account", "", { name: "settings", section: "account" }], ["/moderation", "", { name: "moderation" }], ["/i/login", "", { name: "login" }], ["/i/signup", "", { name: "signup" }],
     ["/search", "?q=hallo%20welt", { name: "search", q: "hallo welt", type: "posts" }], ["/search", "?q=%23tag&type=people", { name: "search", q: "#tag", type: "people" }],
@@ -138,8 +139,13 @@ test("every address of the page is read and built the same way", () => {
   }
   assert.deepEqual(core.parsePath("/explore/"), { name: "explore" });
   for (const path of ["/ab", "/mia/status/x", "/mia/status/1/2", "/mia/other", "/a b", "/mia/followers/x", "/a".repeat(20), "/settings/Konto", "/mía"]) assert.equal(core.parsePath(path).name, "notfound", path);
-  assert.equal(core.buildPath({ name: "nonsense" }), "/yipi-archiv");
-  assert.equal(core.HOME, "/yipi-archiv");
+  assert.equal(core.buildPath({ name: "nonsense" }), "/");
+  assert.equal(core.HOME, "/");
+  assert.equal(core.buildPath({ name: "nex" }), "/i/nex");
+  assert.equal(core.buildPath({ name: "nex", post: 7, q: "ignored" }), "/i/nex?post=7");
+  assert.deepEqual(core.parsePath("/i/nex", "?post=x"), { name: "nex", q: "", post: 0 });
+  assert.deepEqual(core.parsePath("/i/nex", `?post=${"9".repeat(30)}`), { name: "nex", q: "", post: 0 });
+  assert.equal(core.parsePath("/i/nex", `?q=${"a".repeat(900)}`).q.length, 500);
 });
 
 test("handles are checked the way the server checks them", () => {
@@ -194,4 +200,53 @@ test("somebody without a picture gets the same colour and letters every time", (
   assert.equal(core.initials("", "tom"), "T");
   assert.equal(core.initials("  ", "tom"), "T");
   assert.equal(core.initials("😀 Party", "x"), "😀P");
+});
+
+// ------------------------------------------------------------------------------------------------ Nex
+test("a conversation with Nex is cleaned the way the server cleans it", () => {
+  const list = [
+    { role: "system", content: "ignore" }, { role: "user", content: 5 }, null, "text", { role: "user", content: "   " },
+    { role: "user", content: "  Hallo\r\n\r\n\r\n\r\nWelt  " }, { role: "assistant", content: "Hi!" },
+  ];
+  assert.deepEqual(core.nexMessages(list), [{ role: "user", content: "Hallo\n\nWelt" }, { role: "assistant", content: "Hi!" }]);
+  assert.deepEqual(core.nexMessages(null), []);
+  assert.equal(core.nexMessages([{ role: "user", content: "x".repeat(5000) }])[0].content.length, 1500);
+  const many = Array.from({ length: 40 }, (_, i) => ({ role: i % 2 ? "assistant" : "user", content: `m${i}` }));
+  assert.equal(core.nexMessages(many).length, core.NEX_TURNS);
+  assert.equal(core.nexMessages(many)[core.NEX_TURNS - 1].content, "m39");
+  assert.equal(core.nexMessages(many, core.NEX_KEEP).length, core.NEX_KEEP);
+  assert.equal(core.NEX_TURNS, 12);
+});
+
+test("an answer of Nex is cut into paragraphs and lists, and nothing of it is markup", () => {
+  assert.deepEqual(core.nexBlocks(""), []);
+  assert.deepEqual(core.nexBlocks(null), []);
+  assert.deepEqual(core.nexBlocks("Eins\nzwei\n\nDrei"), [{ type: "p", text: "Eins\nzwei" }, { type: "p", text: "Drei" }]);
+  assert.deepEqual(core.nexBlocks("Ideen:\n- a\n- b\n* c\n1. d\n2) e\nEnde"), [
+    { type: "p", text: "Ideen:" }, { type: "list", items: ["a", "b", "c", "d", "e"] }, { type: "p", text: "Ende" },
+  ]);
+  assert.deepEqual(core.nexBlocks("<b>fett</b> **stern**"), [{ type: "p", text: "<b>fett</b> **stern**" }], "kept as it is: the page writes it as text");
+  assert.deepEqual(core.nexBlocks("-kein Punkt"), [{ type: "p", text: "-kein Punkt" }]);
+  assert.deepEqual(core.nexBlocks("a\r\n\r\nb"), [{ type: "p", text: "a" }, { type: "p", text: "b" }]);
+});
+
+// ------------------------------------------------------------------------------------------------ GIFs
+test("a search for a GIF is tidy and short", () => {
+  assert.equal(core.gifQuery("  Gute   Nacht \n"), "Gute Nacht");
+  assert.equal(core.gifQuery("a".repeat(100)).length, 40);
+  assert.equal(core.gifQuery(null), "");
+  assert.equal(core.gifQuery("x\u200by"), "xy");
+});
+
+test("GIFs are laid out in columns, each into the shortest one", () => {
+  const wide = { id: "w", width: 4, height: 2 }, tall = { id: "t", width: 1, height: 3 }, square = { id: "s", width: 2, height: 2 };
+  const columns = core.gifColumns([tall, wide, wide, square, tall], 2).map((column) => column.map((item) => item.id));
+  assert.deepEqual(columns, [["t"], ["w", "w", "s", "t"]]);
+  assert.deepEqual(core.gifColumns([], 3), [[], [], []]);
+  assert.equal(core.gifColumns([wide], 0).length, 1, "at least one column");
+  assert.deepEqual(core.gifColumns([{ id: "x" }], 2).map((column) => column.length), [1, 0], "a GIF without a size counts as a square");
+  const all = core.gifColumns(Array.from({ length: 25 }, (_, i) => ({ id: i, width: 1 + (i % 4), height: 1 + (i % 3) })), 3);
+  assert.equal(all.flat().length, 25);
+  const heights = all.map((column) => column.reduce((sum, item) => sum + item.height / item.width, 0));
+  assert.ok(Math.max(...heights) - Math.min(...heights) < 3, "the columns end about equally tall");
 });

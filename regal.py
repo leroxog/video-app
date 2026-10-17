@@ -139,7 +139,7 @@ def manifest():
 def agents_manifest():
     return {
         "name": f"{SITE_NAME}: mehrere KI-Agenten", "short_name": SITE_NAME, "description": AGENTS_DESCRIPTION, "lang": "de", "dir": "ltr",
-        "id": "/", "start_url": "/", "scope": "/", "display": "standalone", "orientation": "any",
+        "id": "/nex-agenten-archiv", "start_url": "/nex-agenten-archiv", "scope": "/nex-agenten-archiv", "display": "standalone", "orientation": "any",
         "background_color": "#212121", "theme_color": "#212121", "categories": ["utilities", "productivity"],
         "icons": [
             {"src": "/static/img/nex-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
@@ -203,10 +203,10 @@ def register_routes(app):
                 response.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
         return response
 
-    @route("/", endpoint="pl_home")
+    @route("/nex-agenten-archiv", endpoint="regal_agents_home")
     def regal_agents_home():
-        """The home page: a question runs through five real, server-side AI passes (see AGENT_ROLES), each reading what came
-        before it, all visible as they are written."""
+        """The home page of 2026-10-16 evening, archived since Pulse took "/" (2026-10-17): a question runs through five real,
+        server-side AI passes (see AGENT_ROLES), each reading what came before it, all visible as they are written."""
         page = render_template("regal_agents.html", description=AGENTS_DESCRIPTION, base=base_url())
         return agents_page_headers(make_response(page))
 
@@ -277,7 +277,7 @@ def register_routes(app):
 
     @route("/chat", endpoint="regal_chat")
     def regal_chat():
-        return redirect("/", code=301)                       # the chat (now the multi-agent page) lives at "/" again
+        return redirect("/i/nex", code=301)                  # the chat is Nex inside Pulse now
 
     @route("/modelle-archiv", endpoint="regal_models_archive")
     def regal_models_archive():
@@ -308,6 +308,6 @@ def register_routes(app):
     def regal_manifest():
         return Response(json.dumps(manifest(), ensure_ascii=False), mimetype="application/manifest+json")
 
-    @route("/manifest.webmanifest", endpoint="regal_agents_manifest")
+    @route("/nex-agenten-archiv/manifest.webmanifest", endpoint="regal_agents_manifest")
     def regal_agents_manifest_route():
         return Response(json.dumps(agents_manifest(), ensure_ascii=False), mimetype="application/manifest+json")

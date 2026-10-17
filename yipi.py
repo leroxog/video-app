@@ -1,13 +1,16 @@
-"""yipi: a short-post social network (all code, texts and artwork are original; it works like the well-known
-microblogs, but nothing here is copied from any of them).
+"""Pulse (internally still called "yipi": the module, the tables, the cookie and the /api/yipi/ addresses keep that name so that
+nothing that already exists breaks): a short-post social network (all code, texts and artwork are original; it works like the
+well-known microblogs, but nothing here is copied from any of them).  Since 2026-10-17 it is the home page of the whole site.
 
 What people do:
-  * write "Yips" of up to 280 characters with up to 4 pictures, reply to them, repost them, quote them, like them,
-    bookmark them;
+  * write "Posts" of up to 280 characters with up to 4 photos (never videos) or one GIF, reply to them, repost them, quote them,
+    like them, bookmark them;
   * follow each other: the home page has a "Für dich" feed (everybody) and a "Folge ich" feed (the people you follow);
-  * look at profiles (Yips, Antworten, Medien, Gefällt mir), search for Yips and people, see what is trending (hashtags);
-  * get notifications (likes, reposts, replies, quotes, mentions, new followers) and send private messages;
-  * block or mute people and report Yips; people named in the environment variable YIPI_ADMINS can handle reports.
+  * look at profiles (Posts, Antworten, Medien, Gefällt mir), search for Posts and people, see what is trending (hashtags);
+  * get notifications (likes, reposts, replies, quotes, mentions, new followers) and send private messages (text or a GIF);
+  * pick a GIF from the shared library, mark favourites, make their own (or upload one) and let others favourite and send it;
+  * ask Nex, the assistant of the site (Groq, streamed word by word), anything -- or let Nex explain a post;
+  * block or mute people and report Posts and GIFs; people named in the environment variable YIPI_ADMINS can handle reports.
 
 How it is built:
   * a post, a reply, a quote and a repost are all rows of one table (`yipi_post`): a reply has `reply_to_id`, a quote
@@ -16,10 +19,16 @@ How it is built:
   * the page (static/js/yipi*.js) draws everything from JSON (/api/yipi/...); text from users is only ever put on the
     page as text, never as HTML;
   * the sign-in is its own signed cookie (`yipi_session`, see siteauth.py); every route that changes something takes
-    JSON (or an image upload) only and refuses requests that come from another site; attempts are rate limited;
-  * pictures are checked by their first bytes (JPEG, PNG, GIF, WebP), measured, and stored in the database.
+    JSON (or a file upload) only and refuses requests that come from another site; attempts are rate limited;
+  * photos are checked by their first bytes (JPEG, PNG, GIF, WebP), measured, and stored in the database; anything that looks
+    like a video is refused with its own message;
+  * the GIF library (`pulse_gif`, `pulse_gif_fav`) holds the GIFs people made or uploaded plus a few starter GIFs that ship with
+    the site (static/gifs, made by scripts/make_pulse_gifs.py); using one copies its bytes into a fresh, unattached `yipi_media`
+    row of the user, so a post never changes when the original is deleted.
 """
+import hashlib
 import json
+import logging
 import os
 import re
 import struct
@@ -27,11 +36,13 @@ import unicodedata
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from flask import Response, abort, jsonify, make_response, render_template, request
+from flask import Response, abort, jsonify, make_response, redirect, render_template, request, stream_with_context
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import defer
 from werkzeug.security import check_password_hash, generate_password_hash
 
+import ai_assistant
 import siteauth
 import ysound
 from models import db
@@ -48,6 +59,14 @@ MAX_DM = 1000
 MAX_MEDIA = 4
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
 MAX_PIXELS = 40_000_000
+MAX_GIF_BYTES = 3 * 1024 * 1024                  # a GIF of the library: it is shown many times in a picker, so it stays small
+MAX_GIF_PIXELS = 2_000_000                       # one picture of a GIF
+MAX_GIF_TOTAL_PIXELS = 40_000_000                # all pictures of a GIF together: what a browser has to draw while it plays
+MAX_GIF_FRAMES = 200
+MAX_GIF_TITLE = 40
+GIF_PAGE = 24
+NEX_TURNS = 12                                   # how many of the last messages of a Nex conversation are sent along
+MAX_NEX_MESSAGE = 1500
 MIN_PASSWORD = 8
 MAX_PASSWORD = 200
 PAGE = 20
@@ -76,6 +95,8 @@ LIMITS = {
     "password": (8, 900), "delete": (6, 900),
     "post-burst": (12, 60), "post-hour": (150, 3600), "like": (400, 3600), "follow": (120, 3600), "media": (40, 3600), "dm": (120, 3600),
     "report": (20, 3600), "profile": (30, 3600), "search": (120, 600), "block": (60, 3600),
+    "gif-make": (20, 3600), "gif-fav": (400, 3600), "gif-use": (300, 3600), "gif-list": (600, 600),
+    "nex": (40, 600), "nex-flood": (80, 60),
 }
 _hits = {}
 limiter = RateLimiter(LIMITS, _hits)
@@ -86,9 +107,14 @@ CONTENT_SECURITY_POLICY = (
     "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; "
     "connect-src 'self'; manifest-src 'self'; base-uri 'none'; object-src 'none'; form-action 'self'; frame-ancestors 'none'"
 )
-DESCRIPTION = "yipi: kurze Yips, Antworten, Reposts und Likes. Sag, was dich gerade bewegt."
+SITE_NAME = "Pulse"
+DESCRIPTION = "Pulse: Was gerade passiert. Kurze Beiträge, Fotos und GIFs, Antworten, Reposts und Likes, dazu Nex, die KI, die dir weiterhilft."
 # Old home pages of the site that stay reachable but are not for search engines.
-ARCHIVE_PATHS = ("/yipi-archiv", "/gomat-archiv", "/ysound-archiv", "/sound-archiv", "/server-archiv", "/browser-archiv", "/ylib-archiv", "/ychat-archiv", "/nex-archiv", "/modelle-archiv", "/nex-ai-archiv", "/nstl-archiv")
+ARCHIVE_PATHS = ("/nex-agenten-archiv", "/gomat-archiv", "/ysound-archiv", "/sound-archiv", "/server-archiv", "/browser-archiv", "/ylib-archiv", "/ychat-archiv", "/nex-archiv", "/modelle-archiv", "/nex-ai-archiv", "/nstl-archiv")
+PRIVATE_PATHS = ("/i/", "/search", "/messages", "/notifications", "/bookmarks", "/settings", "/moderation")   # not for search engines
+OLD_HOME = "/yipi-archiv"                         # the address of the earlier yipi home page: it leads to "/" now
+STARTER_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "gifs")
+logger = logging.getLogger(__name__)
 ENDPOINTS = set()           # filled by register_routes: every endpoint of this module (the site's login gate must let them through)
 
 
@@ -161,6 +187,7 @@ class YipiMedia(db.Model):
     width = db.Column(db.Integer, nullable=False)
     height = db.Column(db.Integer, nullable=False)
     alt = db.Column(db.String(200), nullable=False, default="")
+    gif_id = db.Column(db.String(32), nullable=True)                  # the GIF of the library this picture was copied from, if it was
     created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
 
 
@@ -235,6 +262,7 @@ class YipiMessage(db.Model):
     sender_id = db.Column(db.Integer, nullable=False, index=True)
     recipient_id = db.Column(db.Integer, nullable=False, index=True)
     text = db.Column(db.String(MAX_DM), nullable=False)
+    gif_id = db.Column(db.String(32), nullable=True)                  # a GIF of the library sent instead of (or with) text
     created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
     read = db.Column(db.Boolean, nullable=False, default=False)
 
@@ -244,11 +272,39 @@ class YipiReport(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     reporter_id = db.Column(db.Integer, nullable=False)
     post_id = db.Column(BigId, nullable=True)
+    gif_id = db.Column(db.String(32), nullable=True)
     user_id = db.Column(db.Integer, nullable=True)
     reason = db.Column(db.String(20), nullable=False)
     note = db.Column(db.String(300), nullable=False, default="")
     created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
     handled = db.Column(db.Boolean, nullable=False, default=False)
+
+
+class PulseGif(db.Model):
+    """A GIF of the shared library: made in the browser or uploaded by somebody (owner_id), or one of the starters that ship with the
+    site (starter, no owner).  Everybody who is signed in sees it, can favourite it and send it."""
+    __tablename__ = "pulse_gif"
+    id = db.Column(db.String(32), primary_key=True)
+    owner_id = db.Column(db.Integer, nullable=True, index=True)
+    title = db.Column(db.String(MAX_GIF_TITLE), nullable=False, default="")
+    data = db.Column(db.LargeBinary, nullable=False)
+    size = db.Column(db.Integer, nullable=False)
+    width = db.Column(db.Integer, nullable=False)
+    height = db.Column(db.Integer, nullable=False)
+    frames = db.Column(db.Integer, nullable=False, default=1)
+    uses = db.Column(db.Integer, nullable=False, default=0)
+    favorites = db.Column(db.Integer, nullable=False, default=0)
+    starter = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow, index=True)
+
+
+class PulseGifFav(db.Model):
+    __tablename__ = "pulse_gif_fav"
+    __table_args__ = (db.UniqueConstraint("user_id", "gif_id"),)
+    id = db.Column(BigId, primary_key=True, autoincrement=True)
+    user_id = db.Column(db.Integer, nullable=False, index=True)
+    gif_id = db.Column(db.String(32), nullable=False, index=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
 
 
 _DUMMY_HASH = generate_password_hash("not-a-real-password")      # checked when the name is unknown, so timing does not tell
@@ -376,6 +432,82 @@ def image_info(data):
     return None
 
 
+VIDEO_EXTENSIONS = {".mp4", ".m4v", ".mov", ".qt", ".webm", ".mkv", ".avi", ".wmv", ".flv", ".mpg", ".mpeg", ".3gp", ".3g2", ".ogv", ".ts", ".m2ts", ".mts"}
+IMAGE_BRANDS = {b"heic", b"heix", b"hevc", b"hevx", b"heim", b"heis", b"mif1", b"msf1", b"avif", b"avis", b"crx "}   # "ftyp" files that are pictures
+
+
+def looks_like_video(data, filename="", mimetype=""):
+    """True for a file that is a video: by what is written in it (the container formats of the common cameras and phones), and
+    also by the name and type the browser gave it.  Photos and GIFs are never judged a video."""
+    head = data[:16]
+    if head[:6] in (b"GIF87a", b"GIF89a") or head[:3] == b"\xff\xd8\xff" or head[:8] == b"\x89PNG\r\n\x1a\n":
+        return False
+    if head[4:8] == b"ftyp" and head[8:12] not in IMAGE_BRANDS:
+        return True                                                   # MP4, MOV, M4V, 3GP
+    if head[:4] == b"\x1aE\xdf\xa3" or head[:4] == b"OggS" or head[:4] == b"FLV\x01":
+        return True                                                   # WebM / Matroska, Ogg, Flash video
+    if head[:4] == b"RIFF" and head[8:12] == b"AVI ":
+        return True
+    if head[:4] in (b"\x00\x00\x01\xba", b"\x00\x00\x01\xb3") or head[:4] == b"0&\xb2u":
+        return True                                                   # MPEG, Windows Media
+    if str(mimetype or "").lower().startswith("video/"):
+        return True
+    return os.path.splitext(str(filename or "").lower())[1] in VIDEO_EXTENSIONS
+
+
+def gif_info(data):
+    """(width, height, frames) of a well-formed GIF, or None.  The file is walked block by block (so a truncated or mangled file
+    is refused and a GIF that claims a huge size or hundreds of frames is too), not just judged by its first bytes."""
+    try:
+        if data[:6] not in (b"GIF87a", b"GIF89a") or len(data) < 14:
+            return None
+        width, height, flags = struct.unpack("<HHB", data[6:11])
+        if width < 1 or height < 1 or width * height > MAX_GIF_PIXELS:
+            return None
+        position = 13
+        if flags & 0x80:
+            position += 3 * (2 << (flags & 7))
+        frames = 0
+        while position < len(data):
+            marker = data[position]
+            if marker == 0x3B:
+                return (width, height, frames) if frames and width * height * frames <= MAX_GIF_TOTAL_PIXELS else None
+            if marker == 0x21:                                        # extension: a label, then blocks of data
+                position += 2
+            elif marker == 0x2C:                                      # picture: its box, maybe its own colours, then packed data
+                frames += 1
+                if frames > MAX_GIF_FRAMES or position + 10 > len(data):
+                    return None
+                local = data[position + 9]
+                position += 10
+                if local & 0x80:
+                    position += 3 * (2 << (local & 7))
+                position += 1                                         # the LZW code size
+            else:
+                return None
+            while True:                                               # sub-blocks end with a block of length 0
+                if position >= len(data):
+                    return None
+                length = data[position]
+                position += 1 + length
+                if length == 0:
+                    break
+        return None
+    except (struct.error, IndexError):
+        return None
+
+
+NEX_MAX_TOKENS = 900                              # the model reasons before it writes: a small number would leave nothing visible
+NEX_PROMPT = (
+    "Du bist Nex, die KI von Pulse, einer Plattform für kurze Beiträge. Du antwortest dem Nutzer, der gerade mit dir schreibt. "
+    "Das Gespräch steht unten; schreib nur die nächste Antwort von Nex. Antworte kurz, klar und freundlich, in der Sprache des Nutzers "
+    "(meist Deutsch), in normalem Text ohne Sternchen, ohne Überschriften und ohne Tabellen; für Aufzählungen nimm einfache Zeilen mit "
+    "'- '. Entscheide dich für die wahrscheinlichste Deutung, statt nachzufragen. Wenn du etwas nicht sicher weißt, sag es offen. "
+    "Du hilfst beim Schreiben von Beiträgen (höchstens 280 Zeichen), erklärst Beiträge und beantwortest Fragen. Du kannst keine Seiten "
+    "öffnen und nichts in Pulse ändern. Gib nie Medizin-, Rechts- oder Finanzberatung als sicher aus."
+)
+
+
 # ------------------------------------------------------------------------------------ who is who
 def current_user():
     payload = auth.read()
@@ -395,12 +527,86 @@ def media_url(media_id):
     return f"/yipi-media/{media_id}" if media_id else None
 
 
+GIF_ID_RE = re.compile(r"[0-9a-f]{32}")
+_starters = []                                    # the starter GIFs that ship with the site, read once (static/gifs/index.json)
+
+
+def starter_id(slug):
+    return hashlib.md5(("pulse-starter-" + slug).encode("utf-8")).hexdigest()
+
+
+def starter_index():
+    if not _starters:
+        try:
+            with open(os.path.join(STARTER_DIR, "index.json"), encoding="utf-8") as handle:
+                entries = json.load(handle)
+            _starters.extend(entry for entry in entries if isinstance(entry, dict) and re.fullmatch(r"[a-z0-9-]{1,40}", str(entry.get("slug", ""))))
+        except (OSError, ValueError):
+            pass
+    return _starters
+
+
+def ensure_starters():
+    """Puts the starter GIFs that ship with the site (static/gifs) into the library the first time it is looked at (and again if
+    somebody emptied the table), so that it is never empty."""
+    entries = starter_index()
+    if not entries:
+        return
+    have = {row.id for row in PulseGif.query.filter_by(starter=True).with_entities(PulseGif.id)}
+    added = False
+    for entry in entries:
+        gif_id = starter_id(entry["slug"])
+        if gif_id in have:
+            continue
+        try:
+            with open(os.path.join(STARTER_DIR, os.path.basename(str(entry.get("file", entry["slug"] + ".gif")))), "rb") as handle:
+                data = handle.read(MAX_GIF_BYTES + 1)
+        except OSError:
+            continue
+        info = gif_info(data) if len(data) <= MAX_GIF_BYTES else None
+        if info is None:
+            continue
+        title = clean_text(str(entry.get("title", "")), MAX_GIF_TITLE, keep_newlines=False) or ""
+        db.session.add(PulseGif(id=gif_id, owner_id=None, title=title, data=data, size=len(data), width=info[0], height=info[1], frames=info[2], starter=True))
+        added = True
+    if added:
+        try:
+            db.session.commit()
+        except IntegrityError:                                    # another request put them in at the same moment
+            db.session.rollback()
+
+
+def gif_json(gif, viewer_id=None, favorites=()):
+    return {"id": gif.id, "url": f"/pulse-gif/{gif.id}", "title": gif.title, "width": gif.width, "height": gif.height, "favorites": gif.favorites,
+            "uses": gif.uses, "starter": bool(gif.starter), "mine": bool(viewer_id and gif.owner_id == viewer_id), "favorite": gif.id in favorites}
+
+
+def gifs_by_id(ids):
+    """{id: gif} of the library GIFs with these ids, without their bytes."""
+    wanted = {value for value in ids if isinstance(value, str) and GIF_ID_RE.fullmatch(value)}
+    if not wanted:
+        return {}
+    return {gif.id: gif for gif in PulseGif.query.options(defer(PulseGif.data)).filter(PulseGif.id.in_(wanted))}
+
+
+def media_json(item):
+    return {"id": item.id, "url": media_url(item.id), "width": item.width, "height": item.height, "alt": item.alt, "gif": item.content_type == "image/gif", "gifId": item.gif_id}
+
+
+def favorite_ids(viewer, ids):
+    """Which of these library GIFs the viewer has marked with a star."""
+    wanted = {value for value in ids if isinstance(value, str) and GIF_ID_RE.fullmatch(value)}
+    if viewer is None or not wanted:
+        return set()
+    return {row.gif_id for row in PulseGifFav.query.filter(PulseGifFav.user_id == viewer.id, PulseGifFav.gif_id.in_(wanted))}
+
+
 def user_brief(user):
     return {"handle": user.handle, "name": user.name, "avatar": media_url(user.avatar_id)}
 
 
 def hidden_user_ids(viewer):
-    """People whose Yips this viewer does not see: those they blocked or muted, and those who blocked them."""
+    """People whose posts this viewer does not see: those they blocked or muted, and those who blocked them."""
     if viewer is None:
         return set()
     ids = {row.blocked_id for row in YipiBlock.query.filter_by(blocker_id=viewer.id)}
@@ -460,8 +666,12 @@ def feed_items(rows, viewer):
     user_ids = {p.user_id for p in everything.values()} | {row.user_id for row in rows if row.repost_of_id}
     users = {u.id: u for u in YipiUser.query.filter(YipiUser.id.in_(user_ids))}
     media = {}
-    for item in YipiMedia.query.filter(YipiMedia.post_id.in_(list(everything))).order_by(YipiMedia.position, YipiMedia.id):
-        media.setdefault(item.post_id, []).append({"id": item.id, "url": media_url(item.id), "width": item.width, "height": item.height, "alt": item.alt})
+    rows_of_media = list(YipiMedia.query.filter(YipiMedia.post_id.in_(list(everything))).order_by(YipiMedia.position, YipiMedia.id))
+    starred = favorite_ids(viewer, [item.gif_id for item in rows_of_media if item.gif_id])
+    for item in rows_of_media:
+        entry = media_json(item)
+        entry["gifFavorite"] = item.gif_id in starred
+        media.setdefault(item.post_id, []).append(entry)
     liked = bookmarked = reposted = set()
     hidden = hidden_user_ids(viewer)
     if viewer:
@@ -544,7 +754,7 @@ def bump(model, row_id, column, amount):
 
 
 def remove_post(post, by_admin=False):
-    """Deletes a Yip. One with replies stays as an empty "deleted" place holder so the conversation under it keeps its shape."""
+    """Deletes a post. One with replies stays as an empty "deleted" place holder so the conversation under it keeps its shape."""
     author = db.session.get(YipiUser, post.user_id)
     if post.repost_of_id:
         bump(YipiPost, post.repost_of_id, YipiPost.repost_count, -1)
@@ -596,11 +806,16 @@ def purge_user(user):
     YipiMessage.query.filter(or_(YipiMessage.sender_id == uid, YipiMessage.recipient_id == uid)).delete()
     YipiReport.query.filter_by(reporter_id=uid).delete()
     YipiMedia.query.filter_by(owner_id=uid).delete()
+    PulseGifFav.query.filter_by(user_id=uid).delete()
+    own_gifs = [row.id for row in PulseGif.query.filter_by(owner_id=uid).with_entities(PulseGif.id)]
+    if own_gifs:
+        PulseGifFav.query.filter(PulseGifFav.gif_id.in_(own_gifs)).delete(synchronize_session=False)
+        PulseGif.query.filter(PulseGif.id.in_(own_gifs)).delete(synchronize_session=False)
     db.session.delete(user)
 
 
 def cleanup_orphans(user):
-    """Pictures that were uploaded but never used (not in a Yip, not an avatar or banner) disappear after a day."""
+    """Pictures that were uploaded but never used (not in a post, not an avatar or banner) disappear after a day."""
     keep = [x for x in (user.avatar_id, user.banner_id) if x]
     query = YipiMedia.query.filter(YipiMedia.owner_id == user.id, YipiMedia.post_id.is_(None), YipiMedia.created_at < utcnow() - timedelta(days=1))
     if keep:
@@ -610,8 +825,8 @@ def cleanup_orphans(user):
 
 # ---------------------------------------------------------------------------------------------- the page
 def page_meta(path):
-    """Title and description for link previews of the pages that have something to say (profiles, single Yips)."""
-    title, description = "yipi", DESCRIPTION
+    """Title and description for link previews of the pages that have something to say (profiles, single posts)."""
+    title, description = f"{SITE_NAME}: was gerade passiert", DESCRIPTION
     match = re.fullmatch(r"/([A-Za-z0-9_]{3,15})(?:/status/(\d+))?", path)
     if match:
         user = YipiUser.query.filter_by(handle_lc=match.group(1).lower()).first()
@@ -619,23 +834,25 @@ def page_meta(path):
             if match.group(2):
                 post = db.session.get(YipiPost, int(match.group(2)))
                 if post and not post.deleted and post.user_id == user.id and not post.repost_of_id:
-                    title = f"{user.name} auf yipi: „{post.text[:80]}{'…' if len(post.text) > 80 else ''}“"
-                    description = post.text[:200] or "Ein Yip mit Bild."
+                    title = f"{user.name} auf {SITE_NAME}: „{post.text[:80]}{'…' if len(post.text) > 80 else ''}“"
+                    description = post.text[:200] or "Ein Beitrag mit Bild."
             else:
-                title = f"{user.name} (@{user.handle}) auf yipi"
-                description = user.bio or f"Die neuesten Yips von @{user.handle}."
+                title = f"{user.name} (@{user.handle}) auf {SITE_NAME}"
+                description = user.bio or f"Die neuesten Beiträge von @{user.handle}."
+    elif path == "/i/nex":
+        title, description = f"Nex auf {SITE_NAME}", "Nex ist die KI von Pulse: frag sie etwas, lass dir einen Beitrag erklären oder dir beim Schreiben helfen."
     return title, description
 
 
 def manifest():
     return {
-        "name": "yipi", "short_name": "yipi", "description": DESCRIPTION, "lang": "de", "dir": "ltr",
-        "id": "/yipi-archiv", "start_url": "/yipi-archiv", "scope": "/", "display": "standalone", "orientation": "portrait-primary",
-        "background_color": "#000000", "theme_color": "#000000", "categories": ["social"],
+        "name": f"{SITE_NAME}: was gerade passiert", "short_name": SITE_NAME, "description": DESCRIPTION, "lang": "de", "dir": "ltr",
+        "id": "/", "start_url": "/", "scope": "/", "display": "standalone", "orientation": "any",
+        "background_color": "#07080d", "theme_color": "#07080d", "categories": ["social"],
         "icons": [
-            {"src": "/static/img/yipi-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
-            {"src": "/static/img/yipi-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
-            {"src": "/static/img/yipi-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
+            {"src": "/static/img/pulse-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+            {"src": "/static/img/pulse-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+            {"src": "/static/img/pulse-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
         ],
     }
 
@@ -890,6 +1107,8 @@ def register_routes(app):
         if upload is None:
             return fail("no_file")
         data = upload.read(MAX_IMAGE_BYTES + 1)
+        if looks_like_video(data, upload.filename, upload.mimetype):
+            return fail("no_video", 415)                             # Pulse takes photos and GIFs, never videos
         if len(data) > MAX_IMAGE_BYTES:
             return fail("too_big", 413)
         info = image_info(data)
@@ -900,7 +1119,7 @@ def register_routes(app):
         item = YipiMedia(id=uuid.uuid4().hex, owner_id=user.id, content_type=info[0], data=data, size=len(data), width=info[1], height=info[2], alt=alt)
         db.session.add(item)
         db.session.commit()
-        return jsonify({"ok": True, "media": {"id": item.id, "url": media_url(item.id), "width": item.width, "height": item.height, "alt": item.alt}})
+        return jsonify({"ok": True, "media": media_json(item)})
 
     @route("/yipi-media/<media_id>")
     def yipi_media_file(media_id):
@@ -914,7 +1133,7 @@ def register_routes(app):
         response.set_etag(item.id)
         return response.make_conditional(request)
 
-    # -------------------------------------------------------------------------------------- Yips
+    # ------------------------------------------------------------------------------------ posts
     def create_post(user, data):
         text = clean_text(data.get("text", ""), MAX_POST)
         if text is None:
@@ -953,6 +1172,8 @@ def register_routes(app):
             if item is None or item.owner_id != user.id or item.post_id is not None or media_id in (user.avatar_id, user.banner_id):
                 return None, fail("bad_media")
             items.append((position, item))
+        if len(items) > 1 and any(item.content_type == "image/gif" for _, item in items):
+            return None, fail("gif_alone")                           # up to four photos, or one GIF: like the app it is modelled on
         post = YipiPost(user_id=user.id, text=text, reply_to_id=reply_to.id if reply_to else None, quote_of_id=quote_of.id if quote_of else None,
                         root_id=(reply_to.root_id or reply_to.id) if reply_to else None)
         db.session.add(post)
@@ -1436,6 +1657,8 @@ def register_routes(app):
             return problem
         cursor = clamp_cursor(request.args.get("cursor"))
         query = YipiNotification.query.filter_by(user_id=user.id)
+        if request.args.get("filter") == "mentions":              # the "Erwähnungen" tab: mentions, replies and quotes
+            query = query.filter(YipiNotification.kind.in_(("mention", "reply", "quote")))
         hidden = hidden_user_ids(user) | suspended_ids()
         if hidden:
             query = query.filter(~YipiNotification.actor_id.in_(hidden))
@@ -1474,6 +1697,11 @@ def register_routes(app):
         return jsonify({"ok": True})
 
     # --------------------------------------------------------------------------------------- messages
+    def message_json(row, gifs, mine, starred=()):
+        gif = gifs.get(row.gif_id) if row.gif_id else None
+        return {"id": row.id, "text": row.text, "createdAt": iso(row.created_at), "mine": mine,
+                "gif": gif_json(gif, None, starred) if gif else ({"gone": True} if row.gif_id else None)}
+
     def may_message(sender, target):
         """Somebody may start a conversation with a person who follows them, or answer one who wrote to them first."""
         if YipiFollow.query.filter_by(follower_id=target.id, followee_id=sender.id).first() is not None:
@@ -1504,7 +1732,8 @@ def register_routes(app):
             other = users.get(other_id)
             if other is None or other.suspended or other_id in hidden:
                 continue
-            items.append({"user": user_brief(other), "last": {"text": row.text, "createdAt": iso(row.created_at), "mine": row.sender_id == user.id}, "unread": unread.get(other_id, 0)})
+            items.append({"user": user_brief(other), "last": {"text": row.text or ("GIF" if row.gif_id else ""), "gif": bool(row.gif_id), "createdAt": iso(row.created_at), "mine": row.sender_id == user.id},
+                          "unread": unread.get(other_id, 0)})
         return jsonify({"ok": True, "items": items})
 
     @route("/api/yipi/messages/<handle>")
@@ -1526,7 +1755,9 @@ def register_routes(app):
         rows = rows[:PAGE * 2]
         YipiMessage.query.filter_by(sender_id=other.id, recipient_id=user.id, read=False).update({"read": True})
         db.session.commit()
-        messages = [{"id": r.id, "text": r.text, "createdAt": iso(r.created_at), "mine": r.sender_id == user.id} for r in reversed(rows)]
+        gifs = gifs_by_id(r.gif_id for r in rows)
+        starred = favorite_ids(user, [r.gif_id for r in rows if r.gif_id])
+        messages = [message_json(r, gifs, r.sender_id == user.id, starred) for r in reversed(rows)]
         return jsonify({"ok": True, "user": user_dict(other, user), "messages": messages, "next": rows[-1].id if more and rows else None, "canWrite": may_message(user, other)})
 
     @route("/api/yipi/messages/<handle>", methods=["POST"], endpoint="yipi_send")
@@ -1547,16 +1778,24 @@ def register_routes(app):
         text = clean_text(data.get("text", ""), MAX_DM)
         if text is None:
             return fail("too_long")
-        if not text:
+        gif_id = data.get("gifId")
+        gifs = {}
+        if gif_id is not None:
+            gifs = gifs_by_id([gif_id])
+            if not isinstance(gif_id, str) or gif_id not in gifs:
+                return fail("gif_gone", 404)
+        if not text and not gif_id:
             return fail("empty")
         if not may_message(user, other):
             return fail("dm_closed", 403)
         if limiter.too_many("dm", str(user.id)):
             return fail("too_many", 429)
-        message = YipiMessage(sender_id=user.id, recipient_id=other.id, text=text)
+        message = YipiMessage(sender_id=user.id, recipient_id=other.id, text=text, gif_id=gif_id)
         db.session.add(message)
+        if gif_id:
+            bump(PulseGif, gif_id, PulseGif.uses, 1)
         db.session.commit()
-        return jsonify({"ok": True, "message": {"id": message.id, "text": message.text, "createdAt": iso(message.created_at), "mine": True}}), 201
+        return jsonify({"ok": True, "message": message_json(message, gifs, True, favorite_ids(user, [gif_id]))}), 201
 
     @route("/api/yipi/messages/<handle>/poll")
     def yipi_thread_poll(handle):
@@ -1571,7 +1810,207 @@ def register_routes(app):
         for row in rows:
             row.read = True
         db.session.commit()
-        return jsonify({"ok": True, "messages": [{"id": r.id, "text": r.text, "createdAt": iso(r.created_at), "mine": False} for r in rows]})
+        gifs = gifs_by_id(r.gif_id for r in rows)
+        starred = favorite_ids(user, [r.gif_id for r in rows if r.gif_id])
+        return jsonify({"ok": True, "messages": [message_json(r, gifs, False, starred) for r in rows]})
+
+    # -------------------------------------------------------------------------------------------- GIFs
+    def library_gif(gif_id, viewer=None):
+        """The GIF with this id (without its bytes) unless it is gone or its maker is hidden from the viewer, else None."""
+        gif = gifs_by_id([gif_id]).get(gif_id) if isinstance(gif_id, str) else None
+        if gif is None:
+            return None
+        if gif.owner_id is not None:
+            owner = db.session.get(YipiUser, gif.owner_id)
+            if owner is None or owner.suspended or (viewer is not None and owner.id in hidden_user_ids(viewer)):
+                return None
+        return gif
+
+    @route("/api/yipi/gifs")
+    def pulse_gifs():
+        user, problem = need_user()
+        if problem:
+            return problem
+        if limiter.too_many("gif-list", str(user.id)):
+            return fail("too_many", 429)
+        ensure_starters()
+        tab = request.args.get("tab", "trending")
+        if tab not in ("trending", "new", "favorites", "mine"):
+            return fail("bad_request")
+        term = clean_text(request.args.get("q", ""), 40, keep_newlines=False) or ""
+        offset = clamp_cursor(request.args.get("offset")) or 0
+        offset = min(offset, 5000)
+        query = PulseGif.query.options(defer(PulseGif.data))
+        if tab == "favorites":
+            query = query.join(PulseGifFav, and_(PulseGifFav.gif_id == PulseGif.id, PulseGifFav.user_id == user.id)).order_by(PulseGifFav.id.desc())
+        elif tab == "mine":
+            query = query.filter(PulseGif.owner_id == user.id).order_by(PulseGif.created_at.desc(), PulseGif.id)
+        elif tab == "new":
+            query = query.order_by(PulseGif.created_at.desc(), PulseGif.id)
+        else:
+            query = query.order_by((PulseGif.uses + 3 * PulseGif.favorites).desc(), PulseGif.created_at.desc(), PulseGif.id)
+        hidden = hidden_user_ids(user) | suspended_ids()
+        if hidden and tab != "mine":                              # a GIF of somebody who is blocked, muted or suspended is not shown (not even as a favourite)
+            query = query.filter(or_(PulseGif.owner_id.is_(None), ~PulseGif.owner_id.in_(hidden)))
+        if term:
+            query = query.filter(PulseGif.title.ilike(like_pattern(term), escape="\\"))
+        rows = query.offset(offset).limit(GIF_PAGE + 1).all()
+        more = len(rows) > GIF_PAGE
+        rows = rows[:GIF_PAGE]
+        favorites = {row.gif_id for row in PulseGifFav.query.filter(PulseGifFav.user_id == user.id, PulseGifFav.gif_id.in_([g.id for g in rows]))} if rows else set()
+        return jsonify({"ok": True, "items": [gif_json(g, user.id, favorites) for g in rows], "next": offset + GIF_PAGE if more else None})
+
+    @route("/api/yipi/gifs", methods=["POST"], endpoint="pulse_gif_create")
+    def pulse_gif_create():
+        """A GIF made in the browser (or a GIF file) goes into the library, where everybody who is signed in can find it."""
+        user, problem = need_user()
+        if problem:
+            return problem
+        if limiter.too_many("gif-make", str(user.id)):
+            return fail("too_many", 429)
+        upload = request.files.get("file")
+        if upload is None:
+            return fail("no_file")
+        data = upload.read(MAX_GIF_BYTES + 1)
+        if looks_like_video(data, upload.filename, upload.mimetype):
+            return fail("no_video", 415)
+        if len(data) > MAX_GIF_BYTES:
+            return fail("gif_too_big", 413)
+        info = gif_info(data)
+        if info is None:
+            return fail("bad_gif", 415)
+        title = clean_text(request.form.get("title", ""), MAX_GIF_TITLE, keep_newlines=False)
+        if title is None:
+            return fail("gif_title_long")
+        gif = PulseGif(id=uuid.uuid4().hex, owner_id=user.id, title=title, data=data, size=len(data), width=info[0], height=info[1], frames=info[2])
+        db.session.add(gif)
+        db.session.commit()
+        return jsonify({"ok": True, "gif": gif_json(gif, user.id)}), 201
+
+    @route("/pulse-gif/<gif_id>")
+    def pulse_gif_file(gif_id):
+        gif = db.session.get(PulseGif, gif_id) if GIF_ID_RE.fullmatch(gif_id) else None
+        if gif is None:
+            abort(404)
+        response = Response(gif.data, mimetype="image/gif")
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        response.headers["Content-Security-Policy"] = "default-src 'none'; img-src 'self'; sandbox"
+        response.headers["Content-Disposition"] = "inline"
+        response.set_etag(gif.id)
+        return response.make_conditional(request)
+
+    def set_favorite(gif_id, on):
+        user, problem = need_user()
+        if problem:
+            return problem
+        if limiter.too_many("gif-fav", str(user.id)):
+            return fail("too_many", 429)
+        gif = library_gif(gif_id, user)
+        if gif is None:
+            return fail("gif_gone", 404)
+        existing = PulseGifFav.query.filter_by(user_id=user.id, gif_id=gif.id).first()
+        try:
+            if on and existing is None:
+                db.session.add(PulseGifFav(user_id=user.id, gif_id=gif.id))
+                bump(PulseGif, gif.id, PulseGif.favorites, 1)
+                db.session.commit()
+            elif not on and existing is not None:
+                db.session.delete(existing)
+                bump(PulseGif, gif.id, PulseGif.favorites, -1)
+                db.session.commit()
+        except IntegrityError:                                    # a second tap at the same moment: it is a favourite either way
+            db.session.rollback()
+        fresh = gifs_by_id([gif.id]).get(gif.id)
+        return jsonify({"ok": True, "favorite": on, "favorites": fresh.favorites if fresh else 0})
+
+    @route("/api/yipi/gifs/<gif_id>/favorite", methods=["POST"], endpoint="pulse_gif_favorite")
+    def pulse_gif_favorite(gif_id):
+        return set_favorite(gif_id, True)
+
+    @route("/api/yipi/gifs/<gif_id>/favorite", methods=["DELETE"], endpoint="pulse_gif_unfavorite")
+    def pulse_gif_unfavorite(gif_id):
+        return set_favorite(gif_id, False)
+
+    @route("/api/yipi/gifs/<gif_id>/use", methods=["POST"])
+    def pulse_gif_use(gif_id):
+        """Picks a GIF for a post: its bytes are copied into a fresh picture of the user, which the post then takes like any photo."""
+        user, problem = need_user()
+        if problem:
+            return problem
+        if limiter.too_many("gif-use", str(user.id)):
+            return fail("too_many", 429)
+        gif = library_gif(gif_id, user)
+        if gif is None:
+            return fail("gif_gone", 404)
+        data = db.session.query(PulseGif.data).filter(PulseGif.id == gif.id).scalar()
+        cleanup_orphans(user)
+        item = YipiMedia(id=uuid.uuid4().hex, owner_id=user.id, content_type="image/gif", data=data, size=gif.size, width=gif.width, height=gif.height, alt=gif.title or "GIF", gif_id=gif.id)
+        db.session.add(item)
+        bump(PulseGif, gif.id, PulseGif.uses, 1)
+        db.session.commit()
+        return jsonify({"ok": True, "media": media_json(item)}), 201
+
+    @route("/api/yipi/gifs/<gif_id>", methods=["DELETE"], endpoint="pulse_gif_delete")
+    def pulse_gif_delete(gif_id):
+        user, problem = need_user()
+        if problem:
+            return problem
+        gif = gifs_by_id([gif_id]).get(gif_id) if isinstance(gif_id, str) else None
+        if gif is None:
+            return fail("gif_gone", 404)
+        if gif.owner_id is None or (gif.owner_id != user.id and not is_admin(user)):
+            return fail("forbidden", 403)
+        remove_gif(gif.id)
+        db.session.commit()
+        return jsonify({"ok": True})
+
+    def remove_gif(gif_id):
+        """The GIF and its stars go; a message that carried it stays and shows "this GIF is gone" (its id is kept on purpose)."""
+        PulseGifFav.query.filter_by(gif_id=gif_id).delete()
+        PulseGif.query.filter_by(id=gif_id).delete()
+
+    # ------------------------------------------------------------------------------------------------ Nex
+    @route("/api/yipi/nex", methods=["POST"])
+    def pulse_nex():
+        """One answer of Nex, streamed as plain text.  The page sends the last turns of the conversation (it keeps them in the
+        browser; nothing is stored here); `postId` hands over a post to explain."""
+        user, problem = need_user()
+        if problem:
+            return problem
+        data, problem = body()
+        if problem:
+            return problem
+        if limiter.too_many("nex", str(user.id)) or limiter.too_many("nex-flood", "all"):
+            return fail("too_many", 429)
+        raw = data.get("messages") if isinstance(data.get("messages"), list) else []
+        turns = []
+        for item in raw[-NEX_TURNS:]:
+            if isinstance(item, dict) and item.get("role") in ("user", "assistant") and isinstance(item.get("content"), str):
+                content = clean_text(item["content"], 20000)
+                if content:
+                    turns.append((item["role"], content[:MAX_NEX_MESSAGE]))
+        if not turns or turns[-1][0] != "user":
+            return fail("bad_request")
+        lines = []
+        if data.get("postId") is not None:
+            post = get_post_or_none(clamp_cursor(data["postId"]) or 0, user)
+            if post is not None and not post.deleted and post.user_id not in hidden_user_ids(user):
+                author = db.session.get(YipiUser, post.user_id)
+                lines.append(f"Der Nutzer zeigt dir diesen Beitrag von @{author.handle if author else '?'}: „{post.text}“")
+        for role, content in turns:
+            lines.append(("Nutzer: " if role == "user" else "Nex: ") + content)
+        transcript = "\n\n".join(lines)
+        while len(transcript) > 7500 and len(lines) > 1:           # the model takes about 8000 characters: drop the oldest turns first
+            lines.pop(1 if len(lines) > 2 and lines[0].startswith("Der Nutzer zeigt") else 0)
+            transcript = "\n\n".join(lines)
+
+        def generate():
+            try:
+                yield from ai_assistant.generate_custom_stream(NEX_PROMPT, transcript, max_tokens=NEX_MAX_TOKENS)
+            except Exception:
+                logger.exception("Nex konnte nicht antworten")
+
+        return Response(stream_with_context(generate()), mimetype="text/plain")
 
     # ----------------------------------------------------------------------------- reports, moderation
     @route("/api/yipi/reports", methods=["POST"])
@@ -1588,8 +2027,13 @@ def register_routes(app):
         if reason not in REPORT_REASONS:
             return fail("bad_reason")
         note = clean_text(data.get("note", ""), 300) or ""
-        post_id = user_id = None
-        if data.get("postId") is not None:
+        post_id = user_id = gif_id = None
+        if data.get("gifId") is not None:
+            gif = library_gif(data["gifId"], user)
+            if gif is None or gif.owner_id is None:
+                return fail("not_found", 404)
+            gif_id, user_id = gif.id, gif.owner_id
+        elif data.get("postId") is not None:
             post = db.session.get(YipiPost, clamp_cursor(data["postId"]) or 0)
             if post is None:
                 return fail("not_found", 404)
@@ -1601,7 +2045,7 @@ def register_routes(app):
             user_id = target.id
         else:
             return fail("bad_request")
-        db.session.add(YipiReport(reporter_id=user.id, post_id=post_id, user_id=user_id, reason=reason, note=note))
+        db.session.add(YipiReport(reporter_id=user.id, post_id=post_id, gif_id=gif_id, user_id=user_id, reason=reason, note=note))
         db.session.commit()
         return jsonify({"ok": True}), 201
 
@@ -1621,13 +2065,15 @@ def register_routes(app):
         reports = YipiReport.query.filter_by(handled=False).order_by(YipiReport.id).limit(50).all()
         users = {u.id: u for u in YipiUser.query.filter(YipiUser.id.in_({r.reporter_id for r in reports} | {r.user_id for r in reports if r.user_id}))}
         posts = {p.id: p for p in YipiPost.query.filter(YipiPost.id.in_({r.post_id for r in reports if r.post_id}))}
+        gifs = gifs_by_id(r.gif_id for r in reports)
         items = []
         for r in reports:
             post = posts.get(r.post_id)
             target = users.get(r.user_id)
             items.append({"id": r.id, "reason": r.reason, "note": r.note, "createdAt": iso(r.created_at), "reporter": users[r.reporter_id].handle if r.reporter_id in users else None,
                           "handle": target.handle if target else None, "suspended": bool(target and target.suspended), "postId": r.post_id,
-                          "text": post.text if post and not post.deleted else None, "postGone": bool(r.post_id and (post is None or post.deleted))})
+                          "text": post.text if post and not post.deleted else None, "postGone": bool(r.post_id and (post is None or post.deleted)),
+                          "gifId": r.gif_id, "gif": gif_json(gifs[r.gif_id]) if r.gif_id in gifs else None, "gifGone": bool(r.gif_id and r.gif_id not in gifs)})
         return jsonify({"ok": True, "items": items})
 
     @route("/api/yipi/moderation/reports/<int(min=1, max=4611686018427387904):report_id>", methods=["POST"])
@@ -1646,6 +2092,8 @@ def register_routes(app):
             post = db.session.get(YipiPost, report.post_id)
             if post is not None:
                 remove_post(post, by_admin=True)
+        elif action == "delete_gif" and report.gif_id:
+            remove_gif(report.gif_id)
         elif action == "suspend" and report.user_id:
             target = db.session.get(YipiUser, report.user_id)
             if target is not None and not is_admin(target):
@@ -1657,24 +2105,29 @@ def register_routes(app):
                 target.suspended = False
         elif action != "dismiss":
             return fail("bad_action")
-        for same in YipiReport.query.filter_by(handled=False, post_id=report.post_id, user_id=report.user_id).all():
+        for same in YipiReport.query.filter_by(handled=False, post_id=report.post_id, gif_id=report.gif_id, user_id=report.user_id).all():
             same.handled = True
         report.handled = True
         db.session.commit()
         return jsonify({"ok": True})
 
     # ---------------------------------------------------------------------------------- the pages
-    @route("/yipi-archiv", endpoint="yipi_home")
+    @route("/", endpoint="pl_home")
     def yipi_home():
-        return render_shell("/yipi-archiv")
+        return render_shell("/")
+
+    @route(OLD_HOME, endpoint="yipi_old_home")
+    def yipi_old_home():
+        return redirect("/", code=301)                           # the earlier address of this app (it was an archive for a few days)
 
     def render_shell(path):
         user = current_user()
         title, description = page_meta(path)
         boot = {"me": me_dict(user) if user else None}
-        return page_headers(make_response(render_template("yipi.html", boot=boot, title=title, description=description, base=base_url(), path=path)))
+        private = path.startswith(PRIVATE_PATHS)                  # pages that only mean something to the person who is signed in
+        return page_headers(make_response(render_template("yipi.html", boot=boot, title=title, description=description, base=base_url(), path=path, private=private)))
 
-    for page in ("/explore", "/notifications", "/messages", "/bookmarks", "/settings", "/search", "/moderation", "/i/login", "/i/signup"):
+    for page in ("/explore", "/notifications", "/messages", "/bookmarks", "/settings", "/search", "/moderation", "/i/login", "/i/signup", "/i/nex"):
         route(page, endpoint="yipi_shell_" + page.strip("/").replace("/", "_"))(lambda page=page: render_shell(page))
 
     @route("/messages/<handle>")
@@ -1701,13 +2154,13 @@ def register_routes(app):
     def yipi_imprint():
         return legal("imprint")
 
-    @route("/yipi-archiv/manifest.webmanifest")
+    @route("/manifest.webmanifest")
     def yipi_manifest():
         return Response(json.dumps(manifest(), ensure_ascii=False), mimetype="application/manifest+json")
 
     @route("/robots.txt")
     def yipi_robots():
-        private = ("/api/", "/i/", "/search", "/messages", "/notifications", "/bookmarks", "/settings", "/moderation")
+        private = ("/api/", "/pulse-gif/") + PRIVATE_PATHS
         lines = ["User-agent: *", "Allow: /"] + [f"Disallow: {path}" for path in private + ARCHIVE_PATHS]
         lines += ["", f"Sitemap: {base_url()}/sitemap.xml", ""]
         return Response("\n".join(lines), mimetype="text/plain")

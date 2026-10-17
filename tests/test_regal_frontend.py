@@ -226,7 +226,7 @@ def test_the_layout_works_on_small_screens_and_respects_reduced_motion_and_light
     assert ".model-body { display: grid; grid-template-columns: minmax(0, 1fr);" in CSS
     assert "prefers-reduced-motion: reduce" in CSS and "prefers-color-scheme: light" in CSS
     assert "env(safe-area-inset-bottom)" in CSS and "env(safe-area-inset-top)" in CSS
-    for page in ("regal.html", "legal.html", "error.html"):             # a fixed data-theme="dark" would keep the light colours from ever being used
+    for page in ("regal.html",):                                      # (the legal and error pages are Pulse pages now, with their own theme script)             # a fixed data-theme="dark" would keep the light colours from ever being used
         with open(os.path.join(ROOT, "templates", page), encoding="utf-8") as handle:
             assert "data-theme" not in handle.read(), page
 

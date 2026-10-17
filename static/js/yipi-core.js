@@ -1,4 +1,4 @@
-/* yipi core: everything about the page that does not need a screen, as plain functions -- cutting a text into
+/* Pulse core (the file keeps the name yipi-core.js): everything about the page that does not need a screen, as plain functions -- cutting a text into
    links, mentions and hashtags, counting characters the way the server does, German times and counts, the addresses of
    the pages, grouping notifications, and the arithmetic for picture sizes. It runs in the browser and in Node (that is
    how the tests run it). */
@@ -9,7 +9,7 @@
   "use strict";
 
   const MAX_POST = 280;
-  const HOME = "/yipi-archiv";                          // yipi's home page (the site's own home page is Treff)
+  const HOME = "/";                                      // the home page of Pulse is the home page of the site
   const MAX_MEDIA = 4;
   const MONTHS = ["Jan.", "Feb.", "März", "Apr.", "Mai", "Juni", "Juli", "Aug.", "Sept.", "Okt.", "Nov.", "Dez."];
   const MONTHS_LONG = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
@@ -133,13 +133,14 @@
   // ----------------------------------------------------------------------------------------- addresses
   const isHandle = (value) => typeof value === "string" && HANDLE.test(value);
 
-  /* The page for an address: {name: "home" | "explore" | "search" | "notifications" | "messages" | "thread" | "bookmarks" |
+  /* The page for an address: {name: "home" | "explore" | "search" | "nex" | "notifications" | "messages" | "thread" | "bookmarks" |
      "settings" | "moderation" | "login" | "signup" | "profile" | "post" | "followers" | "following" | "notfound", ...}. */
   function parsePath(pathname, search = "") {
     const path = String(pathname || "/").replace(/\/+$/, "") || "/";
     const params = new URLSearchParams(search);
-    const fixed = { "/yipi-archiv": "home", "/explore": "explore", "/notifications": "notifications", "/messages": "messages", "/bookmarks": "bookmarks", "/moderation": "moderation", "/i/login": "login", "/i/signup": "signup" };
+    const fixed = { "/": "home", "/explore": "explore", "/notifications": "notifications", "/messages": "messages", "/bookmarks": "bookmarks", "/moderation": "moderation", "/i/login": "login", "/i/signup": "signup" };
     if (fixed[path]) return { name: fixed[path] };
+    if (path === "/i/nex") return { name: "nex", q: (params.get("q") || "").slice(0, 500), post: /^\d{1,18}$/.test(params.get("post") || "") ? Number(params.get("post")) : 0 };
     if (path === "/search") return { name: "search", q: params.get("q") || "", type: params.get("type") === "people" ? "people" : "posts" };
     if (path === "/settings") return { name: "settings", section: "" };
     let match = /^\/settings\/([a-z]+)$/.exec(path);
@@ -159,6 +160,7 @@
     switch (route.name) {
       case "home": return HOME;
       case "explore": case "notifications": case "messages": case "bookmarks": case "moderation": return `/${route.name}`;
+      case "nex": return route.post ? `/i/nex?post=${route.post}` : route.q ? `/i/nex?q=${encodeURIComponent(route.q)}` : "/i/nex";
       case "login": return "/i/login";
       case "signup": return "/i/signup";
       case "search": return `/search?q=${encodeURIComponent(route.q || "")}${route.type === "people" ? "&type=people" : ""}`;
@@ -172,7 +174,7 @@
   }
 
   // ------------------------------------------------------------------------------------- notifications
-  /* Likes and reposts of the same Yip, and new followers, that follow each other become one line ("A, B und 3 weitere ..."). */
+  /* Likes and reposts of the same post, and new followers, that follow each other become one line ("A, B und 3 weitere ..."). */
   function groupNotifications(items) {
     const groups = [];
     for (const item of items) {
@@ -222,8 +224,66 @@
     return letters.toUpperCase();
   }
 
+  // --------------------------------------------------------------------------------------------- Nex
+  const NEX_TURNS = 12;                                 // how many of the last messages go to the server (yipi.py: NEX_TURNS)
+  const NEX_KEEP = 30;                                  // how many stay in the browser
+
+  /* The conversation as it is kept and sent: only real turns, the last ones, each at most 1500 characters. */
+  function nexMessages(list, keep = NEX_TURNS) {
+    const clean = [];
+    for (const item of Array.isArray(list) ? list : []) {
+      if (!item || (item.role !== "user" && item.role !== "assistant") || typeof item.content !== "string") continue;
+      const content = cleanText(item.content).slice(0, 1500);
+      if (content) clean.push({ role: item.role, content });
+    }
+    return clean.slice(-keep);
+  }
+
+  /* An answer of Nex cut into paragraphs and lists: [{type: "p", text} | {type: "list", items: [text]}]. A blank line starts a new
+     paragraph; lines that begin with "- ", "* ", "• " or "1. " are the items of a list. */
+  function nexBlocks(text) {
+    const blocks = [];
+    for (const part of String(text == null ? "" : text).replace(/\r\n?/g, "\n").split(/\n{2,}/)) {
+      let paragraph = null;
+      let list = null;
+      for (const raw of part.split("\n")) {
+        const line = raw.trim();
+        if (!line) continue;
+        const bullet = /^(?:[-*•]|\d+[.)])\s+(.*)$/.exec(line);
+        if (bullet) {
+          paragraph = null;
+          if (!list) { list = { type: "list", items: [] }; blocks.push(list); }
+          list.items.push(bullet[1]);
+        } else {
+          list = null;
+          if (!paragraph) { paragraph = { type: "p", text: line }; blocks.push(paragraph); }
+          else paragraph.text += `\n${line}`;
+        }
+      }
+    }
+    return blocks;
+  }
+
+
+  // ------------------------------------------------------------------------------------------------- GIFs
+  /* What a search for a GIF may be: tidy, one line, at most 40 characters. */
+  function gifQuery(text) {
+    return Array.from(String(text == null ? "" : text).normalize("NFC").replace(CONTROL, "").replace(/\s+/g, " ").trim()).slice(0, 40).join("");
+  }
+
+  /* The columns of the GIF grid: each GIF goes to the shortest column, so tall and wide ones fit together without holes. */
+  function gifColumns(items, count) {
+    const columns = Array.from({ length: Math.max(1, count) }, () => ({ height: 0, items: [] }));
+    for (const item of items) {
+      const target = columns.reduce((best, column) => (column.height < best.height ? column : best));
+      target.items.push(item);
+      target.height += (item.height || 1) / (item.width || 1);
+    }
+    return columns.map((column) => column.items);
+  }
+
   return {
-    HOME, MAX_POST, MAX_MEDIA, cleanText, charCount, counterState, tokenize, shortUrl, formatCount, relativeTime, fullTime, joinedLabel,
+    HOME, MAX_POST, MAX_MEDIA, NEX_TURNS, NEX_KEEP, nexMessages, nexBlocks, gifQuery, gifColumns, cleanText, charCount, counterState, tokenize, shortUrl, formatCount, relativeTime, fullTime, joinedLabel,
     isHandle, parsePath, buildPath, groupNotifications, fitSize, coverCrop, avatarHue, initials,
   };
 });

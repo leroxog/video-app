@@ -1,4 +1,4 @@
-"""yipi's page: the files the page is made of agree with each other and with the server (every address the script calls exists,
+"""Pulse's page (the files keep the name yipi): the files the page is made of agree with each other and with the server (every address the script calls exists,
 every style the script uses exists, nothing writes user text as HTML), and the pages around the app (legal pages, manifest, robots,
 error pages) are there. The behaviour of the helper functions is tested in yipi_core.test.js, the API in test_yipi.py."""
 import os
@@ -21,7 +21,7 @@ from app import app as flask_app, db  # noqa: E402
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 JS_DIR = os.path.join(ROOT, "static", "js")
-SCRIPTS = ["yipi-core.js", "yipi-icons.js", "yipi-api.js", "yipi-ui.js", "yipi-components.js", "yipi-views.js", "yipi-pages.js", "yipi.js"]
+SCRIPTS = ["yipi-core.js", "yipi-gif-core.js", "yipi-icons.js", "yipi-api.js", "yipi-ui.js", "yipi-gif.js", "yipi-components.js", "yipi-views.js", "yipi-pages.js", "yipi-nex.js", "yipi.js"]
 
 
 def read(*parts):
@@ -69,14 +69,14 @@ def test_every_file_the_templates_load_exists():
 
 
 def test_the_images_of_the_page_and_the_manifest_exist():
-    for name in ("yipi-icon.svg", "yipi-180.png", "yipi-192.png", "yipi-512.png", "yipi-512-maskable.png", "yipi-og.png"):
+    for name in ("pulse-icon.svg", "pulse-180.png", "pulse-192.png", "pulse-512.png", "pulse-512-maskable.png", "pulse-og.png"):
         assert os.path.getsize(os.path.join(ROOT, "static", "img", name)) > 200, name
     for icon in yipi.manifest()["icons"]:
         assert os.path.exists(os.path.join(ROOT, icon["src"].lstrip("/").replace("/", os.sep))), icon["src"]
 
 
 def test_the_shell_is_served_with_a_strict_policy_and_the_boot_data(client):
-    response = client.get("/yipi-archiv")
+    response = client.get("/")
     assert response.status_code == 200
     csp = response.headers["Content-Security-Policy"]
     assert "script-src 'self'" in csp and "'unsafe-inline'" not in csp.split("style-src")[0]
@@ -113,15 +113,24 @@ def test_every_address_the_script_calls_exists_on_the_server_with_that_method():
             found.append((name, methods[verb], literal))
         for quote, literal in re.findall(r"\bqs\(\s*([`\"'])(/[^`\"']*)\1", source):
             found.append((name, "GET", literal))
-    assert len(found) > 40, "the pattern that finds the calls stopped working"
+    assert len(found) > 45, "the pattern that finds the calls stopped working"
     for name, method, literal in found:
         for concrete in KINDS.get(literal, [literal]):
             path = "/api/yipi" + js_literal_to_path(concrete)
             assert matches(path, method), f"{name}: {method} {literal} is not a route of the server"
 
 
+def test_the_calls_the_pattern_above_cannot_see_use_addresses_the_server_knows():
+    """The GIF upload goes through its own helper, Nex through fetch (a stream, not JSON)."""
+    assert 'call("POST", "/gifs", undefined, form)' in JS["yipi-api.js"] and matches("/api/yipi/gifs", "POST")
+    nex = JS["yipi-nex.js"]
+    assert 'fetch("/api/yipi/nex", { method: "POST"' in nex and matches("/api/yipi/nex", "POST")
+    assert nex.count("fetch(") == 1, "Nex is the one page that does not use YipiApi: its answer is a stream"
+    assert 'credentials: "same-origin"' in nex
+
+
 def test_calls_that_hand_the_address_over_use_addresses_the_server_knows():
-    """Yip buttons hand their address (/posts/<id>/like ...) to a helper, so the pattern above cannot see them."""
+    """Post buttons hand their address (/posts/<id>/like ...) to a helper, so the pattern above cannot see them."""
     source = JS["yipi-components.js"]
     for literal, method in (("/posts/${item.id}/like", "POST"), ("/posts/${item.id}/repost", "POST"), ("/posts/${item.id}/bookmark", "POST"),
                             ("/posts/${item.id}/like", "DELETE"), ("/posts/${item.id}/repost", "DELETE"), ("/posts/${item.id}/bookmark", "DELETE"),
@@ -134,7 +143,7 @@ def test_the_pages_the_router_knows_are_served_by_the_server():
     """A reload or a shared link on any address of the app must find a page (the shell) and not an error."""
     adapter = flask_app.url_map.bind("localhost")
     for path in ("/", "/explore", "/notifications", "/messages", "/messages/mia", "/bookmarks", "/settings", "/settings/display", "/search",
-                 "/moderation", "/i/login", "/i/signup", "/mia", "/mia/status/1", "/mia/followers", "/mia/following"):
+                 "/moderation", "/i/login", "/i/signup", "/i/nex", "/mia", "/mia/status/1", "/mia/followers", "/mia/following"):
         adapter.match(path, method="GET")
 
 
@@ -144,6 +153,12 @@ def test_the_script_and_the_server_agree_on_the_limits():
     assert f"MAX_MEDIA = {yipi.MAX_MEDIA}" in core
     components = JS["yipi-components.js"]
     assert f"{yipi.MAX_IMAGE_BYTES // (1024 * 1024)} * 1024 * 1024" in components
+    gif = JS["yipi-gif-core.js"]
+    assert f"MAX_BYTES = {yipi.MAX_GIF_BYTES // (1024 * 1024)} * 1024 * 1024" in gif and f"MAX_FRAMES = {yipi.MAX_GIF_FRAMES}" in gif and f"MAX_TITLE = {yipi.MAX_GIF_TITLE}" in gif
+    assert "maxPixels = 2000000" in gif and yipi.MAX_GIF_PIXELS == 2000000
+    assert f"NEX_TURNS = {yipi.NEX_TURNS}" in core
+    assert "slice(0, 1500)" in core and yipi.MAX_NEX_MESSAGE == 1500
+    assert f"maxlength: {yipi.MAX_NEX_MESSAGE}" in JS["yipi-nex.js"]
     assert 'maxlength: 1000' in JS["yipi-pages.js"] and yipi.MAX_DM == 1000
     views = JS["yipi-views.js"]
     assert f"maxlength: {yipi.MAX_NAME}" in views and f"maxlength: {yipi.MAX_BIO}" in views
@@ -212,11 +227,11 @@ def test_every_theme_defines_the_same_colours():
 
 def test_every_animation_has_its_keyframes():
     keyframes = set(re.findall(r"@keyframes\s+([\w-]+)", CSS))
-    assert keyframes == {"spin", "fade", "rise", "pop", "shimmer", "toast-in", "drop"}
+    assert keyframes == {"spin", "fade", "rise", "pop", "shimmer", "toast-in", "drop", "drift", "breathe", "blink", "sheet"}
     for name in keyframes:
         assert re.search(rf"animation:[^;]*\b{name}\b", CSS), f"{name} is defined but never used"
     for declaration in re.findall(r"animation:\s*([a-z][\w-]*)", CSS):
-        assert declaration in keyframes, declaration
+        assert declaration in keyframes or declaration == "none", declaration
 
 
 # Class names the script uses only as hooks or states (no style of their own).
@@ -242,10 +257,48 @@ def test_every_class_the_script_gives_to_an_element_has_a_style():
     assert not missing, f"classes without a style: {missing}"
 
 
-def test_the_layout_has_the_three_sizes_and_respects_reduced_motion():
-    assert "@media (max-width: 700px)" in CSS and "@media (max-width: 1050px)" in CSS and "@media (max-width: 1280px)" in CSS
+def test_the_layout_fits_wide_tablet_phone_held_sideways_and_phone_held_upright_and_respects_reduced_motion():
+    assert "@media (max-width: 1280px)" in CSS and "@media (max-width: 1050px)" in CSS, "tablet: a rail of icons, then no extras column"
+    landscape = "(min-width: 561px) and (max-height: 499px)"
+    assert CSS.count(landscape) >= 4, "a phone held sideways: the rail, no bar at the bottom"
+    assert "@media (max-width: 560px), (max-width: 700px) and (min-height: 500px)" in CSS, "a phone held upright: the floating bar at the bottom"
     assert "prefers-reduced-motion: reduce" in CSS
-    assert "env(safe-area-inset-bottom)" in CSS
+    assert "env(safe-area-inset-bottom)" in CSS and "env(safe-area-inset-left)" in CSS and "100dvh" in CSS
+    phone = CSS.split("@media (max-width: 560px), (max-width: 700px) and (min-height: 500px) {")[1].split("\n}\n")[0]
+    for rule in (".tabbar {", ".fab {", ".side { display: none; }", '.tabbar .nav-item[data-nav="nex"]'):
+        assert rule in phone, rule
+    sideways = CSS.split("@media (min-width: 561px) and (max-height: 499px) {")[1].split("\n}\n")[0]
+    assert ".mobile-head { display: none; }" in sideways and ".tabbar" not in sideways, "sideways: no bar at the bottom"
+
+
+def test_the_look_is_glass_on_every_surface():
+    assert "backdrop-filter: blur(" in CSS and CSS.count("backdrop-filter") >= 20
+    for selector in (".center {", ".card {", ".topbar {", ".dialog {", ".menu {", ".tabbar {", ".toast {", ".nex-compose-box {", ".auth-card {", ".legal {"):
+        blocks = [part.split("}")[0] for part in CSS.split(selector)[1:]]
+        assert any("backdrop-filter" in block for block in blocks), selector
+    assert ".orbs {" in CSS and "font-family: \"Inter\"" in CSS
+
+
+def test_the_accent_colours_of_the_settings_the_theme_script_and_the_style_agree():
+    named = re.findall(r'\[\"(\w+)\", \"[^\"]+\", \"linear-gradient', JS["yipi-pages.js"])
+    assert named == ["pulse", "violet", "pink", "orange", "green"]
+    in_css = set(re.findall(r':root\[data-accent=\"(\w+)\"\]', CSS))
+    assert in_css == set(named) - {"pulse"}, "the standard colour is the one without an attribute"
+    assert in_css == set(re.findall(r'accent === \"(\w+)\"', JS["yipi-theme.js"]))
+    for name in in_css:
+        assert f'name === "pulse"' in JS["yipi.js"] and f':root[data-theme="light"][data-accent="{name}"]' in CSS, name
+
+
+def test_the_notification_tabs_ask_the_server_for_what_it_offers():
+    views = JS["yipi-views.js"]
+    assert '["all", "Alle"], ["mentions", "Erwähnungen"]' in views and 'filter: only === "mentions" ? "mentions" : ""' in views
+    assert 'request.args.get("filter") == "mentions"' in read("yipi.py")
+
+
+def test_the_bottom_bar_of_a_phone_has_nex_in_the_middle():
+    shell = JS["yipi.js"]
+    assert 'const TABBAR = ["home", "explore", "nex", "notifications", "messages"]' in shell
+    assert 'id: "nex"' in shell and "/i/nex" in shell
 
 
 # ------------------------------------------------------------------------- the pages around the app
@@ -263,7 +316,7 @@ def test_the_legal_pages_exist_and_say_what_they_must(client):
 
 def test_the_privacy_page_matches_what_the_app_really_stores():
     page = read("templates", "legal.html")
-    for key in ("yipi.theme", "yipi.feed", "yipi.recent"):
+    for key in ("yipi.theme", "yipi.feed", "yipi.recent", "yipi.nex", "yipi.draft"):
         assert key in page
         assert any(key in source for source in JS.values()), f"{key} is described but not used"
     assert yipi.COOKIE in page and "30 Tage" in page
@@ -279,13 +332,13 @@ def test_the_imprint_shows_the_operator_when_it_is_set(client, monkeypatch):
 
 
 def test_manifest_robots_and_sitemap(client):
-    manifest = client.get("/yipi-archiv/manifest.webmanifest")
+    manifest = client.get("/manifest.webmanifest")
     assert manifest.mimetype == "application/manifest+json"
     data = manifest.get_json()
-    assert data["name"] == "yipi" and data["start_url"] == "/yipi-archiv" and data["display"] == "standalone"
+    assert data["short_name"] == "Pulse" and data["start_url"] == "/" and data["display"] == "standalone"
     assert {icon["purpose"] for icon in data["icons"]} == {"any", "maskable"}
     robots = client.get("/robots.txt").get_data(as_text=True)
-    for private in ("/api/", "/messages", "/settings", "/yipi-archiv", "/gomat-archiv", "/ysound-archiv"):
+    for private in ("/api/", "/messages", "/settings", "/nex-agenten-archiv", "/gomat-archiv", "/ysound-archiv"):
         assert f"Disallow: {private}" in robots
     assert "Sitemap: http://localhost/sitemap.xml" in robots
     sitemap = client.get("/sitemap.xml").get_data(as_text=True)
@@ -294,11 +347,11 @@ def test_manifest_robots_and_sitemap(client):
     assert "gomat-archiv" not in sitemap and "yipi-archiv" not in sitemap
 
 
-def test_error_pages_are_nex_ai_pages(client):
+def test_error_pages_are_pulse_pages(client):
     page = client.get("/gibt-es-nicht-1234")
     assert page.status_code == 404
     text = page.get_data(as_text=True)
-    assert "Nex Ai" in text and "Diese Seite gibt es nicht" in text and "gomat" not in text.lower()
+    assert "Pulse" in text and "Diese Seite gibt es nicht" in text and "gomat" not in text.lower() and "Nex Ai" not in text
     assert "Content-Security-Policy" in page.headers
     api = client.get("/api/yipi/gibt-es-nicht")
     assert api.status_code == 404 and api.get_json() == {"ok": False, "error": "not_found"}
@@ -331,7 +384,8 @@ def test_the_old_home_page_is_still_reachable_and_links_inside_its_own_address(c
 # --------------------------------------------------------------------------------------- Node tests of the helpers
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is not installed")
 def test_the_helper_functions_pass_their_node_tests():
-    result = subprocess.run([shutil.which("node"), "--test", os.path.join(ROOT, "tests", "yipi_core.test.js")], capture_output=True, text=True, timeout=180)
+    result = subprocess.run([shutil.which("node"), "--test", os.path.join(ROOT, "tests", "yipi_core.test.js"), os.path.join(ROOT, "tests", "yipi_gif_core.test.js")],
+                            capture_output=True, text=True, timeout=180)
     assert result.returncode == 0, (result.stdout + result.stderr)[-3000:]
     assert "# fail 0" in result.stdout and "# pass" in result.stdout
 

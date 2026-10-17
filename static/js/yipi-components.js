@@ -1,7 +1,7 @@
-/* yipi components: the parts that make the page -- a Yip (post card with its buttons and menus), the box to write a Yip
-   (with pictures, emojis and the ring that counts characters), a row for a person with its follow button, and the dialogs
-   to compose and to report. Pictures are made smaller in the browser before they are sent (which also removes where and
-   with what they were taken). */
+/* Pulse components (the file keeps the name yipi-components.js): the parts that make the page -- a post (card with its buttons and
+   menus), the box to write a post (with photos or one GIF, emojis and the ring that counts characters), a row for a person with its
+   follow button, and the dialogs to compose and to report. Photos are made smaller in the browser before they are sent (which also
+   removes where and with what they were taken). Videos are not taken at all. */
 (function () {
   "use strict";
 
@@ -23,7 +23,7 @@
   const absolute = (path) => `${location.origin}${path}`;
 
   // ------------------------------------------------------------------------------------ small pieces
-  /* A round button of the row under a Yip. `draw(active, count)` fills in icon and number. */
+  /* A round button of the row under a post. `draw(active, count)` fills in icon and number. */
   function actionButton({ kind, label, off, on }) {
     const iconBox = h("span", { class: "act-icon" });
     const number = h("span", { class: "act-count" });
@@ -48,17 +48,17 @@
     }
   }
 
-  function reportDialog({ postId, handle }) {
+  function reportDialog({ postId, handle, gifId }) {
     if (!Y.requireLogin("Melde dich an, um etwas zu melden.")) return;
     let reason = "";
     const note = h("textarea", { class: "field-area", rows: 3, maxlength: 300, placeholder: "Möchtest du etwas dazu sagen? (freiwillig)", "aria-label": "Anmerkung" });
     const choices = REASONS.map(([value, text]) => h("label", { class: "choice" }, h("input", { type: "radio", name: "reason", value, onchange: () => { reason = value; entry.box.querySelector(".dialog-actions .btn").disabled = false; } }), h("span", {}, text)));
     const entry = dialog({
-      title: postId ? "Yip melden" : `@${handle} melden`,
+      title: gifId ? "GIF melden" : postId ? "Beitrag melden" : `@${handle} melden`,
       body: h("div", { class: "report" }, h("p", { class: "dialog-text" }, "Warum meldest du das?"), h("div", { class: "choices" }, choices), note),
       actions: [{ label: "Melden", kind: "primary", run: async () => {
         if (!reason) return false;
-        const reply = await Api.post("/reports", { postId, handle: postId ? undefined : handle, reason, note: note.value });
+        const reply = await Api.post("/reports", { postId, gifId, handle: postId || gifId ? undefined : handle, reason, note: note.value });
         toast(reply.ok ? "Danke, wir schauen uns das an." : Api.message(reply));
         return reply.ok;
       } }],
@@ -160,20 +160,21 @@
     throw new Error("too big");
   }
 
-  // ------------------------------------------------------------------------------------------- Yips
+  // ------------------------------------------------------------------------------------------- posts
   function mediaGrid(media) {
     const grid = h("div", { class: `media m${Math.min(media.length, 4)}` });
+    if (media.length === 1 && media[0].gif && media[0].gifId) put(grid, Y.gifStar({ id: media[0].gifId, favorite: !!media[0].gifFavorite }));
     media.slice(0, 4).forEach((item, index) => {
       const ratio = media.length === 1 ? `aspect-ratio: ${Math.max(0.8, Math.min(1.78, item.width / item.height)).toFixed(3)}` : "";
-      put(grid, h("button", { class: "media-item", type: "button", style: ratio, "aria-label": item.alt ? `Bild vergrößern: ${item.alt}` : "Bild vergrößern", onclick: (event) => { event.stopPropagation(); Y.viewer(media, index); } },
-        h("img", { src: item.url, alt: item.alt || "", loading: "lazy", decoding: "async" })));
+      put(grid, h("button", { class: `media-item${item.gif ? " is-gif" : ""}`, type: "button", style: ratio, "aria-label": item.alt ? `${item.gif ? "GIF" : "Bild"} vergrößern: ${item.alt}` : item.gif ? "GIF vergrößern" : "Bild vergrößern", onclick: (event) => { event.stopPropagation(); Y.viewer(media, index); } },
+        h("img", { src: item.url, alt: item.alt || (item.gif ? "GIF" : ""), loading: "lazy", decoding: "async" }), item.gif ? h("span", { class: "gif-badge", "aria-hidden": "true" }, "GIF") : null));
     });
     return grid;
   }
 
   function quoteCard(quote) {
-    if (quote.unavailable) return h("div", { class: "quote gone" }, "Dieser Yip ist nicht verfügbar.");
-    const card = h("div", { class: "quote", role: "link", tabindex: "0", "aria-label": `Zitierter Yip von ${quote.user.name}` },
+    if (quote.unavailable) return h("div", { class: "quote gone" }, "Dieser Beitrag ist nicht verfügbar.");
+    const card = h("div", { class: "quote", role: "link", tabindex: "0", "aria-label": `Zitierter Beitrag von ${quote.user.name}` },
       h("div", { class: "quote-head" }, avatar(quote.user, "xs"), h("b", {}, quote.user.name), h("span", { class: "handle" }, `@${quote.user.handle}`), h("span", { class: "dot" }, "·"), timeEl(quote.createdAt)),
       quote.text ? h("div", { class: "post-text" }, richText(quote.text)) : null,
       quote.media && quote.media.length ? h("div", { class: "quote-media" }, h("img", { src: quote.media[0].url, alt: quote.media[0].alt || "", loading: "lazy" })) : null);
@@ -183,14 +184,14 @@
     return card;
   }
 
-  /* One Yip. Options: detail (the big version on its own page), noReplyLine, onDelete(card), onReply(post). */
+  /* One post. Options: detail (the big version on its own page), noReplyLine, onDelete(card), onReply(post). */
   function postCard(item, options = {}) {
     if (item.deleted) {
-      return h("article", { class: "post gone" }, h("p", {}, "Dieser Yip wurde gelöscht."));
+      return h("article", { class: "post gone" }, h("p", {}, "Dieser Beitrag wurde gelöscht."));
     }
     const detail = !!options.detail;
     const mine = !!(Y.me && Y.me.handle === item.user.handle);
-    const card = h("article", { class: `post${detail ? " detail" : ""}`, "data-id": String(item.id), "data-cursor": String(item.cursor || item.id), tabindex: "0", "aria-label": `Yip von ${item.user.name}` });
+    const card = h("article", { class: `post${detail ? " detail" : ""}`, "data-id": String(item.id), "data-cursor": String(item.cursor || item.id), tabindex: "0", "aria-label": `Beitrag von ${item.user.name}` });
     const state = { viewer: { ...item.viewer }, counts: { ...item.counts } };
 
     const replyButton = actionButton({ kind: "reply", label: "Antworten", off: "reply" });
@@ -264,7 +265,7 @@
     shareButton.addEventListener("click", async (event) => {
       event.stopPropagation();
       if (navigator.share && matchMedia("(pointer: coarse)").matches) {
-        try { await navigator.share({ url: absolute(postPath(item)), title: `${item.user.name} auf yipi` }); return; } catch (error) { if (error && error.name === "AbortError") return; }
+        try { await navigator.share({ url: absolute(postPath(item)), title: `${item.user.name} auf Pulse` }); return; } catch (error) { if (error && error.name === "AbortError") return; }
       }
       copyLink(postPath(item));
     });
@@ -273,21 +274,22 @@
       const other = item.user.handle;
       menu(moreButton, [
         { label: "Link kopieren", icon: "link", run: () => copyLink(postPath(item)) },
-        mine ? { label: "Yip löschen", icon: "trash", danger: true, run: async () => {
-          if (!(await confirmBox({ title: "Yip löschen?", text: "Das lässt sich nicht rückgängig machen.", yes: "Löschen", danger: true }))) return;
+        item.text ? { label: "Mit Nex erklären", icon: "sparkle", run: () => Y.navigate(Core.buildPath({ name: "nex", post: item.id })) } : null,
+        mine ? { label: "Beitrag löschen", icon: "trash", danger: true, run: async () => {
+          if (!(await confirmBox({ title: "Beitrag löschen?", text: "Das lässt sich nicht rückgängig machen.", yes: "Löschen", danger: true }))) return;
           const reply = await Api.del(`/posts/${item.id}`);
           if (!reply.ok) { toast(Api.message(reply)); return; }
-          toast("Dein Yip wurde gelöscht.");
+          toast("Dein Beitrag wurde gelöscht.");
           if (options.onDelete) options.onDelete(card); else card.remove();
         } } : null,
         Y.me && !mine ? { label: `@${other} stummschalten`, icon: "mute", run: async () => { const reply = await Api.post(`/users/${other}/mute`); toast(reply.ok ? `@${other} ist stummgeschaltet.` : Api.message(reply)); if (reply.ok) card.remove(); } } : null,
         Y.me && !mine ? { label: `@${other} blockieren`, icon: "block", danger: true, run: async () => {
-          if (!(await confirmBox({ title: `@${other} blockieren?`, text: "Ihr seht die Yips des anderen nicht mehr und könnt euch nicht mehr folgen oder schreiben.", yes: "Blockieren", danger: true }))) return;
+          if (!(await confirmBox({ title: `@${other} blockieren?`, text: "Ihr seht die Beiträge des anderen nicht mehr und könnt euch nicht mehr folgen oder schreiben.", yes: "Blockieren", danger: true }))) return;
           const reply = await Api.post(`/users/${other}/block`);
           toast(reply.ok ? `@${other} ist blockiert.` : Api.message(reply));
           if (reply.ok) card.remove();
         } } : null,
-        !mine ? { label: "Yip melden", icon: "flag", danger: true, run: () => reportDialog({ postId: item.id }) } : null,
+        !mine ? { label: "Beitrag melden", icon: "flag", danger: true, run: () => reportDialog({ postId: item.id }) } : null,
       ]);
     });
 
@@ -345,20 +347,21 @@
     return { svg, set(fraction) { bar.style.strokeDashoffset = String(length * (1 - Math.max(0, Math.min(1, fraction)))); } };
   }
 
-  /* The box to write a Yip. Options: replyTo, quoteOf (Yips), placeholder, compact, autofocus, draftKey, onPosted(post), label. */
+  /* The box to write a post. Options: replyTo, quoteOf (posts), placeholder, compact, autofocus, draftKey, text (to start with), onPosted(post), label. */
   function composer(options = {}) {
     const { replyTo, quoteOf, compact, onPosted } = options;
     const draftKey = `yipi.draft.${options.draftKey || (replyTo ? `r${replyTo.id}` : quoteOf ? `q${quoteOf.id}` : "new")}`;
-    const picked = [];                                   // {blob, url, alt, uploaded}
+    const picked = [];                                   // {blob, url, alt, uploaded, gif}: up to 4 photos, or one GIF
     let busy = false;
 
-    const textarea = h("textarea", { class: "compose-text", rows: 1, maxlength: 1000, placeholder: options.placeholder || (replyTo ? "Deine Antwort" : quoteOf ? "Füge einen Kommentar hinzu" : "Was gibt's Neues?"), "aria-label": replyTo ? "Deine Antwort" : "Text deines Yips" });
+    const textarea = h("textarea", { class: "compose-text", rows: 1, maxlength: 1000, placeholder: options.placeholder || (replyTo ? "Deine Antwort" : quoteOf ? "Füge einen Kommentar hinzu" : "Was gibt's Neues?"), "aria-label": replyTo ? "Deine Antwort" : "Text deines Beitrags" });
     const previews = h("div", { class: "compose-media", hidden: true });
     const picker = h("input", { type: "file", accept: "image/jpeg,image/png,image/gif,image/webp", multiple: true, hidden: true, "aria-hidden": "true", tabindex: "-1" });
     const gauge = ring();
     const left = h("span", { class: "ring-left" });
-    const submit = h("button", { class: "btn primary post-btn", type: "button", disabled: true }, options.label || (replyTo ? "Antworten" : "Yippen"));
-    const photoButton = h("button", { class: "icon-btn tool", type: "button", "aria-label": "Bild hinzufügen" }, icon("image"));
+    const submit = h("button", { class: "btn primary post-btn", type: "button", disabled: true }, options.label || (replyTo ? "Antworten" : "Posten"));
+    const photoButton = h("button", { class: "icon-btn tool", type: "button", "aria-label": "Foto hinzufügen" }, icon("image"));
+    const gifButton = h("button", { class: "icon-btn tool", type: "button", "aria-label": "GIF hinzufügen", "aria-haspopup": "dialog" }, icon("gif"));
     const emojiButton = h("button", { class: "icon-btn tool", type: "button", "aria-label": "Emoji einfügen", "aria-haspopup": "dialog" }, icon("emoji"));
 
     function update() {
@@ -370,7 +373,8 @@
       left.textContent = state === "ok" ? "" : String(Core.MAX_POST - count);
       left.dataset.state = state;
       submit.disabled = busy || state === "over" || (!count && !picked.length);
-      photoButton.disabled = busy || picked.length >= Core.MAX_MEDIA;
+      photoButton.disabled = busy || (picked.length >= Core.MAX_MEDIA && !picked.some((entry) => entry.gif));
+      gifButton.disabled = busy;
       textarea.style.height = "auto";
       textarea.style.height = `${Math.min(textarea.scrollHeight, compact ? 220 : 340)}px`;
       try { if (text) sessionStorage.setItem(draftKey, text); else sessionStorage.removeItem(draftKey); } catch (error) { /* storage blocked */ }
@@ -381,8 +385,9 @@
       previews.className = `compose-media m${Math.min(picked.length, 4)}`;
       fill(previews, ...picked.map((entry, index) => h("div", { class: "pv" },
         h("img", { src: entry.url, alt: entry.alt || "Vorschau" }),
-        h("button", { class: "pv-x", type: "button", "aria-label": "Bild entfernen", onclick: () => { URL.revokeObjectURL(entry.url); picked.splice(index, 1); drawPreviews(); update(); } }, icon("close")),
-        h("button", { class: `pv-alt${entry.alt ? " set" : ""}`, type: "button", onclick: () => altDialog(entry) }, entry.alt ? "ALT ✓" : "+ ALT"))));
+        h("button", { class: "pv-x", type: "button", "aria-label": entry.gif ? "GIF entfernen" : "Foto entfernen", onclick: () => { URL.revokeObjectURL(entry.url); picked.splice(index, 1); drawPreviews(); update(); } }, icon("close")),
+        entry.gif ? h("span", { class: "pv-alt gif-badge", "aria-hidden": "true" }, "GIF")
+                  : h("button", { class: `pv-alt${entry.alt ? " set" : ""}`, type: "button", onclick: () => altDialog(entry) }, entry.alt ? "ALT ✓" : "+ ALT"))));
     }
 
     function altDialog(entry) {
@@ -393,18 +398,33 @@
 
     async function addFiles(files) {
       for (const file of files) {
-        if (picked.length >= Core.MAX_MEDIA) { toast("Mehr als 4 Bilder gehen nicht."); break; }
-        if (!/^image\/(jpeg|png|gif|webp)$/.test(file.type)) { toast("Das ist kein Bild, das yipi kennt (JPEG, PNG, GIF oder WebP)."); continue; }
+        if (file.type.startsWith("video/") || /\.(mp4|m4v|mov|webm|mkv|avi|wmv|3gp|mpe?g)$/i.test(file.name || "")) { toast(Api.MESSAGES.no_video); continue; }
+        if (picked.some((entry) => entry.gif)) picked.splice(0, picked.length);          // photos take the place of a GIF
+        if (picked.length >= Core.MAX_MEDIA) { toast("Mehr als 4 Fotos gehen nicht."); break; }
+        if (!/^image\/(jpeg|png|gif|webp)$/.test(file.type)) { toast(Api.MESSAGES.bad_image); continue; }
         if (file.type === "image/gif" && file.size > 5 * 1024 * 1024) { toast("Das GIF ist zu groß (höchstens 5 MB)."); continue; }
+        if (file.type === "image/gif" && picked.length) { toast(Api.MESSAGES.gif_alone); continue; }
         try {
           const blob = await prepareImage(file);
-          picked.push({ blob, url: URL.createObjectURL(blob), alt: "", uploaded: null, name: file.name });
+          picked.push({ blob, url: URL.createObjectURL(blob), alt: "", uploaded: null, name: file.name, gif: file.type === "image/gif" });
+          if (file.type === "image/gif") break;
         } catch (error) {
-          toast("Dieses Bild konnte nicht gelesen werden.");
+          toast("Dieses Foto konnte nicht gelesen werden.");
         }
       }
       drawPreviews();
       update();
+    }
+
+    /* A GIF of the library: its bytes are copied into a picture of the sender (on the server), and that picture goes into the post. */
+    async function addGif(gif) {
+      const reply = await Api.post(`/gifs/${gif.id}/use`);
+      if (!reply.ok) { toast(Api.message(reply)); return; }
+      picked.forEach((entry) => URL.revokeObjectURL(entry.url));
+      picked.splice(0, picked.length, { blob: null, url: reply.data.media.url, alt: gif.title || "GIF", uploaded: reply.data.media.id, name: "", gif: true });
+      drawPreviews();
+      update();
+      textarea.focus();
     }
 
     function clear() {
@@ -445,11 +465,12 @@
     textarea.addEventListener("input", update);
     textarea.addEventListener("keydown", (event) => { if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); send(); } });
     textarea.addEventListener("paste", (event) => {
-      const files = [...(event.clipboardData ? event.clipboardData.files : [])].filter((f) => f.type.startsWith("image/"));
+      const files = [...(event.clipboardData ? event.clipboardData.files : [])].filter((f) => f.type.startsWith("image/") || f.type.startsWith("video/"));
       if (files.length) { event.preventDefault(); addFiles(files); }
     });
     submit.addEventListener("click", send);
     photoButton.addEventListener("click", () => picker.click());
+    gifButton.addEventListener("click", () => Y.gifPicker({ onPick: addGif }));
     picker.addEventListener("change", () => { addFiles([...picker.files]); picker.value = ""; });
     emojiButton.addEventListener("click", (event) => {
       event.stopPropagation();
@@ -465,12 +486,13 @@
     const root = h("div", { class: `composer${compact ? " compact" : ""}` },
       avatar(Y.me, "md"),
       h("div", { class: "compose-main" }, textarea, previews,
-        h("div", { class: "compose-bar" }, h("div", { class: "tools" }, photoButton, emojiButton, picker),
+        h("div", { class: "compose-bar" }, h("div", { class: "tools" }, photoButton, gifButton, emojiButton, picker),
           h("div", { class: "send" }, left, gauge.svg, submit))));
     root.addEventListener("dragover", (event) => { if ([...(event.dataTransfer ? event.dataTransfer.types : [])].includes("Files")) { event.preventDefault(); root.classList.add("drop"); } });
     root.addEventListener("dragleave", () => root.classList.remove("drop"));
     root.addEventListener("drop", (event) => { root.classList.remove("drop"); if (event.dataTransfer && event.dataTransfer.files.length) { event.preventDefault(); addFiles([...event.dataTransfer.files]); } });
-    try { const draft = sessionStorage.getItem(draftKey); if (draft) textarea.value = draft; } catch (error) { /* storage blocked */ }
+    if (options.text) textarea.value = options.text;
+    else { try { const draft = sessionStorage.getItem(draftKey); if (draft) textarea.value = draft; } catch (error) { /* storage blocked */ } }
     update();
     if (options.autofocus) setTimeout(() => textarea.focus(), 0);
     root.focusText = () => textarea.focus();
@@ -478,24 +500,24 @@
     return root;
   }
 
-  /* The dialog to write a Yip, a reply or a quote. */
-  Y.compose = function compose({ replyTo, quoteOf, onPosted } = {}) {
-    if (!Y.requireLogin("Melde dich an, um zu yippen.")) return null;
+  /* The dialog to write a post, a reply or a quote. */
+  Y.compose = function compose({ replyTo, quoteOf, onPosted, text } = {}) {
+    if (!Y.requireLogin("Melde dich an, um zu posten.")) return null;
     const target = replyTo || quoteOf;
     let entry;
     const box = composer({
-      replyTo, quoteOf, autofocus: true,
+      replyTo, quoteOf, autofocus: true, text,
       onPosted: (post) => {
         entry.close();
         onPosted?.(post);
         Y.onPosted?.(post, { replyTo, quoteOf });
-        toast(replyTo ? "Deine Antwort wurde gesendet." : "Dein Yip wurde gesendet.", { label: "Anzeigen", run: () => Y.navigate(postPath(post)) });
+        toast(replyTo ? "Deine Antwort wurde gesendet." : "Dein Beitrag wurde gesendet.", { label: "Anzeigen", run: () => Y.navigate(postPath(post)) });
       },
     });
     const context = target ? h("div", { class: "compose-context" }, h("div", { class: "cc-line" }, avatar(target.user, "sm")),
       h("div", {}, h("div", { class: "cc-who" }, h("b", {}, target.user.name), h("span", { class: "handle" }, ` @${target.user.handle}`)), target.text ? h("div", { class: "post-text" }, richText(target.text.length > 280 ? target.text.slice(0, 280) : target.text)) : null,
         replyTo ? h("p", { class: "reply-line" }, "Antwort an ", h("span", { class: "tok" }, `@${target.user.handle}`)) : null)) : null;
-    entry = dialog({ label: replyTo ? "Antworten" : quoteOf ? "Zitieren" : "Neuer Yip", body: h("div", { class: "compose-dialog" }, replyTo ? context : null, box, quoteOf ? h("div", { class: "quote-preview" }, context) : null), initialFocus: box.querySelector("textarea") });
+    entry = dialog({ label: replyTo ? "Antworten" : quoteOf ? "Zitieren" : "Neuer Beitrag", body: h("div", { class: "compose-dialog" }, replyTo ? context : null, box, quoteOf ? h("div", { class: "quote-preview" }, context) : null), initialFocus: box.querySelector("textarea") });
     return entry;
   };
 

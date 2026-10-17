@@ -10,6 +10,7 @@
 """
 import os
 import secrets
+import threading
 import time
 
 from flask import request
@@ -85,21 +86,24 @@ class RateLimiter:
     def __init__(self, limits, hits=None):
         self.limits = limits
         self.hits = {} if hits is None else hits
+        self._lock = threading.Lock()             # the site runs several threads (a Nex answer must not hold up everybody else)
 
     def too_many(self, kind, key):
         limit, window = self.limits[kind]
         now = time.time()
         slot = (kind, key)
-        recent = [t for t in self.hits.get(slot, ()) if now - t < window]
-        recent.append(now)
-        self.hits[slot] = recent
-        if len(self.hits) > 5000:                 # keep the table small
-            for old in [s for s, times in self.hits.items() if not times or now - times[-1] > 3600]:
-                self.hits.pop(old, None)
+        with self._lock:
+            recent = [t for t in self.hits.get(slot, ()) if now - t < window]
+            recent.append(now)
+            self.hits[slot] = recent
+            if len(self.hits) > 5000:             # keep the table small
+                for old in [s for s, times in list(self.hits.items()) if not times or now - times[-1] > 3600]:
+                    self.hits.pop(old, None)
         return len(recent) > limit
 
     def clear(self, kind, key):
-        self.hits.pop((kind, key), None)
+        with self._lock:
+            self.hits.pop((kind, key), None)
 
 
 def client_addresses():

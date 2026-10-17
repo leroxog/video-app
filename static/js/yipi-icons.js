@@ -1,6 +1,6 @@
-/* yipi icons: the small pictures of the page and the logo, drawn in code (all original). `YipiIcons.icon(name)` gives
-   an <svg> element that takes the colour of the text around it; `YipiIcons.logo()` the speech bubble with the "y". The only
-   place in the page that uses innerHTML is here, for these fixed drawings. */
+/* Pulse icons (the file keeps the name yipi-icons.js): the small pictures of the page and the logo, drawn in code (all original).
+   `YipiIcons.icon(name)` gives an <svg> element that takes the colour of the text around it; `YipiIcons.logo()` the heartbeat on its
+   violet-to-cyan tile. The only place in the page that uses innerHTML is here, for these fixed drawings. */
 (function () {
   "use strict";
 
@@ -51,6 +51,14 @@
     send: S('<path d="M4 12l16-8-6 16-3-7z"/>'),
     trending: S('<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>'),
     pencil: S('<path d="M4 20h4L19 9a2.800 2.800 0 00-4-4L4 16z"/><path d="M13.500 6.500l4 4"/>'),
+    sparkle: S('<path d="M11 3l1.900 5.600L18.500 10.500l-5.600 1.900L11 18l-1.900-5.600L3.500 10.500l5.600-1.900z"/><path d="M19 15l.8 2.200 2.200.8-2.200.8L19 21l-.8-2.200-2.200-.8 2.200-.8z"/>'),
+    sparkleFill: S('<path d="M11 3l1.900 5.600L18.500 10.500l-5.600 1.900L11 18l-1.900-5.600L3.500 10.500l5.600-1.900z"/><path d="M19 15l.8 2.200 2.200.8-2.200.8L19 21l-.8-2.200-2.200-.8 2.200-.8z"/>', `${FILL} stroke="currentColor" stroke-width="1.600" stroke-linejoin="round"`),
+    gif: S('<rect x="2.500" y="6" width="19" height="12" rx="3.500"/><path d="M10.500 10.600A2 2 0 009 10c-1.100 0-2 .9-2 2s.9 2 2 2c.7 0 1.300-.3 1.500-.8V12H9M12.800 10v4M15.500 14v-4h2.500M15.500 12h1.800"/>'),
+    star: S('<path d="M12 3.500l2.600 5.400 5.900.8-4.300 4.100 1 5.800L12 16.800 6.800 19.600l1-5.800-4.300-4.100 5.900-.8z"/>'),
+    starFill: S('<path d="M12 3.500l2.600 5.400 5.900.8-4.300 4.100 1 5.800L12 16.800 6.800 19.600l1-5.800-4.300-4.100 5.900-.8z"/>', `${FILL} stroke="currentColor" stroke-width="2" stroke-linejoin="round"`),
+    text: S('<path d="M5 6.500V5h14v1.500M12 5v14M9 19h6"/>'),
+    stop: S('<rect x="6" y="6" width="12" height="12" rx="2.500"/>', `${FILL} stroke="currentColor" stroke-width="2" stroke-linejoin="round"`),
+    refresh: S('<path d="M20 11a8 8 0 10-2.300 6.300"/><path d="M20 4v7h-7"/>'),
     users: S('<circle cx="9" cy="8" r="3.500"/><path d="M2.500 20c.8-3.500 3.200-5.500 6.500-5.500s5.700 2 6.500 5.500"/><path d="M16 4.800a3.500 3.500 0 010 6.400M18 14.800c2 .6 3.200 2.300 3.600 4.700"/>'),
   };
 
@@ -62,13 +70,13 @@
 
   let counter = 0;
 
-  /* The speech bubble with a "y", on a violet-to-pink gradient. */
+  /* The heartbeat of Pulse on a violet-to-cyan tile (the same drawing as static/img/pulse-icon.svg). */
   function logo() {
-    const id = `yg${++counter}`;
+    const id = `pg${++counter}`;
     const holder = document.createElement("span");
-    holder.innerHTML = `<svg viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b6cff"/><stop offset="1" stop-color="#ff4f9a"/></linearGradient></defs>
-      <path d="M32 5C16.500 5 5 15.500 5 29.500c0 13.500 10.700 23.500 25.500 23.500 3.300 0 6.300-.5 9-1.500L53 59l-2.800-12C55.800 42.800 59 36.500 59 29.500 59 15.500 47.500 5 32 5z" fill="url(#${id})"/>
-      <path d="M20 21l12 14 12-14M32 35l-7 13" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    holder.innerHTML = `<svg viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b5cf6"/><stop offset="0.5" stop-color="#3b82f6"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs>
+      <rect x="2.500" y="2.500" width="59" height="59" rx="16" fill="url(#${id})"/>
+      <path d="M11.800 33.700L22.800 33.700L27.800 19.400L36.200 46.300L41.200 30.300L45.400 33.700L52.200 33.700" fill="none" stroke="#fff" stroke-width="5.500" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     return holder.firstElementChild;
   }
 

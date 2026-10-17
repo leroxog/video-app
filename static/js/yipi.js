@@ -1,6 +1,7 @@
-/* yipi: the frame around everything -- the router (the address bar changes without reloading the page), the side bar, the bottom bar
-   on phones, the right column, the badges for new messages, the themes and the keyboard shortcuts. The pages themselves are in
-   yipi-views.js and yipi-pages.js. */
+/* Pulse (the file keeps the name yipi.js): the frame around everything -- the router (the address bar changes without reloading the
+   page), the side bar (a rail of icons on a tablet or a phone held sideways), the bar at the bottom of a phone held upright, the right
+   column, the badges for new messages, the themes and the keyboard shortcuts. The pages themselves are in yipi-views.js, yipi-pages.js
+   and yipi-nex.js. */
 (function () {
   "use strict";
 
@@ -16,12 +17,12 @@
   Y.me = boot.me || null;
 
   // Addresses of the site that are not part of this page: a click on them loads the page from the server.
-  const OUTSIDE = new Set(["datenschutz", "impressum", "nutzungsbedingungen", "regeln", "hilfe", "gomat-archiv", "robots.txt", "sitemap.xml", "manifest.webmanifest", "static", "yipi-media", "api"]);
-  const NEEDS_LOGIN = new Set(["notifications", "messages", "thread", "bookmarks"]);
+  const OUTSIDE = new Set(["datenschutz", "impressum", "nutzungsbedingungen", "regeln", "hilfe", "gomat-archiv", "nex-agenten-archiv", "nex-ai-archiv", "nstl-archiv", "yipi-archiv", "robots.txt", "sitemap.xml", "manifest.webmanifest", "static", "yipi-media", "pulse-gif", "api"]);
+  const NEEDS_LOGIN = new Set(["notifications", "messages", "thread", "bookmarks", "nex"]);
   const BARE = new Set(["login", "signup"]);
 
   // ------------------------------------------------------------------------------------------------ theme
-  const THEME_COLOR = { light: "#ffffff", dim: "#15202b", dark: "#000000" };
+  const THEME_COLOR = { light: "#eef1f8", dim: "#0c1220", dark: "#07080d" };
   function applyTheme() {
     let choice = "auto";
     try { const saved = localStorage.getItem("yipi.theme"); if (saved === "dark" || saved === "dim" || saved === "light") choice = saved; } catch (error) { /* storage blocked */ }
@@ -35,17 +36,24 @@
   };
   matchMedia("(prefers-color-scheme: light)").addEventListener?.("change", applyTheme);
 
+  /* The colour of the accent: "pulse" (the standard), "pink", "green", "orange" or "violet". */
+  Y.setAccent = (name) => {
+    try { if (name === "pulse") localStorage.removeItem("yipi.accent"); else localStorage.setItem("yipi.accent", name); } catch (error) { /* storage blocked */ }
+    if (name === "pulse") document.documentElement.removeAttribute("data-accent"); else document.documentElement.setAttribute("data-accent", name);
+  };
+
   // ----------------------------------------------------------------------------------------------- shell
   const NAV = [
     { id: "home", label: "Startseite", path: () => Y.HOME, icon: "home", on: "homeFill" },
     { id: "explore", label: "Entdecken", path: () => "/explore", icon: "search", on: "searchBold" },
     { id: "notifications", label: "Benachrichtigungen", path: () => "/notifications", icon: "bell", on: "bellFill", auth: true, badge: true },
     { id: "messages", label: "Nachrichten", path: () => "/messages", icon: "mail", on: "mailFill", auth: true, badge: true },
+    { id: "nex", label: "Nex", path: () => "/i/nex", icon: "sparkle", on: "sparkleFill" },
     { id: "bookmarks", label: "Lesezeichen", path: () => "/bookmarks", icon: "bookmark", on: "bookmarkFill", auth: true },
     { id: "profile", label: "Profil", path: () => `/${Y.me.handle}`, icon: "user", on: "userFill", auth: true },
     { id: "settings", label: "Einstellungen", path: () => "/settings", icon: "settings", on: "settings" },
   ];
-  const TABBAR = ["home", "explore", "notifications", "messages"];
+  const TABBAR = ["home", "explore", "nex", "notifications", "messages"];       // the bar of a phone held upright, Nex in the middle
 
   let main = null;
   let announcer = null;
@@ -70,17 +78,22 @@
   }
 
   function buildRail() {
-    const box = h("aside", { class: "rail", "aria-label": "Mehr auf yipi" });
+    const box = h("aside", { class: "rail", "aria-label": "Mehr auf Pulse" });
     box.append(h("div", { class: "rail-search" }, Y.searchForm("")));
     if (!Y.me) {
-      box.append(h("section", { class: "card join" }, h("h2", {}, "Neu bei yipi?"), h("p", { class: "muted" }, "Erstelle ein Konto, folge Leuten und sag, was du denkst."),
+      box.append(h("section", { class: "card join" }, h("h2", {}, "Neu bei Pulse?"), h("p", { class: "muted" }, "Erstelle ein Konto, folge Leuten und sag, was dich bewegt."),
         link("/i/signup", { class: "btn primary wide" }, "Konto erstellen"), link("/i/login", { class: "btn ghost wide" }, "Anmelden")));
+    } else {
+      const ask = h("input", { class: "nex-card-input", type: "text", name: "q", placeholder: "Frag Nex etwas …", "aria-label": "Frag Nex etwas", maxlength: 300, autocomplete: "off", enterkeyhint: "send" });
+      box.append(h("form", { class: "card nex-card", onsubmit: (event) => { event.preventDefault(); Y.nexAsk(ask.value); } },
+        h("div", { class: "nex-card-head" }, h("span", { class: "nex-orb", "aria-hidden": "true" }, icon("sparkleFill")), h("div", {}, h("h2", {}, "Nex"), h("small", { class: "muted" }, "Die KI von Pulse"))),
+        ask, h("button", { class: "btn primary small", type: "submit" }, "Fragen")));
     }
     box.append(h("section", { class: "card", "data-rail": "trends" }, h("h2", {}, "Im Trend"), Y.skeleton(2)),
       h("section", { class: "card", "data-rail": "people" }, h("h2", {}, "Wem folgen"), Y.skeleton(2)),
       h("footer", { class: "rail-foot" },
         h("a", { href: "/nutzungsbedingungen" }, "Nutzungsbedingungen"), h("a", { href: "/datenschutz" }, "Datenschutz"), h("a", { href: "/impressum" }, "Impressum"),
-        h("button", { class: "linklike", type: "button", onclick: () => Y.shortcutsDialog() }, "Tastenkürzel"), h("span", {}, "© yipi")));
+        h("button", { class: "linklike", type: "button", onclick: () => Y.shortcutsDialog() }, "Tastenkürzel"), h("span", {}, "© Pulse")));
     return box;
   }
 
@@ -100,7 +113,7 @@
     if (!railBox) return;
     if (trends.ok && trends.data.trends.length) {
       fill(railCard("trends"), h("h2", {}, "Im Trend"), trends.data.trends.slice(0, 5).map((trend) => link(`/search?q=${encodeURIComponent(`#${trend.tag}`)}`, { class: "trend" },
-        h("span", { class: "t-kicker" }, "Trend"), h("b", {}, `#${trend.tag}`), h("span", { class: "t-count" }, `${Core.formatCount(trend.posts)} ${trend.posts === 1 ? "Yip" : "Yips"}`))));
+        h("span", { class: "t-kicker" }, "Trend"), h("b", {}, `#${trend.tag}`), h("span", { class: "t-count" }, `${Core.formatCount(trend.posts)} ${trend.posts === 1 ? "Beitrag" : "Beiträge"}`))));
     } else railBox.querySelector('[data-rail="trends"]')?.remove();
     if (people.ok && people.data.users.length) fill(railCard("people"), h("h2", {}, "Wem folgen"), people.data.users.map((user) => Y.userRow(user, { bio: false })));
     else railBox.querySelector('[data-rail="people"]')?.remove();
@@ -121,23 +134,23 @@
     if (Y.me && Y.me.isAdmin) items.push({ id: "moderation", label: "Moderation", path: () => "/moderation", icon: "shield", on: "shield" });
     const side = h("header", { class: "side" },
       h("div", { class: "side-inner" },
-        link(Y.HOME, { class: "brand", "aria-label": "yipi, zur Startseite" }, Icons.logo(), h("span", { class: "brand-name" }, "yipi")),
+        link(Y.HOME, { class: "brand", "aria-label": "Pulse, zur Startseite" }, Icons.logo(), h("span", { class: "brand-name" }, "Pulse")),
         h("nav", { class: "nav", "aria-label": "Hauptmenü" }, items.map((entry) => navItem(entry, false))),
-        Y.me ? h("button", { class: "btn primary compose-btn", type: "button", "aria-label": "Neuer Yip", onclick: () => Y.compose() }, h("span", { class: "cb-text" }, "Yippen"), h("span", { class: "cb-icon" }, icon("feather")))
+        Y.me ? h("button", { class: "btn primary compose-btn", type: "button", "aria-label": "Neuer Beitrag", onclick: () => Y.compose() }, h("span", { class: "cb-text" }, "Posten"), h("span", { class: "cb-icon" }, icon("feather")))
              : h("div", { class: "side-guest" }, link("/i/signup", { class: "btn primary" }, "Registrieren"), link("/i/login", { class: "btn ghost" }, "Anmelden")),
         h("div", { class: "side-spacer" }),
         Y.me ? accountChip() : null));
     const tabbar = h("nav", { class: "tabbar", "aria-label": "Hauptmenü" },
-      NAV.filter((entry) => TABBAR.includes(entry.id) && (!entry.auth || Y.me)).map((entry) => navItem(entry, true)),
+      TABBAR.map((id) => NAV.find((entry) => entry.id === id)).filter((entry) => !entry.auth || Y.me).map((entry) => navItem(entry, true)),
       Y.me ? null : link("/i/login", { class: "nav-item", "aria-label": "Anmelden" }, h("span", { class: "nav-ic" }, icon("user"))));
     railBox = buildRail();
     Y.put(app, side, h("div", { class: "center" }, main), railBox, tabbar, announcer,
-      Y.me ? h("button", { class: "fab", type: "button", "aria-label": "Neuer Yip", onclick: () => Y.compose() }, icon("feather")) : null);
+      Y.me ? h("button", { class: "fab", type: "button", "aria-label": "Neuer Beitrag", onclick: () => Y.compose() }, icon("feather")) : null);
     fillRail();
   }
 
   function updateNav(route) {
-    const active = { home: "home", explore: "explore", search: "explore", notifications: "notifications", messages: "messages", thread: "messages", bookmarks: "bookmarks", settings: "settings", moderation: "moderation" }[route.name]
+    const active = { home: "home", explore: "explore", search: "explore", nex: "nex", notifications: "notifications", messages: "messages", thread: "messages", bookmarks: "bookmarks", settings: "settings", moderation: "moderation" }[route.name]
       || (route.name === "profile" && Y.me && route.handle.toLowerCase() === Y.me.handle.toLowerCase() ? "profile" : "");
     for (const el of app.querySelectorAll("[data-nav]")) {
       const entry = NAV.find((item) => item.id === el.dataset.nav) || { icon: "shield", on: "shield" };
@@ -151,11 +164,11 @@
 
   // ---------------------------------------------------------------------------------------------- badges
   const unreadTotal = () => (Y.me ? (Y.me.unreadNotifications || 0) + (Y.me.unreadMessages || 0) : 0);
-  let pageTitle = "yipi";
+  let pageTitle = "Pulse";
 
   function updateTitle() {
     const count = unreadTotal();
-    document.title = `${count ? `(${count > 99 ? "99+" : count}) ` : ""}${pageTitle === "yipi" ? "yipi" : `${pageTitle} / yipi`}`;
+    document.title = `${count ? `(${count > 99 ? "99+" : count}) ` : ""}${pageTitle === "Pulse" ? "Pulse: was gerade passiert" : `${pageTitle} / Pulse`}`;
   }
 
   Y.updateBadges = () => {
@@ -259,7 +272,7 @@
     current = { key, route, view, ctx };
     main.replaceChildren(view.element);
     app.dataset.route = route.name;
-    pageTitle = view.title || "yipi";
+    pageTitle = view.title || "Pulse";
     updateTitle();
     updateNav(route);
     if (announcer) announcer.textContent = pageTitle;
@@ -272,7 +285,6 @@
   Y.navigate = (href, options = {}) => {
     let url;
     try { url = new URL(href, location.href); } catch (error) { return; }
-    if (url.pathname === "/") url = new URL(Y.HOME, location.href);                  // "/" is the page of the site, yipi's own home is elsewhere
     if (url.origin !== location.origin || OUTSIDE.has(url.pathname.split("/")[1])) { location.assign(url.href); return; }
     const target = url.pathname + url.search;
     if (target === location.pathname + location.search && !options.replace) {
@@ -325,7 +337,7 @@
     let entry = null;
     const go = (path) => () => { entry.close(); Y.navigate(path); };
     entry = dialog({ label: "Anmelden", title: "", body: h("div", { class: "auth-prompt" },
-      h("span", { class: "hero-logo" }, Icons.logo()), h("h2", {}, "Mach mit bei yipi"), h("p", { class: "dialog-text" }, message || "Melde dich an, um das zu tun."),
+      h("span", { class: "hero-logo" }, Icons.logo()), h("h2", {}, "Mach mit bei Pulse"), h("p", { class: "dialog-text" }, message || "Melde dich an, um das zu tun."),
       h("div", { class: "hero-actions" }, h("button", { class: "btn primary", type: "button", onclick: go("/i/signup") }, "Konto erstellen"), h("button", { class: "btn ghost", type: "button", onclick: go("/i/login") }, "Anmelden"))) });
     return false;
   };
@@ -334,8 +346,8 @@
 
   // ------------------------------------------------------------------------------------------- shortcuts
   // "j|k" means one key or the other, "g>h" means one key after the other.
-  const SHORTCUTS = [["n", "Neuer Yip"], ["/", "Suche"], ["j|k", "Nächster / voriger Yip"], ["l", "Yip mögen"], ["r", "Auf einen Yip antworten"], ["g>h", "Startseite"], ["g>e", "Entdecken"],
-    ["g>n", "Benachrichtigungen"], ["g>m", "Nachrichten"], ["g>b", "Lesezeichen"], ["g>p", "Dein Profil"], ["g>s", "Einstellungen"], ["?", "Diese Hilfe"]];
+  const SHORTCUTS = [["n", "Neuer Beitrag"], ["/", "Suche"], ["j|k", "Nächster / voriger Beitrag"], ["l", "Beitrag mögen"], ["r", "Auf einen Beitrag antworten"], ["g>h", "Startseite"], ["g>e", "Entdecken"],
+    ["g>x", "Nex"], ["g>n", "Benachrichtigungen"], ["g>m", "Nachrichten"], ["g>b", "Lesezeichen"], ["g>p", "Dein Profil"], ["g>s", "Einstellungen"], ["?", "Diese Hilfe"]];
 
   const keyCaps = (spec) => spec.split(/([|>])/).map((part) => (part === "|" ? " oder " : part === ">" ? " dann " : h("kbd", {}, part)));
 
@@ -352,7 +364,7 @@
     if (goPending) {
       goPending = false;
       clearTimeout(goTimer);
-      const places = { h: Y.HOME, e: "/explore", n: "/notifications", m: "/messages", b: "/bookmarks", s: "/settings", p: Y.me ? `/${Y.me.handle}` : "/i/login" };
+      const places = { h: Y.HOME, e: "/explore", x: "/i/nex", n: "/notifications", m: "/messages", b: "/bookmarks", s: "/settings", p: Y.me ? `/${Y.me.handle}` : "/i/login" };
       if (places[key]) { event.preventDefault(); Y.navigate(places[key]); }
       return;
     }

@@ -117,8 +117,8 @@ def test_the_archived_chat_may_talk_to_hugging_face_for_the_downloads_and_to_nob
     assert client.get("/nex-ai-archiv", headers={"X-Forwarded-Proto": "https"}).headers["Strict-Transport-Security"].startswith("max-age=")
 
 
-def test_the_home_page_talks_only_to_its_own_server_the_browser_never_reaches_groq(client):
-    response = client.get("/")
+def test_the_archived_agents_page_talks_only_to_its_own_server_the_browser_never_reaches_groq(client):
+    response = client.get("/nex-agenten-archiv")
     csp = response.headers["Content-Security-Policy"]
     assert "script-src 'self'" in csp and "frame-ancestors 'none'" in csp
     assert "connect-src 'self';" in csp and "huggingface" not in csp and "worker-src" not in csp
@@ -133,8 +133,8 @@ def test_the_archived_swarm_page_may_talk_to_wikipedia_and_to_nobody_else(client
 
 
 def test_the_manifest_and_the_images_exist(client):
-    data = client.get("/manifest.webmanifest").get_json()
-    assert data["short_name"] == "Nex Ai" and data["start_url"] == "/" and data["display"] == "standalone" and "KI-Agenten" in data["name"]
+    data = client.get("/nex-agenten-archiv/manifest.webmanifest").get_json()
+    assert data["short_name"] == "Nex Ai" and data["start_url"] == "/nex-agenten-archiv" and data["display"] == "standalone" and "KI-Agenten" in data["name"]
     assert {icon["purpose"] for icon in data["icons"]} == {"any", "maskable"}
     for icon in data["icons"]:
         assert client.get(icon["src"]).status_code == 200, icon["src"]
@@ -152,17 +152,18 @@ def test_the_manifest_and_the_images_exist(client):
         assert client.get(f"/static/img/{name}").status_code == 200, name
 
 
-def test_the_old_home_pages_are_still_there_and_the_site_pages_are_those_of_nex_ai(client):
-    assert b"yipiBoot" in client.get("/yipi-archiv").data and b"gomatData" in client.get("/gomat-archiv").data
+def test_the_old_home_pages_are_still_there_and_the_site_pages_are_those_of_pulse(client):
+    assert b"yipiBoot" in client.get("/").data and b"gomatData" in client.get("/gomat-archiv").data
+    assert b"regal-agents.js" in client.get("/nex-agenten-archiv").data
     assert b"regal-core.js" in client.get("/nex-ai-archiv").data
     assert b"nstl-swarm-worker.js" in client.get("/nstl-archiv").data
     for path, words in (("/datenschutz", ("Nex Ai", "regal.fav", "regal.chats", "Hugging Face", "keine Cookies", "yipi_session")), ("/impressum", ("§ 5 DDG", "Rechtswidrige Inhalte melden")),
                         ("/nutzungsbedingungen", ("Lizenz", "Hugging Face", "16 Jahren", "yipi"))):
         page = client.get(path)
         text = page.get_data(as_text=True)
-        assert page.status_code == 200 and "| Nex Ai</title>" in text and "Set-Cookie" not in page.headers, path
+        assert page.status_code == 200 and "| Pulse</title>" in text and "Set-Cookie" not in page.headers, path
         for word in words:
             assert word in text, (path, word)
     error_page = client.get("/gibt-es-nicht-1234")
-    assert error_page.status_code == 404 and "Nex Ai" in error_page.get_data(as_text=True)
+    assert error_page.status_code == 404 and "Pulse" in error_page.get_data(as_text=True)
     assert "Sitemap:" in client.get("/robots.txt").get_data(as_text=True)

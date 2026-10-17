@@ -1,4 +1,4 @@
-"""Nex Ai's home page since 2026-10-16 evening: a question runs through five real, server-side AI passes (ai_assistant.py's Groq
+"""Nex Ai's home page from 2026-10-16 evening until Pulse took "/" (2026-10-17), archived at /nex-agenten-archiv since: a question runs through five real, server-side AI passes (ai_assistant.py's Groq
 call, not an on-device model any more -- the user explicitly asked for "ai's die nicht auf deinem pc laufen") -- four agents each
 write their own answer, a fifth reads all four and writes the one the visitor sees, every word streamed to the page as it is written.
 This file tests the route (/api/agents/ask): who may call it, what it sends to Groq for each role, and that it keeps no history. The
@@ -53,19 +53,19 @@ def _post(client, **body):
     return client.post("/api/agents/ask", json=body)
 
 
-def test_the_home_page_is_the_agents_page_and_a_visitor_gets_no_cookie(client):
-    response = client.get("/")
+def test_the_archived_page_is_the_agents_page_and_a_visitor_gets_no_cookie(client):
+    response = client.get("/nex-agenten-archiv")
     text = response.get_data(as_text=True)
     assert response.status_code == 200 and "Set-Cookie" not in response.headers
-    assert 'rel="canonical" href="http://localhost/"' in text and "regal-agents.js" in text and "regal-chat.js" not in text
+    assert 'rel="canonical" href="http://localhost/nex-agenten-archiv"' in text and "regal-agents.js" in text and "regal-chat.js" not in text
     assert "data-worker" not in text and "data-models" not in text, "the home page downloads nothing any more"
     csp = response.headers["Content-Security-Policy"]
     assert "script-src 'self'" in csp and "connect-src 'self';" in csp and "frame-ancestors 'none'" in csp
 
 
-def test_the_old_address_of_the_chat_leads_here_again(client):
+def test_the_old_address_of_the_chat_leads_to_nex_inside_pulse(client):
     response = client.get("/chat")
-    assert response.status_code == 301 and response.headers["Location"].endswith("/")
+    assert response.status_code == 301 and response.headers["Location"].endswith("/i/nex")
 
 
 def test_one_agent_turn_streams_what_groq_wrote(client, monkeypatch):

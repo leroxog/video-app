@@ -1,5 +1,5 @@
-/* yipi views, part 2: messages, settings, moderation, the pages to sign in and sign up, and the pages for "not found" and "please
-   sign in". Same shape as part 1: each view is a function (route, ctx) answering {element, title, ...}. */
+/* Pulse views, part 2 (the file keeps the name yipi-pages.js): messages, settings, moderation, the pages to sign in and sign up, and the
+   pages for "not found" and "please sign in". Same shape as part 1: each view is a function (route, ctx) answering {element, title, ...}. */
 (function () {
   "use strict";
 
@@ -18,14 +18,14 @@
   // ------------------------------------------------------------------------------------ small views
   views.notfound = function notfound() {
     return { element: h("div", { class: "view" }, topbar({ title: "Nicht gefunden" }),
-      h("div", { class: "empty big" }, h("div", { class: "empty-logo" }, window.YipiIcons.logo()), h("h2", {}, "Diese Seite gibt es nicht"), h("p", {}, "Vielleicht ist der Link falsch, oder das Konto oder der Yip wurde gelöscht."),
+      h("div", { class: "empty big" }, h("div", { class: "empty-logo" }, window.YipiIcons.logo()), h("h2", {}, "Diese Seite gibt es nicht"), h("p", {}, "Vielleicht ist der Link falsch, oder das Konto oder der Beitrag wurde gelöscht."),
         link(Y.HOME, { class: "btn primary" }, "Zur Startseite"))), title: "Nicht gefunden" };
   };
 
   views.needLogin = function needLogin(route) {
-    const what = { notifications: "Benachrichtigungen", messages: "Nachrichten", thread: "Nachrichten", bookmarks: "Lesezeichen", moderation: "Moderation", settings: "Einstellungen" }[route.name] || "Das";
+    const what = { notifications: "Benachrichtigungen", messages: "Nachrichten", thread: "Nachrichten", bookmarks: "Lesezeichen", moderation: "Moderation", settings: "Einstellungen", nex: "Nex" }[route.name] || "Das";
     return { element: h("div", { class: "view" }, topbar({ title: what }),
-      h("div", { class: "empty big" }, h("div", { class: "empty-logo" }, window.YipiIcons.logo()), h("h2", {}, "Melde dich an"), h("p", {}, `Für ${what} brauchst du ein yipi-Konto.`),
+      h("div", { class: "empty big" }, h("div", { class: "empty-logo" }, window.YipiIcons.logo()), h("h2", {}, "Melde dich an"), h("p", {}, `Für ${what} brauchst du ein Pulse-Konto.`),
         h("div", { class: "hero-actions" }, link("/i/signup", { class: "btn primary" }, "Konto erstellen"), link("/i/login", { class: "btn ghost" }, "Anmelden")))), title: what };
   };
 
@@ -98,8 +98,9 @@
     const bubbles = h("div", { class: "bubbles", role: "log", "aria-live": "polite", "aria-label": "Nachrichten" });
     const input = h("textarea", { class: "dm-input", rows: 1, maxlength: 1000, placeholder: "Neue Nachricht", "aria-label": "Nachricht" });
     const sendButton = h("button", { class: "icon-btn send-btn", type: "button", "aria-label": "Senden", disabled: true }, icon("send"));
+    const gifButton = h("button", { class: "icon-btn tool", type: "button", "aria-label": "GIF senden", "aria-haspopup": "dialog" }, icon("gif"));
     const note = h("p", { class: "notice", hidden: true });
-    const composeBar = h("div", { class: "dm-compose", hidden: true }, input, sendButton);
+    const composeBar = h("div", { class: "dm-compose", hidden: true }, gifButton, input, sendButton);
     const body = h("div", { class: "thread" }, h("div", { class: "thread-intro" }), older, bubbles);
     const el = h("div", { class: "view thread-view" }, bar, body, note, composeBar);
     const state = { list: [], next: null, other: null, dead: false, sending: false };
@@ -117,8 +118,14 @@
         if (label !== day) { day = label; nodes.push(h("div", { class: "day" }, h("span", {}, label))); previous = null; }
         const next = state.list[state.list.indexOf(message) + 1];
         const endOfGroup = !next || next.mine !== message.mine || dayLabel(next.createdAt) !== day || clock(next.createdAt) !== clock(message.createdAt);
+        const gif = message.gif && !message.gif.gone ? message.gif : null;
         nodes.push(h("div", { class: `bubble ${message.mine ? "mine" : "theirs"}${previous && previous.mine === message.mine ? " joined" : ""}` },
-          h("div", { class: "bubble-text" }, message.text), endOfGroup ? h("span", { class: "bubble-time" }, clock(message.createdAt)) : null));
+          gif ? h("div", { class: "bubble-gif-wrap" },
+            h("button", { class: "bubble-gif", type: "button", "aria-label": `GIF vergrößern${gif.title ? `: ${gif.title}` : ""}`, onclick: () => Y.viewer([{ url: gif.url, alt: gif.title || "GIF" }], 0) }, h("img", { src: gif.url, alt: gif.title || "GIF", width: gif.width, height: gif.height, loading: "lazy" })),
+            Y.gifStar(gif)) : null,
+          message.gif && message.gif.gone ? h("div", { class: "bubble-text gone" }, "Dieses GIF gibt es nicht mehr.") : null,
+          message.text ? h("div", { class: "bubble-text" }, message.text) : null,
+          endOfGroup ? h("span", { class: "bubble-time" }, clock(message.createdAt)) : null));
         previous = message;
       }
       fill(bubbles, ...nodes);
@@ -166,20 +173,24 @@
       input.style.height = "auto";
       input.style.height = `${Math.min(input.scrollHeight, 140)}px`;
     }
-    async function send() {
-      const text = Core.cleanText(input.value);
-      if (!text || state.sending) return;
+    async function deliver(payload, clearInput) {
+      if (state.sending) return;
       state.sending = true;
       update();
-      const reply = await Api.post(`/messages/${handle}`, { text });
+      const reply = await Api.post(`/messages/${handle}`, payload);
       state.sending = false;
       if (!reply.ok) { toast(Api.message(reply)); update(); return; }
-      input.value = "";
+      if (clearInput) input.value = "";
       state.list.push(reply.data.message);
       draw();
       update();
       toBottom();
     }
+    function send() {
+      const text = Core.cleanText(input.value);
+      if (text) deliver({ text }, true);
+    }
+    gifButton.addEventListener("click", () => Y.gifPicker({ onPick: (gif) => deliver({ gifId: gif.id }, false) }));
     input.addEventListener("input", update);
     input.addEventListener("keydown", (event) => { if (event.key === "Enter" && !event.shiftKey && matchMedia("(pointer: fine)").matches) { event.preventDefault(); send(); } });
     sendButton.addEventListener("click", send);
@@ -226,9 +237,9 @@
       h("section", { class: "card" }, h("h2", {}, "Dein Konto"),
         h("dl", { class: "facts" }, h("dt", {}, "Nutzername"), h("dd", {}, `@${me.handle}`), h("dt", {}, "E-Mail"), h("dd", {}, me.email || "nicht angegeben"), h("dt", {}, "Dabei seit"), h("dd", {}, Core.joinedLabel(me.createdAt).replace("Beigetreten ", "")))),
       h("section", { class: "card" }, h("h2", {}, "Passwort ändern"), field("Aktuelles Passwort", oldPassword), field("Neues Passwort", newPassword, "Mindestens 8 Zeichen."), passwordError, changePassword,
-        h("p", { class: "muted small" }, "yipi verschickt keine E-Mails. Ein vergessenes Passwort lässt sich deshalb nicht zurücksetzen. Bewahre es sicher auf.")),
+        h("p", { class: "muted small" }, "Pulse verschickt keine E-Mails. Ein vergessenes Passwort lässt sich deshalb nicht zurücksetzen. Bewahre es sicher auf.")),
       h("section", { class: "card danger-zone" }, h("h2", {}, "Konto löschen"),
-        h("p", { class: "muted" }, "Dabei werden dein Profil, alle deine Yips, Bilder, Nachrichten und Likes endgültig gelöscht. Das lässt sich nicht rückgängig machen."),
+        h("p", { class: "muted" }, "Dabei werden dein Profil, alle deine Beiträge, Fotos, GIFs, Nachrichten und Likes endgültig gelöscht. Das lässt sich nicht rückgängig machen."),
         button("Konto löschen …", "danger", () => {
           const confirmPassword = h("input", { class: "field", type: "password", autocomplete: "current-password", "aria-label": "Passwort zur Bestätigung", maxlength: 200 });
           const error = formError();
@@ -244,6 +255,9 @@
     return box;
   }
 
+  const ACCENTS = [["pulse", "Pulse (Violett, Blau, Cyan)", "linear-gradient(135deg, #8b5cf6, #22d3ee)"], ["violet", "Violett", "linear-gradient(135deg, #7c3aed, #e879f9)"],
+    ["pink", "Pink", "linear-gradient(135deg, #ff4f9a, #ffb347)"], ["orange", "Orange", "linear-gradient(135deg, #f97316, #f43f5e)"], ["green", "Grün", "linear-gradient(135deg, #10b981, #38bdf8)"]];
+
   function displaySection() {
     let current = "auto";
     try { current = localStorage.getItem("yipi.theme") || "auto"; } catch (error) { /* storage blocked */ }
@@ -253,7 +267,14 @@
       input.checked = id === current;
       put(group, h("label", { class: `choice theme-${id}` }, input, h("span", { class: "choice-text" }, h("b", {}, label), h("small", {}, text))));
     }
-    return h("div", { class: "settings-body" }, h("section", { class: "card" }, h("h2", {}, "Darstellung"), group));
+    let accent = "pulse";
+    try { accent = localStorage.getItem("yipi.accent") || "pulse"; } catch (error) { /* storage blocked */ }
+    const swatches = h("div", { class: "swatches accents", role: "radiogroup", "aria-label": "Farbe" });
+    const drawAccents = () => fill(swatches, ACCENTS.map(([id, label, colour]) => h("button", { class: `swatch${id === accent ? " on" : ""}`, type: "button", role: "radio", "aria-checked": String(id === accent), "aria-label": label, title: label,
+      style: `background:${colour}`, onclick: () => { accent = id; Y.setAccent(id); drawAccents(); } })));
+    drawAccents();
+    return h("div", { class: "settings-body" }, h("section", { class: "card" }, h("h2", {}, "Darstellung"), group),
+      h("section", { class: "card" }, h("h2", {}, "Farbe"), h("div", { class: "card-pad" }, swatches, h("p", { class: "hint" }, "Die Farbe der Knöpfe, Leisten und des Lichts im Hintergrund."))));
   }
 
   function relationSection(kind) {
@@ -272,7 +293,7 @@
         }) });
         return row;
       },
-      empty: emptyState(`Niemand ${kind === "muted" ? "stummgeschaltet" : "blockiert"}`, kind === "muted" ? "Stummgeschaltete Konten tauchen nicht mehr in deinen Listen und Benachrichtigungen auf, merken es aber nicht." : "Blockierte Konten können dir nicht folgen oder schreiben und deine Yips nicht sehen."),
+      empty: emptyState(`Niemand ${kind === "muted" ? "stummgeschaltet" : "blockiert"}`, kind === "muted" ? "Stummgeschaltete Konten tauchen nicht mehr in deinen Listen und Benachrichtigungen auf, merken es aber nicht." : "Blockierte Konten können dir nicht folgen oder schreiben und deine Beiträge nicht sehen."),
     });
     listPager.title = label;
     return listPager;
@@ -284,9 +305,9 @@
         h("ul", { class: "plain-links" }, ["nutzungsbedingungen|Nutzungsbedingungen und Regeln", "datenschutz|Datenschutzerklärung", "impressum|Impressum"].map((entry) => { const [path, text] = entry.split("|"); return h("li", {}, h("a", { href: `/${path}` }, text, icon("chevron"))); }))),
       h("section", { class: "card" }, h("h2", {}, "Hilfe"),
         button("Tastenkürzel anzeigen", "ghost", () => Y.shortcutsDialog()),
-        h("p", { class: "muted small" }, "Yips sind öffentlich. Nachrichten sind nur für die beiden Beteiligten sichtbar, aber nicht Ende-zu-Ende-verschlüsselt. Etwas Unpassendes siehst du? Tippe beim Yip oder Profil auf „Melden“.")),
-      h("section", { class: "card" }, h("h2", {}, "Über yipi"),
-        h("p", { class: "muted" }, "yipi ist ein unabhängiges, kostenloses Projekt, ohne Werbung und ohne Tracking. Es speichert nur ein Anmelde-Cookie, wenn du dich anmeldest, und deine Einstellungen im Browser.")));
+        h("p", { class: "muted small" }, "Beiträge sind öffentlich. Nachrichten sind nur für die beiden Beteiligten sichtbar, aber nicht Ende-zu-Ende-verschlüsselt. Etwas Unpassendes siehst du? Tippe beim Beitrag, beim GIF oder beim Profil auf „Melden“. Videos gibt es bei Pulse nicht: du kannst Fotos und GIFs posten.")),
+      h("section", { class: "card" }, h("h2", {}, "Über Pulse"),
+        h("p", { class: "muted" }, "Pulse ist ein unabhängiges, kostenloses Projekt, ohne Werbung und ohne Tracking. Es speichert nur ein Anmelde-Cookie, wenn du dich anmeldest, und deine Einstellungen im Browser. Nex, die KI, antwortet mit Hilfe eines KI-Dienstes (Groq): was du Nex schreibst, wird dafür an den Server und von dort an den Dienst geschickt, aber nicht gespeichert.")));
   }
 
   views.settings = function settings(route, ctx) {
@@ -332,15 +353,18 @@
     }
 
     function card(report) {
-      const target = report.postId ? (report.text ? `Yip von @${report.handle}` : "Yip (gelöscht)") : `Profil @${report.handle}`;
+      const target = report.gifId ? (report.gif ? `GIF von @${report.handle}` : "GIF (gelöscht)") : report.postId ? (report.text ? `Beitrag von @${report.handle}` : "Beitrag (gelöscht)") : `Profil @${report.handle}`;
       const element = h("article", { class: "report-card" },
         h("div", { class: "report-top" }, h("span", { class: "tag" }, REASON_LABEL[report.reason] || report.reason), h("b", {}, target), Y.timeEl(report.createdAt)),
         report.text ? h("blockquote", {}, report.text) : null,
+        report.gif ? h("img", { class: "report-gif", src: report.gif.url, alt: report.gif.title || "gemeldetes GIF", width: report.gif.width, height: report.gif.height }) : null,
+        report.gif && report.gif.title ? h("p", { class: "muted small" }, `Name: ${report.gif.title}`) : null,
         report.note ? h("p", { class: "muted" }, `Anmerkung: ${report.note}`) : null,
         h("p", { class: "muted small" }, `Gemeldet von @${report.reporter || "?"}`),
         h("div", { class: "report-actions" },
           report.handle ? link(`/${report.handle}`, { class: "btn ghost small" }, "Profil ansehen") : null,
-          report.postId && !report.postGone ? button("Yip löschen", "danger small", () => act(report, "delete_post", element)) : null,
+          report.postId && !report.postGone ? button("Beitrag löschen", "danger small", () => act(report, "delete_post", element)) : null,
+          report.gifId && !report.gifGone ? button("GIF löschen", "danger small", () => act(report, "delete_gif", element)) : null,
           report.handle && !report.suspended ? button("Konto sperren", "danger small", async () => { if (await confirmBox({ title: `@${report.handle} sperren?`, text: "Das Konto wird abgemeldet und kann sich nicht mehr anmelden.", yes: "Sperren", danger: true })) act(report, "suspend", element); }) : null,
           report.handle && report.suspended ? button("Sperre aufheben", "ghost small", () => act(report, "restore", element)) : null,
           button("Verwerfen", "ghost small", () => act(report, "dismiss", element))));
@@ -361,9 +385,17 @@
 
   // ------------------------------------------------------------------------------------------- sign in
   function authFrame(title, subtitle, content, footer) {
-    return h("div", { class: "auth-page" }, h("div", { class: "auth-card" },
-      link(Y.HOME, { class: "auth-logo", "aria-label": "yipi" }, window.YipiIcons.logo(), h("span", {}, "yipi")),
-      h("h1", {}, title), subtitle ? h("p", { class: "muted" }, subtitle) : null, content, h("p", { class: "auth-switch" }, footer)));
+    return h("div", { class: "auth-page" },
+      h("aside", { class: "auth-hero" },
+        h("span", { class: "auth-hero-logo" }, window.YipiIcons.logo()),
+        h("h2", {}, "Was gerade passiert."),
+        h("ul", { class: "auth-points" },
+          h("li", {}, icon("feather"), h("span", {}, "Kurze Beiträge, Fotos und GIFs")),
+          h("li", {}, icon("gif"), h("span", {}, "Eigene GIFs machen und teilen")),
+          h("li", {}, icon("sparkle"), h("span", {}, "Nex, die KI, hilft dir weiter")))),
+      h("div", { class: "auth-card" },
+        link(Y.HOME, { class: "auth-logo", "aria-label": "Pulse" }, window.YipiIcons.logo(), h("span", {}, "Pulse")),
+        h("h1", {}, title), subtitle ? h("p", { class: "muted" }, subtitle) : null, content, h("p", { class: "auth-switch" }, footer)));
   }
 
   function passwordField(label, autocomplete) {
@@ -378,7 +410,7 @@
   }
 
   views.login = function login() {
-    if (Y.me) { setTimeout(() => Y.navigate(Y.HOME, { replace: true }), 0); return { element: h("div"), title: "yipi" }; }
+    if (Y.me) { setTimeout(() => Y.navigate(Y.HOME, { replace: true }), 0); return { element: h("div"), title: "Pulse" }; }
     const name = h("input", { class: "field", autocomplete: "username", "aria-label": "Nutzername oder E-Mail", maxlength: 254, required: true, autocapitalize: "none", spellcheck: "false" });
     const password = passwordField("Passwort", "current-password");
     const error = formError();
@@ -395,11 +427,11 @@
       Y.navigate(Y.HOME, { replace: true });
     } }, field("Nutzername oder E-Mail", name), password.element, error, submit);
     setTimeout(() => name.focus(), 0);
-    return { element: authFrame("Anmelden bei yipi", "", form, ["Noch kein Konto? ", link("/i/signup", {}, "Registrieren")]), title: "Anmelden", bare: true };
+    return { element: authFrame("Anmelden bei Pulse", "", form, ["Noch kein Konto? ", link("/i/signup", {}, "Registrieren")]), title: "Anmelden", bare: true };
   };
 
   views.signup = function signup() {
-    if (Y.me) { setTimeout(() => Y.navigate(Y.HOME, { replace: true }), 0); return { element: h("div"), title: "yipi" }; }
+    if (Y.me) { setTimeout(() => Y.navigate(Y.HOME, { replace: true }), 0); return { element: h("div"), title: "Pulse" }; }
     const handle = h("input", { class: "field", autocomplete: "username", "aria-label": "Nutzername", maxlength: 15, required: true, autocapitalize: "none", spellcheck: "false", "aria-describedby": "handleState" });
     const state = h("small", { class: "hint", id: "handleState", "aria-live": "polite" }, "3 bis 15 Zeichen: Buchstaben, Zahlen und _.");
     const name = h("input", { class: "field", autocomplete: "name", "aria-label": "Anzeigename", maxlength: 50, placeholder: "So sehen dich andere (optional)" });
@@ -435,10 +467,10 @@
       if (!reply.ok) { showError(error, Api.message(reply)); return; }
       Y.setMe(reply.data.me);
       Y.navigate(Y.HOME, { replace: true });
-      toast("Willkommen bei yipi!");
+      toast("Willkommen bei Pulse!");
     } },
       field("Nutzername", h("div", { class: "with-prefix" }, h("span", {}, "@"), handle), null), state,
-      field("Name", name), field("E-Mail", email, "Freiwillig. Du kannst dich damit anmelden. yipi verschickt keine E-Mails."),
+      field("Name", name), field("E-Mail", email, "Freiwillig. Du kannst dich damit anmelden. Pulse verschickt keine E-Mails."),
       password.element, h("small", { class: "hint" }, "Mindestens 8 Zeichen. Ein vergessenes Passwort kann nicht zurückgesetzt werden."),
       h("label", { class: "check" }, adult, h("span", {}, "Ich bin mindestens 16 Jahre alt (oder habe die Erlaubnis meiner Eltern) und akzeptiere die ", h("a", { href: "/nutzungsbedingungen", target: "_blank", rel: "noopener" }, "Nutzungsbedingungen"), " sowie die ", h("a", { href: "/datenschutz", target: "_blank", rel: "noopener" }, "Datenschutzerklärung"), ".")),
       error, submit);

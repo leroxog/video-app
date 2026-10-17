@@ -1,4 +1,4 @@
-/* yipi api: the calls to the server (/api/yipi/...). Every call answers {ok, status, data}; with no connection it answers
+/* Pulse api (the file keeps the name yipi-api.js): the calls to the server (/api/yipi/...). Every call answers {ok, status, data}; with no connection it answers
    {ok: false, offline: true, data: {error: "network"}} instead of throwing. `YipiApi.message(reply)` is the German sentence
    for what went wrong. */
 (function () {
@@ -14,15 +14,21 @@
     self: "Das geht bei dir selbst nicht.",
     bad_request: "Das hat nicht geklappt.",
     too_long: "Das ist zu lang.",
-    empty: "Schreib etwas oder füge ein Bild hinzu.",
+    empty: "Schreib etwas oder füge ein Foto oder GIF hinzu.",
     bad_text: "Das ist kein gültiger Text.",
-    duplicate: "Das hast du gerade schon geyippt.",
+    duplicate: "Das hast du gerade schon gepostet.",
     bad_media: "Mit den Bildern stimmt etwas nicht.",
-    bad_image: "Das ist kein Bild, das yipi kennt (JPEG, PNG, GIF oder WebP).",
-    too_big: "Das Bild ist zu groß (höchstens 5 MB).",
+    bad_image: "Das ist kein Foto, das Pulse kennt (JPEG, PNG, GIF oder WebP).",
+    too_big: "Das Foto ist zu groß (höchstens 5 MB).",
     no_file: "Es wurde keine Datei gesendet.",
-    reply_gone: "Der Yip, auf den du antworten willst, ist nicht mehr da.",
-    quote_gone: "Der Yip, den du zitieren willst, ist nicht mehr da.",
+    no_video: "Videos gibt es bei Pulse nicht. Du kannst Fotos und GIFs posten.",
+    gif_alone: "Ein GIF steht allein: entweder ein GIF oder bis zu 4 Fotos.",
+    bad_gif: "Das ist kein gültiges GIF (oder es hat zu viele Bilder oder Pixel).",
+    gif_too_big: "Das GIF ist zu groß (höchstens 3 MB).",
+    gif_title_long: "Der Name eines GIFs darf höchstens 40 Zeichen haben.",
+    gif_gone: "Dieses GIF gibt es nicht mehr.",
+    reply_gone: "Der Beitrag, auf den du antworten willst, ist nicht mehr da.",
+    quote_gone: "Der Beitrag, den du zitieren willst, ist nicht mehr da.",
     bad_handle: "Der Nutzername darf 3 bis 15 Zeichen haben: Buchstaben, Zahlen und _.",
     reserved_handle: "Diesen Nutzernamen kannst du nicht nehmen.",
     handle_taken: "Diesen Nutzernamen gibt es schon.",
@@ -39,7 +45,7 @@
     bad_website: "Die Webseite muss mit http:// oder https:// beginnen.",
     dm_closed: "Diese Person nimmt nur Nachrichten von Leuten an, denen sie folgt.",
     bad_reason: "Bitte wähle einen Grund.",
-    bad_action: "Das kennt yipi nicht.",
+    bad_action: "Das kennt Pulse nicht.",
   };
 
   async function call(method, path, body, form) {
@@ -67,6 +73,13 @@
       form.append("file", file, file.name || "bild");
       for (const [key, value] of Object.entries(fields)) form.append(key, value);
       return call("POST", "/media", undefined, form);
+    },
+    /* A GIF for the library: `file` is a Blob of type image/gif, `fields` more form fields (the title). */
+    uploadGif(file, fields = {}) {
+      const form = new FormData();
+      form.append("file", file, file.name || "pulse.gif");
+      for (const [key, value] of Object.entries(fields)) form.append(key, value);
+      return call("POST", "/gifs", undefined, form);
     },
     message: (reply) => MESSAGES[reply && reply.data && reply.data.error] || "Das hat nicht geklappt. Bitte versuche es noch einmal.",
     MESSAGES,

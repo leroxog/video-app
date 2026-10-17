@@ -1,4 +1,4 @@
-"""yipi: accounts, Yips (posts, replies, quotes, reposts), likes, bookmarks, pictures, feeds, profiles, following,
+"""Pulse (internally yipi): accounts, posts (posts, replies, quotes, reposts), likes, bookmarks, pictures, feeds, profiles, following,
 blocking and muting, search, trends, notifications, private messages, reports and moderation -- through the JSON API."""
 import os
 import re
@@ -892,7 +892,7 @@ def test_a_conversation_is_listed_read_and_polled(client):
     api(mia, "post", "/messages/tom", {"text": "zwei"}, status=201)
     assert api(tom, "get", "/me")["me"]["unreadMessages"] == 2
     listing = api(tom, "get", "/messages", status=200)["items"]
-    assert len(listing) == 1 and listing[0]["user"]["handle"] == "mia" and listing[0]["unread"] == 2 and listing[0]["last"] == {"text": "zwei", "createdAt": listing[0]["last"]["createdAt"], "mine": False}
+    assert len(listing) == 1 and listing[0]["user"]["handle"] == "mia" and listing[0]["unread"] == 2 and listing[0]["last"] == {"text": "zwei", "gif": False, "createdAt": listing[0]["last"]["createdAt"], "mine": False}
     thread = api(tom, "get", "/messages/mia", status=200)
     assert [m["text"] for m in thread["messages"]] == ["eins", "zwei"] and [m["mine"] for m in thread["messages"]] == [False, False] and thread["canWrite"] is True
     assert api(tom, "get", "/me")["me"]["unreadMessages"] == 0
@@ -986,7 +986,7 @@ def test_moderators_cannot_be_suspended_by_a_report(client, monkeypatch):
 # =============================================================================================== pages
 def test_every_page_of_the_app_is_served_with_security_headers(client):
     c = flask_app.test_client()
-    for path in ("/yipi-archiv", "/explore", "/notifications", "/messages", "/messages/someone", "/bookmarks", "/settings", "/settings/account", "/search", "/moderation", "/i/login", "/i/signup"):
+    for path in ("/", "/explore", "/notifications", "/messages", "/messages/someone", "/bookmarks", "/settings", "/settings/account", "/search", "/moderation", "/i/login", "/i/signup", "/i/nex"):
         r = c.get(path)
         assert r.status_code == 200 and b'id="yipiBoot"' in r.data, path
         assert "script-src 'self'" in r.headers["Content-Security-Policy"] and r.headers["X-Frame-Options"] == "DENY", path
@@ -999,7 +999,7 @@ def test_profile_and_yip_pages_exist_only_for_real_ones_and_carry_link_previews(
     post = yip(mia, "Mein erster Yip mit <b>Tags</b>")
     c = flask_app.test_client()
     page = c.get("/mia").get_data(as_text=True)
-    assert c.get("/Mia").status_code == 200 and "Mia Maus (@Mia) auf yipi" in page and "Ich mag Mathe" in page
+    assert c.get("/Mia").status_code == 200 and "Mia Maus (@Mia) auf Pulse" in page and "Ich mag Mathe" in page
     status = c.get(f"/mia/status/{post['id']}").get_data(as_text=True)
     assert "Mein erster Yip mit &lt;b&gt;Tags&lt;/b&gt;" in status and "<b>Tags</b>" not in status
     assert c.get("/nobody").status_code == 404 and c.get("/mia/status/99999").status_code == 404 and c.get("/tom/status/1").status_code == 404
@@ -1009,9 +1009,9 @@ def test_profile_and_yip_pages_exist_only_for_real_ones_and_carry_link_previews(
 
 def test_the_home_page_knows_who_is_signed_in(client):
     mia = person("mia")
-    page = mia.get("/yipi-archiv").get_data(as_text=True)
+    page = mia.get("/").get_data(as_text=True)
     assert re.search(r'"handle":\s*"mia"', page)
-    assert re.search(r'"me":\s*null', flask_app.test_client().get("/yipi-archiv").get_data(as_text=True))
+    assert re.search(r'"me":\s*null', flask_app.test_client().get("/").get_data(as_text=True))
 
 
 # ============================================================================================ huge numbers
