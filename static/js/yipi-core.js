@@ -10,7 +10,7 @@
 
   const MAX_POST = 280;
   const HOME = "/";                                      // the home page of Pulse is the home page of the site
-  const MAX_MEDIA = 4;
+  const MAX_MEDIA = 3;                                  // photos per post (yipi.py: MAX_MEDIA)
   const MONTHS = ["Jan.", "Feb.", "März", "Apr.", "Mai", "Juni", "Juli", "Aug.", "Sept.", "Okt.", "Nov.", "Dez."];
   const MONTHS_LONG = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
   const HANDLE = /^[A-Za-z0-9_]{3,15}$/;
@@ -104,7 +104,7 @@
 
   const pad2 = (n) => String(n).padStart(2, "0");
 
-  /* "Jetzt", "5 Sek.", "5 Min.", "3 Std.", then the date: "12. Okt." (with the year when it is another year). */
+  /* "Jetzt", "5 Sek.", "5 Min.", "3 Std.", "2 Tg.", then the date: "12. Okt." (with the year when it is another year). */
   function relativeTime(iso, now = Date.now()) {
     const then = new Date(iso);
     if (Number.isNaN(then.getTime())) return "";
@@ -113,6 +113,7 @@
     if (seconds < 60) return `${seconds} Sek.`;
     if (seconds < 3600) return `${Math.floor(seconds / 60)} Min.`;
     if (seconds < 86400) return `${Math.floor(seconds / 3600)} Std.`;
+    if (seconds < 7 * 86400) return `${Math.floor(seconds / 86400)} Tg.`;
     const sameYear = then.getFullYear() === new Date(now).getFullYear();
     return `${then.getDate()}. ${MONTHS[then.getMonth()]}${sameYear ? "" : ` ${then.getFullYear()}`}`;
   }
@@ -138,7 +139,7 @@
   function parsePath(pathname, search = "") {
     const path = String(pathname || "/").replace(/\/+$/, "") || "/";
     const params = new URLSearchParams(search);
-    const fixed = { "/": "home", "/explore": "explore", "/notifications": "notifications", "/messages": "messages", "/bookmarks": "bookmarks", "/moderation": "moderation", "/i/login": "login", "/i/signup": "signup" };
+    const fixed = { "/": "home", "/explore": "explore", "/notifications": "notifications", "/messages": "messages", "/bookmarks": "bookmarks", "/moderation": "moderation", "/games": "games", "/videos": "videos", "/i/login": "login", "/i/signup": "signup" };
     if (path === "/explore") return { name: "explore", tab: ["trends", "media", "people"].includes(params.get("tab")) ? params.get("tab") : "" };
     if (fixed[path]) return { name: fixed[path] };
     if (path === "/i/nex") return { name: "nex", q: (params.get("q") || "").slice(0, 500), post: /^\d{1,18}$/.test(params.get("post") || "") ? Number(params.get("post")) : 0 };
@@ -148,6 +149,8 @@
     if (match) return { name: "settings", section: match[1] };
     match = /^\/messages\/([A-Za-z0-9_]{3,15})$/.exec(path);
     if (match) return { name: "thread", handle: match[1] };
+    match = /^\/g\/(\d{1,10})$/.exec(path);
+    if (match && Number(match[1]) > 0) return { name: "group", id: Number(match[1]) };
     match = /^\/([A-Za-z0-9_]{3,15})\/status\/(\d{1,18})$/.exec(path);
     if (match) return { name: "post", handle: match[1], id: Number(match[2]) };
     match = /^\/([A-Za-z0-9_]{3,15})\/(followers|following)$/.exec(path);
@@ -162,6 +165,8 @@
       case "home": return HOME;
       case "explore": return route.tab ? `/explore?tab=${route.tab}` : "/explore";
       case "notifications": case "messages": case "bookmarks": case "moderation": return `/${route.name}`;
+      case "games": case "videos": return `/${route.name}`;
+      case "group": return `/g/${route.id}`;
       case "nex": return route.post ? `/i/nex?post=${route.post}` : route.q ? `/i/nex?q=${encodeURIComponent(route.q)}` : "/i/nex";
       case "login": return "/i/login";
       case "signup": return "/i/signup";
@@ -262,7 +267,110 @@
     return { options, valid: !problem, problem };
   }
 
+  // ------------------------------------------------------------------------------------ the visitor
+  /* What the page can tell a visitor about their own visit, as sections of rows [label, value] (the desktop notice shows it): `server` is what
+     the request carried (address, browser, language ...), `client` what the browser tells about itself, `me` the account when signed in. Nothing
+     is made up: whatever is not known says so. */
+  function visitorSections(server = {}, client = {}, me = null) {
+    const unknown = "nicht ermittelbar";
+    const pick = (value) => (value === undefined || value === null || value === "" ? unknown : String(value));
+    const yes = (value) => (value === undefined || value === null ? unknown : value ? "ja" : "nein");
+    const list = (values) => (Array.isArray(values) && values.length ? values.join(", ") : unknown);
+    const size = (width, height) => (width && height ? `${width} × ${height} px` : unknown);
+    const screen = client.screen || {};
+    const view = client.viewport || {};
+    const link = client.connection || {};
+    return [
+      { title: "Verbindung", rows: [
+        ["IP-Adresse", pick(server.ip)],
+        ["Weiterleitungskette", pick(server.forwardedFor)],
+        ["Letzte Station", pick(server.via)],
+        ["Protokoll", pick(server.protocol)],
+        ["Adresse der Seite", pick(server.host)],
+        ["Herkunftsseite", pick(server.referrer)],
+        ["Zeitpunkt (UTC)", pick(server.time)],
+      ] },
+      { title: "Browser und Gerät", rows: [
+        ["Browser-Kennung", pick(server.userAgent)],
+        ["Plattform", pick(client.platform)],
+        ["Sprachen", list(client.languages && client.languages.length ? client.languages : server.acceptLanguage ? [server.acceptLanguage] : [])],
+        ["Zeitzone", pick(client.timezone)],
+        ["Ortszeit", pick(client.localTime)],
+        ["Bildschirm", `${size(screen.width, screen.height)}${screen.ratio ? ` (Faktor ${screen.ratio})` : ""}`],
+        ["Farbtiefe", screen.depth ? `${screen.depth} Bit` : unknown],
+        ["Fenster", size(view.width, view.height)],
+        ["Prozessorkerne", pick(client.cores)],
+        ["Arbeitsspeicher", client.memory ? `mindestens ${client.memory} GB` : unknown],
+        ["Touch-Punkte", pick(client.touchPoints)],
+        ["Maus oder Touch", pick(client.pointer)],
+        ["Farbschema", pick(client.colorScheme)],
+        ["Cookies erlaubt", yes(client.cookies)],
+        ["Do Not Track", pick(client.doNotTrack || server.doNotTrack)],
+        ["Online", yes(client.online)],
+        ["Verbindungsart", pick(link.type)],
+        ["Datenrate", link.downlink ? `${link.downlink} Mbit/s` : unknown],
+        ["Antwortzeit", link.rtt ? `${link.rtt} ms` : unknown],
+        ["Datensparmodus", yes(link.saveData)],
+      ] },
+      { title: "Konto", rows: me ? [
+        ["Angemeldet als", `@${me.handle}`],
+        ["Anzeigename", pick(me.name)],
+        ["E-Mail-Adresse", me.email || "nicht angegeben"],
+        ["Mitglied seit", pick(me.createdAt ? String(me.createdAt).slice(0, 10) : "")],
+        ["Beiträge", pick(me.posts)],
+        ["Follower", pick(me.followers)],
+        ["Folge ich", pick(me.following)],
+      ] : [["Angemeldet", "nein: es ist kein Konto angemeldet"]] },
+    ];
+  }
+
   // --------------------------------------------------------------------------------------------- Nex
+  const NEX_CHATS = 30;                                 // how many conversations with Nex are kept in this browser
+
+  /* The name of a conversation: its first question, cut to fit. */
+  function nexTitle(text) {
+    const clean = cleanText(text).replace(/\s+/g, " ");
+    const letters = Array.from(clean);
+    if (!letters.length) return "Neues Gespräch";
+    return letters.length > 38 ? `${letters.slice(0, 37).join("").trimEnd()}…` : clean;
+  }
+
+  const newChatId = () => `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+
+  /* The conversations of one person as they are kept in the browser: {handle, chats: [{id, title, at, messages}], current}. Anything of
+     somebody else, broken or too much is dropped; the older format (a single list of messages) becomes one conversation. */
+  function nexStore(raw, handle) {
+    const empty = { handle, chats: [], current: "" };
+    if (!raw || typeof raw !== "object" || raw.handle !== handle) return empty;
+    let chats = [];
+    if (Array.isArray(raw.chats)) {
+      for (const entry of raw.chats) {
+        if (!entry || typeof entry !== "object" || typeof entry.id !== "string" || !/^[\w-]{1,40}$/.test(entry.id)) continue;
+        const messages = nexMessages(entry.messages, 30);
+        if (!messages.length) continue;
+        const first = messages.find((message) => message.role === "user");
+        chats.push({ id: entry.id, title: typeof entry.title === "string" && entry.title.trim() ? Array.from(entry.title.trim()).slice(0, 60).join("") : nexTitle(first ? first.content : ""), at: Number.isFinite(entry.at) ? entry.at : 0, messages });
+      }
+    } else if (Array.isArray(raw.messages)) {
+      const messages = nexMessages(raw.messages, 30);
+      const first = messages.find((message) => message.role === "user");
+      if (messages.length) chats = [{ id: newChatId(), title: nexTitle(first ? first.content : ""), at: Date.now(), messages }];
+    }
+    const seen = new Set();
+    chats = chats.filter((chat) => (seen.has(chat.id) ? false : seen.add(chat.id))).sort((a, b) => b.at - a.at).slice(0, NEX_CHATS);
+    return { handle, chats, current: chats.some((chat) => chat.id === raw.current) ? raw.current : "" };
+  }
+
+  /* The store with one conversation added or replaced (the newest first, never more than NEX_CHATS). */
+  function nexUpsert(store, chat) {
+    const rest = store.chats.filter((entry) => entry.id !== chat.id);
+    return { ...store, chats: [chat, ...rest].sort((a, b) => b.at - a.at).slice(0, NEX_CHATS), current: chat.id };
+  }
+
+  function nexRemove(store, id) {
+    return { ...store, chats: store.chats.filter((chat) => chat.id !== id), current: store.current === id ? "" : store.current };
+  }
+
   const NEX_TURNS = 12;                                 // how many of the last messages go to the server (yipi.py: NEX_TURNS)
   const NEX_KEEP = 30;                                  // how many stay in the browser
 
@@ -321,7 +429,7 @@
   }
 
   return {
-    HOME, MAX_POST, MAX_MEDIA, MAX_POLL_OPTION, POLL_OPTIONS, POLL_LENGTHS, pollTimeLeft, pollPercent, pollVotes, pollAnswers, NEX_TURNS, NEX_KEEP, nexMessages, nexBlocks, gifQuery, gifColumns, cleanText, charCount, counterState, tokenize, shortUrl, formatCount, relativeTime, fullTime, joinedLabel,
+    HOME, MAX_POST, MAX_MEDIA, NEX_CHATS, nexTitle, newChatId, nexStore, nexUpsert, nexRemove, visitorSections, MAX_POLL_OPTION, POLL_OPTIONS, POLL_LENGTHS, pollTimeLeft, pollPercent, pollVotes, pollAnswers, NEX_TURNS, NEX_KEEP, nexMessages, nexBlocks, gifQuery, gifColumns, cleanText, charCount, counterState, tokenize, shortUrl, formatCount, relativeTime, fullTime, joinedLabel,
     isHandle, parsePath, buildPath, groupNotifications, fitSize, coverCrop, avatarHue, initials,
   };
 });

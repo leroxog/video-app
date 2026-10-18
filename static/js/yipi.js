@@ -1,7 +1,7 @@
-/* Pulse (the file keeps the name yipi.js): the frame around everything -- the router (the address bar changes without reloading the
-   page), the side bar (a rail of icons on a tablet or a phone held sideways), the bar at the bottom of a phone held upright, the right
-   column, the badges for new messages, the themes and the keyboard shortcuts. The pages themselves are in yipi-views.js, yipi-pages.js
-   and yipi-nex.js. */
+/* Pulse (the file keeps the name yipi.js): the frame around everything -- the router (the address bar changes without reloading the page),
+   the floating bar at the bottom with five tabs (Home, Chats, Nex in the middle, Games, Videos), the menu from the left, the badges for new
+   messages and the themes. The pages themselves are in yipi-views.js, yipi-chats.js, yipi-pages.js and yipi-nex.js. The app is made for a phone
+   held upright. */
 (function () {
   "use strict";
 
@@ -9,7 +9,7 @@
   const Core = window.YipiCore;
   const Api = window.YipiApi;
   const Icons = window.YipiIcons;
-  const { fill, h, icon, link, avatar, toast, dialog, menu } = Y;
+  const { fill, h, icon, link, avatar, toast, dialog } = Y;
 
   const app = document.getElementById("app");
   let boot = {};
@@ -18,11 +18,11 @@
 
   // Addresses of the site that are not part of this page: a click on them loads the page from the server.
   const OUTSIDE = new Set(["datenschutz", "impressum", "nutzungsbedingungen", "regeln", "hilfe", "gomat-archiv", "nex-agenten-archiv", "nex-ai-archiv", "nstl-archiv", "yipi-archiv", "robots.txt", "sitemap.xml", "manifest.webmanifest", "static", "yipi-media", "pulse-gif", "api"]);
-  const NEEDS_LOGIN = new Set(["notifications", "messages", "thread", "bookmarks", "nex"]);
+  const NEEDS_LOGIN = new Set(["notifications", "messages", "thread", "group", "bookmarks", "nex"]);
   const BARE = new Set(["login", "signup"]);
 
   // ------------------------------------------------------------------------------------------------ theme
-  const THEME_COLOR = { light: "#eef1f8", dim: "#0c1220", dark: "#07080d" };
+  const THEME_COLOR = { light: "#ffffff", dim: "#1a1a1a", dark: "#000000" };
   function applyTheme() {
     let choice = "auto";
     try { const saved = localStorage.getItem("yipi.theme"); if (saved === "dark" || saved === "dim" || saved === "light") choice = saved; } catch (error) { /* storage blocked */ }
@@ -36,138 +36,56 @@
   };
   matchMedia("(prefers-color-scheme: light)").addEventListener?.("change", applyTheme);
 
-  /* The colour of the accent: "pulse" (the standard violet), "indigo", "orchid" or "lilac". */
+  /* The colour of the special things (the like, the new-message badge, Nex): "pulse" (the standard violet), "indigo", "orchid" or "lilac". */
   Y.setAccent = (name) => {
     try { if (name === "pulse") localStorage.removeItem("yipi.accent"); else localStorage.setItem("yipi.accent", name); } catch (error) { /* storage blocked */ }
     if (name === "pulse") document.documentElement.removeAttribute("data-accent"); else document.documentElement.setAttribute("data-accent", name);
   };
 
   // ----------------------------------------------------------------------------------------------- shell
-  const NAV = [
-    { id: "home", label: "Startseite", path: () => Y.HOME, icon: "home", on: "homeFill" },
-    { id: "explore", label: "Entdecken", path: () => "/explore", icon: "search", on: "searchBold" },
-    { id: "notifications", label: "Benachrichtigungen", path: () => "/notifications", icon: "bell", on: "bellFill", auth: true, badge: true },
-    { id: "messages", label: "Nachrichten", path: () => "/messages", icon: "mail", on: "mailFill", auth: true, badge: true },
-    { id: "nex", label: "Nex", path: () => "/i/nex", icon: "sparkle", on: "sparkleFill" },
-    { id: "bookmarks", label: "Lesezeichen", path: () => "/bookmarks", icon: "bookmark", on: "bookmarkFill", auth: true },
-    { id: "profile", label: "Profil", path: () => (Y.me ? `/${Y.me.handle}` : "/i/login"), icon: "user", on: "userFill" },
-    { id: "more", label: "Mehr", icon: "moreCircle", on: "moreCircle", menu: true },        // settings, display, help and the legal pages are in here, like on X
+  const TABS = [
+    { id: "home", label: "Home", path: () => Y.HOME, icon: "home", on: "homeFill" },
+    { id: "messages", label: "Chats", path: () => "/messages", icon: "users", on: "usersFill", badge: "messages" },
+    { id: "nex", label: "Nex", path: () => "/i/nex", icon: "nexmark", on: "nexmark", center: true },
+    { id: "games", label: "Games", path: () => "/games", icon: "gamepad", on: "gamepad" },
+    { id: "videos", label: "Videos", path: () => "/videos", icon: "playCircle", on: "playCircle" },
   ];
-  const TABBAR = ["home", "explore", "nex", "notifications", "messages"];       // the bar of a phone held upright, Nex in the middle
 
   let main = null;
   let announcer = null;
-  let railBox = null;
-  let railLoaded = 0;
   let shellKey = "";
 
-  /* The "Mehr" menu: everything that has no place of its own in the side bar. */
-  function openMore(anchor) {
-    menu(anchor, [
-      { label: "Einstellungen", icon: "settings", run: () => Y.navigate("/settings") },
-      { label: "Darstellung und Farbe", icon: "sun", run: () => Y.navigate("/settings/display") },
-      { label: "Hilfe und Rechtliches", icon: "help", run: () => Y.navigate("/settings/about") },
-      { label: "Tastenkürzel", icon: "list", run: () => Y.shortcutsDialog() },
-      Y.me && Y.me.isAdmin ? { label: "Moderation", icon: "shield", run: () => Y.navigate("/moderation") } : null,
-      Y.me ? { label: `@${Y.me.handle} abmelden`, icon: "logout", run: () => Y.logout() } : { label: "Anmelden", icon: "user", run: () => Y.navigate("/i/login") },
-    ]);
-  }
+  /* A little number badge that Y.updateBadges keeps up to date (`kind` is "notifications" or "messages"). */
+  Y.badge = (kind) => h("span", { class: "badge", "data-badge": kind, hidden: true });
 
-  function navItem(entry, bar) {
-    const iconBox = h("span", { class: "nav-ic" }, icon(entry.icon));
-    const badge = entry.badge ? h("span", { class: "badge", hidden: true }) : null;
-    if (badge) iconBox.append(badge);
-    const label = bar ? null : h("span", { class: "nav-label" }, entry.label);
-    const el = entry.menu
-      ? h("button", { class: "nav-item", type: "button", "data-nav": entry.id, "aria-label": entry.label, "aria-haspopup": "menu", onclick: (event) => openMore(event.currentTarget) }, iconBox, label)
-      : link(entry.path(), { class: "nav-item", "data-nav": entry.id, "aria-label": entry.label }, iconBox, label);
-    el._icon = iconBox;
+  function tabItem(entry) {
+    const box = h("span", { class: "tab-ic" }, icon(entry.icon));
+    if (entry.badge) box.append(Y.badge(entry.badge));
+    const el = link(entry.path(), { class: `tab-item${entry.center ? " nex-tab" : ""}`, "data-nav": entry.id, "aria-label": entry.label }, box);
+    el._icon = box;
     return el;
   }
-
-  function accountChip() {
-    const chip = h("button", { class: "account-chip", type: "button", "aria-haspopup": "menu", "aria-label": `Konto von ${Y.me.name}` },
-      avatar(Y.me, "sm"), h("span", { class: "chip-text" }, h("b", {}, Y.me.name), h("small", {}, `@${Y.me.handle}`)), h("span", { class: "chip-more" }, icon("more")));
-    chip.addEventListener("click", () => Y.accountMenu(chip));
-    return chip;
-  }
-
-  function buildRail() {
-    const box = h("aside", { class: "rail", "aria-label": "Mehr auf Pulse" });
-    box.append(h("div", { class: "rail-search" }, Y.searchForm("")));
-    if (!Y.me) {
-      box.append(h("section", { class: "card join" }, h("h2", {}, "Neu bei Pulse?"), h("p", { class: "muted" }, "Erstelle ein Konto, folge Leuten und sag, was dich bewegt."),
-        link("/i/signup", { class: "btn primary wide" }, "Konto erstellen"), link("/i/login", { class: "btn ghost wide" }, "Anmelden")));
-    } else {
-      const ask = h("input", { class: "nex-card-input", type: "text", name: "q", placeholder: "Frag Nex etwas …", "aria-label": "Frag Nex etwas", maxlength: 300, autocomplete: "off", enterkeyhint: "send" });
-      box.append(h("form", { class: "card nex-card", onsubmit: (event) => { event.preventDefault(); Y.nexAsk(ask.value); } },
-        h("div", { class: "nex-card-head" }, h("span", { class: "nex-orb", "aria-hidden": "true" }, icon("sparkleFill")), h("div", {}, h("h2", {}, "Nex"), h("small", { class: "muted" }, "Die KI von Pulse"))),
-        ask, h("button", { class: "btn primary small", type: "submit" }, "Fragen")));
-    }
-    box.append(h("section", { class: "card", "data-rail": "trends" }, h("h2", {}, "Im Trend"), Y.skeleton(2)),
-      h("section", { class: "card", "data-rail": "people" }, h("h2", {}, "Wem folgen"), Y.skeleton(2)),
-      h("footer", { class: "rail-foot" },
-        h("a", { href: "/nutzungsbedingungen" }, "Nutzungsbedingungen"), h("a", { href: "/datenschutz" }, "Datenschutz"), h("a", { href: "/impressum" }, "Impressum"),
-        h("button", { class: "linklike", type: "button", onclick: () => Y.shortcutsDialog() }, "Tastenkürzel"), h("span", {}, "© Pulse")));
-    return box;
-  }
-
-  function railCard(name) {
-    let card = railBox.querySelector(`[data-rail="${name}"]`);
-    if (!card) {
-      card = h("section", { class: "card", "data-rail": name });
-      railBox.insertBefore(card, railBox.querySelector(".rail-foot"));
-    }
-    return card;
-  }
-
-  async function fillRail() {
-    if (!railBox) return;
-    railLoaded = Date.now();
-    const [trends, people] = await Promise.all([Api.get("/trends"), Api.get("/suggestions")]);
-    if (!railBox) return;
-    if (trends.ok && trends.data.trends.length) {
-      fill(railCard("trends"), h("h2", {}, "Im Trend"), trends.data.trends.slice(0, 5).map((trend) => link(`/search?q=${encodeURIComponent(`#${trend.tag}`)}`, { class: "trend" },
-        h("span", { class: "t-kicker" }, "Trend"), h("b", {}, `#${trend.tag}`), h("span", { class: "t-count" }, `${Core.formatCount(trend.posts)} ${trend.posts === 1 ? "Beitrag" : "Beiträge"}`))), link("/explore?tab=trends", { class: "card-more" }, "Mehr anzeigen"));
-    } else railBox.querySelector('[data-rail="trends"]')?.remove();
-    if (people.ok && people.data.users.length) fill(railCard("people"), h("h2", {}, "Wem folgen"), people.data.users.map((user) => Y.userRow(user, { bio: false })), link("/explore?tab=people", { class: "card-more" }, "Mehr anzeigen"));
-    else railBox.querySelector('[data-rail="people"]')?.remove();
-  }
-
-  /* Somebody was followed or unfollowed: the suggestions in the right column are asked for again (not when the click was in that
-     column itself, so the list does not change under the mouse). */
-  Y.followChanged = (fromRail) => { if (!fromRail) setTimeout(fillRail, 300); };
 
   function buildShell(bare) {
     app.replaceChildren();
     app.classList.toggle("bare", bare);
-    railBox = null;
     announcer = h("div", { class: "sr-only", "aria-live": "polite", role: "status" });
     main = h("main", { id: "main", class: "main", tabindex: "-1" });
     if (bare) { app.append(main, announcer); return; }
-    const items = NAV.filter((entry) => (!entry.auth || Y.me));
-    if (Y.me && Y.me.isAdmin) items.splice(items.length - 1, 0, { id: "moderation", label: "Moderation", path: () => "/moderation", icon: "shield", on: "shield" });
-    const side = h("header", { class: "side" },
-      h("div", { class: "side-inner" },
-        link(Y.HOME, { class: "brand", "aria-label": "Pulse, zur Startseite" }, Icons.logo(), h("span", { class: "brand-name" }, "Pulse")),
-        h("nav", { class: "nav", "aria-label": "Hauptmenü" }, items.map((entry) => navItem(entry, false))),
-        Y.me ? h("button", { class: "btn primary compose-btn", type: "button", "aria-label": "Neuer Beitrag", onclick: () => Y.compose() }, h("span", { class: "cb-text" }, "Posten"), h("span", { class: "cb-icon" }, icon("feather"))) : null,
-        h("div", { class: "side-spacer" }),
-        Y.me ? accountChip() : null));
-    const tabbar = h("nav", { class: "tabbar", "aria-label": "Hauptmenü" },
-      TABBAR.map((id) => NAV.find((entry) => entry.id === id)).filter((entry) => !entry.auth || Y.me).map((entry) => navItem(entry, true)),
-      Y.me ? null : link("/i/login", { class: "nav-item", "aria-label": "Anmelden" }, h("span", { class: "nav-ic" }, icon("user"))));
-    railBox = buildRail();
-    Y.put(app, side, h("div", { class: "center" }, main), railBox, tabbar, announcer,
-      Y.me ? h("button", { class: "fab", type: "button", "aria-label": "Neuer Beitrag", onclick: () => Y.compose() }, icon("feather")) : null);
-    fillRail();
+    const tabbar = h("nav", { class: "tabbar", "aria-label": "Hauptmenü" }, TABS.map(tabItem));
+    Y.put(app, main, tabbar, announcer);
+  }
+
+  function activeTab(route) {
+    if (route.name === "messages" || route.name === "thread" || route.name === "group") return "messages";
+    if (route.name === "nex" || route.name === "games" || route.name === "videos") return route.name;
+    return "home";
   }
 
   function updateNav(route) {
-    const active = { home: "home", explore: "explore", search: "explore", nex: "nex", notifications: "notifications", messages: "messages", thread: "messages", bookmarks: "bookmarks", settings: "settings", moderation: "moderation" }[route.name]
-      || (route.name === "profile" && Y.me && route.handle.toLowerCase() === Y.me.handle.toLowerCase() ? "profile" : "");
-    for (const el of app.querySelectorAll("[data-nav]")) {
-      const entry = NAV.find((item) => item.id === el.dataset.nav) || { icon: "shield", on: "shield" };
+    const active = activeTab(route);
+    for (const el of app.querySelectorAll(".tab-item")) {
+      const entry = TABS.find((item) => item.id === el.dataset.nav);
       const on = el.dataset.nav === active;
       el.classList.toggle("active", on);
       if (on) el.setAttribute("aria-current", "page"); else el.removeAttribute("aria-current");
@@ -187,10 +105,8 @@
 
   Y.updateBadges = () => {
     const counts = { notifications: Y.me ? Y.me.unreadNotifications || 0 : 0, messages: Y.me ? Y.me.unreadMessages || 0 : 0 };
-    for (const el of app.querySelectorAll("[data-nav]")) {
-      const badge = el.querySelector(".badge");
-      if (!badge) continue;
-      const n = counts[el.dataset.nav] || 0;
+    for (const badge of document.querySelectorAll("[data-badge]")) {
+      const n = counts[badge.dataset.badge] || 0;
       badge.hidden = !n;
       badge.textContent = n > 99 ? "99+" : String(n);
     }
@@ -289,11 +205,11 @@
     pageTitle = view.title || "Pulse";
     updateTitle();
     updateNav(route);
+    Y.updateBadges();
     if (announcer) announcer.textContent = pageTitle;
     window.scrollTo(0, restore ? view.scrollY || 0 : 0);
     view.onShow?.();
     if (!initial && !restore) main.focus({ preventScroll: true });
-    if (railBox && Date.now() - railLoaded > 120000) fillRail();
   }
 
   Y.navigate = (href, options = {}) => {
@@ -323,8 +239,6 @@
   Y.setMe = (me) => {
     Y.me = me;
     clearCache();
-    const chip = app.querySelector(".account-chip");
-    if (chip && me) chip.replaceWith(accountChip());                  // name or picture may have changed
     Y.updateBadges();
   };
 
@@ -335,26 +249,16 @@
     toast("Du wurdest abgemeldet.");
   };
 
-  Y.accountMenu = (anchor) => {
-    if (!Y.me) return;
-    menu(anchor, [
-      { label: "Profil", icon: "user", run: () => Y.navigate(`/${Y.me.handle}`) },
-      { label: "Lesezeichen", icon: "bookmark", run: () => Y.navigate("/bookmarks") },
-      { label: "Einstellungen", icon: "settings", run: () => Y.navigate("/settings") },
-      Y.me.isAdmin ? { label: "Moderation", icon: "shield", run: () => Y.navigate("/moderation") } : null,
-      { label: `@${Y.me.handle} abmelden`, icon: "logout", run: () => Y.logout() },
-    ]);
-  };
-
   /* The page that is shown is asked to load itself again (after a post was pinned, for instance). */
   Y.refreshView = () => { current?.view.refresh?.(); };
 
-  /* The menu of a phone, from the left (the picture in the top bar opens it): profile, bookmarks, settings and the rest. */
-  Y.openDrawer = () => {
-    if (!Y.me || document.querySelector(".drawer-back")) return;
-    const me = Y.me;
+  /* A panel that slides in from the left over the page (the menu of Home, the list of conversations of Nex). `build(panel, close)` puts its
+     content in; it closes with the button, a tap next to it, Escape, or a tap on a link inside. Returns `close`. */
+  Y.sidePanel = (label, build, extraClass = "") => {
+    const old = document.querySelector(".drawer-back");
+    if (old) return null;
     const back = h("div", { class: "drawer-back" });
-    const panel = h("aside", { class: "drawer", role: "dialog", "aria-modal": "true", "aria-label": "Menü" });
+    const panel = h("aside", { class: `drawer ${extraClass}`.trim(), role: "dialog", "aria-modal": "true", "aria-label": label });
     const onKey = (event) => { if (event.key === "Escape") { event.stopPropagation(); close(); } };
     function close() {
       document.removeEventListener("keydown", onKey, true);
@@ -362,24 +266,40 @@
       document.body.classList.remove("modal-open");
       setTimeout(() => back.remove(), 200);
     }
-    const entry = (path, name, label) => link(path, { class: "drawer-item" }, icon(name), h("span", {}, label));
-    panel.append(
-      h("div", { class: "drawer-head" }, link(`/${me.handle}`, { class: "dr-av", "aria-label": "Zum Profil" }, avatar(me, "lg")), h("button", { class: "icon-btn", type: "button", "aria-label": "Menü schließen", onclick: close }, icon("close"))),
-      link(`/${me.handle}`, { class: "dr-name" }, h("b", {}, me.name), h("span", { class: "handle" }, `@${me.handle}`)),
-      h("div", { class: "dr-counts" }, link(`/${me.handle}/following`, {}, h("b", {}, Core.formatCount(me.following)), " Folge ich"), link(`/${me.handle}/followers`, {}, h("b", {}, Core.formatCount(me.followers)), " Follower")),
-      h("nav", { class: "drawer-nav", "aria-label": "Menü" },
-        entry(`/${me.handle}`, "user", "Profil"), entry("/bookmarks", "bookmark", "Lesezeichen"), entry("/i/nex", "sparkle", "Nex"),
-        entry("/settings", "settings", "Einstellungen"), entry("/settings/display", "sun", "Darstellung und Farbe"), entry("/settings/about", "help", "Hilfe und Rechtliches"),
-        me.isAdmin ? entry("/moderation", "shield", "Moderation") : null),
-      h("button", { class: "drawer-item logout", type: "button", onclick: () => { close(); Y.logout(); } }, icon("logout"), h("span", {}, `@${me.handle} abmelden`)));
+    build(panel, close);
     panel.addEventListener("click", (event) => { if (event.target.closest("a")) close(); });
     back.addEventListener("click", (event) => { if (event.target === back) close(); });
     back.append(panel);
     document.body.append(back);
     document.body.classList.add("modal-open");
     document.addEventListener("keydown", onKey, true);
-    panel.querySelector("a")?.focus();
+    Y.updateBadges();
+    panel.querySelector("a, button")?.focus();
+    return close;
   };
+
+  /* The menu from the left (the round button at the top of Home opens it): profile, notifications, bookmarks, settings and the rest. */
+  Y.openDrawer = () => Y.sidePanel("Menü", (panel, close) => {
+    const me = Y.me;
+    const entry = (path, name, label, badge) => link(path, { class: "drawer-item" }, icon(name), h("span", {}, label), badge ? Y.badge(badge) : null);
+    const common = [entry("/explore", "search", "Entdecken"), entry("/settings/display", "sun", "Darstellung und Farbe"), entry("/settings/about", "help", "Hilfe und Rechtliches")];
+    panel.append(h("div", { class: "drawer-head" },
+      me ? link(`/${me.handle}`, { class: "dr-av", "aria-label": "Zum Profil" }, avatar(me, "lg")) : h("span", { class: "hero-logo" }, Icons.logo()),
+      h("button", { class: "icon-btn", type: "button", "aria-label": "Menü schließen", onclick: close }, icon("close"))));
+    if (me) {
+      panel.append(
+        link(`/${me.handle}`, { class: "dr-name" }, h("b", {}, me.name), h("span", { class: "handle" }, `@${me.handle}`)),
+        h("div", { class: "dr-counts" }, link(`/${me.handle}/following`, {}, h("b", {}, Core.formatCount(me.following)), " Folge ich"), link(`/${me.handle}/followers`, {}, h("b", {}, Core.formatCount(me.followers)), " Follower")),
+        h("nav", { class: "drawer-nav", "aria-label": "Menü" },
+          entry(`/${me.handle}`, "user", "Profil"), entry("/notifications", "bell", "Benachrichtigungen", "notifications"), entry("/bookmarks", "bookmark", "Lesezeichen"), ...common,
+          entry("/settings", "settings", "Einstellungen"), me.isAdmin ? entry("/moderation", "shield", "Moderation") : null),
+        h("button", { class: "drawer-item logout", type: "button", onclick: () => { close(); Y.logout(); } }, icon("logout"), h("span", {}, `@${me.handle} abmelden`)));
+    } else {
+      panel.append(
+        h("div", { class: "dr-name" }, h("b", {}, "Pulse"), h("span", { class: "handle" }, "Was gerade passiert.")),
+        h("nav", { class: "drawer-nav", "aria-label": "Menü" }, entry("/i/login", "user", "Anmelden"), entry("/i/signup", "feather", "Konto erstellen"), ...common));
+    }
+  });
 
   Y.requireLogin = (message) => {
     if (Y.me) return true;
@@ -392,53 +312,6 @@
   };
 
   Y.onPosted = (post, info) => { if (current) current.view.onPosted?.(post, info || {}); };
-
-  // ------------------------------------------------------------------------------------------- shortcuts
-  // "j|k" means one key or the other, "g>h" means one key after the other.
-  const SHORTCUTS = [["n", "Neuer Beitrag"], ["/", "Suche"], ["j|k", "Nächster / voriger Beitrag"], ["l", "Beitrag mögen"], ["r", "Auf einen Beitrag antworten"], ["g>h", "Startseite"], ["g>e", "Entdecken"],
-    ["g>x", "Nex"], ["g>n", "Benachrichtigungen"], ["g>m", "Nachrichten"], ["g>b", "Lesezeichen"], ["g>p", "Dein Profil"], ["g>s", "Einstellungen"], ["?", "Diese Hilfe"]];
-
-  const keyCaps = (spec) => spec.split(/([|>])/).map((part) => (part === "|" ? " oder " : part === ">" ? " dann " : h("kbd", {}, part)));
-
-  Y.shortcutsDialog = () => dialog({ title: "Tastenkürzel", body: h("dl", { class: "shortcuts" }, SHORTCUTS.flatMap(([keys, text]) => [h("dt", {}, keyCaps(keys)), h("dd", {}, text)])) });
-
-  let goPending = false;
-  let goTimer = null;
-  document.addEventListener("keydown", (event) => {
-    if (event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented) return;
-    const target = event.target;
-    if (target && (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable)) return;
-    if (document.querySelector(".dialog-back") && event.key !== "?") return;
-    const key = event.key;
-    if (goPending) {
-      goPending = false;
-      clearTimeout(goTimer);
-      const places = { h: Y.HOME, e: "/explore", x: "/i/nex", n: "/notifications", m: "/messages", b: "/bookmarks", s: "/settings", p: Y.me ? `/${Y.me.handle}` : "/i/login" };
-      if (places[key]) { event.preventDefault(); Y.navigate(places[key]); }
-      return;
-    }
-    if (key === "g") { goPending = true; goTimer = setTimeout(() => { goPending = false; }, 1200); return; }
-    if (key === "?") { event.preventDefault(); Y.shortcutsDialog(); return; }
-    if (key === "/") { const input = document.querySelector(".view .search-input") || document.querySelector(".rail .search-input"); if (input) { event.preventDefault(); input.focus(); } else { event.preventDefault(); Y.navigate("/search"); } return; }
-    if (key === "n") { if (Y.me) { event.preventDefault(); Y.compose(); } return; }
-    if (key === "j" || key === "k") {
-      const posts = [...document.querySelectorAll(".view .post:not(.gone)")];
-      if (!posts.length) return;
-      const at = posts.indexOf(document.activeElement ? document.activeElement.closest(".post") : null);
-      const next = posts[Math.max(0, Math.min(posts.length - 1, at + (key === "j" ? 1 : -1)))];
-      event.preventDefault();
-      next.focus({ preventScroll: true });
-      const box = next.getBoundingClientRect();
-      const bar = document.querySelector(".view .topbar");
-      const top = bar ? bar.getBoundingClientRect().bottom : 0;
-      if (box.top < top + 8 || box.bottom > window.innerHeight - 8) window.scrollBy({ top: box.top - top - 24, behavior: "smooth" });
-      return;
-    }
-    if (key === "l" || key === "r") {
-      const card = document.activeElement ? document.activeElement.closest(".post") : null;
-      if (card && card.act) { event.preventDefault(); card.act[key === "l" ? "like" : "reply"](); }
-    }
-  });
 
   // ----------------------------------------------------------------------------------------- connection
   // A safety net: something that fails on its own (a bug, a broken answer) at least says so instead of doing nothing.

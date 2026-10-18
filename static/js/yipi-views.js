@@ -42,7 +42,7 @@
     subline.hidden = !sub;
     const bar = h("div", { class: `topbar ${className}`.trim() },
       h("div", { class: "topbar-row" },
-        back ? h("button", { class: "icon-btn", type: "button", "aria-label": "Zurück", onclick: () => Y.back(typeof back === "string" ? back : Y.HOME) }, icon("back")) : null,
+        back ? h("button", { class: "icon-btn round", type: "button", "aria-label": "Zurück", onclick: () => Y.back(typeof back === "string" ? back : Y.HOME) }, icon("back")) : null,
         h("div", { class: "topbar-title" }, heading, subline), right || null),
       extra || null);
     bar.set = (text, more) => { heading.textContent = text; subline.textContent = more || ""; subline.hidden = !more; };
@@ -113,6 +113,14 @@
   Y.welcomeCard = welcomeCard;
 
   // ------------------------------------------------------------------------------------------------ home
+  /* The round button at the top left: the picture of the person (or a menu symbol) that opens the menu from the left. */
+  function menuButton() {
+    return Y.me
+      ? h("button", { class: "avatar-btn", type: "button", "aria-label": "Menü öffnen", "aria-haspopup": "dialog", onclick: () => Y.openDrawer() }, avatar(Y.me, "md"), Y.badge("notifications"))
+      : h("button", { class: "avatar-btn menu-btn", type: "button", "aria-label": "Menü öffnen", "aria-haspopup": "dialog", onclick: () => Y.openDrawer() }, icon("menuLines"));
+  }
+  Y.menuButton = menuButton;
+
   views.home = function home(route, ctx) {
     const signedIn = !!Y.me;
     let feed = signedIn && Y.readJson("yipi.feed", "foryou") === "following" ? "following" : "foryou";
@@ -124,16 +132,14 @@
     const pill = h("button", { class: "new-pill", type: "button", hidden: true, onclick: () => { feedPager.reload(); window.scrollTo(0, 0); pill.hidden = true; } });
     const feedBox = h("div", { class: "feed" });
     const tabBox = h("div", { class: "home-tabs" });
-    const mobileRow = h("div", { class: "mobile-head" },
-      signedIn ? h("button", { class: "avatar-btn", type: "button", "aria-label": "Menü öffnen", "aria-haspopup": "dialog", onclick: () => Y.openDrawer() }, avatar(Y.me, "sm"))
-               : link("/i/login", { class: "btn ghost small" }, "Anmelden"),
-      h("span", { class: "mobile-logo" }, window.YipiIcons.logo()),
-      h("span", { class: "mh-spacer", "aria-hidden": "true" }));
-    const bar = h("div", { class: "topbar home" }, mobileRow, tabBox);
-    const el = h("div", { class: "view home-view" }, bar, h("div", { class: "home-search" }, searchForm("")), pill);
+    const compose = signedIn
+      ? h("button", { class: "icon-btn solid", type: "button", "aria-label": "Neuer Beitrag", onclick: () => Y.compose() }, icon("plus"))
+      : link("/i/login", { class: "btn primary small" }, "Anmelden");
+    const bar = h("div", { class: "topbar home" }, h("div", { class: "home-head" }, menuButton(), searchForm(""), compose), tabBox);
+    const el = h("div", { class: "view home-view" }, bar, pill);
 
     function drawTabs() {
-      if (!signedIn) { fill(tabBox, h("div", { class: "tabs single" }, h("span", { class: "tab on" }, h("span", {}, "Neueste Beiträge")))); return; }
+      if (!signedIn) { fill(tabBox, h("div", { class: "tabs single" }, h("span", { class: "tab on" }, "Neueste Beiträge"))); return; }
       fill(tabBox, tabs([["foryou", "Für dich"], ["following", "Folge ich"]], feed, (id) => {
         if (id === feed) { feedPager.reload(); window.scrollTo(0, 0); return; }
         feed = id;
@@ -153,7 +159,7 @@
         first: (reply) => { firstCursor = reply.items.length ? Math.max(...reply.items.map((item) => item.cursor || 0)) : 0; },
         empty: feed === "following"
           ? emptyState("Hier ist noch nichts los", "Folge Leuten, um ihre Beiträge hier zu sehen.", link("/explore", { class: "btn primary" }, "Leute entdecken"))
-          : emptyState("Noch keine Beiträge", signedIn ? "Schreib den ersten." : "Erstelle ein Konto und schreib den ersten.", null),
+          : emptyState("Noch keine Beiträge", signedIn ? "Schreib den ersten: tippe oben rechts auf das Plus." : "Erstelle ein Konto und schreib den ersten.", null),
       });
       fill(feedBox, feedPager.element);
     }
@@ -167,15 +173,7 @@
     }
 
     drawTabs();
-    if (signedIn) {
-      put(el, Y.composer({ draftKey: "home", onPosted: (post) => {
-        firstCursor = Math.max(firstCursor, post.cursor || 0);
-        feedPager.prepend(Y.postCard(post));
-        Y.toast("Dein Beitrag wurde gesendet.", { label: "Anzeigen", run: () => Y.navigate(Y.postPath(post)) });
-      } }));
-    } else {
-      put(el, welcomeCard());
-    }
+    if (!signedIn) put(el, welcomeCard());
     put(el, feedBox);
     mountFeed();
     timer = setInterval(check, 30000);
@@ -200,7 +198,7 @@
     const body = h("div", { class: "explore-body" });
     const switcher = tabs([["foryou", "Für dich"], ["trends", "Trends"], ["media", "Medien"], ["people", "Personen"]], tab, (id) => Y.navigate(Core.buildPath({ name: "explore", tab: id === "foryou" ? "" : id }), { replace: true }), "Entdecken");
     const el = h("div", { class: "view" },
-      topbar({ title: "Entdecken", className: "search-bar", extra: h("div", {}, h("div", { class: "topbar-search" }, searchForm("")), switcher) }), body);
+      topbar({ back: true, title: "Entdecken", className: "search-bar", extra: h("div", {}, h("div", { class: "topbar-search" }, searchForm("")), switcher) }), body);
     let listPager = null;
     let dead = false;
     const result = { element: el, title: "Entdecken", keep: true, refresh() { listPager?.reload(); }, destroy() { dead = true; listPager?.destroy(); } };
@@ -346,7 +344,7 @@
     });
     drawTabs();
     mount();
-    const el = h("div", { class: "view" }, topbar({ title: "Benachrichtigungen", extra: tabBox }), listBox);
+    const el = h("div", { class: "view" }, topbar({ back: true, title: "Benachrichtigungen", extra: tabBox }), listBox);
     return { element: el, title: "Benachrichtigungen", refresh() { marked = false; feedPager.reload(); }, destroy() { feedPager.destroy(); } };
   };
 
@@ -357,14 +355,14 @@
       render: (item) => Y.postCard(item, { onBookmark: (on, card) => { if (!on) card.classList.add("faded"); } }),
       empty: emptyState("Speichere Beiträge für später", "Tippe bei einem Beitrag auf das Lesezeichen, dann findest du ihn hier wieder."),
     });
-    const clear = h("button", { class: "icon-btn", type: "button", "aria-label": "Alle Lesezeichen entfernen", title: "Alle entfernen", onclick: async () => {
+    const clear = h("button", { class: "icon-btn round", type: "button", "aria-label": "Alle Lesezeichen entfernen", title: "Alle entfernen", onclick: async () => {
       if (!(await confirmBox({ title: "Alle Lesezeichen entfernen?", text: "Die Beiträge selbst bleiben bestehen, nur deine Merkliste wird geleert.", yes: "Alle entfernen", danger: true }))) return;
       const reply = await Api.del("/bookmarks");
       if (!reply.ok) { toast(Api.message(reply)); return; }
       toast(reply.data.removed ? "Alle Lesezeichen sind entfernt." : "Du hattest keine Lesezeichen.");
       feedPager.reload();
     } }, icon("trash"));
-    const el = h("div", { class: "view" }, topbar({ title: "Lesezeichen", sub: Y.me ? `@${Y.me.handle}` : "", right: clear }), feedPager.element);
+    const el = h("div", { class: "view" }, topbar({ back: true, title: "Lesezeichen", sub: Y.me ? `@${Y.me.handle}` : "", right: clear }), feedPager.element);
     return { element: el, title: "Lesezeichen", keep: true, refresh() { feedPager.reload(); }, destroy() { feedPager.destroy(); } };
   };
 

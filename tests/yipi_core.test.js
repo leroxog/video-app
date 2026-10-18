@@ -106,7 +106,10 @@ test("times are short and German", () => {
   assert.equal(core.relativeTime(at(59 * 60), now), "59 Min.");
   assert.equal(core.relativeTime(at(3600), now), "1 Std.");
   assert.equal(core.relativeTime(at(23 * 3600), now), "23 Std.");
-  assert.equal(core.relativeTime(new Date(2026, 9, 10, 8, 0).toISOString(), now), "10. Okt.");
+  assert.equal(core.relativeTime(at(86400), now), "1 Tg.");
+  assert.equal(core.relativeTime(at(2 * 86400 + 5), now), "2 Tg.");
+  assert.equal(core.relativeTime(at(6 * 86400 + 3600), now), "6 Tg.");
+  assert.equal(core.relativeTime(new Date(2026, 9, 3, 8, 0).toISOString(), now), "3. Okt.");
   assert.equal(core.relativeTime(new Date(2025, 2, 3, 8, 0).toISOString(), now), "3. März 2025");
   assert.equal(core.relativeTime(at(-120), now), "Jetzt");
   assert.equal(core.relativeTime("kaputt", now), "");
@@ -126,7 +129,7 @@ test("every address of the page is read and built the same way", () => {
     ["/", "", { name: "home" }], ["/yipi-archiv", "", { name: "notfound" }], ["/i/nex", "", { name: "nex", q: "", post: 0 }], ["/i/nex", "?post=42", { name: "nex", q: "", post: 42 }],
     ["/i/nex", "?q=Hallo%20Nex", { name: "nex", q: "Hallo Nex", post: 0 }], ["/explore", "", { name: "explore", tab: "" }], ["/explore", "?tab=trends", { name: "explore", tab: "trends" }], ["/explore", "?tab=media", { name: "explore", tab: "media" }], ["/explore", "?tab=nonsense", { name: "explore", tab: "" }], ["/notifications", "", { name: "notifications" }], ["/messages", "", { name: "messages" }],
     ["/messages/mia", "", { name: "thread", handle: "mia" }], ["/bookmarks", "", { name: "bookmarks" }], ["/settings", "", { name: "settings", section: "" }],
-    ["/settings/account", "", { name: "settings", section: "account" }], ["/moderation", "", { name: "moderation" }], ["/i/login", "", { name: "login" }], ["/i/signup", "", { name: "signup" }],
+    ["/settings/account", "", { name: "settings", section: "account" }], ["/moderation", "", { name: "moderation" }], ["/games", "", { name: "games" }], ["/videos", "", { name: "videos" }], ["/g/12", "", { name: "group", id: 12 }], ["/i/login", "", { name: "login" }], ["/i/signup", "", { name: "signup" }],
     ["/search", "?q=hallo%20welt", { name: "search", q: "hallo welt", type: "posts", sort: "top" }], ["/search", "?q=%23tag&type=people", { name: "search", q: "#tag", type: "people", sort: "top" }],
     ["/search", "?q=katze&sort=new", { name: "search", q: "katze", type: "posts", sort: "new" }], ["/search", "?q=katze&type=media", { name: "search", q: "katze", type: "media", sort: "top" }],
     ["/search", "?q=katze&type=media&sort=new", { name: "search", q: "katze", type: "media", sort: "new" }],
@@ -140,7 +143,7 @@ test("every address of the page is read and built the same way", () => {
     assert.deepEqual(core.parsePath(built, query ? `?${query}` : ""), route, `${path} (built again)`);
   }
   assert.deepEqual(core.parsePath("/explore/"), { name: "explore", tab: "" });
-  for (const path of ["/ab", "/mia/status/x", "/mia/status/1/2", "/mia/other", "/a b", "/mia/followers/x", "/a".repeat(20), "/settings/Konto", "/mía"]) assert.equal(core.parsePath(path).name, "notfound", path);
+  for (const path of ["/g/0", "/g/x", "/g/12345678901", "/g", "/ab", "/mia/status/x", "/mia/status/1/2", "/mia/other", "/a b", "/mia/followers/x", "/a".repeat(20), "/settings/Konto", "/mía"]) assert.equal(core.parsePath(path).name, "notfound", path);
   assert.equal(core.buildPath({ name: "nonsense" }), "/");
   assert.equal(core.HOME, "/");
   assert.equal(core.buildPath({ name: "nex" }), "/i/nex");
@@ -297,4 +300,87 @@ test("the answers of a poll are tidied and checked the way the server checks the
   assert.equal(core.MAX_POLL_OPTION, 25);
   assert.ok(core.POLL_LENGTHS.every(([minutes, label]) => minutes >= 5 && minutes <= 10080 && label.length > 3));
   assert.ok(core.POLL_LENGTHS.some(([minutes]) => minutes === 1440), "one day is on the list");
+});
+
+// ------------------------------------------------------------------------------------------------ chats with Nex
+test("the name of a conversation with Nex is its first question, cut to fit", () => {
+  assert.equal(core.nexTitle("  Wie   funktioniert\n ein Akku? "), "Wie funktioniert ein Akku?");
+  assert.equal(core.nexTitle(""), "Neues Gespräch");
+  assert.equal(core.nexTitle(null), "Neues Gespräch");
+  const long = core.nexTitle("x".repeat(100));
+  assert.equal(Array.from(long).length, 38);
+  assert.ok(long.endsWith("…"));
+  assert.equal(Array.from(core.nexTitle("😀".repeat(60))).length, 38);
+  assert.match(core.newChatId(), /^c[a-z0-9]{6,}$/);
+  assert.notEqual(core.newChatId(), core.newChatId());
+});
+
+test("the saved conversations are cleaned, belong to one person and are never more than thirty", () => {
+  const message = (role, content) => ({ role, content });
+  const chat = (id, at, text = "Hallo") => ({ id, title: "", at, messages: [message("user", text), message("assistant", "Hi!")] });
+  const store = core.nexStore({ handle: "mia", current: "b", chats: [chat("a", 1), chat("b", 3, "Zweite Frage"), chat("a", 5), { id: "bad id!", at: 9, messages: [message("user", "x")] }, null, { id: "empty", at: 4, messages: [] }, chat("c", 2)] }, "mia");
+  assert.deepEqual(store.chats.map((entry) => entry.id), ["b", "c", "a"], "newest first, doubles, empty ones and broken ones gone");
+  assert.equal(store.current, "b");
+  assert.equal(store.chats[0].title, "Zweite Frage", "a conversation without a name gets its first question");
+  assert.deepEqual(core.nexStore({ handle: "tom", chats: [chat("a", 1)] }, "mia"), { handle: "mia", chats: [], current: "" });
+  assert.deepEqual(core.nexStore(null, "mia"), { handle: "mia", chats: [], current: "" });
+  assert.equal(core.nexStore({ handle: "mia", current: "gone", chats: [chat("a", 1)] }, "mia").current, "", "a current conversation that does not exist is forgotten");
+  const many = core.nexStore({ handle: "mia", chats: Array.from({ length: 40 }, (_, i) => chat(`id${i}`, i)) }, "mia");
+  assert.equal(many.chats.length, core.NEX_CHATS);
+  assert.equal(many.chats[0].id, "id39");
+});
+
+test("the older single conversation becomes one chat", () => {
+  const store = core.nexStore({ handle: "mia", messages: [{ role: "user", content: "Erste Frage" }, { role: "assistant", content: "Antwort" }] }, "mia");
+  assert.equal(store.chats.length, 1);
+  assert.equal(store.chats[0].title, "Erste Frage");
+  assert.equal(store.chats[0].messages.length, 2);
+  assert.deepEqual(core.nexStore({ handle: "mia", messages: [] }, "mia").chats, []);
+});
+
+test("a conversation is added or replaced at the front and removed again", () => {
+  let store = { handle: "mia", chats: [{ id: "a", title: "A", at: 1, messages: [] }, { id: "b", title: "B", at: 2, messages: [] }], current: "" };
+  store = core.nexUpsert(store, { id: "a", title: "A neu", at: 5, messages: [] });
+  assert.deepEqual(store.chats.map((entry) => entry.id), ["a", "b"]);
+  assert.equal(store.chats[0].title, "A neu");
+  assert.equal(store.current, "a");
+  store = core.nexUpsert(store, { id: "c", title: "C", at: 9, messages: [] });
+  assert.deepEqual(store.chats.map((entry) => entry.id), ["c", "a", "b"]);
+  store = core.nexRemove(store, "c");
+  assert.deepEqual(store.chats.map((entry) => entry.id), ["a", "b"]);
+  assert.equal(store.current, "", "the one that was open is gone");
+  assert.equal(core.nexRemove(store, "nope").chats.length, 2);
+});
+
+// ------------------------------------------------------------------------------------------------ the visitor
+test("everything the page knows about a visit is listed, and what it does not know says so", () => {
+  const sections = core.visitorSections(
+    { ip: "203.0.113.7", forwardedFor: "203.0.113.7, 10.0.0.1", via: "10.0.0.1", protocol: "https", host: "pulse.example", userAgent: "Mozilla/5.0 (X11)", acceptLanguage: "de-DE,de;q=0.9", time: "2026-10-17 20:15:00" },
+    { platform: "Linux", languages: ["de-DE", "de"], timezone: "Europe/Berlin", localTime: "17.10.2026, 22:15", screen: { width: 1920, height: 1080, ratio: 1, depth: 24 }, viewport: { width: 1280, height: 720 }, cores: 8, memory: 8, touchPoints: 0, pointer: "Maus", colorScheme: "dunkel", cookies: true, online: true, connection: { type: "4g", downlink: 10, rtt: 50, saveData: false } },
+    { handle: "mia", name: "Mia", email: "mia@example.com", createdAt: "2026-10-01T10:00:00Z", posts: 3, followers: 2, following: 1 });
+  assert.deepEqual(sections.map((section) => section.title), ["Verbindung", "Browser und Gerät", "Konto"]);
+  const flat = Object.fromEntries(sections.flatMap((section) => section.rows));
+  assert.equal(flat["IP-Adresse"], "203.0.113.7");
+  assert.equal(flat["Bildschirm"], "1920 × 1080 px (Faktor 1)");
+  assert.equal(flat["Fenster"], "1280 × 720 px");
+  assert.equal(flat["Sprachen"], "de-DE, de");
+  assert.equal(flat["Cookies erlaubt"], "ja");
+  assert.equal(flat["Datensparmodus"], "nein");
+  assert.equal(flat["Datenrate"], "10 Mbit/s");
+  assert.equal(flat["Arbeitsspeicher"], "mindestens 8 GB");
+  assert.equal(flat["Angemeldet als"], "@mia");
+  assert.equal(flat["Mitglied seit"], "2026-10-01");
+  assert.equal(flat["E-Mail-Adresse"], "mia@example.com");
+});
+
+test("a visitor about whom little is known gets honest blanks", () => {
+  const sections = core.visitorSections();
+  const flat = Object.fromEntries(sections.flatMap((section) => section.rows));
+  assert.equal(flat["IP-Adresse"], "nicht ermittelbar");
+  assert.equal(flat["Bildschirm"], "nicht ermittelbar");
+  assert.equal(flat["Cookies erlaubt"], "nicht ermittelbar");
+  assert.equal(flat["Angemeldet"], "nein: es ist kein Konto angemeldet");
+  assert.equal(core.visitorSections({}, {}, { handle: "a_b", name: "", email: "" }).at(-1).rows.find(([label]) => label === "E-Mail-Adresse")[1], "nicht angegeben");
+  assert.equal(Object.fromEntries(core.visitorSections({ acceptLanguage: "fr" }).flatMap((section) => section.rows))["Sprachen"], "fr", "the language the browser asked for, when the browser itself is silent");
+  assert.equal(core.MAX_MEDIA, 3);
 });

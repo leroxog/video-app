@@ -125,7 +125,7 @@ def test_the_manifest_is_the_one_of_pulse(client):
     r = flask_app.test_client().get("/manifest.webmanifest")
     data = json.loads(r.get_data(as_text=True))
     assert r.mimetype == "application/manifest+json" and data["name"].startswith("Pulse") and data["short_name"] == "Pulse"
-    assert data["start_url"] == "/" and data["scope"] == "/" and data["orientation"] == "any" and data["theme_color"] == "#07080d"
+    assert data["start_url"] == "/" and data["scope"] == "/" and data["orientation"] == "portrait-primary" and data["theme_color"] == "#000000"
     assert {icon["purpose"] for icon in data["icons"]} == {"any", "maskable"}
     for icon in data["icons"]:
         assert os.path.getsize(os.path.join(ROOT, icon["src"].lstrip("/").replace("/", os.sep))) > 200

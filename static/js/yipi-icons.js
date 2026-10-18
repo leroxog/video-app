@@ -65,6 +65,14 @@
     pushpin: S('<path d="M9 4h6l-1 5 3 3v2H7v-2l3-3z"/><path d="M12 14v6"/>'),
     list: S('<path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1" fill="currentColor"/><circle cx="4" cy="12" r="1" fill="currentColor"/><circle cx="4" cy="18" r="1" fill="currentColor"/>'),
     help: S('<circle cx="12" cy="12" r="9"/><path d="M9.500 9.500a2.500 2.500 0 114 2c-.9.6-1.500 1.100-1.500 2.200"/><circle cx="12" cy="17" r=".9" fill="currentColor"/>'),
+    nexmark: S('<path d="M5 4.500c6 0 10 4.500 14 15M19 4.500c-6 0-10 4.500-14 15"/>', LINE.replace('stroke-width="2"', 'stroke-width="2.400"')),
+    gamepad: S('<rect x="2.500" y="7" width="19" height="11" rx="5.500"/><path d="M8 10.500v4M6 12.500h4"/><circle cx="15.500" cy="11.500" r="1" fill="currentColor"/><circle cx="18" cy="14" r="1" fill="currentColor"/>'),
+    playCircle: S('<circle cx="12" cy="12" r="9"/><path d="M10 8.500l5.500 3.500-5.500 3.500z" fill="currentColor"/>'),
+    usersFill: S('<circle cx="9" cy="8" r="3.500"/><path d="M2.500 20c.8-3.500 3.200-5.500 6.500-5.500s5.700 2 6.500 5.500z"/><path d="M16 4.800a3.500 3.500 0 010 6.400M18 14.800c2 .6 3.200 2.300 3.600 4.700" fill="none"/>', `${FILL} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"`),
+    menuLines: S('<path d="M5 9h14M5 15h9"/>'),
+    arrowUp: S('<path d="M12 19V6M6.500 11.500L12 6l5.500 5.500"/>', LINE.replace('stroke-width="2"', 'stroke-width="2.400"')),
+    warn: S('<path d="M12 4l9.500 16.500h-19z"/><path d="M12 10v4.500M12 17.500v.1"/>'),
+    imageOff: S('<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="1.600"/><path d="M3 17l5-5 4 4"/><path d="M4 20L20 4"/>'),
     users: S('<circle cx="9" cy="8" r="3.500"/><path d="M2.500 20c.8-3.500 3.200-5.500 6.500-5.500s5.700 2 6.500 5.500"/><path d="M16 4.800a3.500 3.500 0 010 6.400M18 14.800c2 .6 3.200 2.300 3.600 4.700"/>'),
   };
 

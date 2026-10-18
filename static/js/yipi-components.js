@@ -23,11 +23,11 @@
   const absolute = (path) => `${location.origin}${path}`;
 
   // ------------------------------------------------------------------------------------ small pieces
-  /* A round button of the row under a post. `draw(active, count)` fills in icon and number. */
-  function actionButton({ kind, label, off, on }) {
-    const iconBox = h("span", { class: "act-icon" });
-    const number = h("span", { class: "act-count" });
-    const button = h("button", { class: `act ${kind}`, type: "button", "aria-label": label }, iconBox, number);
+  /* A button of the little pill on the edge of a post card (like, reply, share). `draw(active, count, text)` fills in icon and number. */
+  function pillButton({ kind, label, off, on }) {
+    const iconBox = h("span", { class: "pill-ic" });
+    const number = h("span", { class: "pill-count" });
+    const button = h("button", { class: `pill-btn ${kind}`, type: "button", "aria-label": label }, iconBox, number);
     button.draw = (active, count, text) => {
       button.classList.toggle("on", !!active);
       if (on) button.setAttribute("aria-pressed", String(!!active));
@@ -66,56 +66,6 @@
     entry.box.querySelector(".dialog-actions .btn").disabled = true;
   }
 
-  // ---------------------------------------------------------------------------------------- hover cards
-  /* On a computer a pause of the pointer over a name or a picture opens a small card of the person (like on X); it is not for touch. */
-  const profiles = new Map();                                      // handle -> {user, at}: kept for a minute
-  let hoverCard = null;
-  let showTimer = null;
-  let hideTimer = null;
-
-  function closeHover() {
-    clearTimeout(showTimer);
-    clearTimeout(hideTimer);
-    if (hoverCard) { hoverCard.remove(); hoverCard = null; }
-  }
-
-  async function openHover(anchor, handle) {
-    let entry = profiles.get(handle);
-    if (!entry || Date.now() - entry.at > 60000) {
-      const reply = await Api.get(`/users/${handle}`);
-      if (!reply.ok || !reply.data.user.createdAt) return;
-      entry = { user: reply.data.user, at: Date.now() };
-      profiles.set(handle, entry);
-    }
-    if (!anchor.isConnected || !anchor.matches(":hover")) return;
-    const user = entry.user;
-    if (hoverCard) hoverCard.remove();
-    const box = h("div", { class: "hovercard", role: "tooltip" },
-      h("div", { class: "hc-top" }, link(`/${user.handle}`, { class: "hc-av", tabindex: "-1", "aria-hidden": "true" }, avatar(user, "lg")), followButton(user)),
-      link(`/${user.handle}`, { class: "hc-name" }, h("b", {}, user.name), h("span", { class: "handle" }, `@${user.handle}`)),
-      user.bio ? h("p", { class: "hc-bio" }, richText(user.bio)) : null,
-      h("div", { class: "hc-counts" }, link(`/${user.handle}/following`, {}, h("b", {}, Core.formatCount(user.following)), " Folge ich"), link(`/${user.handle}/followers`, {}, h("b", {}, Core.formatCount(user.followers)), " Follower")));
-    box.addEventListener("mouseenter", () => clearTimeout(hideTimer));
-    box.addEventListener("mouseleave", () => { hideTimer = setTimeout(closeHover, 200); });
-    box.addEventListener("click", (event) => { if (event.target.closest("a")) closeHover(); });
-    document.body.append(box);
-    const place = anchor.getBoundingClientRect();
-    const left = Math.max(8, Math.min(window.innerWidth - box.offsetWidth - 8, place.left));
-    const top = place.bottom + 8 + box.offsetHeight > window.innerHeight ? Math.max(8, place.top - box.offsetHeight - 8) : place.bottom + 8;
-    box.style.left = `${left}px`;
-    box.style.top = `${top}px`;
-    hoverCard = box;
-  }
-
-  function hoverable(element, handle) {
-    if (!matchMedia("(hover: hover) and (pointer: fine)").matches) return element;
-    element.addEventListener("mouseenter", () => { clearTimeout(hideTimer); clearTimeout(showTimer); showTimer = setTimeout(() => openHover(element, handle), 450); });
-    element.addEventListener("mouseleave", () => { clearTimeout(showTimer); hideTimer = setTimeout(closeHover, 220); });
-    element.addEventListener("click", closeHover);
-    return element;
-  }
-  window.addEventListener("scroll", closeHover, { passive: true });
-
   // ------------------------------------------------------------------------------------------ people
   function followButton(user, options = {}) {
     if (user.isMe) return null;
@@ -125,7 +75,7 @@
       button.classList.toggle("blocked", !!user.blockedByMe);
       fill(button, ...(user.blockedByMe
         ? [h("span", {}, "Blockiert")]
-        : user.followedByMe ? [h("span", { class: "t-on" }, "Folge ich"), h("span", { class: "t-hover" }, "Entfolgen")] : [h("span", {}, user.followsMe ? "Auch folgen" : "Folgen")]));
+        : user.followedByMe ? [h("span", {}, "Folge ich")] : [h("span", {}, user.followsMe ? "Auch folgen" : "Folgen")]));
       button.setAttribute("aria-pressed", String(!!user.followedByMe));
       button.setAttribute("aria-label", user.blockedByMe ? `@${user.handle} ist blockiert` : user.followedByMe ? `@${user.handle} nicht mehr folgen` : `@${user.handle} folgen`);
     }
@@ -148,7 +98,6 @@
       Object.assign(user, reply.data.user);
       draw();
       options.onChange?.(user);
-      Y.followChanged?.(!!button.closest(".rail"));
     });
     return button;
   }
@@ -156,9 +105,9 @@
   /* A line for a person: picture, name, @handle, a short description and the follow button. */
   function userRow(user, options = {}) {
     const row = h("div", { class: "user-row" },
-      hoverable(link(`/${user.handle}`, { class: "ur-av", tabindex: "-1", "aria-hidden": "true" }, avatar(user, "md")), user.handle),
+      link(`/${user.handle}`, { class: "ur-av", tabindex: "-1", "aria-hidden": "true" }, avatar(user, "md")),
       h("div", { class: "ur-main" },
-        hoverable(link(`/${user.handle}`, { class: "ur-name" }, h("b", {}, user.name), h("span", { class: "handle" }, `@${user.handle}`)), user.handle),
+        link(`/${user.handle}`, { class: "ur-name" }, h("b", {}, user.name), h("span", { class: "handle" }, `@${user.handle}`)),
         options.bio !== false && user.bio ? h("p", { class: "ur-bio" }, richText(user.bio)) : null),
       options.action === undefined ? followButton(user) : options.action);
     return row;
@@ -212,9 +161,9 @@
 
   // ------------------------------------------------------------------------------------------- posts
   function mediaGrid(media) {
-    const grid = h("div", { class: `media m${Math.min(media.length, 4)}` });
+    const grid = h("div", { class: `media m${Math.min(media.length, 3)}` });
     if (media.length === 1 && media[0].gif && media[0].gifId) put(grid, Y.gifStar({ id: media[0].gifId, favorite: !!media[0].gifFavorite }));
-    media.slice(0, 4).forEach((item, index) => {
+    media.slice(0, 3).forEach((item, index) => {
       const ratio = media.length === 1 ? `aspect-ratio: ${Math.max(0.8, Math.min(1.78, item.width / item.height)).toFixed(3)}` : "";
       put(grid, h("button", { class: `media-item${item.gif ? " is-gif" : ""}`, type: "button", style: ratio, "aria-label": item.alt ? `${item.gif ? "GIF" : "Bild"} vergrößern: ${item.alt}` : item.gif ? "GIF vergrößern" : "Bild vergrößern", onclick: (event) => { event.stopPropagation(); Y.viewer(media, index); } },
         h("img", { src: item.url, alt: item.alt || (item.gif ? "GIF" : ""), loading: "lazy", decoding: "async" }), item.gif ? h("span", { class: "gif-badge", "aria-hidden": "true" }, "GIF") : null));
@@ -354,7 +303,8 @@
     return entry;
   }
 
-  /* One post. Options: detail (the big version on its own page), noReplyLine, onDelete(card), onReply(post). */
+  /* One post, as a big rounded card with a little pill on its top edge (like, reply, share). Options: detail (the big version on its own page),
+     noReplyLine, onDelete(card), onReply(post), onBookmark(on, card). */
   function postCard(item, options = {}) {
     if (item.deleted) {
       return h("article", { class: "post gone" }, h("p", {}, "Dieser Beitrag wurde gelöscht."));
@@ -364,25 +314,19 @@
     const card = h("article", { class: `post${detail ? " detail" : ""}`, "data-id": String(item.id), "data-cursor": String(item.cursor || item.id), tabindex: "0", "aria-label": `Beitrag von ${item.user.name}` });
     const state = { viewer: { ...item.viewer }, counts: { ...item.counts } };
 
-    const replyButton = actionButton({ kind: "reply", label: "Antworten", off: "reply" });
-    const repostButton = actionButton({ kind: "repost", label: "Reposten", off: "repost" });
-    const likeButton = actionButton({ kind: "like", label: "Gefällt mir", off: "heart", on: "heartFill" });
-    const bookmarkButton = actionButton({ kind: "bookmark", label: "Lesezeichen", off: "bookmark", on: "bookmarkFill" });
-    const shareButton = h("button", { class: "act share", type: "button", "aria-label": "Teilen", "aria-haspopup": "menu" }, h("span", { class: "act-icon" }, icon("share")));
-    const viewCount = h("span", { class: "act-count" });
-    const viewsStat = h("span", { class: "act views", title: "Aufrufe" }, h("span", { class: "act-icon" }, icon("views")), viewCount);
+    const likeButton = pillButton({ kind: "like", label: "Gefällt mir", off: "heart", on: "heartFill" });
+    const replyButton = pillButton({ kind: "reply", label: "Antworten", off: "reply" });
+    const shareButton = pillButton({ kind: "share", label: "Teilen", off: "share", on: "repost" });
+    shareButton.setAttribute("aria-haspopup", "menu");
     const moreButton = h("button", { class: "more icon-btn small", type: "button", "aria-label": "Mehr", "aria-haspopup": "menu" }, icon("more"));
     const stats = h("div", { class: "post-stats" });
+    const foot = h("div", { class: "post-foot" });
 
     function draw() {
-      replyButton.draw(false, detail ? 0 : state.counts.replies);
-      repostButton.draw(state.viewer.reposted, detail ? 0 : state.counts.reposts, state.viewer.reposted ? "Repost rückgängig machen" : "Reposten");
-      repostButton.classList.toggle("on", state.viewer.reposted);
-      likeButton.draw(state.viewer.liked, detail ? 0 : state.counts.likes, state.viewer.liked ? "Gefällt mir nicht mehr" : "Gefällt mir");
-      bookmarkButton.draw(state.viewer.bookmarked, 0, state.viewer.bookmarked ? "Lesezeichen entfernen" : "Lesezeichen");
+      likeButton.draw(state.viewer.liked, state.counts.likes, state.viewer.liked ? "Gefällt mir nicht mehr" : "Gefällt mir");
+      replyButton.draw(false, state.counts.replies);
+      shareButton.draw(state.viewer.reposted, state.counts.reposts, state.viewer.reposted ? "Repost, Menü öffnen" : "Teilen");
       const views = item.views || 0;
-      viewCount.textContent = views ? Core.formatCount(views) : "";
-      viewsStat.setAttribute("aria-label", `${views} ${views === 1 ? "Aufruf" : "Aufrufe"}`);
       if (detail) {
         fill(stats,
           views ? h("span", {}, h("b", {}, Core.formatCount(views)), ` ${views === 1 ? "Aufruf" : "Aufrufe"}`) : null,
@@ -390,10 +334,13 @@
           state.counts.likes ? h("button", { class: "stat-link", type: "button", onclick: () => peopleDialog("Gefällt mir von", `/posts/${item.id}/likes`) }, h("b", {}, Core.formatCount(state.counts.likes)), " Gefällt mir") : null,
           state.counts.replies ? h("span", {}, h("b", {}, Core.formatCount(state.counts.replies)), ` ${state.counts.replies === 1 ? "Antwort" : "Antworten"}`) : null);
         stats.hidden = !stats.children.length;
+      } else {
+        fill(foot, views ? h("span", {}, h("b", {}, Core.formatCount(views)), ` ${views === 1 ? "Aufruf" : "Aufrufe"}`) : null);
+        foot.hidden = !views;
       }
     }
 
-    async function react(on, path, key, flip) {
+    async function react(on, path, flip) {
       if (!Y.requireLogin("Melde dich an, um mitzumachen.")) return;
       const before = { viewer: { ...state.viewer }, counts: { ...state.counts } };
       flip(on);
@@ -410,40 +357,33 @@
       draw();
     }
 
-    const toggleLike = () => react(!state.viewer.liked, `/posts/${item.id}/like`, "liked", (on) => { state.viewer.liked = on; state.counts.likes = Math.max(0, state.counts.likes + (on ? 1 : -1)); });
-    const toggleRepost = () => react(!state.viewer.reposted, `/posts/${item.id}/repost`, "reposted", (on) => { state.viewer.reposted = on; state.counts.reposts = Math.max(0, state.counts.reposts + (on ? 1 : -1)); });
+    const toggleLike = () => react(!state.viewer.liked, `/posts/${item.id}/like`, (on) => { state.viewer.liked = on; state.counts.likes = Math.max(0, state.counts.likes + (on ? 1 : -1)); });
+    const toggleRepost = () => react(!state.viewer.reposted, `/posts/${item.id}/repost`, (on) => { state.viewer.reposted = on; state.counts.reposts = Math.max(0, state.counts.reposts + (on ? 1 : -1)); });
     const toggleBookmark = async () => {
       if (!Y.requireLogin("Melde dich an, um Lesezeichen zu setzen.")) return;
       const on = !state.viewer.bookmarked;
       state.viewer.bookmarked = on;
-      draw();
       const reply = on ? await Api.post(`/posts/${item.id}/bookmark`) : await Api.del(`/posts/${item.id}/bookmark`);
-      if (!reply.ok) { state.viewer.bookmarked = !on; draw(); toast(Api.message(reply)); return; }
+      if (!reply.ok) { state.viewer.bookmarked = !on; toast(Api.message(reply)); return; }
       toast(on ? "Zu deinen Lesezeichen hinzugefügt" : "Aus den Lesezeichen entfernt");
       options.onBookmark?.(on, card);
     };
 
     likeButton.addEventListener("click", (event) => { event.stopPropagation(); toggleLike(); });
-    bookmarkButton.addEventListener("click", (event) => { event.stopPropagation(); toggleBookmark(); });
     replyButton.addEventListener("click", (event) => {
       event.stopPropagation();
       if (!Y.requireLogin("Melde dich an, um zu antworten.")) return;
       Y.compose({ replyTo: item, onPosted: (post) => { state.counts.replies += 1; draw(); options.onReply?.(post); } });
     });
-    repostButton.addEventListener("click", (event) => {
-      event.stopPropagation();
-      if (!Y.requireLogin("Melde dich an, um zu reposten.")) return;
-      menu(repostButton, [
-        { label: state.viewer.reposted ? "Repost rückgängig machen" : "Reposten", icon: "repost", run: toggleRepost },
-        { label: "Zitieren", icon: "pencil", run: () => Y.compose({ quoteOf: item }) },
-      ]);
-    });
     shareButton.addEventListener("click", (event) => {
       event.stopPropagation();
       menu(shareButton, [
+        { label: state.viewer.reposted ? "Repost rückgängig machen" : "Reposten", icon: "repost", run: () => { if (Y.requireLogin("Melde dich an, um zu reposten.")) toggleRepost(); } },
+        { label: "Zitieren", icon: "pencil", run: () => { if (Y.requireLogin("Melde dich an, um zu zitieren.")) Y.compose({ quoteOf: item }); } },
+        { label: state.viewer.bookmarked ? "Lesezeichen entfernen" : "Lesezeichen setzen", icon: "bookmark", run: toggleBookmark },
         { label: "Link kopieren", icon: "link", run: () => copyLink(postPath(item)) },
         { label: "Per Nachricht senden", icon: "mail", run: () => sendPostDialog(item) },
-        navigator.share && matchMedia("(pointer: coarse)").matches ? { label: "Teilen …", icon: "share", run: async () => {
+        navigator.share ? { label: "Teilen …", icon: "share", run: async () => {
           try { await navigator.share({ url: absolute(postPath(item)), title: `${item.user.name} auf Pulse` }); } catch (error) { /* closed */ }
         } } : null,
       ]);
@@ -452,7 +392,6 @@
       event.stopPropagation();
       const other = item.user.handle;
       menu(moreButton, [
-        { label: "Link kopieren", icon: "link", run: () => copyLink(postPath(item)) },
         item.text ? { label: "Mit Nex erklären", icon: "sparkle", run: () => Y.navigate(Core.buildPath({ name: "nex", post: item.id })) } : null,
         mine && !item.replyTo ? (Y.me.pinnedPostId === item.id
           ? { label: "Von deinem Profil lösen", icon: "pushpin", run: async () => { const reply = await Api.del(`/posts/${item.id}/pin`); if (reply.ok) { Y.me.pinnedPostId = reply.data.pinnedPostId; toast("Der Beitrag ist nicht mehr angeheftet."); Y.refreshView?.(); } else toast(Api.message(reply)); } }
@@ -476,40 +415,38 @@
     });
 
     const head = h("div", { class: "post-head" },
-      hoverable(link(`/${item.user.handle}`, { class: "post-name" }, h("b", {}, item.user.name), detail ? null : h("span", { class: "handle" }, `@${item.user.handle}`)), item.user.handle),
-      detail ? null : [h("span", { class: "dot" }, "·"), link(postPath(item), { class: "post-time" }, timeEl(item.createdAt))],
-      detail ? null : moreButton);
+      link(`/${item.user.handle}`, { class: "post-av", tabindex: "-1", "aria-hidden": "true" }, avatar(item.user, "sm")),
+      h("div", { class: "post-who" },
+        link(`/${item.user.handle}`, { class: "post-name" }, item.user.name),
+        h("span", { class: "post-meta" }, h("span", { class: "handle" }, `@${item.user.handle}`), detail ? null : [h("span", { class: "dot" }, "·"), link(postPath(item), { class: "post-time" }, timeEl(item.createdAt))])),
+      moreButton);
 
     const body = h("div", { class: "post-body" },
-      item.replyTo && item.replyTo.handle && !options.noReplyLine && !detail ? h("p", { class: "reply-line" }, "Antwort an ", link(`/${item.replyTo.handle}`, { class: "tok" }, `@${item.replyTo.handle}`)) : null,
+      item.replyTo && item.replyTo.handle && !options.noReplyLine ? h("p", { class: "reply-line" }, "Antwort an ", link(`/${item.replyTo.handle}`, { class: "tok" }, `@${item.replyTo.handle}`)) : null,
       item.text ? h("div", { class: "post-text" }, richText(item.text)) : null,
       item.media && item.media.length ? mediaGrid(item.media) : null,
       item.poll ? pollView(item) : null,
       item.quote ? quoteCard(item.quote) : null);
 
-    const bar = h("div", { class: "post-actions", role: "group", "aria-label": "Aktionen" }, replyButton, repostButton, likeButton, viewsStat, h("span", { class: "act-group" }, bookmarkButton, shareButton));
     draw();
 
+    put(card, h("div", { class: "post-pill", role: "group", "aria-label": "Aktionen" }, likeButton, replyButton, shareButton));
     if (item.pinned) put(card, h("div", { class: "post-context" }, h("span", { class: "ctx-ic" }, icon("pushpin")), "Angeheftet"));
-
     if (item.repostedBy) {
       const own = Y.me && Y.me.handle === item.repostedBy.handle;
       put(card, h("div", { class: "post-context" }, h("span", { class: "ctx-ic" }, icon("repost")), own ? "Du hast repostet" : link(`/${item.repostedBy.handle}`, {}, `${item.repostedBy.name} hat repostet`)));
     }
+    put(card, head, body);
 
     if (detail) {
-      put(card, 
-        h("div", { class: "post-row detail-head" }, link(`/${item.user.handle}`, { class: "post-av", tabindex: "-1", "aria-hidden": "true" }, avatar(item.user, "md")),
-          h("div", { class: "detail-who" }, link(`/${item.user.handle}`, { class: "post-name" }, h("b", {}, item.user.name)), h("span", { class: "handle" }, `@${item.user.handle}`)), moreButton),
-        item.replyTo && item.replyTo.handle ? h("p", { class: "reply-line" }, "Antwort an ", link(`/${item.replyTo.handle}`, { class: "tok" }, `@${item.replyTo.handle}`)) : null,
-        body, h("div", { class: "detail-time" }, timeEl(item.createdAt, true)), stats, bar);
+      put(card, h("div", { class: "detail-time" }, timeEl(item.createdAt, true)), stats);
       queueView(item.id);
     } else {
-      put(card, h("div", { class: "post-row" }, hoverable(link(`/${item.user.handle}`, { class: "post-av", tabindex: "-1" }, avatar(item.user, "md")), item.user.handle), h("div", { class: "post-main" }, head, body, bar)));
+      put(card, foot);
       if (watcher && !item.deleted) watcher.observe(card);
       const open = () => Y.navigate(postPath(item));
       card.addEventListener("click", (event) => {
-        if (event.target.closest("a, button, .menu, .quote, .poll")) return;
+        if (event.target.closest("a, button, .menu, .quote, .poll, .post-pill")) return;
         if (window.getSelection && String(window.getSelection())) return;
         open();
       });
@@ -517,7 +454,6 @@
     }
     card.refresh = draw;
     card.bumpReplies = () => { state.counts.replies += 1; draw(); };
-    card.act = { like: toggleLike, reply: () => replyButton.click() };
     return card;
   }
 
@@ -538,7 +474,7 @@
   function composer(options = {}) {
     const { replyTo, quoteOf, compact, onPosted } = options;
     const draftKey = `yipi.draft.${options.draftKey || (replyTo ? `r${replyTo.id}` : quoteOf ? `q${quoteOf.id}` : "new")}`;
-    const picked = [];                                   // {blob, url, alt, uploaded, gif}: up to 4 photos, or one GIF
+    const picked = [];                                   // {blob, url, alt, uploaded, gif}: up to 3 photos, or one GIF
     let poll = null;                                     // {options: [...], minutes} while a poll is being written (instead of pictures)
     let busy = false;
 
@@ -595,7 +531,7 @@
 
     function drawPreviews() {
       previews.hidden = !picked.length;
-      previews.className = `compose-media m${Math.min(picked.length, 4)}`;
+      previews.className = `compose-media m${Math.min(picked.length, 3)}`;
       fill(previews, ...picked.map((entry, index) => h("div", { class: "pv" },
         h("img", { src: entry.url, alt: entry.alt || "Vorschau" }),
         h("button", { class: "pv-x", type: "button", "aria-label": entry.gif ? "GIF entfernen" : "Foto entfernen", onclick: () => { URL.revokeObjectURL(entry.url); picked.splice(index, 1); drawPreviews(); update(); } }, icon("close")),
@@ -614,7 +550,7 @@
       for (const file of files) {
         if (file.type.startsWith("video/") || /\.(mp4|m4v|mov|webm|mkv|avi|wmv|3gp|mpe?g)$/i.test(file.name || "")) { toast(Api.MESSAGES.no_video); continue; }
         if (picked.some((entry) => entry.gif)) picked.splice(0, picked.length);          // photos take the place of a GIF
-        if (picked.length >= Core.MAX_MEDIA) { toast("Mehr als 4 Fotos gehen nicht."); break; }
+        if (picked.length >= Core.MAX_MEDIA) { toast("Mehr als 3 Fotos gehen nicht."); break; }
         if (!/^image\/(jpeg|png|gif|webp)$/.test(file.type)) { toast(Api.MESSAGES.bad_image); continue; }
         if (file.type === "image/gif" && file.size > 5 * 1024 * 1024) { toast("Das GIF ist zu groß (höchstens 5 MB)."); continue; }
         if (file.type === "image/gif" && picked.length) { toast(Api.MESSAGES.gif_alone); continue; }
@@ -747,5 +683,5 @@
     return entry;
   };
 
-  Object.assign(Y, { postCard, composer, userRow, followButton, reportDialog, prepareImage, copyLink, postPath, peopleDialog, sendPostDialog, hoverable });
+  Object.assign(Y, { postCard, composer, userRow, followButton, reportDialog, prepareImage, copyLink, postPath, peopleDialog, sendPostDialog });
 })();

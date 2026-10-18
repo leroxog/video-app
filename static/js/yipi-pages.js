@@ -23,195 +23,22 @@
   };
 
   views.needLogin = function needLogin(route) {
-    const what = { notifications: "Benachrichtigungen", messages: "Nachrichten", thread: "Nachrichten", bookmarks: "Lesezeichen", moderation: "Moderation", settings: "Einstellungen", nex: "Nex" }[route.name] || "Das";
+    const what = { notifications: "Benachrichtigungen", messages: "Chats", thread: "Chats", group: "Chats", bookmarks: "Lesezeichen", moderation: "Moderation", settings: "Einstellungen", nex: "Nex" }[route.name] || "Das";
     return { element: h("div", { class: "view" }, topbar({ title: what }),
       h("div", { class: "empty big" }, h("div", { class: "empty-logo" }, window.YipiIcons.logo()), h("h2", {}, "Melde dich an"), h("p", {}, `Für ${what} brauchst du ein Pulse-Konto.`),
         h("div", { class: "hero-actions" }, link("/i/signup", { class: "btn primary" }, "Konto erstellen"), link("/i/login", { class: "btn ghost" }, "Anmelden")))), title: what };
   };
 
-  // ---------------------------------------------------------------------------------------- messages
-  function newMessage() {
-    const input = h("input", { class: "field", type: "search", placeholder: "Nach Namen oder @Nutzernamen suchen", "aria-label": "Person suchen", autocomplete: "off", maxlength: 50 });
-    const results = h("div", { class: "pick-list" }, h("p", { class: "muted" }, "Tippe mindestens zwei Zeichen."));
-    let timer = null;
-    let token = 0;
-    let entry = null;
-    input.addEventListener("input", () => {
-      clearTimeout(timer);
-      const term = Core.cleanText(input.value).replace(/^@/, "");
-      if (term.length < 2) { fill(results, h("p", { class: "muted" }, "Tippe mindestens zwei Zeichen.")); return; }
-      const mine = ++token;
-      timer = setTimeout(async () => {
-        const reply = await Api.get(qs("/search", { q: term, type: "people" }));
-        if (mine !== token) return;
-        if (!reply.ok) { fill(results, h("p", { class: "muted" }, Api.message(reply))); return; }
-        const people = reply.data.users.filter((user) => !user.isMe);
-        fill(results, ...(people.length ? people.map((user) => h("button", { class: "pick", type: "button", onclick: () => { entry.close(); Y.navigate(`/messages/${user.handle}`); } },
-          avatar(user, "md"), h("span", { class: "pick-main" }, h("b", {}, user.name), h("span", { class: "handle" }, `@${user.handle}`)))) : [h("p", { class: "muted" }, "Niemanden gefunden.")]));
-      }, 280);
-    });
-    entry = dialog({ title: "Neue Nachricht", body: h("div", {}, input, results), initialFocus: input });
+  // ------------------------------------------------------------------------------------ games, videos
+  /* The two tabs that are not there yet: a calm page that says so. */
+  function comingSoon(title, iconName, text) {
+    return function soon() {
+      return { element: h("div", { class: "view" }, topbar({ title, className: "big" }),
+        h("div", { class: "soon" }, h("div", { class: "soon-ic" }, icon(iconName)), h("h2", {}, title), h("span", { class: "soon-tag" }, "Kommt bald!"), h("p", {}, text))), title };
+    };
   }
-
-  views.messages = function messages(route, ctx) {
-    const box = h("div", { class: "convos" });
-    const el = h("div", { class: "view" }, topbar({ title: "Nachrichten", right: h("button", { class: "icon-btn", type: "button", "aria-label": "Neue Nachricht", onclick: newMessage }, icon("pencil")) }), box);
-    let dead = false;
-
-    function row(item) {
-      const last = item.last;
-      return link(`/messages/${item.user.handle}`, { class: `convo${item.unread ? " unread" : ""}` }, avatar(item.user, "md"),
-        h("div", { class: "convo-main" },
-          h("div", { class: "convo-top" }, h("b", {}, item.user.name), h("span", { class: "handle" }, `@${item.user.handle}`), h("span", { class: "dot" }, "·"), Y.timeEl(last.createdAt)),
-          h("p", { class: "convo-last" }, `${last.mine ? "Du: " : ""}${snippet(last.text.replace(/\s+/g, " "), 90)}`)),
-        item.unread ? h("span", { class: "unread-dot", "aria-label": `${item.unread} ungelesen` }) : null);
-    }
-
-    async function load(first) {
-      const reply = await Api.get("/messages");
-      if (dead) return;
-      if (!reply.ok) { if (first) fill(box, errorState(reply, () => load(true))); return; }
-      fill(box, ...(reply.data.items.length ? reply.data.items.map(row)
-        : [emptyState("Willkommen im Posteingang", "Schreibe privat mit Leuten, die dir folgen. Wähle oben rechts eine Person aus.", button("Nachricht schreiben", "primary", newMessage))]));
-    }
-    put(box, Y.skeleton(3));
-    load(true);
-    const timer = setInterval(() => { if (!document.hidden) load(false); }, 15000);
-    return { element: el, title: "Nachrichten", destroy() { dead = true; clearInterval(timer); } };
-  };
-
-  const dayLabel = (iso) => {
-    const date = new Date(iso);
-    const today = new Date();
-    const yesterday = new Date(today.getTime() - 86400000);
-    const same = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-    if (same(date, today)) return "Heute";
-    if (same(date, yesterday)) return "Gestern";
-    return Core.fullTime(iso).split(" · ")[1];
-  };
-  const clock = (iso) => Core.fullTime(iso).split(" · ")[0];
-
-  views.thread = function thread(route, ctx) {
-    const handle = route.handle;
-    const bar = topbar({ back: "/messages", title: `@${handle}` });
-    const older = h("button", { class: "btn ghost small older", type: "button", hidden: true }, "Frühere Nachrichten laden");
-    const bubbles = h("div", { class: "bubbles", role: "log", "aria-live": "polite", "aria-label": "Nachrichten" });
-    const input = h("textarea", { class: "dm-input", rows: 1, maxlength: 1000, placeholder: "Neue Nachricht", "aria-label": "Nachricht" });
-    const sendButton = h("button", { class: "icon-btn send-btn", type: "button", "aria-label": "Senden", disabled: true }, icon("send"));
-    const gifButton = h("button", { class: "icon-btn tool", type: "button", "aria-label": "GIF senden", "aria-haspopup": "dialog" }, icon("gif"));
-    const note = h("p", { class: "notice", hidden: true });
-    const composeBar = h("div", { class: "dm-compose", hidden: true }, gifButton, input, sendButton);
-    const body = h("div", { class: "thread" }, h("div", { class: "thread-intro" }), older, bubbles);
-    const el = h("div", { class: "view thread-view" }, bar, body, note, composeBar);
-    const state = { list: [], next: null, other: null, dead: false, sending: false };
-
-    const lastTheirs = () => state.list.reduce((max, m) => (m.mine ? max : Math.max(max, m.id)), 0);
-    const nearBottom = () => document.documentElement.scrollHeight - window.scrollY - window.innerHeight < 160;
-    const toBottom = () => window.scrollTo(0, document.documentElement.scrollHeight);
-
-    function draw() {
-      const nodes = [];
-      let day = "";
-      let previous = null;
-      for (const message of state.list) {
-        const label = dayLabel(message.createdAt);
-        if (label !== day) { day = label; nodes.push(h("div", { class: "day" }, h("span", {}, label))); previous = null; }
-        const next = state.list[state.list.indexOf(message) + 1];
-        const endOfGroup = !next || next.mine !== message.mine || dayLabel(next.createdAt) !== day || clock(next.createdAt) !== clock(message.createdAt);
-        const gif = message.gif && !message.gif.gone ? message.gif : null;
-        nodes.push(h("div", { class: `bubble ${message.mine ? "mine" : "theirs"}${previous && previous.mine === message.mine ? " joined" : ""}` },
-          gif ? h("div", { class: "bubble-gif-wrap" },
-            h("button", { class: "bubble-gif", type: "button", "aria-label": `GIF vergrößern${gif.title ? `: ${gif.title}` : ""}`, onclick: () => Y.viewer([{ url: gif.url, alt: gif.title || "GIF" }], 0) }, h("img", { src: gif.url, alt: gif.title || "GIF", width: gif.width, height: gif.height, loading: "lazy" })),
-            Y.gifStar(gif)) : null,
-          message.gif && message.gif.gone ? h("div", { class: "bubble-text gone" }, "Dieses GIF gibt es nicht mehr.") : null,
-          message.text ? h("div", { class: "bubble-text" }, richText(message.text)) : null,
-          endOfGroup ? h("span", { class: "bubble-time" }, clock(message.createdAt)) : null));
-        previous = message;
-      }
-      fill(bubbles, ...nodes);
-    }
-
-    function intro(user) {
-      fill(body.querySelector(".thread-intro"), link(`/${user.handle}`, { class: "intro-card" }, avatar(user, "lg"), h("b", {}, user.name), h("span", { class: "handle" }, `@${user.handle}`),
-        user.bio ? h("p", {}, snippet(user.bio, 120)) : null, h("small", {}, `${Core.formatCount(user.followers)} Follower · ${Core.joinedLabel(user.createdAt)}`)));
-    }
-
-    async function load() {
-      const reply = await Api.get(`/messages/${handle}`);
-      if (state.dead) return;
-      if (!reply.ok) { fill(body, errorState(reply, () => ctx.reload())); return; }
-      state.other = reply.data.user;
-      if (state.other.isMe) { fill(body, emptyState("Das geht nicht", "Du kannst dir nicht selbst schreiben.", link("/messages", { class: "btn primary" }, "Zurück"))); return; }
-      bar.set(state.other.name, `@${state.other.handle}`);
-      ctx.setTitle(`Nachrichten mit ${state.other.name}`);
-      state.list = reply.data.messages;
-      state.next = reply.data.next;
-      older.hidden = !state.next;
-      intro(state.other);
-      draw();
-      if (reply.data.canWrite) composeBar.hidden = false;
-      else { note.textContent = `Du kannst ${state.other.name} erst schreiben, wenn ${state.other.name} dir folgt oder dir zuerst geschrieben hat.`; note.hidden = false; }
-      requestAnimationFrame(toBottom);
-      Y.refreshBadges();
-    }
-
-    older.addEventListener("click", async () => {
-      older.disabled = true;
-      const reply = await Api.get(qs(`/messages/${handle}`, { cursor: state.next }));
-      older.disabled = false;
-      if (!reply.ok) { toast(Api.message(reply)); return; }
-      const before = document.documentElement.scrollHeight;
-      state.list = [...reply.data.messages, ...state.list];
-      state.next = reply.data.next;
-      older.hidden = !state.next;
-      draw();
-      window.scrollTo(0, window.scrollY + document.documentElement.scrollHeight - before);
-    });
-
-    function update() {
-      sendButton.disabled = state.sending || !Core.cleanText(input.value);
-      input.style.height = "auto";
-      input.style.height = `${Math.min(input.scrollHeight, 140)}px`;
-    }
-    async function deliver(payload, clearInput) {
-      if (state.sending) return;
-      state.sending = true;
-      update();
-      const reply = await Api.post(`/messages/${handle}`, payload);
-      state.sending = false;
-      if (!reply.ok) { toast(Api.message(reply)); update(); return; }
-      if (clearInput) input.value = "";
-      state.list.push(reply.data.message);
-      draw();
-      update();
-      toBottom();
-    }
-    function send() {
-      const text = Core.cleanText(input.value);
-      if (text) deliver({ text }, true);
-    }
-    gifButton.addEventListener("click", () => Y.gifPicker({ onPick: (gif) => deliver({ gifId: gif.id }, false) }));
-    input.addEventListener("input", update);
-    input.addEventListener("keydown", (event) => { if (event.key === "Enter" && !event.shiftKey && matchMedia("(pointer: fine)").matches) { event.preventDefault(); send(); } });
-    sendButton.addEventListener("click", send);
-
-    async function poll() {
-      if (state.dead || document.hidden || !state.other || state.other.isMe) return;
-      const reply = await Api.get(qs(`/messages/${handle}/poll`, { after: lastTheirs() }));
-      if (state.dead || !reply.ok || !reply.data.messages.length) return;
-      const stick = nearBottom();
-      state.list.push(...reply.data.messages);
-      draw();
-      if (stick) toBottom();
-      composeBar.hidden = false;                       // somebody who wrote to you can always be answered
-      note.hidden = true;
-      Y.refreshBadges();
-    }
-    const timer = setInterval(poll, 4000);
-    put(body, h("div", { class: "thread-skeleton" }, Y.skeleton(2)));
-    load().then(() => body.querySelector(".thread-skeleton")?.remove());
-    return { element: el, title: `Nachrichten mit @${handle}`, destroy() { state.dead = true; clearInterval(timer); } };
-  };
+  views.games = comingSoon("Games", "gamepad", "Hier warten bald kleine Spiele auf dich, allein oder mit Freunden.");
+  views.videos = comingSoon("Videos", "playCircle", "Hier gibt es bald kurze Videos zum Anschauen.");
 
   // ---------------------------------------------------------------------------------------- settings
   const THEMES = [["auto", "Wie das Gerät", "Folgt der Einstellung deines Geräts."], ["light", "Hell", "Weiß mit Lila."], ["dim", "Gedimmt", "Dunkles Lila, schonend für die Augen."], ["dark", "Schwarz", "Tiefschwarz mit Lila, spart Strom auf OLED-Bildschirmen."]];
@@ -274,7 +101,7 @@
       style: `background:${colour}`, onclick: () => { accent = id; Y.setAccent(id); drawAccents(); } })));
     drawAccents();
     return h("div", { class: "settings-body" }, h("section", { class: "card" }, h("h2", {}, "Darstellung"), group),
-      h("section", { class: "card" }, h("h2", {}, "Farbe"), h("div", { class: "card-pad" }, swatches, h("p", { class: "hint" }, "Die Farbe der Knöpfe, Leisten und des Lichts im Hintergrund."))));
+      h("section", { class: "card" }, h("h2", {}, "Farbe"), h("div", { class: "card-pad" }, swatches, h("p", { class: "hint" }, "Die Farbe der besonderen Dinge: das Herz, Hinweise und Nex."))));
   }
 
   function relationSection(kind) {
@@ -304,8 +131,7 @@
       h("section", { class: "card" }, h("h2", {}, "Rechtliches"),
         h("ul", { class: "plain-links" }, ["nutzungsbedingungen|Nutzungsbedingungen und Regeln", "datenschutz|Datenschutzerklärung", "impressum|Impressum"].map((entry) => { const [path, text] = entry.split("|"); return h("li", {}, h("a", { href: `/${path}` }, text, icon("chevron"))); }))),
       h("section", { class: "card" }, h("h2", {}, "Hilfe"),
-        button("Tastenkürzel anzeigen", "ghost", () => Y.shortcutsDialog()),
-        h("p", { class: "muted small" }, "Beiträge sind öffentlich. Nachrichten sind nur für die beiden Beteiligten sichtbar, aber nicht Ende-zu-Ende-verschlüsselt. Etwas Unpassendes siehst du? Tippe beim Beitrag, beim GIF oder beim Profil auf „Melden“. Videos gibt es bei Pulse nicht: du kannst Fotos und GIFs posten.")),
+        h("p", { class: "muted small" }, "Beiträge sind öffentlich. Nachrichten sind nur für die Beteiligten sichtbar (zwei Personen oder die Mitglieder einer Gruppe), aber nicht Ende-zu-Ende-verschlüsselt. Etwas Unpassendes siehst du? Tippe beim Beitrag, beim GIF oder beim Profil auf „Melden“. In einem Beitrag gehen bis zu 3 Fotos, ein GIF oder eine Umfrage. Games und Videos kommen bald.")),
       h("section", { class: "card" }, h("h2", {}, "Über Pulse"),
         h("p", { class: "muted" }, "Pulse ist ein unabhängiges, kostenloses Projekt, ohne Werbung und ohne Tracking. Es speichert nur ein Anmelde-Cookie, wenn du dich anmeldest, und deine Einstellungen im Browser. Nex, die KI, antwortet mit Hilfe eines KI-Dienstes (Groq): was du Nex schreibst, wird dafür an den Server und von dort an den Dienst geschickt, aber nicht gespeichert.")));
   }
@@ -322,7 +148,7 @@
     if (!section) {
       const rows = SECTIONS.filter(([, , , , needs]) => !needs || Y.me).map(([id, title, text, iconName]) => link(`/settings/${id}`, { class: "setting-row" }, h("span", { class: "setting-ic" }, icon(iconName)), h("span", { class: "setting-text" }, h("b", {}, title), h("small", {}, text)), icon("chevron")));
       if (Y.me) rows.push(h("button", { class: "setting-row logout", type: "button", onclick: () => Y.logout() }, h("span", { class: "setting-ic" }, icon("logout")), h("span", { class: "setting-text" }, h("b", {}, "Abmelden"), h("small", {}, `@${Y.me.handle}`))));
-      return { element: h("div", { class: "view" }, topbar({ title: "Einstellungen" }), h("div", { class: "settings-list" }, rows)), title: "Einstellungen" };
+      return { element: h("div", { class: "view" }, topbar({ back: true, title: "Einstellungen" }), h("div", { class: "settings-list" }, rows)), title: "Einstellungen" };
     }
     const entry = SECTIONS.find(([id]) => id === section);
     if (!entry) return views.notfound();
@@ -386,13 +212,6 @@
   // ------------------------------------------------------------------------------------------- sign in
   function authFrame(title, subtitle, content, footer) {
     return h("div", { class: "auth-page" },
-      h("aside", { class: "auth-hero" },
-        h("span", { class: "auth-hero-logo" }, window.YipiIcons.logo()),
-        h("h2", {}, "Was gerade passiert."),
-        h("ul", { class: "auth-points" },
-          h("li", {}, icon("feather"), h("span", {}, "Kurze Beiträge, Fotos und GIFs")),
-          h("li", {}, icon("gif"), h("span", {}, "Eigene GIFs machen und teilen")),
-          h("li", {}, icon("sparkle"), h("span", {}, "Nex, die KI, hilft dir weiter")))),
       h("div", { class: "auth-card" },
         link(Y.HOME, { class: "auth-logo", "aria-label": "Pulse" }, window.YipiIcons.logo(), h("span", {}, "Pulse")),
         h("h1", {}, title), subtitle ? h("p", { class: "muted" }, subtitle) : null, content, h("p", { class: "auth-switch" }, footer)));

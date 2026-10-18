@@ -22,7 +22,7 @@
     too_big: "Das Foto ist zu groß (höchstens 5 MB).",
     no_file: "Es wurde keine Datei gesendet.",
     no_video: "Videos gibt es bei Pulse nicht. Du kannst Fotos und GIFs posten.",
-    gif_alone: "Ein GIF steht allein: entweder ein GIF oder bis zu 4 Fotos.",
+    gif_alone: "Ein GIF steht allein: entweder ein GIF oder bis zu 3 Fotos.",
     bad_gif: "Das ist kein gültiges GIF (oder es hat zu viele Bilder oder Pixel).",
     gif_too_big: "Das GIF ist zu groß (höchstens 3 MB).",
     gif_title_long: "Der Name eines GIFs darf höchstens 40 Zeichen haben.",
@@ -51,6 +51,9 @@
     poll_closed: "Diese Umfrage ist schon beendet.",
     already_voted: "Du hast bei dieser Umfrage schon abgestimmt.",
     bad_option: "Diese Antwort gibt es nicht.",
+    not_friends: "Das geht nur mit Freunden: ihr müsst euch gegenseitig folgen.",
+    bad_group_name: "Der Name der Gruppe darf 1 bis 40 Zeichen haben.",
+    group_full: "Die Gruppe ist voll (höchstens 20 Personen).",
   };
 
   async function call(method, path, body, form) {

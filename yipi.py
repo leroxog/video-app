@@ -56,7 +56,9 @@ MAX_NAME = 50
 MAX_LOCATION = 30
 MAX_WEBSITE = 100
 MAX_DM = 1000
-MAX_MEDIA = 4
+MAX_MEDIA = 3                                    # photos per post (or one GIF, or a poll)
+MAX_GROUP_NAME = 40
+MAX_GROUP_MEMBERS = 20
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
 MAX_PIXELS = 40_000_000
 MAX_GIF_BYTES = 3 * 1024 * 1024                  # a GIF of the library: it is shown many times in a picker, so it stays small
@@ -91,7 +93,7 @@ RESERVED_HANDLES = {
     "datenschutz", "impressum", "nutzungsbedingungen", "regeln", "hilfe", "suche", "entdecken", "robots", "sitemap", "manifest",
     "gomat", "ysound", "root", "system", "staff", "team", "official", "null", "undefined", "me", "you", "intent", "share", "hashtag",
     "yipi_media", "service", "offline", "link", "play", "plm", "auth", "plugins", "music", "servers", "ychat", "ylib", "nrs", "nex", "sound",
-    "browser", "server", "play_game", "service_worker",
+    "browser", "server", "play_game", "service_worker", "games", "videos", "chats", "friends", "groups",
 }
 
 LIMITS = {
@@ -100,7 +102,7 @@ LIMITS = {
     "post-burst": (12, 60), "post-hour": (150, 3600), "like": (400, 3600), "follow": (120, 3600), "media": (40, 3600), "dm": (120, 3600),
     "report": (20, 3600), "profile": (30, 3600), "search": (120, 600), "block": (60, 3600),
     "gif-make": (20, 3600), "gif-fav": (400, 3600), "gif-use": (300, 3600), "gif-list": (600, 600),
-    "nex": (40, 600), "nex-flood": (80, 60), "views": (90, 600), "vote": (200, 3600), "pin": (60, 3600),
+    "nex": (40, 600), "nex-flood": (80, 60), "views": (90, 600), "vote": (200, 3600), "pin": (60, 3600), "group": (12, 3600),
 }
 _hits = {}
 limiter = RateLimiter(LIMITS, _hits)
@@ -115,7 +117,7 @@ SITE_NAME = "Pulse"
 DESCRIPTION = "Pulse: Was gerade passiert. Kurze Beiträge, Fotos und GIFs, Antworten, Reposts und Likes, dazu Nex, die KI, die dir weiterhilft."
 # Old home pages of the site that stay reachable but are not for search engines.
 ARCHIVE_PATHS = ("/nex-agenten-archiv", "/gomat-archiv", "/ysound-archiv", "/sound-archiv", "/server-archiv", "/browser-archiv", "/ylib-archiv", "/ychat-archiv", "/nex-archiv", "/modelle-archiv", "/nex-ai-archiv", "/nstl-archiv")
-PRIVATE_PATHS = ("/i/", "/search", "/messages", "/notifications", "/bookmarks", "/settings", "/moderation")   # not for search engines
+PRIVATE_PATHS = ("/i/", "/g/", "/search", "/messages", "/notifications", "/bookmarks", "/settings", "/moderation")   # not for search engines
 OLD_HOME = "/yipi-archiv"                         # the address of the earlier yipi home page: it leads to "/" now
 STARTER_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "gifs")
 logger = logging.getLogger(__name__)
@@ -271,6 +273,35 @@ class YipiMessage(db.Model):
     gif_id = db.Column(db.String(32), nullable=True)                  # a GIF of the library sent instead of (or with) text
     created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
     read = db.Column(db.Boolean, nullable=False, default=False)
+
+
+class YipiGroup(db.Model):
+    """A group chat: a name, an owner, members (yipi_group_member) and messages (yipi_group_message)."""
+    __tablename__ = "yipi_group"
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(MAX_GROUP_NAME), nullable=False)
+    owner_id = db.Column(db.Integer, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+
+
+class YipiGroupMember(db.Model):
+    __tablename__ = "yipi_group_member"
+    __table_args__ = (db.UniqueConstraint("group_id", "user_id"),)
+    id = db.Column(db.Integer, primary_key=True)
+    group_id = db.Column(db.Integer, nullable=False, index=True)
+    user_id = db.Column(db.Integer, nullable=False, index=True)
+    last_read = db.Column(BigId, nullable=False, default=0)          # the newest message of the group this member has seen
+    joined_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+
+
+class YipiGroupMessage(db.Model):
+    __tablename__ = "yipi_group_message"
+    id = db.Column(BigId, primary_key=True, autoincrement=True)
+    group_id = db.Column(db.Integer, nullable=False, index=True)
+    sender_id = db.Column(db.Integer, nullable=False, index=True)
+    text = db.Column(db.String(MAX_DM), nullable=False, default="")
+    gif_id = db.Column(db.String(32), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
 
 
 class YipiReport(db.Model):
@@ -623,6 +654,14 @@ def gifs_by_id(ids):
     return {gif.id: gif for gif in PulseGif.query.options(defer(PulseGif.data)).filter(PulseGif.id.in_(wanted))}
 
 
+def group_unread(user):
+    """{group id: number of messages of others the user has not seen} for every group the user is in."""
+    rows = (db.session.query(YipiGroupMessage.group_id, func.count(YipiGroupMessage.id))
+            .join(YipiGroupMember, and_(YipiGroupMember.group_id == YipiGroupMessage.group_id, YipiGroupMember.user_id == user.id))
+            .filter(YipiGroupMessage.id > YipiGroupMember.last_read, YipiGroupMessage.sender_id != user.id).group_by(YipiGroupMessage.group_id).all())
+    return dict(rows)
+
+
 def media_json(item):
     return {"id": item.id, "url": media_url(item.id), "width": item.width, "height": item.height, "alt": item.alt, "gif": item.content_type == "image/gif", "gifId": item.gif_id}
 
@@ -857,6 +896,21 @@ def remove_post(post, by_admin=False):
         db.session.delete(post)
 
 
+def leave_group(group_id, user_id):
+    """Takes a user out of a group; a group nobody is left in disappears, one that loses its owner gives the group to the member who was there longest."""
+    YipiGroupMember.query.filter_by(group_id=group_id, user_id=user_id).delete()
+    db.session.flush()
+    group = db.session.get(YipiGroup, group_id)
+    if group is None:
+        return
+    rest = YipiGroupMember.query.filter_by(group_id=group_id).order_by(YipiGroupMember.id).first()
+    if rest is None:
+        YipiGroupMessage.query.filter_by(group_id=group_id).delete()
+        db.session.delete(group)
+    elif group.owner_id == user_id:
+        group.owner_id = rest.user_id
+
+
 def purge_user(user):
     """Deletes an account and everything that belongs to it."""
     uid = user.id
@@ -884,6 +938,9 @@ def purge_user(user):
     YipiMute.query.filter(or_(YipiMute.muter_id == uid, YipiMute.muted_id == uid)).delete()
     YipiNotification.query.filter(or_(YipiNotification.user_id == uid, YipiNotification.actor_id == uid)).delete()
     YipiMessage.query.filter(or_(YipiMessage.sender_id == uid, YipiMessage.recipient_id == uid)).delete()
+    for member in YipiGroupMember.query.filter_by(user_id=uid).all():
+        leave_group(member.group_id, uid)
+    YipiGroupMessage.query.filter_by(sender_id=uid).delete()
     YipiReport.query.filter_by(reporter_id=uid).delete()
     YipiMedia.query.filter_by(owner_id=uid).delete()
     PulseGifFav.query.filter_by(user_id=uid).delete()
@@ -907,6 +964,10 @@ def cleanup_orphans(user):
 def page_meta(path):
     """Title and description for link previews of the pages that have something to say (profiles, single posts)."""
     title, description = f"{SITE_NAME}: was gerade passiert", DESCRIPTION
+    if path == "/games":                                          # (these two look like a profile address, so they are answered first)
+        return f"Games auf {SITE_NAME}: kommt bald", "Kleine Spiele für dich und deine Freunde. Kommt bald!"
+    if path == "/videos":
+        return f"Videos auf {SITE_NAME}: kommt bald", "Kurze Videos auf Pulse. Kommt bald!"
     match = re.fullmatch(r"/([A-Za-z0-9_]{3,15})(?:/status/(\d+))?", path)
     if match:
         user = YipiUser.query.filter_by(handle_lc=match.group(1).lower()).first()
@@ -927,8 +988,8 @@ def page_meta(path):
 def manifest():
     return {
         "name": f"{SITE_NAME}: was gerade passiert", "short_name": SITE_NAME, "description": DESCRIPTION, "lang": "de", "dir": "ltr",
-        "id": "/", "start_url": "/", "scope": "/", "display": "standalone", "orientation": "any",
-        "background_color": "#07080d", "theme_color": "#07080d", "categories": ["social"],
+        "id": "/", "start_url": "/", "scope": "/", "display": "standalone", "orientation": "portrait-primary",
+        "background_color": "#000000", "theme_color": "#000000", "categories": ["social"],
         "icons": [
             {"src": "/static/img/pulse-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
             {"src": "/static/img/pulse-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
@@ -1004,7 +1065,7 @@ def register_routes(app):
 
     def me_dict(user):
         unread = YipiNotification.query.filter_by(user_id=user.id, read=False).count()
-        messages = YipiMessage.query.filter_by(recipient_id=user.id, read=False).count()
+        messages = YipiMessage.query.filter_by(recipient_id=user.id, read=False).count() + sum(group_unread(user).values())
         data = user_dict(user, user)
         data.update({"email": user.email or "", "unreadNotifications": unread, "unreadMessages": messages, "isAdmin": is_admin(user)})
         return data
@@ -1270,7 +1331,7 @@ def register_routes(app):
                 return None, fail("bad_media")
             items.append((position, item))
         if len(items) > 1 and any(item.content_type == "image/gif" for _, item in items):
-            return None, fail("gif_alone")                           # up to four photos, or one GIF: like the app it is modelled on
+            return None, fail("gif_alone")                           # up to three photos, or one GIF
         post = YipiPost(user_id=user.id, text=text, reply_to_id=reply_to.id if reply_to else None, quote_of_id=quote_of.id if quote_of else None,
                         root_id=(reply_to.root_id or reply_to.id) if reply_to else None)
         db.session.add(post)
@@ -1952,11 +2013,7 @@ def register_routes(app):
             return True
         return YipiMessage.query.filter_by(sender_id=target.id, recipient_id=sender.id).first() is not None
 
-    @route("/api/yipi/messages")
-    def yipi_conversations():
-        user, problem = need_user()
-        if problem:
-            return problem
+    def dm_items(user):
         recent = (YipiMessage.query.filter(or_(YipiMessage.sender_id == user.id, YipiMessage.recipient_id == user.id))
                   .order_by(YipiMessage.id.desc()).limit(500).all())
         rows, seen = [], set()
@@ -1978,7 +2035,262 @@ def register_routes(app):
                 continue
             items.append({"user": user_brief(other), "last": {"text": row.text or ("GIF" if row.gif_id else ""), "gif": bool(row.gif_id), "createdAt": iso(row.created_at), "mine": row.sender_id == user.id},
                           "unread": unread.get(other_id, 0)})
-        return jsonify({"ok": True, "items": items})
+        return items
+
+    @route("/api/yipi/messages")
+    def yipi_conversations():
+        user, problem = need_user()
+        if problem:
+            return problem
+        return jsonify({"ok": True, "items": dm_items(user)})
+
+    @route("/api/yipi/visitor")
+    def yipi_visitor():
+        """What this site sees of the person who asks: the notice for computers shows it to that same person, nothing of it is stored or logged."""
+        first, last = client_addresses()
+        chain = [part.strip() for part in request.headers.get("X-Forwarded-For", "").split(",") if part.strip()]
+        header = request.headers.get
+        return jsonify({"ok": True, "visitor": {
+            "ip": first, "forwardedFor": ", ".join(chain)[:300], "via": last if last != first else "",
+            "protocol": header("X-Forwarded-Proto", request.scheme).split(",")[0].strip()[:10], "host": request.host[:100],
+            "time": iso(utcnow()), "userAgent": header("User-Agent", "")[:400], "acceptLanguage": header("Accept-Language", "")[:200], "doNotTrack": header("DNT", "")[:3]}})
+
+    @route("/api/yipi/chats")
+    def yipi_chats():
+        """The list of the chats page: conversations with one person and group chats together, the newest first."""
+        user, problem = need_user()
+        if problem:
+            return problem
+        items = [{**item, "kind": "dm", "at": item["last"]["createdAt"]} for item in dm_items(user)]
+        memberships = YipiGroupMember.query.filter_by(user_id=user.id).all()
+        ids = [m.group_id for m in memberships]
+        if ids:
+            groups = {g.id: g for g in YipiGroup.query.filter(YipiGroup.id.in_(ids))}
+            newest = dict(db.session.query(YipiGroupMessage.group_id, func.max(YipiGroupMessage.id)).filter(YipiGroupMessage.group_id.in_(ids)).group_by(YipiGroupMessage.group_id).all())
+            rows = {row.id: row for row in YipiGroupMessage.query.filter(YipiGroupMessage.id.in_(list(newest.values())))} if newest else {}
+            senders = {u.id: u for u in YipiUser.query.filter(YipiUser.id.in_({row.sender_id for row in rows.values()}))} if rows else {}
+            sizes = dict(db.session.query(YipiGroupMember.group_id, func.count(YipiGroupMember.id)).filter(YipiGroupMember.group_id.in_(ids)).group_by(YipiGroupMember.group_id).all())
+            unread = group_unread(user)
+            for group_id, group in groups.items():
+                row = rows.get(newest.get(group_id))
+                sender = senders.get(row.sender_id) if row else None
+                last = {"text": row.text or ("GIF" if row.gif_id else ""), "gif": bool(row.gif_id), "createdAt": iso(row.created_at), "mine": row.sender_id == user.id, "sender": sender.handle if sender else None} if row else None
+                items.append({"kind": "group", "group": {"id": group.id, "name": group.name, "count": sizes.get(group_id, 1)}, "last": last, "unread": unread.get(group_id, 0), "at": last["createdAt"] if last else iso(group.created_at)})
+        items.sort(key=lambda item: item["at"], reverse=True)
+        return jsonify({"ok": True, "items": items[:60]})
+
+    # ---------------------------------------------------------------------------------------- group chats
+    def friends_among(user, ids):
+        """Those of `ids` that follow the user and are followed back: only friends can be put into a group (nobody is pulled into a chat by a stranger)."""
+        ids = list(ids)
+        if not ids:
+            return set()
+        following = {r.followee_id for r in YipiFollow.query.filter(YipiFollow.follower_id == user.id, YipiFollow.followee_id.in_(ids))}
+        followers = {r.follower_id for r in YipiFollow.query.filter(YipiFollow.followee_id == user.id, YipiFollow.follower_id.in_(ids))}
+        return following & followers
+
+    def group_json(group, viewer):
+        members = YipiGroupMember.query.filter_by(group_id=group.id).order_by(YipiGroupMember.id).all()
+        users = {u.id: u for u in YipiUser.query.filter(YipiUser.id.in_([m.user_id for m in members]))}
+        owner = users.get(group.owner_id)
+        return {"id": group.id, "name": group.name, "owner": owner.handle if owner else None, "isOwner": group.owner_id == viewer.id, "count": len(members),
+                "members": [{**user_brief(users[m.user_id]), "isOwner": m.user_id == group.owner_id} for m in members if m.user_id in users]}
+
+    def group_message_json(row, users, gifs, viewer):
+        sender = users.get(row.sender_id)
+        gif = gifs.get(row.gif_id) if row.gif_id else None
+        return {"id": row.id, "text": row.text, "createdAt": iso(row.created_at), "mine": row.sender_id == viewer.id, "sender": user_brief(sender) if sender else None,
+                "gif": gif_json(gif) if gif else ({"gone": True} if row.gif_id else None)}
+
+    def group_of(user, group_id):
+        """(group, the user's membership) or (None, None) when the group is not there or the user is not in it."""
+        member = YipiGroupMember.query.filter_by(group_id=group_id, user_id=user.id).first()
+        group = db.session.get(YipiGroup, group_id) if member else None
+        return (group, member) if group else (None, None)
+
+    def friends_from_handles(user, handles):
+        """The users behind a list of handles, who all must be friends of the user: (users, None) or (None, an error response)."""
+        if not isinstance(handles, list) or not all(isinstance(name, str) for name in handles):
+            return None, fail("bad_request")
+        found = []
+        for name in dict.fromkeys(name.lower() for name in handles):
+            other = find_user(name)
+            if other is None or other.suspended:
+                return None, fail("not_found", 404)
+            if other.id != user.id:
+                found.append(other)
+        hidden = hidden_user_ids(user)
+        friends = friends_among(user, [u.id for u in found])
+        for other in found:
+            if other.id in hidden or other.id not in friends:
+                return None, fail("not_friends", 403, handle=other.handle)
+        return found, None
+
+    @route("/api/yipi/friends")
+    def yipi_friends():
+        user, problem = need_user()
+        if problem:
+            return problem
+        following = {r.followee_id for r in YipiFollow.query.filter_by(follower_id=user.id)}
+        followers = {r.follower_id for r in YipiFollow.query.filter_by(followee_id=user.id)}
+        mutual = (following & followers) - hidden_user_ids(user)
+        people = YipiUser.query.filter(YipiUser.id.in_(mutual), YipiUser.suspended.is_(False)).order_by(YipiUser.name).limit(200).all() if mutual else []
+        return jsonify({"ok": True, "users": [user_brief(u) for u in people]})
+
+    @route("/api/yipi/groups", methods=["POST"], endpoint="yipi_group_create")
+    def yipi_group_create():
+        user, problem = need_user()
+        if problem:
+            return problem
+        data, problem = body()
+        if problem:
+            return problem
+        if limiter.too_many("group", str(user.id)):
+            return fail("too_many", 429)
+        name = clean_text(data.get("name", ""), MAX_GROUP_NAME, keep_newlines=False)
+        if not name:
+            return fail("bad_group_name")
+        others, problem = friends_from_handles(user, data.get("members"))
+        if problem:
+            return problem
+        if not others or len(others) + 1 > MAX_GROUP_MEMBERS:
+            return fail("bad_request")
+        group = YipiGroup(name=name, owner_id=user.id)
+        db.session.add(group)
+        db.session.flush()
+        for member in [user] + others:
+            db.session.add(YipiGroupMember(group_id=group.id, user_id=member.id))
+        db.session.commit()
+        return jsonify({"ok": True, "group": group_json(group, user)}), 201
+
+    @route("/api/yipi/groups/<int(min=1, max=2147483647):group_id>")
+    def yipi_group_get(group_id):
+        user, problem = need_user()
+        if problem:
+            return problem
+        group, member = group_of(user, group_id)
+        if group is None:
+            return fail("not_found", 404)
+        query = YipiGroupMessage.query.filter_by(group_id=group.id)
+        cursor = clamp_cursor(request.args.get("cursor"))
+        if cursor:
+            query = query.filter(YipiGroupMessage.id < cursor)
+        rows = query.order_by(YipiGroupMessage.id.desc()).limit(PAGE * 2 + 1).all()
+        more = len(rows) > PAGE * 2
+        rows = rows[:PAGE * 2]
+        if rows and not cursor and rows[0].id > member.last_read:
+            member.last_read = rows[0].id
+            db.session.commit()
+        users = {u.id: u for u in YipiUser.query.filter(YipiUser.id.in_({row.sender_id for row in rows}))} if rows else {}
+        gifs = gifs_by_id(row.gif_id for row in rows)
+        return jsonify({"ok": True, "group": group_json(group, user), "messages": [group_message_json(row, users, gifs, user) for row in reversed(rows)], "next": rows[-1].id if more and rows else None})
+
+    @route("/api/yipi/groups/<int(min=1, max=2147483647):group_id>/messages", methods=["POST"], endpoint="yipi_group_send")
+    def yipi_group_send(group_id):
+        user, problem = need_user()
+        if problem:
+            return problem
+        data, problem = body()
+        if problem:
+            return problem
+        group, member = group_of(user, group_id)
+        if group is None:
+            return fail("not_found", 404)
+        text = clean_text(data.get("text", ""), MAX_DM)
+        if text is None:
+            return fail("too_long")
+        gif_id = data.get("gifId")
+        gifs = {}
+        if gif_id is not None:
+            gifs = gifs_by_id([gif_id])
+            if not isinstance(gif_id, str) or gif_id not in gifs:
+                return fail("gif_gone", 404)
+        if not text and not gif_id:
+            return fail("empty")
+        if limiter.too_many("dm", str(user.id)):
+            return fail("too_many", 429)
+        row = YipiGroupMessage(group_id=group.id, sender_id=user.id, text=text, gif_id=gif_id)
+        db.session.add(row)
+        db.session.flush()
+        member.last_read = row.id
+        if gif_id:
+            bump(PulseGif, gif_id, PulseGif.uses, 1)
+        db.session.commit()
+        return jsonify({"ok": True, "message": group_message_json(row, {user.id: user}, gifs, user)}), 201
+
+    @route("/api/yipi/groups/<int(min=1, max=2147483647):group_id>/poll")
+    def yipi_group_poll(group_id):
+        user, problem = need_user()
+        if problem:
+            return problem
+        group, member = group_of(user, group_id)
+        if group is None:
+            return fail("not_found", 404)
+        after = clamp_cursor(request.args.get("after")) or 0
+        rows = YipiGroupMessage.query.filter(YipiGroupMessage.group_id == group.id, YipiGroupMessage.id > after, YipiGroupMessage.sender_id != user.id).order_by(YipiGroupMessage.id).limit(50).all()
+        if rows:
+            member.last_read = max(member.last_read, rows[-1].id)
+            db.session.commit()
+        users = {u.id: u for u in YipiUser.query.filter(YipiUser.id.in_({row.sender_id for row in rows}))} if rows else {}
+        gifs = gifs_by_id(row.gif_id for row in rows)
+        return jsonify({"ok": True, "messages": [group_message_json(row, users, gifs, user) for row in rows]})
+
+    @route("/api/yipi/groups/<int(min=1, max=2147483647):group_id>/leave", methods=["POST"], endpoint="yipi_group_leave")
+    def yipi_group_leave(group_id):
+        user, problem = need_user()
+        if problem:
+            return problem
+        group, member = group_of(user, group_id)
+        if group is None:
+            return fail("not_found", 404)
+        leave_group(group.id, user.id)
+        db.session.commit()
+        return jsonify({"ok": True})
+
+    @route("/api/yipi/groups/<int(min=1, max=2147483647):group_id>", methods=["PATCH"], endpoint="yipi_group_rename")
+    def yipi_group_rename(group_id):
+        user, problem = need_user()
+        if problem:
+            return problem
+        data, problem = body()
+        if problem:
+            return problem
+        group, member = group_of(user, group_id)
+        if group is None:
+            return fail("not_found", 404)
+        if group.owner_id != user.id:
+            return fail("forbidden", 403)
+        name = clean_text(data.get("name", ""), MAX_GROUP_NAME, keep_newlines=False)
+        if not name:
+            return fail("bad_group_name")
+        group.name = name
+        db.session.commit()
+        return jsonify({"ok": True, "group": group_json(group, user)})
+
+    @route("/api/yipi/groups/<int(min=1, max=2147483647):group_id>/members", methods=["POST"], endpoint="yipi_group_add")
+    def yipi_group_add(group_id):
+        user, problem = need_user()
+        if problem:
+            return problem
+        data, problem = body()
+        if problem:
+            return problem
+        group, member = group_of(user, group_id)
+        if group is None:
+            return fail("not_found", 404)
+        if group.owner_id != user.id:
+            return fail("forbidden", 403)
+        others, problem = friends_from_handles(user, [data.get("handle")] if isinstance(data.get("handle"), str) else None)
+        if problem:
+            return problem
+        present = {m.user_id for m in YipiGroupMember.query.filter_by(group_id=group.id)}
+        fresh = [other for other in others if other.id not in present]
+        if len(present) + len(fresh) > MAX_GROUP_MEMBERS:
+            return fail("group_full", 409)
+        for other in fresh:
+            db.session.add(YipiGroupMember(group_id=group.id, user_id=other.id, last_read=db.session.query(func.coalesce(func.max(YipiGroupMessage.id), 0)).filter(YipiGroupMessage.group_id == group.id).scalar()))
+        db.session.commit()
+        return jsonify({"ok": True, "group": group_json(group, user)})
 
     @route("/api/yipi/messages/<handle>")
     def yipi_thread(handle):
@@ -2371,8 +2683,12 @@ def register_routes(app):
         private = path.startswith(PRIVATE_PATHS)                  # pages that only mean something to the person who is signed in
         return page_headers(make_response(render_template("yipi.html", boot=boot, title=title, description=description, base=base_url(), path=path, private=private)))
 
-    for page in ("/explore", "/notifications", "/messages", "/bookmarks", "/settings", "/search", "/moderation", "/i/login", "/i/signup", "/i/nex"):
+    for page in ("/explore", "/notifications", "/messages", "/bookmarks", "/settings", "/search", "/moderation", "/i/login", "/i/signup", "/i/nex", "/games", "/videos"):
         route(page, endpoint="yipi_shell_" + page.strip("/").replace("/", "_"))(lambda page=page: render_shell(page))
+
+    @route("/g/<int(min=1, max=2147483647):group_id>")
+    def yipi_page_group(group_id):
+        return render_shell(f"/g/{group_id}")
 
     @route("/messages/<handle>")
     def yipi_page_thread(handle):

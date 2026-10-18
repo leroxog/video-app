@@ -556,16 +556,20 @@ def test_uploading_needs_a_file_and_an_account(client):
     assert flask_app.test_client().post("/api/yipi/media", data={"file": (io.BytesIO(png()), "p.png")}, content_type="multipart/form-data").status_code == 401
 
 
-def test_a_yip_can_carry_up_to_four_pictures_in_order(client):
+def test_a_post_can_carry_up_to_three_pictures_in_order(client):
     mia = person("mia")
     ids = [upload(mia, png(10 + i, 10), alt=f"Bild {i}")["media"]["id"] for i in range(5)]
-    post = yip(mia, "Vier Bilder", media=ids[:4])
-    assert [m["id"] for m in post["media"]] == ids[:4] and [m["alt"] for m in post["media"]] == ["Bild 0", "Bild 1", "Bild 2", "Bild 3"]
-    assert yip(mia, "Fünf Bilder", status=400, media=ids)["error"] == "bad_media"
+    post = yip(mia, "Drei Bilder", media=ids[:3])
+    assert [m["id"] for m in post["media"]] == ids[:3] and [m["alt"] for m in post["media"]] == ["Bild 0", "Bild 1", "Bild 2"]
+    assert yip(mia, "Vier Bilder", status=400, media=ids[3:] + [ids[0]])["error"] == "bad_media"
+    assert yip(mia, "Noch zwei zu viel", status=400, media=ids)["error"] == "bad_media"
     assert yip(mia, "Schon benutzt", status=400, media=[ids[0]])["error"] == "bad_media"
     assert yip(mia, "Doppelt", status=400, media=[ids[4], ids[4]])["error"] == "bad_media"
     assert yip(mia, "Unbekannt", status=400, media=["0" * 32])["error"] == "bad_media"
     assert yip(mia, "", media=[ids[4]])["text"] == ""
+    four = [upload(mia, png(30 + i, 10))["media"]["id"] for i in range(4)]
+    assert yip(mia, "Vier sind zu viel", status=400, media=four)["error"] == "bad_media"
+    assert yipi.MAX_MEDIA == 3
 
 
 def test_somebody_elses_picture_cannot_be_used(client):
