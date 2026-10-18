@@ -88,7 +88,7 @@ def test_a_post_can_carry_a_poll_that_only_its_author_sees_the_numbers_of(client
     assert voted["voted"] is True and voted["canVote"] is False and voted["showResults"] is True and voted["total"] == 1
     assert [o["votes"] for o in voted["options"]] == [0, 1, 0] and [o["mine"] for o in voted["options"]] == [False, True, False]
     assert [o["votes"] for o in api(mia, "get", f"/posts/{post['id']}", status=200)["post"]["poll"]["options"]] == [0, 1, 0]
-    assert api(flask_app.test_client(), "get", f"/posts/{post['id']}", status=200)["post"]["poll"]["canVote"] is False
+    assert api(flask_app.test_client(), "get", f"/posts/{post['id']}", status=401)["error"] == "not_logged_in"
     listed = api(tom, "get", "/timeline?feed=foryou", status=200)["items"][0]["poll"]
     assert listed["voted"] is True and listed["options"][1]["mine"] is True
 
@@ -204,7 +204,7 @@ def test_the_people_who_liked_or_reposted_can_be_listed(client):
         api(who, "post", f"/posts/{post['id']}/like", status=200)
     api(ann, "post", f"/posts/{post['id']}/repost", status=200)
     api(bob, "post", "/posts", {"text": "Zitat dazu", "quoteOf": post["id"]}, status=201)
-    guest = flask_app.test_client()
+    guest = person("zoe")                                       # somebody who is signed in and has nothing to do with the post
     likes = api(guest, "get", f"/posts/{post['id']}/likes", status=200)
     assert [u["handle"] for u in likes["users"]] == ["cyd", "bob", "ann"] and likes["next"] is None
     assert [u["handle"] for u in api(guest, "get", f"/posts/{post['id']}/reposts", status=200)["users"]] == ["ann"], "only real reposts, quotes are posts of their own"

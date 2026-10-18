@@ -22,26 +22,8 @@
         link(Y.HOME, { class: "btn primary" }, "Zur Startseite"))), title: "Nicht gefunden" };
   };
 
-  views.needLogin = function needLogin(route) {
-    const what = { notifications: "Benachrichtigungen", messages: "Chats", thread: "Chats", group: "Chats", bookmarks: "Lesezeichen", moderation: "Moderation", settings: "Einstellungen", nex: "Nex" }[route.name] || "Das";
-    return { element: h("div", { class: "view" }, topbar({ title: what }),
-      h("div", { class: "empty big" }, h("div", { class: "empty-logo" }, window.YipiIcons.logo()), h("h2", {}, "Melde dich an"), h("p", {}, `Für ${what} brauchst du ein Pulse-Konto.`),
-        h("div", { class: "hero-actions" }, link("/i/signup", { class: "btn primary" }, "Konto erstellen"), link("/i/login", { class: "btn ghost" }, "Anmelden")))), title: what };
-  };
-
-  // ------------------------------------------------------------------------------------ games, videos
-  /* The two tabs that are not there yet: a calm page that says so. */
-  function comingSoon(title, iconName, text) {
-    return function soon() {
-      return { element: h("div", { class: "view" }, topbar({ title, className: "big" }),
-        h("div", { class: "soon" }, h("div", { class: "soon-ic" }, icon(iconName)), h("h2", {}, title), h("span", { class: "soon-tag" }, "Kommt bald!"), h("p", {}, text))), title };
-    };
-  }
-  views.games = comingSoon("Games", "gamepad", "Hier warten bald kleine Spiele auf dich, allein oder mit Freunden.");
-  views.videos = comingSoon("Videos", "playCircle", "Hier gibt es bald kurze Videos zum Anschauen.");
-
   // ---------------------------------------------------------------------------------------- settings
-  const THEMES = [["auto", "Wie das Gerät", "Folgt der Einstellung deines Geräts."], ["light", "Hell", "Weiß mit Lila."], ["dim", "Gedimmt", "Dunkles Lila, schonend für die Augen."], ["dark", "Schwarz", "Tiefschwarz mit Lila, spart Strom auf OLED-Bildschirmen."]];
+  const THEMES = [["auto", "Wie das Gerät", "Folgt der Einstellung deines Geräts."], ["light", "Hell", "Weiß mit schwarzer Schrift."], ["dim", "Gedimmt", "Dunkelgrau, schonend für die Augen."], ["dark", "Schwarz", "Tiefschwarz, spart Strom auf OLED-Bildschirmen."]];
 
   function accountSection() {
     const box = h("div", { class: "settings-body" });
@@ -82,9 +64,6 @@
     return box;
   }
 
-  const ACCENTS = [["pulse", "Violett (Standard)", "linear-gradient(180deg, #9a72ff, #6d3df0)"], ["indigo", "Indigo", "linear-gradient(180deg, #8b8cf8, #4f46e5)"],
-    ["orchid", "Orchidee", "linear-gradient(180deg, #d58cf5, #a21caf)"], ["lilac", "Flieder", "linear-gradient(180deg, #c4b5fd, #8b5cf6)"]];
-
   function displaySection() {
     let current = "auto";
     try { current = localStorage.getItem("yipi.theme") || "auto"; } catch (error) { /* storage blocked */ }
@@ -94,14 +73,7 @@
       input.checked = id === current;
       put(group, h("label", { class: `choice theme-${id}` }, input, h("span", { class: "choice-text" }, h("b", {}, label), h("small", {}, text))));
     }
-    let accent = "pulse";
-    try { accent = localStorage.getItem("yipi.accent") || "pulse"; } catch (error) { /* storage blocked */ }
-    const swatches = h("div", { class: "swatches accents", role: "radiogroup", "aria-label": "Farbe" });
-    const drawAccents = () => fill(swatches, ACCENTS.map(([id, label, colour]) => h("button", { class: `swatch${id === accent ? " on" : ""}`, type: "button", role: "radio", "aria-checked": String(id === accent), "aria-label": label, title: label,
-      style: `background:${colour}`, onclick: () => { accent = id; Y.setAccent(id); drawAccents(); } })));
-    drawAccents();
-    return h("div", { class: "settings-body" }, h("section", { class: "card" }, h("h2", {}, "Darstellung"), group),
-      h("section", { class: "card" }, h("h2", {}, "Farbe"), h("div", { class: "card-pad" }, swatches, h("p", { class: "hint" }, "Die Farbe der besonderen Dinge: das Herz, Hinweise und Nex."))));
+    return h("div", { class: "settings-body" }, h("section", { class: "card" }, h("h2", {}, "Darstellung"), group));
   }
 
   function relationSection(kind) {
@@ -129,7 +101,7 @@
   function aboutSection() {
     return h("div", { class: "settings-body" },
       h("section", { class: "card" }, h("h2", {}, "Rechtliches"),
-        h("ul", { class: "plain-links" }, ["nutzungsbedingungen|Nutzungsbedingungen und Regeln", "datenschutz|Datenschutzerklärung", "impressum|Impressum"].map((entry) => { const [path, text] = entry.split("|"); return h("li", {}, h("a", { href: `/${path}` }, text, icon("chevron"))); }))),
+        h("ul", { class: "plain-links" }, ["nutzungsbedingungen|Nutzungsbedingungen und Regeln", "datenschutz|Datenschutzerklärung", "impressum|Impressum", "bildnachweise|Bildnachweise (freie GIFs)"].map((entry) => { const [path, text] = entry.split("|"); return h("li", {}, h("a", { href: `/${path}` }, text, icon("chevron"))); }))),
       h("section", { class: "card" }, h("h2", {}, "Hilfe"),
         h("p", { class: "muted small" }, "Beiträge sind öffentlich. Nachrichten sind nur für die Beteiligten sichtbar (zwei Personen oder die Mitglieder einer Gruppe), aber nicht Ende-zu-Ende-verschlüsselt. Etwas Unpassendes siehst du? Tippe beim Beitrag, beim GIF oder beim Profil auf „Melden“. In einem Beitrag gehen bis zu 3 Fotos, ein GIF oder eine Umfrage. Games und Videos kommen bald.")),
       h("section", { class: "card" }, h("h2", {}, "Über Pulse"),
@@ -152,7 +124,6 @@
     }
     const entry = SECTIONS.find(([id]) => id === section);
     if (!entry) return views.notfound();
-    if (entry[4] && !Y.me) return views.needLogin({ name: "settings" });
     const el = h("div", { class: "view" }, topbar({ back: "/settings", title: entry[1] }));
     let destroy = null;
     if (section === "account") put(el, accountSection());
@@ -163,7 +134,7 @@
   };
 
   // -------------------------------------------------------------------------------------- moderation
-  const REASON_LABEL = { spam: "Spam", abuse: "Belästigung", hate: "Hass", violence: "Gewalt", illegal: "Illegal", self_harm: "Selbstverletzung", other: "Sonstiges" };
+  const REASON_LABEL = { spam: "Spam", abuse: "Belästigung", hate: "Hass", violence: "Gewalt", illegal: "Illegal", self_harm: "Selbstverletzung", factcheck: "Fact Check falsch", other: "Sonstiges" };
 
   views.moderation = function moderation() {
     if (!Y.me || !Y.me.isAdmin) return views.notfound();
@@ -191,6 +162,7 @@
           report.handle ? link(`/${report.handle}`, { class: "btn ghost small" }, "Profil ansehen") : null,
           report.postId && !report.postGone ? button("Beitrag löschen", "danger small", () => act(report, "delete_post", element)) : null,
           report.gifId && !report.gifGone ? button("GIF löschen", "danger small", () => act(report, "delete_gif", element)) : null,
+          report.reason === "factcheck" && report.postId && !report.postGone ? button("Fact Check entfernen", "primary small", () => act(report, "clear_factcheck", element)) : null,
           report.handle && !report.suspended ? button("Konto sperren", "danger small", async () => { if (await confirmBox({ title: `@${report.handle} sperren?`, text: "Das Konto wird abgemeldet und kann sich nicht mehr anmelden.", yes: "Sperren", danger: true })) act(report, "suspend", element); }) : null,
           report.handle && report.suspended ? button("Sperre aufheben", "ghost small", () => act(report, "restore", element)) : null,
           button("Verwerfen", "ghost small", () => act(report, "dismiss", element))));
@@ -212,9 +184,19 @@
   // ------------------------------------------------------------------------------------------- sign in
   function authFrame(title, subtitle, content, footer) {
     return h("div", { class: "auth-page" },
+      h("aside", { class: "auth-hero" },
+        h("span", { class: "auth-hero-logo" }, window.YipiIcons.logo()),
+        h("h2", {}, "Was gerade passiert."),
+        h("ul", { class: "auth-points" },
+          h("li", {}, icon("feather"), h("span", {}, "Kurze Beiträge, Fotos, GIFs und Videos")),
+          h("li", {}, icon("playCircle"), h("span", {}, "Videos zum Scrollen, wie bei TikTok")),
+          h("li", {}, icon("users"), h("span", {}, "Chats und Gruppen mit deinen Freunden")),
+          h("li", {}, icon("gamepad"), h("span", {}, "Spiele, direkt hier")),
+          h("li", {}, icon("nexmark"), h("span", {}, "Nex, die KI, hilft dir weiter")))),
       h("div", { class: "auth-card" },
         link(Y.HOME, { class: "auth-logo", "aria-label": "Pulse" }, window.YipiIcons.logo(), h("span", {}, "Pulse")),
-        h("h1", {}, title), subtitle ? h("p", { class: "muted" }, subtitle) : null, content, h("p", { class: "auth-switch" }, footer)));
+        h("h1", {}, title), subtitle ? h("p", { class: "muted" }, subtitle) : null, content, h("p", { class: "auth-switch" }, footer),
+        h("p", { class: "auth-legal" }, h("a", { href: "/nutzungsbedingungen" }, "Nutzungsbedingungen"), h("a", { href: "/datenschutz" }, "Datenschutz"), h("a", { href: "/impressum" }, "Impressum"))));
   }
 
   function passwordField(label, autocomplete) {
@@ -228,8 +210,12 @@
     return { input, element: h("label", { class: "field-label" }, h("span", {}, label), h("div", { class: "with-action" }, input, toggle)) };
   }
 
-  views.login = function login() {
+  /* Where a successful sign-in goes: to the address that was asked for (the page to sign in is shown in place of it), or to Home. */
+  const afterSignIn = (route) => (route && route.name !== "login" && route.name !== "signup" ? location.pathname + location.search : Y.HOME);
+
+  views.login = function login(route) {
     if (Y.me) { setTimeout(() => Y.navigate(Y.HOME, { replace: true }), 0); return { element: h("div"), title: "Pulse" }; }
+    const target = afterSignIn(route);
     const name = h("input", { class: "field", autocomplete: "username", "aria-label": "Nutzername oder E-Mail", maxlength: 254, required: true, autocapitalize: "none", spellcheck: "false" });
     const password = passwordField("Passwort", "current-password");
     const error = formError();
@@ -243,10 +229,10 @@
       submit.disabled = false;
       if (!reply.ok) { showError(error, Api.message(reply)); return; }
       Y.setMe(reply.data.me);
-      Y.navigate(Y.HOME, { replace: true });
+      Y.navigate(target, { replace: true });
     } }, field("Nutzername oder E-Mail", name), password.element, error, submit);
     setTimeout(() => name.focus(), 0);
-    return { element: authFrame("Anmelden bei Pulse", "", form, ["Noch kein Konto? ", link("/i/signup", {}, "Registrieren")]), title: "Anmelden", bare: true };
+    return { element: authFrame("Anmelden bei Pulse", "Melde dich an, um Pulse zu sehen.", form, ["Noch kein Konto? ", link("/i/signup", {}, "Registrieren")]), title: "Anmelden", bare: true };
   };
 
   views.signup = function signup() {

@@ -631,9 +631,9 @@ def test_the_for_you_feed_shows_everybody_newest_first_without_replies_and_repos
     b = yip(tom, "B")
     yip(tom, "Antwort", replyTo=a["id"])
     api(tom, "post", f"/posts/{a['id']}/repost", status=200)
-    guest = flask_app.test_client()
-    assert [p["text"] for p in api(guest, "get", "/timeline?feed=foryou", status=200)["items"]] == ["B", "A"]
-    assert api(guest, "get", "/timeline", status=200)["items"][0]["viewer"] == {"liked": False, "reposted": False, "bookmarked": False}
+    assert api(flask_app.test_client(), "get", "/timeline?feed=foryou", status=401)["error"] == "not_logged_in", "nothing is for somebody who is not signed in"
+    assert [p["text"] for p in api(tom, "get", "/timeline?feed=foryou", status=200)["items"]] == ["B", "A"]
+    assert api(tom, "get", "/timeline", status=200)["items"][0]["viewer"] == {"liked": False, "reposted": False, "bookmarked": False}
 
 
 def test_the_following_feed_needs_an_account_and_shows_you_and_those_you_follow(client):
@@ -692,8 +692,8 @@ def test_a_profile_has_counts_and_tabs(client):
     assert [p["text"] for p in api(tom, "get", "/users/mia/posts?tab=replies")["items"]] == ["Mia mit Bild", "Antwort von Mia"]
     assert [p["text"] for p in api(tom, "get", "/users/mia/posts?tab=media")["items"]] == ["Mia mit Bild"]
     assert api(tom, "get", "/users/mia/posts?tab=likes", status=403)["error"] == "forbidden"
-    assert api(flask_app.test_client(), "get", "/users/nobody", status=404)["error"] == "not_found"
-    assert api(flask_app.test_client(), "get", "/users/x", status=404)["error"] == "not_found"
+    assert api(tom, "get", "/users/nobody", status=404)["error"] == "not_found"
+    assert api(tom, "get", "/users/x", status=404)["error"] == "not_found"
 
 
 def test_the_likes_tab_is_only_for_the_owner_and_in_the_order_of_liking(client):
@@ -703,7 +703,8 @@ def test_the_likes_tab_is_only_for_the_owner_and_in_the_order_of_liking(client):
     api(mia, "post", f"/posts/{b['id']}/like", status=200)
     api(mia, "post", f"/posts/{a['id']}/like", status=200)
     assert [p["text"] for p in api(mia, "get", "/users/mia/posts?tab=likes", status=200)["items"]] == ["a", "b"]
-    assert api(flask_app.test_client(), "get", "/users/mia/posts?tab=likes", status=403)
+    assert api(tom, "get", "/users/mia/posts?tab=likes", status=403)
+    assert api(flask_app.test_client(), "get", "/users/mia/posts?tab=likes", status=401)
 
 
 def test_following_counts_lists_and_notifies(client):
@@ -715,8 +716,8 @@ def test_following_counts_lists_and_notifies(client):
     assert api(mia, "get", "/me")["me"]["following"] == 1
     assert api(tom, "get", "/users/mia")["user"]["followsMe"] is True and api(tom, "get", "/users/mia")["user"]["followedByMe"] is False
     assert api(mia, "get", "/users/tom")["user"]["followedByMe"] is True and api(mia, "get", "/users/tom")["user"]["followsMe"] is False
-    assert [u["handle"] for u in api(flask_app.test_client(), "get", "/users/tom/followers")["users"]] == ["mia"]
-    assert [u["handle"] for u in api(flask_app.test_client(), "get", "/users/mia/following")["users"]] == ["tom"]
+    assert [u["handle"] for u in api(tom, "get", "/users/tom/followers")["users"]] == ["mia"]
+    assert [u["handle"] for u in api(tom, "get", "/users/mia/following")["users"]] == ["tom"]
     assert [n["kind"] for n in api(tom, "get", "/notifications")["items"]] == ["follow"]
     assert api(mia, "delete", "/users/tom/follow", status=200)["user"]["followers"] == 0
     assert api(mia, "delete", "/users/tom/follow", status=200)["user"]["followers"] == 0
@@ -777,9 +778,10 @@ def test_suspended_people_disappear(client, monkeypatch):
     report = api(person("tom"), "post", "/reports", {"postId": post["id"], "reason": "abuse"}, status=201)
     item = api(boss, "get", "/moderation/reports", status=200)["items"][0]
     api(boss, "post", f"/moderation/reports/{item['id']}", {"action": "suspend"}, status=200)
-    assert api(flask_app.test_client(), "get", "/timeline?feed=foryou")["items"] == []
-    assert api(flask_app.test_client(), "get", "/users/mia", status=200)["user"]["suspended"] is True
-    assert api(flask_app.test_client(), "get", "/users/mia/posts", status=404)
+    zoe = person("zoe")
+    assert api(zoe, "get", "/timeline?feed=foryou")["items"] == []
+    assert api(zoe, "get", "/users/mia", status=200)["user"]["suspended"] is True
+    assert api(zoe, "get", "/users/mia/posts", status=404)
     assert api(mia, "get", "/me")["me"] is None                                            # the session ends
     assert call(flask_app.test_client(), "post", "/api/yipi/login", {"login": "mia", "password": PASSWORD}).get_json()["error"] == "suspended"
     assert report["ok"]
@@ -831,12 +833,12 @@ def test_trends_count_recent_hashtags(client):
     yip(mia, "#eins #zwei")
     yip(tom, "#zwei noch mal")
     yip(mia, "#zwei und #drei")
-    trends = api(flask_app.test_client(), "get", "/trends", status=200)["trends"]
+    trends = api(mia, "get", "/trends", status=200)["trends"]
     assert trends[0] == {"tag": "zwei", "posts": 3, "people": 2} and {t["tag"] for t in trends} == {"eins", "zwei", "drei"}
     for tag in yipi.YipiTag.query.all():
         tag.created_at = yipi.utcnow() - timedelta(hours=30)
     yipi.db.session.commit()
-    assert api(flask_app.test_client(), "get", "/trends")["trends"] == []
+    assert api(mia, "get", "/trends")["trends"] == []
 
 
 def test_suggestions_skip_you_and_those_you_follow(client):
@@ -847,7 +849,7 @@ def test_suggestions_skip_you_and_those_you_follow(client):
     assert [u["handle"] for u in api(mia, "get", "/suggestions", status=200)["users"]] == ["tom", "ann"]
     api(mia, "post", "/users/tom/follow", status=200)
     assert [u["handle"] for u in api(mia, "get", "/suggestions")["users"]] == ["ann"]
-    assert {u["handle"] for u in api(flask_app.test_client(), "get", "/suggestions")["users"]} == {"mia", "tom", "ann"}
+    assert api(flask_app.test_client(), "get", "/suggestions", status=401)["error"] == "not_logged_in"
 
 
 # ============================================================================================ notifications
@@ -878,14 +880,13 @@ def test_notifications_come_in_pages(client):
 
 
 # =============================================================================================== messages
-def test_messages_need_a_follower_or_an_earlier_message(client):
+def test_anybody_can_be_written_to_and_answering_is_always_allowed(client):
     mia = person("mia")
     tom = person("tom")
-    assert api(mia, "post", "/messages/tom", {"text": "Hi"}, status=403)["error"] == "dm_closed"
+    sent = api(mia, "post", "/messages/tom", {"text": "Hi"}, status=201)["message"]          # (nobody follows: it is a request, see test_pulse_requests.py)
+    assert sent["mine"] is True and sent["text"] == "Hi"
     api(tom, "post", "/users/mia/follow", status=200)
-    sent = api(mia, "post", "/messages/tom", {"text": "Hi Tom"}, status=201)["message"]
-    assert sent["mine"] is True and sent["text"] == "Hi Tom"
-    assert api(tom, "post", "/messages/mia", {"text": "Hi Mia"}, status=201)["message"]["mine"] is True        # answering is always allowed
+    assert api(tom, "post", "/messages/mia", {"text": "Hi Mia"}, status=201)["message"]["mine"] is True        # answering a message of somebody you follow is allowed
 
 
 def test_a_conversation_is_listed_read_and_polled(client):
@@ -896,7 +897,7 @@ def test_a_conversation_is_listed_read_and_polled(client):
     api(mia, "post", "/messages/tom", {"text": "zwei"}, status=201)
     assert api(tom, "get", "/me")["me"]["unreadMessages"] == 2
     listing = api(tom, "get", "/messages", status=200)["items"]
-    assert len(listing) == 1 and listing[0]["user"]["handle"] == "mia" and listing[0]["unread"] == 2 and listing[0]["last"] == {"text": "zwei", "gif": False, "createdAt": listing[0]["last"]["createdAt"], "mine": False}
+    assert len(listing) == 1 and listing[0]["user"]["handle"] == "mia" and listing[0]["unread"] == 2 and listing[0]["last"] == {"text": "zwei", "gif": False, "createdAt": listing[0]["last"]["createdAt"], "mine": False, "read": False} and listing[0]["box"] == "primary"
     thread = api(tom, "get", "/messages/mia", status=200)
     assert [m["text"] for m in thread["messages"]] == ["eins", "zwei"] and [m["mine"] for m in thread["messages"]] == [False, False] and thread["canWrite"] is True
     assert api(tom, "get", "/me")["me"]["unreadMessages"] == 0
@@ -1001,7 +1002,7 @@ def test_profile_and_yip_pages_exist_only_for_real_ones_and_carry_link_previews(
     mia = person("Mia", name="Mia Maus")
     api(mia, "patch", "/profile", {"bio": "Ich mag Mathe"})
     post = yip(mia, "Mein erster Yip mit <b>Tags</b>")
-    c = flask_app.test_client()
+    c = mia                                                           # (somebody who is not signed in only gets the page to sign in: see test_pulse_wall.py)
     page = c.get("/mia").get_data(as_text=True)
     assert c.get("/Mia").status_code == 200 and "Mia Maus (@Mia) auf Pulse" in page and "Ich mag Mathe" in page
     status = c.get(f"/mia/status/{post['id']}").get_data(as_text=True)

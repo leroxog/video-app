@@ -32,6 +32,7 @@ import logging
 import os
 import re
 import struct
+import threading
 import unicodedata
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -60,6 +61,9 @@ MAX_MEDIA = 3                                    # photos per post (or one GIF, 
 MAX_GROUP_NAME = 40
 MAX_GROUP_MEMBERS = 20
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
+MAX_VIDEO_BYTES = 25 * 1024 * 1024               # a video is kept in the database like a picture: not bigger than this
+MAX_VIDEO_SIDE = 4096
+VIDEO_BRANDS = {b"isom", b"iso2", b"iso4", b"iso5", b"iso6", b"mp41", b"mp42", b"avc1", b"dash", b"M4V ", b"M4VH", b"M4VP", b"qt  "}
 MAX_PIXELS = 40_000_000
 MAX_GIF_BYTES = 3 * 1024 * 1024                  # a GIF of the library: it is shown many times in a picker, so it stays small
 MAX_GIF_PIXELS = 2_000_000                       # one picture of a GIF
@@ -83,14 +87,14 @@ EMAIL_RE = re.compile(r"[^@\s]{1,64}@[^@\s]{1,190}\.[^@\s.]{2,24}")
 MENTION_RE = re.compile(r"(?<![\w@])@([A-Za-z0-9_]{3,15})(?![\w@])")
 HASHTAG_RE = re.compile(r"(?<![\w#&/])#(\w{2,50})")
 CONTROL_RE = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\x7f​‎‏‪-‮⁠-⁤﻿]")
-REPORT_REASONS = ("spam", "abuse", "hate", "violence", "illegal", "self_harm", "other")
+REPORT_REASONS = ("spam", "abuse", "hate", "violence", "illegal", "self_harm", "factcheck", "other")
 NOTIFICATION_KINDS = ("like", "repost", "reply", "quote", "mention", "follow")
 
 # Names that must not be a handle: the page's own addresses, and names that would pretend to be the site.
 RESERVED_HANDLES = {
     "api", "static", "explore", "notifications", "messages", "bookmarks", "settings", "search", "compose", "login", "signup", "logout",
     "home", "i", "m", "admin", "administrator", "moderation", "yipi", "yips", "support", "help", "about", "terms", "privacy", "rules",
-    "datenschutz", "impressum", "nutzungsbedingungen", "regeln", "hilfe", "suche", "entdecken", "robots", "sitemap", "manifest",
+    "datenschutz", "impressum", "bildnachweise", "nutzungsbedingungen", "regeln", "hilfe", "suche", "entdecken", "robots", "sitemap", "manifest",
     "gomat", "ysound", "root", "system", "staff", "team", "official", "null", "undefined", "me", "you", "intent", "share", "hashtag",
     "yipi_media", "service", "offline", "link", "play", "plm", "auth", "plugins", "music", "servers", "ychat", "ylib", "nrs", "nex", "sound",
     "browser", "server", "play_game", "service_worker", "games", "videos", "chats", "friends", "groups",
@@ -102,7 +106,7 @@ LIMITS = {
     "post-burst": (12, 60), "post-hour": (150, 3600), "like": (400, 3600), "follow": (120, 3600), "media": (40, 3600), "dm": (120, 3600),
     "report": (20, 3600), "profile": (30, 3600), "search": (120, 600), "block": (60, 3600),
     "gif-make": (20, 3600), "gif-fav": (400, 3600), "gif-use": (300, 3600), "gif-list": (600, 600),
-    "nex": (40, 600), "nex-flood": (80, 60), "views": (90, 600), "vote": (200, 3600), "pin": (60, 3600), "group": (12, 3600),
+    "nex": (40, 600), "nex-flood": (80, 60), "factcheck": (120, 3600), "views": (90, 600), "vote": (200, 3600), "pin": (60, 3600), "group": (12, 3600),
 }
 _hits = {}
 limiter = RateLimiter(LIMITS, _hits)
@@ -110,17 +114,19 @@ auth = CookieAuth(COOKIE, salt="yipi-account-v1")
 
 # What the pages may load: only our own files (and the pictures people chose, shown from memory before they are sent).
 CONTENT_SECURITY_POLICY = (
-    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; "
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self'; "
     "connect-src 'self'; manifest-src 'self'; base-uri 'none'; object-src 'none'; form-action 'self'; frame-ancestors 'none'"
 )
 SITE_NAME = "Pulse"
 DESCRIPTION = "Pulse: Was gerade passiert. Kurze Beiträge, Fotos und GIFs, Antworten, Reposts und Likes, dazu Nex, die KI, die dir weiterhilft."
 # Old home pages of the site that stay reachable but are not for search engines.
 ARCHIVE_PATHS = ("/nex-agenten-archiv", "/gomat-archiv", "/ysound-archiv", "/sound-archiv", "/server-archiv", "/browser-archiv", "/ylib-archiv", "/ychat-archiv", "/nex-archiv", "/modelle-archiv", "/nex-ai-archiv", "/nstl-archiv")
-PRIVATE_PATHS = ("/i/", "/g/", "/search", "/messages", "/notifications", "/bookmarks", "/settings", "/moderation")   # not for search engines
+PRIVATE_PATHS = ("/i/", "/g/", "/games/", "/search", "/messages", "/notifications", "/bookmarks", "/settings", "/moderation")   # not for search engines
 OLD_HOME = "/yipi-archiv"                         # the address of the earlier yipi home page: it leads to "/" now
 STARTER_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "gifs")
 logger = logging.getLogger(__name__)
+GAMES = {"fruit-merge": "Fruit Merge"}                 # the games Pulse has: address -> name (the page of each is static/js/yipi-games.js)
+OPEN_ENDPOINTS = {"yipi_handle_check", "yipi_signup", "yipi_login", "yipi_logout", "yipi_me"}     # the only calls that work without being signed in
 ENDPOINTS = set()           # filled by register_routes: every endpoint of this module (the site's login gate must let them through)
 
 
@@ -180,6 +186,8 @@ class YipiPost(db.Model):
     repost_count = db.Column(db.Integer, nullable=False, default=0)
     quote_count = db.Column(db.Integer, nullable=False, default=0)
     view_count = db.Column(db.Integer, nullable=False, default=0)
+    fact_status = db.Column(db.String(12), nullable=False, default="")        # "" not checked yet, "ok", "false" or "misleading" (the last two come with a note)
+    fact_note = db.Column(db.String(300), nullable=False, default="")
     deleted = db.Column(db.Boolean, nullable=False, default=False)
 
 
@@ -292,6 +300,17 @@ class YipiGroupMember(db.Model):
     user_id = db.Column(db.Integer, nullable=False, index=True)
     last_read = db.Column(BigId, nullable=False, default=0)          # the newest message of the group this member has seen
     joined_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+
+
+class YipiDmState(db.Model):
+    """What a person decided about a conversation that started with a message request: "accepted" (it moves to the main chats) or "declined" (hidden)."""
+    __tablename__ = "yipi_dm_state"
+    __table_args__ = (db.UniqueConstraint("user_id", "other_id"),)
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, nullable=False, index=True)       # the one who decided
+    other_id = db.Column(db.Integer, nullable=False)                  # the one who wrote
+    state = db.Column(db.String(10), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
 
 
 class YipiGroupMessage(db.Model):
@@ -520,6 +539,20 @@ def looks_like_video(data, filename="", mimetype=""):
     return os.path.splitext(str(filename or "").lower())[1] in VIDEO_EXTENSIONS
 
 
+def video_type(data):
+    """"video/mp4" for an MP4 or a MOV (the files of phones and cameras), "video/webm" for a WebM, else None: only what a browser can play,
+    and only a file that is built like one (the first box after the type box of an MP4, the segment of a WebM), not just named like one."""
+    head = data[:4096]
+    if head[4:8] == b"ftyp" and head[8:12] in VIDEO_BRANDS:
+        size = int.from_bytes(head[:4], "big")
+        if 12 <= size <= 512 and head[size + 4:size + 8] in (b"moov", b"mdat", b"free", b"skip", b"wide", b"uuid", b"pnot"):
+            return "video/mp4"
+        return None
+    if head[:4] == b"\x1aE\xdf\xa3" and b"webm" in head[:64] and b"\x18S\x80g" in head:
+        return "video/webm"
+    return None
+
+
 def gif_info(data):
     """(width, height, frames) of a well-formed GIF, or None.  The file is walked block by block (so a truncated or mangled file
     is refused and a GIF that claims a huge size or hundreds of frames is too), not just judged by its first bytes."""
@@ -601,14 +634,24 @@ def starter_id(slug):
 
 
 def starter_index():
+    """The GIFs that ship with the site: the ones Pulse drew itself (static/gifs/index.json) and the freely licensed ones from Wikimedia Commons
+    (static/gifs/cc/index.json, collected by scripts/fetch_cc_gifs.py; the page /bildnachweise credits them)."""
     if not _starters:
-        try:
-            with open(os.path.join(STARTER_DIR, "index.json"), encoding="utf-8") as handle:
-                entries = json.load(handle)
-            _starters.extend(entry for entry in entries if isinstance(entry, dict) and re.fullmatch(r"[a-z0-9-]{1,40}", str(entry.get("slug", ""))))
-        except (OSError, ValueError):
-            pass
+        for folder in ("", "cc"):
+            try:
+                with open(os.path.join(STARTER_DIR, folder, "index.json"), encoding="utf-8") as handle:
+                    entries = json.load(handle)
+            except (OSError, ValueError):
+                continue
+            for entry in entries:
+                if isinstance(entry, dict) and re.fullmatch(r"[a-z0-9-]{1,40}", str(entry.get("slug", ""))):
+                    _starters.append({**entry, "folder": folder, "slug": f"{folder}-{entry['slug']}" if folder else entry["slug"], "name": entry["slug"]})
     return _starters
+
+
+def credits_list():
+    """The freely licensed GIFs with who made them and under which licence (for the page /bildnachweise)."""
+    return [entry for entry in starter_index() if entry.get("folder") == "cc"]
 
 
 def ensure_starters():
@@ -618,13 +661,13 @@ def ensure_starters():
     if not entries:
         return
     have = {row.id for row in PulseGif.query.filter_by(starter=True).with_entities(PulseGif.id)}
-    added = False
+    added = 0
     for entry in entries:
         gif_id = starter_id(entry["slug"])
         if gif_id in have:
             continue
         try:
-            with open(os.path.join(STARTER_DIR, os.path.basename(str(entry.get("file", entry["slug"] + ".gif")))), "rb") as handle:
+            with open(os.path.join(STARTER_DIR, entry.get("folder", ""), os.path.basename(str(entry.get("file", entry["name"] + ".gif")))), "rb") as handle:
                 data = handle.read(MAX_GIF_BYTES + 1)
         except OSError:
             continue
@@ -633,11 +676,16 @@ def ensure_starters():
             continue
         title = clean_text(str(entry.get("title", "")), MAX_GIF_TITLE, keep_newlines=False) or ""
         db.session.add(PulseGif(id=gif_id, owner_id=None, title=title, data=data, size=len(data), width=info[0], height=info[1], frames=info[2], starter=True))
-        added = True
-    if added:
+        added += 1
+        if added % 25 == 0:                                       # a few at a time: there are hundreds
+            try:
+                db.session.commit()
+            except IntegrityError:                                # another request put them in at the same moment
+                db.session.rollback()
+    if added % 25:
         try:
             db.session.commit()
-        except IntegrityError:                                    # another request put them in at the same moment
+        except IntegrityError:
             db.session.rollback()
 
 
@@ -662,8 +710,45 @@ def group_unread(user):
     return dict(rows)
 
 
+def dm_boxes(user, other_ids):
+    """Where the conversation with each of these people is for `user`, who is the one who got the messages:
+         "primary"   the user follows them, or accepted them, or wrote to them first (so mutual followers land here at once),
+         "request"   they follow the user, but the user does not follow them: the user has to accept first,
+         "general"   nobody follows anybody: a request too, but further back,
+         "declined"  the user said no (hidden)."""
+    ids = list(dict.fromkeys(other_ids))
+    if not ids:
+        return {}
+    following = {row.followee_id for row in YipiFollow.query.filter(YipiFollow.follower_id == user.id, YipiFollow.followee_id.in_(ids))}
+    followers = {row.follower_id for row in YipiFollow.query.filter(YipiFollow.followee_id == user.id, YipiFollow.follower_id.in_(ids))}
+    states = {row.other_id: row.state for row in YipiDmState.query.filter(YipiDmState.user_id == user.id, YipiDmState.other_id.in_(ids))}
+    wrote = {row[0] for row in db.session.query(YipiMessage.recipient_id).filter(YipiMessage.sender_id == user.id, YipiMessage.recipient_id.in_(ids)).distinct()}
+    boxes = {}
+    for other_id in ids:
+        if other_id in following or other_id in wrote or states.get(other_id) == "accepted":
+            boxes[other_id] = "primary"
+        elif states.get(other_id) == "declined":
+            boxes[other_id] = "declined"
+        elif other_id in followers:
+            boxes[other_id] = "request"
+        else:
+            boxes[other_id] = "general"
+    return boxes
+
+
+def dm_unread(user):
+    """(unread messages in the main chats, number of people with unread message requests)."""
+    rows = (db.session.query(YipiMessage.sender_id, func.count(YipiMessage.id))
+            .filter(YipiMessage.recipient_id == user.id, YipiMessage.read.is_(False)).group_by(YipiMessage.sender_id).all())
+    boxes = dm_boxes(user, [sender for sender, _ in rows])
+    primary = sum(count for sender, count in rows if boxes[sender] == "primary")
+    requests = sum(1 for sender, _ in rows if boxes[sender] in ("request", "general"))
+    return primary, requests
+
+
 def media_json(item):
-    return {"id": item.id, "url": media_url(item.id), "width": item.width, "height": item.height, "alt": item.alt, "gif": item.content_type == "image/gif", "gifId": item.gif_id}
+    return {"id": item.id, "url": media_url(item.id), "width": item.width, "height": item.height, "alt": item.alt, "gif": item.content_type == "image/gif", "gifId": item.gif_id,
+            "video": item.content_type.startswith("video/")}
 
 
 def favorite_ids(viewer, ids):
@@ -719,6 +804,66 @@ def relations_to(viewer, ids):
         "muted": {r.muted_id for r in YipiMute.query.filter(YipiMute.muter_id == viewer.id, YipiMute.muted_id.in_(ids))},
         "blockedMe": {r.blocker_id for r in YipiBlock.query.filter(YipiBlock.blocked_id == viewer.id, YipiBlock.blocker_id.in_(ids))},
     }
+
+
+# ---------------------------------------------------------------------------------------------- fact check
+FACT_MIN_LENGTH = 30           # shorter posts hold no claim worth checking
+FACT_CONFIDENCE = 85           # a note is only shown when the AI is at least this sure (in percent)
+FACT_PROMPT = (
+    "Du bist ein sachlicher, vorsichtiger Faktenprüfer für kurze Beiträge in einem sozialen Netzwerk. Prüfe NUR überprüfbare Tatsachenbehauptungen "
+    "(Zahlen, Ereignisse, Wissenschaft, Geschichte, Gesundheit, Politik, Technik). Meinungen, Witze, Ironie, Fragen, Gefühle, Alltag, Werbung "
+    "und Vorhersagen sind KEINE Tatsachenbehauptungen: dann ist das Urteil \"opinion\". Du hast keinen Internetzugang: bei Ereignissen, die "
+    "nach deinem Wissensstand liegen könnten, urteilst du \"unclear\". Antworte NUR mit einem JSON-Objekt, ohne weiteren Text: "
+    "{\"verdict\": \"ok\" | \"false\" | \"misleading\" | \"opinion\" | \"unclear\", \"confidence\": Zahl von 0 bis 100, \"note\": \"...\"}. "
+    "\"false\" nur, wenn eine Tatsachenbehauptung eindeutig falsch ist und du dir sehr sicher bist; \"misleading\", wenn sie so verkürzt ist, "
+    "dass sie in die Irre führt. \"note\" ist bei \"false\" und \"misleading\" eine kurze, sachliche Richtigstellung auf Deutsch (höchstens "
+    "220 Zeichen, mit der richtigen Information), sonst leer."
+)
+
+
+def judge_fact(text):
+    """(status, note) for a post text: status is "ok" (nothing to note) or "false" / "misleading" with a note.  Raises when the AI cannot be reached."""
+    raw = ai_assistant._generate_groq([{"role": "system", "content": FACT_PROMPT}, {"role": "user", "content": text[:1000]}], 400, 0.1)
+    found = re.search(r"\{.*\}", raw or "", re.S)
+    try:
+        verdict = json.loads(found.group(0)) if found else {}
+    except ValueError:
+        verdict = {}
+    kind = verdict.get("verdict") if isinstance(verdict, dict) else None
+    try:
+        confidence = float(verdict.get("confidence", 0))
+    except (TypeError, ValueError):
+        confidence = 0
+    note = clean_text(verdict.get("note", ""), 240, keep_newlines=False) if isinstance(verdict.get("note"), str) else ""
+    if kind in ("false", "misleading") and note and confidence >= FACT_CONFIDENCE:
+        return kind, note
+    return "ok", ""
+
+
+def run_fact_check(application, post_id):
+    """Checks one post and keeps the result; a post that could not be checked (no connection) stays unchecked and is tried again when it is seen."""
+    with application.app_context():
+        post = db.session.get(YipiPost, post_id)
+        if post is None or post.deleted or post.repost_of_id or post.fact_status or len(post.text or "") < FACT_MIN_LENGTH:
+            return
+        try:
+            status, note = judge_fact(post.text)
+        except Exception:
+            logger.exception("Fact Check nicht möglich")
+            db.session.rollback()
+            return
+        post.fact_status, post.fact_note = status, note
+        db.session.commit()
+
+
+def _fact_in_background(application, post_ids):
+    def work():
+        for post_id in post_ids:
+            run_fact_check(application, post_id)
+    threading.Thread(target=work, daemon=True).start()
+
+
+FACT_RUNNER = _fact_in_background           # (the tests replace it by something that runs at once)
 
 
 # ------------------------------------------------------------------------------------------- posts to JSON
@@ -783,6 +928,8 @@ def feed_items(rows, viewer):
                 "viewer": {"liked": post.id in liked, "reposted": post.id in reposted, "bookmarked": post.id in bookmarked},
                 "views": post.view_count,
             }
+            if post.fact_status in ("false", "misleading") and post.fact_note:
+                item["factCheck"] = {"status": post.fact_status, "note": post.fact_note}
             if post.id in polls:
                 item["poll"] = polls[post.id]
         item["cursor"] = row.id
@@ -941,6 +1088,7 @@ def purge_user(user):
     for member in YipiGroupMember.query.filter_by(user_id=uid).all():
         leave_group(member.group_id, uid)
     YipiGroupMessage.query.filter_by(sender_id=uid).delete()
+    YipiDmState.query.filter(or_(YipiDmState.user_id == uid, YipiDmState.other_id == uid)).delete()
     YipiReport.query.filter_by(reporter_id=uid).delete()
     YipiMedia.query.filter_by(owner_id=uid).delete()
     PulseGifFav.query.filter_by(user_id=uid).delete()
@@ -964,8 +1112,10 @@ def cleanup_orphans(user):
 def page_meta(path):
     """Title and description for link previews of the pages that have something to say (profiles, single posts)."""
     title, description = f"{SITE_NAME}: was gerade passiert", DESCRIPTION
-    if path == "/games":                                          # (these two look like a profile address, so they are answered first)
-        return f"Games auf {SITE_NAME}: kommt bald", "Kleine Spiele für dich und deine Freunde. Kommt bald!"
+    if path == "/games":                                          # (these look like a profile address, so they are answered first)
+        return f"Games auf {SITE_NAME}", "Kleine Spiele direkt auf Pulse, zum Beispiel Fruit Merge."
+    if path.startswith("/games/") and path[7:] in GAMES:
+        return f"{GAMES[path[7:]]} spielen auf {SITE_NAME}", f"{GAMES[path[7:]]}: ein Spiel direkt auf Pulse."
     if path == "/videos":
         return f"Videos auf {SITE_NAME}: kommt bald", "Kurze Videos auf Pulse. Kommt bald!"
     match = re.fullmatch(r"/([A-Za-z0-9_]{3,15})(?:/status/(\d+))?", path)
@@ -988,7 +1138,7 @@ def page_meta(path):
 def manifest():
     return {
         "name": f"{SITE_NAME}: was gerade passiert", "short_name": SITE_NAME, "description": DESCRIPTION, "lang": "de", "dir": "ltr",
-        "id": "/", "start_url": "/", "scope": "/", "display": "standalone", "orientation": "portrait-primary",
+        "id": "/", "start_url": "/", "scope": "/", "display": "standalone", "orientation": "any",
         "background_color": "#000000", "theme_color": "#000000", "categories": ["social"],
         "icons": [
             {"src": "/static/img/pulse-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
@@ -1029,8 +1179,11 @@ def register_routes(app):
         return decorator
 
     def api_guard():
-        if request.endpoint in ENDPOINTS and request.path.startswith("/api/yipi/") and request.method not in ("GET", "HEAD") and not same_origin():
-            return fail("forbidden", 403)
+        if request.endpoint in ENDPOINTS and request.path.startswith("/api/yipi/"):
+            if request.method not in ("GET", "HEAD") and not same_origin():
+                return fail("forbidden", 403)
+            if request.endpoint not in OPEN_ENDPOINTS and current_user() is None:
+                return fail("not_logged_in", 401)             # nothing of Pulse is for somebody who is not signed in
 
     app.before_request(api_guard)
 
@@ -1065,9 +1218,10 @@ def register_routes(app):
 
     def me_dict(user):
         unread = YipiNotification.query.filter_by(user_id=user.id, read=False).count()
-        messages = YipiMessage.query.filter_by(recipient_id=user.id, read=False).count() + sum(group_unread(user).values())
+        primary, requests = dm_unread(user)
+        messages = primary + sum(group_unread(user).values())
         data = user_dict(user, user)
-        data.update({"email": user.email or "", "unreadNotifications": unread, "unreadMessages": messages, "isAdmin": is_admin(user)})
+        data.update({"email": user.email or "", "unreadNotifications": unread, "unreadMessages": messages, "messageRequests": requests, "isAdmin": is_admin(user)})
         return data
 
     # ------------------------------------------------------------------------------------ account
@@ -1247,9 +1401,25 @@ def register_routes(app):
         upload = request.files.get("file")
         if upload is None:
             return fail("no_file")
-        data = upload.read(MAX_IMAGE_BYTES + 1)
+        data = upload.read(MAX_VIDEO_BYTES + 1)
         if looks_like_video(data, upload.filename, upload.mimetype):
-            return fail("no_video", 415)                             # Pulse takes photos and GIFs, never videos
+            kind = video_type(data)
+            if kind is None:
+                return fail("bad_video", 415)                        # a video, but not one a browser plays (MP4, MOV, WebM only)
+            if len(data) > MAX_VIDEO_BYTES:
+                return fail("video_too_big", 413)
+            sides = []
+            for name in ("width", "height"):
+                try:
+                    value = int(request.form.get(name, 0))
+                except (TypeError, ValueError):
+                    value = 0
+                sides.append(value if 16 <= value <= MAX_VIDEO_SIDE else (720 if name == "width" else 1280))
+            cleanup_orphans(user)
+            item = YipiMedia(id=uuid.uuid4().hex, owner_id=user.id, content_type=kind, data=data, size=len(data), width=sides[0], height=sides[1], alt=clean_text(request.form.get("alt", ""), 200, keep_newlines=False) or "")
+            db.session.add(item)
+            db.session.commit()
+            return jsonify({"ok": True, "media": media_json(item)})
         if len(data) > MAX_IMAGE_BYTES:
             return fail("too_big", 413)
         info = image_info(data)
@@ -1264,15 +1434,34 @@ def register_routes(app):
 
     @route("/yipi-media/<media_id>")
     def yipi_media_file(media_id):
-        item = db.session.get(YipiMedia, media_id) if re.fullmatch(r"[0-9a-f]{32}", media_id) else None
+        item = YipiMedia.query.options(defer(YipiMedia.data)).filter_by(id=media_id).first() if re.fullmatch(r"[0-9a-f]{32}", media_id) else None
         if item is None:
             abort(404)
-        response = Response(item.data, mimetype=item.content_type)
-        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
-        response.headers["Content-Security-Policy"] = "default-src 'none'; img-src 'self'; sandbox"
-        response.headers["Content-Disposition"] = "inline"
-        response.set_etag(item.id)
-        return response.make_conditional(request)
+        headers = {"Cache-Control": "public, max-age=31536000, immutable", "Content-Security-Policy": "default-src 'none'; img-src 'self'; media-src 'self'; sandbox", "Content-Disposition": "inline"}
+        if not item.content_type.startswith("video/"):
+            response = Response(db.session.query(YipiMedia.data).filter_by(id=item.id).scalar(), mimetype=item.content_type, headers=headers)
+            response.set_etag(item.id)
+            return response.make_conditional(request)
+        size = item.size
+        start, end, partial = 0, size - 1, False
+        wanted = re.fullmatch(r"bytes=(\d*)-(\d*)", request.headers.get("Range", "").strip())
+        if wanted and (wanted.group(1) or wanted.group(2)):
+            if wanted.group(1):
+                start = int(wanted.group(1))
+                end = min(int(wanted.group(2)), size - 1) if wanted.group(2) else size - 1
+            else:                                                     # "the last N bytes"
+                start = max(0, size - int(wanted.group(2)))
+            if start >= size or start > end:
+                return Response(status=416, headers={"Content-Range": f"bytes */{size}"})
+            partial = True
+        length = end - start + 1
+        chunk = db.session.query(func.substr(YipiMedia.data, start + 1, length)).filter(YipiMedia.id == item.id).scalar() or b""
+        response = Response(bytes(chunk), status=206 if partial else 200, mimetype=item.content_type, headers=headers)
+        response.headers["Accept-Ranges"] = "bytes"
+        response.headers["Content-Length"] = str(len(chunk))
+        if partial:
+            response.headers["Content-Range"] = f"bytes {start}-{start + len(chunk) - 1}/{size}"
+        return response
 
     # ------------------------------------------------------------------------------------ posts
     def create_post(user, data):
@@ -1332,6 +1521,11 @@ def register_routes(app):
             items.append((position, item))
         if len(items) > 1 and any(item.content_type == "image/gif" for _, item in items):
             return None, fail("gif_alone")                           # up to three photos, or one GIF
+        if any(item.content_type.startswith("video/") for _, item in items):
+            if len(items) > 1:
+                return None, fail("video_alone")                     # a video stands alone: no photos next to it
+            if reply_to is not None or quote_of is not None:
+                return None, fail("video_top")                       # and it is a post of its own, not an answer or a quote
         post = YipiPost(user_id=user.id, text=text, reply_to_id=reply_to.id if reply_to else None, quote_of_id=quote_of.id if quote_of else None,
                         root_id=(reply_to.root_id or reply_to.id) if reply_to else None)
         db.session.add(post)
@@ -1376,7 +1570,17 @@ def register_routes(app):
         post, problem = create_post(user, data)
         if problem:
             return problem
+        schedule_fact_check([post])
         return jsonify({"ok": True, "post": feed_items([post], user)[0]}), 201
+
+    def schedule_fact_check(posts):
+        """Posts with something to check that nobody has checked yet go to the AI in the background (at most as often as the limit allows)."""
+        if not os.environ.get("GROQ_API_KEY"):
+            return
+        wanted = [post.id for post in posts if not post.fact_status and not post.deleted and not post.repost_of_id and len(post.text or "") >= FACT_MIN_LENGTH][:5]
+        wanted = [post_id for post_id in wanted if not limiter.too_many("factcheck", "all")]
+        if wanted:
+            FACT_RUNNER(app, wanted)
 
     def get_post_or_none(post_id, viewer):
         post = db.session.get(YipiPost, post_id)
@@ -1478,10 +1682,12 @@ def register_routes(app):
         ids.discard(0)
         counted = 0
         if ids:
-            for post in YipiPost.query.filter(YipiPost.id.in_(ids), YipiPost.deleted.is_(False), YipiPost.repost_of_id.is_(None), YipiPost.user_id != user.id):
+            seen = list(YipiPost.query.filter(YipiPost.id.in_(ids), YipiPost.deleted.is_(False), YipiPost.repost_of_id.is_(None), YipiPost.user_id != user.id))
+            for post in seen:
                 bump(YipiPost, post.id, YipiPost.view_count, 1)
                 counted += 1
             db.session.commit()
+            schedule_fact_check(seen)
         return jsonify({"ok": True, "counted": counted})
 
     @route("/api/yipi/posts/<int(min=1, max=4611686018427387904):post_id>/likes")
@@ -1652,8 +1858,12 @@ def register_routes(app):
                 query = query.filter(or_(YipiPost.repost_of_id.is_(None), ~YipiPost.repost_of_id.in_(originals)))
         else:
             query = visible_posts(viewer).filter(YipiPost.reply_to_id.is_(None), YipiPost.repost_of_id.is_(None))
-            if feed == "media":                                   # Explore, "Medien": posts with photos or a GIF
+            if feed == "media":                                   # Explore, "Medien": posts with photos, a GIF or a video
                 query = query.filter(YipiPost.id.in_(select(YipiMedia.post_id).where(YipiMedia.post_id.isnot(None))))
+            elif feed == "videos":                                # the Videos tab: posts with a video
+                query = query.filter(YipiPost.id.in_(select(YipiMedia.post_id).where(YipiMedia.post_id.isnot(None), YipiMedia.content_type.like("video/%"))))
+                if request.args.get("scope") == "following" and viewer:        # "Folge ich": only people the viewer follows
+                    query = query.filter(YipiPost.user_id.in_([r.followee_id for r in YipiFollow.query.filter_by(follower_id=viewer.id)]))
         if cursor:
             query = query.filter(YipiPost.id < cursor)
         return jsonify(feed_page(query, viewer))
@@ -2004,14 +2214,18 @@ def register_routes(app):
     # --------------------------------------------------------------------------------------- messages
     def message_json(row, gifs, mine, starred=()):
         gif = gifs.get(row.gif_id) if row.gif_id else None
-        return {"id": row.id, "text": row.text, "createdAt": iso(row.created_at), "mine": mine,
+        return {"id": row.id, "text": row.text, "createdAt": iso(row.created_at), "mine": mine, "read": bool(row.read),
                 "gif": gif_json(gif, None, starred) if gif else ({"gone": True} if row.gif_id else None)}
 
-    def may_message(sender, target):
-        """Somebody may start a conversation with a person who follows them, or answer one who wrote to them first."""
-        if YipiFollow.query.filter_by(follower_id=target.id, followee_id=sender.id).first() is not None:
-            return True
-        return YipiMessage.query.filter_by(sender_id=target.id, recipient_id=sender.id).first() is not None
+    def dm_gate(sender, target):
+        """None when `sender` may write to `target` now, else why not:
+             "accept_first"     target wrote first, and the sender has not accepted that request yet,
+             "request_pending"  target has not accepted the sender's request: one message is allowed, then it is the other one's turn."""
+        if dm_boxes(sender, [target.id])[target.id] != "primary" and YipiMessage.query.filter_by(sender_id=target.id, recipient_id=sender.id).first() is not None:
+            return "accept_first"
+        if dm_boxes(target, [sender.id])[sender.id] != "primary" and YipiMessage.query.filter_by(sender_id=sender.id, recipient_id=target.id).first() is not None:
+            return "request_pending"
+        return None
 
     def dm_items(user):
         recent = (YipiMessage.query.filter(or_(YipiMessage.sender_id == user.id, YipiMessage.recipient_id == user.id))
@@ -2027,13 +2241,15 @@ def register_routes(app):
         others = {(r.recipient_id if r.sender_id == user.id else r.sender_id) for r in rows}
         users = {u.id: u for u in YipiUser.query.filter(YipiUser.id.in_(others))}
         unread = dict(db.session.query(YipiMessage.sender_id, func.count(YipiMessage.id)).filter(YipiMessage.recipient_id == user.id, YipiMessage.read.is_(False)).group_by(YipiMessage.sender_id).all())
+        boxes = dm_boxes(user, others)
         items = []
         for row in rows:
             other_id = row.recipient_id if row.sender_id == user.id else row.sender_id
             other = users.get(other_id)
-            if other is None or other.suspended or other_id in hidden:
+            if other is None or other.suspended or other_id in hidden or boxes.get(other_id) == "declined":
                 continue
-            items.append({"user": user_brief(other), "last": {"text": row.text or ("GIF" if row.gif_id else ""), "gif": bool(row.gif_id), "createdAt": iso(row.created_at), "mine": row.sender_id == user.id},
+            items.append({"user": user_brief(other), "box": boxes.get(other_id, "primary"),
+                          "last": {"text": row.text or ("GIF" if row.gif_id else ""), "gif": bool(row.gif_id), "createdAt": iso(row.created_at), "mine": row.sender_id == user.id, "read": bool(row.read)},
                           "unread": unread.get(other_id, 0)})
         return items
 
@@ -2043,17 +2259,6 @@ def register_routes(app):
         if problem:
             return problem
         return jsonify({"ok": True, "items": dm_items(user)})
-
-    @route("/api/yipi/visitor")
-    def yipi_visitor():
-        """What this site sees of the person who asks: the notice for computers shows it to that same person, nothing of it is stored or logged."""
-        first, last = client_addresses()
-        chain = [part.strip() for part in request.headers.get("X-Forwarded-For", "").split(",") if part.strip()]
-        header = request.headers.get
-        return jsonify({"ok": True, "visitor": {
-            "ip": first, "forwardedFor": ", ".join(chain)[:300], "via": last if last != first else "",
-            "protocol": header("X-Forwarded-Proto", request.scheme).split(",")[0].strip()[:10], "host": request.host[:100],
-            "time": iso(utcnow()), "userAgent": header("User-Agent", "")[:400], "acceptLanguage": header("Accept-Language", "")[:200], "doNotTrack": header("DNT", "")[:3]}})
 
     @route("/api/yipi/chats")
     def yipi_chats():
@@ -2077,7 +2282,7 @@ def register_routes(app):
                 last = {"text": row.text or ("GIF" if row.gif_id else ""), "gif": bool(row.gif_id), "createdAt": iso(row.created_at), "mine": row.sender_id == user.id, "sender": sender.handle if sender else None} if row else None
                 items.append({"kind": "group", "group": {"id": group.id, "name": group.name, "count": sizes.get(group_id, 1)}, "last": last, "unread": unread.get(group_id, 0), "at": last["createdAt"] if last else iso(group.created_at)})
         items.sort(key=lambda item: item["at"], reverse=True)
-        return jsonify({"ok": True, "items": items[:60]})
+        return jsonify({"ok": True, "items": items[:60], "requests": sum(1 for item in items if item.get("box") in ("request", "general"))})
 
     # ---------------------------------------------------------------------------------------- group chats
     def friends_among(user, ids):
@@ -2309,12 +2514,17 @@ def register_routes(app):
         rows = query.order_by(YipiMessage.id.desc()).limit(PAGE * 2 + 1).all()
         more = len(rows) > PAGE * 2
         rows = rows[:PAGE * 2]
-        YipiMessage.query.filter_by(sender_id=other.id, recipient_id=user.id, read=False).update({"read": True})
-        db.session.commit()
+        box = dm_boxes(user, [other.id])[other.id]
+        received = YipiMessage.query.filter_by(sender_id=other.id, recipient_id=user.id).first() is not None
+        if box == "primary":                                  # a message request is not "seen" until it is accepted: the sender does not learn that it was read
+            YipiMessage.query.filter_by(sender_id=other.id, recipient_id=user.id, read=False).update({"read": True})
+            db.session.commit()
         gifs = gifs_by_id(r.gif_id for r in rows)
         starred = favorite_ids(user, [r.gif_id for r in rows if r.gif_id])
         messages = [message_json(r, gifs, r.sender_id == user.id, starred) for r in reversed(rows)]
-        return jsonify({"ok": True, "user": user_dict(other, user), "messages": messages, "next": rows[-1].id if more and rows else None, "canWrite": may_message(user, other)})
+        gate = dm_gate(user, other)
+        return jsonify({"ok": True, "user": user_dict(other, user), "messages": messages, "next": rows[-1].id if more and rows else None, "canWrite": gate is None, "gate": gate,
+                        "request": received and box in ("request", "general", "declined"), "box": box})
 
     @route("/api/yipi/messages/<handle>", methods=["POST"], endpoint="yipi_send")
     def yipi_send(handle):
@@ -2342,8 +2552,9 @@ def register_routes(app):
                 return fail("gif_gone", 404)
         if not text and not gif_id:
             return fail("empty")
-        if not may_message(user, other):
-            return fail("dm_closed", 403)
+        gate = dm_gate(user, other)
+        if gate:
+            return fail(gate, 403)
         if limiter.too_many("dm", str(user.id)):
             return fail("too_many", 429)
         message = YipiMessage(sender_id=user.id, recipient_id=other.id, text=text, gif_id=gif_id)
@@ -2351,7 +2562,7 @@ def register_routes(app):
         if gif_id:
             bump(PulseGif, gif_id, PulseGif.uses, 1)
         db.session.commit()
-        return jsonify({"ok": True, "message": message_json(message, gifs, True, favorite_ids(user, [gif_id]))}), 201
+        return jsonify({"ok": True, "message": message_json(message, gifs, True, favorite_ids(user, [gif_id])), "gate": dm_gate(user, other)}), 201
 
     @route("/api/yipi/messages/<handle>/poll")
     def yipi_thread_poll(handle):
@@ -2363,12 +2574,37 @@ def register_routes(app):
             return fail("not_found", 404)
         after = clamp_cursor(request.args.get("after")) or 0
         rows = YipiMessage.query.filter(YipiMessage.sender_id == other.id, YipiMessage.recipient_id == user.id, YipiMessage.id > after).order_by(YipiMessage.id).limit(50).all()
-        for row in rows:
-            row.read = True
-        db.session.commit()
+        if rows and dm_boxes(user, [other.id])[other.id] == "primary":
+            for row in rows:
+                row.read = True
+            db.session.commit()
         gifs = gifs_by_id(r.gif_id for r in rows)
         starred = favorite_ids(user, [r.gif_id for r in rows if r.gif_id])
-        return jsonify({"ok": True, "messages": [message_json(r, gifs, False, starred) for r in rows]})
+        seen = db.session.query(func.max(YipiMessage.id)).filter(YipiMessage.sender_id == user.id, YipiMessage.recipient_id == other.id, YipiMessage.read.is_(True)).scalar()
+        return jsonify({"ok": True, "messages": [message_json(r, gifs, False, starred) for r in rows], "readUpTo": seen or 0})
+
+    def dm_decide(handle, state):
+        user, problem = need_user()
+        if problem:
+            return problem
+        other = find_user(handle)
+        if other is None or other.suspended or other.id == user.id:
+            return fail("not_found", 404)
+        row = YipiDmState.query.filter_by(user_id=user.id, other_id=other.id).first()
+        if row is None:
+            row = YipiDmState(user_id=user.id, other_id=other.id, state=state)
+            db.session.add(row)
+        row.state = state
+        db.session.commit()
+        return jsonify({"ok": True, "box": dm_boxes(user, [other.id])[other.id]})
+
+    @route("/api/yipi/messages/<handle>/accept", methods=["POST"], endpoint="yipi_dm_accept")
+    def yipi_dm_accept(handle):
+        return dm_decide(handle, "accepted")
+
+    @route("/api/yipi/messages/<handle>/decline", methods=["POST"], endpoint="yipi_dm_decline")
+    def yipi_dm_decline(handle):
+        return dm_decide(handle, "declined")
 
     # -------------------------------------------------------------------------------------------- GIFs
     def library_gif(gif_id, viewer=None):
@@ -2650,6 +2886,10 @@ def register_routes(app):
                 remove_post(post, by_admin=True)
         elif action == "delete_gif" and report.gif_id:
             remove_gif(report.gif_id)
+        elif action == "clear_factcheck" and report.post_id:
+            post = db.session.get(YipiPost, report.post_id)
+            if post is not None:
+                post.fact_status, post.fact_note = "ok", ""                      # "ok" so that nobody asks the AI about this post again
         elif action == "suspend" and report.user_id:
             target = db.session.get(YipiUser, report.user_id)
             if target is not None and not is_admin(target):
@@ -2678,13 +2918,20 @@ def register_routes(app):
 
     def render_shell(path):
         user = current_user()
-        title, description = page_meta(path)
+        shown = path if user else "/"                             # somebody who is not signed in only gets the page to sign in, whatever the address
+        title, description = page_meta(shown)
         boot = {"me": me_dict(user) if user else None}
-        private = path.startswith(PRIVATE_PATHS)                  # pages that only mean something to the person who is signed in
-        return page_headers(make_response(render_template("yipi.html", boot=boot, title=title, description=description, base=base_url(), path=path, private=private)))
+        private = path.startswith(PRIVATE_PATHS) or (user is None and path != "/")        # pages that only mean something to the person who is signed in
+        return page_headers(make_response(render_template("yipi.html", boot=boot, title=title, description=description, base=base_url(), path=shown, private=private)))
 
     for page in ("/explore", "/notifications", "/messages", "/bookmarks", "/settings", "/search", "/moderation", "/i/login", "/i/signup", "/i/nex", "/games", "/videos"):
         route(page, endpoint="yipi_shell_" + page.strip("/").replace("/", "_"))(lambda page=page: render_shell(page))
+
+    @route("/games/<slug>")
+    def yipi_page_game(slug):
+        if slug not in GAMES:
+            abort(404)
+        return render_shell(f"/games/{slug}")
 
     @route("/g/<int(min=1, max=2147483647):group_id>")
     def yipi_page_group(group_id):
@@ -2700,7 +2947,7 @@ def register_routes(app):
 
     # ---------------------------------------------------------------------- legal pages, files for browsers and crawlers
     def legal(page):
-        return page_headers(make_response(render_template("legal.html", page=page, imprint=ysound.imprint())))
+        return page_headers(make_response(render_template("legal.html", page=page, imprint=ysound.imprint(), credits=credits_list() if page == "credits" else ())))
 
     @route("/nutzungsbedingungen")
     def yipi_terms():
@@ -2713,6 +2960,10 @@ def register_routes(app):
     @route("/impressum")
     def yipi_imprint():
         return legal("imprint")
+
+    @route("/bildnachweise")
+    def yipi_credits():
+        return legal("credits")
 
     @route("/manifest.webmanifest")
     def yipi_manifest():

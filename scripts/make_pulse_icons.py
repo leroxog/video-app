@@ -1,4 +1,4 @@
-"""Draws Pulse's app icons (a heartbeat line on a violet tile) and the link-preview picture with Pillow.
+"""Draws Pulse's app icons (a white heartbeat line on a black tile) and the link-preview picture with Pillow.
 
     python scripts/make_pulse_icons.py
 
@@ -12,7 +12,7 @@ from PIL import Image, ImageDraw, ImageFont
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 OUT = os.path.join(ROOT, "static", "img")
 FONT = os.path.join(ROOT, "static", "fonts", "Nunito-Variable.ttf")
-VIOLET, BLUE, CYAN, WHITE, NIGHT = (167, 139, 250), (124, 58, 237), (76, 29, 149), (255, 255, 255), (4, 3, 8)
+WHITE, BLACK, GREY = (255, 255, 255), (0, 0, 0), (70, 70, 70)
 SUPER = 4
 
 LINE = [(8, 34), (21, 34), (27, 17), (37, 49), (43, 30), (48, 34), (56, 34)]     # the beat, on a 64 x 64 grid
@@ -23,15 +23,9 @@ def lerp(a, b, t):
     return tuple(round(a[k] + (b[k] - a[k]) * t) for k in range(3))
 
 
-def gradient(size):
-    """A square diagonal gradient: light violet, violet, deep purple."""
-    image = Image.new("RGB", (size, size))
-    pixels = image.load()
-    for py in range(size):
-        for px in range(size):
-            t = (px + py) / (2 * (size - 1))
-            pixels[px, py] = lerp(VIOLET, BLUE, t * 2) if t < 0.5 else lerp(BLUE, CYAN, (t - 0.5) * 2)
-    return image
+def plate(size):
+    """The black ground of the icons."""
+    return Image.new("RGB", (size, size), BLACK)
 
 
 def line_mask(size, scale, offset):
@@ -57,15 +51,16 @@ def mark(size, line_size, fill):
 
 
 def icon(size, mode):
-    """mode: 'tile' (rounded gradient tile, see-through corners), 'square' (edge to edge) or 'maskable' (edge to edge, beat smaller)."""
+    """mode: 'tile' (rounded black tile, see-through corners), 'square' (edge to edge) or 'maskable' (edge to edge, beat smaller)."""
     big = size * SUPER
     base = Image.new("RGBA", (big, big), (0, 0, 0, 0))
     if mode == "tile":
         mask = Image.new("L", (big, big), 0)
         ImageDraw.Draw(mask).rounded_rectangle([big * 0.04, big * 0.04, big * 0.96, big * 0.96], radius=big * 0.26, fill=255)
-        base.paste(gradient(big), (0, 0), mask)
+        base.paste(plate(big), (0, 0), mask)
+        ImageDraw.Draw(base).rounded_rectangle([big * 0.04, big * 0.04, big * 0.96, big * 0.96], radius=big * 0.26, outline=GREY, width=max(2, big // 100))
     else:
-        base.paste(gradient(big), (0, 0))
+        base.paste(plate(big), (0, 0))
     base.alpha_composite(mark(size, 0.74 if mode == "maskable" else 0.84, WHITE))
     return base.resize((size, size), Image.LANCZOS)
 
@@ -81,21 +76,14 @@ def font(size, weight):
 
 def og_image():
     width, height = 1200, 630
-    image = Image.new("RGBA", (width, height), NIGHT + (255,))
-    glow = Image.new("RGBA", (width, height), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(glow)
-    draw.ellipse([-200, -260, 620, 560], fill=VIOLET + (150,))
-    draw.ellipse([640, 120, 1400, 880], fill=CYAN + (170,))
-    draw.ellipse([300, 380, 900, 900], fill=BLUE + (90,))
-    from PIL import ImageFilter
-    image = Image.alpha_composite(image, glow.filter(ImageFilter.GaussianBlur(120)))
+    image = Image.new("RGBA", (width, height), BLACK + (255,))
     panel = Image.new("RGBA", (width, height), (0, 0, 0, 0))
-    ImageDraw.Draw(panel).rounded_rectangle([60, 60, width - 60, height - 60], radius=44, fill=(255, 255, 255, 22), outline=(255, 255, 255, 60), width=2)
+    ImageDraw.Draw(panel).rounded_rectangle([60, 60, width - 60, height - 60], radius=44, fill=(255, 255, 255, 14), outline=(255, 255, 255, 70), width=2)
     image = Image.alpha_composite(image, panel)
     draw = ImageDraw.Draw(image)
     draw.text((120, 150), "Pulse", font=font(210, 900), fill=WHITE)
     draw.text((126, 395), "Was gerade passiert.", font=font(64, 800), fill=WHITE)
-    draw.text((126, 478), "Beiträge, Fotos, GIFs und Nex, die KI.", font=font(36, 700), fill=(255, 255, 255, 205))
+    draw.text((126, 478), "Beiträge, Videos, Fotos, GIFs und Nex, die KI.", font=font(36, 700), fill=(255, 255, 255, 205))
     beat = Image.new("RGBA", (360, 360), (0, 0, 0, 0))
     beat.alpha_composite(icon(360, "tile"))
     image.alpha_composite(beat, (760, 110))
@@ -103,8 +91,7 @@ def og_image():
 
 
 SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a78bfa"/><stop offset="0.5" stop-color="#7c3aed"/><stop offset="1" stop-color="#4c1d95"/></linearGradient></defs>
-  <rect x="2.5" y="2.5" width="59" height="59" rx="16" fill="url(#g)"/>
+  <rect x="2.5" y="2.5" width="59" height="59" rx="16" fill="#000" stroke="#464646" stroke-width="1.5"/>
   <path d="M{points}" fill="none" stroke="#fff" stroke-width="{width}" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
 """

@@ -96,10 +96,11 @@ def test_pulse_is_the_home_page_of_the_site(client):
 
 def test_pages_that_only_mean_something_to_somebody_signed_in_are_not_for_search_engines(client):
     c = flask_app.test_client()
-    for path in ("/i/nex", "/i/login", "/messages", "/settings", "/notifications", "/search"):
-        assert 'content="noindex"' in c.get(path).get_data(as_text=True), path
-    person("mia")
-    assert 'content="noindex"' not in c.get("/mia").get_data(as_text=True)
+    for path in ("/i/nex", "/i/login", "/messages", "/settings", "/notifications", "/search", "/mia", "/games"):
+        assert 'content="noindex"' in c.get(path).get_data(as_text=True), path            # (somebody who is not signed in gets the page to sign in for every address)
+    assert 'content="noindex"' not in c.get("/").get_data(as_text=True)
+    mia = person("mia")
+    assert 'content="noindex"' not in mia.get("/mia").get_data(as_text=True)
 
 
 def test_the_old_address_of_the_app_leads_to_the_home_page(client):
@@ -125,7 +126,7 @@ def test_the_manifest_is_the_one_of_pulse(client):
     r = flask_app.test_client().get("/manifest.webmanifest")
     data = json.loads(r.get_data(as_text=True))
     assert r.mimetype == "application/manifest+json" and data["name"].startswith("Pulse") and data["short_name"] == "Pulse"
-    assert data["start_url"] == "/" and data["scope"] == "/" and data["orientation"] == "portrait-primary" and data["theme_color"] == "#000000"
+    assert data["start_url"] == "/" and data["scope"] == "/" and data["orientation"] == "any" and data["theme_color"] == "#000000"
     assert {icon["purpose"] for icon in data["icons"]} == {"any", "maskable"}
     for icon in data["icons"]:
         assert os.path.getsize(os.path.join(ROOT, icon["src"].lstrip("/").replace("/", os.sep))) > 200
@@ -141,10 +142,11 @@ def test_robots_and_sitemap_name_the_archives_and_the_private_parts(client):
 
 
 def test_link_previews_name_pulse(client):
-    person("mia")
-    page = flask_app.test_client().get("/mia").get_data(as_text=True)
+    mia = person("mia")
+    page = mia.get("/mia").get_data(as_text=True)
     assert "<title>mia (@mia) auf Pulse</title>" in page
-    assert "Nex auf Pulse" in flask_app.test_client().get("/i/nex").get_data(as_text=True)
+    assert "Nex auf Pulse" in mia.get("/i/nex").get_data(as_text=True)
+    assert "<title>mia (@mia) auf Pulse</title>" not in flask_app.test_client().get("/mia").get_data(as_text=True), "a guest learns nothing about a profile"
 
 
 def test_the_error_and_legal_pages_are_pulse_too(client):
@@ -169,10 +171,10 @@ def test_the_error_and_legal_pages_are_pulse_too(client):
     (b"\x00\x00\x01\xba" + b"\x00" * 20, "clip.mpg"),
     (b"not even a video inside", "holiday.mp4"),
 ])
-def test_a_video_is_refused_with_its_own_message_by_every_upload(client, data, name):
+def test_a_file_that_is_not_a_playable_video_is_refused_and_no_video_goes_into_the_gif_library(client, data, name):
     mia = person("mia")
     r = post_file(mia, "/api/yipi/media", data, name)
-    assert r.status_code == 415 and r.get_json()["error"] == "no_video"
+    assert r.status_code == 415 and r.get_json()["error"] == "bad_video"
     r = post_file(mia, "/api/yipi/gifs", data, name)
     assert r.status_code == 415 and r.get_json()["error"] == "no_video"
 
@@ -180,7 +182,7 @@ def test_a_video_is_refused_with_its_own_message_by_every_upload(client, data, n
 def test_the_type_the_browser_names_counts_too(client):
     mia = person("mia")
     r = post_file(mia, "/api/yipi/media", b"abcdefgh", "x.bin", "video/mp4")
-    assert r.status_code == 415 and r.get_json()["error"] == "no_video"
+    assert r.status_code == 415 and r.get_json()["error"] == "bad_video"
 
 
 def test_photos_and_pictures_with_an_ftyp_brand_are_not_taken_for_videos(client):
@@ -209,14 +211,14 @@ def test_a_gif_is_read_block_by_block():
 
 
 def test_the_starter_gifs_that_ship_with_the_site_are_all_valid():
-    with open(os.path.join(yipi.STARTER_DIR, "index.json"), encoding="utf-8") as handle:
-        entries = json.load(handle)
-    assert len(entries) >= 12 and len({e["slug"] for e in entries}) == len(entries)
+    entries = yipi.starter_index()
+    drawn = [e for e in entries if not e["folder"]]
+    assert len(drawn) >= 12 and len(entries) > len(drawn) and len({e["slug"] for e in entries}) == len(entries)
     for entry in entries:
-        path = os.path.join(yipi.STARTER_DIR, entry["file"])
+        path = os.path.join(yipi.STARTER_DIR, entry["folder"], entry["file"])
         data = open(path, "rb").read()
         info = yipi.gif_info(data)
-        assert info and info[2] > 1 and len(data) <= 200 * 1024, entry["slug"]
+        assert info and info[2] > 1 and len(data) <= (200 * 1024 if not entry["folder"] else 650_000), entry["slug"]
         assert re.fullmatch(r"[a-z0-9-]{1,40}", entry["slug"]) and 0 < len(entry["title"]) <= yipi.MAX_GIF_TITLE
 
 
@@ -232,16 +234,20 @@ def test_the_library_is_for_people_who_are_signed_in(client):
 def test_the_library_starts_with_the_starter_gifs_and_pages_through_them(client):
     mia = person("mia")
     only_starters = library(mia)
-    assert len(only_starters["items"]) == len(yipi.starter_index()) < yipi.GIF_PAGE and only_starters["next"] is None
+    assert len(only_starters["items"]) == yipi.GIF_PAGE < len(yipi.starter_index()) and only_starters["next"] == yipi.GIF_PAGE, "there are more starters than fit on a page"
     assert all(item["starter"] and not item["mine"] and not item["favorite"] and item["url"].startswith("/pulse-gif/") for item in only_starters["items"])
-    for number in range(yipi.GIF_PAGE - len(only_starters["items"]) + 4):
+    for number in range(4):
         make(mia, f"eigenes {number}")
-    first = library(mia)
-    assert len(first["items"]) == yipi.GIF_PAGE and first["next"] == yipi.GIF_PAGE
     total = yipi.PulseGif.query.count()
-    second = library(mia, offset=first["next"])
-    assert len(first["items"]) + len(second["items"]) == total and second["next"] is None
-    assert not {i["id"] for i in first["items"]} & {i["id"] for i in second["items"]}
+    assert total == len(yipi.starter_index()) + 4
+    pages, offset = [], 0
+    while offset is not None:
+        page = library(mia, offset=offset)
+        pages.append(page["items"])
+        offset = page["next"]
+    assert sum(len(items) for items in pages) == total and len(pages) > 1
+    ids = [item["id"] for items in pages for item in items]
+    assert len(ids) == len(set(ids)), "no GIF twice across the pages"
     assert yipi.PulseGif.query.count() == total, "the starters are put in once, not on every visit"
     assert api(mia, "get", "/gifs?tab=nonsense", status=400)["error"] == "bad_request"
 
@@ -329,6 +335,7 @@ def test_the_most_loved_gif_comes_first_among_the_popular(client):
 def test_a_picked_gif_becomes_a_picture_of_the_sender_that_a_post_takes(client):
     mia = person("mia")
     tom = person("tom")
+    library(mia)                                              # (the starters go in first, so that the new one is the newest)
     gif = make(mia, "Lachen")
     media = api(tom, "post", f"/gifs/{gif['id']}/use", status=201)["media"]
     assert media["gif"] is True and media["url"].startswith("/yipi-media/") and (media["width"], media["height"]) == (3, 2) and media["alt"] == "Lachen"
@@ -352,7 +359,7 @@ def test_a_gif_that_stands_in_a_post_can_be_starred_from_the_post(client):
     again = api(mia, "get", f"/posts/{post['id']}", status=200)["post"]["media"][0]
     assert again["gifFavorite"] is True
     assert api(tom, "get", "/timeline?feed=foryou", status=200)["items"][0]["media"][0]["gifFavorite"] is False, "a star is somebody's own"
-    assert api(flask_app.test_client(), "get", "/timeline?feed=foryou", status=200)["items"][0]["media"][0]["gifFavorite"] is False
+    assert api(flask_app.test_client(), "get", "/timeline?feed=foryou", status=401)["error"] == "not_logged_in"
     uploaded = post_file(tom, "/api/yipi/media", make_gif(), "own.gif").get_json()["media"]
     assert uploaded["gif"] is True and uploaded["gifId"] is None, "a GIF file chosen as a photo has no library entry to star"
 
@@ -427,6 +434,7 @@ def test_only_the_maker_or_an_admin_deletes_a_gif_and_never_a_starter(client, mo
 def test_a_gif_of_somebody_who_is_blocked_or_suspended_is_hidden(client):
     mia = person("mia")
     tom = person("tom")
+    library(mia)                                              # (the starters go in first, so that the new one is the newest)
     gif = make(tom, "Toms")
     assert gif["id"] in [g["id"] for g in library(mia, tab="new")["items"]]
     api(mia, "post", "/users/tom/block", status=200)

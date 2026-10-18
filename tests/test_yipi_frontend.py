@@ -21,7 +21,7 @@ from app import app as flask_app, db  # noqa: E402
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 JS_DIR = os.path.join(ROOT, "static", "js")
-SCRIPTS = ["yipi-core.js", "yipi-gif-core.js", "yipi-icons.js", "yipi-api.js", "yipi-ui.js", "yipi-gif.js", "yipi-components.js", "yipi-views.js", "yipi-chats.js", "yipi-pages.js", "yipi-nex.js", "yipi-notice.js", "yipi.js"]
+SCRIPTS = ["yipi-core.js", "yipi-gif-core.js", "yipi-icons.js", "yipi-api.js", "yipi-ui.js", "yipi-gif.js", "yipi-components.js", "yipi-views.js", "yipi-chats.js", "yipi-pages.js", "yipi-nex.js", "yipi-games.js", "yipi-videos.js", "yipi.js"]
 
 
 def read(*parts):
@@ -243,7 +243,7 @@ UNSTYLED = {"on", "single", "set", "remove", "who", "sub", "line", "gone", "plai
             "mobile-only", "small", "tiny", "outlined", "glass", "primary", "ghost", "danger", "follow", "tab", "m1", "m2", "m3", "m4", "empty", "error",
             "theme-auto", "theme-light", "theme-dim", "theme-dark", "search-bar", "home-tabs", "feed", "thread-main", "thread-above", "reply-box", "replies",
             "explore-cards", "profile-body", "ph-top", "profile-list", "profile-tabs", "pager", "list", "search-body", "settings-body", "reports", "pick-list",
-            "view", "profile", "profile-head", "convos", "idle", "report", "trend-list", "home-view", "chats-view", "assistant"}
+            "view", "profile", "profile-head", "convos", "idle", "report", "trend-list", "home-view", "chats-view", "assistant", "games-view", "game-view", "power-label", "post-view"}
 
 
 def test_every_class_the_script_gives_to_an_element_has_a_style():
@@ -257,16 +257,6 @@ def test_every_class_the_script_gives_to_an_element_has_a_style():
                 if token not in css_classes and token not in UNSTYLED:
                     missing.setdefault(token, name)
     assert not missing, f"classes without a style: {missing}"
-
-
-def test_the_accent_colours_of_the_settings_the_theme_script_and_the_style_agree():
-    named = re.findall(r'\[\"(\w+)\", \"[^\"]+\", \"linear-gradient', JS["yipi-pages.js"])
-    assert named == ["pulse", "indigo", "orchid", "lilac"], "the standard purple and three purples more: Pulse is black and purple"
-    in_css = set(re.findall(r':root\[data-accent=\"(\w+)\"\]', CSS))
-    assert in_css == set(named) - {"pulse"}, "the standard colour is the one without an attribute"
-    assert in_css == set(re.findall(r'accent === \"(\w+)\"', JS["yipi-theme.js"]))
-    for name in in_css:
-        assert f'name === "pulse"' in JS["yipi.js"] and f':root[data-theme="light"][data-accent="{name}"]' in CSS, name
 
 
 def test_the_notification_tabs_ask_the_server_for_what_it_offers():
@@ -296,33 +286,39 @@ def test_what_the_page_offers_for_search_and_explore_exists_on_the_server():
         assert text in server, text
 
 
-def test_the_app_is_made_for_a_phone_held_upright_and_respects_reduced_motion():
+def test_the_app_works_on_every_screen_and_fills_it():
     assert "prefers-reduced-motion: reduce" in CSS
     assert "env(safe-area-inset-bottom)" in CSS and "100dvh" in CSS
-    assert "@media (orientation: landscape) and (max-height: 560px) and (hover: none)" in CSS, "a phone held sideways is asked to turn"
-    assert ".rotate-hint { display: flex; }" in CSS
-    assert yipi.manifest()["orientation"] == "portrait-primary"
-    html = read("templates", "yipi.html")
-    assert 'class="rotate-hint"' in html and "Bitte halte dein Handy aufrecht" in html
-    for gone in (".side {", ".rail {", ".nav-item", ".orbs", ".fab {", "max-width: 1280px", "max-width: 1050px"):
-        assert gone not in CSS, f"{gone}: the layouts for wide screens are gone, the app is for a phone"
-    assert "html:not(.force-app) .app" in CSS and "(hover: hover) and (pointer: fine) and (min-width: 820px)" in CSS, "a computer gets the notice instead of the app"
+    assert yipi.manifest()["orientation"] == "any", "no turning of the phone is asked for"
+    html = read("templates/yipi.html")
+    assert "rotate-hint" not in html and "desktopNotice" not in html and "rotate-hint" not in CSS and ".dn {" not in CSS, "the notice for computers and the hint to turn the phone are gone"
+    assert not os.path.exists(os.path.join(JS_DIR, "yipi-notice.js"))
+    assert ".app { position: relative;" in CSS and "margin: 0 auto; padding: 0 14px" not in CSS and "max-width: 640px; min-height" not in CSS, "the page is not a narrow column in the middle"
+    assert "@media (min-width: 820px)" in CSS and "@media (min-width: 1200px)" in CSS and "@media (min-width: 1000px)" in CSS
+    wide = CSS.split("@media (min-width: 820px) {")[1]
+    for rule in (".tabbar { top: 0; bottom: 0; left: 0; width: var(--side);", ".side-post {", ".nex-side { display: flex;", ".dialog-back { align-items: center;"):
+        assert rule in wide, f"wide screens: {rule}"
+    assert "grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr))" in CSS.split(".pager > .list {")[1].split("}")[0], "the feed spreads over the width in a grid"
+    assert ".post-view { display: grid;" in CSS and "post-view" in JS["yipi-views.js"], "a post and its replies sit side by side on a wide screen"
+    shell = JS["yipi.js"]
+    for part in ("side-brand", "side-foot", "side-post", "side-me", "tab-label"):
+        assert part in shell, part
 
 
-def test_the_look_is_black_and_white_and_purple_is_only_for_the_special_things():
+def test_the_look_is_black_and_white_with_no_colour_at_all():
     dark = CSS.split(':root[data-theme="dark"]')[1].split("}")[0]
     assert "--bg: #000;" in dark and "--ink: #fff;" in dark and "--on-ink: #000;" in dark, "black page, white ink"
     light = CSS.split(':root[data-theme="light"]')[1].split("}")[0]
     assert "--bg: #fff;" in light and "--ink: #0a0a0a;" in light
-    for blue in ("#639eff", "#3a6ee8", "#22d3ee", "#3b82f6", "#2c5bd1", "#c3dbff", "#9d78ff", "#6d3df0"):
-        assert blue not in CSS, blue
-    for old in ("--grad", "--glow", "--sheen", "--orb", "--btn-3d"):
-        assert old not in CSS, f"{old}: the coloured gradients and lights of the earlier look are gone"
-    assert "--accent: #8b5cf6;" in CSS
-    assert CSS.count("var(--accent") <= 16, "purple is rare: a like, Nex, a new message, a few marks"
-    assert ".btn.primary { background: var(--ink); color: var(--on-ink); }" in CSS, "buttons are black or white, not purple"
-    for name in ("pink", "orange", "green"):
-        assert f'data-accent="{name}"' not in CSS
+    for colour in ("#8b5cf6", "#b79dff", "#6d3fe0", "#a78bfa", "#7c3aed", "#639eff", "#3a6ee8", "#22d3ee", "#3b82f6", "#9d78ff", "#6d3df0"):
+        assert colour.lower() not in CSS.lower(), f"{colour}: no purple or blue"
+    for old in ("--grad", "--glow", "--sheen", "--orb", "--btn-3d", "--accent", "--like", "data-accent"):
+        assert old not in CSS, f"{old}: the colours of the earlier looks are gone"
+    assert ".btn.primary { background: var(--ink); color: var(--on-ink); }" in CSS, "buttons are black or white"
+    for source in (JS["yipi-icons.js"], read("static/js/yipi-theme.js"), JS["yipi.js"], JS["yipi-pages.js"]):
+        assert "accent" not in source.lower() and "#a78bfa" not in source and "#7c3aed" not in source
+    assert "stop-color" not in JS["yipi-icons.js"], "the logo is black and white: no gradient"
+    assert "(167, 139, 250)" not in read("scripts/make_pulse_icons.py")
 
 
 def test_the_five_tabs_are_home_chats_nex_games_videos():
@@ -338,8 +334,7 @@ def test_the_five_tabs_are_home_chats_nex_games_videos():
     assert ".tabbar {" in CSS and ".nex-tab .tab-ic" in CSS
     for route in ("thread", "group", "nex"):
         assert f'.app[data-route="{route}"] .tabbar' in CSS, f"{route}: the bar is out of the way in a conversation"
-    pages = JS["yipi-pages.js"]
-    assert 'comingSoon("Games"' in pages and 'comingSoon("Videos"' in pages and '"Kommt bald!"' in pages
+    assert 'views.games = ' in JS["yipi-games.js"] and 'views.videos = ' in JS["yipi-videos.js"] and 'views.game = ' in JS["yipi-games.js"]
     assert "g>h" not in shell and "shortcutsDialog" not in "".join(JS.values()), "no keyboard shortcuts: the app is for a phone"
 
 
@@ -398,21 +393,68 @@ def test_the_composer_offers_polls_and_up_to_three_photos():
     assert ".compose-media.m3 { grid-template-columns: 1fr 1fr 1fr; }" in CSS and ".media.m3 {" in CSS and ".m4" not in CSS
 
 
-def test_the_notice_for_computers_says_what_was_asked_in_that_order():
+def test_nobody_who_is_not_signed_in_sees_anything_but_the_page_to_sign_in():
+    shell = JS["yipi.js"]
+    assert "const bare = BARE.has(route.name) || !Y.me;" in shell, "no tab bar, no side bar for a guest"
+    assert "if (!Y.me && !BARE.has(route.name)) view = Y.views.login(route, ctx);" in shell, "the page to sign in takes the place of every other page"
+    pages = JS["yipi-pages.js"]
+    assert "needLogin" not in "".join(JS.values()), "there is no 'please sign in' page for single pages any more"
+    assert "afterSignIn(route)" in pages and "Y.navigate(target, { replace: true })" in pages, "after signing in the page that was asked for opens"
+    for link in ("/nutzungsbedingungen", "/datenschutz", "/impressum"):
+        assert link in pages.split("function authFrame")[1].split("function passwordField")[0], f"{link} stays reachable from the page to sign in"
+    server = read("yipi.py")
+    assert "OPEN_ENDPOINTS" in server and "current_user() is None" in server.split("def api_guard")[1].split("app.before_request")[0]
+
+
+def test_the_games_are_a_portal_with_fruit_merge_and_the_game_loads_when_it_is_opened():
+    games = JS["yipi-games.js"]
+    for part in ("game-tile", "games-chips", "game-stage", "game-bar", "game-side", "Mehr Spiele", "loadScript(assets.matter)", "loadScript(assets.fruit)", "yipi.games"):
+        assert part in games, part
     html = read("templates", "yipi.html")
-    first = "Sie können vielleicht deswegen nicht auf unser Programm zugreifen"
-    table = 'id="dnData"'
-    image = "Sie können auf das Bild nicht zugreifen"
-    button = "Erneut Versuchen!"
-    assert html.index(first) < html.index(table) < html.index(image) < html.index(button), "headline, then the data, then the picture, then the button"
-    assert '<button class="dn-btn" type="button" id="dnRetry" aria-disabled="true">' in html
-    notice = JS["yipi-notice.js"]
-    assert "dnRetry" not in notice and "onclick" not in notice and 'addEventListener("click"' not in notice, "the button does nothing, on purpose"
-    assert 'Api.get("/visitor")' in notice and "Api.post" not in notice and "sendBeacon" not in notice and "localStorage" not in notice, "the data is only read and shown, never sent or kept"
-    assert "weder gespeichert noch weitergegeben" in html, "the notice says honestly that nothing is stored"
-    assert ".dn { display: none; }" in CSS and "html:not(.force-app) .dn { display: block; }" in CSS
-    assert "force-app" in JS["yipi-theme.js"] and "ansicht=app" in JS["yipi-theme.js"]
-    assert "'unsafe-inline'" not in read("yipi.py").split("CONTENT_SECURITY_POLICY")[1].split("\n\n")[0].split("script-src")[1].split(";")[0]
+    assert 'id="yipiAssets"' in html and "vendor/matter.min.js" in html and "js/fruit-merge.js" in html
+    assert "matter.min.js" not in "".join(re.findall(r"<script src=\"[^\"]*\"></script>", html)), "the physics library is only loaded when a game is opened"
+    assert os.path.getsize(os.path.join(ROOT, "static", "vendor", "matter.min.js")) > 50000
+    fruit = read("static", "js", "fruit-merge.js")
+    for part in ("window.FruitMerge", "kind: \"watermelon\"", "destroy()", "onOver", "onPower"):
+        assert part in fruit, part
+    assert yipi.GAMES == {"fruit-merge": "Fruit Merge"} and "fruit-merge" in games
+
+
+def test_the_videos_tab_is_a_feed_like_tiktok():
+    videos = JS["yipi-videos.js"]
+    for part in ('feed: "videos"', "scroll", "reel-actions", "commentsSheet", "IntersectionObserver", "reel-follow", "Video hochladen", "Y.postCard(post, { noReplyLine: true })", "/like", "/bookmark"):
+        assert part in videos or part == "scroll", part
+    css = CSS.split(".reels {")[1].split("}")[0]
+    assert "scroll-snap-type: y mandatory" in css and "100dvh" in css, "each video as big as the screen, one after the other"
+    components = JS["yipi-components.js"]
+    assert "videoPlayer(media[0])" in components and "Video hinzufügen" in components and "MAX_VIDEO_SECONDS" in components and "openVideo" in components
+    core = JS["yipi-core.js"]
+    assert f"MAX_VIDEO_BYTES = {yipi.MAX_VIDEO_BYTES // (1024 * 1024)} * 1024 * 1024" in core
+    assert "media-src 'self' blob:" in yipi.CONTENT_SECURITY_POLICY
+
+
+def test_the_chats_follow_the_rules_of_message_requests():
+    chats = JS["yipi-chats.js"]
+    for part in ('"Nachrichten"', "Anfragen", "Allgemein", "decide(\"accept\")", "decide(\"decline\")", "readUpTo", "Gelesen", "request-bar", "chatListPane", "chats-split"):
+        assert part in chats, part
+    api = JS["yipi-api.js"]
+    assert "accept_first" in api and "request_pending" in api and "dm_closed" not in api
+    server = read("yipi.py")
+    for part in ('"/api/yipi/messages/<handle>/accept"', '"/api/yipi/messages/<handle>/decline"', "def dm_boxes", "def dm_gate"):
+        assert part in server, part
+
+
+def test_the_fact_check_is_shown_under_a_post_and_can_be_reported():
+    components = JS["yipi-components.js"]
+    assert "function factBox(item)" in components and "item.factCheck ? factBox(item) : null" in components and "Falsch? Melden" in components
+    assert "Fact Check: falsch" in components and "Fact Check: irreführend" in components
+    assert "clear_factcheck" in JS["yipi-pages.js"] and ".factcheck {" in CSS
+
+
+def test_the_nex_symbol_is_the_one_that_was_drawn():
+    icon = re.search(r"nexmark: S\((.*)\),\n", JS["yipi-icons.js"]).group(1)
+    assert icon.count("<path") == 2, "two curves that cross twice: a lens between them, the ends run on as straight strokes"
+    assert "3.500 3.500L7 11" in icon and "3.500 20.500L7 12.400" in icon and "20.500 3.500" in icon and "20.500 20.500" in icon
 
 
 # ------------------------------------------------------------------------- the pages around the app
@@ -442,10 +484,9 @@ def test_the_privacy_page_matches_what_the_app_really_stores():
 def test_every_key_the_app_keeps_in_the_browser_is_described_on_the_privacy_page():
     page = read("templates", "legal.html")
     used = {key for source in JS.values() for key in re.findall(r"[\"`](yipi\.[a-z]+)[\"`.]", source)}
-    assert {"yipi.theme", "yipi.accent", "yipi.feed", "yipi.recent", "yipi.nex", "yipi.draft", "yipi.force"} <= used
+    assert {"yipi.theme", "yipi.feed", "yipi.recent", "yipi.nex", "yipi.draft"} <= used
     for key in sorted(used):
         assert key in page, f"{key} is kept in the browser but not described on the privacy page"
-    assert "Hinweisseite für Computer" in page and "nicht" in page.split("Hinweisseite für Computer")[1].split("</p>")[0]
 
 
 def test_the_imprint_shows_the_operator_when_it_is_set(client, monkeypatch):
@@ -507,7 +548,7 @@ def test_the_old_home_page_is_still_reachable_and_links_inside_its_own_address(c
 # --------------------------------------------------------------------------------------- Node tests of the helpers
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is not installed")
 def test_the_helper_functions_pass_their_node_tests():
-    result = subprocess.run([shutil.which("node"), "--test", os.path.join(ROOT, "tests", "yipi_core.test.js"), os.path.join(ROOT, "tests", "yipi_gif_core.test.js")],
+    result = subprocess.run([shutil.which("node"), "--test", os.path.join(ROOT, "tests", "yipi_core.test.js"), os.path.join(ROOT, "tests", "yipi_gif_core.test.js"), os.path.join(ROOT, "tests", "fruit_merge.test.js")],
                             capture_output=True, text=True, timeout=180)
     assert result.returncode == 0, (result.stdout + result.stderr)[-3000:]
     assert "# fail 0" in result.stdout and "# pass" in result.stdout

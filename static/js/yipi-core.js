@@ -11,6 +11,8 @@
   const MAX_POST = 280;
   const HOME = "/";                                      // the home page of Pulse is the home page of the site
   const MAX_MEDIA = 3;                                  // photos per post (yipi.py: MAX_MEDIA)
+  const MAX_VIDEO_BYTES = 25 * 1024 * 1024;             // a video (yipi.py: MAX_VIDEO_BYTES)
+  const MAX_VIDEO_SECONDS = 90;                         // and how long it may be (only the browser can measure that)
   const MONTHS = ["Jan.", "Feb.", "März", "Apr.", "Mai", "Juni", "Juli", "Aug.", "Sept.", "Okt.", "Nov.", "Dez."];
   const MONTHS_LONG = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
   const HANDLE = /^[A-Za-z0-9_]{3,15}$/;
@@ -149,6 +151,8 @@
     if (match) return { name: "settings", section: match[1] };
     match = /^\/messages\/([A-Za-z0-9_]{3,15})$/.exec(path);
     if (match) return { name: "thread", handle: match[1] };
+    match = /^\/games\/([a-z0-9-]{1,40})$/.exec(path);
+    if (match) return { name: "game", slug: match[1] };
     match = /^\/g\/(\d{1,10})$/.exec(path);
     if (match && Number(match[1]) > 0) return { name: "group", id: Number(match[1]) };
     match = /^\/([A-Za-z0-9_]{3,15})\/status\/(\d{1,18})$/.exec(path);
@@ -166,6 +170,7 @@
       case "explore": return route.tab ? `/explore?tab=${route.tab}` : "/explore";
       case "notifications": case "messages": case "bookmarks": case "moderation": return `/${route.name}`;
       case "games": case "videos": return `/${route.name}`;
+      case "game": return `/games/${route.slug}`;
       case "group": return `/g/${route.id}`;
       case "nex": return route.post ? `/i/nex?post=${route.post}` : route.q ? `/i/nex?q=${encodeURIComponent(route.q)}` : "/i/nex";
       case "login": return "/i/login";
@@ -265,63 +270,6 @@
     else if (unique.size !== options.length) problem = "Die Antworten müssen verschieden sein.";
     else if (options.some((option) => Array.from(option).length > MAX_POLL_OPTION)) problem = `Eine Antwort darf höchstens ${MAX_POLL_OPTION} Zeichen haben.`;
     return { options, valid: !problem, problem };
-  }
-
-  // ------------------------------------------------------------------------------------ the visitor
-  /* What the page can tell a visitor about their own visit, as sections of rows [label, value] (the desktop notice shows it): `server` is what
-     the request carried (address, browser, language ...), `client` what the browser tells about itself, `me` the account when signed in. Nothing
-     is made up: whatever is not known says so. */
-  function visitorSections(server = {}, client = {}, me = null) {
-    const unknown = "nicht ermittelbar";
-    const pick = (value) => (value === undefined || value === null || value === "" ? unknown : String(value));
-    const yes = (value) => (value === undefined || value === null ? unknown : value ? "ja" : "nein");
-    const list = (values) => (Array.isArray(values) && values.length ? values.join(", ") : unknown);
-    const size = (width, height) => (width && height ? `${width} × ${height} px` : unknown);
-    const screen = client.screen || {};
-    const view = client.viewport || {};
-    const link = client.connection || {};
-    return [
-      { title: "Verbindung", rows: [
-        ["IP-Adresse", pick(server.ip)],
-        ["Weiterleitungskette", pick(server.forwardedFor)],
-        ["Letzte Station", pick(server.via)],
-        ["Protokoll", pick(server.protocol)],
-        ["Adresse der Seite", pick(server.host)],
-        ["Herkunftsseite", pick(server.referrer)],
-        ["Zeitpunkt (UTC)", pick(server.time)],
-      ] },
-      { title: "Browser und Gerät", rows: [
-        ["Browser-Kennung", pick(server.userAgent)],
-        ["Plattform", pick(client.platform)],
-        ["Sprachen", list(client.languages && client.languages.length ? client.languages : server.acceptLanguage ? [server.acceptLanguage] : [])],
-        ["Zeitzone", pick(client.timezone)],
-        ["Ortszeit", pick(client.localTime)],
-        ["Bildschirm", `${size(screen.width, screen.height)}${screen.ratio ? ` (Faktor ${screen.ratio})` : ""}`],
-        ["Farbtiefe", screen.depth ? `${screen.depth} Bit` : unknown],
-        ["Fenster", size(view.width, view.height)],
-        ["Prozessorkerne", pick(client.cores)],
-        ["Arbeitsspeicher", client.memory ? `mindestens ${client.memory} GB` : unknown],
-        ["Touch-Punkte", pick(client.touchPoints)],
-        ["Maus oder Touch", pick(client.pointer)],
-        ["Farbschema", pick(client.colorScheme)],
-        ["Cookies erlaubt", yes(client.cookies)],
-        ["Do Not Track", pick(client.doNotTrack || server.doNotTrack)],
-        ["Online", yes(client.online)],
-        ["Verbindungsart", pick(link.type)],
-        ["Datenrate", link.downlink ? `${link.downlink} Mbit/s` : unknown],
-        ["Antwortzeit", link.rtt ? `${link.rtt} ms` : unknown],
-        ["Datensparmodus", yes(link.saveData)],
-      ] },
-      { title: "Konto", rows: me ? [
-        ["Angemeldet als", `@${me.handle}`],
-        ["Anzeigename", pick(me.name)],
-        ["E-Mail-Adresse", me.email || "nicht angegeben"],
-        ["Mitglied seit", pick(me.createdAt ? String(me.createdAt).slice(0, 10) : "")],
-        ["Beiträge", pick(me.posts)],
-        ["Follower", pick(me.followers)],
-        ["Folge ich", pick(me.following)],
-      ] : [["Angemeldet", "nein: es ist kein Konto angemeldet"]] },
-    ];
   }
 
   // --------------------------------------------------------------------------------------------- Nex
@@ -429,7 +377,7 @@
   }
 
   return {
-    HOME, MAX_POST, MAX_MEDIA, NEX_CHATS, nexTitle, newChatId, nexStore, nexUpsert, nexRemove, visitorSections, MAX_POLL_OPTION, POLL_OPTIONS, POLL_LENGTHS, pollTimeLeft, pollPercent, pollVotes, pollAnswers, NEX_TURNS, NEX_KEEP, nexMessages, nexBlocks, gifQuery, gifColumns, cleanText, charCount, counterState, tokenize, shortUrl, formatCount, relativeTime, fullTime, joinedLabel,
+    HOME, MAX_POST, MAX_MEDIA, MAX_VIDEO_BYTES, MAX_VIDEO_SECONDS, NEX_CHATS, nexTitle, newChatId, nexStore, nexUpsert, nexRemove, MAX_POLL_OPTION, POLL_OPTIONS, POLL_LENGTHS, pollTimeLeft, pollPercent, pollVotes, pollAnswers, NEX_TURNS, NEX_KEEP, nexMessages, nexBlocks, gifQuery, gifColumns, cleanText, charCount, counterState, tokenize, shortUrl, formatCount, relativeTime, fullTime, joinedLabel,
     isHandle, parsePath, buildPath, groupNotifications, fitSize, coverCrop, avatarHue, initials,
   };
 });

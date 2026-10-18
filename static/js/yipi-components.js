@@ -12,7 +12,7 @@
 
   const REASONS = [
     ["spam", "Spam"], ["abuse", "Belästigung oder Beleidigung"], ["hate", "Hass oder Hetze"], ["violence", "Gewalt oder Drohungen"],
-    ["illegal", "Illegale Inhalte"], ["self_harm", "Selbstverletzung"], ["other", "Etwas anderes"],
+    ["illegal", "Illegale Inhalte"], ["self_harm", "Selbstverletzung"], ["factcheck", "Der Fact Check ist falsch"], ["other", "Etwas anderes"],
   ];
   const EMOJIS = ["😀", "😂", "🤣", "😊", "😍", "🥰", "😘", "😎", "🤩", "🥳", "😅", "😇", "🙂", "😉", "😋", "🤔", "🤗", "😴", "😭", "😢", "😡", "🤯", "😱", "🥺",
     "👍", "👎", "👏", "🙌", "🙏", "💪", "👀", "🤝", "✌️", "👋", "🤞", "🫶", "❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "💔", "🔥", "✨", "🎉", "🎂",
@@ -48,11 +48,11 @@
     }
   }
 
-  function reportDialog({ postId, handle, gifId }) {
+  function reportDialog({ postId, handle, gifId, factcheck = false }) {
     if (!Y.requireLogin("Melde dich an, um etwas zu melden.")) return;
     let reason = "";
     const note = h("textarea", { class: "field-area", rows: 3, maxlength: 300, placeholder: "Möchtest du etwas dazu sagen? (freiwillig)", "aria-label": "Anmerkung" });
-    const choices = REASONS.map(([value, text]) => h("label", { class: "choice" }, h("input", { type: "radio", name: "reason", value, onchange: () => { reason = value; entry.box.querySelector(".dialog-actions .btn").disabled = false; } }), h("span", {}, text)));
+    const choices = REASONS.filter(([value]) => factcheck || value !== "factcheck").map(([value, text]) => h("label", { class: "choice" }, h("input", { type: "radio", name: "reason", value, onchange: () => { reason = value; entry.box.querySelector(".dialog-actions .btn").disabled = false; } }), h("span", {}, text)));
     const entry = dialog({
       title: gifId ? "GIF melden" : postId ? "Beitrag melden" : `@${handle} melden`,
       body: h("div", { class: "report" }, h("p", { class: "dialog-text" }, "Warum meldest du das?"), h("div", { class: "choices" }, choices), note),
@@ -160,7 +160,16 @@
   }
 
   // ------------------------------------------------------------------------------------------- posts
+  /* The player of a video in a post: its own controls, the first picture as the poster, a click on it does not open the post. */
+  function videoPlayer(item) {
+    const ratio = Math.max(0.5, Math.min(1.78, (item.width || 9) / (item.height || 16)));
+    const video = h("video", { class: "post-video", src: `${item.url}#t=0.001`, controls: true, playsinline: true, preload: "metadata", "aria-label": item.alt || "Video" });
+    video.addEventListener("click", (event) => event.stopPropagation());
+    return h("div", { class: "media media-video", style: `aspect-ratio: ${ratio.toFixed(3)}` }, video);
+  }
+
   function mediaGrid(media) {
+    if (media[0].video) return videoPlayer(media[0]);
     const grid = h("div", { class: `media m${Math.min(media.length, 3)}` });
     if (media.length === 1 && media[0].gif && media[0].gifId) put(grid, Y.gifStar({ id: media[0].gifId, favorite: !!media[0].gifFavorite }));
     media.slice(0, 3).forEach((item, index) => {
@@ -176,7 +185,7 @@
     const card = h("div", { class: "quote", role: "link", tabindex: "0", "aria-label": `Zitierter Beitrag von ${quote.user.name}` },
       h("div", { class: "quote-head" }, avatar(quote.user, "xs"), h("b", {}, quote.user.name), h("span", { class: "handle" }, `@${quote.user.handle}`), h("span", { class: "dot" }, "·"), timeEl(quote.createdAt)),
       quote.text ? h("div", { class: "post-text" }, richText(quote.text)) : null,
-      quote.media && quote.media.length ? h("div", { class: "quote-media" }, h("img", { src: quote.media[0].url, alt: quote.media[0].alt || "", loading: "lazy" })) : null);
+      quote.media && quote.media.length ? (quote.media[0].video ? h("div", { class: "quote-media quote-video" }, icon("playCircle"), "Video") : h("div", { class: "quote-media" }, h("img", { src: quote.media[0].url, alt: quote.media[0].alt || "", loading: "lazy" }))) : null);
     const open = () => Y.navigate(postPath(quote));
     card.addEventListener("click", (event) => { if (!event.target.closest("a")) { event.stopPropagation(); open(); } });
     card.addEventListener("keydown", (event) => { if (event.key === "Enter" && event.target === card) open(); });
@@ -303,6 +312,15 @@
     return entry;
   }
 
+  /* The "Fact Check" under a post whose claim is wrong (like the notes of X): written by Nex, the AI, which can be wrong, so there is a way to say so. */
+  function factBox(item) {
+    const note = item.factCheck;
+    return h("div", { class: `factcheck ${note.status}`, role: "note" },
+      h("div", { class: "fc-head" }, icon("shield"), h("b", {}, note.status === "false" ? "Fact Check: falsch" : "Fact Check: irreführend")),
+      h("p", { class: "fc-note" }, note.note),
+      h("p", { class: "fc-foot" }, "Von Nex, der KI, geprüft. Das kann ein Irrtum sein. ", h("button", { class: "linklike", type: "button", onclick: (event) => { event.stopPropagation(); reportDialog({ postId: item.id, factcheck: true }); } }, "Falsch? Melden")));
+  }
+
   /* One post, as a big rounded card with a little pill on its top edge (like, reply, share). Options: detail (the big version on its own page),
      noReplyLine, onDelete(card), onReply(post), onBookmark(on, card). */
   function postCard(item, options = {}) {
@@ -426,7 +444,8 @@
       item.text ? h("div", { class: "post-text" }, richText(item.text)) : null,
       item.media && item.media.length ? mediaGrid(item.media) : null,
       item.poll ? pollView(item) : null,
-      item.quote ? quoteCard(item.quote) : null);
+      item.quote ? quoteCard(item.quote) : null,
+      item.factCheck ? factBox(item) : null);
 
     draw();
 
@@ -474,7 +493,7 @@
   function composer(options = {}) {
     const { replyTo, quoteOf, compact, onPosted } = options;
     const draftKey = `yipi.draft.${options.draftKey || (replyTo ? `r${replyTo.id}` : quoteOf ? `q${quoteOf.id}` : "new")}`;
-    const picked = [];                                   // {blob, url, alt, uploaded, gif}: up to 3 photos, or one GIF
+    const picked = [];                                   // {blob, url, alt, uploaded, gif, video, width, height}: up to 3 photos, or one GIF, or one video
     let poll = null;                                     // {options: [...], minutes} while a poll is being written (instead of pictures)
     let busy = false;
 
@@ -484,6 +503,8 @@
     const gauge = ring();
     const left = h("span", { class: "ring-left" });
     const submit = h("button", { class: "btn primary post-btn", type: "button", disabled: true }, options.label || (replyTo ? "Antworten" : "Posten"));
+    const videoPicker = h("input", { type: "file", accept: "video/mp4,video/quicktime,video/webm,.mp4,.m4v,.mov,.webm", hidden: true, "aria-hidden": "true", tabindex: "-1" });
+    const videoButton = h("button", { class: "icon-btn tool", type: "button", "aria-label": "Video hinzufügen", hidden: !!(replyTo || quoteOf) }, icon("playCircle"));
     const photoButton = h("button", { class: "icon-btn tool", type: "button", "aria-label": "Foto hinzufügen" }, icon("image"));
     const gifButton = h("button", { class: "icon-btn tool", type: "button", "aria-label": "GIF hinzufügen", "aria-haspopup": "dialog" }, icon("gif"));
     const emojiButton = h("button", { class: "icon-btn tool", type: "button", "aria-label": "Emoji einfügen", "aria-haspopup": "dialog" }, icon("emoji"));
@@ -520,8 +541,10 @@
       left.dataset.state = state;
       const pollReady = !poll || (count > 0 && Core.pollAnswers(poll.options).valid);        // a poll needs its question and two answers
       submit.disabled = busy || state === "over" || (!count && !picked.length && !poll) || !pollReady;
-      photoButton.disabled = busy || !!poll || (picked.length >= Core.MAX_MEDIA && !picked.some((entry) => entry.gif));
-      gifButton.disabled = busy || !!poll;
+      const hasVideo = picked.some((entry) => entry.video);
+      photoButton.disabled = busy || !!poll || hasVideo || (picked.length >= Core.MAX_MEDIA && !picked.some((entry) => entry.gif));
+      gifButton.disabled = busy || !!poll || hasVideo;
+      videoButton.disabled = busy || !!poll || (picked.length > 0 && !hasVideo);
       pollButton.disabled = busy || picked.length > 0;
       pollButton.classList.toggle("on", !!poll);
       textarea.style.height = "auto";
@@ -532,10 +555,10 @@
     function drawPreviews() {
       previews.hidden = !picked.length;
       previews.className = `compose-media m${Math.min(picked.length, 3)}`;
-      fill(previews, ...picked.map((entry, index) => h("div", { class: "pv" },
-        h("img", { src: entry.url, alt: entry.alt || "Vorschau" }),
-        h("button", { class: "pv-x", type: "button", "aria-label": entry.gif ? "GIF entfernen" : "Foto entfernen", onclick: () => { URL.revokeObjectURL(entry.url); picked.splice(index, 1); drawPreviews(); update(); } }, icon("close")),
-        entry.gif ? h("span", { class: "pv-alt gif-badge", "aria-hidden": "true" }, "GIF")
+      fill(previews, ...picked.map((entry, index) => h("div", { class: `pv${entry.video ? " pv-video" : ""}` },
+        entry.video ? h("video", { src: entry.url, controls: true, muted: true, playsinline: true, preload: "metadata", "aria-label": "Vorschau des Videos" }) : h("img", { src: entry.url, alt: entry.alt || "Vorschau" }),
+        h("button", { class: "pv-x", type: "button", "aria-label": entry.video ? "Video entfernen" : entry.gif ? "GIF entfernen" : "Foto entfernen", onclick: () => { URL.revokeObjectURL(entry.url); picked.splice(index, 1); drawPreviews(); update(); } }, icon("close")),
+        entry.video ? null : entry.gif ? h("span", { class: "pv-alt gif-badge", "aria-hidden": "true" }, "GIF")
                   : h("button", { class: `pv-alt${entry.alt ? " set" : ""}`, type: "button", onclick: () => altDialog(entry) }, entry.alt ? "ALT ✓" : "+ ALT"))));
     }
 
@@ -562,6 +585,29 @@
           toast("Dieses Foto konnte nicht gelesen werden.");
         }
       }
+      drawPreviews();
+      update();
+    }
+
+    /* A video file: MP4, MOV or WebM, not bigger than 25 MB, one the browser can read (and so play), not longer than 90 seconds. */
+    async function addVideo(file) {
+      if (poll) { toast("Zu einer Umfrage gehört kein Video."); return; }
+      if (picked.length && !picked[0].video) { toast(Api.MESSAGES.video_alone); return; }
+      if (!/^video\/(mp4|quicktime|webm)$/.test(file.type) && !/\.(mp4|m4v|mov|webm)$/i.test(file.name || "")) { toast(Api.MESSAGES.bad_video); return; }
+      if (file.size > Core.MAX_VIDEO_BYTES) { toast(Api.MESSAGES.video_too_big); return; }
+      const url = URL.createObjectURL(file);
+      const probe = h("video", { preload: "metadata", muted: true });
+      const facts = await new Promise((resolve) => {
+        const timer = setTimeout(() => resolve(null), 10000);
+        probe.addEventListener("loadedmetadata", () => { clearTimeout(timer); resolve({ width: probe.videoWidth, height: probe.videoHeight, seconds: probe.duration }); });
+        probe.addEventListener("error", () => { clearTimeout(timer); resolve(null); });
+        probe.src = url;
+      });
+      probe.removeAttribute("src");
+      if (!facts || !facts.width || !facts.height) { URL.revokeObjectURL(url); toast("Dieses Video kann dein Browser nicht lesen. Probier ein MP4 mit dem üblichen Format (H.264)."); return; }
+      if (Number.isFinite(facts.seconds) && facts.seconds > Core.MAX_VIDEO_SECONDS) { URL.revokeObjectURL(url); toast(`Das Video ist zu lang (höchstens ${Core.MAX_VIDEO_SECONDS} Sekunden).`); return; }
+      picked.forEach((entry) => URL.revokeObjectURL(entry.url));
+      picked.splice(0, picked.length, { blob: file, url, alt: "", uploaded: null, name: file.name, video: true, width: facts.width, height: facts.height });
       drawPreviews();
       update();
     }
@@ -600,8 +646,9 @@
       const ids = [];
       for (const entry of picked) {
         if (!entry.uploaded) {
-          const up = await Api.upload(entry.blob, { alt: entry.alt || "" });
-          if (!up.ok) { busy = false; submit.classList.remove("busy"); toast(Api.message(up)); update(); return; }
+          if (entry.video) submit.textContent = "Lädt hoch …";
+          const up = await Api.upload(entry.blob, entry.video ? { alt: entry.alt || "", width: String(entry.width), height: String(entry.height) } : { alt: entry.alt || "" });
+          if (!up.ok) { busy = false; submit.classList.remove("busy"); submit.textContent = options.label || (replyTo ? "Antworten" : "Posten"); toast(Api.message(up)); update(); return; }
           entry.uploaded = up.data.media.id;
         }
         ids.push(entry.uploaded);
@@ -613,6 +660,7 @@
       const reply = await Api.post("/posts", body);
       busy = false;
       submit.classList.remove("busy");
+      submit.textContent = options.label || (replyTo ? "Antworten" : "Posten");
       if (!reply.ok) { toast(Api.message(reply)); update(); return; }
       clear();
       onPosted?.(reply.data.post);
@@ -626,6 +674,8 @@
     });
     submit.addEventListener("click", send);
     photoButton.addEventListener("click", () => picker.click());
+    videoButton.addEventListener("click", () => videoPicker.click());
+    videoPicker.addEventListener("change", () => { const file = videoPicker.files[0]; videoPicker.value = ""; if (file) addVideo(file); });
     pollButton.addEventListener("click", () => {
       poll = poll ? null : { options: ["", ""], minutes: 1440 };
       drawPoll();
@@ -648,7 +698,7 @@
     const root = h("div", { class: `composer${compact ? " compact" : ""}` },
       avatar(Y.me, "md"),
       h("div", { class: "compose-main" }, textarea, previews, pollBox,
-        h("div", { class: "compose-bar" }, h("div", { class: "tools" }, photoButton, gifButton, pollButton, emojiButton, picker),
+        h("div", { class: "compose-bar" }, h("div", { class: "tools" }, photoButton, videoButton, gifButton, pollButton, emojiButton, picker, videoPicker),
           h("div", { class: "send" }, left, gauge.svg, submit))));
     root.addEventListener("dragover", (event) => { if ([...(event.dataTransfer ? event.dataTransfer.types : [])].includes("Files")) { event.preventDefault(); root.classList.add("drop"); } });
     root.addEventListener("dragleave", () => root.classList.remove("drop"));
@@ -656,19 +706,20 @@
     if (options.text) textarea.value = options.text;
     else { try { const draft = sessionStorage.getItem(draftKey); if (draft) textarea.value = draft; } catch (error) { /* storage blocked */ } }
     update();
-    if (options.autofocus) setTimeout(() => textarea.focus(), 0);
+    if (options.autofocus && !options.openVideo) setTimeout(() => textarea.focus(), 0);
+    if (options.openVideo) setTimeout(() => videoPicker.click(), 0);
     root.focusText = () => textarea.focus();
     root.send = send;
     return root;
   }
 
   /* The dialog to write a post, a reply or a quote. */
-  Y.compose = function compose({ replyTo, quoteOf, onPosted, text } = {}) {
+  Y.compose = function compose({ replyTo, quoteOf, onPosted, text, video } = {}) {
     if (!Y.requireLogin("Melde dich an, um zu posten.")) return null;
     const target = replyTo || quoteOf;
     let entry;
     const box = composer({
-      replyTo, quoteOf, autofocus: true, text,
+      replyTo, quoteOf, autofocus: true, text, openVideo: !!video,
       onPosted: (post) => {
         entry.close();
         onPosted?.(post);
@@ -683,5 +734,5 @@
     return entry;
   };
 
-  Object.assign(Y, { postCard, composer, userRow, followButton, reportDialog, prepareImage, copyLink, postPath, peopleDialog, sendPostDialog });
+  Object.assign(Y, { queueView, postCard, composer, userRow, followButton, reportDialog, prepareImage, copyLink, postPath, peopleDialog, sendPostDialog });
 })();

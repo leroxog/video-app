@@ -1,6 +1,6 @@
 /* Pulse icons (the file keeps the name yipi-icons.js): the small pictures of the page and the logo, drawn in code (all original).
    `YipiIcons.icon(name)` gives an <svg> element that takes the colour of the text around it; `YipiIcons.logo()` the heartbeat on its
-   violet tile. The only place in the page that uses innerHTML is here, for these fixed drawings. */
+   black tile. The only place in the page that uses innerHTML is here, for these fixed drawings. */
 (function () {
   "use strict";
 
@@ -39,6 +39,7 @@
     trash: S('<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/>'),
     flag: S('<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>'),
     block: S('<circle cx="12" cy="12" r="9"/><path d="M5.600 5.600l12.800 12.800"/>'),
+    volume: S('<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.500 8.500a5 5 0 010 7M19 6a8.500 8.500 0 010 12"/>'),
     mute: S('<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 9l5 6M21 9l-5 6"/>'),
     plus: S('<path d="M12 5v14M5 12h14"/>'),
     feather: S('<path d="M4 20l1-5L16 4a2.100 2.100 0 013 3L8 18z"/><path d="M13.500 6.500l3 3"/>'),
@@ -65,7 +66,7 @@
     pushpin: S('<path d="M9 4h6l-1 5 3 3v2H7v-2l3-3z"/><path d="M12 14v6"/>'),
     list: S('<path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1" fill="currentColor"/><circle cx="4" cy="12" r="1" fill="currentColor"/><circle cx="4" cy="18" r="1" fill="currentColor"/>'),
     help: S('<circle cx="12" cy="12" r="9"/><path d="M9.500 9.500a2.500 2.500 0 114 2c-.9.6-1.500 1.100-1.500 2.200"/><circle cx="12" cy="17" r=".9" fill="currentColor"/>'),
-    nexmark: S('<path d="M5 4.500c6 0 10 4.500 14 15M19 4.500c-6 0-10 4.500-14 15"/>', LINE.replace('stroke-width="2"', 'stroke-width="2.400"')),
+    nexmark: S('<path d="M3.500 3.500L7 11C8.500 14.400 10.300 15.900 12 15.900C13.700 15.900 15.500 14.400 17 11L20.500 3.500"/><path d="M3.500 20.500L7 12.400C8.500 9 10.300 7.400 12 7.400C13.700 7.400 15.500 9 17 12.400L20.500 20.500"/>', LINE.replace('stroke-width="2"', 'stroke-width="2.200"')),
     gamepad: S('<rect x="2.500" y="7" width="19" height="11" rx="5.500"/><path d="M8 10.500v4M6 12.500h4"/><circle cx="15.500" cy="11.500" r="1" fill="currentColor"/><circle cx="18" cy="14" r="1" fill="currentColor"/>'),
     playCircle: S('<circle cx="12" cy="12" r="9"/><path d="M10 8.500l5.500 3.500-5.500 3.500z" fill="currentColor"/>'),
     usersFill: S('<circle cx="9" cy="8" r="3.500"/><path d="M2.500 20c.8-3.500 3.200-5.500 6.500-5.500s5.700 2 6.500 5.500z"/><path d="M16 4.800a3.500 3.500 0 010 6.400M18 14.800c2 .6 3.200 2.300 3.600 4.700" fill="none"/>', `${FILL} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"`),
@@ -82,14 +83,11 @@
     return holder.firstElementChild;
   }
 
-  let counter = 0;
-
-  /* The heartbeat of Pulse on a violet tile (the same drawing as static/img/pulse-icon.svg). */
+  /* The heartbeat of Pulse, white on a black tile (the same drawing as static/img/pulse-icon.svg). */
   function logo() {
-    const id = `pg${++counter}`;
     const holder = document.createElement("span");
-    holder.innerHTML = `<svg viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a78bfa"/><stop offset="0.5" stop-color="#7c3aed"/><stop offset="1" stop-color="#4c1d95"/></linearGradient></defs>
-      <rect x="2.500" y="2.500" width="59" height="59" rx="16" fill="url(#${id})"/>
+    holder.innerHTML = `<svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+      <rect x="2.500" y="2.500" width="59" height="59" rx="16" fill="#000" stroke="#767676" stroke-width="1.500"/>
       <path d="M11.800 33.700L22.800 33.700L27.800 19.400L36.200 46.300L41.200 30.300L45.400 33.700L52.200 33.700" fill="none" stroke="#fff" stroke-width="5.500" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     return holder.firstElementChild;
   }

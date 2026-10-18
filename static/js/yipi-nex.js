@@ -77,10 +77,14 @@
     const moreButton = h("button", { class: "icon-btn round", type: "button", "aria-label": "Mehr", "aria-haspopup": "menu" }, icon("more"));
     const postBox = h("div", { class: "nex-post-box", hidden: true });
     const head = h("div", { class: "nex-head" }, historyButton, h("span", { class: "nex-title" }, "Nex"), moreButton);
-    const el = h("div", { class: "view nex-view" }, head, postBox, h("div", { class: "nex-scroll" }, intro, thread), composeBar);
+    const scroller = h("div", { class: "nex-scroll" }, intro, thread);
+    const side = h("aside", { class: "nex-side", "aria-label": "Gespräche mit Nex" });         // the list of conversations, always there on a wide screen
+    const el = h("div", { class: "view nex-view" }, side, h("div", { class: "nex-main" }, head, postBox, scroller, composeBar));
 
-    const toBottom = () => window.scrollTo({ top: document.documentElement.scrollHeight });
-    const nearBottom = () => document.documentElement.scrollHeight - window.scrollY - window.innerHeight < 220;
+    /* On a wide screen the conversation scrolls inside its own box, on a phone the whole page scrolls (the style sheet switches at 1000 px). */
+    const wide = () => matchMedia("(min-width: 1000px)").matches;
+    const toBottom = () => { if (wide()) scroller.scrollTop = scroller.scrollHeight; else window.scrollTo({ top: document.documentElement.scrollHeight }); };
+    const nearBottom = () => (wide() ? scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 220 : document.documentElement.scrollHeight - window.scrollY - window.innerHeight < 220);
 
     /* The conversation is kept (and put first in the list) as soon as it has a message. */
     function save() {
@@ -89,6 +93,7 @@
       chat = { ...chat, title: chat.title || Core.nexTitle(first ? first.content : ""), at: Date.now(), messages: Core.nexMessages(chat.messages, Core.NEX_KEEP) };
       store = Core.nexUpsert(store, chat);
       Y.writeJson(KEY, store);
+      redrawHistory();
     }
 
     function blocksOf(text, into) {
@@ -195,7 +200,8 @@
       postBox.hidden = true;
       fill(postBox);
       draw();
-      window.scrollTo(0, 0);
+      redrawHistory();
+      if (!wide()) window.scrollTo(0, 0);
       if (chat.messages.length) requestAnimationFrame(toBottom);
     }
 
@@ -210,25 +216,38 @@
       store = Core.nexRemove(store, entry.id);
       Y.writeJson(KEY, store);
       if (entry.id === chat.id) open(blank());
+      redrawHistory();
       return true;
     }
 
+    /* The content of the list of conversations: in a panel from the left on a phone, permanently at the side on a wide screen. */
+    const redraws = new Set();
+    function redrawHistory() { for (const redraw of redraws) redraw(); }
+    function historyContent(close, onGone) {
+      const list = h("div", { class: "nx-list" });
+      const page = (path, name, label) => link(path, { class: "drawer-item" }, icon(name), h("span", {}, label));
+      function drawList(first) {
+        if (!first && onGone && !list.isConnected) { onGone(redraw); return; }            // the panel was closed meanwhile
+        fill(list, ...(store.chats.length ? store.chats.map((entry) => h("div", { class: `nx-item${entry.id === chat.id ? " on" : ""}` },
+          h("button", { class: "nx-open", type: "button", onclick: () => { close(); open(entry); } }, entry.title),
+          h("button", { class: "icon-btn small nx-del", type: "button", "aria-label": `Gespräch „${entry.title}“ löschen`, onclick: () => { removeChat(entry); } }, icon("trash"))))
+          : [h("p", { class: "nx-empty" }, "Noch keine Gespräche.")]));
+      }
+      const redraw = () => drawList(false);
+      drawList(true);
+      redraws.add(redraw);
+      return [
+        h("div", { class: "nx-top" }, h("b", {}, "Nex"), close === noClose ? null : h("button", { class: "icon-btn", type: "button", "aria-label": "Schließen", onclick: close }, icon("close"))),
+        h("button", { class: "nx-new", type: "button", onclick: () => { close(); newChat(); } }, icon("pencil"), h("span", {}, "Neues Gespräch")),
+        h("div", { class: "nx-label" }, "Gespräche"), list,
+        close === noClose ? null : h("nav", { class: "nx-links drawer-nav", "aria-label": "Pulse" }, page(Y.HOME, "home", "Home"), page("/messages", "users", "Chats"), page("/games", "gamepad", "Games"), page("/videos", "playCircle", "Videos"))];
+    }
+    const noClose = () => {};
+    fill(side, ...historyContent(noClose));
+
     function openHistory() {
       Y.sidePanel("Nex: Gespräche", (panel, close) => {
-        const list = h("div", { class: "nx-list" });
-        const page = (path, name, label) => link(path, { class: "drawer-item" }, icon(name), h("span", {}, label));
-        function drawList() {
-          fill(list, ...(store.chats.length ? store.chats.map((entry) => h("div", { class: `nx-item${entry.id === chat.id ? " on" : ""}` },
-            h("button", { class: "nx-open", type: "button", onclick: () => { close(); open(entry); } }, entry.title),
-            h("button", { class: "icon-btn small nx-del", type: "button", "aria-label": `Gespräch „${entry.title}“ löschen`, onclick: async () => { if (await removeChat(entry)) drawList(); } }, icon("trash"))))
-            : [h("p", { class: "nx-empty" }, "Noch keine Gespräche.")]));
-        }
-        drawList();
-        panel.append(
-          h("div", { class: "nx-top" }, h("b", {}, "Nex"), h("button", { class: "icon-btn", type: "button", "aria-label": "Schließen", onclick: close }, icon("close"))),
-          h("button", { class: "nx-new", type: "button", onclick: () => { close(); newChat(); } }, icon("pencil"), h("span", {}, "Neues Gespräch")),
-          h("div", { class: "nx-label" }, "Gespräche"), list,
-          h("nav", { class: "nx-links drawer-nav", "aria-label": "Pulse" }, page(Y.HOME, "home", "Home"), page("/messages", "users", "Chats"), page("/games", "gamepad", "Games"), page("/videos", "playCircle", "Videos")));
+        panel.append(...historyContent(close, (redraw) => redraws.delete(redraw)));
       }, "nex-drawer");
     }
 

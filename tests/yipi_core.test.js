@@ -129,7 +129,7 @@ test("every address of the page is read and built the same way", () => {
     ["/", "", { name: "home" }], ["/yipi-archiv", "", { name: "notfound" }], ["/i/nex", "", { name: "nex", q: "", post: 0 }], ["/i/nex", "?post=42", { name: "nex", q: "", post: 42 }],
     ["/i/nex", "?q=Hallo%20Nex", { name: "nex", q: "Hallo Nex", post: 0 }], ["/explore", "", { name: "explore", tab: "" }], ["/explore", "?tab=trends", { name: "explore", tab: "trends" }], ["/explore", "?tab=media", { name: "explore", tab: "media" }], ["/explore", "?tab=nonsense", { name: "explore", tab: "" }], ["/notifications", "", { name: "notifications" }], ["/messages", "", { name: "messages" }],
     ["/messages/mia", "", { name: "thread", handle: "mia" }], ["/bookmarks", "", { name: "bookmarks" }], ["/settings", "", { name: "settings", section: "" }],
-    ["/settings/account", "", { name: "settings", section: "account" }], ["/moderation", "", { name: "moderation" }], ["/games", "", { name: "games" }], ["/videos", "", { name: "videos" }], ["/g/12", "", { name: "group", id: 12 }], ["/i/login", "", { name: "login" }], ["/i/signup", "", { name: "signup" }],
+    ["/settings/account", "", { name: "settings", section: "account" }], ["/moderation", "", { name: "moderation" }], ["/games", "", { name: "games" }], ["/games/fruit-merge", "", { name: "game", slug: "fruit-merge" }], ["/games/Fruit", "", { name: "notfound" }], ["/games/a/b", "", { name: "notfound" }], ["/videos", "", { name: "videos" }], ["/g/12", "", { name: "group", id: 12 }], ["/i/login", "", { name: "login" }], ["/i/signup", "", { name: "signup" }],
     ["/search", "?q=hallo%20welt", { name: "search", q: "hallo welt", type: "posts", sort: "top" }], ["/search", "?q=%23tag&type=people", { name: "search", q: "#tag", type: "people", sort: "top" }],
     ["/search", "?q=katze&sort=new", { name: "search", q: "katze", type: "posts", sort: "new" }], ["/search", "?q=katze&type=media", { name: "search", q: "katze", type: "media", sort: "top" }],
     ["/search", "?q=katze&type=media&sort=new", { name: "search", q: "katze", type: "media", sort: "new" }],
@@ -352,35 +352,3 @@ test("a conversation is added or replaced at the front and removed again", () =>
   assert.equal(core.nexRemove(store, "nope").chats.length, 2);
 });
 
-// ------------------------------------------------------------------------------------------------ the visitor
-test("everything the page knows about a visit is listed, and what it does not know says so", () => {
-  const sections = core.visitorSections(
-    { ip: "203.0.113.7", forwardedFor: "203.0.113.7, 10.0.0.1", via: "10.0.0.1", protocol: "https", host: "pulse.example", userAgent: "Mozilla/5.0 (X11)", acceptLanguage: "de-DE,de;q=0.9", time: "2026-10-17 20:15:00" },
-    { platform: "Linux", languages: ["de-DE", "de"], timezone: "Europe/Berlin", localTime: "17.10.2026, 22:15", screen: { width: 1920, height: 1080, ratio: 1, depth: 24 }, viewport: { width: 1280, height: 720 }, cores: 8, memory: 8, touchPoints: 0, pointer: "Maus", colorScheme: "dunkel", cookies: true, online: true, connection: { type: "4g", downlink: 10, rtt: 50, saveData: false } },
-    { handle: "mia", name: "Mia", email: "mia@example.com", createdAt: "2026-10-01T10:00:00Z", posts: 3, followers: 2, following: 1 });
-  assert.deepEqual(sections.map((section) => section.title), ["Verbindung", "Browser und Gerät", "Konto"]);
-  const flat = Object.fromEntries(sections.flatMap((section) => section.rows));
-  assert.equal(flat["IP-Adresse"], "203.0.113.7");
-  assert.equal(flat["Bildschirm"], "1920 × 1080 px (Faktor 1)");
-  assert.equal(flat["Fenster"], "1280 × 720 px");
-  assert.equal(flat["Sprachen"], "de-DE, de");
-  assert.equal(flat["Cookies erlaubt"], "ja");
-  assert.equal(flat["Datensparmodus"], "nein");
-  assert.equal(flat["Datenrate"], "10 Mbit/s");
-  assert.equal(flat["Arbeitsspeicher"], "mindestens 8 GB");
-  assert.equal(flat["Angemeldet als"], "@mia");
-  assert.equal(flat["Mitglied seit"], "2026-10-01");
-  assert.equal(flat["E-Mail-Adresse"], "mia@example.com");
-});
-
-test("a visitor about whom little is known gets honest blanks", () => {
-  const sections = core.visitorSections();
-  const flat = Object.fromEntries(sections.flatMap((section) => section.rows));
-  assert.equal(flat["IP-Adresse"], "nicht ermittelbar");
-  assert.equal(flat["Bildschirm"], "nicht ermittelbar");
-  assert.equal(flat["Cookies erlaubt"], "nicht ermittelbar");
-  assert.equal(flat["Angemeldet"], "nein: es ist kein Konto angemeldet");
-  assert.equal(core.visitorSections({}, {}, { handle: "a_b", name: "", email: "" }).at(-1).rows.find(([label]) => label === "E-Mail-Adresse")[1], "nicht angegeben");
-  assert.equal(Object.fromEntries(core.visitorSections({ acceptLanguage: "fr" }).flatMap((section) => section.rows))["Sprachen"], "fr", "the language the browser asked for, when the browser itself is silent");
-  assert.equal(core.MAX_MEDIA, 3);
-});

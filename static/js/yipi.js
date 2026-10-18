@@ -17,8 +17,7 @@
   Y.me = boot.me || null;
 
   // Addresses of the site that are not part of this page: a click on them loads the page from the server.
-  const OUTSIDE = new Set(["datenschutz", "impressum", "nutzungsbedingungen", "regeln", "hilfe", "gomat-archiv", "nex-agenten-archiv", "nex-ai-archiv", "nstl-archiv", "yipi-archiv", "robots.txt", "sitemap.xml", "manifest.webmanifest", "static", "yipi-media", "pulse-gif", "api"]);
-  const NEEDS_LOGIN = new Set(["notifications", "messages", "thread", "group", "bookmarks", "nex"]);
+  const OUTSIDE = new Set(["datenschutz", "impressum", "bildnachweise", "nutzungsbedingungen", "regeln", "hilfe", "gomat-archiv", "nex-agenten-archiv", "nex-ai-archiv", "nstl-archiv", "yipi-archiv", "robots.txt", "sitemap.xml", "manifest.webmanifest", "static", "yipi-media", "pulse-gif", "api"]);
   const BARE = new Set(["login", "signup"]);
 
   // ------------------------------------------------------------------------------------------------ theme
@@ -35,12 +34,6 @@
     applyTheme();
   };
   matchMedia("(prefers-color-scheme: light)").addEventListener?.("change", applyTheme);
-
-  /* The colour of the special things (the like, the new-message badge, Nex): "pulse" (the standard violet), "indigo", "orchid" or "lilac". */
-  Y.setAccent = (name) => {
-    try { if (name === "pulse") localStorage.removeItem("yipi.accent"); else localStorage.setItem("yipi.accent", name); } catch (error) { /* storage blocked */ }
-    if (name === "pulse") document.documentElement.removeAttribute("data-accent"); else document.documentElement.setAttribute("data-accent", name);
-  };
 
   // ----------------------------------------------------------------------------------------------- shell
   const TABS = [
@@ -61,7 +54,7 @@
   function tabItem(entry) {
     const box = h("span", { class: "tab-ic" }, icon(entry.icon));
     if (entry.badge) box.append(Y.badge(entry.badge));
-    const el = link(entry.path(), { class: `tab-item${entry.center ? " nex-tab" : ""}`, "data-nav": entry.id, "aria-label": entry.label }, box);
+    const el = link(entry.path(), { class: `tab-item${entry.center ? " nex-tab" : ""}`, "data-nav": entry.id, "aria-label": entry.label }, box, h("span", { class: "tab-label" }, entry.label));
     el._icon = box;
     return el;
   }
@@ -72,13 +65,20 @@
     announcer = h("div", { class: "sr-only", "aria-live": "polite", role: "status" });
     main = h("main", { id: "main", class: "main", tabindex: "-1" });
     if (bare) { app.append(main, announcer); return; }
-    const tabbar = h("nav", { class: "tabbar", "aria-label": "Hauptmenü" }, TABS.map(tabItem));
+    const me = Y.me;
+    const brand = link(Y.HOME, { class: "side-brand", "aria-label": "Pulse, zur Startseite" }, Icons.logo(), h("span", { class: "side-name" }, "Pulse"));
+    const foot = h("div", { class: "side-foot" },
+      h("button", { class: "side-post", type: "button", "aria-label": "Neuer Beitrag", onclick: () => Y.compose() }, icon("plus"), h("span", { class: "side-post-text" }, "Posten")),
+      h("button", { class: "side-me", type: "button", "aria-label": "Menü öffnen", "aria-haspopup": "dialog", onclick: () => Y.openDrawer() },
+        avatar(me, "md"), h("span", { class: "side-me-text" }, h("b", {}, me.name), h("small", {}, `@${me.handle}`)), Y.badge("notifications")));
+    const tabbar = h("nav", { class: "tabbar", "aria-label": "Hauptmenü" }, brand, TABS.map(tabItem), foot);       // (below 820 px only the five tabs show)
     Y.put(app, main, tabbar, announcer);
   }
 
   function activeTab(route) {
     if (route.name === "messages" || route.name === "thread" || route.name === "group") return "messages";
     if (route.name === "nex" || route.name === "games" || route.name === "videos") return route.name;
+    if (route.name === "game") return "games";
     return "home";
   }
 
@@ -158,7 +158,7 @@
   }
 
   function ensureShell(route) {
-    const bare = BARE.has(route.name);
+    const bare = BARE.has(route.name) || !Y.me;                  // nobody who is not signed in sees anything but the page to sign in
     const key = `${bare ? "bare" : "full"}:${Y.me ? Y.me.handle : ""}`;
     if (key === shellKey) return;
     release(true);
@@ -173,7 +173,7 @@
       reload() { cache.delete(key); render(); } };
     let view;
     try {
-      if (NEEDS_LOGIN.has(route.name) && !Y.me) view = Y.views.needLogin(route);
+      if (!Y.me && !BARE.has(route.name)) view = Y.views.login(route, ctx);          // the page to sign in takes the place of every other page
       else view = (Y.views[route.name] || Y.views.notfound)(route, ctx);
     } catch (error) {
       console.error(error);

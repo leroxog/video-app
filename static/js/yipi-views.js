@@ -79,8 +79,9 @@
     const first = item.media && item.media[0];
     if (!first) return null;
     return link(Y.postPath(item), { class: "tile", "aria-label": `Beitrag von ${item.user.name}${first.alt ? `: ${first.alt}` : ""}` },
-      h("img", { src: first.url, alt: first.alt || "", loading: "lazy", decoding: "async" }),
+      first.video ? h("video", { src: `${first.url}#t=0.001`, muted: true, playsinline: true, preload: "metadata", "aria-hidden": "true" }) : h("img", { src: first.url, alt: first.alt || "", loading: "lazy", decoding: "async" }),
       first.gif ? h("span", { class: "gif-badge", "aria-hidden": "true" }, "GIF") : null,
+      first.video ? h("span", { class: "gif-badge", "aria-hidden": "true" }, "VIDEO") : null,
       item.media.length > 1 ? h("span", { class: "tile-count", "aria-hidden": "true" }, icon("image"), String(item.media.length)) : null);
   }
 
@@ -297,7 +298,7 @@
         follow: group.actors.length === 1 ? " folgt dir jetzt" : " folgen dir jetzt",
       }[group.kind] || "";
       put(main, faces, h("p", { class: "note-text" }, peopleLine(group.actors), text, h("span", { class: "dot" }, " · "), Y.timeEl(group.createdAt)));
-      if (group.post) put(main, link(Y.postPath(group.post), { class: "note-snippet" }, group.post.text ? snippet(group.post.text) : group.post.media && group.post.media[0] && group.post.media[0].gif ? "GIF" : "Beitrag mit Bild"));
+      if (group.post) put(main, link(Y.postPath(group.post), { class: "note-snippet" }, group.post.text ? snippet(group.post.text) : group.post.media && group.post.media[0] && group.post.media[0].video ? "Video" : group.post.media && group.post.media[0] && group.post.media[0].gif ? "GIF" : "Beitrag mit Bild"));
       if (group.kind === "follow" && group.actors.length === 1 && group.actors[0].bio) put(main, h("p", { class: "note-snippet plain" }, snippet(group.actors[0].bio, 100)));
     }
     put(row, side, main);
@@ -547,7 +548,7 @@
     const main = h("div", { class: "thread-main" }, Y.skeleton(1));
     const replyBox = h("div", { class: "reply-box" });
     const repliesBox = h("div", { class: "replies" });
-    const el = h("div", { class: "view" }, topbar({ back: true, title: "Beitrag" }), above, main, replyBox, repliesBox);
+    const el = h("div", { class: "view post-view" }, topbar({ back: true, title: "Beitrag" }), above, main, replyBox, repliesBox);
     let replies = null;
     let detail = null;
     const result = { element: el, title: "Beitrag", keep: true, destroy() { replies?.destroy(); } };
