@@ -96,7 +96,7 @@ def test_pulse_is_the_home_page_of_the_site(client):
 
 def test_pages_that_only_mean_something_to_somebody_signed_in_are_not_for_search_engines(client):
     c = flask_app.test_client()
-    for path in ("/i/nex", "/i/login", "/messages", "/settings", "/notifications", "/search", "/mia", "/games"):
+    for path in ("/i/nex", "/i/login", "/messages", "/settings", "/notifications", "/search", "/mia", "/camera"):
         assert 'content="noindex"' in c.get(path).get_data(as_text=True), path            # (somebody who is not signed in gets the page to sign in for every address)
     assert 'content="noindex"' not in c.get("/").get_data(as_text=True)
     mia = person("mia")

@@ -12,3 +12,7 @@ requests==2.32.3
 lameenc==1.8.4
 numpy==2.5.1
 python-dotenv==1.0.1
+# Nex can read a PDF that somebody attaches (pure Python, no other dependency).
+pypdf==6.21.2
+# Notifications on the phone or the computer even when the page is closed (Web Push with VAPID keys).
+pywebpush==2.4.0

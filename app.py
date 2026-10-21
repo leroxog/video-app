@@ -278,11 +278,12 @@ def ensure_sqlite_columns_exist():
             ("thumb_name", "VARCHAR(64)"),
         ],
         "ysong": [("tags", "VARCHAR(300)")],
-        "yipi_message": [("gif_id", "VARCHAR(32)")],
+        "yipi_message": [("gif_id", "VARCHAR(32)"), ("file_id", "VARCHAR(32)")],
+        "yipi_group_message": [("file_id", "VARCHAR(32)")],
         "yipi_report": [("gif_id", "VARCHAR(32)")],
         "yipi_media": [("gif_id", "VARCHAR(32)")],
         "yipi_post": [("view_count", "INTEGER NOT NULL DEFAULT 0"), ("fact_status", "VARCHAR(12) NOT NULL DEFAULT ''"), ("fact_note", "VARCHAR(300) NOT NULL DEFAULT ''")],
-        "yipi_user": [("pinned_post_id", "BIGINT")],
+        "yipi_user": [("pinned_post_id", "BIGINT"), ("phone", "VARCHAR(16)"), ("google_sub", "VARCHAR(40)"), ("streak", "INTEGER NOT NULL DEFAULT 0"), ("streak_best", "INTEGER NOT NULL DEFAULT 0"), ("last_day", "VARCHAR(10)")],
     }
     with db.engine.connect() as conn:
         for table, columns in wanted.items():
@@ -379,6 +380,18 @@ def ensure_columns_exist():
         "ALTER TABLE yipi_post ADD COLUMN IF NOT EXISTS fact_status VARCHAR(12) NOT NULL DEFAULT ''",
         "ALTER TABLE yipi_post ADD COLUMN IF NOT EXISTS fact_note VARCHAR(300) NOT NULL DEFAULT ''",
         "ALTER TABLE yipi_user ADD COLUMN IF NOT EXISTS pinned_post_id BIGINT",
+        # Pulse (2026-10-21): photos, videos and documents in chats.
+        "ALTER TABLE yipi_message ADD COLUMN IF NOT EXISTS file_id VARCHAR(32)",
+        "ALTER TABLE yipi_group_message ADD COLUMN IF NOT EXISTS file_id VARCHAR(32)",
+        # Pulse (2026-10-21): signing in with a phone number or with Google.
+        "ALTER TABLE yipi_user ADD COLUMN IF NOT EXISTS phone VARCHAR(16)",
+        "ALTER TABLE yipi_user ADD COLUMN IF NOT EXISTS google_sub VARCHAR(40)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS ix_yipi_user_phone ON yipi_user (phone)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS ix_yipi_user_google_sub ON yipi_user (google_sub)",
+        # Pulse (2026-10-21): the streak of days in a row.
+        "ALTER TABLE yipi_user ADD COLUMN IF NOT EXISTS streak INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE yipi_user ADD COLUMN IF NOT EXISTS streak_best INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE yipi_user ADD COLUMN IF NOT EXISTS last_day VARCHAR(10)",
     ]
     with db.engine.connect() as conn:
         for statement in statements:

@@ -54,7 +54,7 @@ class CookieAuth:
     def __init__(self, cookie, salt, days=30):
         self.cookie = cookie
         self.salt = salt
-        self.max_age = days * 86400
+        self.max_age = int(days * 86400)
 
     def _serializer(self):
         return URLSafeTimedSerializer(secret(f"cookie:{self.cookie}"), salt=self.salt)

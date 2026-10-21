@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
 GROQ_FALLBACK_MODEL = os.environ.get("GROQ_FALLBACK_MODEL", "openai/gpt-oss-120b")
+GROQ_VISION_MODEL = os.environ.get("GROQ_VISION_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")      # the model that looks at pictures
 CHAT_REQUEST_TIMEOUT_SECONDS = 30
 # A plain reply is a few hundred tokens; a self-contained HTML/CSS/JS
 # artifact (see the nexpreview convention below) can easily run to
@@ -428,3 +429,15 @@ def generate_custom_stream(system_prompt, message, max_tokens=600, temperature=0
             GROQ_MODEL, status, GROQ_FALLBACK_MODEL,
         )
         yield from _generate_groq_stream_with_model(GROQ_FALLBACK_MODEL, messages, max_tokens, temperature, api_key)
+
+
+def generate_vision_stream(system_prompt, message, images, max_tokens=700, temperature=0.5):
+    """An answer about one to three pictures: `images` are data addresses ("data:image/jpeg;base64,...") that go into the one user turn next to `message`.
+    Streams like generate_custom_stream. Raises when no key is set or the model refuses (the caller says so in plain words)."""
+    message = (message or "").strip()[:6000] or "Was ist auf dem Bild zu sehen?"
+    api_key = os.environ.get("GROQ_API_KEY")
+    if not api_key:
+        raise RuntimeError("GROQ_API_KEY ist nicht gesetzt. Auf groq.com einen kostenlosen API-Key erstellen und als Umgebungsvariable GROQ_API_KEY hinterlegen.")
+    content = [{"type": "text", "text": message}] + [{"type": "image_url", "image_url": {"url": url}} for url in images[:3]]
+    messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": content}]
+    yield from _generate_groq_stream_with_model(GROQ_VISION_MODEL, messages, max_tokens, temperature, api_key)

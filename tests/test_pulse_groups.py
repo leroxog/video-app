@@ -65,16 +65,20 @@ def group_of_three():
 
 
 # ================================================================================================ the places of the pages
-def test_games_and_videos_are_pages_and_a_group_has_its_own_address(client):
+def test_the_camera_and_videos_are_pages_and_a_group_has_its_own_address(client):
     c = person("lia")
-    for path in ("/games", "/games/fruit-merge", "/videos", "/g/1", "/messages", "/i/nex"):
+    for path in ("/camera", "/camera/dino", "/camera/fruit-merge", "/videos", "/g/1", "/messages", "/i/nex"):
         r = c.get(path)
         assert r.status_code == 200 and b'id="yipiBoot"' in r.data, path
-    assert "<title>Games auf Pulse</title>" in c.get("/games").get_data(as_text=True)
-    assert "<title>Fruit Merge spielen auf Pulse</title>" in c.get("/games/fruit-merge").get_data(as_text=True) and c.get("/games/gibt-es-nicht").status_code == 404
+    assert "<title>Kamera und Games auf Pulse</title>" in c.get("/camera").get_data(as_text=True)
+    assert 'content="noindex"' in c.get("/camera/dino").get_data(as_text=True) and c.get("/camera/Gibt-Es-Nicht").status_code == 404 and c.get("/camera/a/b").status_code == 404
+    old = c.get("/games")
+    assert old.status_code == 301 and old.headers["Location"].endswith("/camera"), "the Games tab became the camera tab"
+    old = c.get("/games/fruit-merge")
+    assert old.status_code == 301 and old.headers["Location"].endswith("/camera/fruit-merge")
     assert 'content="noindex"' in c.get("/g/1").get_data(as_text=True)
     assert c.get("/g/0").status_code == 404 and c.get("/g/abc").status_code == 404
-    for name in ("games", "videos", "chats"):
+    for name in ("games", "videos", "chats", "camera", "kamera"):
         r = flask_app.test_client().post("/api/yipi/signup", json={"handle": name, "password": PASSWORD, "adult": True})
         assert r.status_code == 400 and r.get_json()["error"] == "reserved_handle", name
 

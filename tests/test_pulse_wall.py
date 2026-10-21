@@ -70,7 +70,7 @@ def test_every_address_gives_a_guest_the_same_page_without_anything_about_it(cli
     mia = person("mia")
     post = mia.post("/api/yipi/posts", json={"text": "Geheimer Satz im Beitrag"}).get_json()["post"]
     guest = flask_app.test_client()
-    pages = [guest.get(path).get_data(as_text=True) for path in ("/", "/mia", f"/mia/status/{post['id']}", "/messages", "/i/nex", "/games", "/videos", "/g/1")]
+    pages = [guest.get(path).get_data(as_text=True) for path in ("/", "/mia", f"/mia/status/{post['id']}", "/messages", "/i/nex", "/camera", "/videos", "/g/1")]
     for text in pages:
         assert "Geheimer Satz" not in text and "(@mia)" not in text
         assert '"me": null' in text.replace('"me":null', '"me": null')
