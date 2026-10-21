@@ -21,7 +21,7 @@ from app import app as flask_app, db  # noqa: E402
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 JS_DIR = os.path.join(ROOT, "static", "js")
-SCRIPTS = ["yipi-core.js", "yipi-gif-core.js", "yipi-icons.js", "yipi-api.js", "yipi-ui.js", "yipi-gif.js", "yipi-components.js", "yipi-views.js", "yipi-chats.js", "yipi-pages.js", "yipi-nex.js", "yipi-games.js", "yipi-videos.js", "yipi.js"]
+SCRIPTS = list(yipi.PULSE_SCRIPTS)
 
 
 def read(*parts):
@@ -46,12 +46,40 @@ def client():
 
 
 # ------------------------------------------------------------------------------------------- the page
-def test_template_loads_the_scripts_in_dependency_order():
+def test_template_loads_the_scripts_as_one_deferred_bundle_in_dependency_order():
     html = read("templates", "yipi.html")
     sources = re.findall(r"<script src=\"\{\{ static_url\('js/([\w-]+\.js)'\) \}\}\"></script>", html)
-    assert sources == ["yipi-theme.js"] + SCRIPTS
-    for tag in re.findall(r"<script\b[^>]*>", html):
+    assert sources == ["yipi-theme.js"], "only the tiny theme script blocks the page"
+    assert '<script defer src="{{ bundle }}"></script>' in html, "everything else is one deferred file"
+    assert SCRIPTS[0] == "yipi-core.js" and SCRIPTS[-1] == "yipi.js"
+    for earlier, later in (("yipi-core.js", "yipi-ui.js"), ("yipi-icons.js", "yipi-ui.js"), ("yipi-ui.js", "yipi-components.js"), ("yipi-views.js", "yipi-comments.js"),
+                           ("yipi-components.js", "yipi-newpost.js"), ("yipi-components.js", "yipi-views.js"), ("yipi-views.js", "yipi-videos.js")):
+        assert SCRIPTS.index(earlier) < SCRIPTS.index(later), f"{earlier} before {later}"
+    for tag in re.findall(r"<script[^>]*>", html):
         assert "src=" in tag or 'type="application/json"' in tag, f"an inline script would break the content security policy: {tag}"
+    assert 'class="boot"' in html and "boot-draw" in html, "a loading animation stands in the page until the script has started"
+
+
+def test_the_bundle_is_one_cached_file_and_text_is_sent_compressed(client):
+    response = client.get("/")
+    version = re.search(r'/pulse\.js\?v=([0-9a-f]+)', response.get_data(as_text=True)).group(1)
+    plain = client.get(f"/pulse.js?v={version}")
+    assert plain.status_code == 200 and plain.mimetype == "application/javascript"
+    assert "immutable" in plain.headers["Cache-Control"] and "max-age=31536000" in plain.headers["Cache-Control"]
+    for name in SCRIPTS:
+        assert read("static", "js", name)[:60] in plain.get_data(as_text=True), name
+    zipped = client.get(f"/pulse.js?v={version}", headers={"Accept-Encoding": "gzip"})
+    assert zipped.headers["Content-Encoding"] == "gzip" and len(zipped.data) < len(plain.data) / 2
+    import gzip as gzip_module
+    assert gzip_module.decompress(zipped.data) == plain.data
+    css = client.get("/static/css/yipi.css?v=1", headers={"Accept-Encoding": "gzip"})
+    assert css.headers["Content-Encoding"] == "gzip" and "immutable" in css.headers["Cache-Control"]
+    with open(os.path.join(ROOT, "static", "css", "yipi.css"), "rb") as handle:
+        assert gzip_module.decompress(css.data) == handle.read(), "the same bytes, only packed"
+    page = client.get("/", headers={"Accept-Encoding": "gzip"})
+    assert page.headers.get("Content-Encoding") == "gzip" and "Accept-Encoding" in page.headers.get("Vary", "")
+    video = client.get("/api/yipi/me", headers={"Accept-Encoding": "gzip"})
+    assert video.headers.get("Content-Encoding") in (None, "gzip")
 
 
 def test_the_templates_have_nothing_a_strict_policy_would_block():
@@ -214,8 +242,9 @@ def defined_variables():
 def test_every_style_variable_that_is_used_is_defined():
     used = set(re.findall(r"var\((--[\w-]+)", CSS))
     set_by_script = {variable for source in JS.values() for variable in re.findall(r"setProperty\(\"(--[\w-]+)\"", source)}
-    assert set_by_script == {"--hue"}
-    assert used - defined_variables() - set_by_script == set(), sorted(used - defined_variables() - set_by_script)
+    assert set_by_script == {"--hue", "--fill", "--gw", "--gh"}
+    in_style_text = {"--dx", "--dy"}                          # the little pieces of the like burst get their way in a style attribute (yipi-fx.js)
+    assert used - defined_variables() - set_by_script - in_style_text == set(), sorted(used - defined_variables() - set_by_script - in_style_text)
 
 
 def test_every_theme_defines_the_same_colours():
@@ -229,7 +258,7 @@ def test_every_theme_defines_the_same_colours():
 
 def test_every_animation_has_its_keyframes():
     keyframes = set(re.findall(r"@keyframes\s+([\w-]+)", CSS))
-    assert keyframes == {"spin", "fade", "pop", "shimmer", "toast-in", "drop", "blink", "sheet", "drawer-in"}
+    assert keyframes == {"spin", "fade", "pop", "shimmer", "toast-in", "drop", "blink", "sheet", "drawer-in", "bloop", "burst", "bit", "slide-in", "slide-back", "cam-pop", "cam-shake", "cam-count"}
     for name in keyframes:
         assert re.search(rf"animation:[^;]*\b{name}\b", CSS), f"{name} is defined but never used"
     for declaration in re.findall(r"animation:\s*([a-z][\w-]*)", CSS):
@@ -240,7 +269,7 @@ def test_every_animation_has_its_keyframes():
 UNSTYLED = {"on", "single", "set", "remove", "who", "sub", "line", "gone", "plain", "busy", "good", "bad", "unread", "joined", "active", "following", "blocked",
             "faded", "more", "send", "tools", "wide", "big", "top", "dot", "tok", "handle", "n-reply", "n-like", "n-repost", "n-follow", "with-post", "mine", "theirs",
             "reply", "repost", "like", "bookmark", "share", "sentinel", "single", "bare", "home", "viewing", "letters", "t-on", "t-hover", "thread-skeleton",
-            "mobile-only", "small", "tiny", "outlined", "glass", "primary", "ghost", "danger", "follow", "tab", "m1", "m2", "m3", "m4", "empty", "error",
+            "google", "mobile-only", "small", "tiny", "outlined", "glass", "primary", "ghost", "danger", "follow", "tab", "m1", "m2", "m3", "m4", "empty", "error",
             "theme-auto", "theme-light", "theme-dim", "theme-dark", "search-bar", "home-tabs", "feed", "thread-main", "thread-above", "reply-box", "replies",
             "explore-cards", "profile-body", "ph-top", "profile-list", "profile-tabs", "pager", "list", "search-body", "settings-body", "reports", "pick-list",
             "view", "profile", "profile-head", "convos", "idle", "report", "trend-list", "home-view", "chats-view", "assistant", "games-view", "game-view", "power-label", "post-view"}
@@ -321,34 +350,50 @@ def test_the_look_is_black_and_white_with_no_colour_at_all():
     assert "(167, 139, 250)" not in read("scripts/make_pulse_icons.py")
 
 
-def test_the_five_tabs_are_home_chats_nex_games_videos():
+def test_the_five_tabs_are_home_chats_nex_camera_videos():
     shell = JS["yipi.js"]
     block = shell.split("const TABS = [")[1].split("];")[0]
     entries = re.findall(r'\{ id: "(\w+)", label: "([^"]+)", path: \(\) => ([^,]+),', block)
-    assert [(name, label) for name, label, _ in entries] == [("home", "Home"), ("messages", "Chats"), ("nex", "Nex"), ("games", "Games"), ("videos", "Videos")]
-    assert [path for _, _, path in entries] == ["Y.HOME", '"/messages"', '"/i/nex"', '"/games"', '"/videos"']
-    assert block.index('id: "nex"') > block.index('id: "messages"') and block.index('id: "nex"') < block.index('id: "games"'), "Nex is in the middle"
-    assert "center: true" in block and "nexmark" in block and "gamepad" in block and "playCircle" in block and "users" in block
-    for tab in ("home", "messages", "nex", "games", "videos"):
+    assert [(name, label) for name, label, _ in entries] == [("home", "Home"), ("messages", "Chats"), ("nex", "Nex"), ("camera", "Kamera"), ("videos", "Videos")]
+    assert [path for _, _, path in entries] == ["Y.HOME", '"/messages"', '"/i/nex"', '"/camera"', '"/videos"']
+    assert block.index('id: "nex"') > block.index('id: "messages"') and block.index('id: "nex"') < block.index('id: "camera"'), "Nex is in the middle"
+    assert "center: true" in block and "nexmark" in block and "camera" in block and "playCircle" in block and "users" in block
+    for tab in ("home", "messages", "nex", "camera", "videos"):
         assert f'"{tab}"' in shell
     assert ".tabbar {" in CSS and ".nex-tab .tab-ic" in CSS
     for route in ("thread", "group", "nex"):
         assert f'.app[data-route="{route}"] .tabbar' in CSS, f"{route}: the bar is out of the way in a conversation"
-    assert 'views.games = ' in JS["yipi-games.js"] and 'views.videos = ' in JS["yipi-videos.js"] and 'views.game = ' in JS["yipi-games.js"]
+    assert 'views.camera = ' in JS["yipi-camera.js"] and 'views.videos = ' in JS["yipi-videos.js"]
     assert "g>h" not in shell and "shortcutsDialog" not in "".join(JS.values()), "no keyboard shortcuts: the app is for a phone"
 
 
-def test_a_post_is_a_big_rounded_card_with_a_small_pill_on_its_edge():
+def test_a_post_is_a_big_rounded_card_with_a_quiet_grey_row_below():
     components = JS["yipi-components.js"]
-    assert 'class: "post-pill"' in components and "likeButton, replyButton, shareButton" in components
-    for kind in ('kind: "like"', 'kind: "reply"', 'kind: "share"'):
+    assert "post-pill" not in components and "post-pill" not in CSS, "the pill on the top edge is gone"
+    assert 'class: "post-actions"' in components and "replyButton, repostButton, likeButton, moreButton, sendButton" in components, "comments, reposts, likes, the three dots, send"
+    for kind in ('kind: "like"', 'kind: "reply"', 'kind: "repost"'):
         assert kind in components
     post = CSS.split("\n.post {")[1].split("}")[0]
     assert "border-radius: var(--radius)" in post and "background: var(--card)" in post
-    pill = CSS.split(".post-pill {")[1].split("}")[0]
-    assert "position: absolute" in pill and "top: 0" in pill and "right:" in pill and "translateY(-50%)" in pill, "the pill sits on the top edge, to the right"
-    assert "bookmark" in components.split("shareButton.addEventListener")[1].split("moreButton.addEventListener")[0], "the bookmark lives in the share menu"
+    row = CSS.split(".act-btn {")[1].split("}")[0]
+    assert "color: var(--muted)" in row, "grey, not loud"
+    head = components.split("const head = h(\"div\", { class: \"post-head\" }")[1].split("const body")[0]
+    assert head.index("avatar(item.user") < head.index("post-name") < head.index("`@${item.user.handle}`") < head.index('"dot"') < head.index("timeEl(item.createdAt)"), "picture, name, grey @handle, a dot, the time"
+    assert "bookmark" in components.split("sendButton.addEventListener")[1].split("moreButton.addEventListener")[0], "the bookmark lives in the send menu"
     assert "hovercard" not in CSS and "hoverCard" not in components
+
+
+def test_hashtags_are_light_pink_and_the_text_of_a_new_post_has_a_template():
+    ui, newpost, components = JS["yipi-ui.js"], JS["yipi-newpost.js"], JS["yipi-components.js"]
+    assert '{ class: "tok hashtag" }' in ui and ".hashtag {" in CSS and "color: var(--tag)" in CSS.split(".hashtag {")[1].split("}")[0]
+    assert CSS.count("--tag:") == 3, "every theme has its pink"
+    assert 'h("label", { class: "field-title", for: "post-text" }, "Text")' in components and "Y.hashtagEditor" in components
+    assert "function hashtagEditor" in newpost and ".tag-chip {" in CSS and "var(--tag)" in CSS.split(".tag-chip {")[1].split("}")[0]
+    assert "template: !target" in components, "a new post uses the template, a reply or a quote does not"
+    assert 'tile("Beitrag"' in newpost and 'tile("Video"' in newpost and "animation: bloop" in CSS.split(".menu.post-choose {")[1].split("}")[0], "the pop-up pops open"
+    for place in ("yipi.js", "yipi-views.js"):
+        assert "Y.newPost({ anchor: event.currentTarget })" in JS[place], place
+    assert "Core.videoTooLong(facts.seconds)" in newpost and "aria-required" in newpost and "Pflichtfeld" in newpost, "the name is required"
 
 
 def test_the_home_page_has_the_search_on_top_and_a_round_menu_and_a_plus():
@@ -406,28 +451,44 @@ def test_nobody_who_is_not_signed_in_sees_anything_but_the_page_to_sign_in():
     assert "OPEN_ENDPOINTS" in server and "current_user() is None" in server.split("def api_guard")[1].split("app.before_request")[0]
 
 
-def test_the_games_are_a_portal_with_fruit_merge_and_the_game_loads_when_it_is_opened():
-    games = JS["yipi-games.js"]
-    for part in ("game-tile", "games-chips", "game-stage", "game-bar", "game-side", "Mehr Spiele", "loadScript(assets.matter)", "loadScript(assets.fruit)", "yipi.games"):
-        assert part in games, part
+def test_the_camera_tab_runs_games_in_front_of_the_selfie_camera_and_records_them():
+    camera = JS["yipi-camera.js"]
+    for part in ("getUserMedia", "facingMode", "MediaRecorder", "captureStream", "LIMIT = 30", "composeVideo", "Api.attach", "lens", "cam-stop", "loadScript(assets.games)", "yipi.games"):
+        assert part in camera, part
+    assert "camera=(self), microphone=(self)" in read("yipi.py"), "the page may use the camera (only when a game is started)"
     html = read("templates", "yipi.html")
-    assert 'id="yipiAssets"' in html and "vendor/matter.min.js" in html and "js/fruit-merge.js" in html
-    assert "matter.min.js" not in "".join(re.findall(r"<script src=\"[^\"]*\"></script>", html)), "the physics library is only loaded when a game is opened"
+    assert 'id="yipiAssets"' in html and "vendor/matter.min.js" in html and "js/fruit-merge.js" in html and '"games": "{{ games }}"' in html
+    assert "matter.min.js" not in "".join(re.findall(r"<script src=\"[^\"]*\"></script>", html)), "the physics library is only loaded when Fruit Merge is chosen"
     assert os.path.getsize(os.path.join(ROOT, "static", "vendor", "matter.min.js")) > 50000
+    assert yipi.PULSE_GAME_SCRIPTS[0] == "pg-kit.js"
+    for name in yipi.PULSE_GAME_SCRIPTS:
+        assert os.path.exists(os.path.join(JS_DIR, name)), name
     fruit = read("static", "js", "fruit-merge.js")
     for part in ("window.FruitMerge", "kind: \"watermelon\"", "destroy()", "onOver", "onPower"):
         assert part in fruit, part
-    assert yipi.GAMES == {"fruit-merge": "Fruit Merge"} and "fruit-merge" in games
+    assert 'data-frame' in read("static", "js", "pg-fruit.js") and "dataset.frame" in camera, "the box of Fruit Merge is part of the recording"
+    assert ".cam-stage {" in CSS and ".lens.on {" in CSS and ".app[data-cam=\"playing\"] .tabbar" in CSS
 
 
 def test_the_videos_tab_is_a_feed_like_tiktok():
     videos = JS["yipi-videos.js"]
-    for part in ('feed: "videos"', "scroll", "reel-actions", "commentsSheet", "IntersectionObserver", "reel-follow", "Video hochladen", "Y.postCard(post, { noReplyLine: true })", "/like", "/bookmark"):
-        assert part in videos or part == "scroll", part
+    for part in ('feed: "videos"', 'order: "random"', "reel-actions", "commentsSheet", "IntersectionObserver", "reel-follow", "Video hochladen", "/like", "/bookmark", "reel-volume", "reel-range"):
+        assert part in videos, part
     css = CSS.split(".reels {")[1].split("}")[0]
     assert "scroll-snap-type: y mandatory" in css and "100dvh" in css, "each video as big as the screen, one after the other"
     components = JS["yipi-components.js"]
-    assert "videoPlayer(media[0])" in components and "Video hinzufügen" in components and "MAX_VIDEO_SECONDS" in components and "openVideo" in components
+    assert "videoPlayer(media[0])" in components and "Core.videoTooLong" in JS["yipi-newpost.js"]
+    assert "reel-tap" not in videos and "reel-pause" not in videos and 'icon("mute")' not in videos, "a video cannot be stopped, and the loudspeaker button on top is gone"
+    assert 'type: "range", min: "0", max: "10", step: "1"' in videos and "let volume = 10;" in videos, "from 0 to 10, as loud as possible at the start"
+    assert "const level = (value) => (value <= 0 ? 0 : value <= 6 ? 1 : value <= 8 ? 2 : 3);" in videos, "0 crossed out, 1-6 one wave, 7-8 two, 9-10 three"
+    assert "textContent = `${volume}" not in videos and "aria-valuetext" in videos, "no number is shown while the sound is set"
+    for name in ("vol0", "vol1", "vol2", "vol3"):
+        assert f"{name}: S(" in JS["yipi-icons.js"]
+    assert "const PAGE = 5;" in videos and "KEEP = 2" in videos and "letGo(reel)" in videos, "five at a time, the ones far away are let go"
+    assert 'preload: "none"' in videos, "no file is fetched before the video is near the screen"
+    assert "position: absolute" in CSS.split(".reel-volume {")[1].split("}")[0] and "rgba(0, 0, 0, 0.28)" in CSS.split(".reel-volume {")[1].split("}")[0], "see-through, inside the video"
+    assert ".reel-av .avatar.lg { width: 66px" in CSS and "width: 28px; height: 28px" in CSS.split(".reel-follow {")[1].split("}")[0], "the profile with its plus frame is bigger than the other buttons"
+    assert ".reel-btn-ic { display: grid; place-items: center; width: 50px" in CSS
     core = JS["yipi-core.js"]
     assert f"MAX_VIDEO_BYTES = {yipi.MAX_VIDEO_BYTES // (1024 * 1024)} * 1024 * 1024" in core
     assert "media-src 'self' blob:" in yipi.CONTENT_SECURITY_POLICY
@@ -454,7 +515,7 @@ def test_the_fact_check_is_shown_under_a_post_and_can_be_reported():
 def test_the_nex_symbol_is_the_one_that_was_drawn():
     icon = re.search(r"nexmark: S\((.*)\),\n", JS["yipi-icons.js"]).group(1)
     assert icon.count("<path") == 2, "two curves that cross twice: a lens between them, the ends run on as straight strokes"
-    assert "3.500 3.500L7 11" in icon and "3.500 20.500L7 12.400" in icon and "20.500 3.500" in icon and "20.500 20.500" in icon
+    assert "M3.500 3.500L6.310 11.830A6 6 0 0 0 17.690 11.830L20.500 3.500" in icon and "M3.500 20.500L6.310 12.170A6 6 0 0 1 17.690 12.170L20.500 20.500" in icon, "the same mark, built from two circle arcs and straight arms"
 
 
 # ------------------------------------------------------------------------- the pages around the app
@@ -548,7 +609,7 @@ def test_the_old_home_page_is_still_reachable_and_links_inside_its_own_address(c
 # --------------------------------------------------------------------------------------- Node tests of the helpers
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is not installed")
 def test_the_helper_functions_pass_their_node_tests():
-    result = subprocess.run([shutil.which("node"), "--test", os.path.join(ROOT, "tests", "yipi_core.test.js"), os.path.join(ROOT, "tests", "yipi_gif_core.test.js"), os.path.join(ROOT, "tests", "fruit_merge.test.js")],
+    result = subprocess.run([shutil.which("node"), "--test", os.path.join(ROOT, "tests", "yipi_core.test.js"), os.path.join(ROOT, "tests", "yipi_gif_core.test.js"), os.path.join(ROOT, "tests", "fruit_merge.test.js"), os.path.join(ROOT, "tests", "pulse_games.test.js"), os.path.join(ROOT, "tests", "pulse_lock.test.js")],
                             capture_output=True, text=True, timeout=180)
     assert result.returncode == 0, (result.stdout + result.stderr)[-3000:]
     assert "# fail 0" in result.stdout and "# pass" in result.stdout

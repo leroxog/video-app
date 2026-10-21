@@ -15,9 +15,10 @@
   let boot = {};
   try { boot = JSON.parse(document.getElementById("yipiBoot").textContent) || {}; } catch (error) { boot = {}; }
   Y.me = boot.me || null;
+  Y.googleReady = !!boot.google;                                // the server has the keys for the sign-in with Google
 
   // Addresses of the site that are not part of this page: a click on them loads the page from the server.
-  const OUTSIDE = new Set(["datenschutz", "impressum", "bildnachweise", "nutzungsbedingungen", "regeln", "hilfe", "gomat-archiv", "nex-agenten-archiv", "nex-ai-archiv", "nstl-archiv", "yipi-archiv", "robots.txt", "sitemap.xml", "manifest.webmanifest", "static", "yipi-media", "pulse-gif", "api"]);
+  const OUTSIDE = new Set(["datenschutz", "impressum", "bildnachweise", "nutzungsbedingungen", "regeln", "hilfe", "gomat-archiv", "nex-agenten-archiv", "nex-ai-archiv", "nstl-archiv", "yipi-archiv", "robots.txt", "sitemap.xml", "manifest.webmanifest", "static", "yipi-media", "yipi-files", "pulse-gif", "api"]);
   const BARE = new Set(["login", "signup"]);
 
   // ------------------------------------------------------------------------------------------------ theme
@@ -40,7 +41,7 @@
     { id: "home", label: "Home", path: () => Y.HOME, icon: "home", on: "homeFill" },
     { id: "messages", label: "Chats", path: () => "/messages", icon: "users", on: "usersFill", badge: "messages" },
     { id: "nex", label: "Nex", path: () => "/i/nex", icon: "nexmark", on: "nexmark", center: true },
-    { id: "games", label: "Games", path: () => "/games", icon: "gamepad", on: "gamepad" },
+    { id: "camera", label: "Kamera", path: () => "/camera", icon: "camera", on: "camera" },
     { id: "videos", label: "Videos", path: () => "/videos", icon: "playCircle", on: "playCircle" },
   ];
 
@@ -68,7 +69,7 @@
     const me = Y.me;
     const brand = link(Y.HOME, { class: "side-brand", "aria-label": "Pulse, zur Startseite" }, Icons.logo(), h("span", { class: "side-name" }, "Pulse"));
     const foot = h("div", { class: "side-foot" },
-      h("button", { class: "side-post", type: "button", "aria-label": "Neuer Beitrag", onclick: () => Y.compose() }, icon("plus"), h("span", { class: "side-post-text" }, "Posten")),
+      h("button", { class: "side-post", type: "button", "aria-label": "Neuer Beitrag", onclick: (event) => Y.newPost({ anchor: event.currentTarget }) }, icon("plus"), h("span", { class: "side-post-text" }, "Posten")),
       h("button", { class: "side-me", type: "button", "aria-label": "Menü öffnen", "aria-haspopup": "dialog", onclick: () => Y.openDrawer() },
         avatar(me, "md"), h("span", { class: "side-me-text" }, h("b", {}, me.name), h("small", {}, `@${me.handle}`)), Y.badge("notifications")));
     const tabbar = h("nav", { class: "tabbar", "aria-label": "Hauptmenü" }, brand, TABS.map(tabItem), foot);       // (below 820 px only the five tabs show)
@@ -77,8 +78,7 @@
 
   function activeTab(route) {
     if (route.name === "messages" || route.name === "thread" || route.name === "group") return "messages";
-    if (route.name === "nex" || route.name === "games" || route.name === "videos") return route.name;
-    if (route.name === "game") return "games";
+    if (route.name === "nex" || route.name === "camera" || route.name === "videos") return route.name;
     return "home";
   }
 
@@ -123,8 +123,10 @@
       render();
       return;
     }
+    const before = unreadTotal();
     Y.me.unreadNotifications = reply.data.me.unreadNotifications;
     Y.me.unreadMessages = reply.data.me.unreadMessages;
+    if (unreadTotal() > before) Y.sound?.play("receive");
     Y.updateBadges();
   };
   setInterval(() => { if (!document.hidden) Y.refreshBadges(); }, 45000);
@@ -132,6 +134,7 @@
 
   // ---------------------------------------------------------------------------------------------- router
   let current = null;                 // {key, route, view, ctx}
+  let enterTimer = 0;
   const cache = new Map();            // pages that were left but are kept (so "back" is instant and keeps the scroll position)
 
   function release(forceDestroy) {
@@ -173,7 +176,8 @@
       reload() { cache.delete(key); render(); } };
     let view;
     try {
-      if (!Y.me && !BARE.has(route.name)) view = Y.views.login(route, ctx);          // the page to sign in takes the place of every other page
+      if (!Y.me && route.name === "post") view = Y.views.share(route, ctx);            // the one page without an account: a post that was sent to somebody
+      else if (!Y.me && !BARE.has(route.name)) view = Y.views.login(route, ctx);       // the page to sign in takes the place of every other page
       else view = (Y.views[route.name] || Y.views.notfound)(route, ctx);
     } catch (error) {
       console.error(error);
@@ -200,6 +204,10 @@
       view.ctx = ctx;
     }
     current = { key, route, view, ctx };
+    const tabRoute = ["home", "messages", "nex", "camera", "videos", "login", "signup"].includes(route.name);
+    main.dataset.enter = initial ? "" : tabRoute ? "fade" : restore ? "back" : "forward";       // a page that is opened slides in from the right, "back" from the left
+    clearTimeout(enterTimer);
+    enterTimer = setTimeout(() => { main.dataset.enter = ""; }, 380);
     main.replaceChildren(view.element);
     app.dataset.route = route.name;
     pageTitle = view.title || "Pulse";
@@ -238,6 +246,7 @@
   // ----------------------------------------------------------------------------------------------- account
   Y.setMe = (me) => {
     Y.me = me;
+    Y.chatLock?.forget();
     clearCache();
     Y.updateBadges();
   };
@@ -248,6 +257,8 @@
     Y.navigate(Y.HOME, { replace: true });
     toast("Du wurdest abgemeldet.");
   };
+
+  Y.rerender = () => render();                                  // the page of this address is built again (the chats after they were locked)
 
   /* The page that is shown is asked to load itself again (after a post was pinned, for instance). */
   Y.refreshView = () => { current?.view.refresh?.(); };
@@ -311,7 +322,7 @@
     return false;
   };
 
-  Y.onPosted = (post, info) => { if (current) current.view.onPosted?.(post, info || {}); };
+  Y.onPosted = (post, info) => { Y.sound?.play("success"); if (current) current.view.onPosted?.(post, info || {}); };
 
   // ----------------------------------------------------------------------------------------- connection
   // A safety net: something that fails on its own (a bug, a broken answer) at least says so instead of doing nothing.

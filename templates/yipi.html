@@ -31,11 +31,26 @@
 <meta name="twitter:card" content="summary_large_image">
 <link rel="preload" href="{{ static_url('fonts/inter-latin-wght-normal.woff2') }}" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="{{ static_url('css/yipi.css') }}">
+<style>
+.boot { position: fixed; inset: 0; z-index: 2000; display: grid; place-content: center; justify-items: center; gap: 26px; background: var(--bg, #000); color: var(--text, #fff); }
+.boot svg { width: 120px; height: 60px; overflow: visible; }
+.boot path { fill: none; stroke: currentColor; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 150; stroke-dashoffset: 150; animation: boot-draw 1.3s ease-in-out infinite; }
+.boot-name { font: 800 22px/1 var(--font, sans-serif); letter-spacing: -0.03em; animation: boot-fade 1.3s ease-in-out infinite; }
+@keyframes boot-draw { 0% { stroke-dashoffset: 150; } 55%, 80% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: -150; } }
+@keyframes boot-fade { 0%, 100% { opacity: 0.45; } 55% { opacity: 1; } }
+</style>
+<noscript><style>.boot { display: none; }</style></noscript>
 <script src="{{ static_url('js/yipi-theme.js') }}"></script>
+<script defer src="{{ bundle }}"></script>
 </head>
 <body>
 <a class="skip" href="#main">Zum Inhalt springen</a>
-<div id="app" class="app"></div>
+<div id="app" class="app">
+  <div class="boot" role="status" aria-label="Pulse lädt">
+    <svg viewBox="0 0 64 32" aria-hidden="true"><path d="M2 17h12l6-13 10 25 8-17 4 5h20"/></svg>
+    <span class="boot-name">Pulse</span>
+  </div>
+</div>
 <noscript>
   <div class="noscript">
     <h1>Pulse</h1>
@@ -43,20 +58,6 @@
   </div>
 </noscript>
 <script type="application/json" id="yipiBoot">{{ boot|tojson }}</script>
-<script type="application/json" id="yipiAssets">{"matter": "{{ static_url('vendor/matter.min.js') }}", "fruit": "{{ static_url('js/fruit-merge.js') }}"}</script>
-<script src="{{ static_url('js/yipi-core.js') }}"></script>
-<script src="{{ static_url('js/yipi-gif-core.js') }}"></script>
-<script src="{{ static_url('js/yipi-icons.js') }}"></script>
-<script src="{{ static_url('js/yipi-api.js') }}"></script>
-<script src="{{ static_url('js/yipi-ui.js') }}"></script>
-<script src="{{ static_url('js/yipi-gif.js') }}"></script>
-<script src="{{ static_url('js/yipi-components.js') }}"></script>
-<script src="{{ static_url('js/yipi-views.js') }}"></script>
-<script src="{{ static_url('js/yipi-chats.js') }}"></script>
-<script src="{{ static_url('js/yipi-pages.js') }}"></script>
-<script src="{{ static_url('js/yipi-nex.js') }}"></script>
-<script src="{{ static_url('js/yipi-games.js') }}"></script>
-<script src="{{ static_url('js/yipi-videos.js') }}"></script>
-<script src="{{ static_url('js/yipi.js') }}"></script>
+<script type="application/json" id="yipiAssets">{"matter": "{{ static_url('vendor/matter.min.js') }}", "fruit": "{{ static_url('js/fruit-merge.js') }}", "games": "{{ games }}"}</script>
 </body>
 </html>

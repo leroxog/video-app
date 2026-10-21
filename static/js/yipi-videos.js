@@ -1,6 +1,9 @@
 /* Pulse videos (yipi-videos.js): the Videos tab, made like TikTok -- one video after the other, each as big as the screen, you scroll (or press the
-   arrow keys) to the next one, the one on screen plays by itself, a tap pauses it. At the side: the person (with a button to follow), like, comments
-   (a sheet with the answers to the post and a box to write one), save and share. Every video someone puts into a post is in here, and it is
+   arrow keys) to the next one, the one on screen plays by itself and cannot be stopped. The order is a shuffle (not the newest first); when every video
+   has been shown the page shuffles again and starts over. Only five videos are asked for at a time, only the ones near the screen are fetched (and
+   they are fetched piece by piece while they play), the ones far away are let go again. In the video itself, small and see-through, a row to set the
+   sound from 0 to 10 (it starts at 10), shown as a picture only: crossed out (0), one wave (1-6), two (7-8), three (9-10). At the side: the person
+   (with a plus to follow), like, comments (a sheet like on X), save and share. Every video someone puts into a post is in here, and it is
    the same post as in the normal feed: likes and answers are shared. */
 (function () {
   "use strict";
@@ -8,51 +11,90 @@
   const Y = window.Yipi;
   const Core = window.YipiCore;
   const Api = window.YipiApi;
-  const { fill, put, h, icon, link, avatar, richText, timeEl, toast, dialog, confirmBox, menu, pager } = Y;
-  const { qs, listLoader } = Y;
+  const { fill, put, h, icon, link, avatar, richText, timeEl, toast, confirmBox, menu } = Y;
+  const { qs } = Y;
   const views = Y.views;
 
-  let sound = false;                                            // the sound is off until somebody asks for it (browsers do not start a video with sound by themselves)
+  const PAGE = 5;                                               // videos asked for at a time
+  const KEEP = 2;                                               // how many videos after (and before) the one on screen keep their file
+  const MAX_REELS = 40;                                         // more than this in the page and the oldest ones are dropped
 
-  /* The sheet with the comments of a video: the answers to its post, and a box to write one. */
-  function commentsSheet(item, changed) {
-    const list = pager({ load: listLoader((cursor) => qs(`/posts/${item.id}/replies`, { cursor })), render: (post) => Y.postCard(post, { noReplyLine: true }), empty: h("p", { class: "muted pad" }, "Noch keine Kommentare. Schreib den ersten.") });
-    const writer = Y.composer({ replyTo: item, compact: true, placeholder: "Kommentar schreiben …", label: "Senden", draftKey: `reel${item.id}`, onPosted: (post) => {
-      list.prepend(Y.postCard(post, { noReplyLine: true }));
-      changed(1);
-    } });
-    dialog({ title: "Kommentare", body: h("div", { class: "comments-sheet" }, writer, list.element), onClose: () => list.destroy() });
-  }
+  let volume = 10;                                              // 0 to 10, as loud as possible at the start
+  let lastLoud = 10;                                            // what the picture button brings back after it was set to 0
+  const shuffle = { seed: 1 + Math.floor(Math.random() * 999999), at: 0 };   // which shuffle, and how far the person has come in it
+
+  const level = (value) => (value <= 0 ? 0 : value <= 6 ? 1 : value <= 8 ? 2 : 3);
+  const soundIcon = (value) => `vol${level(value)}`;
 
   views.videos = function videos(route, ctx) {
     const scroller = h("div", { class: "reels", tabindex: "0", "aria-label": "Videos" });
-    const speaker = h("button", { class: "icon-btn round reels-btn", type: "button", "aria-label": "Ton einschalten", "aria-pressed": "false" }, icon("mute"));
-    const upload = h("button", { class: "icon-btn round reels-btn", type: "button", "aria-label": "Video hochladen", onclick: () => Y.compose({ video: true }) }, icon("plus"));
+    const upload = h("button", { class: "icon-btn round reels-btn", type: "button", "aria-label": "Video hochladen", onclick: () => Y.newPost({ anchor: upload, only: "video" }) }, icon("plus"));
     let scope = "foryou";                                       // "foryou" or "following"
     const scopes = h("div", { class: "reels-scope", role: "tablist", "aria-label": "Videos" });
-    const top = h("div", { class: "reels-top" }, h("h1", { class: "sr-only" }, "Videos"), scopes, h("div", { class: "reels-tools" }, speaker, upload));
+    const top = h("div", { class: "reels-top" }, h("h1", { class: "sr-only" }, "Videos"), scopes, h("div", { class: "reels-tools" }, upload));
     const status = h("div", { class: "reels-status" });
     const el = h("div", { class: "view reels-view" }, top, scroller, status);
     const reels = [];
-    let next = null;
+    let offset = shuffle.at;                                    // where the next page starts in the shuffle
+    let seed = shuffle.seed;
     let loading = false;
-    let finished = false;
+    let ended = false;                                          // the shuffle has been read to its end (the next page shuffles again)
     let dead = false;
     let active = null;
     let watching = null;
+    let blocked = false;                                        // the browser does not allow sound before the person touches the page
 
-    const drawSpeaker = () => {
-      fill(speaker, icon(sound ? "volume" : "mute"));
-      speaker.setAttribute("aria-label", sound ? "Ton ausschalten" : "Ton einschalten");
-      speaker.setAttribute("aria-pressed", String(sound));
-      for (const reel of reels) reel.video.muted = !sound;
+    /* ------------------------------------------------------------------ sound */
+    const heard = () => (blocked ? 0 : volume);
+    function applySound(reel) {
+      reel.video.volume = Math.min(1, Math.max(0, volume / 10));
+      reel.video.muted = blocked || volume === 0;
+      const shown = heard();
+      fill(reel.volumeIcon, icon(soundIcon(shown)));
+      reel.volumeButton.setAttribute("aria-label", shown === 0 ? "Ton einschalten" : "Ton ausschalten");
+      reel.range.value = String(volume);
+      reel.range.style.setProperty("--fill", `${volume * 10}%`);
+      reel.range.setAttribute("aria-valuetext", `Lautstärke ${volume} von 10`);
+    }
+    const applyAll = () => { for (const reel of reels) applySound(reel); };
+    function setVolume(value) {
+      volume = Math.min(10, Math.max(0, Math.round(value)));
+      if (volume > 0) lastLoud = volume;
+      applyAll();
+    }
+    const unlock = () => {
+      if (!blocked) return;
+      blocked = false;
+      applyAll();
     };
-    speaker.addEventListener("click", () => { sound = !sound; drawSpeaker(); });
+    for (const type of ["pointerdown", "keydown", "touchstart"]) document.addEventListener(type, unlock, { passive: true });
 
     function play(reel) {
-      reel.video.muted = !sound;
+      applySound(reel);
+      reel.stage.classList.remove("stuck");
       const attempt = reel.video.play();
-      if (attempt && attempt.catch) attempt.catch(() => { reel.video.muted = true; reel.video.play().catch(() => reel.stage.classList.add("paused")); });
+      if (attempt && attempt.catch) attempt.catch(() => {
+        blocked = true;                                         // no sound yet: it starts muted and gets its sound with the first touch
+        applyAll();
+        reel.video.play().catch(() => reel.stage.classList.add("stuck"));
+      });
+    }
+
+    /* ------------------------------------------------------------------ loading */
+    const fetchFile = (reel) => { if (!reel.video.getAttribute("src")) { reel.video.preload = "auto"; reel.video.src = reel.url; } };
+    function letGo(reel) {                                      // far from the screen: no file, no memory
+      if (!reel.video.getAttribute("src")) return;
+      reel.video.pause();
+      reel.video.removeAttribute("src");
+      reel.video.load();
+    }
+    function manage() {
+      const at = reels.indexOf(active);
+      if (at < 0) return;
+      reels.forEach((reel, index) => {
+        if (index >= at - 1 && index <= at + KEEP) fetchFile(reel);
+        else if (Math.abs(index - at) > KEEP + 1) letGo(reel);
+      });
     }
 
     function setActive(reel) {
@@ -61,12 +103,22 @@
       active = reel;
       clearTimeout(watching);
       if (!reel) return;
+      const index = reels.indexOf(reel);
+      shuffle.at = Math.max(0, reel.position);
+      fetchFile(reel);
       reel.video.currentTime = 0;
       play(reel);
-      const index = reels.indexOf(reel);
-      for (const near of [reels[index + 1], reels[index + 2]]) if (near && !near.video.getAttribute("src")) near.video.src = near.url;       // the next ones are fetched in advance
+      manage();
       watching = setTimeout(() => Y.queueView?.(reel.item.id), 1500);
-      if (!finished && index >= reels.length - 3) more();
+      if (index >= reels.length - 3) more();
+      if (reels.length > MAX_REELS && index > MAX_REELS / 2) trim();
+    }
+
+    function trim() {                                           // the first ones leave, the scroll position is moved by exactly their height
+      const drop = reels.splice(0, 10);
+      const height = scroller.clientHeight;
+      for (const made of drop) { watcher?.unobserve(made.element); made.video.pause(); made.video.removeAttribute("src"); made.video.load(); made.element.remove(); }
+      scroller.scrollTop -= height * drop.length;
     }
 
     const watcher = "IntersectionObserver" in window ? new IntersectionObserver((entries) => {
@@ -78,10 +130,11 @@
       }
     }, { root: scroller, threshold: [0, 0.6, 1] }) : null;
 
-    function reel(item) {
+    /* ------------------------------------------------------------------ one video */
+    function reel(item, position) {
       const media = item.media.find((entry) => entry.video) || item.media[0];
       const state = { liked: !!item.viewer.liked, bookmarked: !!item.viewer.bookmarked, likes: item.counts.likes, replies: item.counts.replies };
-      const video = h("video", { class: "reel-video", loop: true, muted: true, playsinline: true, preload: "metadata", "aria-label": item.text || `Video von ${item.user.name}` });
+      const video = h("video", { class: "reel-video", loop: true, muted: true, playsinline: true, preload: "none", "aria-label": item.text || `Video von ${item.user.name}` });
       if (media.width > media.height) video.classList.add("wide");
       const stage = h("div", { class: "reel-stage" });
       const likeCount = h("span", { class: "reel-count" });
@@ -89,7 +142,7 @@
       const like = h("button", { class: "reel-btn", type: "button", "aria-label": "Gefällt mir" }, h("span", { class: "reel-btn-ic" }), likeCount);
       const comment = h("button", { class: "reel-btn", type: "button", "aria-label": "Kommentare" }, h("span", { class: "reel-btn-ic" }, icon("reply")), commentCount);
       const save = h("button", { class: "reel-btn", type: "button", "aria-label": "Lesezeichen" }, h("span", { class: "reel-btn-ic" }), h("span", { class: "reel-count" }, "Merken"));
-      const share = h("button", { class: "reel-btn", type: "button", "aria-label": "Teilen", "aria-haspopup": "menu" }, h("span", { class: "reel-btn-ic" }, icon("share")), h("span", { class: "reel-count" }, "Teilen"));
+      const share = h("button", { class: "reel-btn", type: "button", "aria-label": "Teilen", "aria-haspopup": "menu" }, h("span", { class: "reel-btn-ic" }, icon("send")), h("span", { class: "reel-count" }, "Teilen"));
       const more = h("button", { class: "reel-btn", type: "button", "aria-label": "Mehr", "aria-haspopup": "menu" }, h("span", { class: "reel-btn-ic" }, icon("more")));
       const mine = !!(Y.me && Y.me.handle === item.user.handle);
       const follow = !mine && !item.user.followedByMe ? h("button", { class: "reel-follow", type: "button", "aria-label": `@${item.user.handle} folgen` }, icon("plus")) : null;
@@ -103,17 +156,20 @@
         fill(save.firstChild, icon(state.bookmarked ? "bookmarkFill" : "bookmark"));
         save.classList.toggle("on", state.bookmarked);
       }
-      like.addEventListener("click", async () => {
+      async function toggleLike(x, y) {
         if (!Y.requireLogin("Melde dich an, um mitzumachen.")) return;
         const wanted = !state.liked;
+        if (wanted) { const box = like.getBoundingClientRect(); Y.likeBurst(x ?? box.left + box.width / 2, y ?? box.top + box.height / 2, { size: x === undefined ? 56 : 120 }); Y.sound.play("like"); } else Y.sound.play("unlike");
         state.liked = wanted;
         state.likes = Math.max(0, state.likes + (wanted ? 1 : -1));
         draw();
         const reply = wanted ? await Api.post(`/posts/${item.id}/like`) : await Api.del(`/posts/${item.id}/like`);
         if (!reply.ok) { state.liked = !wanted; state.likes = Math.max(0, state.likes + (wanted ? -1 : 1)); draw(); toast(Api.message(reply)); }
         else if (reply.data.counts) { state.likes = reply.data.counts.likes; draw(); }
-      });
-      comment.addEventListener("click", () => commentsSheet(item, (n) => { state.replies += n; draw(); }));
+      }
+      like.addEventListener("click", () => toggleLike());
+      Y.onDoubleTap(stage, (x, y) => { if (state.liked) { Y.likeBurst(x, y, { size: 120 }); Y.sound.play("like"); } else toggleLike(x, y); }, { ignore: "button, a, input, .reel-volume, .menu" });
+      comment.addEventListener("click", () => Y.commentsSheet(item, (n) => { state.replies = Math.max(0, state.replies + n); draw(); }));
       save.addEventListener("click", async () => {
         if (!Y.requireLogin("Melde dich an, um Lesezeichen zu setzen.")) return;
         const wanted = !state.bookmarked;
@@ -122,11 +178,7 @@
         const reply = wanted ? await Api.post(`/posts/${item.id}/bookmark`) : await Api.del(`/posts/${item.id}/bookmark`);
         if (!reply.ok) { state.bookmarked = !wanted; draw(); toast(Api.message(reply)); } else toast(wanted ? "Zu deinen Lesezeichen hinzugefügt" : "Aus den Lesezeichen entfernt");
       });
-      share.addEventListener("click", () => menu(share, [
-        { label: "Link kopieren", icon: "link", run: () => Y.copyLink(Y.postPath(item)) },
-        { label: "Per Nachricht senden", icon: "mail", run: () => Y.sendPostDialog(item) },
-        navigator.share ? { label: "Teilen …", icon: "share", run: async () => { try { await navigator.share({ url: `${location.origin}${Y.postPath(item)}`, title: `${item.user.name} auf Pulse` }); } catch (error) { /* closed */ } } } : null,
-      ]));
+      share.addEventListener("click", () => menu(share, Y.shareItems(item)));
       more.addEventListener("click", () => menu(more, [
         { label: "Beitrag öffnen", icon: "reply", run: () => Y.navigate(Y.postPath(item)) },
         !mine ? { label: "Beitrag melden", icon: "flag", danger: true, run: () => Y.reportDialog({ postId: item.id }) } : null,
@@ -148,78 +200,89 @@
         toast(`Du folgst jetzt @${item.user.handle}.`);
       });
 
-      const playIcon = h("span", { class: "reel-pause", "aria-hidden": "true" }, icon("playCircle"));
-      const tap = h("button", { class: "reel-tap", type: "button", "aria-label": "Abspielen oder anhalten", onclick: () => {
-        if (video.paused) { play(reels.find((entry) => entry.video === video)); stage.classList.remove("paused"); } else { video.pause(); stage.classList.add("paused"); }
-      } });
-      video.addEventListener("pause", () => { if (active && active.video === video) stage.classList.add("paused"); });
-      video.addEventListener("play", () => stage.classList.remove("paused"));
+      /* the see-through row in the video: a picture of the sound and a slider, no numbers */
+      const volumeIcon = h("span", { class: "reel-vol-ic" });
+      const volumeButton = h("button", { class: "reel-vol-btn", type: "button", "aria-label": "Ton ausschalten", onclick: () => { blocked = false; setVolume(volume === 0 ? lastLoud : 0); } }, volumeIcon);
+      const range = h("input", { class: "reel-range", type: "range", min: "0", max: "10", step: "1", value: String(volume), "aria-label": "Lautstärke" });
+      range.addEventListener("input", () => { blocked = false; setVolume(Number(range.value)); });
+      const volumeRow = h("div", { class: "reel-volume" }, volumeButton, range);
+
+      const resume = h("button", { class: "reel-resume", type: "button", "aria-label": "Video abspielen", onclick: () => { const made = reels.find((entry) => entry.video === video); if (made) play(made); } }, icon("playCircle"));
       const bar = h("span", { class: "reel-bar" }, h("span", { class: "reel-bar-fill" }));
       video.addEventListener("timeupdate", () => { if (video.duration) bar.firstChild.style.width = `${(video.currentTime / video.duration) * 100}%`; });
+      const [title, ...rest] = String(item.text || "").split("\n");
+      const caption = rest.join("\n").trim();
       const info = h("div", { class: "reel-info" },
         link(`/${item.user.handle}`, { class: "reel-user" }, h("b", {}, `@${item.user.handle}`), h("span", { class: "dot" }, "·"), timeEl(item.createdAt)),
-        item.text ? h("p", { class: "reel-text" }, richText(item.text)) : null);
+        title ? h("p", { class: "reel-title" }, richText(title)) : null,
+        caption ? h("p", { class: "reel-text" }, richText(caption)) : null);
       const actions = h("div", { class: "reel-actions" },
-        h("span", { class: "reel-person" }, link(`/${item.user.handle}`, { class: "reel-av", "aria-label": `Profil von ${item.user.name}` }, avatar(item.user, "md")), follow),
+        h("span", { class: "reel-person" }, link(`/${item.user.handle}`, { class: "reel-av", "aria-label": `Profil von ${item.user.name}` }, avatar(item.user, "lg")), follow),
         like, comment, save, share, more);
-      put(stage, video, tap, playIcon, bar, info);
+      put(stage, video, volumeRow, resume, bar, info);
       const element = h("section", { class: "reel", "data-id": String(item.id), "aria-label": `Video von ${item.user.name}` }, stage, actions);
       draw();
-      return { element, video, stage, item, url: media.url, draw };
+      return { element, video, stage, item, url: media.url, draw, position, volumeIcon, volumeButton, range };
     }
 
     function showEmpty() {
       fill(status, h("div", { class: "reels-empty" }, h("span", { class: "chat-empty-ic" }, icon("playCircle")), h("h2", {}, scope === "following" ? "Noch nichts von deinen Leuten" : "Noch keine Videos"),
-        h("p", {}, scope === "following" ? "Hier erscheinen die Videos von Leuten, denen du folgst." : "Videos, die jemand in einem Beitrag hochlädt, erscheinen hier."), h("button", { class: "btn primary", type: "button", onclick: () => Y.compose({ video: true }) }, "Erstes Video hochladen")));
+        h("p", {}, scope === "following" ? "Hier erscheinen die Videos von Leuten, denen du folgst." : "Videos, die jemand hochlädt, erscheinen hier."), h("button", { class: "btn primary", type: "button", onclick: () => Y.newPost({ only: "video" }) }, "Erstes Video hochladen")));
     }
 
     async function more() {
-      if (loading || finished || dead) return;
+      if (loading || dead) return;
       loading = true;
-      const reply = await Api.get(qs("/timeline", { feed: "videos", scope: scope === "following" ? "following" : "", cursor: next }));
+      const wrapped = ended;
+      if (ended) { seed = shuffle.seed = 1 + Math.floor(Math.random() * 999999); offset = shuffle.at = 0; ended = false; }
+      const reply = await Api.get(qs("/timeline", { feed: "videos", order: "random", seed, offset, limit: PAGE, scope: scope === "following" ? "following" : "" }));
       loading = false;
       if (dead) return;
-      if (!reply.ok) { if (!reels.length) fill(status, h("div", { class: "reels-empty" }, h("h2", {}, "Das hat nicht geklappt"), h("p", {}, Api.message(reply)), h("button", { class: "btn primary", type: "button", onclick: () => { fill(status); more(); } }, "Noch einmal versuchen"))); return; }
+      if (!reply.ok) {
+        if (wrapped) ended = true;
+        if (!reels.length) fill(status, h("div", { class: "reels-empty" }, h("h2", {}, "Das hat nicht geklappt"), h("p", {}, Api.message(reply)), h("button", { class: "btn primary", type: "button", onclick: () => { fill(status); more(); } }, "Noch einmal versuchen")));
+        return;
+      }
       fill(status);
-      for (const item of reply.data.items) {
-        if (!item.media || !item.media.some((entry) => entry.video)) continue;
-        const made = reel(item);
+      const first = offset;
+      reply.data.items.forEach((item, index) => {
+        if (!item.media || !item.media.some((entry) => entry.video)) return;
+        const made = reel(item, first + index);
+        applySound(made);
         reels.push(made);
         scroller.append(made.element);
         watcher?.observe(made.element);
-        if (reels.length <= 2) made.video.src = made.url;                // the first two are fetched at once
-      }
-      next = reply.data.next;
-      finished = !next;
+      });
+      if (reply.data.next) offset = reply.data.next; else ended = true;
       if (!reels.length) showEmpty();
-      drawSpeaker();
+      if (!active && reels.length) fetchFile(reels[0]);
+      manage();
     }
 
     scroller.addEventListener("keydown", (event) => {
       const at = reels.indexOf(active);
       if (event.key === "ArrowDown" || event.key === "PageDown") { event.preventDefault(); reels[Math.min(reels.length - 1, at + 1)]?.element.scrollIntoView({ behavior: "smooth" }); }
       else if (event.key === "ArrowUp" || event.key === "PageUp") { event.preventDefault(); reels[Math.max(0, at - 1)]?.element.scrollIntoView({ behavior: "smooth" }); }
-      else if (event.key === "m") { sound = !sound; drawSpeaker(); }
-      else if (event.key === " " && active) { event.preventDefault(); active.stage.querySelector(".reel-tap").click(); }
+      else if (event.key === "m") { blocked = false; setVolume(volume === 0 ? lastLoud : 0); }
     });
 
     function reset() {
       for (const made of reels.splice(0)) { watcher?.unobserve(made.element); made.video.pause(); made.video.removeAttribute("src"); made.video.load(); made.element.remove(); }
       active = null;
-      next = null;
-      finished = false;
+      seed = shuffle.seed = 1 + Math.floor(Math.random() * 999999);
+      offset = shuffle.at = 0;
+      ended = false;
       loading = false;
       scroller.scrollTop = 0;
-      fill(status, h("div", { class: "reels-wait" }, h("span", { class: "spinner" })));
+      fill(status, h("div", { class: "reels-wait" }, Y.pulseLoader()));
       more();
     }
     function drawScopes() {
       fill(scopes, ...[["foryou", "Für dich"], ["following", "Folge ich"]].map(([id, label]) => h("button", { class: `reels-scope-btn${id === scope ? " on" : ""}`, type: "button", role: "tab", "aria-selected": String(id === scope), onclick: () => { if (id === scope) return; scope = id; drawScopes(); reset(); } }, label)));
     }
     drawScopes();
-    put(status, h("div", { class: "reels-wait" }, h("span", { class: "spinner" })));
+    put(status, h("div", { class: "reels-wait" }, Y.pulseLoader()));
     more();
-    drawSpeaker();
     return {
       element: el, title: "Videos",
       onShow() { if (active) play(active); scroller.focus({ preventScroll: true }); },
@@ -227,16 +290,22 @@
       onPosted(post) {                                          // a video that was just posted is the first one
         if (!post.media || !post.media.some((entry) => entry.video)) return;
         fill(status);
-        const made = reel(post);
+        const made = reel(post, 0);
+        applySound(made);
         reels.unshift(made);
         scroller.prepend(made.element);
         watcher?.observe(made.element);
-        made.video.src = made.url;
+        fetchFile(made);
         scroller.scrollTop = 0;
-        drawSpeaker();
       },
       refresh() { reset(); },
-      destroy() { dead = true; clearTimeout(watching); watcher?.disconnect(); for (const made of reels) { made.video.pause(); made.video.removeAttribute("src"); made.video.load(); } },
+      destroy() {
+        dead = true;
+        clearTimeout(watching);
+        watcher?.disconnect();
+        for (const type of ["pointerdown", "keydown", "touchstart"]) document.removeEventListener(type, unlock);
+        for (const made of reels) { made.video.pause(); made.video.removeAttribute("src"); made.video.load(); }
+      },
     };
   };
 })();

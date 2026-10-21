@@ -24,6 +24,14 @@
     no_video: "In ein GIF der Bibliothek gehört kein Video.",
     bad_video: "Dieses Video kann nicht abgespielt werden. Pulse nimmt MP4-, MOV- und WebM-Videos.",
     video_too_big: "Das Video ist zu groß (höchstens 25 MB).",
+    video_too_long: "Das Video ist zu lang (höchstens 30 Sekunden).",
+    bad_attachment: "Diese Datei kann nicht gesendet werden (Foto, Video, PDF, Text oder Office-Dokument).",
+    attachment_too_big: "Die Datei ist zu groß (höchstens 15 MB, Fotos 8 MB, Videos 25 MB).",
+    doc_empty: "In diesem Dokument steht kein Text, den Nex lesen kann.",
+    doc_too_big: "Das Dokument ist zu groß.",
+    doc_encrypted: "Das PDF ist geschützt, Nex kann es nicht öffnen.",
+    doc_no_pdf_reader: "PDFs kann Nex gerade nicht lesen.",
+    doc_bad: "Dieses Dokument kann Nex nicht lesen (PDF, Text, Word, Excel, PowerPoint oder OpenDocument).",
     video_alone: "Ein Video steht allein: ohne Fotos oder GIFs im selben Beitrag.",
     video_top: "Ein Video gehört in einen eigenen Beitrag, nicht in eine Antwort oder ein Zitat.",
     gif_alone: "Ein GIF steht allein: entweder ein GIF, ein Video oder bis zu 3 Fotos.",
@@ -38,6 +46,12 @@
     handle_taken: "Diesen Nutzernamen gibt es schon.",
     bad_password: "Das Passwort braucht mindestens 8 Zeichen.",
     need_age: "Du musst bestätigen, dass du mindestens 16 Jahre alt bist (oder die Erlaubnis deiner Eltern hast).",
+    bad_birthday: "Dieses Datum gibt es nicht. Prüfe Tag, Monat und Jahr.",
+    too_young: "Pulse ist erst ab 13 Jahren. Komm gern später wieder.",
+    need_parents: "Unter 16 geht Pulse nur mit der Erlaubnis deiner Eltern.",
+    bad_phone: "Das sieht nicht wie eine Telefonnummer aus. Schreib sie mit Vorwahl, zum Beispiel 151 12345678.",
+    phone_taken: "Mit dieser Telefonnummer gibt es schon ein Konto.",
+    google_expired: "Die Anmeldung mit Google ist abgelaufen. Tippe noch einmal auf „Mit Google“.",
     bad_email: "Das sieht nicht wie eine E-Mail-Adresse aus.",
     email_taken: "Mit dieser E-Mail gibt es schon ein Konto.",
     wrong_login: "Nutzername oder Passwort stimmt nicht.",
@@ -75,17 +89,51 @@
     }
   }
 
+  /* The same call as `call("POST", ...)` with a form, made with XMLHttpRequest because only that reports how far the upload has come. */
+  function sendWithProgress(path, form, onProgress) {
+    return new Promise((resolve) => {
+      const request = new XMLHttpRequest();
+      request.open("POST", `/api/yipi${path}`);
+      request.withCredentials = true;
+      request.setRequestHeader("Accept", "application/json");
+      request.upload.addEventListener("progress", (event) => { if (event.lengthComputable && event.total) onProgress(event.loaded / event.total); });
+      request.addEventListener("load", () => {
+        let data = {};
+        try { data = JSON.parse(request.responseText); } catch (error) { data = {}; }
+        resolve({ ok: request.status >= 200 && request.status < 300 && data.ok === true, status: request.status, data });
+      });
+      request.addEventListener("error", () => resolve({ ok: false, status: 0, offline: true, data: { error: "network" } }));
+      request.addEventListener("abort", () => resolve({ ok: false, status: 0, offline: true, data: { error: "network" } }));
+      request.send(form);
+    });
+  }
+
   window.YipiApi = {
     get: (path) => call("GET", path),
     post: (path, body) => call("POST", path, body === undefined ? {} : body),
     patch: (path, body) => call("PATCH", path, body),
     del: (path) => call("DELETE", path),
-    /* A picture upload: `file` is a File or Blob, `fields` more form fields (alt text). */
-    upload(file, fields = {}) {
+    /* A picture or video upload: `file` is a File or Blob, `fields` more form fields (alt text), `onProgress(fraction)` is called while the bytes go
+       out (a video can take a while). */
+    upload(file, fields = {}, onProgress = null) {
       const form = new FormData();
       form.append("file", file, file.name || "bild");
       for (const [key, value] of Object.entries(fields)) form.append(key, value);
-      return call("POST", "/media", undefined, form);
+      if (!onProgress || typeof XMLHttpRequest === "undefined") return call("POST", "/media", undefined, form);
+      return sendWithProgress("/media", form, onProgress);
+    },
+    /* A document for Nex to read: answers {ok, data: {name, text, cut}} (nothing is stored). */
+    readDocument(file) {
+      const form = new FormData();
+      form.append("file", file, file.name || "dokument");
+      return call("POST", "/nex/read", undefined, form);
+    },
+    /* Any other private file (a document, a photo or video in a chat): same as upload, answers {ok, data: {media}}. */
+    attach(file, onProgress = null) {
+      const form = new FormData();
+      form.append("file", file, file.name || "datei");
+      if (!onProgress || typeof XMLHttpRequest === "undefined") return call("POST", "/attachments", undefined, form);
+      return sendWithProgress("/attachments", form, onProgress);
     },
     /* A GIF for the library: `file` is a Blob of type image/gif, `fields` more form fields (the title). */
     uploadGif(file, fields = {}) {

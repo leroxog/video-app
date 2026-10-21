@@ -129,7 +129,7 @@ test("every address of the page is read and built the same way", () => {
     ["/", "", { name: "home" }], ["/yipi-archiv", "", { name: "notfound" }], ["/i/nex", "", { name: "nex", q: "", post: 0 }], ["/i/nex", "?post=42", { name: "nex", q: "", post: 42 }],
     ["/i/nex", "?q=Hallo%20Nex", { name: "nex", q: "Hallo Nex", post: 0 }], ["/explore", "", { name: "explore", tab: "" }], ["/explore", "?tab=trends", { name: "explore", tab: "trends" }], ["/explore", "?tab=media", { name: "explore", tab: "media" }], ["/explore", "?tab=nonsense", { name: "explore", tab: "" }], ["/notifications", "", { name: "notifications" }], ["/messages", "", { name: "messages" }],
     ["/messages/mia", "", { name: "thread", handle: "mia" }], ["/bookmarks", "", { name: "bookmarks" }], ["/settings", "", { name: "settings", section: "" }],
-    ["/settings/account", "", { name: "settings", section: "account" }], ["/moderation", "", { name: "moderation" }], ["/games", "", { name: "games" }], ["/games/fruit-merge", "", { name: "game", slug: "fruit-merge" }], ["/games/Fruit", "", { name: "notfound" }], ["/games/a/b", "", { name: "notfound" }], ["/videos", "", { name: "videos" }], ["/g/12", "", { name: "group", id: 12 }], ["/i/login", "", { name: "login" }], ["/i/signup", "", { name: "signup" }],
+    ["/settings/account", "", { name: "settings", section: "account" }], ["/moderation", "", { name: "moderation" }], ["/camera", "", { name: "camera" }], ["/camera/dino", "", { name: "camera", game: "dino" }], ["/games", "", { name: "camera" }], ["/games/fruit-merge", "", { name: "camera", game: "fruit-merge" }], ["/camera/Dino", "", { name: "notfound" }], ["/games/a/b", "", { name: "notfound" }], ["/videos", "", { name: "videos" }], ["/g/12", "", { name: "group", id: 12 }], ["/i/login", "", { name: "login" }], ["/i/signup", "", { name: "signup", google: false }], ["/i/signup", "?google=1", { name: "signup", google: true }],
     ["/search", "?q=hallo%20welt", { name: "search", q: "hallo welt", type: "posts", sort: "top" }], ["/search", "?q=%23tag&type=people", { name: "search", q: "#tag", type: "people", sort: "top" }],
     ["/search", "?q=katze&sort=new", { name: "search", q: "katze", type: "posts", sort: "new" }], ["/search", "?q=katze&type=media", { name: "search", q: "katze", type: "media", sort: "top" }],
     ["/search", "?q=katze&type=media&sort=new", { name: "search", q: "katze", type: "media", sort: "new" }],
@@ -352,3 +352,57 @@ test("a conversation is added or replaced at the front and removed again", () =>
   assert.equal(core.nexRemove(store, "nope").chats.length, 2);
 });
 
+
+// ------------------------------------------------------------------------------------- the watermark of a saved video
+test("the watermark sits top left, slides over in the middle and then sits bottom right", () => {
+  const first = core.watermarkPlan(720, 1280, 0);
+  const early = core.watermarkPlan(720, 1280, 0.4);
+  const late = core.watermarkPlan(720, 1280, 0.7);
+  const last = core.watermarkPlan(720, 1280, 1);
+  assert.deepEqual(first, early, "nothing moves in the first half");
+  assert.deepEqual(late, last, "and nothing in the end");
+  assert.ok(first.x < 60 && first.y < 160, "top left");
+  assert.ok(last.x + last.w > 720 * 0.9 && last.x + last.w < 720, "bottom right, inside the picture");
+  assert.ok(last.y + last.h < 1280 && last.y > 1280 / 2);
+  const middle = core.watermarkPlan(720, 1280, 0.515);
+  assert.ok(middle.x > first.x && middle.x < last.x && middle.y > first.y && middle.y < last.y, "in between it slides");
+  assert.ok(core.watermarkPlan(720, 1280, -3).x === first.x && core.watermarkPlan(720, 1280, 9).x === last.x, "out of range values are held");
+});
+
+test("the watermark has the same size relative to the shorter side, wide or tall", () => {
+  const tall = core.watermarkPlan(540, 960, 0);
+  const wide = core.watermarkPlan(960, 540, 0);
+  assert.equal(tall.w, wide.w);
+  assert.equal(tall.h, wide.h);
+  const bottom = core.watermarkPlan(960, 540, 1);
+  assert.ok(bottom.x >= 0 && bottom.y >= 0 && bottom.x + bottom.w <= 960 && bottom.y + bottom.h <= 540, "stays inside a wide picture");
+});
+
+test("a saved video is called pulse-name with the ending of the recording", () => {
+  assert.equal(core.videoFileName("mia_1", "video/webm;codecs=vp9,opus"), "pulse-mia_1.webm");
+  assert.equal(core.videoFileName("Tom", "video/mp4"), "pulse-Tom.mp4");
+  assert.equal(core.videoFileName("../../x y", ""), "pulse-xy.webm", "nothing but letters, digits and underscores");
+  assert.equal(core.videoFileName("", "video/webm"), "pulse-video.webm");
+  assert.equal(core.videoFileName(null, undefined), "pulse-video.webm");
+});
+
+// ------------------------------------------------------------------------------------------ push key and game of the day
+test("the key for notifications is read from base64url", () => {
+  assert.deepEqual([...core.base64UrlBytes("AQID")], [1, 2, 3]);
+  assert.deepEqual([...core.base64UrlBytes("-_8")], [251, 255], "- and _ stand for + and /, the padding may be missing");
+  assert.equal(core.base64UrlBytes("").length, 0);
+  assert.equal(core.base64UrlBytes(null).length, 0);
+  assert.equal(core.base64UrlBytes("BKPybELo8Zg1LUixApBmQo4jaoY-por94XrIjVRDtvc6gYVDygqGx-Psd1I3r19CC4yizaPiamt0Vjvo8ftfCTQ").length, 65, "a public key of a push server is 65 bytes");
+});
+
+test("the game of the day is the same for a whole day and moves on the next", () => {
+  const count = 100;
+  const a = core.dailyIndex("2026-10-21", count);
+  assert.equal(a, core.dailyIndex("2026-10-21", count));
+  assert.ok(a >= 0 && a < count);
+  const seen = new Set();
+  for (let day = 1; day <= 28; day += 1) seen.add(core.dailyIndex(`2026-11-${String(day).padStart(2, "0")}`, count));
+  assert.ok(seen.size >= 20, `the games change from day to day (${seen.size} different in 28 days)`);
+  assert.equal(core.dailyIndex("2026-10-21", 0), 0);
+  assert.equal(core.dailyIndex("2026-10-21", 1), 0);
+});

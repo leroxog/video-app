@@ -102,6 +102,7 @@
     plus.addEventListener("click", () => menu(plus, [
       { label: "Neue Nachricht", icon: "mail", run: newMessage },
       { label: "Neue Gruppe", icon: "users", run: newGroup },
+      Y.chatLock && Y.chatLock.enabled() ? { label: "Chats sperren", icon: "lock", run: () => { Y.chatLock.lockNow(); Y.rerender(); } } : null,
     ]));
     const search = h("input", { class: "search-input", type: "search", placeholder: "Suchen", "aria-label": "Chats durchsuchen", autocomplete: "off", maxlength: 60 });
     const tabBox = h("div", { class: "chat-tabs" });
@@ -118,7 +119,9 @@
       return link(group ? `/g/${item.group.id}` : `/messages/${item.user.handle}`, { class: `convo${item.unread ? " unread" : ""}${keyOf(item) === active ? " active" : ""}` },
         group ? groupFace() : avatar(item.user, "md"),
         h("div", { class: "convo-main" },
-          h("div", { class: "convo-top" }, h("b", { class: "convo-name" }, group ? item.group.name : item.user.name), h("span", { class: "convo-time" }, Y.timeEl(item.at))),
+          h("div", { class: "convo-top" }, h("b", { class: "convo-name" }, group ? item.group.name : item.user.name),
+            item.streak >= 2 ? h("span", { class: "convo-streak", title: `${item.streak} Tage in Folge`, "aria-label": `${item.streak} Tage in Folge geschrieben` }, icon("flame"), String(item.streak)) : null,
+            h("span", { class: "convo-time" }, Y.timeEl(item.at))),
           h("p", { class: "convo-last" }, preview)),
         item.unread ? h("span", { class: "unread-dot", "aria-label": `${item.unread} ungelesen` }, item.unread > 99 ? "99+" : String(item.unread)) : null);
     }
@@ -201,12 +204,25 @@
   };
   const clock = (iso) => Core.fullTime(iso).split(" · ")[0];
 
+  const formatSize = (bytes) => (bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1).replace(".", ",")} MB`);
+
+  /* A photo, a video or a document inside a bubble. */
+  function fileBubble(file) {
+    if (file.kind === "image") {
+      return h("button", { class: "bubble-img", type: "button", "aria-label": `Foto vergrößern${file.name ? `: ${file.name}` : ""}`, onclick: () => Y.viewer([{ url: file.url, alt: file.name || "Foto" }], 0) },
+        h("img", { src: file.url, alt: file.name || "Foto", width: file.width || undefined, height: file.height || undefined, loading: "lazy", decoding: "async" }));
+    }
+    if (file.kind === "video") return h("video", { class: "bubble-video", src: `${file.url}#t=0.001`, controls: true, playsinline: true, preload: "metadata", "aria-label": file.name || "Video" });
+    return h("a", { class: "bubble-doc", href: file.url, download: file.name, target: "_blank", rel: "noopener", "aria-label": `Dokument herunterladen: ${file.name}` },
+      h("span", { class: "bubble-doc-ic" }, icon("file")), h("span", { class: "bubble-doc-main" }, h("b", {}, file.name), h("small", {}, `${(file.name.split(".").pop() || "").toUpperCase()} · ${formatSize(file.size)}`)), h("span", { class: "bubble-doc-dl" }, icon("download")));
+  }
+
   /* The page of one conversation. kind "dm": a person (route.handle), kind "group": a group chat (route.id). */
   function conversation(route, ctx, kind) {
     const group = kind === "group";
     const base = group ? `/groups/${route.id}` : `/messages/${route.handle}`;
     const sendPath = group ? `${base}/messages` : base;
-    const state = { list: [], next: null, other: null, group: null, dead: false, sending: false };
+    const state = { list: [], next: null, other: null, group: null, dead: false, sending: false, staged: null };
     const side = split();                                                // list and conversation side by side: the conversation scrolls inside its own box
     const pane = side ? chatListPane({ active: group ? `g${route.id}` : `d${route.handle.toLowerCase()}` }) : null;
 
@@ -218,9 +234,11 @@
     const bubbles = h("div", { class: "bubbles", role: "log", "aria-live": "polite", "aria-label": "Nachrichten" });
     const input = h("textarea", { class: "dm-input", rows: 1, maxlength: 1000, placeholder: "Nachricht …", "aria-label": "Nachricht" });
     const sendButton = h("button", { class: "icon-btn send-btn", type: "button", "aria-label": "Senden", disabled: true }, icon("arrowUp"));
-    const gifButton = h("button", { class: "icon-btn tool", type: "button", "aria-label": "GIF senden", "aria-haspopup": "dialog" }, icon("gif"));
+    const plusButton = h("button", { class: "icon-btn tool dm-plus", type: "button", "aria-label": "Anhang hinzufügen", "aria-haspopup": "menu" }, icon("plus"));
+    const picker = h("input", { type: "file", hidden: true, "aria-hidden": "true", tabindex: "-1" });
+    const staged = h("div", { class: "dm-staged", hidden: true });
     const note = h("p", { class: "notice", hidden: true });
-    const composeBar = h("div", { class: "dm-compose", hidden: true }, h("div", { class: "dm-box" }, gifButton, input, sendButton));
+    const composeBar = h("div", { class: "dm-compose", hidden: true }, staged, h("div", { class: "dm-box" }, plusButton, input, sendButton, picker));
     const requestBar = h("div", { class: "request-bar", hidden: true });
     const body = h("div", { class: "thread" }, h("div", { class: "thread-intro" }), older, bubbles);
     const threadEl = h("div", { class: "view thread-view" }, head, body, note, requestBar, composeBar);
@@ -244,19 +262,46 @@
         const seen = !group && index === lastMine && message.read;
         const endOfGroup = seen || !next || !sameSender(next, message) || dayLabel(next.createdAt) !== day || clock(next.createdAt) !== clock(message.createdAt);
         const gif = message.gif && !message.gif.gone ? message.gif : null;
+        const file = message.file && !message.file.gone ? message.file : null;
         const showName = group && !message.mine && (!previous || !sameSender(previous, message));
-        nodes.push(h("div", { class: `bubble ${message.mine ? "mine" : "theirs"}` },
+        nodes.push(h("div", { class: `bubble ${message.mine ? "mine" : "theirs"}${message.hearts ? " loved" : ""}`, "data-id": String(message.id) },
           showName ? h("span", { class: "bubble-name" }, message.sender ? message.sender.name : "Gelöschtes Konto") : null,
           gif ? h("div", { class: "bubble-gif-wrap" },
             h("button", { class: "bubble-gif", type: "button", "aria-label": `GIF vergrößern${gif.title ? `: ${gif.title}` : ""}`, onclick: () => Y.viewer([{ url: gif.url, alt: gif.title || "GIF" }], 0) }, h("img", { src: gif.url, alt: gif.title || "GIF", width: gif.width, height: gif.height, loading: "lazy" })),
             Y.gifStar(gif)) : null,
           message.gif && message.gif.gone ? h("div", { class: "bubble-text gone" }, "Dieses GIF gibt es nicht mehr.") : null,
+          file ? fileBubble(file) : null,
+          message.file && message.file.gone ? h("div", { class: "bubble-text gone" }, "Diese Datei gibt es nicht mehr.") : null,
           message.text ? h("div", { class: "bubble-text" }, richText(message.text)) : null,
+          message.hearts ? h("button", { class: `bubble-hearts${message.hearted ? " on" : ""}`, type: "button", "aria-pressed": String(!!message.hearted), "aria-label": `${message.hearts} ${message.hearts === 1 ? "Herz" : "Herzen"}${message.hearted ? ", von dir" : ""}`, onclick: (event) => toggleHeart(message, event.clientX, event.clientY) },
+            icon("heartFill"), message.hearts > 1 ? h("span", {}, String(message.hearts)) : null) : null,
           endOfGroup ? h("span", { class: "bubble-time" }, seen ? `${clock(message.createdAt)} · Gelesen` : clock(message.createdAt)) : null));
         previous = message;
       });
       fill(bubbles, ...nodes);
     }
+
+    /* A double tap on a message puts a heart on it (another one takes it off again); the heart under the bubble shows how many there are. */
+    async function toggleHeart(message, x, y) {
+      if (!message.id) return;
+      const wanted = !message.hearted;
+      message.hearted = wanted;
+      message.hearts = Math.max(0, (message.hearts || 0) + (wanted ? 1 : -1));
+      if (wanted) { Y.likeBurst(x, y, { size: 90 }); Y.sound?.play("like"); } else Y.sound?.play("unlike");
+      draw();
+      const path = group ? `${base}/messages/${message.id}/heart` : `${base}/${message.id}/heart`;
+      const reply = wanted ? await Api.post(path) : await Api.del(path);
+      if (state.dead) return;
+      if (!reply.ok) { message.hearted = !wanted; message.hearts = Math.max(0, message.hearts + (wanted ? -1 : 1)); draw(); toast(Api.message(reply)); return; }
+      message.hearts = reply.data.hearts;
+      message.hearted = reply.data.hearted;
+      draw();
+    }
+    Y.onDoubleTap(bubbles, (x, y, event) => {
+      const node = event.target.closest(".bubble");
+      const message = node && state.list.find((entry) => String(entry.id) === node.dataset.id);
+      if (message) toggleHeart(message, x, y);
+    }, { ignore: "a, button, input, textarea, select, video, .menu" });
 
     // ---- the header: who or what this is
     function drawHead() {
@@ -396,10 +441,58 @@
     });
 
     function update() {
-      sendButton.disabled = state.sending || !Core.cleanText(input.value);
+      const ready = state.staged && state.staged.id;
+      sendButton.disabled = state.sending || (state.staged && !state.staged.id) || (!Core.cleanText(input.value) && !ready);
+      plusButton.disabled = state.sending;
       input.style.height = "auto";
       input.style.height = `${Math.min(input.scrollHeight, 140)}px`;
     }
+
+    /* ---- the "+" : a photo, a video, a document or a GIF. A file is checked here, sent to the server (private) with a bar that shows how far it has come,
+       and waits above the box until "Senden" puts it into a message. */
+    function drawStaged() {
+      const item = state.staged;
+      staged.hidden = !item;
+      if (!item) { fill(staged); return; }
+      const thumb = item.kind === "image" ? h("img", { class: "dm-staged-thumb", src: item.url, alt: "" })
+        : item.kind === "video" ? h("video", { class: "dm-staged-thumb", src: item.url, muted: true, playsinline: true, preload: "metadata" })
+          : h("span", { class: "dm-staged-thumb doc" }, icon("file"));
+      fill(staged, h("div", { class: `dm-chip${item.problem ? " bad" : ""}` }, thumb,
+        h("span", { class: "dm-chip-main" }, h("b", {}, item.name), h("small", {}, item.problem || (item.id ? `${formatSize(item.size)} · bereit` : `${Math.round(item.progress * 100)} % hochgeladen …`)),
+          item.id || item.problem ? null : h("span", { class: "dm-chip-bar" }, h("span", { class: "dm-chip-fill", style: `width:${Math.round(item.progress * 100)}%` }))),
+        h("button", { class: "icon-btn tiny", type: "button", "aria-label": "Anhang entfernen", onclick: () => { if (item.url) URL.revokeObjectURL(item.url); state.staged = null; drawStaged(); update(); } }, icon("close"))));
+    }
+    async function stage(file, kind) {
+      if (state.staged && state.staged.url) URL.revokeObjectURL(state.staged.url);
+      const item = { name: file.name || (kind === "image" ? "Foto" : kind === "video" ? "Video" : "Datei"), size: file.size, kind, url: "", progress: 0, id: null, problem: "" };
+      state.staged = item;
+      drawStaged();
+      update();
+      try {
+        let blob = file;
+        if (kind === "image" && file.type !== "image/gif") blob = await Y.prepareImage(file);
+        item.size = blob.size;
+        if (kind === "video" && blob.size > Core.MAX_VIDEO_BYTES) throw new Error("video_too_big");
+        item.url = kind === "document" ? "" : URL.createObjectURL(blob);
+        drawStaged();
+        const form = blob === file ? file : new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" });
+        const reply = await Api.attach(form, (fraction) => { if (state.staged === item) { item.progress = fraction; drawStaged(); } });
+        if (state.staged !== item) return;
+        if (!reply.ok) { item.problem = Api.message(reply); item.progress = 0; } else { item.id = reply.data.file.id; item.name = reply.data.file.name || item.name; item.size = reply.data.file.size; }
+      } catch (error) {
+        item.problem = error && error.message === "video_too_big" ? Api.MESSAGES.video_too_big : "Diese Datei konnte nicht gelesen werden.";
+      }
+      if (state.staged === item) { drawStaged(); update(); }
+    }
+    const pick = (accept, kind) => { picker.accept = accept; picker.dataset.kind = kind; picker.click(); };
+    picker.addEventListener("change", () => { const file = picker.files[0]; const kind = picker.dataset.kind; picker.value = ""; if (file) stage(file, kind); });
+    plusButton.addEventListener("click", () => menu(plusButton, [
+      { label: "Foto", icon: "image", run: () => pick("image/jpeg,image/png,image/gif,image/webp", "image") },
+      { label: "Video", icon: "film", run: () => pick("video/mp4,video/quicktime,video/webm,.mp4,.m4v,.mov,.webm", "video") },
+      { label: "Dokument", icon: "file", run: () => pick(".pdf,.txt,.md,.csv,.rtf,.docx,.xlsx,.pptx,.odt,.ods,.odp", "document") },
+      { label: "GIF", icon: "gif", run: () => Y.gifPicker({ onPick: (gif) => deliver({ gifId: gif.id }, false) }) },
+    ]));
+
     async function deliver(payload, clearInput) {
       if (state.sending) return;
       state.sending = true;
@@ -408,6 +501,7 @@
       state.sending = false;
       if (!reply.ok) { toast(Api.message(reply)); update(); return; }
       if (clearInput) input.value = "";
+      if (payload.fileId && state.staged) { if (state.staged.url) URL.revokeObjectURL(state.staged.url); state.staged = null; drawStaged(); }
       state.list.push(reply.data.message);
       draw();
       update();
@@ -421,9 +515,12 @@
     }
     function send() {
       const text = Core.cleanText(input.value);
-      if (text) deliver({ text }, true);
+      if (state.staged && !state.staged.id) return;
+      const payload = {};
+      if (text) payload.text = text;
+      if (state.staged && state.staged.id) payload.fileId = state.staged.id;
+      if (payload.text || payload.fileId) deliver(payload, true);
     }
-    gifButton.addEventListener("click", () => Y.gifPicker({ onPick: (gif) => deliver({ gifId: gif.id }, false) }));
     input.addEventListener("input", update);
     input.addEventListener("keydown", (event) => { if (event.key === "Enter" && !event.shiftKey && matchMedia("(pointer: fine)").matches) { event.preventDefault(); send(); } });
     sendButton.addEventListener("click", send);
@@ -435,6 +532,10 @@
       let changed = false;
       if (!group && reply.data.readUpTo) {
         for (const message of state.list) if (message.mine && !message.read && message.id <= reply.data.readUpTo) { message.read = true; changed = true; }
+      }
+      for (const message of state.list) {
+        const known = reply.data.hearts && reply.data.hearts[String(message.id)];
+        if (known && (known[0] !== message.hearts || known[1] !== !!message.hearted)) { message.hearts = known[0]; message.hearted = known[1]; changed = true; }
       }
       if (reply.data.messages.length) {
         const stick = nearBottom();

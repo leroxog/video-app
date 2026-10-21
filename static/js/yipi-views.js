@@ -134,9 +134,10 @@
     const feedBox = h("div", { class: "feed" });
     const tabBox = h("div", { class: "home-tabs" });
     const compose = signedIn
-      ? h("button", { class: "icon-btn solid", type: "button", "aria-label": "Neuer Beitrag", onclick: () => Y.compose() }, icon("plus"))
+      ? h("button", { class: "icon-btn solid", type: "button", "aria-label": "Neuer Beitrag", onclick: (event) => Y.newPost({ anchor: event.currentTarget }) }, icon("plus"))
       : link("/i/login", { class: "btn primary small" }, "Anmelden");
-    const bar = h("div", { class: "topbar home" }, h("div", { class: "home-head" }, menuButton(), searchForm(""), compose), tabBox);
+    const brand = h("div", { class: "home-brand" }, window.YipiIcons.logo(), Y.pulseLoader({ width: 170, height: 34, label: "Pulse" }), signedIn ? Y.streakChip() : null);       // the heartbeat of the logo, running as long as Home is open
+    const bar = h("div", { class: "topbar home" }, brand, h("div", { class: "home-head" }, menuButton(), searchForm(""), compose), tabBox);
     const el = h("div", { class: "view home-view" }, bar, pill);
 
     function drawTabs() {
@@ -346,6 +347,7 @@
     drawTabs();
     mount();
     const el = h("div", { class: "view" }, topbar({ back: true, title: "Benachrichtigungen", extra: tabBox }), listBox);
+    Y.pushInvite().then((card) => { if (card) listBox.before(card); });
     return { element: el, title: "Benachrichtigungen", refresh() { marked = false; feedPager.reload(); }, destroy() { feedPager.destroy(); } };
   };
 
@@ -559,7 +561,7 @@
       const item = reply.data.post;
       if (item.user && item.user.handle.toLowerCase() !== route.handle.toLowerCase()) { Y.navigate(`/${item.user.handle}/status/${item.id}`, { replace: true }); return; }
       fill(above, ...reply.data.ancestors.map((ancestor) => { const card = Y.postCard(ancestor); card.classList.add("line"); return card; }));
-      detail = Y.postCard(item, { detail: true, onDelete: () => Y.back(Y.HOME), onReply: (post) => { replies.prepend(Y.postCard(post, { noReplyLine: true })); } });
+      detail = Y.postCard(item, { detail: true, onDelete: () => Y.back(Y.HOME), onReply: (post) => { replies.prepend(post); } });
       fill(main, detail);
       if (item.user) {
         result.title = `${item.user.name} auf Pulse: „${snippet(item.text || (item.media && item.media[0] && item.media[0].gif ? "GIF" : "Beitrag mit Bild"), 60)}“`;
@@ -568,7 +570,7 @@
       if (!item.deleted) {
         if (Y.me) {
           fill(replyBox, Y.composer({ replyTo: item, compact: true, placeholder: "Schreibe deine Antwort", label: "Antworten", onPosted: (post) => {
-            replies.prepend(Y.postCard(post, { noReplyLine: true }));
+            replies.prepend(post);
             detail.bumpReplies();
             toast("Deine Antwort wurde gesendet.");
           } }));
@@ -576,7 +578,7 @@
           fill(replyBox, h("div", { class: "reply-login" }, h("p", {}, "Melde dich an, um zu antworten."), link("/i/login", { class: "btn primary" }, "Anmelden")));
         }
       }
-      replies = pager({ load: listLoader((cursor) => qs(`/posts/${route.id}/replies`, { cursor })), render: (post) => Y.postCard(post, { noReplyLine: true }), empty: item.deleted ? null : h("p", { class: "muted pad" }, "Noch keine Antworten.") });
+      replies = Y.commentList(item, { empty: item.deleted ? "" : "Noch keine Antworten.", onCount: (n) => detail.bumpReplies(n) });
       fill(repliesBox, replies.element);
       requestAnimationFrame(() => {
         const bar = el.querySelector(".topbar");

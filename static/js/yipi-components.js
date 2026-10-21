@@ -23,11 +23,11 @@
   const absolute = (path) => `${location.origin}${path}`;
 
   // ------------------------------------------------------------------------------------ small pieces
-  /* A button of the little pill on the edge of a post card (like, reply, share). `draw(active, count, text)` fills in icon and number. */
+  /* A button of the grey row under a post (comments, reposts, likes). `draw(active, count, text)` fills in icon and number. */
   function pillButton({ kind, label, off, on }) {
     const iconBox = h("span", { class: "pill-ic" });
     const number = h("span", { class: "pill-count" });
-    const button = h("button", { class: `pill-btn ${kind}`, type: "button", "aria-label": label }, iconBox, number);
+    const button = h("button", { class: `act-btn ${kind}`, type: "button", "aria-label": label }, iconBox, number);
     button.draw = (active, count, text) => {
       button.classList.toggle("on", !!active);
       if (on) button.setAttribute("aria-pressed", String(!!active));
@@ -36,6 +36,25 @@
       button.setAttribute("aria-label", `${text || label}${count ? `, ${count}` : ""}`);
     };
     return button;
+  }
+
+  /* What goes with a link when somebody sends a post or a video: the page does not say "look at this", it says it like a person would. */
+  function shareText(item) {
+    const video = !!(item && item.media && item.media.some((entry) => entry.video));
+    return video ? "Ich habe ein tolles Video auf Pulse gefunden willst du es auch sehen?!" : "Ich habe einen tollen Beitrag auf Pulse gefunden willst du ihn auch sehen?!";
+  }
+
+  /* The entries of the menus that share a post: copy the link, send it to somebody in a message, the share sheet of the phone. */
+  function shareItems(item) {
+    const video = !!(item && item.media && item.media.some((entry) => entry.video));
+    return [
+      video && Y.downloadVideo ? { label: "Video speichern", icon: "download", run: () => Y.downloadVideo(item) } : null,
+      { label: "Link kopieren", icon: "link", run: () => copyLink(postPath(item)) },
+      { label: "Per Nachricht senden", icon: "mail", run: () => sendPostDialog(item) },
+      navigator.share ? { label: "Teilen …", icon: "share", run: async () => {
+        try { await navigator.share({ url: absolute(postPath(item)), title: `${item.user.name} auf Pulse`, text: shareText(item) }); } catch (error) { /* closed */ }
+      } } : null,
+    ];
   }
 
   async function copyLink(path) {
@@ -275,7 +294,8 @@
   function sendPostDialog(item) {
     if (!Y.requireLogin("Melde dich an, um Beiträge zu senden.")) return;
     const address = absolute(postPath(item));
-    const note = h("textarea", { class: "field-area", rows: 2, maxlength: 300, placeholder: "Nachricht hinzufügen (freiwillig)", "aria-label": "Nachricht dazu" });
+    const note = h("textarea", { class: "field-area", rows: 3, maxlength: 300, placeholder: "Nachricht hinzufügen (freiwillig)", "aria-label": "Nachricht dazu" });
+    note.value = shareText(item);
     const search = h("input", { class: "field", type: "search", placeholder: "Nach Namen oder @Nutzernamen suchen", "aria-label": "Person suchen", autocomplete: "off", maxlength: 50 });
     const results = h("div", { class: "pick-list" }, Y.skeleton(1));
     let entry = null;
@@ -293,7 +313,7 @@
     function show(users, empty) { fill(results, ...(users.length ? users.map(row) : [h("p", { class: "muted" }, empty)])); }
 
     (async () => {
-      const reply = await Api.get("/messages");
+      const reply = Y.chatLock && Y.chatLock.locked() ? { ok: false } : await Api.get("/messages");     // (with the chat lock on, the list of chats stays shut)
       if (token) return;
       show(reply.ok ? reply.data.items.map((entry) => entry.user) : [], "Suche eine Person, um ihr den Beitrag zu schicken.");
     })();
@@ -333,17 +353,19 @@
     const state = { viewer: { ...item.viewer }, counts: { ...item.counts } };
 
     const likeButton = pillButton({ kind: "like", label: "Gefällt mir", off: "heart", on: "heartFill" });
-    const replyButton = pillButton({ kind: "reply", label: "Antworten", off: "reply" });
-    const shareButton = pillButton({ kind: "share", label: "Teilen", off: "share", on: "repost" });
-    shareButton.setAttribute("aria-haspopup", "menu");
-    const moreButton = h("button", { class: "more icon-btn small", type: "button", "aria-label": "Mehr", "aria-haspopup": "menu" }, icon("more"));
+    const replyButton = pillButton({ kind: "reply", label: "Kommentare", off: "reply" });
+    const repostButton = pillButton({ kind: "repost", label: "Reposten", off: "repost" });
+    repostButton.setAttribute("aria-haspopup", "menu");
+    const moreButton = h("button", { class: "act-btn more", type: "button", "aria-label": "Mehr", "aria-haspopup": "menu" }, h("span", { class: "pill-ic" }, icon("more")));
+    const sendButton = h("button", { class: "act-btn send", type: "button", "aria-label": "Senden", "aria-haspopup": "menu" }, h("span", { class: "pill-ic" }, icon("send")));
     const stats = h("div", { class: "post-stats" });
-    const foot = h("div", { class: "post-foot" });
+    const foot = h("div", { class: "post-actions", role: "group", "aria-label": "Aktionen" }, replyButton, repostButton, likeButton, moreButton, sendButton);
 
     function draw() {
       likeButton.draw(state.viewer.liked, state.counts.likes, state.viewer.liked ? "Gefällt mir nicht mehr" : "Gefällt mir");
-      replyButton.draw(false, state.counts.replies);
-      shareButton.draw(state.viewer.reposted, state.counts.reposts, state.viewer.reposted ? "Repost, Menü öffnen" : "Teilen");
+      replyButton.draw(false, state.counts.replies, "Kommentare");
+      repostButton.draw(state.viewer.reposted, state.counts.reposts, state.viewer.reposted ? "Repost, Menü öffnen" : "Reposten");
+      repostButton.classList.toggle("on", !!state.viewer.reposted);
       const views = item.views || 0;
       if (detail) {
         fill(stats,
@@ -352,9 +374,6 @@
           state.counts.likes ? h("button", { class: "stat-link", type: "button", onclick: () => peopleDialog("Gefällt mir von", `/posts/${item.id}/likes`) }, h("b", {}, Core.formatCount(state.counts.likes)), " Gefällt mir") : null,
           state.counts.replies ? h("span", {}, h("b", {}, Core.formatCount(state.counts.replies)), ` ${state.counts.replies === 1 ? "Antwort" : "Antworten"}`) : null);
         stats.hidden = !stats.children.length;
-      } else {
-        fill(foot, views ? h("span", {}, h("b", {}, Core.formatCount(views)), ` ${views === 1 ? "Aufruf" : "Aufrufe"}`) : null);
-        foot.hidden = !views;
       }
     }
 
@@ -387,23 +406,31 @@
       options.onBookmark?.(on, card);
     };
 
-    likeButton.addEventListener("click", (event) => { event.stopPropagation(); toggleLike(); });
+    likeButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const willLike = !state.viewer.liked;
+      toggleLike();
+      if (!Y.me) return;
+      if (willLike) { const box = likeButton.getBoundingClientRect(); Y.likeBurst(event.clientX || box.left + box.width / 2, event.clientY || box.top + box.height / 2, { size: 56 }); Y.sound.play("like"); } else Y.sound.play("unlike");
+    });
+    const likeByTap = (x, y) => { if (!state.viewer.liked) toggleLike(); if (Y.me) { Y.likeBurst(x, y); Y.sound.play("like"); } };
     replyButton.addEventListener("click", (event) => {
       event.stopPropagation();
       if (!Y.requireLogin("Melde dich an, um zu antworten.")) return;
       Y.compose({ replyTo: item, onPosted: (post) => { state.counts.replies += 1; draw(); options.onReply?.(post); } });
     });
-    shareButton.addEventListener("click", (event) => {
+    repostButton.addEventListener("click", (event) => {
       event.stopPropagation();
-      menu(shareButton, [
+      menu(repostButton, [
         { label: state.viewer.reposted ? "Repost rückgängig machen" : "Reposten", icon: "repost", run: () => { if (Y.requireLogin("Melde dich an, um zu reposten.")) toggleRepost(); } },
         { label: "Zitieren", icon: "pencil", run: () => { if (Y.requireLogin("Melde dich an, um zu zitieren.")) Y.compose({ quoteOf: item }); } },
+      ]);
+    });
+    sendButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      menu(sendButton, [
         { label: state.viewer.bookmarked ? "Lesezeichen entfernen" : "Lesezeichen setzen", icon: "bookmark", run: toggleBookmark },
-        { label: "Link kopieren", icon: "link", run: () => copyLink(postPath(item)) },
-        { label: "Per Nachricht senden", icon: "mail", run: () => sendPostDialog(item) },
-        navigator.share ? { label: "Teilen …", icon: "share", run: async () => {
-          try { await navigator.share({ url: absolute(postPath(item)), title: `${item.user.name} auf Pulse` }); } catch (error) { /* closed */ }
-        } } : null,
+        ...shareItems(item),
       ]);
     });
     moreButton.addEventListener("click", (event) => {
@@ -436,8 +463,7 @@
       link(`/${item.user.handle}`, { class: "post-av", tabindex: "-1", "aria-hidden": "true" }, avatar(item.user, "sm")),
       h("div", { class: "post-who" },
         link(`/${item.user.handle}`, { class: "post-name" }, item.user.name),
-        h("span", { class: "post-meta" }, h("span", { class: "handle" }, `@${item.user.handle}`), detail ? null : [h("span", { class: "dot" }, "·"), link(postPath(item), { class: "post-time" }, timeEl(item.createdAt))])),
-      moreButton);
+        h("span", { class: "post-meta" }, h("span", { class: "handle" }, `@${item.user.handle}`), detail ? null : [h("span", { class: "dot" }, "·"), link(postPath(item), { class: "post-time" }, timeEl(item.createdAt))])));
 
     const body = h("div", { class: "post-body" },
       item.replyTo && item.replyTo.handle && !options.noReplyLine ? h("p", { class: "reply-line" }, "Antwort an ", link(`/${item.replyTo.handle}`, { class: "tok" }, `@${item.replyTo.handle}`)) : null,
@@ -449,7 +475,6 @@
 
     draw();
 
-    put(card, h("div", { class: "post-pill", role: "group", "aria-label": "Aktionen" }, likeButton, replyButton, shareButton));
     if (item.pinned) put(card, h("div", { class: "post-context" }, h("span", { class: "ctx-ic" }, icon("pushpin")), "Angeheftet"));
     if (item.repostedBy) {
       const own = Y.me && Y.me.handle === item.repostedBy.handle;
@@ -458,21 +483,28 @@
     put(card, head, body);
 
     if (detail) {
-      put(card, h("div", { class: "detail-time" }, timeEl(item.createdAt, true)), stats);
+      put(card, h("div", { class: "detail-time" }, timeEl(item.createdAt, true)), stats, foot);
       queueView(item.id);
     } else {
       put(card, foot);
       if (watcher && !item.deleted) watcher.observe(card);
-      const open = () => Y.navigate(postPath(item));
+      const open = () => { Y.sound.play("open"); Y.navigate(postPath(item)); };
+      let openTimer = 0;
+      let doubled = 0;
       card.addEventListener("click", (event) => {
-        if (event.target.closest("a, button, .menu, .quote, .poll, .post-pill")) return;
+        if (event.target.closest("a, button, .menu, .quote, .poll, .post-actions")) return;
         if (window.getSelection && String(window.getSelection())) return;
-        open();
+        if (performance.now() - doubled < 450) return;                  // the second tap of a double tap
+        clearTimeout(openTimer);
+        if (event.target.closest(".post-body")) openTimer = setTimeout(open, 260);      // (a moment of waiting: a second tap on the text is a like)
+        else open();
       });
+      Y.onDoubleTap(body, (x, y) => { clearTimeout(openTimer); doubled = performance.now(); likeByTap(x, y); }, { ignore: "a, button, .menu, .quote, .poll, video" });
       card.addEventListener("keydown", (event) => { if (event.key === "Enter" && event.target === card) open(); });
     }
+    if (detail) Y.onDoubleTap(body, (x, y) => likeByTap(x, y), { ignore: "a, button, .menu, .quote, .poll, video" });
     card.refresh = draw;
-    card.bumpReplies = () => { state.counts.replies += 1; draw(); };
+    card.bumpReplies = (n = 1) => { state.counts.replies = Math.max(0, state.counts.replies + n); draw(); };
     return card;
   }
 
@@ -493,7 +525,8 @@
   function composer(options = {}) {
     const { replyTo, quoteOf, compact, onPosted } = options;
     const draftKey = `yipi.draft.${options.draftKey || (replyTo ? `r${replyTo.id}` : quoteOf ? `q${quoteOf.id}` : "new")}`;
-    const picked = [];                                   // {blob, url, alt, uploaded, gif, video, width, height}: up to 3 photos, or one GIF, or one video
+    const picked = [];                                   // {blob, url, alt, uploaded, gif}: up to 3 photos, or one GIF
+    const template = !!options.template;                 // the big template for a new post: the field "Text", hashtags as chips below
     let poll = null;                                     // {options: [...], minutes} while a poll is being written (instead of pictures)
     let busy = false;
 
@@ -503,13 +536,16 @@
     const gauge = ring();
     const left = h("span", { class: "ring-left" });
     const submit = h("button", { class: "btn primary post-btn", type: "button", disabled: true }, options.label || (replyTo ? "Antworten" : "Posten"));
-    const videoPicker = h("input", { type: "file", accept: "video/mp4,video/quicktime,video/webm,.mp4,.m4v,.mov,.webm", hidden: true, "aria-hidden": "true", tabindex: "-1" });
-    const videoButton = h("button", { class: "icon-btn tool", type: "button", "aria-label": "Video hinzufügen", hidden: !!(replyTo || quoteOf) }, icon("playCircle"));
     const photoButton = h("button", { class: "icon-btn tool", type: "button", "aria-label": "Foto hinzufügen" }, icon("image"));
     const gifButton = h("button", { class: "icon-btn tool", type: "button", "aria-label": "GIF hinzufügen", "aria-haspopup": "dialog" }, icon("gif"));
     const emojiButton = h("button", { class: "icon-btn tool", type: "button", "aria-label": "Emoji einfügen", "aria-haspopup": "dialog" }, icon("emoji"));
     const pollButton = h("button", { class: "icon-btn tool", type: "button", "aria-label": "Umfrage hinzufügen", hidden: !!(replyTo || quoteOf) }, icon("poll"));
     const pollBox = h("div", { class: "poll-editor", hidden: true });
+    const tagBox = template ? Y.hashtagEditor({ onChange: () => update(), room: () => Core.MAX_POST - Core.charCount(textarea.value) - 1 }) : null;
+    const fullText = () => {
+      const text = Core.cleanText(textarea.value);
+      return tagBox && tagBox.tags().length ? Core.cleanText(`${text}\n\n${tagBox.text()}`) : text;
+    };
 
     function drawPoll() {
       pollBox.hidden = !poll;
@@ -532,7 +568,7 @@
     }
 
     function update() {
-      const text = textarea.value;
+      const text = fullText();
       const count = Core.charCount(text);
       const state = Core.counterState(text);
       gauge.set(count / Core.MAX_POST);
@@ -541,24 +577,22 @@
       left.dataset.state = state;
       const pollReady = !poll || (count > 0 && Core.pollAnswers(poll.options).valid);        // a poll needs its question and two answers
       submit.disabled = busy || state === "over" || (!count && !picked.length && !poll) || !pollReady;
-      const hasVideo = picked.some((entry) => entry.video);
-      photoButton.disabled = busy || !!poll || hasVideo || (picked.length >= Core.MAX_MEDIA && !picked.some((entry) => entry.gif));
-      gifButton.disabled = busy || !!poll || hasVideo;
-      videoButton.disabled = busy || !!poll || (picked.length > 0 && !hasVideo);
+      photoButton.disabled = busy || !!poll || (picked.length >= Core.MAX_MEDIA && !picked.some((entry) => entry.gif));
+      gifButton.disabled = busy || !!poll;
       pollButton.disabled = busy || picked.length > 0;
       pollButton.classList.toggle("on", !!poll);
       textarea.style.height = "auto";
       textarea.style.height = `${Math.min(textarea.scrollHeight, compact ? 220 : 340)}px`;
-      try { if (text) sessionStorage.setItem(draftKey, text); else sessionStorage.removeItem(draftKey); } catch (error) { /* storage blocked */ }
+      try { if (textarea.value) sessionStorage.setItem(draftKey, textarea.value); else sessionStorage.removeItem(draftKey); } catch (error) { /* storage blocked */ }
     }
 
     function drawPreviews() {
       previews.hidden = !picked.length;
       previews.className = `compose-media m${Math.min(picked.length, 3)}`;
-      fill(previews, ...picked.map((entry, index) => h("div", { class: `pv${entry.video ? " pv-video" : ""}` },
-        entry.video ? h("video", { src: entry.url, controls: true, muted: true, playsinline: true, preload: "metadata", "aria-label": "Vorschau des Videos" }) : h("img", { src: entry.url, alt: entry.alt || "Vorschau" }),
-        h("button", { class: "pv-x", type: "button", "aria-label": entry.video ? "Video entfernen" : entry.gif ? "GIF entfernen" : "Foto entfernen", onclick: () => { URL.revokeObjectURL(entry.url); picked.splice(index, 1); drawPreviews(); update(); } }, icon("close")),
-        entry.video ? null : entry.gif ? h("span", { class: "pv-alt gif-badge", "aria-hidden": "true" }, "GIF")
+      fill(previews, ...picked.map((entry, index) => h("div", { class: "pv" },
+        h("img", { src: entry.url, alt: entry.alt || "Vorschau" }),
+        h("button", { class: "pv-x", type: "button", "aria-label": entry.gif ? "GIF entfernen" : "Foto entfernen", onclick: () => { URL.revokeObjectURL(entry.url); picked.splice(index, 1); drawPreviews(); update(); } }, icon("close")),
+        entry.gif ? h("span", { class: "pv-alt gif-badge", "aria-hidden": "true" }, "GIF")
                   : h("button", { class: `pv-alt${entry.alt ? " set" : ""}`, type: "button", onclick: () => altDialog(entry) }, entry.alt ? "ALT ✓" : "+ ALT"))));
     }
 
@@ -571,7 +605,7 @@
     async function addFiles(files) {
       if (poll) { toast("Zu einer Umfrage gehören keine Fotos."); return; }
       for (const file of files) {
-        if (file.type.startsWith("video/") || /\.(mp4|m4v|mov|webm|mkv|avi|wmv|3gp|mpe?g)$/i.test(file.name || "")) { toast(Api.MESSAGES.no_video); continue; }
+        if (file.type.startsWith("video/") || /\.(mp4|m4v|mov|webm|mkv|avi|wmv|3gp|mpe?g)$/i.test(file.name || "")) { toast("Ein Video lädst du über das Plus und „Video“ hoch."); continue; }
         if (picked.some((entry) => entry.gif)) picked.splice(0, picked.length);          // photos take the place of a GIF
         if (picked.length >= Core.MAX_MEDIA) { toast("Mehr als 3 Fotos gehen nicht."); break; }
         if (!/^image\/(jpeg|png|gif|webp)$/.test(file.type)) { toast(Api.MESSAGES.bad_image); continue; }
@@ -585,29 +619,6 @@
           toast("Dieses Foto konnte nicht gelesen werden.");
         }
       }
-      drawPreviews();
-      update();
-    }
-
-    /* A video file: MP4, MOV or WebM, not bigger than 25 MB, one the browser can read (and so play), not longer than 90 seconds. */
-    async function addVideo(file) {
-      if (poll) { toast("Zu einer Umfrage gehört kein Video."); return; }
-      if (picked.length && !picked[0].video) { toast(Api.MESSAGES.video_alone); return; }
-      if (!/^video\/(mp4|quicktime|webm)$/.test(file.type) && !/\.(mp4|m4v|mov|webm)$/i.test(file.name || "")) { toast(Api.MESSAGES.bad_video); return; }
-      if (file.size > Core.MAX_VIDEO_BYTES) { toast(Api.MESSAGES.video_too_big); return; }
-      const url = URL.createObjectURL(file);
-      const probe = h("video", { preload: "metadata", muted: true });
-      const facts = await new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), 10000);
-        probe.addEventListener("loadedmetadata", () => { clearTimeout(timer); resolve({ width: probe.videoWidth, height: probe.videoHeight, seconds: probe.duration }); });
-        probe.addEventListener("error", () => { clearTimeout(timer); resolve(null); });
-        probe.src = url;
-      });
-      probe.removeAttribute("src");
-      if (!facts || !facts.width || !facts.height) { URL.revokeObjectURL(url); toast("Dieses Video kann dein Browser nicht lesen. Probier ein MP4 mit dem üblichen Format (H.264)."); return; }
-      if (Number.isFinite(facts.seconds) && facts.seconds > Core.MAX_VIDEO_SECONDS) { URL.revokeObjectURL(url); toast(`Das Video ist zu lang (höchstens ${Core.MAX_VIDEO_SECONDS} Sekunden).`); return; }
-      picked.forEach((entry) => URL.revokeObjectURL(entry.url));
-      picked.splice(0, picked.length, { blob: file, url, alt: "", uploaded: null, name: file.name, video: true, width: facts.width, height: facts.height });
       drawPreviews();
       update();
     }
@@ -628,6 +639,7 @@
       picked.forEach((entry) => URL.revokeObjectURL(entry.url));
       picked.length = 0;
       textarea.value = "";
+      tagBox?.clear();
       poll = null;
       drawPoll();
       drawPreviews();
@@ -635,7 +647,7 @@
     }
 
     async function send() {
-      const text = Core.cleanText(textarea.value);
+      const text = fullText();
       if (busy || (!text && !picked.length) || Core.charCount(text) > Core.MAX_POST) return;
       const answers = poll ? Core.pollAnswers(poll.options) : null;
       if (answers && (!answers.valid || !text)) { toast(answers.problem || "Eine Umfrage braucht eine Frage."); return; }
@@ -646,8 +658,7 @@
       const ids = [];
       for (const entry of picked) {
         if (!entry.uploaded) {
-          if (entry.video) submit.textContent = "Lädt hoch …";
-          const up = await Api.upload(entry.blob, entry.video ? { alt: entry.alt || "", width: String(entry.width), height: String(entry.height) } : { alt: entry.alt || "" });
+          const up = await Api.upload(entry.blob, { alt: entry.alt || "" });
           if (!up.ok) { busy = false; submit.classList.remove("busy"); submit.textContent = options.label || (replyTo ? "Antworten" : "Posten"); toast(Api.message(up)); update(); return; }
           entry.uploaded = up.data.media.id;
         }
@@ -669,13 +680,11 @@
     textarea.addEventListener("input", update);
     textarea.addEventListener("keydown", (event) => { if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); send(); } });
     textarea.addEventListener("paste", (event) => {
-      const files = [...(event.clipboardData ? event.clipboardData.files : [])].filter((f) => f.type.startsWith("image/") || f.type.startsWith("video/"));
+      const files = [...(event.clipboardData ? event.clipboardData.files : [])].filter((f) => f.type.startsWith("image/"));
       if (files.length) { event.preventDefault(); addFiles(files); }
     });
     submit.addEventListener("click", send);
     photoButton.addEventListener("click", () => picker.click());
-    videoButton.addEventListener("click", () => videoPicker.click());
-    videoPicker.addEventListener("change", () => { const file = videoPicker.files[0]; videoPicker.value = ""; if (file) addVideo(file); });
     pollButton.addEventListener("click", () => {
       poll = poll ? null : { options: ["", ""], minutes: 1440 };
       drawPoll();
@@ -695,31 +704,33 @@
       Y.floating(emojiButton, pop, { arrows: false });
     });
 
-    const root = h("div", { class: `composer${compact ? " compact" : ""}` },
-      avatar(Y.me, "md"),
-      h("div", { class: "compose-main" }, textarea, previews, pollBox,
-        h("div", { class: "compose-bar" }, h("div", { class: "tools" }, photoButton, videoButton, gifButton, pollButton, emojiButton, picker, videoPicker),
-          h("div", { class: "send" }, left, gauge.svg, submit))));
+    const bar = h("div", { class: "compose-bar" }, h("div", { class: "tools" }, photoButton, gifButton, pollButton, emojiButton, picker),
+      h("div", { class: "send" }, left, gauge.svg, submit));
+    const root = template
+      ? h("div", { class: "composer template" },
+        h("div", { class: "field-head" }, h("label", { class: "field-title", for: "post-text" }, "Text"), h("span", { class: "hint" }, "bis zu 280 Zeichen")),
+        textarea, previews, pollBox, tagBox.element, bar)
+      : h("div", { class: `composer${compact ? " compact" : ""}` }, avatar(Y.me, "md"), h("div", { class: "compose-main" }, textarea, previews, pollBox, bar));
+    if (template) textarea.id = "post-text";
     root.addEventListener("dragover", (event) => { if ([...(event.dataTransfer ? event.dataTransfer.types : [])].includes("Files")) { event.preventDefault(); root.classList.add("drop"); } });
     root.addEventListener("dragleave", () => root.classList.remove("drop"));
     root.addEventListener("drop", (event) => { root.classList.remove("drop"); if (event.dataTransfer && event.dataTransfer.files.length) { event.preventDefault(); addFiles([...event.dataTransfer.files]); } });
     if (options.text) textarea.value = options.text;
     else { try { const draft = sessionStorage.getItem(draftKey); if (draft) textarea.value = draft; } catch (error) { /* storage blocked */ } }
     update();
-    if (options.autofocus && !options.openVideo) setTimeout(() => textarea.focus(), 0);
-    if (options.openVideo) setTimeout(() => videoPicker.click(), 0);
+    if (options.autofocus) setTimeout(() => textarea.focus(), 0);
     root.focusText = () => textarea.focus();
     root.send = send;
     return root;
   }
 
   /* The dialog to write a post, a reply or a quote. */
-  Y.compose = function compose({ replyTo, quoteOf, onPosted, text, video } = {}) {
+  Y.compose = function compose({ replyTo, quoteOf, onPosted, text } = {}) {
     if (!Y.requireLogin("Melde dich an, um zu posten.")) return null;
     const target = replyTo || quoteOf;
     let entry;
     const box = composer({
-      replyTo, quoteOf, autofocus: true, text, openVideo: !!video,
+      replyTo, quoteOf, autofocus: true, text, template: !target,
       onPosted: (post) => {
         entry.close();
         onPosted?.(post);
@@ -730,9 +741,9 @@
     const context = target ? h("div", { class: "compose-context" }, h("div", { class: "cc-line" }, avatar(target.user, "sm")),
       h("div", {}, h("div", { class: "cc-who" }, h("b", {}, target.user.name), h("span", { class: "handle" }, ` @${target.user.handle}`)), target.text ? h("div", { class: "post-text" }, richText(target.text.length > 280 ? target.text.slice(0, 280) : target.text)) : null,
         replyTo ? h("p", { class: "reply-line" }, "Antwort an ", h("span", { class: "tok" }, `@${target.user.handle}`)) : null)) : null;
-    entry = dialog({ label: replyTo ? "Antworten" : quoteOf ? "Zitieren" : "Neuer Beitrag", body: h("div", { class: "compose-dialog" }, replyTo ? context : null, box, quoteOf ? h("div", { class: "quote-preview" }, context) : null), initialFocus: box.querySelector("textarea") });
+    entry = dialog({ title: target ? undefined : "Neuer Beitrag", label: replyTo ? "Antworten" : quoteOf ? "Zitieren" : "Neuer Beitrag", body: h("div", { class: "compose-dialog" }, replyTo ? context : null, box, quoteOf ? h("div", { class: "quote-preview" }, context) : null), initialFocus: box.querySelector("textarea") });
     return entry;
   };
 
-  Object.assign(Y, { queueView, postCard, composer, userRow, followButton, reportDialog, prepareImage, copyLink, postPath, peopleDialog, sendPostDialog });
+  Object.assign(Y, { queueView, mediaGrid, shareItems, shareText, postCard, composer, userRow, followButton, reportDialog, prepareImage, copyLink, postPath, peopleDialog, sendPostDialog });
 })();

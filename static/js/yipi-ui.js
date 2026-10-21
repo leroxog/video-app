@@ -75,7 +75,7 @@
     for (const piece of Core.tokenize(text)) {
       if (piece.type === "text") out.append(piece.text);
       else if (piece.type === "mention") out.append(link(`/${piece.handle}`, { class: "tok" }, piece.text));
-      else if (piece.type === "hashtag") out.append(link(`/search?q=${encodeURIComponent(`#${piece.tag}`)}`, { class: "tok" }, piece.text));
+      else if (piece.type === "hashtag") out.append(link(`/search?q=${encodeURIComponent(`#${piece.tag}`)}`, { class: "tok hashtag" }, piece.text));
       else {
         let inside = null;                                             // a link to a page of Pulse itself stays inside the app
         try { const url = new URL(piece.href); if (url.origin === location.origin) inside = url.pathname + url.search; } catch (error) { inside = null; }

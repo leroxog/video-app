@@ -12,12 +12,52 @@
   const HOME = "/";                                      // the home page of Pulse is the home page of the site
   const MAX_MEDIA = 3;                                  // photos per post (yipi.py: MAX_MEDIA)
   const MAX_VIDEO_BYTES = 25 * 1024 * 1024;             // a video (yipi.py: MAX_VIDEO_BYTES)
-  const MAX_VIDEO_SECONDS = 90;                         // and how long it may be (only the browser can measure that)
+  const MAX_VIDEO_SECONDS = 30;                         // and how long it may be (only the browser can measure that; the milliseconds do not count)
   const MONTHS = ["Jan.", "Feb.", "März", "Apr.", "Mai", "Juni", "Juli", "Aug.", "Sept.", "Okt.", "Nov.", "Dez."];
   const MONTHS_LONG = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
   const HANDLE = /^[A-Za-z0-9_]{3,15}$/;
   // the same characters the server throws away (control and direction-changing characters; the joiner of emoji stays)
   const CONTROL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f​‎‏‪-‮⁠-⁤﻿]/g;
+
+  /* A video is too long when it has more than 30 whole seconds (30.9 is fine); a length the browser cannot tell (a recording, Infinity) passes. */
+  function videoTooLong(seconds) {
+    return Number.isFinite(seconds) && Math.floor(seconds) > MAX_VIDEO_SECONDS;
+  }
+
+  /* The watermark of a saved video, like on TikTok: the logo with "@name" sits in the top left corner for the first half, then it slides over to the
+     bottom right corner (a little more than a tenth of the time) and stays there. `progress` runs from 0 to 1; the result is the top left corner of the
+     mark and its width and height, for a video of `width` x `height` pixels. */
+  function watermarkPlan(width, height, progress) {
+    const short = Math.min(width, height);
+    const box = { w: Math.round(short * 0.46), h: Math.round(short * 0.14) };
+    const margin = Math.round(short * 0.045);
+    const from = { x: margin, y: Math.round(short * 0.09) };
+    const to = { x: width - box.w - margin, y: height - box.h - Math.round(short * 0.2) };
+    const t = Math.max(0, Math.min(1, (progress - 0.46) / 0.11));
+    const eased = t * t * (3 - 2 * t);
+    return { x: Math.round(from.x + (to.x - from.x) * eased), y: Math.round(from.y + (to.y - from.y) * eased), w: box.w, h: box.h };
+  }
+
+  /* The bytes behind a text in base64url (the key for notifications on the device is handed over like that). */
+  function base64UrlBytes(text) {
+    const plain = String(text || "").replace(/-/g, "+").replace(/_/g, "/");
+    const raw = atob(plain + "=".repeat((4 - (plain.length % 4)) % 4));
+    return Uint8Array.from(raw, (character) => character.charCodeAt(0));
+  }
+
+  /* Which of `count` games is the game of the day: the same for everybody on the same day ("2026-10-21"), another one on the next. */
+  function dailyIndex(day, count) {
+    if (!(count > 0)) return 0;
+    let hash = 7;
+    for (const character of String(day)) hash = (hash * 31 + character.charCodeAt(0)) % 1000003;
+    return hash % count;
+  }
+
+  /* The file name of a saved video: "pulse-name.webm" (or .mp4, whatever the browser's recorder makes). */
+  function videoFileName(handle, mime) {
+    const name = String(handle || "").replace(/[^A-Za-z0-9_]/g, "").slice(0, 15) || "video";
+    return `pulse-${name}.${/mp4/i.test(String(mime || "")) ? "mp4" : "webm"}`;
+  }
 
   // ------------------------------------------------------------------------------------------------ text
   /* The text as the server will keep it: one Unicode form, no control characters, no runs of blank lines, trimmed. */
@@ -92,6 +132,82 @@
     return tokens;
   }
 
+  // ------------------------------------------------------------------------------------------- the combination of the chat lock
+  /* A combination is one stroke of the finger: its shape AND its pace count. The stroke (points {x, y, t} in pixels and milliseconds) becomes a
+     template: 48 points spaced evenly along the path (moved to the middle and made the same size, so where and how big it was drawn does not
+     matter), the time that had passed at each of them (as a part of the whole), and how long it took. `gestureScore(template, points)` says in
+     percent how well a new stroke matches: the shape, the way the pace changes along the stroke and the total time all have to fit. */
+  const GESTURE_POINTS = 48;
+  const GESTURE_PASS = 82;                                 // percent a stroke needs to open the chats
+  const GESTURE_MIN_LENGTH = 40;
+
+  function strokeCleaned(points) {
+    const out = [];
+    for (const p of Array.isArray(points) ? points : []) {
+      if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y) || !Number.isFinite(p.t)) continue;
+      const last = out[out.length - 1];
+      if (last && Math.hypot(p.x - last.x, p.y - last.y) < 1.5) { last.t = Math.max(last.t, p.t); continue; }
+      out.push({ x: p.x, y: p.y, t: p.t });
+    }
+    return out;
+  }
+
+  function gestureTemplate(points) {
+    const path = strokeCleaned(points);
+    if (path.length < 5) return null;
+    const along = [0];
+    for (let k = 1; k < path.length; k++) along.push(along[k - 1] + Math.hypot(path[k].x - path[k - 1].x, path[k].y - path[k - 1].y));
+    const total = along[along.length - 1];
+    const duration = path[path.length - 1].t - path[0].t;
+    if (total < GESTURE_MIN_LENGTH || duration < 120) return null;
+    const shape = [];
+    const clock = [];
+    let seg = 1;
+    for (let n = 0; n < GESTURE_POINTS; n++) {
+      const target = (total * n) / (GESTURE_POINTS - 1);
+      while (seg < path.length - 1 && along[seg] < target) seg += 1;
+      const span = along[seg] - along[seg - 1] || 1;
+      const f = Math.max(0, Math.min(1, (target - along[seg - 1]) / span));
+      shape.push([path[seg - 1].x + (path[seg].x - path[seg - 1].x) * f, path[seg - 1].y + (path[seg].y - path[seg - 1].y) * f]);
+      clock.push(((path[seg - 1].t + (path[seg].t - path[seg - 1].t) * f) - path[0].t) / duration);
+    }
+    const xs = shape.map((p) => p[0]);
+    const ys = shape.map((p) => p[1]);
+    const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
+    const cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+    const size = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys), 1);
+    return { shape: shape.map(([x, y]) => [Number(((x - cx) / size).toFixed(4)), Number(((y - cy) / size).toFixed(4))]), clock: clock.map((v) => Number(v.toFixed(4))), duration: Math.round(duration), length: Number((total / size).toFixed(3)) };
+  }
+
+  const clamp01 = (v) => Math.max(0, Math.min(1, v));
+
+  function gestureScore(template, points) {
+    const mine = gestureTemplate(points);
+    if (!mine || !template || !Array.isArray(template.shape) || template.shape.length !== GESTURE_POINTS) return 0;
+    let distance = 0;
+    let pace = 0;
+    for (let k = 0; k < GESTURE_POINTS; k++) {
+      distance += Math.hypot(mine.shape[k][0] - template.shape[k][0], mine.shape[k][1] - template.shape[k][1]);
+      pace += (mine.clock[k] - template.clock[k]) ** 2;
+    }
+    const shapeScore = clamp01(1 - distance / GESTURE_POINTS / 0.75);
+    const paceScore = clamp01(1 - Math.sqrt(pace / GESTURE_POINTS) / 0.7);
+    const timeScore = clamp01(1 - Math.abs(Math.log(mine.duration / template.duration)) / 1.5);
+    const timing = 0.5 * paceScore + 0.5 * timeScore;
+    return Math.round(100 * shapeScore ** 0.6 * timing ** 0.8);
+  }
+
+  /* How long the chats stay locked after wrong tries (minutes): three wrong tries in a row give the first one, every further wrong try the next one;
+     after 240 the time doubles. A right try wipes the record. state: {fails, level, until}. */
+  const LOCK_MINUTES = [1, 1, 5, 10, 15, 30, 60, 120, 240];
+  const lockMinutes = (level) => (level < LOCK_MINUTES.length ? LOCK_MINUTES[level] : LOCK_MINUTES[LOCK_MINUTES.length - 1] * 2 ** (level - LOCK_MINUTES.length + 1));
+  function lockAfterWrong(state, now) {
+    const level = state.level || 0;
+    const fails = (state.fails || 0) + 1;
+    if (level > 0 || fails >= 3) return { fails: 0, level: level + 1, until: now + lockMinutes(level) * 60000 };
+    return { fails, level, until: 0 };
+  }
+
   // ------------------------------------------------------------------------------------------ numbers, times
   /* 999 -> "999", 1234 -> "1,2 Tsd.", 12000 -> "12 Tsd.", 2500000 -> "2,5 Mio." */
   function formatCount(n) {
@@ -141,8 +257,9 @@
   function parsePath(pathname, search = "") {
     const path = String(pathname || "/").replace(/\/+$/, "") || "/";
     const params = new URLSearchParams(search);
-    const fixed = { "/": "home", "/explore": "explore", "/notifications": "notifications", "/messages": "messages", "/bookmarks": "bookmarks", "/moderation": "moderation", "/games": "games", "/videos": "videos", "/i/login": "login", "/i/signup": "signup" };
+    const fixed = { "/": "home", "/explore": "explore", "/notifications": "notifications", "/messages": "messages", "/bookmarks": "bookmarks", "/moderation": "moderation", "/camera": "camera", "/games": "camera", "/videos": "videos", "/i/login": "login", "/i/signup": "signup" };
     if (path === "/explore") return { name: "explore", tab: ["trends", "media", "people"].includes(params.get("tab")) ? params.get("tab") : "" };
+    if (path === "/i/signup") return { name: "signup", google: params.get("google") === "1" };
     if (fixed[path]) return { name: fixed[path] };
     if (path === "/i/nex") return { name: "nex", q: (params.get("q") || "").slice(0, 500), post: /^\d{1,18}$/.test(params.get("post") || "") ? Number(params.get("post")) : 0 };
     if (path === "/search") return { name: "search", q: params.get("q") || "", type: ["people", "media"].includes(params.get("type")) ? params.get("type") : "posts", sort: params.get("sort") === "new" ? "new" : "top" };
@@ -151,8 +268,8 @@
     if (match) return { name: "settings", section: match[1] };
     match = /^\/messages\/([A-Za-z0-9_]{3,15})$/.exec(path);
     if (match) return { name: "thread", handle: match[1] };
-    match = /^\/games\/([a-z0-9-]{1,40})$/.exec(path);
-    if (match) return { name: "game", slug: match[1] };
+    match = /^\/(?:camera|games)\/([a-z0-9-]{1,40})$/.exec(path);
+    if (match) return { name: "camera", game: match[1] };
     match = /^\/g\/(\d{1,10})$/.exec(path);
     if (match && Number(match[1]) > 0) return { name: "group", id: Number(match[1]) };
     match = /^\/([A-Za-z0-9_]{3,15})\/status\/(\d{1,18})$/.exec(path);
@@ -169,12 +286,12 @@
       case "home": return HOME;
       case "explore": return route.tab ? `/explore?tab=${route.tab}` : "/explore";
       case "notifications": case "messages": case "bookmarks": case "moderation": return `/${route.name}`;
-      case "games": case "videos": return `/${route.name}`;
-      case "game": return `/games/${route.slug}`;
+      case "camera": return route.game ? `/camera/${route.game}` : "/camera";
+      case "videos": return "/videos";
       case "group": return `/g/${route.id}`;
       case "nex": return route.post ? `/i/nex?post=${route.post}` : route.q ? `/i/nex?q=${encodeURIComponent(route.q)}` : "/i/nex";
       case "login": return "/i/login";
-      case "signup": return "/i/signup";
+      case "signup": return route.google ? "/i/signup?google=1" : "/i/signup";
       case "search": return `/search?q=${encodeURIComponent(route.q || "")}${route.type === "people" ? "&type=people" : route.type === "media" ? "&type=media" : ""}${route.sort === "new" && route.type !== "people" ? "&sort=new" : ""}`;
       case "settings": return route.section ? `/settings/${route.section}` : "/settings";
       case "thread": return `/messages/${route.handle}`;
@@ -328,7 +445,11 @@
     for (const item of Array.isArray(list) ? list : []) {
       if (!item || (item.role !== "user" && item.role !== "assistant") || typeof item.content !== "string") continue;
       const content = cleanText(item.content).slice(0, 1500);
-      if (content) clean.push({ role: item.role, content });
+      if (!content) continue;
+      const attachments = item.role === "user" && Array.isArray(item.attachments)
+        ? item.attachments.filter((entry) => entry && (entry.kind === "image" || entry.kind === "document") && typeof entry.name === "string").slice(0, 3).map((entry) => ({ kind: entry.kind, name: Array.from(entry.name).slice(0, 60).join("") }))
+        : [];
+      clean.push(attachments.length ? { role: item.role, content, attachments } : { role: item.role, content });
     }
     return clean.slice(-keep);
   }
@@ -377,7 +498,7 @@
   }
 
   return {
-    HOME, MAX_POST, MAX_MEDIA, MAX_VIDEO_BYTES, MAX_VIDEO_SECONDS, NEX_CHATS, nexTitle, newChatId, nexStore, nexUpsert, nexRemove, MAX_POLL_OPTION, POLL_OPTIONS, POLL_LENGTHS, pollTimeLeft, pollPercent, pollVotes, pollAnswers, NEX_TURNS, NEX_KEEP, nexMessages, nexBlocks, gifQuery, gifColumns, cleanText, charCount, counterState, tokenize, shortUrl, formatCount, relativeTime, fullTime, joinedLabel,
+    HOME, MAX_POST, MAX_MEDIA, MAX_VIDEO_BYTES, MAX_VIDEO_SECONDS, videoTooLong, watermarkPlan, videoFileName, base64UrlBytes, dailyIndex, gestureTemplate, gestureScore, GESTURE_PASS, GESTURE_POINTS, lockMinutes, lockAfterWrong, NEX_CHATS, nexTitle, newChatId, nexStore, nexUpsert, nexRemove, MAX_POLL_OPTION, POLL_OPTIONS, POLL_LENGTHS, pollTimeLeft, pollPercent, pollVotes, pollAnswers, NEX_TURNS, NEX_KEEP, nexMessages, nexBlocks, gifQuery, gifColumns, cleanText, charCount, counterState, tokenize, shortUrl, formatCount, relativeTime, fullTime, joinedLabel,
     isHandle, parsePath, buildPath, groupNotifications, fitSize, coverCrop, avatarHue, initials,
   };
 });

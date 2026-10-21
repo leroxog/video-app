@@ -12,13 +12,44 @@
   const { fill, put, h, icon, link, avatar, richText, toast, confirmBox, menu } = Y;
 
   const KEY = "yipi.nex";
-  const SUGGESTIONS = [
-    "Schreib mir einen lustigen Beitrag über Montage",
-    "Erkläre mir in zwei Sätzen, wie ein Akku funktioniert",
-    "Gib mir drei Ideen für einen Beitrag über Fotografie",
-    "Was kann ich heute Abend kochen?",
-    "Übersetze „Guten Morgen“ ins Spanische",
+  /* The suggestions under the empty page: five out of this pool, picked again every time a new conversation starts (and with the round arrow),
+     never the same five twice in a row. */
+  const POOL = [
+    "Schreib mir einen lustigen Beitrag über Montage", "Erkläre mir in zwei Sätzen, wie ein Akku funktioniert", "Gib mir drei Ideen für einen Beitrag über Fotografie",
+    "Was kann ich heute Abend kochen?", "Übersetze „Guten Morgen“ ins Spanische", "Erkläre mir, was ein schwarzes Loch ist, als wäre ich zehn",
+    "Gib mir einen Plan für 20 Minuten Sport zu Hause", "Schreib eine kurze Bio für mein Profil: freundlich und witzig", "Wie lerne ich schneller Vokabeln?",
+    "Erfinde einen Namen für einen Podcast über Technik", "Was ist der Unterschied zwischen Wetter und Klima?", "Schreib mir ein kurzes Gedicht über den Regen",
+    "Gib mir fünf Fragen für ein Quiz über Geografie", "Wie funktioniert ein Elektromotor?", "Hilf mir, eine höfliche Absage zu formulieren",
+    "Was sollte ich vor einem Vorstellungsgespräch üben?", "Erkläre mir den Satz des Pythagoras mit einem Beispiel", "Schlag mir drei Filme für einen Abend mit Freunden vor",
+    "Wie schreibe ich einen guten ersten Satz für einen Beitrag?", "Fasse die Geschichte der Pizza in drei Sätzen zusammen", "Gib mir Tipps für besseren Schlaf",
+    "Was ist Inflation, und warum steigen Preise?", "Schreib mir einen Witz über Katzen", "Erkläre mir, wie das Internet funktioniert",
+    "Wie bleibe ich beim Lernen konzentriert?", "Übersetze „Wie geht es dir?“ ins Französische und Italienische", "Gib mir ein Rezept ohne Backofen",
+    "Was sind gute Hashtags für einen Beitrag über Reisen?", "Erkläre mir künstliche Intelligenz in einem Absatz", "Schreib eine Geburtstagsnachricht für einen Freund",
+    "Wie plane ich einen Tag in einer fremden Stadt?", "Was ist der Unterschied zwischen „das“ und „dass“?", "Gib mir drei Ideen für ein Hobby, das wenig kostet",
+    "Wie funktioniert ein Regenbogen?", "Schreib eine kurze Geschichte über einen Roboter, der Kaffee liebt", "Erkläre mir, wie man ein Passwort sicher macht",
+    "Hilf mir, mich für einen Streit zu entschuldigen", "Welche Fragen kann ich bei einem ersten Treffen stellen?", "Was passiert beim Blitz und Donner?",
+    "Gib mir eine Einkaufsliste für eine Woche gesund essen", "Erkläre mir den Unterschied zwischen Bit und Byte", "Schreib mir eine Idee für ein Video in 30 Sekunden",
+    "Wie funktioniert ein Flugzeug?", "Zähl mir fünf spannende Fakten über den Ozean auf", "Übersetze „Danke für alles“ ins Englische, Spanische und Türkische",
+    "Wie baue ich eine gute Morgenroutine auf?", "Was ist ein Primzahl-Zwilling?", "Gib mir drei Tipps, um besser zu schreiben",
+    "Schreib einen Beitrag über meinen Lieblingssport: ich nenne ihn dir", "Erkläre mir, wie Impfstoffe wirken", "Wie spare ich als Schüler Geld?",
+    "Was bedeutet „Work-Life-Balance“?", "Gib mir ein kurzes Workout für den Rücken", "Welche Sehenswürdigkeiten gibt es in Berlin?",
+    "Schreib einen kurzen Dialog zwischen zwei Aliens", "Erkläre mir den Unterschied zwischen Strom und Spannung", "Wie schreibe ich eine gute Zusammenfassung?",
+    "Hilf mir, ein Thema für eine Präsentation zu finden", "Was ist ein guter Name für einen Hund?", "Wie lange darf man Eier aufbewahren?",
+    "Erkläre mir Zinseszins an einem Beispiel", "Gib mir fünf Ideen für ein Geschenk unter 20 Euro", "Wie erkenne ich Fake News?",
+    "Schreib einen motivierenden Satz für Montagmorgen", "Was ist der Unterschied zwischen Virus und Bakterie?", "Erkläre mir, wie ein Kompass funktioniert",
+    "Schlag mir ein Rätsel vor, das ich meinen Freunden stellen kann", "Wie rechne ich Prozente im Kopf?", "Was sind die Planeten unseres Sonnensystems?",
+    "Gib mir Tipps für ein gutes Foto mit dem Handy", "Schreib mir eine Antwort auf eine freundliche Kritik", "Wie funktioniert Bluetooth?",
+    "Erkläre mir die Regeln von Schach in fünf Punkten", "Hilf mir, einen Reim auf „Pulse“ zu finden", "Was ist der Unterschied zwischen Wal und Fisch?",
+    "Wie schreibe ich eine E-Mail an meine Lehrerin?", "Gib mir drei Fragen, um jemanden besser kennenzulernen", "Was ist ein Algorithmus? Erkläre es mit Kuchenbacken",
   ];
+  let lastShown = [];
+  function suggest(count = 5) {
+    const fresh = POOL.filter((text) => !lastShown.includes(text));
+    const bag = fresh.length >= count ? fresh : POOL.slice();
+    for (let i = bag.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [bag[i], bag[j]] = [bag[j], bag[i]]; }
+    lastShown = bag.slice(0, count);
+    return lastShown.slice();
+  }
   const EXPLAIN = "Erkläre diesen Beitrag kurz und verständlich: Worum geht es, und was könnte gemeint sein?";
 
   /* One answer of the server as a stream of text: onText(textSoFar) after every piece. Resolves {text, error?, status?, aborted?}. */
@@ -64,14 +95,21 @@
       h("span", { class: "nex-hero" }, icon("nexmark")),
       h("h2", {}, "Wobei kann ich helfen?"),
       h("p", {}, "Frag mich etwas, lass dir einen Beitrag erklären oder hol dir Hilfe beim Schreiben."));
-    const chips = h("div", { class: "nex-chips" }, SUGGESTIONS.map((text) => h("button", { class: "nex-suggestion", type: "button", onclick: () => ask(text) }, text)));
+    const chips = h("div", { class: "nex-chips" });
+    function drawChips() {
+      fill(chips, ...suggest().map((text) => h("button", { class: "nex-suggestion", type: "button", onclick: () => ask(text) }, text)),
+        h("button", { class: "icon-btn nex-reroll", type: "button", "aria-label": "Neue Vorschläge", onclick: drawChips }, icon("refresh")));
+    }
+    drawChips();
+    const staged = h("div", { class: "nex-staged", hidden: true });
+    const picker = h("input", { type: "file", hidden: true, "aria-hidden": "true", tabindex: "-1" });
     const input = h("textarea", { class: "nex-input", rows: 1, maxlength: 1500, placeholder: "Frag Nex etwas", "aria-label": "Nachricht an Nex" });
     const plus = h("button", { class: "icon-btn nex-plus", type: "button", "aria-label": "Mehr", "aria-haspopup": "menu" }, icon("plus"));
     const sendButton = h("button", { class: "icon-btn send-btn", type: "button", "aria-label": "Senden", disabled: true }, icon("arrowUp"));
     const stopButton = h("button", { class: "icon-btn send-btn stop", type: "button", "aria-label": "Antwort stoppen", hidden: true }, icon("stop"));
     const composeBar = h("div", { class: "nex-compose" },
-      chips,
-      h("div", { class: "nex-box" }, plus, input, sendButton, stopButton),
+      chips, staged,
+      h("div", { class: "nex-box" }, plus, input, sendButton, stopButton, picker),
       h("p", { class: "nex-note" }, "Nex kann Fehler machen. Prüfe Wichtiges nach."));
     const historyButton = h("button", { class: "icon-btn round", type: "button", "aria-label": "Gespräche und Menü", "aria-haspopup": "dialog", onclick: () => openHistory() }, icon("menuLines"));
     const moreButton = h("button", { class: "icon-btn round", type: "button", "aria-label": "Mehr", "aria-haspopup": "menu" }, icon("more"));
@@ -112,7 +150,10 @@
     }
 
     function row(message, index) {
-      if (message.role === "user") return h("div", { class: "nex-msg user" }, h("div", { class: "nex-bubble" }, h("p", { class: "nex-p" }, message.content)));
+      if (message.role === "user") {
+        const things = (message.attachments || []).map((entry) => h("span", { class: "nex-attached" }, icon(entry.kind === "image" ? "image" : "file"), entry.name));
+        return h("div", { class: "nex-msg user" }, h("div", { class: "nex-bubble" }, things.length ? h("div", { class: "nex-attachments" }, things) : null, h("p", { class: "nex-p" }, message.content)));
+      }
       const bubble = h("div", { class: "nex-bubble" });
       blocksOf(message.content, bubble);
       return h("div", { class: "nex-msg assistant" }, h("div", { class: "nex-col" }, bubble, actions(message, index)));
@@ -120,13 +161,15 @@
 
     function draw() {
       const empty = chat.messages.length === 0 && !postBox.children.length;
+      if (empty && intro.hidden) drawChips();                                 // a new conversation: new suggestions
       intro.hidden = !empty;
       chips.hidden = !empty;
       fill(thread, ...chat.messages.map(row));
     }
 
     function update() {
-      sendButton.disabled = busy || !Core.cleanText(input.value);
+      sendButton.disabled = busy || (!Core.cleanText(input.value) && !(attachments.length && attachments.every((entry) => entry.ready)));
+      if (attachments.some((entry) => !entry.ready && !entry.problem)) sendButton.disabled = true;
       input.style.height = "auto";
       input.style.height = `${Math.min(input.scrollHeight, 160)}px`;
     }
@@ -144,10 +187,20 @@
 
     /* Asks Nex: the question goes into the conversation, the answer streams in below it. `extra` (postId) is sent along. */
     async function ask(text, extra = {}) {
-      const question = Core.cleanText(text);
+      let question = Core.cleanText(text);
+      const things = attachments.filter((entry) => entry.ready);
+      if (attachments.some((entry) => !entry.ready && !entry.problem)) return;                  // a file is still on its way
+      if (!question && things.length) question = things.some((entry) => entry.kind === "image") ? "Was siehst du auf diesem Foto?" : "Fasse dieses Dokument kurz zusammen.";
       if (!question || busy) return;
-      chat.messages.push({ role: "user", content: question });
+      const message = { role: "user", content: question };
+      if (things.length) {
+        message.attachments = things.map((entry) => ({ kind: entry.kind, name: entry.name }));
+        extra = { ...extra, files: things.map((entry) => (entry.kind === "image" ? { kind: "image", name: entry.name, data: entry.data } : { kind: "document", name: entry.name, text: entry.text })) };
+      }
+      chat.messages.push(message);
       input.value = "";
+      for (const entry of attachments.splice(0)) if (entry.url) URL.revokeObjectURL(entry.url);
+      drawStaged();
       save();
       draw();
       await answer(extra);
@@ -192,6 +245,48 @@
       draw();
       answer();
     }
+
+    // ---- photos and documents ("+"): a photo is made small here and sent along as it is, a document is read by the server (its text, not stored)
+    const attachments = [];                                // {kind, name, url?, data? (photo as base64), text? (document), ready, problem}
+    const toBase64 = (blob) => new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(",")[1] || ""); reader.onerror = reject; reader.readAsDataURL(blob); });
+    function drawStaged() {
+      staged.hidden = !attachments.length;
+      fill(staged, ...attachments.map((entry) => h("div", { class: `nex-chip${entry.problem ? " bad" : ""}` },
+        entry.kind === "image" && entry.url ? h("img", { class: "nex-chip-thumb", src: entry.url, alt: "" }) : h("span", { class: "nex-chip-thumb doc" }, icon(entry.kind === "image" ? "image" : "file")),
+        h("span", { class: "nex-chip-main" }, h("b", {}, entry.name), h("small", {}, entry.problem || (entry.ready ? (entry.kind === "image" ? "Foto bereit" : `${entry.cut ? "Anfang des Dokuments" : "Dokument"} gelesen`) : "wird vorbereitet …"))),
+        h("button", { class: "icon-btn tiny", type: "button", "aria-label": `${entry.name} entfernen`, onclick: () => { if (entry.url) URL.revokeObjectURL(entry.url); attachments.splice(attachments.indexOf(entry), 1); drawStaged(); update(); } }, icon("close")))));
+    }
+    async function attach(file, kind) {
+      if (attachments.length >= 3) { toast("Mehr als 3 Anhänge gehen nicht."); return; }
+      const entry = { kind, name: file.name || (kind === "image" ? "Foto" : "Dokument"), ready: false, problem: "" };
+      attachments.push(entry);
+      drawStaged();
+      update();
+      try {
+        if (kind === "image") {
+          let data = "";
+          for (const max of [1024, 768, 512]) {
+            const blob = await Y.prepareImage(file, { max });
+            data = await toBase64(blob);
+            if (data.length <= 800000) { if (entry.url) URL.revokeObjectURL(entry.url); entry.url = URL.createObjectURL(blob); break; }
+            data = "";
+          }
+          if (!data) throw new Error("big");
+          entry.data = data;
+        } else {
+          const reply = await Api.readDocument(file);
+          if (!reply.ok) entry.problem = Api.message(reply);
+          else { entry.text = reply.data.text; entry.cut = !!reply.data.cut; entry.name = reply.data.name || entry.name; }
+        }
+        entry.ready = !entry.problem;
+      } catch (error) {
+        entry.problem = "Diese Datei konnte nicht gelesen werden.";
+      }
+      drawStaged();
+      update();
+    }
+    picker.addEventListener("change", () => { const file = picker.files[0]; const kind = picker.dataset.kind; picker.value = ""; if (file) attach(file, kind); });
+    const pick = (accept, kind) => { picker.accept = accept; picker.dataset.kind = kind; picker.click(); };
 
     // ---- conversations
     function open(next) {
@@ -240,7 +335,7 @@
         h("div", { class: "nx-top" }, h("b", {}, "Nex"), close === noClose ? null : h("button", { class: "icon-btn", type: "button", "aria-label": "Schließen", onclick: close }, icon("close"))),
         h("button", { class: "nx-new", type: "button", onclick: () => { close(); newChat(); } }, icon("pencil"), h("span", {}, "Neues Gespräch")),
         h("div", { class: "nx-label" }, "Gespräche"), list,
-        close === noClose ? null : h("nav", { class: "nx-links drawer-nav", "aria-label": "Pulse" }, page(Y.HOME, "home", "Home"), page("/messages", "users", "Chats"), page("/games", "gamepad", "Games"), page("/videos", "playCircle", "Videos"))];
+        close === noClose ? null : h("nav", { class: "nx-links drawer-nav", "aria-label": "Pulse" }, page(Y.HOME, "home", "Home"), page("/messages", "users", "Chats"), page("/camera", "camera", "Kamera"), page("/videos", "playCircle", "Videos"))];
     }
     const noClose = () => {};
     fill(side, ...historyContent(noClose));
@@ -252,6 +347,8 @@
     }
 
     plus.addEventListener("click", () => menu(plus, [
+      { label: "Foto hinzufügen", icon: "image", run: () => pick("image/jpeg,image/png,image/webp", "image") },
+      { label: "Dokument hinzufügen", icon: "file", run: () => pick(".pdf,.txt,.md,.csv,.rtf,.docx,.xlsx,.pptx,.odt,.ods,.odp", "document") },
       { label: "Neues Gespräch", icon: "pencil", run: newChat },
       { label: "Gespräche anzeigen", icon: "list", run: openHistory },
     ]));

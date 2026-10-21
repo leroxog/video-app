@@ -1,6 +1,6 @@
 /* Pulse GIFs: the picker (a sheet from the bottom on a phone, a window on a computer) with the library of everybody's GIFs -- popular,
-   new, your favourites, your own, and a search --, a star to favourite a GIF, and a "+" to make your own: from photos, from a text
-   or from a GIF file. A GIF you make goes into the library, where everybody who is signed in can favourite it and send it.
+   new, your favourites, your own, and a search --, a star to favourite a GIF, and a "+" to make your own: a name and a picture (a photo, a few photos or
+   a GIF file). A sticker you make goes into the library, where everybody who is signed in can favourite it and send it.
    Everything a GIF is made of is drawn here on a canvas and written to a file by yipi-gif-core.js, in the browser. */
 (function () {
   "use strict";
@@ -232,72 +232,8 @@
   };
 
   // ------------------------------------------------------------------------------------------------ making
-  const SWATCHES = [["#7c3aed", "#ffffff"], ["#2563eb", "#ffffff"], ["#0891b2", "#ffffff"], ["#16a34a", "#ffffff"], ["#facc15", "#14161f"], ["#f97316", "#ffffff"], ["#e11d48", "#ffffff"], ["#14161f", "#ffffff"]];
-  const TEXT_STYLES = [["pulse", "Pulsieren"], ["shake", "Wackeln"], ["rainbow", "Regenbogen"], ["blink", "Blinken"], ["wave", "Wellen"]];
-  const SPEEDS = [["slow", "Langsam", 900], ["medium", "Mittel", 550], ["fast", "Schnell", 280]];
-  const SHAPES = [["wide", "Quer", 4 / 3], ["square", "Quadrat", 1], ["tall", "Hoch", 3 / 4]];
-  const TEXT_FRAMES = 16;
-  const TEXT_WIDTH = 320;
-
-  const wave = (t, cycles = 1, phase = 0) => Math.sin((t * cycles + phase) * Math.PI * 2);
-
-  function segmented(label, options, value, onChange) {
-    const box = h("div", { class: "seg", role: "radiogroup", "aria-label": label });
-    const draw = () => fill(box, options.map(([id, text]) => h("button", { class: `seg-btn${id === value ? " on" : ""}`, type: "button", role: "radio", "aria-checked": String(id === value), onclick: () => { value = id; draw(); onChange(id); } }, text)));
-    draw();
-    return box;
-  }
-
-  /* Text on a flat colour, in a style: draws the picture at moment t (0 to 1, a loop) on a context of the size width x height. */
-  function drawText(context, width, height, text, swatch, style, t) {
-    const [background, ink] = swatch;
-    let fillStyle = ink;
-    let backgroundNow = background;
-    if (style === "blink") backgroundNow = t < 0.5 ? background : ink === "#ffffff" ? "#ffffff" : "#14161f";
-    if (style === "blink") fillStyle = t < 0.5 ? ink : background;
-    context.fillStyle = backgroundNow;
-    context.fillRect(0, 0, width, height);
-    const words = text.split(/\s+/).filter(Boolean);
-    let lines = [words.join(" ")];
-    const maxWidth = width * 0.86;
-    let size = Math.min(height * 0.5, 96);
-    const fit = () => { context.font = `800 ${size}px Inter, "Segoe UI", system-ui, sans-serif`; return Math.max(...lines.map((line) => context.measureText(line).width)); };
-    let measured = fit();
-    if (measured > maxWidth && words.length > 1) {
-      const middle = Math.ceil(words.length / 2);
-      lines = [words.slice(0, middle).join(" "), words.slice(middle).join(" ")];
-      measured = fit();
-    }
-    while (measured > maxWidth && size > 14) { size -= 2; measured = fit(); }
-    context.textAlign = "center";
-    context.textBaseline = "middle";
-    const lineHeight = size * 1.12;
-    const top = height / 2 - ((lines.length - 1) * lineHeight) / 2;
-    lines.forEach((line, row) => {
-      const y = top + row * lineHeight;
-      if (style === "wave") {
-        const letters = Array.from(line);
-        const total = context.measureText(line).width;
-        let x = width / 2 - total / 2;
-        for (let k = 0; k < letters.length; k += 1) {
-          const letterWidth = context.measureText(letters[k]).width;
-          context.fillStyle = fillStyle;
-          context.textAlign = "left";
-          context.fillText(letters[k], x, y + wave(t, 1, k / Math.max(3, letters.length)) * size * 0.16);
-          x += letterWidth;
-        }
-        context.textAlign = "center";
-        return;
-      }
-      context.save();
-      context.translate(width / 2, y);
-      if (style === "pulse") { const grow = 1 + 0.12 * wave(t, 1); context.scale(grow, grow); }
-      if (style === "shake") { context.translate(wave(t, 3) * size * 0.07, wave(t, 4, 0.25) * size * 0.04); context.rotate(wave(t, 3, 0.1) * 0.05); }
-      context.fillStyle = style === "rainbow" ? `hsl(${Math.round(t * 360 + row * 40)} 90% ${ink === "#14161f" ? 35 : 62}%)` : fillStyle;
-      context.fillText(line, 0, 0);
-      context.restore();
-    });
-  }
+  const FRAME_MS = 550;                                       // how long each photo is shown when several make one moving sticker
+  const STICKER_WIDTH = 360;
 
   /* The photo `source` (a bitmap) cut to fill the whole frame, like object-fit: cover. */
   function drawCover(context, source, width, height) {
@@ -320,131 +256,72 @@
 
   const asBlob = (bytes) => new Blob([bytes], { type: "image/gif" });
 
-  /* The view to make a GIF. `onBack()` leaves it, `onDone(gif)` is called with the new library entry. */
+  /* The view to make a sticker: a name and a picture, nothing else. A GIF file stays as it is, one photo becomes a still sticker, several photos
+     (up to ten) one that moves. `onBack()` leaves it, `onDone(gif)` is called with the new library entry. */
   function makeView({ onBack, onDone }) {
-    let mode = "photos";
     let busy = false;
     let timer = null;
-    const photos = [];                                        // {file, bitmap, url}
-    const text = { value: "", swatch: 0, style: "pulse" };
-    const file = { blob: null, url: "" };
-    const options = { shape: "wide", speed: "medium", pingpong: true };
+    const photos = [];                                        // {bitmap, url}
+    const file = { blob: null, url: "" };                     // a GIF that is taken as it is
 
     const stage = h("div", { class: "gif-stage" });
-    const controls = h("div", { class: "gif-controls" });
-    const title = h("input", { class: "field", maxlength: GifCore.MAX_TITLE, placeholder: "Name oder Stichwörter, z. B. lachen", "aria-label": "Name des GIFs", autocomplete: "off" });
-    const hint = h("p", { class: "hint" }, "Dein GIF kommt in die Bibliothek: alle, die angemeldet sind, können es finden, mit einem Stern merken und verschicken.");
+    const title = h("input", { class: "field", maxlength: GifCore.MAX_TITLE, placeholder: "Name, z. B. lachen", "aria-label": "Name des Stickers", autocomplete: "off", required: true });
+    const hint = h("p", { class: "hint" }, "Dein Sticker kommt in die Bibliothek: alle, die angemeldet sind, können ihn finden, mit einem Stern merken und verschicken.");
     const create = h("button", { class: "btn primary", type: "button", disabled: true }, "Erstellen und einfügen");
-    const modes = h("div", { class: "gif-modes" });
-    const picker = h("input", { type: "file", hidden: true, "aria-hidden": "true", tabindex: "-1" });
+    const picker = h("input", { type: "file", accept: "image/jpeg,image/png,image/webp,image/gif", multiple: true, hidden: true, "aria-hidden": "true", tabindex: "-1" });
 
-    // ---- the frames of the current mode (a canvas each), also used to play a preview
-    function shapeRatio() { return SHAPES.find(([id]) => id === options.shape)[2]; }
+    const named = () => !!GifCore.cleanTitle(title.value);
+    const ready = () => !busy && named() && (!!file.blob || photos.length > 0);
+    const ratio = () => Math.max(0.6, Math.min(1.8, photos[0].bitmap.width / photos[0].bitmap.height));
+    const choose = () => picker.click();
+
+    function clear() {
+      stopPreview();
+      photos.splice(0).forEach((photo) => { URL.revokeObjectURL(photo.url); photo.bitmap.close?.(); });
+      if (file.url) URL.revokeObjectURL(file.url);
+      file.blob = null;
+      file.url = "";
+    }
+
+    function stopPreview() { clearInterval(timer); timer = null; }
 
     function photoFrames(width) {
-      const height = Math.round(width / shapeRatio());
-      const frames = [];
+      const height = Math.round(width / ratio());
       const canvas = document.createElement("canvas");
       canvas.width = width;
       canvas.height = height;
       const context = canvas.getContext("2d", { willReadFrequently: true });
-      for (const photo of photos) {
+      const frames = photos.map((photo) => {
         context.fillStyle = "#000";
         context.fillRect(0, 0, width, height);
         drawCover(context, photo.bitmap, width, height);
-        frames.push(context.getImageData(0, 0, width, height).data);
-      }
-      const order = options.pingpong && frames.length > 2 ? GifCore.pingPong(frames.length) : frames.map((_, i) => i);
+        return context.getImageData(0, 0, width, height).data;
+      });
+      const order = frames.length > 2 ? GifCore.pingPong(frames.length) : frames.map((_, i) => i);
       return { width, height, frames: order.map((i) => frames[i]) };
     }
 
-    function textFrames() {
-      const canvas = document.createElement("canvas");
-      canvas.width = TEXT_WIDTH;
-      canvas.height = Math.round(TEXT_WIDTH * 0.75);
-      const context = canvas.getContext("2d", { willReadFrequently: true });
-      const frames = [];
-      for (let k = 0; k < TEXT_FRAMES; k += 1) {
-        drawText(context, canvas.width, canvas.height, text.value, SWATCHES[text.swatch], text.style, k / TEXT_FRAMES);
-        frames.push(context.getImageData(0, 0, canvas.width, canvas.height).data);
-      }
-      return { width: canvas.width, height: canvas.height, frames };
-    }
-
-    // ---- the preview
-    function stopPreview() { clearInterval(timer); timer = null; }
-
     function preview() {
       stopPreview();
-      const ready = mode === "photos" ? photos.length >= 2 : mode === "text" ? !!Core.cleanText(text.value) : !!file.blob;
-      create.disabled = busy || !ready;
-      if (mode === "file") {
-        fill(stage, file.url ? h("img", { class: "gif-result", src: file.url, alt: "Vorschau deines GIFs" }) : h("button", { class: "gif-drop", type: "button", onclick: () => { picker.accept = "image/gif"; picker.multiple = false; picker.click(); } }, icon("gif"), h("b", {}, "GIF-Datei auswählen"), h("small", {}, "Höchstens 3 MB")));
+      create.disabled = !ready();
+      if (file.blob) {
+        fill(stage, h("img", { class: "gif-result", src: file.url, alt: "Vorschau deines Stickers" }), h("button", { class: "gif-change", type: "button", onclick: choose }, "Anderes Bild"));
         return;
       }
-      if (!ready) {
-        fill(stage, h("div", { class: "gif-drop idle" }, icon(mode === "photos" ? "image" : "text"), h("b", {}, mode === "photos" ? "Wähle mindestens 2 Fotos" : "Schreib einen Text"), h("small", {}, mode === "photos" ? "Bis zu 10 Fotos werden zu einem Daumenkino." : "Zum Beispiel „Moin!“ oder „Läuft bei dir“.")));
+      if (!photos.length) {
+        fill(stage, h("button", { class: "gif-drop", type: "button", onclick: choose }, icon("image"), h("b", {}, "Foto oder GIF auswählen"), h("small", {}, "Ein GIF bleibt, wie es ist. Aus mehreren Fotos wird ein Sticker, der sich bewegt.")));
         return;
       }
-      const canvas = h("canvas", { class: "gif-canvas", role: "img", "aria-label": "Vorschau deines GIFs" });
-      fill(stage, canvas);
+      const canvas = h("canvas", { class: "gif-canvas", role: "img", "aria-label": "Vorschau deines Stickers" });
+      fill(stage, canvas, h("button", { class: "gif-change", type: "button", onclick: choose }, photos.length < 10 ? "Mehr Fotos oder anderes Bild" : "Anderes Bild"));
       const context = canvas.getContext("2d");
-      if (mode === "photos") {
-        const width = 360;
-        canvas.width = width;
-        canvas.height = Math.round(width / shapeRatio());
-        const order = options.pingpong && photos.length > 2 ? GifCore.pingPong(photos.length) : photos.map((_, i) => i);
-        let step = 0;
-        const draw = () => { context.fillStyle = "#000"; context.fillRect(0, 0, canvas.width, canvas.height); drawCover(context, photos[order[step % order.length]].bitmap, canvas.width, canvas.height); step += 1; };
-        draw();
-        timer = setInterval(draw, SPEEDS.find(([id]) => id === options.speed)[2]);
-      } else {
-        canvas.width = TEXT_WIDTH;
-        canvas.height = Math.round(TEXT_WIDTH * 0.75);
-        let step = 0;
-        const draw = () => { drawText(context, canvas.width, canvas.height, Core.cleanText(text.value), SWATCHES[text.swatch], text.style, (step % TEXT_FRAMES) / TEXT_FRAMES); step += 1; };
-        draw();
-        timer = setInterval(draw, 80);
-      }
-    }
-
-    // ---- the controls of the current mode
-    function drawControls() {
-      if (mode === "photos") {
-        const strip = h("div", { class: "gif-thumbs" }, photos.map((photo, index) => h("div", { class: "gif-thumb" },
-          h("img", { src: photo.url, alt: `Foto ${index + 1}` }),
-          h("button", { class: "pv-x", type: "button", "aria-label": `Foto ${index + 1} entfernen`, onclick: () => { URL.revokeObjectURL(photo.url); photo.bitmap.close?.(); photos.splice(index, 1); drawControls(); preview(); } }, icon("close")))),
-          photos.length < 10 ? h("button", { class: "gif-thumb add", type: "button", "aria-label": "Fotos hinzufügen", onclick: () => { picker.accept = "image/jpeg,image/png,image/webp,image/gif"; picker.multiple = true; picker.click(); } }, icon("plus")) : null);
-        fill(controls, strip,
-          h("div", { class: "gif-row" }, h("span", { class: "gif-label" }, "Format"), segmented("Format", SHAPES, options.shape, (id) => { options.shape = id; preview(); })),
-          h("div", { class: "gif-row" }, h("span", { class: "gif-label" }, "Tempo"), segmented("Tempo", SPEEDS, options.speed, (id) => { options.speed = id; preview(); })),
-          h("label", { class: "check gif-check" }, h("input", { type: "checkbox", checked: options.pingpong, onchange: (event) => { options.pingpong = event.currentTarget.checked; preview(); } }), h("span", {}, "Hin und zurück (ohne Sprung am Ende)")));
-      } else if (mode === "text") {
-        const input = h("input", { class: "field", maxlength: 30, placeholder: "Dein Text", "aria-label": "Text des GIFs", autocomplete: "off" });
-        input.value = text.value;
-        input.addEventListener("input", () => { text.value = input.value; preview(); });
-        fill(controls, input,
-          h("div", { class: "gif-row" }, h("span", { class: "gif-label" }, "Stil"), segmented("Stil", TEXT_STYLES, text.style, (id) => { text.style = id; preview(); })),
-          h("div", { class: "gif-row" }, h("span", { class: "gif-label" }, "Farbe"), h("div", { class: "swatches", role: "radiogroup", "aria-label": "Farbe" }, SWATCHES.map(([colour], index) =>
-            h("button", { class: `swatch${index === text.swatch ? " on" : ""}`, type: "button", role: "radio", "aria-checked": String(index === text.swatch), "aria-label": `Farbe ${index + 1}`, style: `background:${colour}`, onclick: (event) => {
-              text.swatch = index;
-              for (const other of event.currentTarget.parentNode.children) { other.classList.remove("on"); other.setAttribute("aria-checked", "false"); }
-              event.currentTarget.classList.add("on");
-              event.currentTarget.setAttribute("aria-checked", "true");
-              preview();
-            } })))));
-        setTimeout(() => input.focus(), 0);
-      } else {
-        fill(controls, h("p", { class: "hint" }, "Nimm ein GIF, das du selbst gemacht hast oder das du verschicken darfst."));
-      }
-    }
-
-    function setMode(next) {
-      if (busy) return;
-      mode = next;
-      fill(modes, Y.tabs([["photos", "Fotos"], ["text", "Text"], ["file", "GIF-Datei"]], mode, setMode, "So machst du ein GIF"));
-      drawControls();
-      preview();
+      canvas.width = STICKER_WIDTH;
+      canvas.height = Math.round(STICKER_WIDTH / ratio());
+      const order = photos.length > 2 ? GifCore.pingPong(photos.length) : photos.map((_, i) => i);
+      let step = 0;
+      const draw = () => { context.fillStyle = "#000"; context.fillRect(0, 0, canvas.width, canvas.height); drawCover(context, photos[order[step % order.length]].bitmap, canvas.width, canvas.height); step += 1; };
+      draw();
+      if (photos.length > 1) timer = setInterval(draw, FRAME_MS);
     }
 
     picker.addEventListener("change", async () => {
@@ -452,38 +329,41 @@
       picker.value = "";
       if (!chosen.length) return;
       if (chosen.some((entry) => entry.type.startsWith("video/"))) { toast("Videos gibt es bei Pulse nicht. Nimm Fotos oder ein GIF."); return; }
-      if (mode === "file") {
+      if (chosen.length === 1 && chosen[0].type === "image/gif") {          // a GIF is the sticker itself
         const entry = chosen[0];
-        if (entry.type !== "image/gif") { toast("Das ist keine GIF-Datei."); return; }
         if (entry.size > GifCore.MAX_BYTES) { toast(Api.MESSAGES.gif_too_big); return; }
         const bytes = new Uint8Array(await entry.arrayBuffer());
         if (!GifCore.inspect(bytes)) { toast(Api.MESSAGES.bad_gif); return; }
-        if (file.url) URL.revokeObjectURL(file.url);
+        clear();
         file.blob = new Blob([bytes], { type: "image/gif" });
         file.url = URL.createObjectURL(file.blob);
         preview();
         return;
       }
+      if (file.blob) clear();
       for (const entry of chosen) {
         if (photos.length >= 10) { toast("Mehr als 10 Fotos gehen nicht."); break; }
         if (!/^image\/(jpeg|png|webp|gif)$/.test(entry.type)) { toast(Api.MESSAGES.bad_image); continue; }
-        try { photos.push({ file: entry, bitmap: await loadPicture(entry), url: URL.createObjectURL(entry) }); } catch (error) { toast("Dieses Foto konnte nicht gelesen werden."); }
+        try { photos.push({ bitmap: await loadPicture(entry), url: URL.createObjectURL(entry) }); } catch (error) { toast("Dieses Foto konnte nicht gelesen werden."); }
       }
-      drawControls();
       preview();
     });
+    title.addEventListener("input", () => { create.disabled = !ready(); });
 
-    // ---- making it
     async function encodeCurrent() {
-      if (mode === "file") return file.blob;
-      if (mode === "text") {
-        const made = textFrames();
-        return asBlob(GifCore.encode(made.frames, made.width, made.height, { delay: 80, colors: 32 }));
+      if (file.blob) return file.blob;
+      if (photos.length === 1) {                              // one photo: one picture, in the best quality that fits
+        for (const [width, colors] of [[400, 192], [320, 128], [240, 96], [180, 64]]) {
+          const made = photoFrames(width);
+          const blob = asBlob(GifCore.encode(made.frames, made.width, made.height, { delay: 100, colors, dither: true }));
+          if (blob.size <= GifCore.MAX_BYTES) return blob;
+          await wait(20);
+        }
+        return null;
       }
-      const delay = SPEEDS.find(([id]) => id === options.speed)[2];
       for (const [width, colors] of [[360, 128], [300, 96], [240, 64], [180, 48]]) {
         const made = photoFrames(width);
-        const blob = asBlob(GifCore.encode(made.frames, made.width, made.height, { delay, colors, dither: true }));
+        const blob = asBlob(GifCore.encode(made.frames, made.width, made.height, { delay: FRAME_MS, colors, dither: true }));
         if (blob.size <= GifCore.MAX_BYTES) return blob;
         await wait(20);
       }
@@ -491,31 +371,32 @@
     }
 
     create.addEventListener("click", async () => {
-      if (busy) return;
+      if (!ready()) return;
       busy = true;
       create.disabled = true;
       create.classList.add("busy");
       await wait(40);                                         // let the button show that it is working before the pixels are crunched
       let blob = null;
       try { blob = await encodeCurrent(); } catch (error) { blob = null; }
-      if (!blob) { busy = false; create.classList.remove("busy"); create.disabled = false; toast("Das GIF konnte nicht erstellt werden (vielleicht ist es zu groß)."); return; }
+      if (!blob) { busy = false; create.classList.remove("busy"); create.disabled = !ready(); toast("Der Sticker konnte nicht erstellt werden (vielleicht ist das Bild zu groß)."); return; }
       const reply = await Api.uploadGif(blob, { title: GifCore.cleanTitle(title.value) });
       busy = false;
       create.classList.remove("busy");
-      create.disabled = false;
+      create.disabled = !ready();
       if (!reply.ok) { toast(Api.message(reply)); return; }
-      stopPreview();
-      toast("Dein GIF ist in der Bibliothek.");
+      clear();
+      toast("Dein Sticker ist in der Bibliothek.");
+      Y.sound?.play("success");
       onDone(reply.data.gif);
     });
 
-    const back = h("button", { class: "btn ghost", type: "button", onclick: () => { stopPreview(); photos.forEach((photo) => { URL.revokeObjectURL(photo.url); photo.bitmap.close?.(); }); if (file.url) URL.revokeObjectURL(file.url); onBack(); } }, "Zurück");
+    const leave = () => { clear(); onBack(); };
     const root = h("div", { class: "gif-make" },
-      h("div", { class: "gif-make-top" }, h("button", { class: "icon-btn", type: "button", "aria-label": "Zurück zur Bibliothek", onclick: () => back.click() }, icon("back")), h("h2", {}, "Eigenes GIF")),
-      modes, stage, controls,
-      h("label", { class: "field-label" }, h("span", {}, "Name (freiwillig)"), title), hint, picker,
-      h("div", { class: "gif-foot" }, back, create));
-    setMode("photos");
+      h("div", { class: "gif-make-top" }, h("button", { class: "icon-btn", type: "button", "aria-label": "Zurück zur Bibliothek", onclick: leave }, icon("back")), h("h2", {}, "Eigener Sticker")),
+      h("label", { class: "field-label" }, h("span", {}, "Name"), title),
+      stage, hint, picker,
+      h("div", { class: "gif-foot" }, h("button", { class: "btn ghost", type: "button", onclick: leave }, "Zurück"), create));
+    preview();
     return root;
   }
 
