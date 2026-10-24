@@ -112,7 +112,7 @@
 
   /* ------------------------------------------------------------------------------------------------ the loop around a game */
   /* run(def, canvas, hooks): plays the game on the canvas of the page. hooks: onScore, onOver. Returns {restart, destroy, env}. */
-  function run(def, canvas, hooks = {}) {
+  function run(def, canvas, hooks = {}, options = {}) {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     canvas.width = Math.round(W * dpr);
     canvas.height = Math.round(H * dpr);
@@ -125,6 +125,8 @@
     let acc = 0;
     let dead = false;
     let paused = false;
+    let armed = !!options.armed;                       // the first picture is drawn and then the game waits: the first touch (or key) starts it, and hooks.onStart() is called
+    const arm = () => { if (!armed) return; armed = false; hooks.onStart?.(); };
 
     function start() {
       env = createEnv(ctx, hooks);
@@ -143,6 +145,7 @@
       i.x = x; i.y = y; i.downX = x; i.downY = y; i.down = true; i.pressed = true; i.downAt = performance.now();
       try { canvas.setPointerCapture(event.pointerId); } catch (error) { /* a mouse may not have one */ }
       event.preventDefault();
+      if (!(game && game.canStart && game.canStart(x, y) === false)) arm();       // the touch that starts the game is also its first input (a game can keep some places for itself, like a switch)
     };
     const move = (event) => {
       if (!env) return;
@@ -165,6 +168,7 @@
       if (/^(Arrow|Page)/.test(event.key) || event.key === " ") event.preventDefault();
       if (!env.input.keys.has(event.key)) env.input._keysPressed.add(event.key);
       env.input.keys.add(event.key);
+      if (/^(Arrow|Page)|^[ \n\rwasdWASD]$|^Enter$/.test(event.key)) arm();
     };
     const keyUp = (event) => { env?.input.keys.delete(event.key); };
     canvas.addEventListener("pointerdown", down);
@@ -180,13 +184,16 @@
       if (!last) last = now;
       acc += Math.min(0.1, (now - last) / 1000);
       last = now;
-      if (!paused) {
+      if (!paused && !armed) {
         while (acc >= STEP) {
           if (!env.finished) game.update?.(STEP);
           env.input.endTick();
           acc -= STEP;
         }
-      } else acc = 0;
+      } else {
+        acc = 0;
+        if (armed && game.idle) { game.idle(env.input); env.input.endTick(); }     // while the game waits for the first touch it may still answer a touch on its own switches
+      }
       ctx.clearRect(0, 0, W, H);
       game.draw?.();
     }
@@ -196,6 +203,8 @@
       env: () => env,
       restart() { start(); },
       pause(on) { paused = !!on; },
+      go() { arm(); },                                 // start by hand (the round button of the lens strip)
+      isArmed: () => armed,
       destroy() {
         dead = true;
         cancelAnimationFrame(raf);
@@ -248,7 +257,8 @@
 
   window.PulseGames = {
     W, H, register, headless, run, createEnv, mulberry32,
-    list: () => games.map(({ id, name, emoji, cat, hint, color, external }) => ({ id, name, emoji, cat, hint, color: color || "", external: !!external })),
+    list: () => games.map((def, index) => ({ def, index })).sort((a, b) => (b.def.featured ? 1000 - (b.def.order || 0) : 0) - (a.def.featured ? 1000 - (a.def.order || 0) : 0) || a.index - b.index)
+      .map(({ def: { id, name, emoji, cat, hint, color, external, featured } }) => ({ id, name, emoji, cat, hint, color: color || "", external: !!external, featured: !!featured })),
     get: (id) => byId.get(id) || null,
     count: () => games.length,
   };

@@ -43,6 +43,18 @@
       <li>Noch keine.</li>
   {%- endfor %}
     </ul>
+  {%- if rank_credits %}
+    <h2>Bilder der Ranglisten-Spiele</h2>
+    <p class="lead">Die Fotos der Fußballer und Musiker und die Flaggen in den Ranglisten-Spielen stammen ebenfalls von Wikimedia Commons. Wir haben sie verkleinert und bei Fotos auf ein Quadrat zugeschnitten (bearbeitet: verkleinert und zugeschnitten); sonst nichts verändert.</p>
+    {%- for group in rank_credits %}
+    <h3>{{ group.title }}</h3>
+    <ul class="credits">
+      {%- for entry in group.entries %}
+      <li><b>{{ entry.name }}</b>: {{ entry.author }}, <a href="{{ entry.licenceUrl or entry.pageUrl }}" rel="noopener nofollow">{{ entry.licence }}</a>, <a href="{{ entry.pageUrl }}" rel="noopener nofollow">Quelle</a></li>
+      {%- endfor %}
+    </ul>
+    {%- endfor %}
+  {%- endif %}
 {%- elif page == "terms" %}
     <h1>Nutzungsbedingungen</h1>
     <p class="lead">Nex ist ein soziales Netzwerk für kurze Beiträge, Videos, Fotos und GIFs, mit Chats, Spielen und Nex AI, einer KI, die dir weiterhilft. Kostenlos. Stand: Oktober 2026.</p>

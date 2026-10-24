@@ -1,0 +1,1223 @@
+{
+ "footballers": [
+  {
+   "slug": "lionel-messi",
+   "name": "Lionel Messi",
+   "file": "lionel-messi.jpg",
+   "author": "Bryan Berlin",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Leo_Messi_Argentina_v_Egypt_7_July_2026-1.jpg"
+  },
+  {
+   "slug": "cristiano-ronaldo",
+   "name": "Cristiano Ronaldo",
+   "file": "cristiano-ronaldo.jpg",
+   "author": "Bryan Berlin",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Cristiano_Ronaldo_Croatia_v_Portugal_2_July_2026-075_(cropped).jpg"
+  },
+  {
+   "slug": "kylian-mbappe",
+   "name": "Kylian Mbappé",
+   "file": "kylian-mbappe.jpg",
+   "author": "Bryan Berlin",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Kylian_Mbappe_France_v_Senegal_16_June_2026-391_(cropped).jpg"
+  },
+  {
+   "slug": "erling-haaland",
+   "name": "Erling Haaland",
+   "file": "erling-haaland.jpg",
+   "author": "Bryan Berlin",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Erling_Haaland_Morocco_v_Norway_7_June_2026-51.jpg"
+  },
+  {
+   "slug": "manuel-neuer",
+   "name": "Manuel Neuer",
+   "file": "manuel-neuer.jpg",
+   "author": "Bryan Berlin",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Manuel_Neuer_Ecuador_v_Germany_25_June_2026-148.jpg"
+  },
+  {
+   "slug": "thomas-muller",
+   "name": "Thomas Müller",
+   "file": "thomas-muller.jpg",
+   "author": "Werner100359",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:FC_Red_Bull_Salzburg_gegen_Bayern_M%C3%BCnchen_(2025-01-06_Testspiel)_19.jpg"
+  },
+  {
+   "slug": "jamal-musiala",
+   "name": "Jamal Musiala",
+   "file": "jamal-musiala.jpg",
+   "author": "Bryan Berlin",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Jamal_Musiala_Ecuador_v_Germany_25_June_2026-174_(cropped).jpg"
+  },
+  {
+   "slug": "florian-wirtz",
+   "name": "Florian Wirtz",
+   "file": "florian-wirtz.jpg",
+   "author": "Bryan Berlin",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Florian_Wirtz_Ecuador_v_Germany_25_June_2026-181_(cropped).jpg"
+  },
+  {
+   "slug": "toni-kroos",
+   "name": "Toni Kroos",
+   "file": "toni-kroos.jpg",
+   "author": "https://www.youtube.com/@realmadrid",
+   "licence": "CC BY 3.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by/3.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Toni_Kroos_Real_Madrid_2021.jpg"
+  },
+  {
+   "slug": "pele",
+   "name": "Pelé",
+   "file": "pele.jpg",
+   "author": "Unknown authorUnknown author",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Pele_con_brasil_(cropped).jpg"
+  },
+  {
+   "slug": "diego-maradona",
+   "name": "Diego Maradona",
+   "file": "diego-maradona.jpg",
+   "author": "Unknown authorUnknown author",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Argentina_celebrando_copa_(cropped).jpg"
+  },
+  {
+   "slug": "franz-beckenbauer",
+   "name": "Franz Beckenbauer",
+   "file": "franz-beckenbauer.jpg",
+   "author": "Panini Group",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Franz_Beckenbauer_(1975).jpg"
+  },
+  {
+   "slug": "zinedine-zidane",
+   "name": "Zinedine Zidane",
+   "file": "zinedine-zidane.jpg",
+   "author": "Hadi Abyar",
+   "licence": "CC BY 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Zinedine_Zidane_by_Tasnim_03.jpg"
+  },
+  {
+   "slug": "ronaldinho",
+   "name": "Ronaldinho",
+   "file": "ronaldinho.jpg",
+   "author": "Marcos Corrêa/PR",
+   "licence": "CC BY 2.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Ronaldinho_in_2019.jpg"
+  },
+  {
+   "slug": "neymar",
+   "name": "Neymar",
+   "file": "neymar.jpg",
+   "author": "Bryan Berlin",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Neymar_Junior_Brazil_V_Morocco_13_June_2026-40.jpg"
+  },
+  {
+   "slug": "robert-lewandowski",
+   "name": "Robert Lewandowski",
+   "file": "robert-lewandowski.jpg",
+   "author": "Bryan Berlin",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Robert_Lewandowski_NYCFC_v_Chicago_25_July_2026-383.jpg"
+  },
+  {
+   "slug": "luka-modric",
+   "name": "Luka Modrić",
+   "file": "luka-modric.jpg",
+   "author": "Bryan Berlin",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Luka_Modric_Croatia_v_Portugal_2_July_2026-055.jpg"
+  },
+  {
+   "slug": "kevin-de-bruyne",
+   "name": "Kevin De Bruyne",
+   "file": "kevin-de-bruyne.jpg",
+   "author": "Bryan Berlin",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Kevin_De_Bruyne_USMNT_v_Belgium_Mar_28_2026-64_(cropped).jpg"
+  },
+  {
+   "slug": "mohamed-salah",
+   "name": "Mohamed Salah",
+   "file": "mohamed-salah.jpg",
+   "author": "Bryan Berlin",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Mohamed_Salah_Argentina_v_Egypt_7_July_2026-163_(cropped).jpg"
+  },
+  {
+   "slug": "harry-kane",
+   "name": "Harry Kane",
+   "file": "harry-kane.jpg",
+   "author": "Bryan Berlin",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Harry_Kane_England_v_Ghana_23_June_2026-024_(cropped).jpg"
+  },
+  {
+   "slug": "vinicius-j-nior",
+   "name": "Vinícius Júnior",
+   "file": "vinicius-j-nior.jpg",
+   "author": "Bryan Berlin",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Vin%C3%ADcius_J%C3%BAnior_Brazil_V_Morocco_13_June_2026-207_(cropped).jpg"
+  },
+  {
+   "slug": "jude-bellingham",
+   "name": "Jude Bellingham",
+   "file": "jude-bellingham.jpg",
+   "author": "Bryan Berlin",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Jude_Bellingham_England_v_Ghana_23_June_2026-061_(cropped).jpg"
+  },
+  {
+   "slug": "lamine-yamal",
+   "name": "Lamine Yamal",
+   "file": "lamine-yamal.jpg",
+   "author": "Bryan Berlin",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Lamine_Yamal_France_v_Spain_7.24.26-144.jpg"
+  },
+  {
+   "slug": "pedri",
+   "name": "Pedri",
+   "file": "pedri.jpg",
+   "author": "Bryan Berlin",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Pedri_France_v_Spain_7.24.26-245.jpg"
+  },
+  {
+   "slug": "joshua-kimmich",
+   "name": "Joshua Kimmich",
+   "file": "joshua-kimmich.jpg",
+   "author": "Bryan Berlin",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Joshua_Kimmich_Ecuador_v_Germany_25_June_2026-149.jpg"
+  },
+  {
+   "slug": "kai-havertz",
+   "name": "Kai Havertz",
+   "file": "kai-havertz.jpg",
+   "author": "Bryan Berlin",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Kai_Havertz_Ecuador_v_Germany_25_June_2026-118.jpg"
+  },
+  {
+   "slug": "i-lkay-gundogan",
+   "name": "İlkay Gündoğan",
+   "file": "i-lkay-gundogan.jpg",
+   "author": "Granada",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:20180602_FIFA_Friendly_Match_Austria_vs._Germany_%C4%B0lkay_G%C3%BCndo%C4%9Fan_850_0728.jpg"
+  },
+  {
+   "slug": "miroslav-klose",
+   "name": "Miroslav Klose",
+   "file": "miroslav-klose.jpg",
+   "author": "Sven Mandel",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:2016209185719_2016-07-27_Champions_for_Charity_-_Sven_-_1D_X_-_0149_-_DV3P4742_mod.jpg"
+  },
+  {
+   "slug": "michael-ballack",
+   "name": "Michael Ballack",
+   "file": "michael-ballack.jpg",
+   "author": "Die Bildermacherei Cuxhaven, Kerstin Tietje",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:10._Tag_der_Legenden_2014_69.jpg"
+  },
+  {
+   "slug": "mesut-ozil",
+   "name": "Mesut Özil",
+   "file": "mesut-ozil.jpg",
+   "author": "Amir Hosseini",
+   "licence": "CC BY 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Mesut_%C3%96zil_at_Baku_before_2019_UEFA_Europe_League_Final.jpg"
+  },
+  {
+   "slug": "mario-gotze",
+   "name": "Mario Götze",
+   "file": "mario-gotze.jpg",
+   "author": "Steindy (talk) 19:34, 27 June 2011 (UTC)",
+   "licence": "CC BY-SA 3.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Mario_G%C3%B6tze,_Germany_national_football_team_(07).jpg"
+  },
+  {
+   "slug": "bastian-schweinsteiger",
+   "name": "Bastian Schweinsteiger",
+   "file": "bastian-schweinsteiger.jpg",
+   "author": "Anne Barth / re:publica",
+   "licence": "CC BY-SA 2.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Re-publica_23_-_Tag_3_(52957826298)_(cropped).jpg"
+  },
+  {
+   "slug": "philipp-lahm",
+   "name": "Philipp Lahm",
+   "file": "philipp-lahm.jpg",
+   "author": "Elena Ternovaja",
+   "licence": "CC BY-SA 3.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Philipp_Lahm_auf_der_Berlinale_2024,_Ausschnitt.jpg"
+  },
+  {
+   "slug": "oliver-kahn",
+   "name": "Oliver Kahn",
+   "file": "oliver-kahn.jpg",
+   "author": "Steffen Prößdorf",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:2022-07-30_Fu%C3%9Fball,_M%C3%A4nner,_DFL-Supercup,_RB_Leipzig_-_FC_Bayern_M%C3%BCnchen_1DX_3179_by_Stepro.jpg"
+  },
+  {
+   "slug": "gianluigi-buffon",
+   "name": "Gianluigi Buffon",
+   "file": "gianluigi-buffon.jpg",
+   "author": "MichaelEmilio",
+   "licence": "CC BY 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Norway_Italy_-_June_2025_A_44_(Gianluigi_Buffon).jpg"
+  },
+  {
+   "slug": "andres-iniesta",
+   "name": "Andrés Iniesta",
+   "file": "andres-iniesta.jpg",
+   "author": "Bryan Berlin",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Andr%C3%A9s_Iniesta_Argentina_v_Spain_19_July_2026-034_(cropped).jpg"
+  },
+  {
+   "slug": "johan-cruyff",
+   "name": "Johan Cruyff",
+   "file": "johan-cruyff.jpg",
+   "author": "Rob Mieremet / Anefo",
+   "licence": "CC0",
+   "licenceUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Johan_Cruijff_(1974).jpg"
+  },
+  {
+   "slug": "thierry-henry",
+   "name": "Thierry Henry",
+   "file": "thierry-henry.jpg",
+   "author": "Web Summit",
+   "licence": "CC BY 2.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Thierry_Henry_(51649035951)_(cropped).jpg"
+  },
+  {
+   "slug": "david-beckham",
+   "name": "David Beckham",
+   "file": "david-beckham.jpg",
+   "author": "Soccer Aid for Unicef",
+   "licence": "CC BY 3.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by/3.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:David_Beckham_UNICEF_(cropped2).jpg"
+  },
+  {
+   "slug": "zlatan-ibrahimovic",
+   "name": "Zlatan Ibrahimović",
+   "file": "zlatan-ibrahimovic.jpg",
+   "author": "Colleen Sturtevant",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Zlatan_Ibrahimovi%C4%87_nyc.jpg"
+  },
+  {
+   "slug": "gerd-muller",
+   "name": "Gerd Müller",
+   "file": "gerd-muller.jpg",
+   "author": "Unknown authorUnknown author",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Gerd_M%C3%BCller_c1973_(cropped).jpg"
+  },
+  {
+   "slug": "lothar-matthaus",
+   "name": "Lothar Matthäus",
+   "file": "lothar-matthaus.jpg",
+   "author": "Steffen Prößdorf",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:2019_Lothar_Matth%C3%A4us.jpg"
+  },
+  {
+   "slug": "marco-reus",
+   "name": "Marco Reus",
+   "file": "marco-reus.jpg",
+   "author": "Sandro Halank, Wikimedia Commons",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:2023-08-12_TSV_Schott_Mainz_gegen_Borussia_Dortmund_(DFB-Pokal_2023-24)_by_Sandro_Halank%E2%80%93126.jpg"
+  },
+  {
+   "slug": "leroy-sane",
+   "name": "Leroy Sané",
+   "file": "leroy-sane.jpg",
+   "author": "Bryan Berlin",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Leroy_Sane_Ecuador_v_Germany_25_June_2026-119_(cropped).jpg"
+  },
+  {
+   "slug": "antonio-rudiger",
+   "name": "Antonio Rüdiger",
+   "file": "antonio-rudiger.jpg",
+   "author": "Bryan Berlin",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Antonio_Rudiger_Ecuador_v_Germany_25_June_2026-055_(cropped).jpg"
+  },
+  {
+   "slug": "ter-stegen",
+   "name": "Ter Stegen",
+   "file": "ter-stegen.jpg",
+   "author": "Government of Catalonia",
+   "licence": "CC0",
+   "licenceUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Marc-Andre_Ter_Stegen_ACCI_FCBARCELONA_Turisme_Catalunya_gira_pretemporada_CATPRESS.jpg"
+  },
+  {
+   "slug": "karim-benzema",
+   "name": "Karim Benzema",
+   "file": "karim-benzema.jpg",
+   "author": "Zack",
+   "licence": "CC BY 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Karim_Benzema_Pick.jpg"
+  },
+  {
+   "slug": "son-heung-min",
+   "name": "Son Heung-min",
+   "file": "son-heung-min.jpg",
+   "author": "Ujishadow",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:BFA_2023_-2_Heung-Min_Son_(cropped).jpg"
+  }
+ ],
+ "musicians": [
+  {
+   "slug": "taylor-swift",
+   "name": "Taylor Swift",
+   "file": "taylor-swift.jpg",
+   "author": "iHeartRadioCA",
+   "licence": "CC BY 3.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by/3.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Taylor_Swift_at_the_2023_MTV_Video_Music_Awards_(3).png"
+  },
+  {
+   "slug": "ed-sheeran",
+   "name": "Ed Sheeran",
+   "file": "ed-sheeran.jpg",
+   "author": "Number 10",
+   "licence": "CC BY 2.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Ed_Sheeran_2022_(3x4_crop).jpg"
+  },
+  {
+   "slug": "billie-eilish",
+   "name": "Billie Eilish",
+   "file": "billie-eilish.jpg",
+   "author": "Raph_PH",
+   "licence": "CC BY 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:BillieEilishO2140725-39_-_54665577407_(cropped).jpg"
+  },
+  {
+   "slug": "drake",
+   "name": "Drake",
+   "file": "drake.jpg",
+   "author": "GabboT",
+   "licence": "CC BY-SA 2.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Drake_at_The_Carter_Effect_2017_(36818935200)_(cropped).jpg"
+  },
+  {
+   "slug": "the-weeknd",
+   "name": "The Weeknd",
+   "file": "the-weeknd.jpg",
+   "author": "Brian Ziff",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:The_Weeknd_Portrait_by_Brian_Ziff.jpg"
+  },
+  {
+   "slug": "eminem",
+   "name": "Eminem",
+   "file": "eminem.jpg",
+   "author": "Brendan_linden",
+   "licence": "CC0",
+   "licenceUrl": "http://creativecommons.org/publicdomain/zero/1.0/deed.en",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Eminem_2021_Color_Corrected.jpg"
+  },
+  {
+   "slug": "rihanna",
+   "name": "Rihanna",
+   "file": "rihanna.jpg",
+   "author": "SIGMA",
+   "licence": "CC BY 3.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by/3.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Rihanna_Fenty_2018.png"
+  },
+  {
+   "slug": "beyonce",
+   "name": "Beyoncé",
+   "file": "beyonce.jpg",
+   "author": "Raph_PH",
+   "licence": "CC BY 2.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Beyonc%C3%A9_-_Tottenham_Hotspur_Stadium_-_1st_June_2023_(10_of_118)_(52946364598)_(best_crop).jpg"
+  },
+  {
+   "slug": "ariana-grande",
+   "name": "Ariana Grande",
+   "file": "ariana-grande.jpg",
+   "author": "Barbie Simons",
+   "licence": "CC BY 3.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by/3.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Ariana_Grande_promoting_Wicked_(2024).jpg"
+  },
+  {
+   "slug": "bruno-mars",
+   "name": "Bruno Mars",
+   "file": "bruno-mars.jpg",
+   "author": "slgckgc",
+   "licence": "CC BY 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:BrunoMars24KMagicWorldTourLive_(cropped).jpg"
+  },
+  {
+   "slug": "adele",
+   "name": "Adele",
+   "file": "adele.jpg",
+   "author": "Marc E.",
+   "licence": "CC BY 2.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Adele_2016.jpg"
+  },
+  {
+   "slug": "justin-bieber",
+   "name": "Justin Bieber",
+   "file": "justin-bieber.jpg",
+   "author": "Daniel Torok",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:P20260719DT-1213_President_Donald_J._Trump_and_First_Lady_Melania_Trump_attend_the_FIFA_World_Cup_Final_(cropped_2).jpg"
+  },
+  {
+   "slug": "dua-lipa",
+   "name": "Dua Lipa",
+   "file": "dua-lipa.jpg",
+   "author": "Harald Krichel",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Dua_Lipa-69798_(cropped).jpg"
+  },
+  {
+   "slug": "shakira",
+   "name": "Shakira",
+   "file": "shakira.jpg",
+   "author": "Junta de Andalucía",
+   "licence": "CC BY-SA 2.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:2023-11-16_Gala_de_los_Latin_Grammy,_03_(cropped)02.jpg"
+  },
+  {
+   "slug": "lady-gaga",
+   "name": "Lady Gaga",
+   "file": "lady-gaga.jpg",
+   "author": "Carlos M. Vazquez II",
+   "licence": "CC BY 2.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Lady_Gaga_at_Joe_Biden%27s_inauguration_(cropped_5).jpg"
+  },
+  {
+   "slug": "kanye-west",
+   "name": "Kanye West",
+   "file": "kanye-west.jpg",
+   "author": "David Shankbone",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Kanye_West_at_the_2009_Tribeca_Film_Festival_(crop_2).jpg"
+  },
+  {
+   "slug": "post-malone",
+   "name": "Post Malone",
+   "file": "post-malone.jpg",
+   "author": "Chrisallmeid",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Post_Malone_July_2021_(cropped).jpg"
+  },
+  {
+   "slug": "harry-styles",
+   "name": "Harry Styles",
+   "file": "harry-styles.jpg",
+   "author": "Raph_PH",
+   "licence": "CC BY 2.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:HarryStylesWembley170623_(65_of_93)_(52982678051)_(cropped_2).jpg"
+  },
+  {
+   "slug": "capital-bra",
+   "name": "Capital Bra",
+   "file": "capital-bra.jpg",
+   "author": "Stefan Brending (2eight)",
+   "licence": "CC BY-SA 3.0 de",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0/de/deed.en",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:2018_Capital_Bra_(cropped).jpg"
+  },
+  {
+   "slug": "apache-207",
+   "name": "Apache 207",
+   "file": "apache-207.jpg",
+   "author": "Sven Mandel",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Apache_207_-_2022238211019_2022-08-26_Apache_207_-_Sven_-_1D_X_MK_II_-_1062_-_B70I8059.jpg"
+  },
+  {
+   "slug": "helene-fischer",
+   "name": "Helene Fischer",
+   "file": "helene-fischer.jpg",
+   "author": "Fred Kuhles",
+   "licence": "CC BY-SA 3.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Helene-Fischer-Schleyerhalle.jpg"
+  },
+  {
+   "slug": "bushido",
+   "name": "Bushido",
+   "file": "bushido.jpg",
+   "author": "Superbass",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:2018-05-02-Bushido-Maischberger-8772.jpg"
+  },
+  {
+   "slug": "cro",
+   "name": "Cro",
+   "file": "cro.jpg",
+   "author": "Toglenn",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Cro_2019_by_Glenn_Francis.jpg"
+  },
+  {
+   "slug": "lena-meyer-landrut",
+   "name": "Lena Meyer-Landrut",
+   "file": "lena-meyer-landrut.jpg",
+   "author": "Martin Kraft",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:MJK_67923_Lena_Meyer-Landrut_(Berlinale_2020).jpg"
+  },
+  {
+   "slug": "nena",
+   "name": "Nena",
+   "file": "nena.jpg",
+   "author": "Stefan Brending (2eight)",
+   "licence": "CC BY-SA 3.0 de",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0/de/deed.en",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:2018_Sternstunden-Gala_-_Nena_-_by_2eight_-_DSC5745.jpg"
+  },
+  {
+   "slug": "herbert-gronemeyer",
+   "name": "Herbert Grönemeyer",
+   "file": "herbert-gronemeyer.jpg",
+   "author": "Superbass",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:1LIVE_Krone_2014_Herbert_Gr%C3%B6nemeyer_1.jpg"
+  },
+  {
+   "slug": "michael-jackson",
+   "name": "Michael Jackson",
+   "file": "michael-jackson.jpg",
+   "author": "Matthew Rolston; Distributed by Epic Records",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Michael_Jackson_1983_(3x4_cropped)_(contrast).jpg"
+  },
+  {
+   "slug": "madonna",
+   "name": "Madonna",
+   "file": "madonna.jpg",
+   "author": "Raph_PH",
+   "licence": "CC BY 2.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:MadonnaO2171023_(97_of_133)_(53269593787)_(cropped).jpg"
+  },
+  {
+   "slug": "elvis-presley",
+   "name": "Elvis Presley",
+   "file": "elvis-presley.jpg",
+   "author": "Metro-Goldwyn-Mayer, Inc. Reproduction Number: LC-USZ6-2067 Location: NYWTS -- BIOG",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Elvis_Presley_promoting_Jailhouse_Rock.jpg"
+  },
+  {
+   "slug": "freddie-mercury",
+   "name": "Freddie Mercury",
+   "file": "freddie-mercury.jpg",
+   "author": "Carl Lender",
+   "licence": "CC BY-SA 3.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Freddie_Mercury_performing_in_New_Haven,_CT,_November_1977.jpg"
+  },
+  {
+   "slug": "john-lennon",
+   "name": "John Lennon",
+   "file": "john-lennon.jpg",
+   "author": "Bob Gruen; Distributed by Capitol Records",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:John_Lennon_%22Walls_and_Bridges%22_1974_press_photo_2_(color)_(cropped).jpg"
+  },
+  {
+   "slug": "bob-marley",
+   "name": "Bob Marley",
+   "file": "bob-marley.jpg",
+   "author": "Not credited",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Bob_Marley_circa_1976_(cropped).jpg"
+  },
+  {
+   "slug": "snoop-dogg",
+   "name": "Snoop Dogg",
+   "file": "snoop-dogg.jpg",
+   "author": "Diego Serrano",
+   "licence": "CC BY 2.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Snoop_Dogg,_WrestleMania_XL_(cropped)_(cropped).jpg"
+  },
+  {
+   "slug": "jay-z",
+   "name": "Jay-Z",
+   "file": "jay-z.jpg",
+   "author": "Photo Courtesy of NYS Senate Media Services",
+   "licence": "CC BY 2.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Jay-Z_meets_with_New_York_Senate_Majority_Leader_in_Albany_(cropped).webp"
+  },
+  {
+   "slug": "kendrick-lamar",
+   "name": "Kendrick Lamar",
+   "file": "kendrick-lamar.jpg",
+   "author": "Raph_PH",
+   "licence": "CC BY 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:KendrickSZASPurs230725-144_(cropped)_desaturated.jpg"
+  },
+  {
+   "slug": "shawn-mendes",
+   "name": "Shawn Mendes",
+   "file": "shawn-mendes.jpg",
+   "author": "Cosmopolitan UK",
+   "licence": "CC BY 3.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by/3.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:191125_Shawn_Mendes_at_the_2019_American_Music_Awards.png"
+  },
+  {
+   "slug": "selena-gomez",
+   "name": "Selena Gomez",
+   "file": "selena-gomez.jpg",
+   "author": "Frank Sun",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Selena_Gomez_at_the_2024_Toronto_International_Film_Festival_10_(cropped).jpg"
+  },
+  {
+   "slug": "katy-perry",
+   "name": "Katy Perry",
+   "file": "katy-perry.jpg",
+   "author": "Colleen Sturtevant",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Katy_Perry_2026_Tribeca_Film_Festival_(cropped_1).jpg"
+  },
+  {
+   "slug": "miley-cyrus",
+   "name": "Miley Cyrus",
+   "file": "miley-cyrus.jpg",
+   "author": "Raphael Pour-Hashemi",
+   "licence": "CC BY 2.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Miley_Cyrus_Primavera19_-226_(48986293772)_(cropped).jpg"
+  },
+  {
+   "slug": "olivia-rodrigo",
+   "name": "Olivia Rodrigo",
+   "file": "olivia-rodrigo.jpg",
+   "author": "Raph_PH",
+   "licence": "CC BY 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Glasto2025-546_(cropped)_2.jpg"
+  },
+  {
+   "slug": "sabrina-carpenter",
+   "name": "Sabrina Carpenter",
+   "file": "sabrina-carpenter.jpg",
+   "author": "Raph_PH",
+   "licence": "CC BY 2.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by/2.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Sabrina_Carpenter_-_O2_Arena_2025_-_086_(cropped_2).jpg"
+  },
+  {
+   "slug": "nicki-minaj",
+   "name": "Nicki Minaj",
+   "file": "nicki-minaj.jpg",
+   "author": "Gage Skidmore from Surprise, AZ, United States of America",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Nicki_Minaj_2025_(3x4_cropped).jpg"
+  },
+  {
+   "slug": "david-guetta",
+   "name": "David Guetta",
+   "file": "david-guetta.jpg",
+   "author": "Junta de Andalucía",
+   "licence": "CC BY-SA 2.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:2023-11-16_Gala_de_los_Latin_Grammy,_22_(David_Guetta).jpg"
+  },
+  {
+   "slug": "calvin-harris",
+   "name": "Calvin Harris",
+   "file": "calvin-harris.jpg",
+   "author": "Sony BMG",
+   "licence": "CC BY 3.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by/3.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Calvin_Harris_-_Press_Image_1.tif"
+  },
+  {
+   "slug": "kollegah",
+   "name": "Kollegah",
+   "file": "kollegah.jpg",
+   "author": "Selfmade Records",
+   "licence": "CC BY-SA 2.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Kollegah_-_Pressefoto_2015_-_1_(cropped).jpg"
+  },
+  {
+   "slug": "farid-bang",
+   "name": "Farid Bang",
+   "file": "farid-bang.jpg",
+   "author": "Unknown authorUnknown author",
+   "licence": "CC BY-SA 2.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/2.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Farid_Bang_(2012-11-07,_20-21).jpg"
+  },
+  {
+   "slug": "max-giesinger",
+   "name": "Max Giesinger",
+   "file": "max-giesinger.jpg",
+   "author": "Sven Mandel",
+   "licence": "CC BY-SA 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Max_Giesinger_-_2024334_204557_2024-11-29_Night_of_the_Proms_-_Sven_-_1D_X_MK_II_-_0061_-_AK8I8426_(cropped).jpg"
+  }
+ ],
+ "countries": [
+  {
+   "slug": "deutschland",
+   "name": "Deutschland",
+   "file": "deutschland.jpg",
+   "author": "User:SKopp, User:Madden, and other users",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Flag_of_Germany.svg"
+  },
+  {
+   "slug": "frankreich",
+   "name": "Frankreich",
+   "file": "frankreich.jpg",
+   "author": "Original: Unknown Vector: SKopp",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Flag_of_France.svg"
+  },
+  {
+   "slug": "italien",
+   "name": "Italien",
+   "file": "italien.jpg",
+   "author": "See below.",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Flag_of_Italy.svg"
+  },
+  {
+   "slug": "spanien",
+   "name": "Spanien",
+   "file": "spanien.jpg",
+   "author": "RelShot 263, Echando una mano; earlier version was Pedro A. Gracia Fajardo, escudo de Manual de Imagen Institucional de ",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Flag_of_Spain.svg"
+  },
+  {
+   "slug": "brasilien",
+   "name": "Brasilien",
+   "file": "brasilien.jpg",
+   "author": "Raimundo Teixeira Mendes",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Flag_of_Brazil.svg"
+  },
+  {
+   "slug": "argentinien",
+   "name": "Argentinien",
+   "file": "argentinien.jpg",
+   "author": "Manuel Belgrano",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Flag_of_Argentina.svg"
+  },
+  {
+   "slug": "usa",
+   "name": "USA",
+   "file": "usa.jpg",
+   "author": "Uploaded by Dbenbenn; edited by users such as Zscout370, Jacobolus, Indolences, and Technion.",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Flag_of_the_United_States.svg"
+  },
+  {
+   "slug": "japan",
+   "name": "Japan",
+   "file": "japan.jpg",
+   "author": "Various",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Flag_of_Japan.svg"
+  },
+  {
+   "slug": "kanada",
+   "name": "Kanada",
+   "file": "kanada.jpg",
+   "author": "Original: George F. G. Stanley Modified by: The original uploader was Illegitimate Barrister at Wikimedia Commons. The c",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Flag_of_Canada_(Pantone).svg"
+  },
+  {
+   "slug": "australien",
+   "name": "Australien",
+   "file": "australien.jpg",
+   "author": "Unknown (Vector graphics image by Ian Fieggen) (only minor code changes by uploader.)",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Flag_of_Australia_(converted).svg"
+  },
+  {
+   "slug": "schweiz",
+   "name": "Schweiz",
+   "file": "schweiz.jpg",
+   "author": "Original: Unknown Vector: User:Marc Mongenet Credits: User:-xfi- User:Zscout370",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Flag_of_Switzerland.svg"
+  },
+  {
+   "slug": "oesterreich",
+   "name": "Österreich",
+   "file": "oesterreich.jpg",
+   "author": "Bundesministerium für Landesverteidigung",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Flag_of_Austria.svg"
+  },
+  {
+   "slug": "tuerkei",
+   "name": "Türkei",
+   "file": "tuerkei.jpg",
+   "author": "David Benbennick (original author)",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Flag_of_Turkey.svg"
+  },
+  {
+   "slug": "polen",
+   "name": "Polen",
+   "file": "polen.jpg",
+   "author": "See below.",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Flag_of_Poland.svg"
+  },
+  {
+   "slug": "griechenland",
+   "name": "Griechenland",
+   "file": "griechenland.jpg",
+   "author": "Unknown authorUnknown author",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Flag_of_Greece.svg"
+  },
+  {
+   "slug": "portugal",
+   "name": "Portugal",
+   "file": "portugal.jpg",
+   "author": "Original: Columbano Bordalo Pinheiro (1910; generic design) Vector: Vítor Luís Rodrigues; António Martins-Tuválkin (2004",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Flag_of_Portugal.svg"
+  },
+  {
+   "slug": "niederlande",
+   "name": "Niederlande",
+   "file": "niederlande.jpg",
+   "author": "Zscout370",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Flag_of_the_Netherlands.svg"
+  },
+  {
+   "slug": "england",
+   "name": "England",
+   "file": "england.jpg",
+   "author": "Original: traditional Vector: Nicholas Shanks",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Flag_of_England.svg"
+  },
+  {
+   "slug": "mexiko",
+   "name": "Mexiko",
+   "file": "mexiko.jpg",
+   "author": "Omar Alejandro Covarrubias Neri, 9 April 2006. Based on the 1968 arms by Francisco Eppens Helguera and Juan Manuel Gabin",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Flag_of_Mexico.svg"
+  },
+  {
+   "slug": "indien",
+   "name": "Indien",
+   "file": "indien.jpg",
+   "author": "Government of India",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Flag_of_India.svg"
+  },
+  {
+   "slug": "china",
+   "name": "China",
+   "file": "china.jpg",
+   "author": "Zeng Liansong",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Flag_of_the_People%27s_Republic_of_China.svg"
+  },
+  {
+   "slug": "suedkorea",
+   "name": "Südkorea",
+   "file": "suedkorea.jpg",
+   "author": "Original: Government of the Republic of Korea Vector: Great Brightstar and others",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Flag_of_South_Korea.svg"
+  },
+  {
+   "slug": "aegypten",
+   "name": "Ägypten",
+   "file": "aegypten.jpg",
+   "author": "See File history below for details.",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Flag_of_Egypt.svg"
+  },
+  {
+   "slug": "marokko",
+   "name": "Marokko",
+   "file": "marokko.jpg",
+   "author": "Denelson83, Zscout370",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Flag_of_Morocco.svg"
+  },
+  {
+   "slug": "norwegen",
+   "name": "Norwegen",
+   "file": "norwegen.jpg",
+   "author": "Original: Fredrik Meltzer Vector: Gutten på Hemsen",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Flag_of_Norway.svg"
+  },
+  {
+   "slug": "schweden",
+   "name": "Schweden",
+   "file": "schweden.jpg",
+   "author": "Jon Harald Søby and others.",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Flag_of_Sweden.svg"
+  },
+  {
+   "slug": "daenemark",
+   "name": "Dänemark",
+   "file": "daenemark.jpg",
+   "author": "Madden and others",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Flag_of_Denmark.svg"
+  },
+  {
+   "slug": "irland",
+   "name": "Irland",
+   "file": "irland.jpg",
+   "author": "Éire",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Flag_of_Ireland.svg"
+  },
+  {
+   "slug": "neuseeland",
+   "name": "Neuseeland",
+   "file": "neuseeland.jpg",
+   "author": "Original: Albert Hastings Markham Vector: Zscout370, Hugh Jass, s. File history",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Flag_of_New_Zealand.svg"
+  },
+  {
+   "slug": "suedafrika",
+   "name": "Südafrika",
+   "file": "suedafrika.jpg",
+   "author": "Flag design by Frederick Brownell, image by Wikimedia Commons users",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Flag_of_South_Africa.svg"
+  },
+  {
+   "slug": "belgien",
+   "name": "Belgien",
+   "file": "belgien.jpg",
+   "author": "Dbenbenn and others",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Flag_of_Belgium.svg"
+  },
+  {
+   "slug": "kroatien",
+   "name": "Kroatien",
+   "file": "kroatien.jpg",
+   "author": "Nightstallion, Elephantus, Neoneo13, Denelson83, Rainman, R-41, Minestrone, Lupo, Zscout370,MaGa (based on Decision of t",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Flag_of_Croatia.svg"
+  },
+  {
+   "slug": "ukraine",
+   "name": "Ukraine",
+   "file": "ukraine.jpg",
+   "author": "Government of Ukraine",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Flag_of_Ukraine.svg"
+  },
+  {
+   "slug": "island",
+   "name": "Island",
+   "file": "island.jpg",
+   "author": "Original: Matthías Þórðarson Vector: Árni Dagur and Magasjukur2",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Flag_of_Iceland.svg"
+  },
+  {
+   "slug": "jamaika",
+   "name": "Jamaika",
+   "file": "jamaika.jpg",
+   "author": "The SVG code is valid. This vector image was created with Inkscape by SKopp, and then manually edited by Zscout370, Madd",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Flag_of_Jamaica.svg"
+  },
+  {
+   "slug": "kolumbien",
+   "name": "Kolumbien",
+   "file": "kolumbien.jpg",
+   "author": "See File history below for details.",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Flag_of_Colombia.svg"
+  },
+  {
+   "slug": "chile",
+   "name": "Chile",
+   "file": "chile.jpg",
+   "author": "See file history below for details.",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Flag_of_Chile.svg"
+  },
+  {
+   "slug": "peru",
+   "name": "Peru",
+   "file": "peru.jpg",
+   "author": "David Benbennick",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Flag_of_Peru.svg"
+  },
+  {
+   "slug": "thailand",
+   "name": "Thailand",
+   "file": "thailand.jpg",
+   "author": "Zscout370",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Flag_of_Thailand.svg"
+  },
+  {
+   "slug": "vietnam",
+   "name": "Vietnam",
+   "file": "vietnam.jpg",
+   "author": "See File history below for details.",
+   "licence": "Public domain",
+   "licenceUrl": "",
+   "pageUrl": "https://commons.wikimedia.org/wiki/File:Flag_of_Vietnam.svg"
+  }
+ ]
+}

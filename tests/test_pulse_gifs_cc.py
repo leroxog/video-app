@@ -88,3 +88,26 @@ def test_the_page_of_credits_names_everybody(client):
     assert text.count("<li>") >= len(found) and "Wikimedia Commons" in text and "bearbeitet: verkleinert" in text
     assert 'rel="noopener nofollow"' in text
     assert "/bildnachweise" in flask_app.test_client().get("/impressum").get_data(as_text=True), "linked from every legal page"
+
+
+def test_the_pictures_of_the_ranking_games_are_free_and_credited(client):
+    with open(os.path.join(yipi.RANK_DIR, "index.json"), encoding="utf-8") as handle:
+        index = json.load(handle)
+    assert set(index) == {"footballers", "musicians", "countries"}
+    assert len(index["footballers"]) >= 30 and len(index["musicians"]) >= 30 and len(index["countries"]) >= 30
+    total = 0
+    for key, found in index.items():
+        assert len({entry["slug"] for entry in found}) == len(found)
+        for entry in found:
+            path = os.path.join(yipi.RANK_DIR, key, entry["file"])
+            total += os.path.getsize(path)
+            assert ALLOWED.match(entry["licence"]) and not re.search(r"\bNC\b|\bND\b", entry["licence"]), (entry["slug"], entry["licence"])
+            assert entry["author"] and entry["pageUrl"].startswith("https://commons.wikimedia.org/wiki/File:"), entry["slug"]
+            with open(path, "rb") as picture:
+                assert picture.read(3) == b"\xff\xd8\xff", "a JPEG"
+    assert total <= 6_000_000
+    text = flask_app.test_client().get("/bildnachweise").get_data(as_text=True)
+    assert "Bilder der Ranglisten-Spiele" in text and "Fußballer" in text and "Flaggen" in text
+    for key, found in index.items():
+        for entry in found[:6]:
+            assert entry["name"] in text and (entry["pageUrl"] in text.replace("&amp;", "&") or entry["pageUrl"].replace("'", "&#39;") in text), entry["slug"]
