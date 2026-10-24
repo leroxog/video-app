@@ -75,7 +75,10 @@
       let ready = typeof fetch !== "function" || typeof Image === "undefined";      // without a browser (the tests) the game plays with names only
       if (!ready) loadIndex().then((data) => {
         const list = data && data[cat.key];
-        if (Array.isArray(list) && list.length >= 12) items = list.map((entry) => ({ name: entry.name, pic: picture(`/static/rank/${cat.key}/${entry.file}`) }));
+        if (Array.isArray(list) && list.length >= 12) {
+          items = list.map((entry) => ({ name: entry.name, pic: picture(`/static/rank/${cat.key}/${entry.file}`) }));
+          if (phase === "wait") reset();                                          // the round starts from the list with the pictures, not from the one with the names only
+        }
         ready = true;
       });
       let size = 5;
@@ -102,10 +105,13 @@
         const h = (bottom - top - gap * (rows - 1)) / rows;
         return { x: 20, y: top + i * (h + gap), w: 320, h };
       };
+      const seen = (item) => !item.pic || item.pic.ok;                         // its picture has arrived (or it has none)
       function nextSpin() {
         if (!pool.length) pool = e.shuffle(items);
         current = pool.pop();
-        const decoys = e.shuffle(items.filter((item) => item !== current)).slice(0, 12);
+        for (let tries = pool.length; tries > 0 && !seen(current); tries--) { pool.unshift(current); current = pool.pop(); }       // the one that stops should show its picture
+        const others = items.filter((item) => item !== current);
+        const decoys = e.shuffle(others.filter(seen).length >= 12 ? others.filter(seen) : others).slice(0, 12);
         strip = [...decoys, current];                                   // the machine shows these one after the other and stops on the last
         phase = "spin";
         t = 0;
@@ -118,6 +124,7 @@
       }
 
       return {
+        peek: () => ({ items, pool, current, slots, ready }),                    // for the tests
         canStart(x, y) { return !TOGGLES.some((tg) => e.inside(x, y, tg.x, tg.y, tg.w, tg.h)); },
         idle(input) {                                                      // before the first touch only the two switches answer
           if (input.tap) for (const tg of TOGGLES) if (e.inside(input.x, input.y, tg.x, tg.y, tg.w, tg.h) && size !== tg.n) { size = tg.n; reset(); }
