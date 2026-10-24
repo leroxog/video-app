@@ -102,3 +102,13 @@ def test_a_sticker_needs_only_a_name_and_a_picture():
     assert 'accept: "image/jpeg,image/png,image/webp,image/gif"' in view and "multiple: true" in view, "one picker for everything"
     assert "Api.uploadGif(" in view and "GifCore.cleanTitle(title.value)" in view
     assert "const ready = () => !busy && named()" in view, "no name, no sticker"
+
+
+# --------------------------------------------------------------------------------------------------------------- files in R2
+def test_the_moderation_page_has_the_storage_card_that_calls_the_admin_routes():
+    pages, api = js("yipi-pages.js"), js("yipi-api.js")
+    assert "storageCard()" in pages and '"/admin/storage"' in pages and '"/admin/storage/move"' in pages and '"/admin/storage/compact"' in pages
+    for route in ('"/api/yipi/admin/storage"', '"/api/yipi/admin/storage/move"', '"/api/yipi/admin/storage/compact"'):
+        assert route in SERVER, route
+    assert "r2_off:" in api and "not_postgres:" in api, "the answers of the server have texts"
+    assert "confirmBox" in pages[pages.index("async function compact"):pages.index("async function compact") + 400], "tidying locks tables for a moment: asks first"

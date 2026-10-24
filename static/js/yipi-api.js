@@ -39,6 +39,8 @@
     gif_too_big: "Das GIF ist zu groß (höchstens 3 MB).",
     gif_title_long: "Der Name eines GIFs darf höchstens 40 Zeichen haben.",
     gif_gone: "Dieses GIF gibt es nicht mehr.",
+    r2_off: "R2 ist noch nicht eingerichtet: die vier R2-Variablen fehlen bei Railway.",
+    not_postgres: "Aufräumen geht nur mit der PostgreSQL-Datenbank von Railway.",
     reply_gone: "Der Beitrag, auf den du antworten willst, ist nicht mehr da.",
     quote_gone: "Der Beitrag, den du zitieren willst, ist nicht mehr da.",
     bad_handle: "Der Nutzername darf 3 bis 15 Zeichen haben: Buchstaben, Zahlen und _.",

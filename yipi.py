@@ -44,15 +44,16 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 from flask import Response, abort, jsonify, make_response, redirect, render_template, request, stream_with_context
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, event, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import defer
+from sqlalchemy.orm import Session, defer
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import ai_assistant
 import docread
 import siteauth
 import ysound
+from blobstore import STORE
 from models import db
 from siteauth import CookieAuth, RateLimiter, client_addresses, same_origin
 
@@ -124,7 +125,7 @@ LIMITS = {
     "post-burst": (12, 60), "post-hour": (150, 3600), "like": (400, 3600), "follow": (120, 3600), "media": (40, 3600), "dm": (120, 3600),
     "report": (20, 3600), "profile": (30, 3600), "search": (120, 600), "block": (60, 3600),
     "gif-make": (20, 3600), "gif-fav": (400, 3600), "gif-use": (300, 3600), "gif-list": (600, 600),
-    "share": (240, 600), "attach": (40, 3600), "play": (200, 3600), "heart": (300, 3600), "push": (30, 3600), "nex-read": (30, 600), "google": (30, 600), "nex": (40, 600), "nex-flood": (80, 60), "factcheck": (120, 3600), "views": (90, 600), "vote": (200, 3600), "pin": (60, 3600), "group": (12, 3600),
+    "share": (240, 600), "attach": (40, 3600), "storage": (120, 3600), "play": (200, 3600), "heart": (300, 3600), "push": (30, 3600), "nex-read": (30, 600), "google": (30, 600), "nex": (40, 600), "nex-flood": (80, 60), "factcheck": (120, 3600), "views": (90, 600), "vote": (200, 3600), "pin": (60, 3600), "group": (12, 3600),
 }
 _hits = {}
 limiter = RateLimiter(LIMITS, _hits)
@@ -136,6 +137,16 @@ CONTENT_SECURITY_POLICY = (
     "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self'; "
     "connect-src 'self'; manifest-src 'self'; base-uri 'none'; object-src 'none'; form-action 'self'; frame-ancestors 'none'"
 )
+
+
+def content_security_policy():
+    """The policy of the pages. When the files live in R2 the browser may also load pictures and videos from the address of the bucket."""
+    if not STORE.enabled:
+        return CONTENT_SECURITY_POLICY
+    host = f"https://{STORE.host}"
+    return CONTENT_SECURITY_POLICY.replace("img-src 'self' data: blob:", f"img-src 'self' data: blob: {host}").replace("media-src 'self' blob:", f"media-src 'self' blob: {host}")
+
+
 SITE_NAME = "Pulse"
 # What goes with a link that somebody sends (the preview of the link says it, and so do the messages and the share sheet of the page).
 SHARE_SITE = "Ich habe Pulse gefunden!!!!"
@@ -227,6 +238,7 @@ class YipiMedia(db.Model):
     position = db.Column(db.Integer, nullable=False, default=0)
     content_type = db.Column(db.String(30), nullable=False)
     data = db.Column(db.LargeBinary, nullable=False)
+    stored = db.Column(db.String(4), nullable=False, default="db", server_default="db")           # "db": the bytes are in `data`; "r2": they are in Cloudflare R2 (blobstore.py) and `data` is empty
     size = db.Column(db.Integer, nullable=False)
     width = db.Column(db.Integer, nullable=False)
     height = db.Column(db.Integer, nullable=False)
@@ -244,6 +256,7 @@ class YipiFile(db.Model):
     content_type = db.Column(db.String(100), nullable=False)
     name = db.Column(db.String(120), nullable=False, default="")
     data = db.Column(db.LargeBinary, nullable=False)
+    stored = db.Column(db.String(4), nullable=False, default="db", server_default="db")           # "db": the bytes are in `data`; "r2": they are in Cloudflare R2 (blobstore.py) and `data` is empty
     size = db.Column(db.Integer, nullable=False)
     width = db.Column(db.Integer, nullable=False, default=0)
     height = db.Column(db.Integer, nullable=False, default=0)
@@ -458,6 +471,7 @@ class PulseGif(db.Model):
     owner_id = db.Column(db.Integer, nullable=True, index=True)
     title = db.Column(db.String(MAX_GIF_TITLE), nullable=False, default="")
     data = db.Column(db.LargeBinary, nullable=False)
+    stored = db.Column(db.String(4), nullable=False, default="db", server_default="db")           # "db": the bytes are in `data`; "r2": they are in Cloudflare R2 (blobstore.py) and `data` is empty
     size = db.Column(db.Integer, nullable=False)
     width = db.Column(db.Integer, nullable=False)
     height = db.Column(db.Integer, nullable=False)
@@ -884,7 +898,9 @@ def ensure_starters():
         if info is None:
             continue
         title = clean_text(str(entry.get("title", "")), MAX_GIF_TITLE, keep_newlines=False) or ""
-        db.session.add(PulseGif(id=gif_id, owner_id=None, title=title, data=data, size=len(data), width=info[0], height=info[1], frames=info[2], starter=True))
+        starter = PulseGif(id=gif_id, owner_id=None, title=title, data=b"", size=len(data), width=info[0], height=info[1], frames=info[2], starter=True)
+        keep_bytes("gif", starter, data)
+        db.session.add(starter)
         added += 1
         if added % 25 == 0:                                       # a few at a time: there are hundreds
             try:
@@ -1260,6 +1276,7 @@ def remove_post(post, by_admin=False):
     YipiLike.query.filter_by(post_id=post.id).delete()
     YipiBookmark.query.filter_by(post_id=post.id).delete()
     YipiTag.query.filter_by(post_id=post.id).delete()
+    forget_stored(YipiMedia, YipiMedia.post_id == post.id)
     YipiMedia.query.filter_by(post_id=post.id).delete()
     YipiNotification.query.filter_by(post_id=post.id).delete()
     poll = YipiPoll.query.filter_by(post_id=post.id).first()
@@ -1326,22 +1343,71 @@ def purge_user(user):
     YipiGroupMessage.query.filter_by(sender_id=uid).delete()
     YipiDmState.query.filter(or_(YipiDmState.user_id == uid, YipiDmState.other_id == uid)).delete()
     YipiReport.query.filter_by(reporter_id=uid).delete()
+    forget_stored(YipiMedia, YipiMedia.owner_id == uid)
     YipiMedia.query.filter_by(owner_id=uid).delete()
+    forget_stored(YipiFile, YipiFile.owner_id == uid)
+    YipiFile.query.filter_by(owner_id=uid).delete()                    # the photos, videos and documents this person sent in chats
     PulseGifFav.query.filter_by(user_id=uid).delete()
     own_gifs = [row.id for row in PulseGif.query.filter_by(owner_id=uid).with_entities(PulseGif.id)]
     if own_gifs:
+        forget_stored(PulseGif, PulseGif.id.in_(own_gifs))
         PulseGifFav.query.filter(PulseGifFav.gif_id.in_(own_gifs)).delete(synchronize_session=False)
         PulseGif.query.filter(PulseGif.id.in_(own_gifs)).delete(synchronize_session=False)
     db.session.delete(user)
 
 
+# ------------------------------------------------------------------------------- where the bytes of a file are kept
+BLOB_KIND = {YipiMedia: "media", YipiFile: "file", PulseGif: "gif"}                  # the folder of each kind in the bucket
+
+
+def keep_bytes(kind, item, data):
+    """Puts the bytes of a new file where they belong: into R2 when it is set up (the row then only keeps a note), else into the row.
+    A failing R2 never fails an upload: the file goes into the database and the problem is logged."""
+    if STORE.enabled:
+        try:
+            STORE.put(kind, item.id, data, getattr(item, "content_type", None) or "image/gif")
+            item.data, item.stored = b"", "r2"
+            return
+        except Exception:  # noqa: BLE001
+            logger.exception("Could not put a file into R2; it stays in the database")
+    item.data, item.stored = data, "db"
+
+
+def load_bytes(model, item):
+    """All bytes of a stored file, wherever they are."""
+    if item.stored == "r2":
+        return STORE.get(BLOB_KIND[model], item.id)
+    return db.session.query(model.data).filter_by(id=item.id).scalar() or b""
+
+
+def forget_stored(model, *criteria):
+    """Call before deleting rows: the R2 files of those rows are removed after the deletion has been committed (and not at all when it is rolled back)."""
+    if not STORE.enabled:
+        return
+    idents = [row[0] for row in db.session.query(model.id).filter(*criteria, model.stored == "r2")]
+    if idents:
+        db.session.info.setdefault("r2_forget", []).append((BLOB_KIND[model], idents))
+
+
+@event.listens_for(Session, "after_commit")
+def _forget_after_commit(session):
+    for kind, idents in session.info.pop("r2_forget", ()):
+        STORE.delete_many(kind, idents)
+
+
+@event.listens_for(Session, "after_rollback")
+def _forget_after_rollback(session):
+    session.info.pop("r2_forget", None)
+
+
 def cleanup_orphans(user):
     """Pictures that were uploaded but never used (not in a post, not an avatar or banner) disappear after a day."""
     keep = [x for x in (user.avatar_id, user.banner_id) if x]
-    query = YipiMedia.query.filter(YipiMedia.owner_id == user.id, YipiMedia.post_id.is_(None), YipiMedia.created_at < utcnow() - timedelta(days=1))
+    criteria = [YipiMedia.owner_id == user.id, YipiMedia.post_id.is_(None), YipiMedia.created_at < utcnow() - timedelta(days=1)]
     if keep:
-        query = query.filter(~YipiMedia.id.in_(keep))
-    query.delete(synchronize_session=False)
+        criteria.append(~YipiMedia.id.in_(keep))
+    forget_stored(YipiMedia, *criteria)
+    YipiMedia.query.filter(*criteria).delete(synchronize_session=False)
 
 
 # ---------------------------------------------------------------------------------------------- the page
@@ -1470,7 +1536,7 @@ def compress_response(response):
 
 def page_headers(response):
     """The headers every page of the site (the app itself, the legal pages, the error pages) is sent with."""
-    response.headers["Content-Security-Policy"] = CONTENT_SECURITY_POLICY
+    response.headers["Content-Security-Policy"] = content_security_policy()
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Cache-Control"] = "no-cache"
     response.headers["Permissions-Policy"] = "camera=(self), microphone=(self), geolocation=(), payment=(), usb=()"       # the camera tab films you (only when you start a game)
@@ -2189,7 +2255,8 @@ def register_routes(app):
                     value = 0
                 sides.append(value if 16 <= value <= MAX_VIDEO_SIDE else (720 if name == "width" else 1280))
             cleanup_orphans(user)
-            item = YipiMedia(id=uuid.uuid4().hex, owner_id=user.id, content_type=kind, data=data, size=len(data), width=sides[0], height=sides[1], alt=clean_text(request.form.get("alt", ""), 200, keep_newlines=False) or "")
+            item = YipiMedia(id=uuid.uuid4().hex, owner_id=user.id, content_type=kind, data=b"", size=len(data), width=sides[0], height=sides[1], alt=clean_text(request.form.get("alt", ""), 200, keep_newlines=False) or "")
+            keep_bytes("media", item, data)
             db.session.add(item)
             db.session.commit()
             return jsonify({"ok": True, "media": media_json(item)})
@@ -2200,13 +2267,29 @@ def register_routes(app):
             return fail("bad_image", 415)
         alt = clean_text(request.form.get("alt", ""), 200, keep_newlines=False) or ""
         cleanup_orphans(user)
-        item = YipiMedia(id=uuid.uuid4().hex, owner_id=user.id, content_type=info[0], data=data, size=len(data), width=info[1], height=info[2], alt=alt)
+        item = YipiMedia(id=uuid.uuid4().hex, owner_id=user.id, content_type=info[0], data=b"", size=len(data), width=info[1], height=info[2], alt=alt)
+        keep_bytes("media", item, data)
         db.session.add(item)
         db.session.commit()
         return jsonify({"ok": True, "media": media_json(item)})
 
+    def r2_redirect(model, item, headers, content_type):
+        """The file is in R2: the browser is sent there with a signed address that works for an hour (video players ask for pieces themselves)."""
+        disposition = headers.get("Content-Disposition", "")
+        try:
+            address = STORE.url(BLOB_KIND[model], item.id, content_type, disposition if disposition.startswith("attachment") else None, expires=3600)
+        except Exception:  # noqa: BLE001
+            logger.exception("Could not sign an R2 address")
+            abort(503)
+        response = redirect(address, code=302)
+        response.headers["Cache-Control"] = "private, max-age=300"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        return response
+
     def blob_response(model, item, headers):
         """The bytes of a stored file (a picture, a video, a document): whole, or one piece of it for a video that is being played (Range)."""
+        if item.stored == "r2":
+            return r2_redirect(model, item, headers, item.content_type)
         if not item.content_type.startswith("video/"):
             response = Response(db.session.query(model.data).filter_by(id=item.id).scalar(), mimetype=item.content_type, headers=headers)
             response.set_etag(item.id)
@@ -2311,8 +2394,10 @@ def register_routes(app):
         stale = YipiFile.query.options(defer(YipiFile.data)).filter(YipiFile.owner_id == user.id, YipiFile.created_at < cutoff).all()
         for old in stale:                                       # earlier files of this person that never went into a message
             if YipiMessage.query.filter_by(file_id=old.id).first() is None and YipiGroupMessage.query.filter_by(file_id=old.id).first() is None:
+                forget_stored(YipiFile, YipiFile.id == old.id)
                 db.session.delete(old)
-        item = YipiFile(id=uuid.uuid4().hex, owner_id=user.id, kind=kind, content_type=content_type, name=name, data=data, size=len(data), width=width, height=height)
+        item = YipiFile(id=uuid.uuid4().hex, owner_id=user.id, kind=kind, content_type=content_type, name=name, data=b"", size=len(data), width=width, height=height)
+        keep_bytes("file", item, data)
         db.session.add(item)
         db.session.commit()
         return jsonify({"ok": True, "file": file_json(item)}), 201
@@ -3592,7 +3677,8 @@ def register_routes(app):
         title = clean_text(request.form.get("title", ""), MAX_GIF_TITLE, keep_newlines=False)
         if title is None:
             return fail("gif_title_long")
-        gif = PulseGif(id=uuid.uuid4().hex, owner_id=user.id, title=title, data=data, size=len(data), width=info[0], height=info[1], frames=info[2])
+        gif = PulseGif(id=uuid.uuid4().hex, owner_id=user.id, title=title, data=b"", size=len(data), width=info[0], height=info[1], frames=info[2])
+        keep_bytes("gif", gif, data)
         db.session.add(gif)
         db.session.commit()
         return jsonify({"ok": True, "gif": gif_json(gif, user.id)}), 201
@@ -3602,6 +3688,8 @@ def register_routes(app):
         gif = db.session.get(PulseGif, gif_id) if GIF_ID_RE.fullmatch(gif_id) else None
         if gif is None:
             abort(404)
+        if gif.stored == "r2":
+            return r2_redirect(PulseGif, gif, {}, "image/gif")
         response = Response(gif.data, mimetype="image/gif")
         response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
         response.headers["Content-Security-Policy"] = "default-src 'none'; img-src 'self'; sandbox"
@@ -3652,9 +3740,17 @@ def register_routes(app):
         gif = library_gif(gif_id, user)
         if gif is None:
             return fail("gif_gone", 404)
-        data = db.session.query(PulseGif.data).filter(PulseGif.id == gif.id).scalar()
         cleanup_orphans(user)
-        item = YipiMedia(id=uuid.uuid4().hex, owner_id=user.id, content_type="image/gif", data=data, size=gif.size, width=gif.width, height=gif.height, alt=gif.title or "GIF", gif_id=gif.id)
+        item = YipiMedia(id=uuid.uuid4().hex, owner_id=user.id, content_type="image/gif", data=b"", size=gif.size, width=gif.width, height=gif.height, alt=gif.title or "GIF", gif_id=gif.id)
+        if gif.stored == "r2":
+            try:
+                STORE.copy("gif", gif.id, "media", item.id)
+                item.stored = "r2"
+            except Exception:  # noqa: BLE001
+                logger.exception("Could not copy a GIF inside R2")
+                return fail("gif_gone", 404)
+        else:
+            keep_bytes("media", item, load_bytes(PulseGif, gif))
         db.session.add(item)
         bump(PulseGif, gif.id, PulseGif.uses, 1)
         db.session.commit()
@@ -3677,6 +3773,7 @@ def register_routes(app):
     def remove_gif(gif_id):
         """The GIF and its stars go; a message that carried it stays and shows "this GIF is gone" (its id is kept on purpose)."""
         PulseGifFav.query.filter_by(gif_id=gif_id).delete()
+        forget_stored(PulseGif, PulseGif.id == gif_id)
         PulseGif.query.filter_by(id=gif_id).delete()
 
     # ------------------------------------------------------------------------------------------------ Nex
@@ -3820,6 +3917,83 @@ def register_routes(app):
         if not is_admin(user):
             return None, fail("forbidden", 403)
         return user, None
+
+    # ----------------------------------------------------------------------------- storage (admins): the database and R2
+    STORAGE_MODELS = (("media", YipiMedia), ("file", YipiFile), ("gif", PulseGif))
+    STORAGE_TABLES = ("yipi_media", "yipi_file", "pulse_gif", "yipi_post", "yipi_message", "yipi_group_message")
+    MOVE_BUDGET = 30 * 1024 * 1024                                  # bytes moved to R2 per call, so that one call stays short
+
+    def in_database(model):
+        return (model.stored == "db", func.length(model.data) > 0)
+
+    @route("/api/yipi/admin/storage")
+    def yipi_admin_storage():
+        """What takes the room: files in the database, files in R2, and (PostgreSQL) the size of the biggest tables."""
+        admin, problem = need_admin()
+        if problem:
+            return problem
+        tables = []
+        for name, model in STORAGE_MODELS:
+            tables.append({"name": name,
+                           "inDatabase": model.query.filter(*in_database(model)).count(),
+                           "bytesInDatabase": int(db.session.query(func.coalesce(func.sum(model.size), 0)).filter(*in_database(model)).scalar() or 0),
+                           "inR2": model.query.filter(model.stored == "r2").count(),
+                           "bytesInR2": int(db.session.query(func.coalesce(func.sum(model.size), 0)).filter(model.stored == "r2").scalar() or 0)})
+        report = {"ok": True, "r2": STORE.enabled, "tables": tables, "databaseBytes": None, "tableBytes": {}}
+        if db.engine.dialect.name == "postgresql":
+            report["databaseBytes"] = int(db.session.execute(text("SELECT pg_database_size(current_database())")).scalar() or 0)
+            for table in STORAGE_TABLES:
+                report["tableBytes"][table] = int(db.session.execute(text(f"SELECT pg_total_relation_size('{table}')")).scalar() or 0)
+        return jsonify(report)
+
+    @route("/api/yipi/admin/storage/move", methods=["POST"])
+    def yipi_admin_storage_move():
+        """Moves files that still sit in the database to R2, a few megabytes per call (the page calls again until nothing is left).
+        Every file is read back (its size) before it is taken out of the database."""
+        admin, problem = need_admin()
+        if problem:
+            return problem
+        if not STORE.enabled:
+            return fail("r2_off", 409)
+        if limiter.too_many("storage", str(admin.id)):
+            return fail("too_many", 429)
+        budget, moved, failed = MOVE_BUDGET, 0, 0
+        for name, model in STORAGE_MODELS:
+            rows = model.query.options(defer(model.data)).filter(*in_database(model)).order_by(model.created_at.asc(), model.id.asc()).limit(300).all()
+            for row in rows:
+                if budget <= 0:
+                    break
+                data = db.session.query(model.data).filter_by(id=row.id).scalar() or b""
+                try:
+                    STORE.put(name, row.id, data, getattr(row, "content_type", None) or "image/gif")
+                    if STORE.size(name, row.id) != len(data):
+                        raise OSError("the file in R2 has another size")
+                except Exception:  # noqa: BLE001
+                    logger.exception("Could not move %s %s to R2", name, row.id)
+                    failed += 1
+                    continue
+                model.query.filter_by(id=row.id).update({"data": b"", "stored": "r2"}, synchronize_session=False)
+                budget -= len(data)
+                moved += 1
+            db.session.commit()
+        remaining = sum(model.query.filter(*in_database(model)).count() for _name, model in STORAGE_MODELS)
+        return jsonify({"ok": True, "moved": moved, "failed": failed, "remaining": remaining})
+
+    @route("/api/yipi/admin/storage/compact", methods=["POST"])
+    def yipi_admin_storage_compact():
+        """Gives the room of files that were moved to R2 back to the disk (PostgreSQL: VACUUM FULL of the three file tables; they are locked for a moment)."""
+        admin, problem = need_admin()
+        if problem:
+            return problem
+        if db.engine.dialect.name != "postgresql":
+            return fail("not_postgres", 409)
+        if limiter.too_many("storage", str(admin.id)):
+            return fail("too_many", 429)
+        db.session.rollback()
+        with db.engine.connect().execution_options(isolation_level="AUTOCOMMIT") as connection:
+            for table in STORAGE_TABLES[:3]:
+                connection.execute(text(f"VACUUM FULL {table}"))
+        return jsonify({"ok": True, "databaseBytes": int(db.session.execute(text("SELECT pg_database_size(current_database())")).scalar() or 0)})
 
     @route("/api/yipi/moderation/reports")
     def yipi_admin_reports():

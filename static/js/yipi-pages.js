@@ -145,10 +145,57 @@
   // -------------------------------------------------------------------------------------- moderation
   const REASON_LABEL = { spam: "Spam", abuse: "Belästigung", hate: "Hass", violence: "Gewalt", illegal: "Illegal", self_harm: "Selbstverletzung", factcheck: "Fact Check falsch", other: "Sonstiges" };
 
+  /* The card of the admins: how much room the files take (in the database and in R2) and the two buttons that move the files to R2 and give the room back. */
+  function storageCard() {
+    const size = (bytes) => (bytes >= 1e9 ? `${(bytes / 1e9).toFixed(2).replace(".", ",")} GB` : bytes >= 1e6 ? `${Math.round(bytes / 1e5) / 10} MB`.replace(".", ",") : `${Math.round(bytes / 1e3)} KB`);
+    const NAMES = { media: "Fotos und Videos von Beiträgen", file: "Dateien in Chats", gif: "GIFs" };
+    const info = h("div", { class: "storage-info" }, h("p", { class: "muted small" }, "Wird geladen …"));
+    const status = h("p", { class: "muted small", role: "status" });
+    const move = button("Alles nach R2 verschieben", "primary small", () => moveAll());
+    const tidy = button("Datenbank aufräumen", "ghost small", () => compact());
+    const card = h("section", { class: "card storage-card" }, h("h2", {}, "Speicher"), info, status, h("div", { class: "report-actions" }, move, tidy));
+    async function load() {
+      const reply = await Api.get("/admin/storage");
+      if (!reply.ok) { fill(info, h("p", { class: "muted small" }, Api.message(reply))); return null; }
+      const data = reply.data;
+      const rows = data.tables.map((table) => h("li", {}, h("b", {}, NAMES[table.name] || table.name), `: ${table.inDatabase} in der Datenbank (${size(table.bytesInDatabase)}), ${table.inR2} in R2 (${size(table.bytesInR2)})`));
+      fill(info,
+        h("p", {}, data.r2 ? "R2 ist eingerichtet: neue Dateien gehen dorthin." : "R2 ist noch nicht eingerichtet: alle Dateien liegen in der Datenbank."),
+        data.databaseBytes != null ? h("p", {}, `Die Datenbank ist ${size(data.databaseBytes)} groß.`) : null,
+        h("ul", { class: "plain-list" }, rows));
+      move.disabled = !data.r2 || !data.tables.some((table) => table.inDatabase > 0);
+      return data;
+    }
+    async function moveAll() {
+      move.disabled = true;
+      let total = 0;
+      for (let round = 0; round < 400; round += 1) {
+        const reply = await Api.post("/admin/storage/move");
+        if (!reply.ok) { status.textContent = Api.message(reply); break; }
+        total += reply.data.moved;
+        status.textContent = `${total} Dateien verschoben, noch ${reply.data.remaining} übrig${reply.data.failed ? `, ${reply.data.failed} Fehler` : ""} …`;
+        if (reply.data.remaining === 0 || (reply.data.moved === 0 && reply.data.failed > 0)) break;
+      }
+      await load();
+      if (!status.textContent.includes("Fehler") && status.textContent.includes("noch 0")) status.textContent = `Fertig: ${total} Dateien liegen jetzt in R2. Mit „Datenbank aufräumen“ gibst du den Platz frei.`;
+    }
+    async function compact() {
+      if (!(await confirmBox({ title: "Datenbank aufräumen?", text: "Die Tabellen mit den Dateien werden für kurze Zeit gesperrt (Uploads dauern dann einen Moment). Mach das am besten, wenn wenig los ist.", yes: "Aufräumen" }))) return;
+      tidy.disabled = true;
+      status.textContent = "Räume auf …";
+      const reply = await Api.post("/admin/storage/compact");
+      status.textContent = reply.ok ? `Fertig. Die Datenbank ist jetzt ${size(reply.data.databaseBytes)} groß.` : Api.message(reply);
+      tidy.disabled = false;
+      load();
+    }
+    load();
+    return card;
+  }
+
   views.moderation = function moderation() {
     if (!Y.me || !Y.me.isAdmin) return views.notfound();
     const box = h("div", { class: "reports" });
-    const el = h("div", { class: "view" }, topbar({ title: "Moderation", sub: "Offene Meldungen" }), box);
+    const el = h("div", { class: "view" }, topbar({ title: "Moderation", sub: "Offene Meldungen" }), storageCard(), box);
     let dead = false;
 
     async function act(report, action, card) {

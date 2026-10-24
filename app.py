@@ -281,8 +281,10 @@ def ensure_sqlite_columns_exist():
         "yipi_message": [("gif_id", "VARCHAR(32)"), ("file_id", "VARCHAR(32)")],
         "yipi_group_message": [("file_id", "VARCHAR(32)")],
         "yipi_report": [("gif_id", "VARCHAR(32)")],
-        "yipi_media": [("gif_id", "VARCHAR(32)")],
         "yipi_post": [("view_count", "INTEGER NOT NULL DEFAULT 0"), ("fact_status", "VARCHAR(12) NOT NULL DEFAULT ''"), ("fact_note", "VARCHAR(300) NOT NULL DEFAULT ''")],
+        "yipi_media": [("gif_id", "VARCHAR(32)"), ("stored", "VARCHAR(4) NOT NULL DEFAULT 'db'")],
+        "yipi_file": [("stored", "VARCHAR(4) NOT NULL DEFAULT 'db'")],
+        "pulse_gif": [("stored", "VARCHAR(4) NOT NULL DEFAULT 'db'")],
         "yipi_user": [("pinned_post_id", "BIGINT"), ("phone", "VARCHAR(16)"), ("google_sub", "VARCHAR(40)"), ("streak", "INTEGER NOT NULL DEFAULT 0"), ("streak_best", "INTEGER NOT NULL DEFAULT 0"), ("last_day", "VARCHAR(10)")],
     }
     with db.engine.connect() as conn:
@@ -388,6 +390,10 @@ def ensure_columns_exist():
         "ALTER TABLE yipi_user ADD COLUMN IF NOT EXISTS google_sub VARCHAR(40)",
         "CREATE UNIQUE INDEX IF NOT EXISTS ix_yipi_user_phone ON yipi_user (phone)",
         "CREATE UNIQUE INDEX IF NOT EXISTS ix_yipi_user_google_sub ON yipi_user (google_sub)",
+        # Pulse (2026-10-24): files can live in Cloudflare R2 instead of the database (blobstore.py).
+        "ALTER TABLE yipi_media ADD COLUMN IF NOT EXISTS stored VARCHAR(4) NOT NULL DEFAULT 'db'",
+        "ALTER TABLE yipi_file ADD COLUMN IF NOT EXISTS stored VARCHAR(4) NOT NULL DEFAULT 'db'",
+        "ALTER TABLE pulse_gif ADD COLUMN IF NOT EXISTS stored VARCHAR(4) NOT NULL DEFAULT 'db'",
         # Pulse (2026-10-21): the streak of days in a row.
         "ALTER TABLE yipi_user ADD COLUMN IF NOT EXISTS streak INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE yipi_user ADD COLUMN IF NOT EXISTS streak_best INTEGER NOT NULL DEFAULT 0",

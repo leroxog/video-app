@@ -1432,3 +1432,8 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 @media (prefers-reduced-motion: reduce) {
   .cam-best.hot, .cam-score.bump, .cam-host.shake, .cam-count { animation: none !important; }
 }
+/* The storage card of the admins */
+.storage-card { display: grid; gap: 10px; margin: 12px 16px; padding: 16px 18px; }
+.storage-card > h2 { padding: 0; }
+.storage-info { display: grid; gap: 6px; }
+.storage-info .plain-list { display: grid; gap: 4px; padding-left: 18px; list-style: disc; }
