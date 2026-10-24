@@ -223,6 +223,14 @@ test("a conversation with Nex is cleaned the way the server cleans it", () => {
   assert.equal(core.NEX_TURNS, 12);
 });
 
+test("the time of a message stays in the browser and is never sent to the server", () => {
+  const list = [{ role: "user", content: "Hi", at: 1760000000000 }, { role: "assistant", content: "Hallo!", at: "gestern" }, { role: "user", content: "Noch was", at: -5 }];
+  assert.deepEqual(core.nexMessages(list), [{ role: "user", content: "Hi" }, { role: "assistant", content: "Hallo!" }, { role: "user", content: "Noch was" }]);
+  assert.deepEqual(core.nexMessages(list, core.NEX_KEEP, true), [{ role: "user", content: "Hi", at: 1760000000000 }, { role: "assistant", content: "Hallo!" }, { role: "user", content: "Noch was" }]);
+  const store = core.nexStore({ handle: "tom", chats: [{ id: "a1", title: "Gruß", at: 5, messages: [{ role: "user", content: "Hi", at: 1760000000000 }] }] }, "tom");
+  assert.equal(store.chats[0].messages[0].at, 1760000000000, "kept when the conversation is read from the browser again");
+});
+
 test("an answer of Nex is cut into paragraphs and lists, and nothing of it is markup", () => {
   assert.deepEqual(core.nexBlocks(""), []);
   assert.deepEqual(core.nexBlocks(null), []);

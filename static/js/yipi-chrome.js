@@ -29,14 +29,7 @@
     const plus = h("button", { class: "appbar-plus", type: "button", "aria-label": "Neu: Beitrag, Video oder Story", "aria-haspopup": "menu", onclick: (event) => Y.newPost({ anchor: event.currentTarget }) }, icon("plus"));
     const right = h("div", { class: "appbar-right" }, Y.streakChip ? Y.streakChip() : null, find, bell, plus);
     const element = h("header", { class: "appbar" }, menu, mine, brand, pulse, search, right);
-    let loader = null;
-    return {
-      element,
-      route(name) {
-        if (name === "home" && !loader) { loader = Y.pulseLoader({ width: 150, height: 26, label: "Nex" }); pulse.append(loader); }
-        else if (name !== "home" && loader) { loader.remove(); loader = null; }
-      },
-    };
+    return { element, route() { /* the bar is the same on every page */ } };
   }
 
   /* The side bar is folded in (only symbols) until the three lines are pressed; it folds in again with Escape, a click next to it or when a page is opened. */

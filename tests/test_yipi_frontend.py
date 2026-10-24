@@ -242,7 +242,7 @@ def defined_variables():
 def test_every_style_variable_that_is_used_is_defined():
     used = set(re.findall(r"var\((--[\w-]+)", CSS))
     set_by_script = {variable for source in JS.values() for variable in re.findall(r"setProperty\(\"(--[\w-]+)\"", source)}
-    assert set_by_script == {"--hue", "--fill", "--gw", "--gh"}
+    assert set_by_script == {"--hue", "--fill", "--gw", "--gh", "--grow"}
     in_style_text = {"--dx", "--dy"}                          # the little pieces of the like burst get their way in a style attribute (yipi-fx.js)
     assert used - defined_variables() - set_by_script - in_style_text == set(), sorted(used - defined_variables() - set_by_script - in_style_text)
 
@@ -258,7 +258,7 @@ def test_every_theme_defines_the_same_colours():
 
 def test_every_animation_has_its_keyframes():
     keyframes = set(re.findall(r"@keyframes\s+([\w-]+)", CSS))
-    assert keyframes == {"spin", "fade", "pop", "shimmer", "toast-in", "drop", "blink", "sheet", "drawer-in", "bloop", "burst", "bit", "slide-in", "slide-back", "cam-pop", "cam-shake", "cam-count"}
+    assert keyframes == {"spin", "fade", "pop", "shimmer", "toast-in", "drop", "blink", "sheet", "drawer-in", "bloop", "burst", "bit", "slide-in", "slide-back", "cam-pop", "cam-shake", "cam-nudge"}
     for name in keyframes:
         assert re.search(rf"animation:[^;]*\b{name}\b", CSS), f"{name} is defined but never used"
     for declaration in re.findall(r"animation:\s*([a-z][\w-]*)", CSS):
@@ -325,7 +325,7 @@ def test_the_app_works_on_every_screen_and_fills_it():
     assert ".app { position: relative;" in CSS and "margin: 0 auto; padding: 0 14px" not in CSS and "max-width: 640px; min-height" not in CSS, "the page is not a narrow column in the middle"
     assert "@media (min-width: 820px)" in CSS and "@media (min-width: 1200px)" in CSS and "@media (min-width: 1000px)" in CSS
     wide = CSS.split("@media (min-width: 820px) {")[1]
-    for rule in (".nex-side { display: flex;", ".dialog-back { align-items: center;"):
+    for rule in (".dialog-back { align-items: center;",):
         assert rule in wide, f"wide screens: {rule}"
     assert ".tabbar { top: var(--top); bottom: 0; left: 0; right: auto; width: var(--side);" in CSS.split("@media (min-width: 820px) {")[-1], "wide screens: the side bar sits below the bar at the top"
     assert "grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr))" in CSS.split(".pager > .list {")[1].split("}")[0], "the feed spreads over the width in a grid"
@@ -457,16 +457,20 @@ def test_the_chats_page_lists_people_and_groups_and_a_group_can_be_made_with_fri
     assert ".chat-list {" in CSS and ".convo {" in CSS
 
 
-def test_nex_looks_and_works_like_the_chatgpt_app():
+def test_nex_ai_is_a_contact_like_any_other_with_a_small_ki_under_the_time():
     nex = JS["yipi-nex.js"]
-    for text in ("Core.nexStore(", "Core.nexUpsert(", "Core.nexRemove(", "Core.newChatId()", "Y.sidePanel(", 'icon("menuLines")', 'nex-plus', 'class: "nex-box"', "Gespräche"):
+    chats = JS["yipi-chats.js"]
+    for text in ("Core.nexStore(", "Core.nexUpsert(", "Core.nexRemove(", "Core.newChatId()", "Y.sidePanel(", "Gespräche", "Y.chatListPane({ active: \"nex\" })", "Y.chatSplit()"):
         assert text in nex, text
-    assert nex.index('historyButton, h("span", { class: "nex-title" }') < nex.index("moreButton)"), "the round menu button is on the left, the three dots on the right"
-    user = CSS.split(".nex-msg.user .nex-bubble {")[1].split("}")[0]
-    assert "justify-content: flex-end" in CSS.split(".nex-msg.user {")[1].split("}")[0] and "background: var(--card-2)" in user, "your questions are grey bubbles on the right"
-    assert "background" not in CSS.split(".nex-msg.assistant")[1].split("}")[0] if ".nex-msg.assistant {" in CSS else True, "the answers are plain text"
-    assert ".nex-box {" in CSS and "border-radius: 32px" in CSS.split(".nex-box {")[1].split("}")[0], "a floating pill at the bottom"
+    for text in ('"chat-head"', '"avatar md nex-face"', '"bubbles"', '"dm-compose"', '"dm-box"', '"dm-input"', "thread-view", "bubble mine", "bubble theirs ai", '"bubble-time"', '"ai-badge"', '"KI"'):
+        assert text in nex, f"the page of Nex AI is made of the parts of every chat: {text}"
+    assert 'Y.chatTime = { dayLabel, clock };' in chats and "Y.chatListPane = chatListPane;" in chats and "Y.chatSplit = split;" in chats
+    assert '"ai-badge"' in chats.split("function nexRow()")[1].split("const matches")[0], "the list of chats marks Nex AI as an AI too"
+    assert "nex-bubble" not in nex and "nex-msg" not in nex and "nex-box" not in nex, "the ChatGPT-like page is gone"
+    assert ".ai-badge {" in CSS and ".nex-face {" in CSS and ".bubble.ai {" in CSS
     assert "Y.nexAsk" not in "".join(JS.values()), "the right column with its question box is gone"
+    assert "at: Date.now()" in nex and "Core.nexMessages(chat.messages, Core.NEX_KEEP, true)" in nex, "every message keeps its time in the browser"
+    assert "Core.nexMessages(chat.messages), ...extra" in nex, "the server gets the turns without the times"
 
 
 def test_the_composer_offers_polls_and_up_to_three_photos():

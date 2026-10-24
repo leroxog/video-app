@@ -1,8 +1,8 @@
-/* Nex Nex: the page of the assistant (/i/nex), made like the ChatGPT app -- a round button for the list of conversations at the top left, a
-   round "..." button at the top right, your questions as grey bubbles on the right, the answers as plain text, a floating input at the bottom.
-   You can have many conversations; they stay in this browser (localStorage, for the signed-in person only). The server gets the last turns of the
-   one you are in, passes them to the AI service and keeps nothing. "Mit Nex erklären" on a post opens a fresh conversation with that post
-   (/i/nex?post=ID). What Nex writes is put on the page as text (richText makes the links), never as HTML. */
+/* Nex AI: the page of the assistant (/i/nex). It is made like every other chat, so that it looks like a normal contact: the same head (back, round picture, name), the
+   same bubbles (yours on the right, the answers on the left), the same box to write in, and under the time of an answer a small "KI". Nex AI is in the list of chats
+   like a person. You can have many conversations; they stay in this browser (localStorage, for the signed-in person only). The server gets the last turns of the one
+   you are in, passes them to the AI service and keeps nothing. "Mit Nex erklären" on a post opens a fresh conversation with that post (/i/nex?post=ID). What Nex AI
+   writes is put on the page as text (richText makes the links), never as HTML. */
 (function () {
   "use strict";
 
@@ -89,12 +89,26 @@
     let chat = store.chats.find((entry) => entry.id === store.current) || blank();
     let controller = null;
     let busy = false;
+    let shown = -1;                                                           // the answer whose buttons (copy, as a post, answer again) are open; -1 = the last one
+    const side = Y.chatSplit();                                               // on a wide screen the list of chats stands at the side, as in every other chat
+    const pane = side ? Y.chatListPane({ active: "nex" }) : null;
 
-    const thread = h("div", { class: "nex-thread", role: "log", "aria-live": "polite", "aria-label": "Gespräch mit Nex" });
-    const intro = h("div", { class: "nex-intro" },
-      h("span", { class: "nex-hero" }, icon("nexmark")),
-      h("h2", {}, "Wobei kann ich helfen?"),
-      h("p", {}, "Frag mich etwas, lass dir einen Beitrag erklären oder hol dir Hilfe beim Schreiben."));
+    // ---- the page is made like any other conversation: the same head, the same bubbles, the same box to write in; only the small "KI" under the time tells that the contact is an AI
+    const back = h("button", { class: "icon-btn round chat-back", type: "button", "aria-label": "Zurück", onclick: () => Y.back("/messages") }, icon("back"));
+    const moreButton = h("button", { class: "icon-btn round", type: "button", "aria-label": "Mehr", "aria-haspopup": "menu" }, icon("more"));
+    const head = h("div", { class: "chat-head" }, back,
+      h("div", { class: "chat-head-main" }, h("span", { class: "avatar md nex-face", "aria-hidden": "true" }, icon("nexmark")),
+        h("div", { class: "chat-head-text" }, h("b", {}, "Nex AI"), h("small", {}, "KI-Assistent"))),
+      moreButton);
+
+    const postBox = h("div", { class: "nex-post-box", hidden: true });
+    const intro = h("div", { class: "thread-intro nex-intro" },
+      h("span", { class: "avatar xl nex-face", "aria-hidden": "true" }, icon("nexmark")),
+      h("h2", {}, "Nex AI"),
+      h("p", {}, "Frag mich alles: ich erkläre, schreibe und denke mit. Ich bin eine KI und kann Fehler machen."));
+    const bubbles = h("div", { class: "bubbles", role: "log", "aria-live": "polite", "aria-label": "Gespräch mit Nex AI" });
+    const body = h("div", { class: "thread" }, postBox, intro, bubbles);
+
     const chips = h("div", { class: "nex-chips" });
     function drawChips() {
       fill(chips, ...suggest().map((text) => h("button", { class: "nex-suggestion", type: "button", onclick: () => ask(text) }, text)),
@@ -103,32 +117,23 @@
     drawChips();
     const staged = h("div", { class: "nex-staged", hidden: true });
     const picker = h("input", { type: "file", hidden: true, "aria-hidden": "true", tabindex: "-1" });
-    const input = h("textarea", { class: "nex-input", rows: 1, maxlength: 1500, placeholder: "Frag Nex etwas", "aria-label": "Nachricht an Nex" });
-    const plus = h("button", { class: "icon-btn nex-plus", type: "button", "aria-label": "Mehr", "aria-haspopup": "menu" }, icon("plus"));
+    const input = h("textarea", { class: "dm-input", rows: 1, maxlength: 1500, placeholder: "Nachricht an Nex AI …", "aria-label": "Nachricht an Nex AI" });
+    const plus = h("button", { class: "icon-btn tool dm-plus", type: "button", "aria-label": "Foto oder Dokument hinzufügen", "aria-haspopup": "menu" }, icon("plus"));
     const sendButton = h("button", { class: "icon-btn send-btn", type: "button", "aria-label": "Senden", disabled: true }, icon("arrowUp"));
     const stopButton = h("button", { class: "icon-btn send-btn stop", type: "button", "aria-label": "Antwort stoppen", hidden: true }, icon("stop"));
-    const composeBar = h("div", { class: "nex-compose" },
-      chips, staged,
-      h("div", { class: "nex-box" }, plus, input, sendButton, stopButton, picker),
-      h("p", { class: "nex-note" }, "Nex kann Fehler machen. Prüfe Wichtiges nach."));
-    const historyButton = h("button", { class: "icon-btn round", type: "button", "aria-label": "Gespräche und Menü", "aria-haspopup": "dialog", onclick: () => openHistory() }, icon("menuLines"));
-    const moreButton = h("button", { class: "icon-btn round", type: "button", "aria-label": "Mehr", "aria-haspopup": "menu" }, icon("more"));
-    const postBox = h("div", { class: "nex-post-box", hidden: true });
-    const head = h("div", { class: "nex-head" }, historyButton, h("span", { class: "nex-title" }, "Nex"), moreButton);
-    const scroller = h("div", { class: "nex-scroll" }, intro, thread);
-    const side = h("aside", { class: "nex-side", "aria-label": "Gespräche mit Nex" });         // the list of conversations, always there on a wide screen
-    const el = h("div", { class: "view nex-view" }, side, h("div", { class: "nex-main" }, head, postBox, scroller, composeBar));
+    const composeBar = h("div", { class: "dm-compose" }, chips, staged, h("div", { class: "dm-box" }, plus, input, sendButton, stopButton, picker));
+    const threadEl = h("div", { class: "view thread-view" }, head, body, composeBar);
+    const el = side ? h("div", { class: "chats-split" }, pane.element, threadEl) : threadEl;
 
-    /* On a wide screen the conversation scrolls inside its own box, on a phone the whole page scrolls (the style sheet switches at 1000 px). */
-    const wide = () => matchMedia("(min-width: 1000px)").matches;
-    const toBottom = () => { if (wide()) scroller.scrollTop = scroller.scrollHeight; else window.scrollTo({ top: document.documentElement.scrollHeight }); };
-    const nearBottom = () => (wide() ? scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 220 : document.documentElement.scrollHeight - window.scrollY - window.innerHeight < 220);
+    /* On a wide screen the conversation scrolls inside its own box, on a phone the whole page scrolls (like every chat). */
+    const toBottom = () => { if (side) body.scrollTop = body.scrollHeight; else window.scrollTo({ top: document.documentElement.scrollHeight }); };
+    const nearBottom = () => (side ? body.scrollHeight - body.scrollTop - body.clientHeight < 220 : document.documentElement.scrollHeight - window.scrollY - window.innerHeight < 220);
 
     /* The conversation is kept (and put first in the list) as soon as it has a message. */
     function save() {
       if (!chat.messages.length) return;
       const first = chat.messages.find((message) => message.role === "user");
-      chat = { ...chat, title: chat.title || Core.nexTitle(first ? first.content : ""), at: Date.now(), messages: Core.nexMessages(chat.messages, Core.NEX_KEEP) };
+      chat = { ...chat, title: chat.title || Core.nexTitle(first ? first.content : ""), at: Date.now(), messages: Core.nexMessages(chat.messages, Core.NEX_KEEP, true) };
       store = Core.nexUpsert(store, chat);
       Y.writeJson(KEY, store);
       redrawHistory();
@@ -140,6 +145,13 @@
         : h("p", { class: "nex-p" }, richText(block.text)))));
     }
 
+    /* The time under a message: "14:05" for yours, "14:05 · KI" for the answers of Nex AI (an old message without a time only says "KI"). */
+    const timeLine = (message) => {
+      const clock = message.at ? Y.chatTime.clock(new Date(message.at).toISOString()) : "";
+      if (message.role === "user") return clock ? h("span", { class: "bubble-time" }, clock) : null;
+      return h("span", { class: "bubble-time" }, clock ? `${clock} · ` : "", h("span", { class: "ai-badge", title: "Diese Antwort schreibt eine KI" }, "KI"));
+    };
+
     function actions(message, index) {
       const copy = h("button", { class: "nex-act", type: "button", onclick: async () => {
         try { await navigator.clipboard.writeText(message.content); toast("Text kopiert"); } catch (error) { window.prompt("Diesen Text kannst du kopieren:", message.content); }
@@ -149,14 +161,24 @@
       return h("div", { class: "nex-actions" }, copy, asPost, index === chat.messages.length - 1 ? again : null);
     }
 
-    function row(message, index) {
+    function row(message, index, list) {
+      const next = list[index + 1];
+      const endOfGroup = !next || next.role !== message.role || !message.at || !next.at || Y.chatTime.clock(new Date(next.at).toISOString()) !== Y.chatTime.clock(new Date(message.at).toISOString());
       if (message.role === "user") {
         const things = (message.attachments || []).map((entry) => h("span", { class: "nex-attached" }, icon(entry.kind === "image" ? "image" : "file"), entry.name));
-        return h("div", { class: "nex-msg user" }, h("div", { class: "nex-bubble" }, things.length ? h("div", { class: "nex-attachments" }, things) : null, h("p", { class: "nex-p" }, message.content)));
+        return h("div", { class: "bubble mine" },
+          h("div", { class: "bubble-text" }, things.length ? h("div", { class: "nex-attachments" }, things) : null, richText(message.content)),
+          endOfGroup ? timeLine(message) : null);
       }
-      const bubble = h("div", { class: "nex-bubble" });
-      blocksOf(message.content, bubble);
-      return h("div", { class: "nex-msg assistant" }, h("div", { class: "nex-col" }, bubble, actions(message, index)));
+      const last = list.map((entry) => entry.role).lastIndexOf("assistant");
+      const open = shown === -1 ? index === last : index === shown;
+      const text = h("div", { class: "bubble-text nex-text", title: "Antippen für Kopieren und mehr", onclick: (event) => {
+        if (event.target.closest("a, button") || String(window.getSelection && window.getSelection()).length) return;
+        shown = index === last || shown === index ? -1 : index;          // the last answer keeps its buttons; a tap on an older one opens its buttons instead
+        draw();
+      } });
+      blocksOf(message.content, text);
+      return h("div", { class: "bubble theirs ai" }, text, open ? actions(message, index) : null, endOfGroup ? timeLine(message) : null);
     }
 
     function draw() {
@@ -164,14 +186,23 @@
       if (empty && intro.hidden) drawChips();                                 // a new conversation: new suggestions
       intro.hidden = !empty;
       chips.hidden = !empty;
-      fill(thread, ...chat.messages.map(row));
+      const nodes = [];
+      let day = "";
+      chat.messages.forEach((message, index, list) => {
+        if (message.at) {
+          const label = Y.chatTime.dayLabel(new Date(message.at).toISOString());
+          if (label !== day) { day = label; nodes.push(h("div", { class: "day" }, h("span", {}, label))); }
+        }
+        nodes.push(row(message, index, list));
+      });
+      fill(bubbles, ...nodes);
     }
 
     function update() {
       sendButton.disabled = busy || (!Core.cleanText(input.value) && !(attachments.length && attachments.every((entry) => entry.ready)));
       if (attachments.some((entry) => !entry.ready && !entry.problem)) sendButton.disabled = true;
       input.style.height = "auto";
-      input.style.height = `${Math.min(input.scrollHeight, 160)}px`;
+      input.style.height = `${Math.min(input.scrollHeight, 140)}px`;
     }
 
     function setBusy(on) {
@@ -182,22 +213,23 @@
       update();
     }
 
-    const problem = (result) => (result.status === 429 || result.error === "too_many" ? "Du hast Nex gerade viel gefragt. Warte einen Moment und versuch es dann noch einmal."
-      : result.error === "network" ? Api.MESSAGES.network : result.status === 401 ? Api.MESSAGES.not_logged_in : "Nex konnte gerade nicht antworten. Versuch es gleich noch einmal.");
+    const problem = (result) => (result.status === 429 || result.error === "too_many" ? "Du hast Nex AI gerade viel gefragt. Warte einen Moment und versuch es dann noch einmal."
+      : result.error === "network" ? Api.MESSAGES.network : result.status === 401 ? Api.MESSAGES.not_logged_in : "Nex AI konnte gerade nicht antworten. Versuch es gleich noch einmal.");
 
-    /* Asks Nex: the question goes into the conversation, the answer streams in below it. `extra` (postId) is sent along. */
+    /* Asks Nex AI: the question goes into the conversation, the answer streams in below it. `extra` (postId) is sent along. */
     async function ask(text, extra = {}) {
       let question = Core.cleanText(text);
       const things = attachments.filter((entry) => entry.ready);
       if (attachments.some((entry) => !entry.ready && !entry.problem)) return;                  // a file is still on its way
       if (!question && things.length) question = things.some((entry) => entry.kind === "image") ? "Was siehst du auf diesem Foto?" : "Fasse dieses Dokument kurz zusammen.";
       if (!question || busy) return;
-      const message = { role: "user", content: question };
+      const message = { role: "user", content: question, at: Date.now() };
       if (things.length) {
         message.attachments = things.map((entry) => ({ kind: entry.kind, name: entry.name }));
         extra = { ...extra, files: things.map((entry) => (entry.kind === "image" ? { kind: "image", name: entry.name, data: entry.data } : { kind: "document", name: entry.name, text: entry.text })) };
       }
       chat.messages.push(message);
+      shown = -1;
       input.value = "";
       for (const entry of attachments.splice(0)) if (entry.url) URL.revokeObjectURL(entry.url);
       drawStaged();
@@ -210,16 +242,16 @@
       setBusy(true);
       intro.hidden = true;
       chips.hidden = true;
-      const bubble = h("div", { class: "nex-bubble" }, h("span", { class: "nex-typing", "aria-label": "Nex schreibt" }, h("i"), h("i"), h("i")));
-      const holder = h("div", { class: "nex-msg assistant" }, h("div", { class: "nex-col" }, bubble));
-      put(thread, holder);
+      const text = h("div", { class: "bubble-text nex-text" }, h("span", { class: "nex-typing", "aria-label": "Nex AI schreibt" }, h("i"), h("i"), h("i")));
+      const holder = h("div", { class: "bubble theirs ai" }, text);
+      bubbles.append(holder);
       toBottom();
       controller = new AbortController();
       const mine = chat.id;
       const result = await stream({ messages: Core.nexMessages(chat.messages), ...extra }, (soFar) => {
         if (chat.id !== mine) return;
         const stick = nearBottom();
-        blocksOf(soFar, bubble);
+        blocksOf(soFar, text);
         if (stick) toBottom();
       }, controller.signal);
       controller = null;
@@ -227,13 +259,14 @@
       if (chat.id !== mine) return;                      // another conversation was opened meanwhile
       const written = Core.cleanText(result.text || "");
       if (written) {
-        chat.messages.push({ role: "assistant", content: written });
+        chat.messages.push({ role: "assistant", content: written, at: Date.now() });
         save();
         draw();
+        toBottom();
       } else if (result.aborted) {
         holder.remove();
       } else {
-        fill(bubble, h("p", { class: "nex-p nex-problem" }, problem(result)));
+        fill(text, h("p", { class: "nex-p nex-problem" }, problem(result)));
       }
       if (result.error && written) toast(problem(result));
     }
@@ -292,11 +325,12 @@
     function open(next) {
       if (busy) controller?.abort();
       chat = next;
+      shown = -1;
       postBox.hidden = true;
       fill(postBox);
       draw();
       redrawHistory();
-      if (!wide()) window.scrollTo(0, 0);
+      if (!side) window.scrollTo(0, 0);
       if (chat.messages.length) requestAnimationFrame(toBottom);
     }
 
@@ -315,12 +349,11 @@
       return true;
     }
 
-    /* The content of the list of conversations: in a panel from the left on a phone, permanently at the side on a wide screen. */
+    /* The list of conversations with Nex AI: in a panel from the left (the round menu at the top right opens it). */
     const redraws = new Set();
     function redrawHistory() { for (const redraw of redraws) redraw(); }
     function historyContent(close, onGone) {
       const list = h("div", { class: "nx-list" });
-      const page = (path, name, label) => link(path, { class: "drawer-item" }, icon(name), h("span", {}, label));
       function drawList(first) {
         if (!first && onGone && !list.isConnected) { onGone(redraw); return; }            // the panel was closed meanwhile
         fill(list, ...(store.chats.length ? store.chats.map((entry) => h("div", { class: `nx-item${entry.id === chat.id ? " on" : ""}` },
@@ -332,16 +365,13 @@
       drawList(true);
       redraws.add(redraw);
       return [
-        h("div", { class: "nx-top" }, h("b", {}, "Nex"), close === noClose ? null : h("button", { class: "icon-btn", type: "button", "aria-label": "Schließen", onclick: close }, icon("close"))),
+        h("div", { class: "nx-top" }, h("b", {}, "Nex AI"), h("button", { class: "icon-btn", type: "button", "aria-label": "Schließen", onclick: close }, icon("close"))),
         h("button", { class: "nx-new", type: "button", onclick: () => { close(); newChat(); } }, icon("pencil"), h("span", {}, "Neues Gespräch")),
-        h("div", { class: "nx-label" }, "Gespräche"), list,
-        close === noClose ? null : h("nav", { class: "nx-links drawer-nav", "aria-label": "Nex" }, page(Y.HOME, "home", "Home"), page("/messages", "users", "Chats"), page("/camera", "camera", "Kamera"), page("/videos", "playCircle", "Videos"))];
+        h("div", { class: "nx-label" }, "Gespräche"), list];
     }
-    const noClose = () => {};
-    fill(side, ...historyContent(noClose));
 
     function openHistory() {
-      Y.sidePanel("Nex: Gespräche", (panel, close) => {
+      Y.sidePanel("Nex AI: Gespräche", (panel, close) => {
         panel.append(...historyContent(close, (redraw) => redraws.delete(redraw)));
       }, "nex-drawer");
     }
@@ -349,15 +379,13 @@
     plus.addEventListener("click", () => menu(plus, [
       { label: "Foto hinzufügen", icon: "image", run: () => pick("image/jpeg,image/png,image/webp", "image") },
       { label: "Dokument hinzufügen", icon: "file", run: () => pick(".pdf,.txt,.md,.csv,.rtf,.docx,.xlsx,.pptx,.odt,.ods,.odp", "document") },
-      { label: "Neues Gespräch", icon: "pencil", run: newChat },
-      { label: "Gespräche anzeigen", icon: "list", run: openHistory },
     ]));
     moreButton.addEventListener("click", () => menu(moreButton, [
       { label: "Neues Gespräch", icon: "pencil", run: newChat },
       { label: "Gespräche anzeigen", icon: "list", run: openHistory },
       chat.messages.length ? { label: "Dieses Gespräch löschen", icon: "trash", danger: true, run: () => removeChat(chat) } : null,
       store.chats.length ? { label: "Alle Gespräche löschen", icon: "trash", danger: true, run: async () => {
-        if (!(await confirmBox({ title: "Alle Gespräche löschen?", text: "Alle Gespräche mit Nex werden in diesem Browser gelöscht.", yes: "Alle löschen", danger: true }))) return;
+        if (!(await confirmBox({ title: "Alle Gespräche löschen?", text: "Alle Gespräche mit Nex AI werden in diesem Browser gelöscht.", yes: "Alle löschen", danger: true }))) return;
         store = { ...store, chats: [], current: "" };
         Y.writeJson(KEY, store);
         open(blank());
@@ -383,7 +411,7 @@
           postBox.hidden = false;
           fill(postBox, h("div", { class: "nex-post" }, h("div", { class: "nex-post-head" }, avatar(post.user, "sm"), h("b", {}, post.user.name), h("span", { class: "handle" }, `@${post.user.handle}`)),
             post.text ? h("p", { class: "nex-post-text" }, richText(post.text)) : null, link(Y.postPath(post), { class: "tok" }, "Zum Beitrag")));
-          chat.messages.push({ role: "user", content: EXPLAIN });
+          chat.messages.push({ role: "user", content: EXPLAIN, at: Date.now() });
           save();
           draw();
           answer({ postId: post.id });
@@ -398,6 +426,6 @@
     update();
     startFromRoute();
     setTimeout(() => { if (chat.messages.length) toBottom(); }, 0);
-    return { element: el, title: "Nex", destroy() { controller?.abort(); } };
+    return { element: el, title: "Nex AI", destroy() { controller?.abort(); pane?.destroy(); } };
   };
 })();

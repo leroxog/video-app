@@ -411,13 +411,13 @@
     if (Array.isArray(raw.chats)) {
       for (const entry of raw.chats) {
         if (!entry || typeof entry !== "object" || typeof entry.id !== "string" || !/^[\w-]{1,40}$/.test(entry.id)) continue;
-        const messages = nexMessages(entry.messages, 30);
+        const messages = nexMessages(entry.messages, 30, true);
         if (!messages.length) continue;
         const first = messages.find((message) => message.role === "user");
         chats.push({ id: entry.id, title: typeof entry.title === "string" && entry.title.trim() ? Array.from(entry.title.trim()).slice(0, 60).join("") : nexTitle(first ? first.content : ""), at: Number.isFinite(entry.at) ? entry.at : 0, messages });
       }
     } else if (Array.isArray(raw.messages)) {
-      const messages = nexMessages(raw.messages, 30);
+      const messages = nexMessages(raw.messages, 30, true);
       const first = messages.find((message) => message.role === "user");
       if (messages.length) chats = [{ id: newChatId(), title: nexTitle(first ? first.content : ""), at: Date.now(), messages }];
     }
@@ -440,7 +440,7 @@
   const NEX_KEEP = 30;                                  // how many stay in the browser
 
   /* The conversation as it is kept and sent: only real turns, the last ones, each at most 1500 characters. */
-  function nexMessages(list, keep = NEX_TURNS) {
+  function nexMessages(list, keep = NEX_TURNS, withTime = false) {
     const clean = [];
     for (const item of Array.isArray(list) ? list : []) {
       if (!item || (item.role !== "user" && item.role !== "assistant") || typeof item.content !== "string") continue;
@@ -449,7 +449,9 @@
       const attachments = item.role === "user" && Array.isArray(item.attachments)
         ? item.attachments.filter((entry) => entry && (entry.kind === "image" || entry.kind === "document") && typeof entry.name === "string").slice(0, 3).map((entry) => ({ kind: entry.kind, name: Array.from(entry.name).slice(0, 60).join("") }))
         : [];
-      clean.push(attachments.length ? { role: item.role, content, attachments } : { role: item.role, content });
+      const entry = attachments.length ? { role: item.role, content, attachments } : { role: item.role, content };
+      if (withTime && Number.isFinite(item.at) && item.at > 0) entry.at = item.at;                // the time stays with the message in the browser; the server never gets it
+      clean.push(entry);
     }
     return clean.slice(-keep);
   }

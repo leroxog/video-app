@@ -48,8 +48,14 @@
     const app = document.getElementById("app");
     const feed = h("video", { class: "cam-feed", playsinline: true, muted: true, autoplay: true, "aria-label": "Deine Kamera" });
     feed.muted = true;
-    const fallback = h("div", { class: "cam-fallback", hidden: true });
+    const fallback = h("div", { class: "cam-fallback", hidden: true });          // without a camera: a dark picture instead of it, and a small chip that says why
+    const nocamText = h("span", {});
+    const nocam = h("button", { class: "cam-nocam", type: "button", hidden: true }, icon("camera"), nocamText);
     const host = h("div", { class: "cam-host" });
+    const face = h("video", { class: "cam-face", playsinline: true, muted: true, autoplay: true, hidden: true, "aria-hidden": "true" });     // a small round picture of you for the games that cover the camera
+    face.muted = true;
+    let wantFace = false;
+    const syncFace = () => { face.hidden = !(wantFace && stream); if (!face.hidden && face.paused) face.play().catch(() => {}); };
     const score = h("div", { class: "cam-score", "aria-live": "off" }, "0");
     const timeBar = h("span", { class: "cam-time-fill" });
     const stop = h("button", { class: "cam-stop", type: "button", "aria-label": "Aufnahme beenden" }, h("span", {}));
@@ -67,7 +73,7 @@
     const bottom = h("div", { class: "cam-bottom" }, lensName, lensHint, lensBar);
     const review = h("div", { class: "cam-review", hidden: true });
     const loadingBox = h("div", { class: "cam-loading" }, Y.pulseLoader({ compact: true }), h("span", {}, "Die Spiele werden geladen …"));
-    const el = h("div", { class: "view cam-view" }, stage, top, bottom, review, loadingBox);
+    const el = h("div", { class: "view cam-view" }, stage, top, nocam, bottom, review, loadingBox);
 
     let state = "idle";                                        // idle, starting, playing, over, review
     let dead = false;
@@ -91,27 +97,45 @@
     async function openCamera() {
       closeCamera();
       fallback.hidden = true;
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { noCamera("Dein Browser kann die Kamera nicht benutzen."); return; }
+      nocam.hidden = true;
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { noCamera("Kamera nicht verfügbar"); return; }
+      const video = { facingMode: facing, width: { ideal: 1280 }, height: { ideal: 720 } };
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
-      } catch (error) {
-        noCamera(error && error.name === "NotAllowedError" ? "Du hast die Kamera nicht erlaubt." : "Es wurde keine Kamera gefunden.");
-        return;
+        stream = await navigator.mediaDevices.getUserMedia({ video, audio: true });         // one question for the camera and the microphone
+        micAllowed = true;
+      } catch (first) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ video, audio: false });
+          micAllowed = false;
+        } catch (error) {
+          noCamera(error && error.name === "NotAllowedError" ? "Kamera nicht erlaubt" : "Keine Kamera gefunden");
+          return;
+        }
       }
+      micStream = micAllowed ? stream : null;
       if (dead) { stream.getTracks().forEach((track) => track.stop()); return; }
       feed.srcObject = stream;
       feed.classList.toggle("mirror", facing === "user");
       feed.play().catch(() => {});
+      face.srcObject = stream;
+      face.classList.toggle("mirror", facing === "user");
+      face.play().catch(() => {});
+      syncFace();
     }
     function closeCamera() {
       if (stream) { stream.getTracks().forEach((track) => track.stop()); stream = null; }
       feed.srcObject = null;
+      face.srcObject = null;
+      face.hidden = true;
     }
     function noCamera(text) {
-      fill(fallback, h("span", { class: "cam-fallback-ic" }, icon("camera")), h("b", {}, "Keine Kamera"), h("p", {}, `${text} Du kannst trotzdem spielen und aufnehmen, nur ohne dich.`),
-        h("button", { class: "btn ghost small", type: "button", onclick: () => openCamera() }, "Noch einmal versuchen"));
+      fallback.replaceChildren();
       fallback.hidden = false;
+      nocamText.textContent = `${text} · nochmal versuchen`;
+      nocam.setAttribute("aria-label", `${text}. Du kannst trotzdem spielen und aufnehmen, nur ohne dich. Tippen, um es noch einmal zu versuchen.`);
+      nocam.hidden = false;
     }
+    nocam.addEventListener("click", () => openCamera());
     board.addEventListener("click", () => { if (state === "idle" && list[active]) Y.leaderboard(list[active]); });
     const todaysGame = () => list[Core.dailyIndex(new Date().toISOString().slice(0, 10), list.length)];
     flip.addEventListener("click", () => { if (state !== "idle") return; facing = facing === "user" ? "environment" : "user"; openCamera(); });
@@ -122,13 +146,28 @@
         h("span", { class: "lens-ic", style: game.color ? `background:${game.color}` : "" }, h("span", { class: "lens-emoji", "aria-hidden": "true" }, game.emoji)));
       button.addEventListener("click", () => {
         if (state !== "idle") return;
-        if (index === active) begin(game); else go(index, true);
+        if (index === active) { if (runner && runner.go) runner.go(); else startRound(); } else go(index, true);
       });
       return button;
+    }
+
+    /* The lens in the middle is big, the ones next to it are smaller the farther away they are (like the circles of the lenses of Snapchat). */
+    function sizeLenses() {
+      const first = lensBar.children[0];
+      if (!first) return;
+      const middle = lensBar.scrollLeft + lensBar.clientWidth / 2;
+      const step = (lensBar.children[1] ? lensBar.children[1].offsetLeft - first.offsetLeft : first.offsetWidth) || 1;
+      for (const button of lensBar.children) {
+        const away = Math.abs(button.offsetLeft + button.offsetWidth / 2 - middle) / step;
+        const grow = Math.max(0.52, 1.18 - 0.3 * away);
+        button.style.setProperty("--grow", grow.toFixed(3));
+        button.style.opacity = String(Math.max(0.35, 1 - 0.22 * away).toFixed(2));
+      }
     }
     function drawLenses() {
       fill(lensBar, ...list.map(lensButton));
       go(active, false);
+      requestAnimationFrame(sizeLenses);
     }
     function paintActive() {
       [...lensBar.children].forEach((button, index) => { button.classList.toggle("on", index === active); button.setAttribute("aria-selected", String(index === active)); });
@@ -136,7 +175,8 @@
       if (game) {
         lastGame = game.id;
         fill(lensName, h("b", {}, game.name), h("span", { class: "cam-lens-cat" }, game.cat), todaysGame() === game ? h("span", { class: "cam-daily" }, "Spiel des Tages") : null);
-        lensHint.textContent = `${game.hint} · tippe den Kreis zum Start`;
+        lensHint.textContent = game.hint;
+        schedulePreview();
       }
     }
     function go(index, smooth) {
@@ -154,13 +194,14 @@
         if (!first || state !== "idle") return;
         const step = (lensBar.children[1] ? lensBar.children[1].offsetLeft - first.offsetLeft : first.offsetWidth) || 1;
         const index = Math.max(0, Math.min(list.length - 1, Math.round((lensBar.scrollLeft + lensBar.clientWidth / 2 - first.offsetWidth / 2 - first.offsetLeft) / step)));
+        sizeLenses();
         if (index !== active) { active = index; paintActive(); }
       });
     }, { passive: true });
     lensBar.addEventListener("keydown", (event) => {
       if (event.key === "ArrowRight") { event.preventDefault(); go(active + 1, true); }
       else if (event.key === "ArrowLeft") { event.preventDefault(); go(active - 1, true); }
-      else if (event.key === "Enter" && state === "idle" && list[active]) { event.preventDefault(); begin(list[active]); }
+      else if (event.key === "Enter" && state === "idle" && list[active]) { event.preventDefault(); if (runner && runner.go) runner.go(); else startRound(); }
     });
 
     function galleryDialog() {
@@ -187,72 +228,86 @@
     all.addEventListener("click", galleryDialog);
 
     // ---------------------------------------------------------------------------------------------- a game and its recording
-    async function begin(game) {
+    let previewTimer = 0;
+    let previewId = 0;
+    const tapHint = h("div", { class: "cam-tap", "aria-live": "polite" }, h("span", {}, "Tippe auf den Bildschirm, um zu starten"));
+    stage.append(tapHint);
+
+    /* A moment after a lens is chosen the game is shown on the camera picture, not running yet: the scenery, the figure and the buttons to steer it are there. */
+    function schedulePreview() {
+      clearTimeout(previewTimer);
       if (state !== "idle") return;
-      setState("starting");
+      previewTimer = setTimeout(showPreview, 140);
+    }
+    function showPreview() {
+      if (dead || state !== "idle" || !list[active]) return;
+      const game = list[active];
+      const mine = ++previewId;
+      runner?.destroy();
+      runner = null;
+      host.replaceChildren();
       chosen = game;
       finalScore = 0;
       score.textContent = "0";
+      tapHint.hidden = false;
       const def = window.PulseGames.get(game.id);
-      try {
-        if (def.external) await def.prepare();
-      } catch (error) {
-        toast("Dieses Spiel konnte nicht geladen werden.");
-        setState("idle");
-        return;
-      }
-      if (micAllowed === null && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        try { micStream = await navigator.mediaDevices.getUserMedia({ audio: true }); micAllowed = true; } catch (error) { micAllowed = false; }
-      }
-      if (dead) return;
-      host.replaceChildren();
+      wantFace = !!def.bubble;
       const before = best()[game.id] || 0;                    // the best score before this round: beating it is announced once
       let announced = false;
       let lastPop = 0;
       bestLine.textContent = before ? `Bestwert ${before}` : "Dein erster Versuch";
       bestLine.classList.remove("hot");
-      const hooks = { onScore(value) {
-        if (state !== "playing") return;
-        finalScore = value;
-        score.textContent = String(value);
-        const now = performance.now();
-        if (now - lastPop > 300) { lastPop = now; score.classList.remove("bump"); void score.offsetWidth; score.classList.add("bump"); }
-        if (before && value > before && !announced) { announced = true; bestLine.textContent = "Neuer Bestwert!"; bestLine.classList.add("hot"); navigator.vibrate?.(30); }
-      }, onOver(value) { finish(value); } };
-      if (def.external) runner = def.run(host, hooks);
-      else {
-        const canvas = h("canvas", { class: "game-layer", "aria-label": `${game.name}: Spielfeld`, tabindex: "0" });
-        host.append(canvas);
-        runner = window.PulseGames.run(def, canvas, hooks);
-        canvas.focus({ preventScroll: true });
+      current = { before, hooks: {
+        onScore(value) {
+          if (state !== "playing") return;
+          finalScore = value;
+          score.textContent = String(value);
+          const now = performance.now();
+          if (now - lastPop > 300) { lastPop = now; score.classList.remove("bump"); void score.offsetWidth; score.classList.add("bump"); }
+          if (before && value > before && !announced) { announced = true; bestLine.textContent = "Neuer Bestwert!"; bestLine.classList.add("hot"); navigator.vibrate?.(30); }
+        },
+        onOver(value) { finish(value); },
+        onStart() { startRound(); },
+      } };
+      if (def.external) {                                     // a game that brings its own page (Fruit Merge): a card, the first touch loads it
+        const card = h("button", { class: "cam-ext", type: "button", onclick: () => startRound() },
+          h("span", { class: "cam-ext-ic" }, game.emoji), h("b", {}, game.name), h("small", {}, game.hint));
+        host.append(card);
+        return;
+      }
+      const canvas = h("canvas", { class: "game-canvas", "aria-label": `${game.name}: Spielfeld`, tabindex: "0" });
+      host.append(h("div", { class: "game-frame" }, canvas, face));
+      syncFace();
+      if (mine !== previewId) return;
+      runner = window.PulseGames.run(def, canvas, current.hooks, { armed: true });
+      canvas.focus({ preventScroll: true });
+    }
+
+    /* The first touch on the picture: the round and the recording begin together, at once. */
+    async function startRound() {
+      if (state !== "idle" || !chosen || !current) return;
+      const game = chosen;
+      const def = window.PulseGames.get(game.id);
+      setState("playing");
+      clearTimeout(previewTimer);
+      previewId += 1;
+      tapHint.hidden = true;
+      if (def.external) {
+        try { await def.prepare(); } catch (error) { toast("Dieses Spiel konnte nicht geladen werden."); setState("idle"); schedulePreview(); return; }
+        if (dead) return;
+        host.replaceChildren();
+        runner = def.run(host, current.hooks);
       }
       lensBarHide(true);
       hud.hidden = false;
       timeBar.style.width = "100%";
-      runner?.pause?.(true);
-      if (!(await countdown())) return;                       // left or cancelled meanwhile
-      runner?.pause?.(false);
       startRecording();
       startedAt = performance.now();
-      setState("playing");
       clearInterval(timer);
       timer = setInterval(tick, 100);
     }
+    let current = null;
     const lensBarHide = (on) => { bottom.hidden = on; top.hidden = on; };
-
-    /* 3, 2, 1 before every round (the game stands still and nothing is recorded yet). */
-    let countId = 0;
-    async function countdown() {
-      const mine = ++countId;
-      for (const step of ["3", "2", "1"]) {
-        if (dead || mine !== countId || state !== "starting") return false;
-        fill(over, h("div", { class: "cam-count", "aria-live": "assertive" }, step));
-        over.hidden = false;
-        await wait(550);
-      }
-      over.hidden = true;
-      return !dead && mine === countId && state === "starting";
-    }
 
     function tick() {
       if (state !== "playing") return;
@@ -260,10 +315,7 @@
       timeBar.style.width = `${Math.max(0, (left / LIMIT) * 100)}%`;
       if (left <= 0) finish(finalScore);
     }
-    stop.addEventListener("click", () => {
-      if (state === "playing") finish(finalScore);
-      else if (state === "starting") { countId += 1; endGame(); lensBarHide(false); setState("idle"); }       // cancelled during the countdown
-    });
+    stop.addEventListener("click", () => { if (state === "playing") finish(finalScore); });
 
     function finish(value) {
       if (state !== "playing") return;
@@ -350,6 +402,29 @@
           try { g.drawImage(canvas, ((r.left - box.left) / box.width) * REC_W, ((r.top - box.top) / box.height) * REC_H, (r.width / box.width) * REC_W, (r.height / box.height) * REC_H); } catch (error) { /* a canvas that is not ready */ }
         }
       }
+      if (!face.hidden && feed.videoWidth && feed.readyState >= 2) {                 // the round picture of you (games that cover the camera)
+        const box2 = stage.getBoundingClientRect();
+        const r = face.getBoundingClientRect();
+        if (box2.width > 0 && r.width > 0) {
+          const size = (r.width / box2.width) * REC_W;
+          const cx = ((r.left - box2.left) / box2.width) * REC_W + size / 2;
+          const cy = ((r.top - box2.top) / box2.height) * REC_H + size / 2;
+          const cover = Math.max(size / feed.videoWidth, size / feed.videoHeight);
+          g.save();
+          g.beginPath();
+          g.arc(cx, cy, size / 2, 0, Math.PI * 2);
+          g.clip();
+          g.translate(cx, cy);
+          if (facing === "user") g.scale(-1, 1);
+          g.drawImage(feed, (-feed.videoWidth * cover) / 2, (-feed.videoHeight * cover) / 2, feed.videoWidth * cover, feed.videoHeight * cover);
+          g.restore();
+          g.beginPath();
+          g.arc(cx, cy, size / 2 - 2, 0, Math.PI * 2);
+          g.lineWidth = 5;
+          g.strokeStyle = "#fff";
+          g.stroke();
+        }
+      }
       g.font = "800 64px system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
       g.textAlign = "center";
       g.textBaseline = "middle";
@@ -400,7 +475,7 @@
       const bar = h("div", { class: "cam-review-bar" },
         action("close", "Verwerfen", () => { discard(); backToLenses(); }),
         action("download", "Speichern", save),
-        action("refresh", "Nochmal", () => { const game = chosen; discard(); backToLenses(); begin(game); }),
+        action("refresh", "Nochmal", () => { discard(); backToLenses(); }),
         h("button", { class: "cam-send", type: "button", onclick: sendDialog }, icon("send"), h("span", {}, "Senden")),
         h("button", { class: "cam-post", type: "button", onclick: post }, icon("plus"), h("span", {}, "Posten")));
       fill(review, video, h("div", { class: "cam-review-top" }, h("b", {}, clip.game.name), h("span", {}, points(clip.score))), bar);
@@ -419,6 +494,7 @@
       lensBarHide(false);
       setState("idle");
       go(active, false);
+      requestAnimationFrame(sizeLenses);
     }
     function save() {
       const anchor = h("a", { href: clip.url, download: clip.name });
@@ -469,16 +545,15 @@
       if (dead) return;
       list = window.PulseGames.list();
       const wanted = route.game ? list.findIndex((game) => game.id === route.game) : list.findIndex((game) => game.id === lastGame);
-      const todays = list.indexOf(todaysGame());
-      active = wanted >= 0 ? wanted : Math.max(0, todays);
+      active = wanted >= 0 ? wanted : 0;                       // the first lens: the newest main games (the game of the day is marked in the name line)
       loadingBox.hidden = true;
       drawLenses();
     }
     function fit() {                                           // the play field is 9:16 and as big as the screen allows; the camera behind it fills the whole stage
       const box = stage.getBoundingClientRect();
       const width = Math.max(1, Math.min(box.width, (box.height * 9) / 16));
-      host.style.setProperty("--gw", `${width}px`);
-      host.style.setProperty("--gh", `${(width * 16) / 9}px`);
+      stage.style.setProperty("--gw", `${width}px`);
+      stage.style.setProperty("--gh", `${(width * 16) / 9}px`);
     }
     if (window.ResizeObserver) { const watcher = new ResizeObserver(fit); watcher.observe(stage); }
     window.addEventListener("resize", fit);
@@ -492,6 +567,7 @@
       onShow() { runner?.pause?.(false); },
       destroy() {
         dead = true;
+        clearTimeout(previewTimer);
         endGame();
         recorder = null;
         window.removeEventListener("resize", fit);

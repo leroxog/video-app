@@ -131,7 +131,7 @@
       return link("/i/nex", { class: `convo convo-nex${active === "nex" ? " active" : ""}` },
         h("span", { class: "avatar md nex-face", "aria-hidden": "true" }, icon("nexmark")),
         h("div", { class: "convo-main" },
-          h("div", { class: "convo-top" }, h("b", { class: "convo-name" }, "Nex AI")),
+          h("div", { class: "convo-top" }, h("b", { class: "convo-name" }, "Nex AI"), h("span", { class: "ai-badge" }, "KI")),
           h("p", { class: "convo-last" }, "Frag mich alles. Ich bin immer für dich da.")));
     }
 
@@ -165,11 +165,11 @@
       const banner = requests && !term ? h("button", { class: "chat-requests", type: "button", onclick: () => { current = "requests"; drawTabs(); draw(); } },
         h("span", { class: "chat-requests-ic" }, icon("mail")), h("span", { class: "chat-requests-text" }, h("b", {}, "Anfragen"), h("small", {}, `${requests} ${requests === 1 ? "Person möchte" : "Personen möchten"} dir schreiben`)), icon("chevron")) : null;
       const showNex = !term || "nex ki ai assistent".includes(term);
-      fill(body, banner, h("div", { class: "chat-list" }, showNex ? nexRow() : null, ...(main.length ? main.map(row)
-        : [term ? (showNex ? null : emptyState("Nichts gefunden", "Probier einen anderen Namen."))
-          : emptyState("Noch keine Chats", "Schreib mit deinen Freunden oder gründe eine Gruppe.",
-            h("div", { class: "hero-actions" }, h("button", { class: "btn primary", type: "button", onclick: newMessage }, "Nachricht schreiben"), h("button", { class: "btn ghost", type: "button", onclick: newGroup }, "Gruppe gründen")))]),
-        term ? null : Y.sponsored("row")));
+      const rows = [showNex ? nexRow() : null, ...main.map(row)].filter(Boolean);
+      const blank = main.length ? null : term ? (showNex ? null : emptyState("Nichts gefunden", "Probier einen anderen Namen."))
+        : emptyState("Noch keine Chats", "Schreib mit deinen Freunden oder gründe eine Gruppe.",
+          h("div", { class: "hero-actions" }, h("button", { class: "btn primary", type: "button", onclick: newMessage }, "Nachricht schreiben"), h("button", { class: "btn ghost", type: "button", onclick: newGroup }, "Gruppe gründen")));
+      fill(body, banner, rows.length ? h("div", { class: "chat-list" }, rows) : null, blank ? h("div", { class: "chat-blank" }, blank) : null, term ? null : Y.sponsored("row"));
     }
 
     async function load(first) {
@@ -565,6 +565,9 @@
     return { element: el, title: group ? "Gruppe" : `Nachrichten mit @${route.handle}`, destroy() { state.dead = true; clearInterval(timer); pane?.destroy(); } };
   }
 
+  Y.chatSplit = split;                                                    // Nex AI is a chat too: it takes the same panes, the same list at the side and the same times
+  Y.chatListPane = chatListPane;
+  Y.chatTime = { dayLabel, clock };
   views.thread = (route, ctx) => conversation(route, ctx, "dm");
   views.group = (route, ctx) => conversation(route, ctx, "group");
 })();

@@ -896,6 +896,26 @@ def credits_list():
     return [entry for entry in starter_index() if entry.get("folder") == "cc"]
 
 
+RANK_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "rank")
+RANK_TITLES = (("footballers", "Fußballer"), ("musicians", "Musikerinnen und Musiker"), ("countries", "Flaggen"))
+
+
+def rank_credits():
+    """The pictures of the ranking games (static/rank, collected by scripts/fetch_rank_images.py) with who made them and under which licence,
+    in groups, for the page /bildnachweise."""
+    try:
+        with open(os.path.join(RANK_DIR, "index.json"), encoding="utf-8") as handle:
+            index = json.load(handle)
+    except (OSError, ValueError):
+        return []
+    groups = []
+    for key, title in RANK_TITLES:
+        entries = [entry for entry in (index.get(key) or []) if isinstance(entry, dict) and str(entry.get("pageUrl", "")).startswith("https://commons.wikimedia.org/wiki/File:")]
+        if entries:
+            groups.append({"key": key, "title": title, "entries": entries})
+    return groups
+
+
 def ensure_starters():
     """Puts the starter GIFs that ship with the site (static/gifs) into the library the first time it is looked at (and again if
     somebody emptied the table), so that it is never empty."""
@@ -1518,7 +1538,7 @@ def manifest():
 PULSE_SCRIPTS = ["yipi-core.js", "yipi-gif-core.js", "yipi-icons.js", "yipi-api.js", "yipi-ui.js", "yipi-fx.js", "yipi-gif.js", "yipi-components.js", "yipi-newpost.js",
                  "yipi-views.js", "yipi-comments.js", "yipi-chats.js", "yipi-lock.js", "yipi-pages.js", "yipi-share.js", "yipi-progress.js", "yipi-nex.js", "yipi-download.js", "yipi-camera.js", "yipi-videos.js", "yipi-stories.js", "yipi-chrome.js", "yipi.js"]
 # The games of the camera tab are a second file, loaded when the camera tab is opened (about a hundred small games; nobody who only reads needs them).
-PULSE_GAME_SCRIPTS = ["pg-kit.js", "pg-runners.js", "pg-arcade.js", "pg-reflex.js", "pg-puzzle.js", "pg-board.js", "pg-numbers.js", "pg-skill.js", "pg-more.js", "pg-fruit.js"]
+PULSE_GAME_SCRIPTS = ["pg-kit.js", "pg-racing.js", "pg-rank.js", "pg-runners.js", "pg-arcade.js", "pg-reflex.js", "pg-puzzle.js", "pg-board.js", "pg-numbers.js", "pg-skill.js", "pg-more.js", "pg-fruit.js"]
 _bundles = {}
 
 
@@ -4265,7 +4285,7 @@ def register_routes(app):
 
     # ---------------------------------------------------------------------- legal pages, files for browsers and crawlers
     def legal(page):
-        return page_headers(make_response(render_template("legal.html", page=page, imprint=ysound.imprint(), credits=credits_list() if page == "credits" else ())))
+        return page_headers(make_response(render_template("legal.html", page=page, imprint=ysound.imprint(), credits=credits_list() if page == "credits" else (), rank_credits=rank_credits() if page == "credits" else ())))
 
     @route("/nutzungsbedingungen")
     def yipi_terms():

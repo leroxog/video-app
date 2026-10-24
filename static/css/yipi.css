@@ -686,16 +686,19 @@ main:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-vi
 
 /* ---------------------------------------------------------------------------------------------- the "+" pop-up and the templates */
 @keyframes bloop { 0% { opacity: 0; transform: scale(0.5); } 60% { opacity: 1; transform: scale(1.06); } 100% { opacity: 1; transform: scale(1); } }
-.menu.post-choose { min-width: 0; width: min(320px, calc(100vw - 16px)); padding: 14px; transform-origin: top right; animation: bloop 0.26s cubic-bezier(0.2, 0.9, 0.3, 1.2); }
-.pc-title { margin: 0 2px 10px; font-size: 14px; font-weight: 700; color: var(--muted); }
-.pc-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.pc-tile { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 14px 14px 12px; border-radius: 20px; background: var(--bg-2); border: 1px solid var(--line); text-align: left; transition: transform 0.12s, background 0.12s; }
-.pc-tile:hover, .pc-tile:focus-visible { background: var(--bg-3); outline: none; }
-.pc-tile:active { transform: scale(0.96); }
-.pc-tile b { font-size: 17px; }
-.pc-tile .hint { margin-top: 0; }
-.pc-ic { display: grid; place-items: center; width: 46px; height: 46px; margin-bottom: 6px; border-radius: 50%; background: var(--ink); color: var(--on-ink); }
-.pc-ic svg { width: 23px; height: 23px; }
+.menu.post-choose { min-width: 0; width: min(330px, calc(100vw - 16px)); padding: 12px 8px 8px; transform-origin: top right; animation: bloop 0.26s cubic-bezier(0.2, 0.9, 0.3, 1.2); }
+.pc-title { margin: 0 10px 8px; font-size: 13px; font-weight: 700; color: var(--muted); }
+.pc-tiles { display: flex; flex-direction: column; gap: 2px; }
+.pc-tile { display: flex; align-items: center; gap: 14px; width: 100%; padding: 10px 8px; border-radius: 16px; background: transparent; text-align: left; transition: transform 0.12s, background 0.12s; }
+.pc-tile:hover, .pc-tile:focus-visible { background: var(--hover); outline: none; }
+.pc-tile:active { transform: scale(0.98); }
+.pc-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.pc-text b { font-size: 16px; }
+.pc-text .hint { margin-top: 1px; }
+.pc-go { flex: none; color: var(--muted); }
+.pc-go svg { width: 18px; height: 18px; }
+.pc-ic { display: grid; place-items: center; flex: none; width: 44px; height: 44px; border-radius: 50%; background: var(--ink); color: var(--on-ink); }
+.pc-ic svg { width: 21px; height: 21px; }
 .dialog-body > .pc-tiles { padding: 4px 0 6px; }
 .field-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 14px 0 6px; }
 .field-head:first-child { margin-top: 2px; }
@@ -790,18 +793,6 @@ main:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-vi
 .auth-prompt .hero-logo svg { width: 48px; height: 48px; }
 
 /* ---------------------------------------------------------------------------------------------- Nex (like the ChatGPT app) */
-.nex-view { position: relative; min-height: 100vh; min-height: 100dvh; }
-.nex-main { display: flex; flex-direction: column; min-width: 0; min-height: 100vh; min-height: 100dvh; }
-.nex-side { display: none; }
-.nex-head { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 calc(var(--pad) * -1); padding: calc(10px + env(safe-area-inset-top)) var(--pad) 10px; background: linear-gradient(to bottom, var(--bg) 70%, transparent); }
-.nex-title { display: inline-flex; align-items: center; gap: 8px; font-size: 19px; font-weight: 800; letter-spacing: -0.02em; }
-.nex-title svg { width: 20px; height: 20px; }
-.nex-scroll { flex: 1; padding: 6px 0 12px; }
-.nex-intro { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 18vh 8px 8px; }
-.nex-hero { display: grid; place-items: center; width: 76px; height: 76px; margin-bottom: 20px; border-radius: 50%; background: var(--ink); color: var(--on-ink); }
-.nex-hero svg { width: 38px; height: 38px; }
-.nex-intro h2 { font-size: 28px; font-weight: 800; letter-spacing: -0.03em; }
-.nex-intro p { margin: 6px 0 0; color: var(--muted); max-width: 360px; }
 .nex-chips { display: flex; gap: 8px; padding: 6px var(--pad) 10px; margin: 0 calc(var(--pad) * -1); overflow-x: auto; scrollbar-width: none; }
 .nex-chips::-webkit-scrollbar { display: none; }
 .nex-suggestion { flex: none; max-width: 260px; padding: 11px 16px; border-radius: 20px; background: var(--card); font-size: 14px; font-weight: 600; text-align: left; line-height: 1.3; }
@@ -810,12 +801,6 @@ main:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-vi
 .nex-post { padding: 14px 16px; border-radius: var(--radius); background: var(--card); }
 .nex-post-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; min-width: 0; }
 .nex-post-text { white-space: pre-wrap; margin-bottom: 6px; }
-.nex-thread { display: flex; flex-direction: column; gap: 22px; padding-top: 8px; }
-.nex-msg { display: flex; }
-.nex-msg.user { justify-content: flex-end; }
-.nex-col { display: flex; flex-direction: column; gap: 6px; min-width: 0; width: 100%; }
-.nex-bubble { min-width: 0; line-height: 1.6; font-size: 16px; }
-.nex-msg.user .nex-bubble { max-width: 84%; padding: 11px 17px; border-radius: 24px; background: var(--card-2); }
 .nex-p { white-space: pre-wrap; }
 .nex-p + .nex-p, .nex-p + .nex-list, .nex-list + .nex-p { margin-top: 12px; }
 .nex-list { padding-left: 2px; }
@@ -831,12 +816,6 @@ main:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-vi
 .nex-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-left: -8px; }
 .nex-act { padding: 5px 10px; border-radius: 999px; color: var(--muted); font-size: 13px; font-weight: 600; }
 .nex-act:hover { background: var(--hover); color: var(--text); }
-.nex-compose { position: sticky; bottom: 0; z-index: 10; margin: 0 calc(var(--pad) * -1); padding: 6px var(--pad) calc(10px + env(safe-area-inset-bottom)); background: linear-gradient(to top, var(--bg) 66%, transparent); }
-.nex-box { display: flex; align-items: flex-end; gap: 6px; padding: 6px; border: 1px solid var(--line-strong); border-radius: 32px; background: var(--card); box-shadow: var(--shadow); }
-.nex-plus { align-self: flex-end; background: var(--card-2); }
-.nex-input { flex: 1; min-height: 44px; max-height: 160px; padding: 11px 4px; border: 0; background: transparent; resize: none; line-height: 1.35; font-size: 16px; }
-.nex-input:focus { outline: none; }
-.nex-note { margin-top: 6px; text-align: center; color: var(--muted); font-size: 11.5px; }
 
 .nex-drawer { width: min(340px, 88vw); }
 .nx-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
@@ -850,7 +829,6 @@ main:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-vi
 .nx-open { flex: 1; min-width: 0; padding: 12px 12px; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nx-del { opacity: 0.6; }
 .nx-empty { padding: 8px 6px; color: var(--muted); }
-.nx-links { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--line); }
 
 /* ---------------------------------------------------------------------------------------------- GIFs */
 .dialog.gif-dialog { height: 88vh; height: 88dvh; overflow: hidden; }
@@ -1061,19 +1039,6 @@ main:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-vi
   .thread-view > .notice { margin: 8px 24px 18px; }
   .bubble { max-width: 66%; }
   .app[data-route="thread"], .app[data-route="group"], .app[data-route="messages"], .app[data-route="nex"], .app[data-route="videos"] { --pad: 0px; padding-right: 0; padding-left: var(--side); }
-  .nex-view { display: grid; grid-template-columns: 300px minmax(0, 1fr); height: 100vh; height: 100dvh; min-height: 0; }
-  .nex-side { display: flex; flex-direction: column; gap: 4px; padding: 18px 14px; border-right: 1px solid var(--line); overflow-y: auto; }
-  .nex-main { height: 100vh; height: 100dvh; min-height: 0; }
-  .nex-head { position: static; background: none; padding: 16px 28px 10px; }
-  .nex-head > .icon-btn:first-child { display: none; }
-  .nex-title { margin-right: auto; }
-  .nex-scroll { min-height: 0; overflow-y: auto; padding: 6px 28px 12px; }
-  .nex-post-box { padding: 4px 28px 0; }
-  .nex-intro, .nex-thread, .nex-post-box .nex-post { max-width: 860px; margin-left: auto; margin-right: auto; }
-  .nex-intro { padding-top: 12vh; }
-  .nex-compose { position: static; padding: 6px 28px 18px; background: none; }
-  .nex-chips { margin: 0 auto; padding: 6px 0 10px; max-width: 860px; flex-wrap: wrap; overflow: visible; }
-  .nex-box, .nex-note { max-width: 860px; margin-left: auto; margin-right: auto; }
 }
 @media (min-width: 820px) {
   .reel-stage { width: min(100%, calc(100dvh * 9 / 16)); height: calc(100dvh - 32px); border-radius: 26px; }
@@ -1159,8 +1124,6 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .bubble-doc-dl svg { width: 20px; height: 20px; }
 
 /* ---------------------------------------------------------------------------------------------- Nex: the mark, photos and documents */
-.nex-hero { width: 84px; height: 84px; box-shadow: 0 0 0 1px var(--line-strong), 0 14px 34px rgba(0, 0, 0, 0.35); }
-.nex-hero svg { width: 42px; height: 42px; stroke-width: 2.1; }
 .nex-reroll { flex: none; align-self: center; width: 42px; height: 42px; background: var(--card); }
 .nex-reroll svg { width: 19px; height: 19px; }
 .nex-staged { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 4px 8px; }
@@ -1180,15 +1143,17 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 /* ---------------------------------------------------------------------------------------------- the camera tab (like the camera of Snapchat) */
 .app[data-cam="starting"] .tabbar, .app[data-cam="playing"] .tabbar, .app[data-cam="over"] .tabbar, .app[data-cam="review"] .tabbar { display: none; }
 .cam-view { position: relative; margin: 0 calc(var(--pad) * -1); height: 100vh; height: 100dvh; background: #000; color: #fff; overflow: hidden; user-select: none; -webkit-user-select: none; }
-.cam-stage { position: absolute; top: 0; bottom: 0; left: 50%; width: 100%; max-width: calc(100dvh * 9 / 16); transform: translateX(-50%); overflow: hidden; background: #0b0b10; }
+.cam-stage { --gw: 360px; --gh: 640px; position: absolute; top: 0; bottom: 0; left: 50%; width: 100%; max-width: calc(100dvh * 9 / 16); transform: translateX(-50%); overflow: hidden; background: #0b0b10; }
 .cam-feed { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #0b0b10; }
 .cam-feed.mirror { transform: scaleX(-1); }
-.cam-fallback { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 24px 24px 150px; text-align: center; background: linear-gradient(to bottom, #1c1c28, #08080c); }
-.cam-fallback p { max-width: 300px; color: #bbb; }
-.cam-fallback-ic { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; border: 2px solid #fff; }
-.cam-fallback-ic svg { width: 30px; height: 30px; }
-.cam-host { position: absolute; inset: 0; display: grid; place-items: center; --gw: 360px; --gh: 640px; }
+.cam-fallback { position: absolute; inset: 0; background: radial-gradient(120% 70% at 50% 0%, #26263a, #0b0b12 70%); }
+.cam-host { position: absolute; inset: 0; display: grid; place-items: center; }
 .game-layer { display: block; width: var(--gw); height: var(--gh); touch-action: none; outline: none; cursor: pointer; }
+.game-frame { position: relative; width: var(--gw); height: var(--gh); }
+.game-canvas { display: block; width: 100%; height: 100%; touch-action: none; outline: none; cursor: pointer; }
+.cam-face { position: absolute; left: 50%; top: 4.4%; width: calc(var(--gw) * 0.16); height: calc(var(--gw) * 0.16); margin-left: calc(var(--gw) * -0.08); border-radius: 50%; object-fit: cover; border: 2.5px solid #fff; background: #1c1c26; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5); pointer-events: none; z-index: 2; }
+.cam-face[hidden] { display: none; }
+.cam-face.mirror { transform: scaleX(-1); }
 .cam-top { position: absolute; top: 0; left: 50%; width: 100%; max-width: calc(100dvh * 9 / 16); transform: translateX(-50%); z-index: 5; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: calc(12px + env(safe-area-inset-top)) 14px 12px; pointer-events: none; background: linear-gradient(to bottom, rgba(0, 0, 0, 0.45), transparent); }
 .cam-top > * { pointer-events: auto; }
 .cam-title { font-size: 17px; font-weight: 800; letter-spacing: -0.02em; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6); }
@@ -1428,12 +1393,10 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .cam-best.hot { opacity: 1; font-size: 15px; animation: cam-pop 0.5s ease-out; }
 .cam-score.bump { animation: cam-pop 0.25s ease-out; }
 .cam-host.shake { animation: cam-shake 0.42s ease-in-out; }
-.cam-count { font-size: 150px; font-weight: 800; line-height: 1; -webkit-text-stroke: 10px rgba(0, 0, 0, 0.5); paint-order: stroke fill; animation: cam-count 0.55s ease-out; }
 @keyframes cam-pop { 0% { transform: scale(1); } 40% { transform: scale(1.25); } 100% { transform: scale(1); } }
 @keyframes cam-shake { 0%, 100% { transform: translate(0, 0); } 20% { transform: translate(-7px, 3px); } 40% { transform: translate(6px, -4px); } 60% { transform: translate(-4px, 2px); } 80% { transform: translate(3px, -1px); } }
-@keyframes cam-count { 0% { transform: scale(1.8); opacity: 0; } 30% { opacity: 1; } 100% { transform: scale(0.9); opacity: 0.9; } }
 @media (prefers-reduced-motion: reduce) {
-  .cam-best.hot, .cam-score.bump, .cam-host.shake, .cam-count { animation: none !important; }
+  .cam-best.hot, .cam-score.bump, .cam-host.shake { animation: none !important; }
 }
 /* The storage card of the admins */
 .storage-card { display: grid; gap: 10px; margin: 12px 16px; padding: 16px 18px; }
@@ -1495,11 +1458,11 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .side-foot { display: none; }
 
 /* ----- the boxes "Gesponsert" */
-.sponsored { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 20px; background: var(--bg-2); border: 1.5px dashed var(--line-strong); color: var(--muted); }
-.sp-mark { display: grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 12px; background: var(--bg); color: var(--text); box-shadow: inset 0 0 0 1.5px var(--line-strong); }
+.sponsored { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: 18px; background: var(--bg-2); border: 1px solid var(--line); color: var(--muted); }
+.sp-mark { display: grid; place-items: center; flex: none; width: 32px; height: 32px; border-radius: 11px; background: var(--bg); color: var(--muted); box-shadow: inset 0 0 0 1px var(--line-strong); }
 .sp-mark svg { width: 22px; height: 22px; }
 .sp-text { display: grid; line-height: 1.25; min-width: 0; }
-.sp-text b { color: var(--text); font-weight: 800; letter-spacing: -0.01em; }
+.sp-text b { color: var(--text); font-weight: 700; font-size: 14px; letter-spacing: -0.01em; }
 .sp-text small { font-size: 12.5px; }
 .sp-card { flex-direction: column; justify-content: center; gap: 8px; min-height: 170px; text-align: center; border-radius: var(--radius); }
 .sp-row { margin: 10px 0 4px; padding: 16px; border-radius: 22px; }
@@ -1509,7 +1472,7 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .sp-reel .sp-mark svg { width: 40px; height: 40px; }
 .sp-reel .sp-text b { color: #000; font-size: 22px; }
 .sp-reel .sp-text small { font-size: 14px; }
-.sp-slot { gap: 10px; padding: 8px; border-radius: 16px; border-width: 1.5px; }
+.sp-slot { gap: 10px; padding: 8px; border-radius: 16px; }
 .sp-slot .sp-mark { width: 30px; height: 30px; border-radius: 10px; }
 .sp-slot .sp-mark svg { width: 18px; height: 18px; }
 .sp-slot .sp-text small { display: none; }
@@ -1518,8 +1481,6 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .sponsored-reel .reel-stage { background: #fff; overflow: hidden; }
 
 /* ----- Nex in the list of chats */
-.convo-nex .nex-face { display: grid; place-items: center; background: var(--ink); color: var(--on-ink); }
-.convo-nex .nex-face svg { width: 24px; height: 24px; }
 
 /* ----- stories */
 .stories-wrap { margin: 2px calc(var(--pad) * -1) 0; padding: 12px 0 4px; }
@@ -1641,8 +1602,6 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
   .chats-split { height: calc(100vh - var(--top)); height: calc(100dvh - var(--top)); }
   .chat-pane .topbar { top: 0; }                          /* the list of chats scrolls inside its own box: its top bar sticks to the top of that box */
   .chats-split .thread-view { height: calc(100vh - var(--top)); height: calc(100dvh - var(--top)); }
-  .nex-view { height: calc(100vh - var(--top)); height: calc(100dvh - var(--top)); }
-  .nex-main { height: calc(100vh - var(--top)); height: calc(100dvh - var(--top)); }
   .lockscreen { height: calc(100vh - var(--top)); height: calc(100dvh - var(--top)); }
 }
 @media (prefers-reduced-motion: reduce) { .tabbar { transition: none; } .story-view { animation: none; } }
@@ -1653,3 +1612,59 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
   --text: #fff; --muted: #a8a8a8; --hover: rgba(255, 255, 255, 0.08); --ink: #fff; --on-ink: #000; --glass: rgba(0, 0, 0, 0.7); --glass-strong: rgba(18, 18, 18, 0.9); --glass-line: rgba(255, 255, 255, 0.16);
   color: #fff; color-scheme: dark;
 }
+
+/* ----- the camera: the game is shown first (standing still, with its buttons), the first touch starts it; the lenses get smaller the farther they are from the middle */
+.cam-lenses { padding-top: 22px; padding-bottom: 12px; }
+.cam-lenses .lens, .cam-lenses .lens.on { transform: scale(var(--grow, 0.74)); transition: transform 0.12s linear, opacity 0.12s linear; }
+.cam-tap { position: absolute; left: 0; right: 0; top: calc(86px + env(safe-area-inset-top)); z-index: 3; display: flex; justify-content: center; pointer-events: none; }
+.cam-tap[hidden] { display: none; }
+.cam-tap span { padding: 9px 18px; border-radius: 999px; background: rgba(0, 0, 0, 0.55); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); color: #fff; font-size: 14px; font-weight: 700; animation: cam-nudge 1.8s ease-in-out infinite; }
+@keyframes cam-nudge { 0%, 100% { transform: translateY(0); opacity: 1; } 50% { transform: translateY(4px); opacity: 0.78; } }
+.cam-ext { display: grid; place-items: center; gap: 8px; width: min(80%, 300px); padding: 34px 22px; border-radius: 30px; background: rgba(0, 0, 0, 0.55); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); color: #fff; text-align: center; }
+.cam-ext-ic { font-size: 56px; line-height: 1; }
+.cam-ext b { font-size: 22px; font-weight: 800; }
+.cam-ext small { color: rgba(255, 255, 255, 0.8); font-size: 14px; }
+@media (prefers-reduced-motion: reduce) { .cam-tap span { animation: none; } }
+
+/* ----- before the first touch the game is shown a bit smaller, above the lenses, so that its buttons are not hidden by them; it grows when the round starts */
+.cam-host .game-layer, .cam-host .game-frame, .cam-host .cam-ext { transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.cam-view[data-state="idle"] .game-layer, .cam-view[data-state="idle"] .game-frame, .cam-view[data-state="idle"] .cam-ext { transform: scale(0.72); transform-origin: 50% 0; }
+.cam-view[data-state="idle"] .cam-host { align-items: start; padding-top: calc(76px + env(safe-area-inset-top)); }
+.cam-view[data-state="idle"] .cam-tap { top: calc(76px + env(safe-area-inset-top) + var(--gh) * 0.36 - 18px); }
+.lens { width: 74px; height: 74px; }
+.lens-emoji { font-size: 32px; }
+.cam-lenses { gap: 12px; padding-left: calc(50% - 37px); padding-right: calc(50% - 37px); }
+.cam-bottom { gap: 3px; }
+@media (prefers-reduced-motion: reduce) { .cam-host .game-layer, .cam-host .game-frame, .cam-host .cam-ext { transition: none; } }
+
+/* without a camera: a dark picture and one small chip (the game itself stays in the middle) */
+.cam-nocam { position: absolute; left: 50%; top: calc(54px + env(safe-area-inset-top)); transform: translateX(-50%); z-index: 6; display: inline-flex; align-items: center; gap: 7px; max-width: calc(100% - 32px); padding: 6px 13px 6px 10px; border: 1px solid rgba(255, 255, 255, 0.28); border-radius: 999px; background: rgba(0, 0, 0, 0.5); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); color: rgba(255, 255, 255, 0.92); font-size: 12px; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.cam-nocam[hidden] { display: none; }
+.cam-nocam svg { width: 15px; height: 15px; flex: none; }
+.cam-nocam span { overflow: hidden; text-overflow: ellipsis; }
+.cam-view:not([data-state="idle"]) .cam-nocam { display: none; }
+.app[data-route="camera"] .main { padding-bottom: 0; }        /* the camera fills the screen: the page must not be a bit taller than it (the tab bar floats above) */
+
+/* ----- Nex AI is a contact like any other: the head, the bubbles and the box come from the chat styles; here are only the round face, the "KI" mark and the small differences */
+.nex-face { display: grid; place-items: center; background: var(--ink); color: var(--on-ink); }
+.nex-face svg { width: 52%; height: 52%; }
+.ai-badge { display: inline-block; padding: 0 6px; border-radius: 6px; background: var(--bg-3); color: var(--text); font-size: 10.5px; font-weight: 800; letter-spacing: 0.04em; line-height: 16px; vertical-align: 1px; }
+.convo-nex .convo-top { justify-content: flex-start; gap: 7px; }
+.nex-intro { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 7vh 12px 8px; text-align: center; }
+.nex-intro h2 { margin-top: 10px; font-size: 24px; font-weight: 800; letter-spacing: -0.02em; }
+.nex-intro p { max-width: 330px; color: var(--muted); }
+.nex-intro[hidden] { display: none; }
+.bubble.ai { max-width: 88%; }
+.bubble-text.nex-text { white-space: normal; }
+.nex-text .nex-p { white-space: pre-wrap; }
+.nex-text .nex-p + .nex-p, .nex-text .nex-p + .nex-list, .nex-text .nex-list + .nex-p { margin-top: 8px; }
+.nex-text .nex-list { margin: 0; padding: 0; list-style: none; }
+.bubble.ai .nex-actions { margin: 1px 0 0 -4px; }
+.dm-compose .nex-chips { margin: 0 0 4px; padding: 2px 0 6px; }
+.nex-post-box .nex-post { margin: 8px 0; }
+@media (min-width: 1000px) {
+  .thread-view .nex-chips { flex-wrap: wrap; overflow: visible; }
+  .nex-intro { padding-top: 10vh; }
+}
+.chat-blank .empty { padding: 36px 20px 24px; }
+
