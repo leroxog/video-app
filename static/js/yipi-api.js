@@ -18,6 +18,7 @@
     bad_text: "Das ist kein gültiger Text.",
     duplicate: "Das hast du gerade schon gepostet.",
     bad_media: "Mit den Bildern stimmt etwas nicht.",
+    too_many_stories: "Du hast schon 30 Stories. Lösche eine oder warte, bis eine abläuft.",
     bad_image: "Das ist kein Foto, das Pulse kennt (JPEG, PNG, GIF oder WebP).",
     too_big: "Das Foto ist zu groß (höchstens 5 MB).",
     no_file: "Es wurde keine Datei gesendet.",

@@ -125,7 +125,7 @@ LIMITS = {
     "post-burst": (12, 60), "post-hour": (150, 3600), "like": (400, 3600), "follow": (120, 3600), "media": (40, 3600), "dm": (120, 3600),
     "report": (20, 3600), "profile": (30, 3600), "search": (120, 600), "block": (60, 3600),
     "gif-make": (20, 3600), "gif-fav": (400, 3600), "gif-use": (300, 3600), "gif-list": (600, 600),
-    "share": (240, 600), "attach": (40, 3600), "storage": (120, 3600), "play": (200, 3600), "heart": (300, 3600), "push": (30, 3600), "nex-read": (30, 600), "google": (30, 600), "nex": (40, 600), "nex-flood": (80, 60), "factcheck": (120, 3600), "views": (90, 600), "vote": (200, 3600), "pin": (60, 3600), "group": (12, 3600),
+    "share": (240, 600), "attach": (40, 3600), "storage": (120, 3600), "story": (30, 3600), "story-view": (900, 600), "play": (200, 3600), "heart": (300, 3600), "push": (30, 3600), "nex-read": (30, 600), "google": (30, 600), "nex": (40, 600), "nex-flood": (80, 60), "factcheck": (120, 3600), "views": (90, 600), "vote": (200, 3600), "pin": (60, 3600), "group": (12, 3600),
 }
 _hits = {}
 limiter = RateLimiter(LIMITS, _hits)
@@ -261,6 +261,25 @@ class YipiFile(db.Model):
     width = db.Column(db.Integer, nullable=False, default=0)
     height = db.Column(db.Integer, nullable=False, default=0)
     created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+
+
+class YipiStory(db.Model):
+    """A story: a photo or a short video that can be seen for 24 hours, like on Snapchat and Instagram (the picture is a `yipi_media` row that belongs to no post)."""
+    __tablename__ = "yipi_story"
+    id = db.Column(BigId, primary_key=True)
+    user_id = db.Column(db.Integer, nullable=False, index=True)
+    media_id = db.Column(db.String(32), nullable=False)
+    caption = db.Column(db.String(140), nullable=False, default="")
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow, index=True)
+
+
+class YipiStoryView(db.Model):
+    """Somebody looked at a story (the ring around a person's picture is grey when you saw all of their stories; the owner sees how many looked)."""
+    __tablename__ = "yipi_story_view"
+    __table_args__ = (db.UniqueConstraint("story_id", "viewer_id"),)
+    id = db.Column(db.Integer, primary_key=True)
+    story_id = db.Column(BigId, nullable=False, index=True)
+    viewer_id = db.Column(db.Integer, nullable=False, index=True)
 
 
 class YipiGameScore(db.Model):
@@ -1343,6 +1362,11 @@ def purge_user(user):
     YipiGroupMessage.query.filter_by(sender_id=uid).delete()
     YipiDmState.query.filter(or_(YipiDmState.user_id == uid, YipiDmState.other_id == uid)).delete()
     YipiReport.query.filter_by(reporter_id=uid).delete()
+    own_stories = [row.id for row in YipiStory.query.filter_by(user_id=uid).with_entities(YipiStory.id)]
+    if own_stories:
+        YipiStoryView.query.filter(YipiStoryView.story_id.in_(own_stories)).delete(synchronize_session=False)
+    YipiStory.query.filter_by(user_id=uid).delete()
+    YipiStoryView.query.filter_by(viewer_id=uid).delete()
     forget_stored(YipiMedia, YipiMedia.owner_id == uid)
     YipiMedia.query.filter_by(owner_id=uid).delete()
     forget_stored(YipiFile, YipiFile.owner_id == uid)
@@ -1400,10 +1424,33 @@ def _forget_after_rollback(session):
     session.info.pop("r2_forget", None)
 
 
+STORY_HOURS = 24
+MAX_STORY_CAPTION = 140
+MAX_STORIES = 30                                                    # active stories per person
+_story_purge = {"at": None}
+
+
+def purge_stories():
+    """Stories older than a day go, with their picture or video (looked at most once a minute, a few hundred at a time)."""
+    now = utcnow()
+    if _story_purge["at"] is not None and now - _story_purge["at"] < timedelta(minutes=1):
+        return
+    _story_purge["at"] = now
+    old = YipiStory.query.filter(YipiStory.created_at < now - timedelta(hours=STORY_HOURS)).limit(300).all()
+    if not old:
+        return
+    story_ids, media_ids = [story.id for story in old], [story.media_id for story in old]
+    YipiStoryView.query.filter(YipiStoryView.story_id.in_(story_ids)).delete(synchronize_session=False)
+    forget_stored(YipiMedia, YipiMedia.id.in_(media_ids))
+    YipiMedia.query.filter(YipiMedia.id.in_(media_ids)).delete(synchronize_session=False)
+    YipiStory.query.filter(YipiStory.id.in_(story_ids)).delete(synchronize_session=False)
+    db.session.commit()
+
+
 def cleanup_orphans(user):
-    """Pictures that were uploaded but never used (not in a post, not an avatar or banner) disappear after a day."""
+    """Pictures that were uploaded but never used (not in a post, not an avatar or banner, not in a story) disappear after a day."""
     keep = [x for x in (user.avatar_id, user.banner_id) if x]
-    criteria = [YipiMedia.owner_id == user.id, YipiMedia.post_id.is_(None), YipiMedia.created_at < utcnow() - timedelta(days=1)]
+    criteria = [YipiMedia.owner_id == user.id, YipiMedia.post_id.is_(None), YipiMedia.created_at < utcnow() - timedelta(days=1), ~YipiMedia.id.in_(select(YipiStory.media_id))]
     if keep:
         criteria.append(~YipiMedia.id.in_(keep))
     forget_stored(YipiMedia, *criteria)
@@ -1457,7 +1504,7 @@ def manifest():
     return {
         "name": f"{SITE_NAME}: was gerade passiert", "short_name": SITE_NAME, "description": DESCRIPTION, "lang": "de", "dir": "ltr",
         "id": "/", "start_url": "/", "scope": "/", "display": "standalone", "orientation": "any",
-        "background_color": "#000000", "theme_color": "#000000", "categories": ["social"],
+        "background_color": "#ffffff", "theme_color": "#ffffff", "categories": ["social"],
         "icons": [
             {"src": "/static/img/pulse-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
             {"src": "/static/img/pulse-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
@@ -1469,7 +1516,7 @@ def manifest():
 # The scripts of the page, in the order they depend on each other. The page loads them as ONE file (/pulse.js, deferred), named after its content, so the
 # browser asks once, keeps it for good and the next visit is instant; the tests read this list.
 PULSE_SCRIPTS = ["yipi-core.js", "yipi-gif-core.js", "yipi-icons.js", "yipi-api.js", "yipi-ui.js", "yipi-fx.js", "yipi-gif.js", "yipi-components.js", "yipi-newpost.js",
-                 "yipi-views.js", "yipi-comments.js", "yipi-chats.js", "yipi-lock.js", "yipi-pages.js", "yipi-share.js", "yipi-progress.js", "yipi-nex.js", "yipi-download.js", "yipi-camera.js", "yipi-videos.js", "yipi.js"]
+                 "yipi-views.js", "yipi-comments.js", "yipi-chats.js", "yipi-lock.js", "yipi-pages.js", "yipi-share.js", "yipi-progress.js", "yipi-nex.js", "yipi-download.js", "yipi-camera.js", "yipi-videos.js", "yipi-stories.js", "yipi-chrome.js", "yipi.js"]
 # The games of the camera tab are a second file, loaded when the camera tab is opened (about a hundred small games; nobody who only reads needs them).
 PULSE_GAME_SCRIPTS = ["pg-kit.js", "pg-runners.js", "pg-arcade.js", "pg-reflex.js", "pg-puzzle.js", "pg-board.js", "pg-numbers.js", "pg-skill.js", "pg-more.js", "pg-fruit.js"]
 _bundles = {}
@@ -3917,6 +3964,120 @@ def register_routes(app):
         if not is_admin(user):
             return None, fail("forbidden", 403)
         return user, None
+
+    # ------------------------------------------------------------------------------------------------ stories
+    def story_json(story, media, viewer, seen, views=None):
+        item = {"id": story.id, "media": media_json(media) if media is not None else None, "caption": story.caption, "createdAt": iso(story.created_at),
+                "seen": story.user_id == viewer.id or story.id in seen, "mine": story.user_id == viewer.id}
+        if story.user_id == viewer.id:
+            item["views"] = (views or {}).get(story.id, 0)
+        return item
+
+    def visible_story_owner(viewer, handle):
+        target = find_user(handle) if isinstance(handle, str) else None
+        if target is None or target.suspended or (target.id != viewer.id and target.id in hidden_user_ids(viewer)):
+            return None
+        return target
+
+    @route("/api/yipi/stories")
+    def yipi_stories():
+        """The row at the top of Home: yourself first, then the people you follow who have a story from the last 24 hours (the ones you have not seen yet first)."""
+        user, problem = need_user()
+        if problem:
+            return problem
+        purge_stories()
+        following = {row.followee_id for row in YipiFollow.query.filter_by(follower_id=user.id)}
+        wanted = (following | {user.id}) - ((suspended_ids() | hidden_user_ids(user)) - {user.id})
+        rows = YipiStory.query.filter(YipiStory.user_id.in_(wanted), YipiStory.created_at >= utcnow() - timedelta(hours=STORY_HOURS)).order_by(YipiStory.created_at.asc()).all() if wanted else []
+        seen = {row.story_id for row in YipiStoryView.query.filter(YipiStoryView.viewer_id == user.id, YipiStoryView.story_id.in_([story.id for story in rows]))} if rows else set()
+        rings = {}
+        for story in rows:
+            ring = rings.setdefault(story.user_id, {"count": 0, "unseen": 0, "latest": story.created_at})
+            ring["count"] += 1
+            ring["latest"] = max(ring["latest"], story.created_at)
+            if story.user_id != user.id and story.id not in seen:
+                ring["unseen"] += 1
+        people = {row.id: row for row in YipiUser.query.filter(YipiUser.id.in_(list(rings)))} if rings else {}
+        items = [{"user": user_brief(people[uid]), "isMe": uid == user.id, "count": ring["count"], "unseen": ring["unseen"], "latest": iso(ring["latest"])} for uid, ring in rings.items() if uid in people]
+        items.sort(key=lambda entry: (not entry["isMe"], entry["unseen"] == 0, -datetime.fromisoformat(entry["latest"].replace("Z", "+00:00")).timestamp()))
+        return jsonify({"ok": True, "items": items, "me": user.id in rings})
+
+    @route("/api/yipi/stories/<handle>")
+    def yipi_story_list(handle):
+        user, problem = need_user()
+        if problem:
+            return problem
+        target = visible_story_owner(user, handle)
+        if target is None:
+            return fail("not_found", 404)
+        rows = YipiStory.query.filter(YipiStory.user_id == target.id, YipiStory.created_at >= utcnow() - timedelta(hours=STORY_HOURS)).order_by(YipiStory.created_at.asc()).all()
+        media = {row.id: row for row in YipiMedia.query.options(defer(YipiMedia.data)).filter(YipiMedia.id.in_([story.media_id for story in rows]))} if rows else {}
+        seen = {row.story_id for row in YipiStoryView.query.filter(YipiStoryView.viewer_id == user.id, YipiStoryView.story_id.in_([story.id for story in rows]))} if rows else set()
+        views = {}
+        if target.id == user.id and rows:
+            views = dict(db.session.query(YipiStoryView.story_id, func.count(YipiStoryView.id)).filter(YipiStoryView.story_id.in_([story.id for story in rows])).group_by(YipiStoryView.story_id).all())
+        return jsonify({"ok": True, "user": user_brief(target), "items": [story_json(story, media.get(story.media_id), user, seen, views) for story in rows]})
+
+    @route("/api/yipi/stories", methods=["POST"])
+    def yipi_story_create():
+        """A photo or video that was just uploaded (the usual upload) becomes a story."""
+        user, problem = need_user()
+        if problem:
+            return problem
+        data, problem = body()
+        if problem:
+            return problem
+        if limiter.too_many("story", str(user.id)):
+            return fail("too_many", 429)
+        media_id = data.get("media")
+        caption = clean_text(data.get("caption", ""), MAX_STORY_CAPTION, keep_newlines=False)
+        if not isinstance(media_id, str) or caption is None:
+            return fail("bad_request")
+        media = db.session.get(YipiMedia, media_id) if re.fullmatch(r"[0-9a-f]{32}", media_id) else None
+        if media is None or media.owner_id != user.id or media.post_id is not None or media_id in (user.avatar_id, user.banner_id):
+            return fail("bad_media")
+        if YipiStory.query.filter_by(media_id=media_id).first() is not None:
+            return fail("bad_media")
+        if YipiStory.query.filter(YipiStory.user_id == user.id, YipiStory.created_at >= utcnow() - timedelta(hours=STORY_HOURS)).count() >= MAX_STORIES:
+            return fail("too_many_stories", 409)
+        story = YipiStory(user_id=user.id, media_id=media.id, caption=caption)
+        db.session.add(story)
+        count_day(user)
+        db.session.commit()
+        return jsonify({"ok": True, "story": story_json(story, media, user, set())}), 201
+
+    @route("/api/yipi/stories/<int(min=1, max=4611686018427387904):story_id>/seen", methods=["POST"])
+    def yipi_story_seen(story_id):
+        user, problem = need_user()
+        if problem:
+            return problem
+        story = db.session.get(YipiStory, story_id)
+        if story is None or story.created_at < utcnow() - timedelta(hours=STORY_HOURS) or visible_story_owner(user, (db.session.get(YipiUser, story.user_id) or YipiUser(handle="")).handle) is None:
+            return fail("not_found", 404)
+        if story.user_id != user.id and not limiter.too_many("story-view", str(user.id)) and YipiStoryView.query.filter_by(story_id=story.id, viewer_id=user.id).first() is None:
+            db.session.add(YipiStoryView(story_id=story.id, viewer_id=user.id))
+            try:
+                db.session.commit()
+            except IntegrityError:
+                db.session.rollback()
+        return jsonify({"ok": True})
+
+    @route("/api/yipi/stories/<int(min=1, max=4611686018427387904):story_id>", methods=["DELETE"])
+    def yipi_story_delete(story_id):
+        user, problem = need_user()
+        if problem:
+            return problem
+        story = db.session.get(YipiStory, story_id)
+        if story is None:
+            return fail("not_found", 404)
+        if story.user_id != user.id and not is_admin(user):
+            return fail("forbidden", 403)
+        YipiStoryView.query.filter_by(story_id=story.id).delete()
+        forget_stored(YipiMedia, YipiMedia.id == story.media_id)
+        YipiMedia.query.filter_by(id=story.media_id).delete()
+        db.session.delete(story)
+        db.session.commit()
+        return jsonify({"ok": True})
 
     # ----------------------------------------------------------------------------- storage (admins): the database and R2
     STORAGE_MODELS = (("media", YipiMedia), ("file", YipiFile), ("gif", PulseGif))

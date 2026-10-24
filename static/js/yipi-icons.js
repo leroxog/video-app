@@ -84,6 +84,11 @@
     google: S('<path d="M19.200 7.500A8.500 8.500 0 1 0 20.500 12H12"/>'),
     at: S('<circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 006 0v-1a10 10 0 10-4 8"/>'),
     flip: S('<path d="M4 9a8 8 0 0114-3l2 2M20 4v4h-4M20 15a8 8 0 01-14 3l-2-2M4 20v-4h4"/>'),
+    plane: S('<path d="M21 3L3 10.500l6.500 2.500L12 20z"/><path d="M9.500 13L21 3"/>'),
+    planeFill: S('<path d="M21 3L3 10.500l6.500 2.500L12 20z"/><path class="cut" d="M9.500 13L21 3" fill="none"/>', `${FILL} stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"`),
+    cameraFill: S('<path d="M4 8h3l1.500-2h7L17 8h3a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z"/><circle class="cut" cx="12" cy="13.500" r="3.500" fill="none"/>', `${FILL} stroke="currentColor" stroke-width="2" stroke-linejoin="round"`),
+    videoFill: S('<circle cx="12" cy="12" r="9"/><path class="cut-fill" d="M10 8.500l5.500 3.500-5.500 3.500z" stroke="none"/>', `${FILL} stroke="currentColor" stroke-width="2" stroke-linejoin="round"`),
+    sponsor: S('<rect x="3.500" y="3.500" width="17" height="17" rx="5"/><circle cx="12" cy="8" r="1.200" fill="currentColor" stroke="none"/><path d="M12 11.500v5"/>'),
     flame: S('<path d="M12 2.500c0 3.500-5.500 6-5.500 11a5.500 5.500 0 0011 0c0-2.500-1.200-4-2.300-5.200-.2 1.800-1 2.700-2 3C13.300 8.500 12.500 5.500 12 2.500z"/>'),
     trophy: S('<path d="M8 4h8v5a4 4 0 01-8 0V4zM8 6H5v1.500A3 3 0 008 10.500M16 6h3v1.500a3 3 0 01-3 3M12 13v4M8.500 20h7M10 17h4"/>'),
     download: S('<path d="M12 4v11M7.500 10.500L12 15l4.500-4.500M5 20h14"/>'),
@@ -107,5 +112,13 @@
     return holder.firstElementChild;
   }
 
-  window.YipiIcons = { icon, logo, names: Object.keys(ICON) };
+  /* The lettering "Nex": three letters drawn with fat round strokes, leaning forward a little; it takes the colour of the text around it. */
+  function wordmark() {
+    const holder = document.createElement("span");
+    holder.innerHTML = `<svg viewBox="0 0 92 40" role="img" aria-label="Nex" focusable="false"><g transform="skewX(-7) translate(4 0)" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M8 33V7l19 26V7"/><path d="M36 21h19a9.500 9.500 0 10-2.800 6.700"/><path d="M62 12l19 21M81 12L62 33"/></g></svg>`;
+    return holder.firstElementChild;
+  }
+
+  window.YipiIcons = { icon, logo, wordmark, names: Object.keys(ICON) };
 })();

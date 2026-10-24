@@ -28,12 +28,13 @@
 
   views.videos = function videos(route, ctx) {
     const scroller = h("div", { class: "reels", tabindex: "0", "aria-label": "Videos" });
-    const upload = h("button", { class: "icon-btn round reels-btn", type: "button", "aria-label": "Video hochladen", onclick: () => Y.newPost({ anchor: upload, only: "video" }) }, icon("plus"));
     let scope = "foryou";                                       // "foryou" or "following"
     const scopes = h("div", { class: "reels-scope", role: "tablist", "aria-label": "Videos" });
-    const top = h("div", { class: "reels-top" }, h("h1", { class: "sr-only" }, "Videos"), scopes, h("div", { class: "reels-tools" }, upload));
+    const top = h("div", { class: "reels-top" }, h("h1", { class: "sr-only" }, "Videos"), scopes);
     const status = h("div", { class: "reels-status" });
-    const el = h("div", { class: "view reels-view" }, top, scroller, status);
+    const el = h("div", { class: "view reels-view" }, Y.sponsored("bar"), top, scroller, status);      // (the strip at the top shows on a phone held upright, where the bar with the lettering is not)
+    let shown = 0;                                              // how many videos were put on the page (every fifth page is a box "Gesponsert")
+    const sponsorPage = () => h("section", { class: "reel sponsored-reel", "aria-label": "Gesponsert" }, h("div", { class: "reel-stage" }, Y.sponsored("reel")));
     const reels = [];
     let offset = shuffle.at;                                    // where the next page starts in the shuffle
     let seed = shuffle.seed;
@@ -114,11 +115,18 @@
       if (reels.length > MAX_REELS && index > MAX_REELS / 2) trim();
     }
 
-    function trim() {                                           // the first ones leave, the scroll position is moved by exactly their height
+    function trim() {                                           // the first ones leave (and the boxes between them), the scroll position is moved by exactly their height
       const drop = reels.splice(0, 10);
       const height = scroller.clientHeight;
-      for (const made of drop) { watcher?.unobserve(made.element); made.video.pause(); made.video.removeAttribute("src"); made.video.load(); made.element.remove(); }
-      scroller.scrollTop -= height * drop.length;
+      const boundary = reels[0] ? reels[0].element : null;
+      let removed = 0;
+      for (const made of drop) { watcher?.unobserve(made.element); made.video.pause(); made.video.removeAttribute("src"); made.video.load(); }
+      for (const page of [...scroller.children]) {
+        if (page === boundary || !page.classList.contains("reel")) { if (page === boundary) break; continue; }
+        page.remove();
+        removed += 1;
+      }
+      scroller.scrollTop -= height * removed;
     }
 
     const watcher = "IntersectionObserver" in window ? new IntersectionObserver((entries) => {
@@ -252,6 +260,8 @@
         reels.push(made);
         scroller.append(made.element);
         watcher?.observe(made.element);
+        shown += 1;
+        if (shown % 4 === 0) scroller.append(sponsorPage());       // after four videos comes the fifth page: a box "Gesponsert"
       });
       if (reply.data.next) offset = reply.data.next; else ended = true;
       if (!reels.length) showEmpty();
@@ -260,14 +270,17 @@
     }
 
     scroller.addEventListener("keydown", (event) => {
-      const at = reels.indexOf(active);
-      if (event.key === "ArrowDown" || event.key === "PageDown") { event.preventDefault(); reels[Math.min(reels.length - 1, at + 1)]?.element.scrollIntoView({ behavior: "smooth" }); }
-      else if (event.key === "ArrowUp" || event.key === "PageUp") { event.preventDefault(); reels[Math.max(0, at - 1)]?.element.scrollIntoView({ behavior: "smooth" }); }
+      const pages = [...scroller.querySelectorAll(".reel")];
+      const at = active ? pages.indexOf(active.element) : Math.round(scroller.scrollTop / Math.max(1, scroller.clientHeight));
+      if (event.key === "ArrowDown" || event.key === "PageDown") { event.preventDefault(); pages[Math.min(pages.length - 1, at + 1)]?.scrollIntoView({ behavior: "smooth" }); }
+      else if (event.key === "ArrowUp" || event.key === "PageUp") { event.preventDefault(); pages[Math.max(0, at - 1)]?.scrollIntoView({ behavior: "smooth" }); }
       else if (event.key === "m") { blocked = false; setVolume(volume === 0 ? lastLoud : 0); }
     });
 
     function reset() {
       for (const made of reels.splice(0)) { watcher?.unobserve(made.element); made.video.pause(); made.video.removeAttribute("src"); made.video.load(); made.element.remove(); }
+      for (const page of scroller.querySelectorAll(".sponsored-reel")) page.remove();
+      shown = 0;
       active = null;
       seed = shuffle.seed = 1 + Math.floor(Math.random() * 999999);
       offset = shuffle.at = 0;

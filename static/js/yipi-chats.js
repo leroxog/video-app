@@ -126,6 +126,15 @@
         item.unread ? h("span", { class: "unread-dot", "aria-label": `${item.unread} ungelesen` }, item.unread > 99 ? "99+" : String(item.unread)) : null);
     }
 
+    /* Nex, the assistant, is in everybody's list like a contact. */
+    function nexRow() {
+      return link("/i/nex", { class: `convo convo-nex${active === "nex" ? " active" : ""}` },
+        h("span", { class: "avatar md nex-face", "aria-hidden": "true" }, icon("nexmark")),
+        h("div", { class: "convo-main" },
+          h("div", { class: "convo-top" }, h("b", { class: "convo-name" }, "Nex AI")),
+          h("p", { class: "convo-last" }, "Frag mich alles. Ich bin immer für dich da.")));
+    }
+
     const matches = (item) => {
       if (!term) return true;
       const text = item.kind === "group" ? item.group.name : `${item.user.name} ${item.user.handle}`;
@@ -155,10 +164,12 @@
       const main = found.filter((item) => item.kind === "group" || item.box === "primary");
       const banner = requests && !term ? h("button", { class: "chat-requests", type: "button", onclick: () => { current = "requests"; drawTabs(); draw(); } },
         h("span", { class: "chat-requests-ic" }, icon("mail")), h("span", { class: "chat-requests-text" }, h("b", {}, "Anfragen"), h("small", {}, `${requests} ${requests === 1 ? "Person möchte" : "Personen möchten"} dir schreiben`)), icon("chevron")) : null;
-      fill(body, banner, h("div", { class: "chat-list" }, ...(main.length ? main.map(row)
-        : [term ? emptyState("Nichts gefunden", "Probier einen anderen Namen.")
+      const showNex = !term || "nex ki ai assistent".includes(term);
+      fill(body, banner, h("div", { class: "chat-list" }, showNex ? nexRow() : null, ...(main.length ? main.map(row)
+        : [term ? (showNex ? null : emptyState("Nichts gefunden", "Probier einen anderen Namen."))
           : emptyState("Noch keine Chats", "Schreib mit deinen Freunden oder gründe eine Gruppe.",
-            h("div", { class: "hero-actions" }, h("button", { class: "btn primary", type: "button", onclick: newMessage }, "Nachricht schreiben"), h("button", { class: "btn ghost", type: "button", onclick: newGroup }, "Gruppe gründen")))])));
+            h("div", { class: "hero-actions" }, h("button", { class: "btn primary", type: "button", onclick: newMessage }, "Nachricht schreiben"), h("button", { class: "btn ghost", type: "button", onclick: newGroup }, "Gruppe gründen")))]),
+        term ? null : Y.sponsored("row")));
     }
 
     async function load(first) {

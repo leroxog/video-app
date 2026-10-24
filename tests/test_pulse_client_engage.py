@@ -59,7 +59,7 @@ def test_the_progress_script_talks_to_routes_that_exist():
 
 def test_the_flame_is_on_home_and_the_settings_have_a_page_for_notifications():
     views, pages = js("yipi-views.js"), js("yipi-pages.js")
-    assert "Y.streakChip()" in views and "signedIn ? Y.streakChip() : null" in views, "only for somebody who is signed in"
+    assert "Y.streakChip ? Y.streakChip() : null" in js("yipi-chrome.js"), "the flame sits in the bar at the top (which only exists for somebody who is signed in)"
     assert "Y.pushInvite()" in views
     assert '["push", "Mitteilungen"' in pages and 'section === "push"' in pages and "Y.pushSettings()" in pages
     assert "chips" in js("yipi-progress.js") and "redrawChips" in js("yipi-progress.js")
@@ -112,3 +112,20 @@ def test_the_moderation_page_has_the_storage_card_that_calls_the_admin_routes():
         assert route in SERVER, route
     assert "r2_off:" in api and "not_postgres:" in api, "the answers of the server have texts"
     assert "confirmBox" in pages[pages.index("async function compact"):pages.index("async function compact") + 400], "tidying locks tables for a moment: asks first"
+
+
+# ------------------------------------------------------------------------------------------------------------------ stories
+def test_the_story_script_uses_the_story_routes_and_the_row_is_on_home():
+    source = js("yipi-stories.js")
+    for call in ('Api.get("/stories")', "Api.get(`/stories/${wanted.user.handle}`)", "Api.post(`/stories/${item.id}/seen`)", "Api.del(`/stories/${item.id}`)", 'Api.post("/stories"'):
+        assert call in source, call
+    for route in ('"/api/yipi/stories"', '"/api/yipi/stories/<handle>"', "/seen", "yipi_story_delete"):
+        assert route in SERVER, route
+    assert "Core.videoTooLong(facts.seconds)" in source and "Core.MAX_VIDEO_BYTES" in source, "a story video is at most 30 seconds, like every video"
+    assert ".innerHTML" not in source and "insertAdjacentHTML" not in source
+    assert "Y.storiesBar()" in js("yipi-views.js") and 'tile("Story"' in js("yipi-newpost.js"), "the row on Home and the entry in the pop-up of the plus"
+    order = yipi.PULSE_SCRIPTS
+    assert order.index("yipi-stories.js") < order.index("yipi.js") and order.index("yipi-chrome.js") < order.index("yipi.js")
+    assert order.index("yipi-icons.js") < order.index("yipi-chrome.js"), "the lettering is drawn by the icons file"
+    for key in ("ArrowRight", "ArrowLeft", "Escape"):
+        assert key in source, "stories can be used with the keyboard: " + key

@@ -24,14 +24,14 @@
   // ------------------------------------------------------------------------------------------------ theme
   const THEME_COLOR = { light: "#ffffff", dim: "#1a1a1a", dark: "#000000" };
   function applyTheme() {
-    let choice = "auto";
-    try { const saved = localStorage.getItem("yipi.theme"); if (saved === "dark" || saved === "dim" || saved === "light") choice = saved; } catch (error) { /* storage blocked */ }
+    let choice = "light";
+    try { const saved = localStorage.getItem("yipi.theme"); if (saved === "dark" || saved === "dim" || saved === "light" || saved === "auto") choice = saved; } catch (error) { /* storage blocked */ }
     const theme = choice === "auto" ? (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark") : choice;
     document.documentElement.setAttribute("data-theme", theme);
     document.querySelector('meta[name="theme-color"]')?.setAttribute("content", THEME_COLOR[theme]);
   }
   Y.setTheme = (choice) => {
-    try { if (choice === "auto") localStorage.removeItem("yipi.theme"); else localStorage.setItem("yipi.theme", choice); } catch (error) { /* storage blocked */ }
+    try { localStorage.setItem("yipi.theme", choice); } catch (error) { /* storage blocked */ }
     applyTheme();
   };
   matchMedia("(prefers-color-scheme: light)").addEventListener?.("change", applyTheme);
@@ -39,15 +39,16 @@
   // ----------------------------------------------------------------------------------------------- shell
   const TABS = [
     { id: "home", label: "Home", path: () => Y.HOME, icon: "home", on: "homeFill" },
-    { id: "messages", label: "Chats", path: () => "/messages", icon: "users", on: "usersFill", badge: "messages" },
-    { id: "nex", label: "Nex", path: () => "/i/nex", icon: "nexmark", on: "nexmark", center: true },
-    { id: "camera", label: "Kamera", path: () => "/camera", icon: "camera", on: "camera" },
-    { id: "videos", label: "Videos", path: () => "/videos", icon: "playCircle", on: "playCircle" },
+    { id: "messages", label: "Chats", path: () => "/messages", icon: "plane", on: "planeFill", badge: "messages" },
+    { id: "plus", label: "Neu", icon: "plus", on: "plus", center: true, action: (event) => Y.newPost({ anchor: event.currentTarget }) },
+    { id: "camera", label: "Kamera", path: () => "/camera", icon: "camera", on: "cameraFill" },
+    { id: "videos", label: "Videos", path: () => "/videos", icon: "playCircle", on: "videoFill" },
   ];
 
   let main = null;
   let announcer = null;
   let shellKey = "";
+  let appbar = null;
 
   /* A little number badge that Y.updateBadges keeps up to date (`kind` is "notifications" or "messages"). */
   Y.badge = (kind) => h("span", { class: "badge", "data-badge": kind, hidden: true });
@@ -55,9 +56,19 @@
   function tabItem(entry) {
     const box = h("span", { class: "tab-ic" }, icon(entry.icon));
     if (entry.badge) box.append(Y.badge(entry.badge));
-    const el = link(entry.path(), { class: `tab-item${entry.center ? " nex-tab" : ""}`, "data-nav": entry.id, "aria-label": entry.label }, box, h("span", { class: "tab-label" }, entry.label));
+    const label = h("span", { class: "tab-label" }, entry.label);
+    const el = entry.action
+      ? h("button", { class: "tab-item plus-tab", type: "button", "data-nav": entry.id, "aria-label": "Neu: Beitrag, Video oder Story", "aria-haspopup": "menu", onclick: entry.action }, box, label)
+      : link(entry.path(), { class: "tab-item", "data-nav": entry.id, "aria-label": entry.label }, box, label);
     el._icon = box;
     return el;
+  }
+
+  /* An entry of the folded-out side bar below the four pages (only there): notifications, bookmarks, settings. */
+  function extraItem(path, name, label, badge) {
+    const box = h("span", { class: "tab-ic" }, icon(name));
+    if (badge) box.append(Y.badge(badge));
+    return link(path, { class: "tab-extra", "aria-label": label }, box, h("span", { class: "tab-label" }, label));
   }
 
   function buildShell(bare) {
@@ -67,18 +78,18 @@
     main = h("main", { id: "main", class: "main", tabindex: "-1" });
     if (bare) { app.append(main, announcer); return; }
     const me = Y.me;
-    const brand = link(Y.HOME, { class: "side-brand", "aria-label": "Pulse, zur Startseite" }, Icons.logo(), h("span", { class: "side-name" }, "Pulse"));
-    const foot = h("div", { class: "side-foot" },
-      h("button", { class: "side-post", type: "button", "aria-label": "Neuer Beitrag", onclick: (event) => Y.newPost({ anchor: event.currentTarget }) }, icon("plus"), h("span", { class: "side-post-text" }, "Posten")),
-      h("button", { class: "side-me", type: "button", "aria-label": "Menü öffnen", "aria-haspopup": "dialog", onclick: () => Y.openDrawer() },
-        avatar(me, "md"), h("span", { class: "side-me-text" }, h("b", {}, me.name), h("small", {}, `@${me.handle}`)), Y.badge("notifications")));
-    const tabbar = h("nav", { class: "tabbar", "aria-label": "Hauptmenü" }, brand, TABS.map(tabItem), foot);       // (below 820 px only the five tabs show)
-    Y.put(app, main, tabbar, announcer);
+    appbar = Y.appBar();
+    const extras = h("div", { class: "tab-extras" }, extraItem("/notifications", "bell", "Benachrichtigungen", "notifications"), extraItem("/bookmarks", "bookmark", "Lesezeichen"), extraItem("/settings", "settings", "Einstellungen"));
+    const foot = h("div", { class: "side-foot" }, Y.sponsored("slot"),
+      link(`/${me.handle}`, { class: "side-me", "aria-label": `Dein Profil, @${me.handle}` }, avatar(me, "md"), h("span", { class: "side-me-text" }, h("b", {}, me.name), h("small", {}, `@${me.handle}`))));
+    const tabbar = h("nav", { class: "tabbar", "aria-label": "Hauptmenü" }, TABS.map(tabItem), extras, foot);       // (on a phone held upright only the five tabs show, at the bottom)
+    Y.put(app, appbar.element, main, tabbar, announcer);
   }
 
   function activeTab(route) {
     if (route.name === "messages" || route.name === "thread" || route.name === "group") return "messages";
-    if (route.name === "nex" || route.name === "camera" || route.name === "videos") return route.name;
+    if (route.name === "nex") return "messages";                  // Nex is a contact in the chats now
+    if (route.name === "camera" || route.name === "videos") return route.name;
     return "home";
   }
 
@@ -86,7 +97,7 @@
     const active = activeTab(route);
     for (const el of app.querySelectorAll(".tab-item")) {
       const entry = TABS.find((item) => item.id === el.dataset.nav);
-      const on = el.dataset.nav === active;
+      const on = el.dataset.nav === active && entry.id !== "plus";
       el.classList.toggle("active", on);
       if (on) el.setAttribute("aria-current", "page"); else el.removeAttribute("aria-current");
       const old = el._icon.querySelector("svg");
@@ -213,6 +224,8 @@
     pageTitle = view.title || "Pulse";
     updateTitle();
     updateNav(route);
+    appbar?.route(route.name);
+    Y.toggleRail?.(false);
     Y.updateBadges();
     if (announcer) announcer.textContent = pageTitle;
     window.scrollTo(0, restore ? view.scrollY || 0 : 0);

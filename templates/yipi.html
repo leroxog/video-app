@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>{{ title }}</title>
 <meta name="description" content="{{ description }}">
-<meta name="theme-color" content="#000000">
+<meta name="theme-color" content="#ffffff">
 <meta name="color-scheme" content="dark light">
 <link rel="canonical" href="{{ base }}{{ path }}">
 <link rel="manifest" href="/manifest.webmanifest">
@@ -32,7 +32,7 @@
 <link rel="preload" href="{{ static_url('fonts/inter-latin-wght-normal.woff2') }}" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="{{ static_url('css/yipi.css') }}">
 <style>
-.boot { position: fixed; inset: 0; z-index: 2000; display: grid; place-content: center; justify-items: center; gap: 26px; background: var(--bg, #000); color: var(--text, #fff); }
+.boot { position: fixed; inset: 0; z-index: 2000; display: grid; place-content: center; justify-items: center; gap: 26px; background: var(--bg, #fff); color: var(--text, #000); }
 .boot svg { width: 120px; height: 60px; overflow: visible; }
 .boot path { fill: none; stroke: currentColor; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 150; stroke-dashoffset: 150; animation: boot-draw 1.3s ease-in-out infinite; }
 .boot-name { font: 800 22px/1 var(--font, sans-serif); letter-spacing: -0.03em; animation: boot-fade 1.3s ease-in-out infinite; }
@@ -46,9 +46,9 @@
 <body>
 <a class="skip" href="#main">Zum Inhalt springen</a>
 <div id="app" class="app">
-  <div class="boot" role="status" aria-label="Pulse lädt">
+  <div class="boot" role="status" aria-label="Nex lädt">
     <svg viewBox="0 0 64 32" aria-hidden="true"><path d="M2 17h12l6-13 10 25 8-17 4 5h20"/></svg>
-    <span class="boot-name">Pulse</span>
+    <span class="boot-name">Nex</span>
   </div>
 </div>
 <noscript>

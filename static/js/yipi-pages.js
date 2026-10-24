@@ -65,8 +65,8 @@
   }
 
   function displaySection() {
-    let current = "auto";
-    try { current = localStorage.getItem("yipi.theme") || "auto"; } catch (error) { /* storage blocked */ }
+    let current = "light";
+    try { current = localStorage.getItem("yipi.theme") || "light"; } catch (error) { /* storage blocked */ }
     const group = h("div", { class: "choices big", role: "radiogroup", "aria-label": "Darstellung" });
     for (const [id, label, text] of THEMES) {
       const input = h("input", { type: "radio", name: "theme", value: id, onchange: () => Y.setTheme(id) });

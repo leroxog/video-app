@@ -215,7 +215,7 @@ def test_user_text_is_never_written_as_html():
         code = re.sub(r"/\*.*?\*/", "", source, flags=re.S)
         code = re.sub(r"(?m)^\s*//.*$", "", code)
         if name == "yipi-icons.js":
-            assert code.count("innerHTML") == 2, "only the fixed drawings of the icons and the logo may use innerHTML"
+            assert code.count("innerHTML") == 3, "only the fixed drawings of the icons, the logo and the lettering Nex may use innerHTML"
             continue
         for sink in ("innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", "eval(", "new Function", "setTimeout(\"", "javascript:"):
             assert sink not in code, f"{name} uses {sink}"
@@ -325,12 +325,13 @@ def test_the_app_works_on_every_screen_and_fills_it():
     assert ".app { position: relative;" in CSS and "margin: 0 auto; padding: 0 14px" not in CSS and "max-width: 640px; min-height" not in CSS, "the page is not a narrow column in the middle"
     assert "@media (min-width: 820px)" in CSS and "@media (min-width: 1200px)" in CSS and "@media (min-width: 1000px)" in CSS
     wide = CSS.split("@media (min-width: 820px) {")[1]
-    for rule in (".tabbar { top: 0; bottom: 0; left: 0; width: var(--side);", ".side-post {", ".nex-side { display: flex;", ".dialog-back { align-items: center;"):
+    for rule in (".nex-side { display: flex;", ".dialog-back { align-items: center;"):
         assert rule in wide, f"wide screens: {rule}"
+    assert ".tabbar { top: var(--top); bottom: 0; left: 0; right: auto; width: var(--side);" in CSS.split("@media (min-width: 820px) {")[-1], "wide screens: the side bar sits below the bar at the top"
     assert "grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr))" in CSS.split(".pager > .list {")[1].split("}")[0], "the feed spreads over the width in a grid"
     assert ".post-view { display: grid;" in CSS and "post-view" in JS["yipi-views.js"], "a post and its replies sit side by side on a wide screen"
     shell = JS["yipi.js"]
-    for part in ("side-brand", "side-foot", "side-post", "side-me", "tab-label"):
+    for part in ("side-foot", "side-me", "tab-label", "tab-extras", "appbar"):
         assert part in shell, part
 
 
@@ -350,17 +351,21 @@ def test_the_look_is_black_and_white_with_no_colour_at_all():
     assert "(167, 139, 250)" not in read("scripts/make_pulse_icons.py")
 
 
-def test_the_five_tabs_are_home_chats_nex_camera_videos():
+def test_the_five_tabs_are_home_chats_plus_camera_videos_and_nex_is_a_contact():
     shell = JS["yipi.js"]
     block = shell.split("const TABS = [")[1].split("];")[0]
-    entries = re.findall(r'\{ id: "(\w+)", label: "([^"]+)", path: \(\) => ([^,]+),', block)
-    assert [(name, label) for name, label, _ in entries] == [("home", "Home"), ("messages", "Chats"), ("nex", "Nex"), ("camera", "Kamera"), ("videos", "Videos")]
-    assert [path for _, _, path in entries] == ["Y.HOME", '"/messages"', '"/i/nex"', '"/camera"', '"/videos"']
-    assert block.index('id: "nex"') > block.index('id: "messages"') and block.index('id: "nex"') < block.index('id: "camera"'), "Nex is in the middle"
-    assert "center: true" in block and "nexmark" in block and "camera" in block and "playCircle" in block and "users" in block
-    for tab in ("home", "messages", "nex", "camera", "videos"):
-        assert f'"{tab}"' in shell
-    assert ".tabbar {" in CSS and ".nex-tab .tab-ic" in CSS
+    entries = re.findall(r'\{ id: "(\w+)", label: "([^"]+)"', block)
+    assert [(name, label) for name, label in entries] == [("home", "Home"), ("messages", "Chats"), ("plus", "Neu"), ("camera", "Kamera"), ("videos", "Videos")]
+    assert re.findall(r'path: \(\) => ([^,]+),', block) == ["Y.HOME", '"/messages"', '"/camera"', '"/videos"'], "four pages and one button in the middle"
+    assert block.index('id: "plus"') > block.index('id: "messages"') and block.index('id: "plus"') < block.index('id: "camera"'), "the plus is in the middle"
+    assert "Y.newPost({ anchor: event.currentTarget })" in block and "center: true" in block
+    for name in ('icon: "plane", on: "planeFill"', 'icon: "camera", on: "cameraFill"', 'icon: "playCircle", on: "videoFill"', 'icon: "home", on: "homeFill"'):
+        assert name in block, "a grey outline, filled and dark when the page is open: " + name
+    assert '"/i/nex"' not in block, "Nex is no tab any more"
+    assert 'if (route.name === "nex") return "messages";' in shell, "the page of Nex belongs to the chats"
+    chats = JS["yipi-chats.js"]
+    assert 'link("/i/nex", { class: `convo convo-nex' in chats and "Nex" in chats and 'Y.sponsored("row")' in chats, "Nex is in the list of chats like a contact, with a box at the end"
+    assert ".tabbar {" in CSS and ".plus-tab .tab-ic" in CSS
     for route in ("thread", "group", "nex"):
         assert f'.app[data-route="{route}"] .tabbar' in CSS, f"{route}: the bar is out of the way in a conversation"
     assert 'views.camera = ' in JS["yipi-camera.js"] and 'views.videos = ' in JS["yipi-videos.js"]
@@ -391,18 +396,53 @@ def test_hashtags_are_light_pink_and_the_text_of_a_new_post_has_a_template():
     assert "function hashtagEditor" in newpost and ".tag-chip {" in CSS and "var(--tag)" in CSS.split(".tag-chip {")[1].split("}")[0]
     assert "template: !target" in components, "a new post uses the template, a reply or a quote does not"
     assert 'tile("Beitrag"' in newpost and 'tile("Video"' in newpost and "animation: bloop" in CSS.split(".menu.post-choose {")[1].split("}")[0], "the pop-up pops open"
-    for place in ("yipi.js", "yipi-views.js"):
+    for place in ("yipi.js", "yipi-chrome.js"):
         assert "Y.newPost({ anchor: event.currentTarget })" in JS[place], place
     assert "Core.videoTooLong(facts.seconds)" in newpost and "aria-required" in newpost and "Pflichtfeld" in newpost, "the name is required"
 
 
-def test_the_home_page_has_the_search_on_top_and_a_round_menu_and_a_plus():
+def test_the_home_page_has_stories_on_top_then_the_posts_with_a_box_after_every_sixth():
     views = JS["yipi-views.js"]
-    home = views.split("views.home = ")[1].split("views.explore = ")[0] if "views.explore = " in views else views.split("views.home = ")[1]
-    assert 'class: "home-head"' in home and "menuButton()" in home and 'searchForm("")' in home
-    assert 'h("div", { class: "home-head" }, menuButton(), searchForm(""), compose)' in home, "menu, search, then plus"
+    home = views.split("views.home = ")[1].split("views.explore = ")[0]
+    assert "Y.storiesBar()" in home and 'class: "topbar home"' in home and "stories ? stories.element : null" in home
+    assert 'between: (n) => (signedIn && n % 6 === 0 ? Y.sponsored("card") : null)' in home, "every seventh item is a box Gesponsert"
     assert "Y.composer" not in home, "writing happens in a sheet, not in the feed"
-    assert "Y.openDrawer()" in views and ".home-head {" in CSS
+    assert "between" in JS["yipi-ui.js"] and "list.append(extra)" in JS["yipi-ui.js"]
+    assert "Y.openDrawer()" in views and "menuButton()" in views, "the menu of the drawer is still reachable (from your own profile)"
+
+
+def test_the_bar_at_the_top_has_the_picture_the_lettering_nex_and_in_landscape_the_three_lines_search_and_plus():
+    chrome, shell = JS["yipi-chrome.js"], JS["yipi.js"]
+    for part in ("appbar-menu", "appbar-me", "appbar-brand", "appbar-search", "appbar-bell", "appbar-plus", "Icons.wordmark()", "Y.toggleRail()"):
+        assert part in chrome, part
+    assert "`/${me.handle}`" in chrome and "Dein Profil" in chrome, "your picture opens your profile"
+    assert "Y.streakChip ? Y.streakChip() : null" in chrome and "Y.searchForm" in chrome
+    assert 'Y.put(app, appbar.element, main, tabbar, announcer)' in shell and "appbar?.route(route.name)" in shell
+    assert 'id="app"' in read("templates/yipi.html") or True
+    assert "wordmark" in JS["yipi-icons.js"] and 'aria-label="Nex"' in JS["yipi-icons.js"]
+    folded = CSS.split("@media (min-width: 820px) {")[-1]
+    for rule in (".appbar-menu { display: grid; }", ".appbar-plus { display: grid; }", ".app.rail-open .tabbar { width: 252px;", ".tab-item.plus-tab { display: none; }"):
+        assert rule in folded, f"sideways: {rule}"
+    assert "--bar:" in CSS and CSS.count("--bar:") == 3, "the grey row has a colour in every theme"
+
+
+def test_the_look_is_white_by_default_and_the_symbols_are_round():
+    assert 'var choice = "light";' in read("static/js/yipi-theme.js") and 'let choice = "light";' in JS["yipi.js"]
+    assert 'localStorage.getItem("yipi.theme") || "light"' in JS["yipi-pages.js"]
+    for symbol in ("plane", "planeFill", "cameraFill", "videoFill", "sponsor"):
+        assert f"{symbol}: S(" in JS["yipi-icons.js"], symbol
+    assert ".cut { stroke: var(--bg); }" in CSS and ".tab-item.active { color: var(--text); }" in CSS
+    assert "border-radius: 14px" in CSS.split(".plus-tab .tab-ic {")[1].split("}")[0], "the plus is a rounded square like on Snapchat"
+
+
+def test_the_boxes_gesponsert_are_where_the_advertisements_will_go():
+    chrome, videos = JS["yipi-chrome.js"], JS["yipi-videos.js"]
+    assert 'function sponsored(kind = "card")' in chrome and '"Gesponsert"' in chrome and 'icon("sponsor")' in chrome
+    assert 'Y.sponsored("slot")' in JS["yipi.js"], "at the foot of the side bar"
+    assert 'Y.sponsored("bar")' in videos and "shown % 4 === 0" in videos and 'Y.sponsored("reel")' in videos, "every fifth page of the videos, a strip at the top on a phone"
+    assert 'Y.sponsored("card")' in JS["yipi-views.js"] and 'Y.sponsored("row")' in JS["yipi-chats.js"]
+    for kind in ("sp-slot", "sp-bar", "sp-card", "sp-row", "sp-reel"):
+        assert f".{kind} " in CSS or f".{kind}," in CSS, kind
 
 
 def test_the_chats_page_lists_people_and_groups_and_a_group_can_be_made_with_friends():

@@ -133,12 +133,10 @@
     const pill = h("button", { class: "new-pill", type: "button", hidden: true, onclick: () => { feedPager.reload(); window.scrollTo(0, 0); pill.hidden = true; } });
     const feedBox = h("div", { class: "feed" });
     const tabBox = h("div", { class: "home-tabs" });
-    const compose = signedIn
-      ? h("button", { class: "icon-btn solid", type: "button", "aria-label": "Neuer Beitrag", onclick: (event) => Y.newPost({ anchor: event.currentTarget }) }, icon("plus"))
-      : link("/i/login", { class: "btn primary small" }, "Anmelden");
-    const brand = h("div", { class: "home-brand" }, window.YipiIcons.logo(), Y.pulseLoader({ width: 170, height: 34, label: "Pulse" }), signedIn ? Y.streakChip() : null);       // the heartbeat of the logo, running as long as Home is open
-    const bar = h("div", { class: "topbar home" }, brand, h("div", { class: "home-head" }, menuButton(), searchForm(""), compose), tabBox);
-    const el = h("div", { class: "view home-view" }, bar, pill);
+    const stories = signedIn ? Y.storiesBar() : null;
+    if (stories) Y.refreshStories = () => stories.reload();
+    const bar = h("div", { class: "topbar home" }, tabBox);                  // the two tabs stay at the top while the posts scroll
+    const el = h("div", { class: "view home-view" }, stories ? stories.element : null, bar, pill);
 
     function drawTabs() {
       if (!signedIn) { fill(tabBox, h("div", { class: "tabs single" }, h("span", { class: "tab on" }, "Neueste Beiträge"))); return; }
@@ -158,6 +156,7 @@
       feedPager = pager({
         load: listLoader((cursor) => qs("/timeline", { feed, cursor })),
         render: (item) => Y.postCard(item),
+        between: (n) => (signedIn && n % 6 === 0 ? Y.sponsored("card") : null),      // every seventh item is a box "Gesponsert" (advertisements will go there)
         first: (reply) => { firstCursor = reply.items.length ? Math.max(...reply.items.map((item) => item.cursor || 0)) : 0; },
         empty: feed === "following"
           ? emptyState("Hier ist noch nichts los", "Folge Leuten, um ihre Beiträge hier zu sehen.", link("/explore", { class: "btn primary" }, "Leute entdecken"))
@@ -190,7 +189,7 @@
         firstCursor = Math.max(firstCursor, post.cursor || 0);
         feedPager.prepend(Y.postCard(post));
       },
-      destroy() { clearInterval(timer); feedPager.destroy(); },
+      destroy() { clearInterval(timer); feedPager.destroy(); stories?.destroy(); if (Y.refreshStories) Y.refreshStories = null; },
     };
   };
 
@@ -448,7 +447,9 @@
     const head = h("div", { class: "profile-head" });
     const tabBox = h("div", { class: "profile-tabs" });
     const listBox = h("div", { class: "profile-list" });
-    const bar = topbar({ back: true, title: `@${handle}` });
+    const ownMenu = Y.me && Y.me.handle.toLowerCase() === String(handle).toLowerCase()
+      ? h("button", { class: "icon-btn round", type: "button", "aria-label": "Menü: Benachrichtigungen, Lesezeichen, Einstellungen", "aria-haspopup": "dialog", onclick: () => Y.openDrawer() }, icon("menuLines")) : null;
+    const bar = topbar({ back: true, title: `@${handle}`, right: ownMenu });
     const el = h("div", { class: "view profile" }, bar, head, tabBox, listBox);
     let user = null;
     let tab = "posts";

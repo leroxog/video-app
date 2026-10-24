@@ -1,12 +1,12 @@
 /* Pulse theme (the file keeps the name yipi-theme.js): sets the look (dark, dim or light) before the page is drawn, so there is no flash. The choice is kept in the
-   browser; without a choice the look follows the device. */
+   browser; without a choice it is the white look ("auto" follows the device). */
 (function () {
   "use strict";
-  var choice = "auto";
+  var choice = "light";
   try {
     var saved = window.localStorage.getItem("yipi.theme");
-    if (saved === "dark" || saved === "dim" || saved === "light") choice = saved;
-  } catch (error) { /* storage blocked: follow the device */ }
+    if (saved === "dark" || saved === "dim" || saved === "light" || saved === "auto") choice = saved;
+  } catch (error) { /* storage blocked: the white look */ }
   var theme = choice;
   if (choice === "auto") theme = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
   document.documentElement.setAttribute("data-theme", theme);

@@ -258,7 +258,7 @@
   /* A list that loads a page, and the next one when the end comes near.
        load(cursor) -> {ok, items, next, data}; render(item) -> element; empty: element for "nothing here".
      Returns {reload(), prepend(el), destroy(), element}. */
-  function pager({ load, render, empty, errorText = "Das konnte nicht geladen werden.", first }) {
+  function pager({ load, render, empty, errorText = "Das konnte nicht geladen werden.", first, between }) {
     const list = h("div", { class: "list" });
     const foot = h("div", { class: "list-foot" });
     const element = h("div", { class: "pager" }, list, foot);
@@ -287,7 +287,12 @@
       if (first && !count) first(reply);
       for (const item of reply.items) {
         const node = render(item);
-        if (node) { list.append(node); count += 1; }
+        if (node) {
+          list.append(node);
+          count += 1;
+          const extra = between && between(count);                  // a box after every so many items (the "Gesponsert" box on Home)
+          if (extra) list.append(extra);
+        }
       }
       next = reply.next;
       finished = !next;
