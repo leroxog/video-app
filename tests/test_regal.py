@@ -161,9 +161,9 @@ def test_the_old_home_pages_are_still_there_and_the_site_pages_are_those_of_puls
                         ("/nutzungsbedingungen", ("Lizenz", "Hugging Face", "16 Jahren", "yipi"))):
         page = client.get(path)
         text = page.get_data(as_text=True)
-        assert page.status_code == 200 and "| Pulse</title>" in text and "Set-Cookie" not in page.headers, path
+        assert page.status_code == 200 and "| Nex</title>" in text and "Set-Cookie" not in page.headers, path
         for word in words:
             assert word in text, (path, word)
     error_page = client.get("/gibt-es-nicht-1234")
-    assert error_page.status_code == 404 and "Pulse" in error_page.get_data(as_text=True)
+    assert error_page.status_code == 404 and "Nex" in error_page.get_data(as_text=True)
     assert "Sitemap:" in client.get("/robots.txt").get_data(as_text=True)

@@ -1,4 +1,4 @@
-/* Pulse views, part 2 (the file keeps the name yipi-pages.js): messages, settings, moderation, the pages to sign in and sign up, and the
+/* Nex views, part 2 (the file keeps the name yipi-pages.js): messages, settings, moderation, the pages to sign in and sign up, and the
    pages for "not found" and "please sign in". Same shape as part 1: each view is a function (route, ctx) answering {element, title, ...}. */
 (function () {
   "use strict";
@@ -46,7 +46,7 @@
       h("section", { class: "card" }, h("h2", {}, "Dein Konto"),
         h("dl", { class: "facts" }, h("dt", {}, "Nutzername"), h("dd", {}, `@${me.handle}`), h("dt", {}, "E-Mail"), h("dd", {}, me.email || "nicht angegeben"), h("dt", {}, "Dabei seit"), h("dd", {}, Core.joinedLabel(me.createdAt).replace("Beigetreten ", "")))),
       h("section", { class: "card" }, h("h2", {}, "Passwort ändern"), field("Aktuelles Passwort", oldPassword), field("Neues Passwort", newPassword, "Mindestens 8 Zeichen."), passwordError, changePassword,
-        h("p", { class: "muted small" }, "Pulse verschickt keine E-Mails. Ein vergessenes Passwort lässt sich deshalb nicht zurücksetzen. Bewahre es sicher auf.")),
+        h("p", { class: "muted small" }, "Nex verschickt keine E-Mails. Ein vergessenes Passwort lässt sich deshalb nicht zurücksetzen. Bewahre es sicher auf.")),
       h("section", { class: "card danger-zone" }, h("h2", {}, "Konto löschen"),
         h("p", { class: "muted" }, "Dabei werden dein Profil, alle deine Beiträge, Fotos, GIFs, Nachrichten und Likes endgültig gelöscht. Das lässt sich nicht rückgängig machen."),
         button("Konto löschen …", "danger", () => {
@@ -108,9 +108,9 @@
       h("section", { class: "card" }, h("h2", {}, "Rechtliches"),
         h("ul", { class: "plain-links" }, ["nutzungsbedingungen|Nutzungsbedingungen und Regeln", "datenschutz|Datenschutzerklärung", "impressum|Impressum", "bildnachweise|Bildnachweise (freie GIFs)"].map((entry) => { const [path, text] = entry.split("|"); return h("li", {}, h("a", { href: `/${path}` }, text, icon("chevron"))); }))),
       h("section", { class: "card" }, h("h2", {}, "Hilfe"),
-        h("p", { class: "muted small" }, "Beiträge sind öffentlich. Nachrichten sind nur für die Beteiligten sichtbar (zwei Personen oder die Mitglieder einer Gruppe), aber nicht Ende-zu-Ende-verschlüsselt. Etwas Unpassendes siehst du? Tippe beim Beitrag, beim GIF oder beim Profil auf „Melden“. In einem Beitrag gehen bis zu 3 Fotos, ein GIF, eine Umfrage oder ein Video (bis 30 Sekunden). Mit einem Doppeltipp gibst du einem Beitrag oder Video ein Like und einer Nachricht ein Herz. Ein Video speicherst du über „Teilen“, dann bekommt es ein Pulse-Wasserzeichen mit dem Namen der Person, die es gemacht hat. In der Kamera spielst du Spiele und nimmst sie auf, dort gibt es auch die Bestenlisten. Mit der Chat-Sperre (Einstellungen) kommst du in deine Chats nur mit deiner Wisch-Kombination.")),
-      h("section", { class: "card" }, h("h2", {}, "Über Pulse"),
-        h("p", { class: "muted" }, "Pulse ist ein unabhängiges, kostenloses Projekt, ohne Werbung und ohne Tracking. Es speichert nur ein Anmelde-Cookie, wenn du dich anmeldest, und deine Einstellungen im Browser. Nex, die KI, antwortet mit Hilfe eines KI-Dienstes (Groq): was du Nex schreibst, wird dafür an den Server und von dort an den Dienst geschickt, aber nicht gespeichert.")));
+        h("p", { class: "muted small" }, "Beiträge sind öffentlich. Nachrichten sind nur für die Beteiligten sichtbar (zwei Personen oder die Mitglieder einer Gruppe), aber nicht Ende-zu-Ende-verschlüsselt. Etwas Unpassendes siehst du? Tippe beim Beitrag, beim GIF oder beim Profil auf „Melden“. In einem Beitrag gehen bis zu 3 Fotos, ein GIF, eine Umfrage oder ein Video (bis 30 Sekunden). Mit einem Doppeltipp gibst du einem Beitrag oder Video ein Like und einer Nachricht ein Herz. Ein Video speicherst du über „Teilen“, dann bekommt es ein Nex-Wasserzeichen mit dem Namen der Person, die es gemacht hat. In der Kamera spielst du Spiele und nimmst sie auf, dort gibt es auch die Bestenlisten. Mit der Chat-Sperre (Einstellungen) kommst du in deine Chats nur mit deiner Wisch-Kombination.")),
+      h("section", { class: "card" }, h("h2", {}, "Über Nex"),
+        h("p", { class: "muted" }, "Nex ist ein unabhängiges, kostenloses Projekt, ohne Werbung und ohne Tracking. Es speichert nur ein Anmelde-Cookie, wenn du dich anmeldest, und deine Einstellungen im Browser. Nex AI, die KI, antwortet mit Hilfe eines KI-Dienstes (Groq): was du Nex AI schreibst, wird dafür an den Server und von dort an den Dienst geschickt, aber nicht gespeichert.")));
   }
 
   views.settings = function settings(route, ctx) {
@@ -238,7 +238,7 @@
   };
 
   // ------------------------------------------------------------------------------------------- sign in and sign up
-  /* The frame of both pages: at the left (above, on a phone) the text of Pulse with a few playful lines, at the right (below) the card. */
+  /* The frame of both pages: at the left (above, on a phone) the text of Nex with a few playful lines, at the right (below) the card. */
   function authFrame(title, subtitle, content, footer) {
     const points = [["📹", "Videos zum Scrollen, wie bei TikTok"], ["💬", "Chats und Gruppen mit deinen Freunden"], ["🎮", "Spiele vor deiner Selfie-Kamera, als Clip posten"], ["✨", "Nex, die KI, hilft dir weiter"]];
     return h("div", { class: "auth-page" },
@@ -248,7 +248,7 @@
         h("p", { class: "auth-lead" }, "Beiträge, Videos, Chats und Spiele an einem Ort. Kostenlos, ohne Werbung."),
         h("ul", { class: "auth-points" }, points.map(([face, text], k) => h("li", { style: `animation-delay:${0.15 + k * 0.12}s` }, h("span", { class: "auth-face", "aria-hidden": "true" }, face), h("span", {}, text))))),
       h("div", { class: "auth-card" },
-        link(Y.HOME, { class: "auth-logo", "aria-label": "Pulse" }, window.YipiIcons.logo(), h("span", {}, "Pulse")),
+        link(Y.HOME, { class: "auth-logo", "aria-label": "Nex" }, window.YipiIcons.logo(), h("span", {}, "Nex")),
         h("h1", {}, title), subtitle ? h("p", { class: "muted" }, subtitle) : null, content, h("p", { class: "auth-switch" }, footer),
         h("p", { class: "auth-legal" }, h("a", { href: "/nutzungsbedingungen" }, "Nutzungsbedingungen"), h("a", { href: "/datenschutz" }, "Datenschutz"), h("a", { href: "/impressum" }, "Impressum"))));
   }
@@ -339,7 +339,7 @@
   }
 
   views.login = function login(route) {
-    if (Y.me) { setTimeout(() => Y.navigate(Y.HOME, { replace: true }), 0); return { element: h("div"), title: "Pulse" }; }
+    if (Y.me) { setTimeout(() => Y.navigate(Y.HOME, { replace: true }), 0); return { element: h("div"), title: "Nex" }; }
     const target = afterSignIn(route);
     const note = GOOGLE_NOTES[new URLSearchParams(location.search).get("google")] || "";
     const holder = h("div", { class: "auth-swap" });
@@ -375,7 +375,7 @@
   };
 
   views.signup = function signup(route) {
-    if (Y.me) { setTimeout(() => Y.navigate(Y.HOME, { replace: true }), 0); return { element: h("div"), title: "Pulse" }; }
+    if (Y.me) { setTimeout(() => Y.navigate(Y.HOME, { replace: true }), 0); return { element: h("div"), title: "Nex" }; }
     const google = !!route.google;
     const flow = google ? ["birthday", "form"] : ["birthday", "method", "form"];
     const answers = { method: google ? "google" : "name", parents: false, name: "", email: "" };
@@ -392,12 +392,12 @@
       const text = h("p", { class: "age-line", "aria-live": "polite" });
       const parents = h("input", { type: "checkbox", id: "parents" });
       parents.checked = answers.parents;
-      const parentsBox = h("label", { class: "check", hidden: true }, parents, h("span", {}, "Meine Eltern erlauben mir, Pulse zu benutzen."));
+      const parentsBox = h("label", { class: "check", hidden: true }, parents, h("span", {}, "Meine Eltern erlauben mir, Nex zu benutzen."));
       const next = h("button", { class: "btn primary wide", type: "button" }, "Weiter");
       function update() {
         const age = wheels.age();
         answers.parents = parents.checked;
-        if (age < 13) { text.textContent = age < 0 ? "Dieses Datum liegt in der Zukunft." : `Du bist ${age}. Pulse gibt es erst ab 13 Jahren.`; text.className = "age-line bad"; }
+        if (age < 13) { text.textContent = age < 0 ? "Dieses Datum liegt in der Zukunft." : `Du bist ${age}. Nex gibt es erst ab 13 Jahren.`; text.className = "age-line bad"; }
         else { text.textContent = `Du bist ${age} Jahre alt.`; text.className = "age-line"; }
         parentsBox.hidden = !(age >= 13 && age < 16);
         next.disabled = age < 13 || (age < 16 && !parents.checked);
@@ -465,7 +465,7 @@
         submit.disabled = false;
         if (!reply.ok) { showError(error, Api.message(reply)); return; }
         Y.setMe(reply.data.me);
-        toast("Willkommen bei Pulse!");
+        toast("Willkommen bei Nex!");
         flow.push("profile");                                   // the account exists: now (if wanted) a banner and a picture
         drawDots();
         go(flow.length - 1);
@@ -473,7 +473,7 @@
         field("Nutzername", h("div", { class: "with-prefix" }, h("span", {}, "@"), handle), null), state,
         field("Name", name),
         phone ? phone.element : null,
-        email ? field("E-Mail", email, "Damit kannst du dich anmelden. Pulse verschickt keine E-Mails.") : null,
+        email ? field("E-Mail", email, "Damit kannst du dich anmelden. Nex verschickt keine E-Mails.") : null,
         phone ? h("small", { class: "hint" }, "Die Nummer wird nicht bestätigt, es wird keine SMS verschickt. Sie dient nur zum Anmelden.") : null,
         password ? password.element : null, password ? h("small", { class: "hint" }, "Mindestens 8 Zeichen. Ein vergessenes Passwort kann nicht zurückgesetzt werden.") : null,
         h("label", { class: "check" }, terms, h("span", {}, "Ich akzeptiere die ", h("a", { href: "/nutzungsbedingungen", target: "_blank", rel: "noopener" }, "Nutzungsbedingungen"), " und die ", h("a", { href: "/datenschutz", target: "_blank", rel: "noopener" }, "Datenschutzerklärung"), ".")),
@@ -505,7 +505,7 @@
         const file = picker.files[0];
         picker.value = "";
         if (!file || !picking) return;
-        if (!/^image\/(jpeg|png|gif|webp)$/.test(file.type)) { showError(error, "Das ist kein Foto, das Pulse kennt (JPEG, PNG, GIF oder WebP)."); return; }
+        if (!/^image\/(jpeg|png|gif|webp)$/.test(file.type)) { showError(error, "Das ist kein Foto, das Nex kennt (JPEG, PNG, GIF oder WebP)."); return; }
         showError(error, "");
         try {
           const blob = await Y.prepareImage(file, { crop: picking === "avatar" ? { width: 400, height: 400 } : { width: 1500, height: 500 } });

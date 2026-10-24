@@ -1,4 +1,4 @@
-/* Pulse core (the file keeps the name yipi-core.js): everything about the page that does not need a screen, as plain functions -- cutting a text into
+/* Nex core (the file keeps the name yipi-core.js): everything about the page that does not need a screen, as plain functions -- cutting a text into
    links, mentions and hashtags, counting characters the way the server does, German times and counts, the addresses of
    the pages, grouping notifications, and the arithmetic for picture sizes. It runs in the browser and in Node (that is
    how the tests run it). */
@@ -9,7 +9,7 @@
   "use strict";
 
   const MAX_POST = 280;
-  const HOME = "/";                                      // the home page of Pulse is the home page of the site
+  const HOME = "/";                                      // the home page of Nex is the home page of the site
   const MAX_MEDIA = 3;                                  // photos per post (yipi.py: MAX_MEDIA)
   const MAX_VIDEO_BYTES = 25 * 1024 * 1024;             // a video (yipi.py: MAX_VIDEO_BYTES)
   const MAX_VIDEO_SECONDS = 30;                         // and how long it may be (only the browser can measure that; the milliseconds do not count)
@@ -56,7 +56,7 @@
   /* The file name of a saved video: "pulse-name.webm" (or .mp4, whatever the browser's recorder makes). */
   function videoFileName(handle, mime) {
     const name = String(handle || "").replace(/[^A-Za-z0-9_]/g, "").slice(0, 15) || "video";
-    return `pulse-${name}.${/mp4/i.test(String(mime || "")) ? "mp4" : "webm"}`;
+    return `nex-${name}.${/mp4/i.test(String(mime || "")) ? "mp4" : "webm"}`;
   }
 
   // ------------------------------------------------------------------------------------------------ text

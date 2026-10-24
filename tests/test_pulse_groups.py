@@ -1,4 +1,4 @@
-"""Pulse chats (2026-10-17, night): the list of the chats page (people and groups together), group chats (friends only: members follow each other
+"""Nex chats (2026-10-17, night): the list of the chats page (people and groups together), group chats (friends only: members follow each other
 with the creator; messages with text or a GIF; unread counters; leaving, renaming, adding), the friends list, and the new places of the pages
 (games and videos are "coming soon", a group has its own address)."""
 import os
@@ -70,7 +70,7 @@ def test_the_camera_and_videos_are_pages_and_a_group_has_its_own_address(client)
     for path in ("/camera", "/camera/dino", "/camera/fruit-merge", "/videos", "/g/1", "/messages", "/i/nex"):
         r = c.get(path)
         assert r.status_code == 200 and b'id="yipiBoot"' in r.data, path
-    assert "<title>Kamera und Games auf Pulse</title>" in c.get("/camera").get_data(as_text=True)
+    assert "<title>Kamera und Games auf Nex</title>" in c.get("/camera").get_data(as_text=True)
     assert 'content="noindex"' in c.get("/camera/dino").get_data(as_text=True) and c.get("/camera/Gibt-Es-Nicht").status_code == 404 and c.get("/camera/a/b").status_code == 404
     old = c.get("/games")
     assert old.status_code == 301 and old.headers["Location"].endswith("/camera"), "the Games tab became the camera tab"

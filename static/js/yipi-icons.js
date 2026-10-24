@@ -1,4 +1,4 @@
-/* Pulse icons (the file keeps the name yipi-icons.js): the small pictures of the page and the logo, drawn in code (all original).
+/* Nex icons (the file keeps the name yipi-icons.js): the small pictures of the page and the logo, drawn in code (all original).
    `YipiIcons.icon(name)` gives an <svg> element that takes the colour of the text around it; `YipiIcons.logo()` the heartbeat on its
    black tile. The only place in the page that uses innerHTML is here, for these fixed drawings. */
 (function () {
@@ -103,7 +103,7 @@
     return holder.firstElementChild;
   }
 
-  /* The heartbeat of Pulse, white on a black tile (the same drawing as static/img/pulse-icon.svg). */
+  /* The heartbeat of Nex, white on a black tile (the same drawing as static/img/pulse-icon.svg). */
   function logo() {
     const holder = document.createElement("span");
     holder.innerHTML = `<svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">

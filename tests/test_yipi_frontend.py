@@ -1,4 +1,4 @@
-"""Pulse's page (the files keep the name yipi): the files the page is made of agree with each other and with the server (every address the script calls exists,
+"""Nex's page (the files keep the name yipi): the files the page is made of agree with each other and with the server (every address the script calls exists,
 every style the script uses exists, nothing writes user text as HTML), and the pages around the app (legal pages, manifest, robots,
 error pages) are there. The behaviour of the helper functions is tested in yipi_core.test.js, the API in test_yipi.py."""
 import os
@@ -600,7 +600,7 @@ def test_manifest_robots_and_sitemap(client):
     manifest = client.get("/manifest.webmanifest")
     assert manifest.mimetype == "application/manifest+json"
     data = manifest.get_json()
-    assert data["short_name"] == "Pulse" and data["start_url"] == "/" and data["display"] == "standalone"
+    assert data["short_name"] == "Nex" and data["start_url"] == "/" and data["display"] == "standalone"
     assert {icon["purpose"] for icon in data["icons"]} == {"any", "maskable"}
     robots = client.get("/robots.txt").get_data(as_text=True)
     for private in ("/api/", "/messages", "/settings", "/nex-agenten-archiv", "/gomat-archiv", "/ysound-archiv"):
@@ -616,7 +616,7 @@ def test_error_pages_are_pulse_pages(client):
     page = client.get("/gibt-es-nicht-1234")
     assert page.status_code == 404
     text = page.get_data(as_text=True)
-    assert "Pulse" in text and "Diese Seite gibt es nicht" in text and "gomat" not in text.lower() and "Nex Ai" not in text
+    assert "Nex" in text and "Diese Seite gibt es nicht" in text and "gomat" not in text.lower() and "Nex Ai" not in text
     assert "Content-Security-Policy" in page.headers
     api = client.get("/api/yipi/gibt-es-nicht")
     assert api.status_code == 404 and api.get_json() == {"ok": False, "error": "not_found"}

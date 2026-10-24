@@ -1,4 +1,4 @@
-/* Pulse service worker: it only shows notifications (the server sends them with Web Push) and opens the page when one is tapped. It keeps nothing
+/* Nex service worker: it only shows notifications (the server sends them with Web Push) and opens the page when one is tapped. It keeps nothing
    in a cache and does not touch any request. Served from /pulse-sw.js so that it works for the whole site. */
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
@@ -6,7 +6,7 @@ self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim(
 self.addEventListener("push", (event) => {
   let data = {};
   try { data = event.data ? event.data.json() : {}; } catch (error) { data = {}; }
-  const title = typeof data.title === "string" && data.title ? data.title : "Pulse";
+  const title = typeof data.title === "string" && data.title ? data.title : "Nex";
   event.waitUntil(self.registration.showNotification(title, {
     body: typeof data.body === "string" ? data.body : "",
     icon: "/static/img/pulse-192.png",

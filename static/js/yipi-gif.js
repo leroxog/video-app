@@ -1,4 +1,4 @@
-/* Pulse GIFs: the picker (a sheet from the bottom on a phone, a window on a computer) with the library of everybody's GIFs -- popular,
+/* Nex GIFs: the picker (a sheet from the bottom on a phone, a window on a computer) with the library of everybody's GIFs -- popular,
    new, your favourites, your own, and a search --, a star to favourite a GIF, and a "+" to make your own: a name and a picture (a photo, a few photos or
    a GIF file). A sticker you make goes into the library, where everybody who is signed in can favourite it and send it.
    Everything a GIF is made of is drawn here on a canvas and written to a file by yipi-gif-core.js, in the browser. */
@@ -328,7 +328,7 @@
       const chosen = [...picker.files];
       picker.value = "";
       if (!chosen.length) return;
-      if (chosen.some((entry) => entry.type.startsWith("video/"))) { toast("Videos gibt es bei Pulse nicht. Nimm Fotos oder ein GIF."); return; }
+      if (chosen.some((entry) => entry.type.startsWith("video/"))) { toast("Videos gibt es bei Nex nicht. Nimm Fotos oder ein GIF."); return; }
       if (chosen.length === 1 && chosen[0].type === "image/gif") {          // a GIF is the sticker itself
         const entry = chosen[0];
         if (entry.size > GifCore.MAX_BYTES) { toast(Api.MESSAGES.gif_too_big); return; }

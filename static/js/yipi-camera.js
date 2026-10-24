@@ -1,4 +1,4 @@
-/* Pulse camera (yipi-camera.js): the camera tab, made like the camera of Snapchat. The front camera fills the screen (you see yourself), at the bottom
+/* Nex camera (yipi-camera.js): the camera tab, made like the camera of Snapchat. The front camera fills the screen (you see yourself), at the bottom
    a row of "lenses" -- each lens is a small game. Tap the one in the middle and the game starts on top of your picture, and the recording starts
    with it: the camera, the game and your voice, up to 30 seconds. When the game is over (or you stop it) you see the clip and can post it (the video
    template), send it to friends, save it or throw it away. The games are in a second file (pg-*.js), loaded when this page opens. Without a camera
@@ -361,8 +361,8 @@
       g.fillText(String(finalScore), REC_W / 2, 90);
       g.font = "800 28px system-ui, sans-serif";
       g.textAlign = "right";
-      g.strokeText("Pulse", REC_W - 24, REC_H - 28);
-      g.fillText("Pulse", REC_W - 24, REC_H - 28);
+      g.strokeText("Nex", REC_W - 24, REC_H - 28);
+      g.fillText("Nex", REC_W - 24, REC_H - 28);
     }
 
     function stopRecording() {
@@ -395,7 +395,7 @@
         return;
       }
       const extension = /mp4/.test(blob.type) ? "mp4" : "webm";
-      clip = { blob, url: URL.createObjectURL(blob), name: `pulse-${chosen.id}.${extension}`, score: finalScore, game: chosen };
+      clip = { blob, url: URL.createObjectURL(blob), name: `nex-${chosen.id}.${extension}`, score: finalScore, game: chosen };
       const video = h("video", { class: "cam-clip", src: clip.url, loop: true, playsinline: true, autoplay: true, "aria-label": "Dein Clip" });
       const bar = h("div", { class: "cam-review-bar" },
         action("close", "Verwerfen", () => { discard(); backToLenses(); }),

@@ -1,4 +1,4 @@
-"""Pulse, round 6: signing up and in -- the birthday (only the age is checked, nothing is kept), a phone number as a way to sign in, and Google."""
+"""Nex, round 6: signing up and in -- the birthday (only the age is checked, nothing is kept), a phone number as a way to sign in, and Google."""
 import os
 import sys
 import tempfile

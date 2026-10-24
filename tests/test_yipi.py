@@ -1,4 +1,4 @@
-"""Pulse (internally yipi): accounts, posts (posts, replies, quotes, reposts), likes, bookmarks, pictures, feeds, profiles, following,
+"""Nex (internally yipi): accounts, posts (posts, replies, quotes, reposts), likes, bookmarks, pictures, feeds, profiles, following,
 blocking and muting, search, trends, notifications, private messages, reports and moderation -- through the JSON API."""
 import os
 import re
@@ -1004,7 +1004,7 @@ def test_profile_and_yip_pages_exist_only_for_real_ones_and_carry_link_previews(
     post = yip(mia, "Mein erster Yip mit <b>Tags</b>")
     c = mia                                                           # (somebody who is not signed in only gets the page to sign in: see test_pulse_wall.py)
     page = c.get("/mia").get_data(as_text=True)
-    assert c.get("/Mia").status_code == 200 and "Mia Maus (@Mia) auf Pulse" in page and "Ich mag Mathe" in page
+    assert c.get("/Mia").status_code == 200 and "Mia Maus (@Mia) auf Nex" in page and "Ich mag Mathe" in page
     status = c.get(f"/mia/status/{post['id']}").get_data(as_text=True)
     assert "Mein erster Yip mit &lt;b&gt;Tags&lt;/b&gt;" in status and "<b>Tags</b>" not in status
     assert c.get("/nobody").status_code == 404 and c.get("/mia/status/99999").status_code == 404 and c.get("/tom/status/1").status_code == 404

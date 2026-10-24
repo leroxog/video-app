@@ -1,4 +1,4 @@
-/* Pulse theme (the file keeps the name yipi-theme.js): sets the look (dark, dim or light) before the page is drawn, so there is no flash. The choice is kept in the
+/* Nex theme (the file keeps the name yipi-theme.js): sets the look (dark, dim or light) before the page is drawn, so there is no flash. The choice is kept in the
    browser; without a choice it is the white look ("auto" follows the device). */
 (function () {
   "use strict";

@@ -1,4 +1,4 @@
-/* Pulse videos (yipi-videos.js): the Videos tab, made like TikTok -- one video after the other, each as big as the screen, you scroll (or press the
+/* Nex videos (yipi-videos.js): the Videos tab, made like TikTok -- one video after the other, each as big as the screen, you scroll (or press the
    arrow keys) to the next one, the one on screen plays by itself and cannot be stopped. The order is a shuffle (not the newest first); when every video
    has been shown the page shuffles again and starts over. Only five videos are asked for at a time, only the ones near the screen are fetched (and
    they are fetched piece by piece while they play), the ones far away are let go again. In the video itself, small and see-through, a row to set the

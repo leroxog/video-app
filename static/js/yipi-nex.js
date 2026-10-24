@@ -1,4 +1,4 @@
-/* Pulse Nex: the page of the assistant (/i/nex), made like the ChatGPT app -- a round button for the list of conversations at the top left, a
+/* Nex Nex: the page of the assistant (/i/nex), made like the ChatGPT app -- a round button for the list of conversations at the top left, a
    round "..." button at the top right, your questions as grey bubbles on the right, the answers as plain text, a floating input at the bottom.
    You can have many conversations; they stay in this browser (localStorage, for the signed-in person only). The server gets the last turns of the
    one you are in, passes them to the AI service and keeps nothing. "Mit Nex erklären" on a post opens a fresh conversation with that post
@@ -39,7 +39,7 @@
     "Schreib einen motivierenden Satz für Montagmorgen", "Was ist der Unterschied zwischen Virus und Bakterie?", "Erkläre mir, wie ein Kompass funktioniert",
     "Schlag mir ein Rätsel vor, das ich meinen Freunden stellen kann", "Wie rechne ich Prozente im Kopf?", "Was sind die Planeten unseres Sonnensystems?",
     "Gib mir Tipps für ein gutes Foto mit dem Handy", "Schreib mir eine Antwort auf eine freundliche Kritik", "Wie funktioniert Bluetooth?",
-    "Erkläre mir die Regeln von Schach in fünf Punkten", "Hilf mir, einen Reim auf „Pulse“ zu finden", "Was ist der Unterschied zwischen Wal und Fisch?",
+    "Erkläre mir die Regeln von Schach in fünf Punkten", "Hilf mir, einen Reim auf „Nex“ zu finden", "Was ist der Unterschied zwischen Wal und Fisch?",
     "Wie schreibe ich eine E-Mail an meine Lehrerin?", "Gib mir drei Fragen, um jemanden besser kennenzulernen", "Was ist ein Algorithmus? Erkläre es mit Kuchenbacken",
   ];
   let lastShown = [];
@@ -335,7 +335,7 @@
         h("div", { class: "nx-top" }, h("b", {}, "Nex"), close === noClose ? null : h("button", { class: "icon-btn", type: "button", "aria-label": "Schließen", onclick: close }, icon("close"))),
         h("button", { class: "nx-new", type: "button", onclick: () => { close(); newChat(); } }, icon("pencil"), h("span", {}, "Neues Gespräch")),
         h("div", { class: "nx-label" }, "Gespräche"), list,
-        close === noClose ? null : h("nav", { class: "nx-links drawer-nav", "aria-label": "Pulse" }, page(Y.HOME, "home", "Home"), page("/messages", "users", "Chats"), page("/camera", "camera", "Kamera"), page("/videos", "playCircle", "Videos"))];
+        close === noClose ? null : h("nav", { class: "nx-links drawer-nav", "aria-label": "Nex" }, page(Y.HOME, "home", "Home"), page("/messages", "users", "Chats"), page("/camera", "camera", "Kamera"), page("/videos", "playCircle", "Videos"))];
     }
     const noClose = () => {};
     fill(side, ...historyContent(noClose));

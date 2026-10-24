@@ -1,4 +1,4 @@
-/* Pulse (the file keeps the name yipi.js): the frame around everything -- the router (the address bar changes without reloading the page),
+/* Nex (the file keeps the name yipi.js): the frame around everything -- the router (the address bar changes without reloading the page),
    the floating bar at the bottom with five tabs (Home, Chats, Nex in the middle, Games, Videos), the menu from the left, the badges for new
    messages and the themes. The pages themselves are in yipi-views.js, yipi-chats.js, yipi-pages.js and yipi-nex.js. The app is made for a phone
    held upright. */
@@ -107,11 +107,11 @@
 
   // ---------------------------------------------------------------------------------------------- badges
   const unreadTotal = () => (Y.me ? (Y.me.unreadNotifications || 0) + (Y.me.unreadMessages || 0) : 0);
-  let pageTitle = "Pulse";
+  let pageTitle = "Nex";
 
   function updateTitle() {
     const count = unreadTotal();
-    document.title = `${count ? `(${count > 99 ? "99+" : count}) ` : ""}${pageTitle === "Pulse" ? "Pulse: was gerade passiert" : `${pageTitle} / Pulse`}`;
+    document.title = `${count ? `(${count > 99 ? "99+" : count}) ` : ""}${pageTitle === "Nex" ? "Nex: was gerade passiert" : `${pageTitle} / Nex`}`;
   }
 
   Y.updateBadges = () => {
@@ -221,7 +221,7 @@
     enterTimer = setTimeout(() => { main.dataset.enter = ""; }, 380);
     main.replaceChildren(view.element);
     app.dataset.route = route.name;
-    pageTitle = view.title || "Pulse";
+    pageTitle = view.title || "Nex";
     updateTitle();
     updateNav(route);
     appbar?.route(route.name);
@@ -320,7 +320,7 @@
         h("button", { class: "drawer-item logout", type: "button", onclick: () => { close(); Y.logout(); } }, icon("logout"), h("span", {}, `@${me.handle} abmelden`)));
     } else {
       panel.append(
-        h("div", { class: "dr-name" }, h("b", {}, "Pulse"), h("span", { class: "handle" }, "Was gerade passiert.")),
+        h("div", { class: "dr-name" }, h("b", {}, "Nex"), h("span", { class: "handle" }, "Was gerade passiert.")),
         h("nav", { class: "drawer-nav", "aria-label": "Menü" }, entry("/i/login", "user", "Anmelden"), entry("/i/signup", "feather", "Konto erstellen"), ...common));
     }
   });
@@ -330,7 +330,7 @@
     let entry = null;
     const go = (path) => () => { entry.close(); Y.navigate(path); };
     entry = dialog({ label: "Anmelden", title: "", body: h("div", { class: "auth-prompt" },
-      h("span", { class: "hero-logo" }, Icons.logo()), h("h2", {}, "Mach mit bei Pulse"), h("p", { class: "dialog-text" }, message || "Melde dich an, um das zu tun."),
+      h("span", { class: "hero-logo" }, Icons.logo()), h("h2", {}, "Mach mit bei Nex"), h("p", { class: "dialog-text" }, message || "Melde dich an, um das zu tun."),
       h("div", { class: "hero-actions" }, h("button", { class: "btn primary", type: "button", onclick: go("/i/signup") }, "Konto erstellen"), h("button", { class: "btn ghost", type: "button", onclick: go("/i/login") }, "Anmelden"))) });
     return false;
   };

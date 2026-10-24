@@ -1,4 +1,4 @@
-/* Pulse new post (yipi-newpost.js): what happens when somebody taps the "+" -- a small pop-up (it pops open) asks "Beitrag" or "Video".
+/* Nex new post (yipi-newpost.js): what happens when somebody taps the "+" -- a small pop-up (it pops open) asks "Beitrag" or "Video".
    "Beitrag" opens the template for a post (the field "Text" at the top, photos, GIF or a poll below it, and hashtags that are added one by one
    and shown in light pink); "Video" opens the template for a video (the name is required, then the video itself, at most 30 seconds, then
    hashtags; the upload shows how far it has come). */

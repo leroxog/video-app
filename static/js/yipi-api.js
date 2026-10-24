@@ -1,4 +1,4 @@
-/* Pulse api (the file keeps the name yipi-api.js): the calls to the server (/api/yipi/...). Every call answers {ok, status, data}; with no connection it answers
+/* Nex api (the file keeps the name yipi-api.js): the calls to the server (/api/yipi/...). Every call answers {ok, status, data}; with no connection it answers
    {ok: false, offline: true, data: {error: "network"}} instead of throwing. `YipiApi.message(reply)` is the German sentence
    for what went wrong. */
 (function () {
@@ -19,11 +19,11 @@
     duplicate: "Das hast du gerade schon gepostet.",
     bad_media: "Mit den Bildern stimmt etwas nicht.",
     too_many_stories: "Du hast schon 30 Stories. Lösche eine oder warte, bis eine abläuft.",
-    bad_image: "Das ist kein Foto, das Pulse kennt (JPEG, PNG, GIF oder WebP).",
+    bad_image: "Das ist kein Foto, das Nex kennt (JPEG, PNG, GIF oder WebP).",
     too_big: "Das Foto ist zu groß (höchstens 5 MB).",
     no_file: "Es wurde keine Datei gesendet.",
     no_video: "In ein GIF der Bibliothek gehört kein Video.",
-    bad_video: "Dieses Video kann nicht abgespielt werden. Pulse nimmt MP4-, MOV- und WebM-Videos.",
+    bad_video: "Dieses Video kann nicht abgespielt werden. Nex nimmt MP4-, MOV- und WebM-Videos.",
     video_too_big: "Das Video ist zu groß (höchstens 25 MB).",
     video_too_long: "Das Video ist zu lang (höchstens 30 Sekunden).",
     bad_attachment: "Diese Datei kann nicht gesendet werden (Foto, Video, PDF, Text oder Office-Dokument).",
@@ -50,8 +50,8 @@
     bad_password: "Das Passwort braucht mindestens 8 Zeichen.",
     need_age: "Du musst bestätigen, dass du mindestens 16 Jahre alt bist (oder die Erlaubnis deiner Eltern hast).",
     bad_birthday: "Dieses Datum gibt es nicht. Prüfe Tag, Monat und Jahr.",
-    too_young: "Pulse ist erst ab 13 Jahren. Komm gern später wieder.",
-    need_parents: "Unter 16 geht Pulse nur mit der Erlaubnis deiner Eltern.",
+    too_young: "Nex ist erst ab 13 Jahren. Komm gern später wieder.",
+    need_parents: "Unter 16 geht Nex nur mit der Erlaubnis deiner Eltern.",
     bad_phone: "Das sieht nicht wie eine Telefonnummer aus. Schreib sie mit Vorwahl, zum Beispiel 151 12345678.",
     phone_taken: "Mit dieser Telefonnummer gibt es schon ein Konto.",
     google_expired: "Die Anmeldung mit Google ist abgelaufen. Tippe noch einmal auf „Mit Google“.",
@@ -67,7 +67,7 @@
     accept_first: "Nimm die Anfrage zuerst an, dann kannst du antworten.",
     request_pending: "Deine Nachricht ist eine Anfrage. Du kannst weiterschreiben, sobald die Person sie annimmt.",
     bad_reason: "Bitte wähle einen Grund.",
-    bad_action: "Das kennt Pulse nicht.",
+    bad_action: "Das kennt Nex nicht.",
     bad_poll: "Mit der Umfrage stimmt etwas nicht: sie braucht zwei bis vier verschiedene Antworten.",
     poll_text: "Schreib zur Umfrage eine Frage.",
     poll_closed: "Diese Umfrage ist schon beendet.",

@@ -1,4 +1,4 @@
-/* Pulse progress (yipi-progress.js): what makes you come back tomorrow -- the streak of days in a row (the flame on Home), the level with its
+/* Nex progress (yipi-progress.js): what makes you come back tomorrow -- the streak of days in a row (the flame on Home), the level with its
    bar and the badges (one tap on the flame), a toast when you reach a new level or when your streak grows, the lists of the best players of a
    game (with a tab for friends), and notifications on the device (Web Push, switched on in the settings). The numbers come from the server
    (/api/yipi/progress); the page only remembers the last level and the last day it announced (localStorage "yipi.progress"). */
@@ -163,9 +163,9 @@
       const state = await push.state();
       toggle.checked = state === "on";
       toggle.disabled = state === "unsupported" || state === "blocked";
-      note.textContent = state === "unsupported" ? "Dieser Browser kann keine Mitteilungen anzeigen. Auf dem iPhone geht es erst, wenn du Pulse zum Home-Bildschirm hinzugefügt hast."
+      note.textContent = state === "unsupported" ? "Dieser Browser kann keine Mitteilungen anzeigen. Auf dem iPhone geht es erst, wenn du Nex zum Home-Bildschirm hinzugefügt hast."
         : state === "blocked" ? "Du hast Mitteilungen für diese Seite im Browser blockiert. Erlaube sie in den Einstellungen der Seite."
-          : "Du bekommst eine Mitteilung bei Likes, Antworten, neuen Followern und Nachrichten, auch wenn Pulse zu ist. Den Text einer Nachricht enthält sie nie.";
+          : "Du bekommst eine Mitteilung bei Likes, Antworten, neuen Followern und Nachrichten, auch wenn Nex zu ist. Den Text einer Nachricht enthält sie nie.";
     }
     toggle.addEventListener("change", async () => {
       toggle.disabled = true;
@@ -181,7 +181,7 @@
   /* A card on the notifications page that asks once, while the browser has not been asked yet. */
   async function pushInvite() {
     if (!Y.me || !push.supported() || Notification.permission !== "default") return null;
-    const card = h("div", { class: "push-invite" }, icon("bell"), h("div", {}, h("b", {}, "Nichts mehr verpassen"), h("small", {}, "Mitteilungen auf dieses Gerät, auch wenn Pulse zu ist.")));
+    const card = h("div", { class: "push-invite" }, icon("bell"), h("div", {}, h("b", {}, "Nichts mehr verpassen"), h("small", {}, "Mitteilungen auf dieses Gerät, auch wenn Nex zu ist.")));
     const go = h("button", { class: "btn primary small", type: "button" }, "Einschalten");
     go.addEventListener("click", async () => {
       go.disabled = true;

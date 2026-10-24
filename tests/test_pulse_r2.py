@@ -1,4 +1,4 @@
-"""Pulse: files in Cloudflare R2.  R2 is replaced by a small fake that keeps the files in a dict (and is told when something is deleted), so the tests need no account.
+"""Nex: files in Cloudflare R2.  R2 is replaced by a small fake that keeps the files in a dict (and is told when something is deleted), so the tests need no account.
 
 What is checked: without the R2 variables nothing changes; with them a new photo, video, chat file or GIF goes to R2 and the row keeps only a note; the
 browser is sent to a signed address (a chat file only after the check that the person may see it); deleting a post, an account or a GIF removes the files

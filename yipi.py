@@ -1,4 +1,4 @@
-"""Pulse (internally still called "yipi": the module, the tables, the cookie and the /api/yipi/ addresses keep that name so that
+"""Nex (formerly Pulse; internally still called "yipi": the module, the tables, the cookie and the /api/yipi/ addresses keep that name so that
 nothing that already exists breaks): a short-post social network (all code, texts and artwork are original; it works like the
 well-known microblogs, but nothing here is copied from any of them).  Since 2026-10-17 it is the home page of the whole site.
 
@@ -147,13 +147,13 @@ def content_security_policy():
     return CONTENT_SECURITY_POLICY.replace("img-src 'self' data: blob:", f"img-src 'self' data: blob: {host}").replace("media-src 'self' blob:", f"media-src 'self' blob: {host}")
 
 
-SITE_NAME = "Pulse"
+SITE_NAME = "Nex"
 # What goes with a link that somebody sends (the preview of the link says it, and so do the messages and the share sheet of the page).
-SHARE_SITE = "Ich habe Pulse gefunden!!!!"
-SHARE_VIDEO = "Ich habe ein tolles Video auf Pulse gefunden willst du es auch sehen?!"
-SHARE_POST = "Ich habe einen tollen Beitrag auf Pulse gefunden willst du ihn auch sehen?!"
+SHARE_SITE = "Ich habe Nex gefunden!!!!"
+SHARE_VIDEO = "Ich habe ein tolles Video auf Nex gefunden willst du es auch sehen?!"
+SHARE_POST = "Ich habe einen tollen Beitrag auf Nex gefunden willst du ihn auch sehen?!"
 POST_PATH_RE = re.compile(r"/([A-Za-z0-9_]{3,15})/status/(\d{1,19})")
-DESCRIPTION = "Pulse: Was gerade passiert. Kurze Beiträge, Fotos und GIFs, Antworten, Reposts und Likes, dazu Nex, die KI, die dir weiterhilft."
+DESCRIPTION = "Nex: Was gerade passiert. Kurze Beiträge, Fotos und GIFs, Antworten, Reposts und Likes, dazu Nex AI, die KI, die dir weiterhilft."
 # Old home pages of the site that stay reachable but are not for search engines.
 ARCHIVE_PATHS = ("/nex-agenten-archiv", "/gomat-archiv", "/ysound-archiv", "/sound-archiv", "/server-archiv", "/browser-archiv", "/ylib-archiv", "/ychat-archiv", "/nex-archiv", "/modelle-archiv", "/nex-ai-archiv", "/nstl-archiv")
 PRIVATE_PATHS = ("/i/", "/g/", "/games/", "/camera", "/search", "/messages", "/notifications", "/bookmarks", "/settings", "/moderation")   # not for search engines
@@ -185,7 +185,7 @@ class YipiUser(db.Model):
     email = db.Column(db.String(254), unique=True, nullable=True)
     phone = db.Column(db.String(16), unique=True, nullable=True)               # "+491511234567": a way to sign in (nothing is sent to it, so it is not confirmed)
     google_sub = db.Column(db.String(40), unique=True, nullable=True)          # the id Google gave this person when they signed in with Google
-    streak = db.Column(db.Integer, nullable=False, default=0)                  # days in a row on which the person was on Pulse
+    streak = db.Column(db.Integer, nullable=False, default=0)                  # days in a row on which the person was on Nex
     streak_best = db.Column(db.Integer, nullable=False, default=0)
     last_day = db.Column(db.String(10), nullable=True)                         # the last day (UTC, "2026-10-21") that counted for the streak
     password_hash = db.Column(db.String(255), nullable=False)
@@ -839,12 +839,12 @@ def gif_info(data):
 
 NEX_MAX_TOKENS = 900                              # the model reasons before it writes: a small number would leave nothing visible
 NEX_PROMPT = (
-    "Du bist Nex, die KI von Pulse, einer Plattform für kurze Beiträge. Du antwortest dem Nutzer, der gerade mit dir schreibt. "
+    "Du bist Nex AI, die KI der Plattform Nex für kurze Beiträge. Du antwortest dem Nutzer, der gerade mit dir schreibt. "
     "Das Gespräch steht unten; schreib nur die nächste Antwort von Nex. Antworte kurz, klar und freundlich, in der Sprache des Nutzers "
     "(meist Deutsch), in normalem Text ohne Sternchen, ohne Überschriften und ohne Tabellen; für Aufzählungen nimm einfache Zeilen mit "
     "'- '. Entscheide dich für die wahrscheinlichste Deutung, statt nachzufragen. Wenn du etwas nicht sicher weißt, sag es offen. "
     "Du hilfst beim Schreiben von Beiträgen (höchstens 280 Zeichen), erklärst Beiträge und beantwortest Fragen. Du kannst keine Seiten "
-    "öffnen und nichts in Pulse ändern. Gib nie Medizin-, Rechts- oder Finanzberatung als sicher aus."
+    "öffnen und nichts in Nex ändern. Gib nie Medizin-, Rechts- oder Finanzberatung als sicher aus."
 )
 
 
@@ -876,7 +876,7 @@ def starter_id(slug):
 
 
 def starter_index():
-    """The GIFs that ship with the site: the ones Pulse drew itself (static/gifs/index.json) and the freely licensed ones from Wikimedia Commons
+    """The GIFs that ship with the site: the ones Nex drew itself (static/gifs/index.json) and the freely licensed ones from Wikimedia Commons
     (static/gifs/cc/index.json, collected by scripts/fetch_cc_gifs.py; the page /bildnachweise credits them)."""
     if not _starters:
         for folder in ("", "cc"):
@@ -1271,7 +1271,7 @@ def notify(user_id, actor, kind, post_id=None):
     db.session.add(YipiNotification(user_id=user_id, actor_id=actor.id, kind=kind, post_id=post_id))
     db.session.flush()
     where = f"/{actor.handle}" if kind == "follow" else f"/{actor.handle}/status/{post_id}" if post_id else "/notifications"      # (a post opens under any name: the page finds its author)
-    push_later(user_id, "Pulse", PUSH_KINDS[kind].format(name=actor.name), where, tag=f"{kind}-{actor.id}")
+    push_later(user_id, "Nex", PUSH_KINDS[kind].format(name=actor.name), where, tag=f"{kind}-{actor.id}")
 
 
 def bump(model, row_id, column, amount):
@@ -1482,7 +1482,7 @@ def page_meta(path, guest=False):
     if path == "/camera" or path.startswith("/camera/"):          # (these look like a profile address, so they are answered first)
         return f"Kamera und Games auf {SITE_NAME}", "Spiele vor deiner Selfie-Kamera: das Spiel wird mit dir aufgenommen, und du kannst den Clip posten oder an Freunde schicken."
     if path == "/videos":
-        return f"Videos auf {SITE_NAME}: kommt bald", "Kurze Videos auf Pulse. Kommt bald!"
+        return f"Videos auf {SITE_NAME}: kommt bald", "Kurze Videos auf Nex. Kommt bald!"
     match = re.fullmatch(r"/([A-Za-z0-9_]{3,15})(?:/status/(\d+))?", path)
     if match:
         user = YipiUser.query.filter_by(handle_lc=match.group(1).lower()).first()
@@ -1496,7 +1496,7 @@ def page_meta(path, guest=False):
                 title = f"{user.name} (@{user.handle}) auf {SITE_NAME}"
                 description = user.bio or f"Die neuesten Beiträge von @{user.handle}."
     elif path == "/i/nex":
-        title, description = f"Nex auf {SITE_NAME}", "Nex ist die KI von Pulse: frag sie etwas, lass dir einen Beitrag erklären oder dir beim Schreiben helfen."
+        title, description = f"Nex AI auf {SITE_NAME}", "Nex AI ist die KI der Plattform: frag sie etwas, lass dir einen Beitrag erklären oder dir beim Schreiben helfen."
     return title, description
 
 
@@ -1736,7 +1736,7 @@ def register_routes(app):
             if request.method not in ("GET", "HEAD") and not same_origin():
                 return fail("forbidden", 403)
             if request.endpoint not in OPEN_ENDPOINTS and current_user() is None:
-                return fail("not_logged_in", 401)             # nothing of Pulse is for somebody who is not signed in
+                return fail("not_logged_in", 401)             # nothing of Nex is for somebody who is not signed in
 
     app.before_request(api_guard)
 
@@ -1987,9 +1987,9 @@ def register_routes(app):
         xp = user.posts_count * 10 + int(likes) * 2 + user.followers_count * 5 + user.following_count + (user.streak_best or 0) * 10 + int(plays) * 2 + friends * 5 + videos * 10
         level, floor, ceiling = level_of(xp)
         badges = [
-            ("first-post", "Hallo Pulse", "Dein erster Beitrag", "✍️", 1, user.posts_count), ("likes-10", "Beliebt", "10 Likes für deine Beiträge", "❤️", 10, int(likes)),
+            ("first-post", "Hallo Nex", "Dein erster Beitrag", "✍️", 1, user.posts_count), ("likes-10", "Beliebt", "10 Likes für deine Beiträge", "❤️", 10, int(likes)),
             ("likes-100", "Star", "100 Likes für deine Beiträge", "🌟", 100, int(likes)), ("followers-10", "Netzwerker", "10 Follower", "👥", 10, user.followers_count),
-            ("friends-5", "Freundeskreis", "5 Freunde (ihr folgt euch gegenseitig)", "🤝", 5, friends), ("streak-3", "Dranbleiber", "3 Tage in Folge auf Pulse", "🔥", 3, user.streak_best or 0),
+            ("friends-5", "Freundeskreis", "5 Freunde (ihr folgt euch gegenseitig)", "🤝", 5, friends), ("streak-3", "Dranbleiber", "3 Tage in Folge auf Nex", "🔥", 3, user.streak_best or 0),
             ("streak-7", "Wochenserie", "7 Tage in Folge", "🔥", 7, user.streak_best or 0), ("streak-30", "Feuerzeug", "30 Tage in Folge", "🏆", 30, user.streak_best or 0),
             ("video", "Filmemacher", "Dein erstes Video", "🎬", 1, int(videos)), ("plays-10", "Spieler", "10 Runden in der Kamera gespielt", "🎮", 10, int(plays)),
             ("games-5", "Allrounder", "5 verschiedene Spiele probiert", "🎯", 5, games), ("chatter", "Plauderer", "50 Nachrichten geschickt", "💬", 50, sent),
@@ -3459,7 +3459,7 @@ def register_routes(app):
             bump(PulseGif, gif_id, PulseGif.uses, 1)
         db.session.commit()
         for other_member in YipiGroupMember.query.filter(YipiGroupMember.group_id == group.id, YipiGroupMember.user_id != user.id).all():
-            push_later(other_member.user_id, "Pulse", f"{user.name} in „{group.name}“", f"/g/{group.id}", tag=f"group-{group.id}")
+            push_later(other_member.user_id, "Nex", f"{user.name} in „{group.name}“", f"/g/{group.id}", tag=f"group-{group.id}")
         return jsonify({"ok": True, "message": group_message_json(row, {user.id: user}, gifs, user, {stored.id: stored} if stored else None)}), 201
 
     @route("/api/yipi/groups/<int(min=1, max=2147483647):group_id>/poll")
@@ -3608,7 +3608,7 @@ def register_routes(app):
         if gif_id:
             bump(PulseGif, gif_id, PulseGif.uses, 1)
         db.session.commit()
-        push_later(other.id, "Pulse", f"{user.name} hat dir geschrieben", f"/messages/{user.handle}", tag=f"dm-{user.id}")
+        push_later(other.id, "Nex", f"{user.name} hat dir geschrieben", f"/messages/{user.handle}", tag=f"dm-{user.id}")
         return jsonify({"ok": True, "message": message_json(message, gifs, True, favorite_ids(user, [gif_id]), {stored.id: stored} if stored else None), "gate": dm_gate(user, other)}), 201
 
     @route("/api/yipi/messages/<handle>/poll")

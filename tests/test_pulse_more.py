@@ -1,4 +1,4 @@
-"""Pulse, the second round (2026-10-17 evening): polls, the counter of views, the lists of who liked or reposted, pinning a post to the profile,
+"""Nex, the second round (2026-10-17 evening): polls, the counter of views, the lists of who liked or reposted, pinning a post to the profile,
 search sorted by "Top" or only for media, the media feed and bigger lists of Explore, and removing all bookmarks at once. The first round (pages,
 no videos, GIFs, Nex) is in test_pulse.py."""
 import io

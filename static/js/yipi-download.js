@@ -1,4 +1,4 @@
-/* Pulse video download (yipi-download.js): "Video speichern" -- like on TikTok the saved video carries a watermark, the Pulse logo with the name of
+/* Nex video download (yipi-download.js): "Video speichern" -- like on TikTok the saved video carries a watermark, the Nex logo with the name of
    whoever made it (@name). It first sits in the top left corner, in the second half it slides over to the bottom right one. The server sends the
    file as it is; the page plays it once (as fast as it is long), draws every picture together with the watermark on a canvas and records that with
    the recorder of the browser, with the sound of the video. Nothing leaves the device. While it works a small card shows how far it is and has a
@@ -32,7 +32,7 @@
     ctx.closePath();
   }
 
-  /* The watermark: the black tile with the heartbeat, "Pulse" and "@name" next to it. */
+  /* The watermark: the black tile with the heartbeat, "Nex" and "@name" next to it. */
   function drawMark(ctx, plan, handle, logo) {
     const tile = plan.h;
     const left = plan.x + tile * 1.16;
@@ -63,7 +63,7 @@
     ctx.textBaseline = "alphabetic";
     let size = tile * 0.5;
     ctx.font = `800 ${size}px ${FONT}`;
-    ctx.fillText("Pulse", left, plan.y + tile * 0.47);
+    ctx.fillText("Nex", left, plan.y + tile * 0.47);
     size = tile * 0.34;
     ctx.font = `700 ${size}px ${FONT}`;
     const text = `@${handle}`;

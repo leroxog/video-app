@@ -1,4 +1,4 @@
-"""Pulse (the home page since 2026-10-17, built on yipi): the pages around it (home, archives, manifest, robots), no videos, the GIF library
+"""Nex (the home page since 2026-10-17, built on yipi): the pages around it (home, archives, manifest, robots), no videos, the GIF library
 (listing, search, favourites, making, using, deleting, reporting, sending in a message), and Nex, the assistant. The rest of the app (accounts,
 posts, feeds, ...) is tested in test_yipi.py; the files the page is made of in test_yipi_frontend.py."""
 import io
@@ -88,7 +88,7 @@ def test_pulse_is_the_home_page_of_the_site(client):
     c = flask_app.test_client()
     r = c.get("/")
     text = r.get_data(as_text=True)
-    assert r.status_code == 200 and "<title>Pulse: was gerade passiert</title>" in text and 'id="yipiBoot"' in text
+    assert r.status_code == 200 and "<title>Nex: was gerade passiert</title>" in text and 'id="yipiBoot"' in text
     assert 'rel="canonical" href="http://localhost/"' in text and 'href="/manifest.webmanifest"' in text and 'content="noindex"' not in text
     assert "pulse-icon.svg" in text and "yipi-icon.svg" not in text and "Set-Cookie" not in r.headers
     assert "script-src 'self'" in r.headers["Content-Security-Policy"] and "connect-src 'self'" in r.headers["Content-Security-Policy"]
@@ -125,7 +125,7 @@ def test_the_old_chat_address_opens_nex_inside_pulse(client):
 def test_the_manifest_is_the_one_of_pulse(client):
     r = flask_app.test_client().get("/manifest.webmanifest")
     data = json.loads(r.get_data(as_text=True))
-    assert r.mimetype == "application/manifest+json" and data["name"].startswith("Pulse") and data["short_name"] == "Pulse"
+    assert r.mimetype == "application/manifest+json" and data["name"].startswith("Nex") and data["short_name"] == "Nex"
     assert data["start_url"] == "/" and data["scope"] == "/" and data["orientation"] == "any" and data["theme_color"] == "#ffffff"
     assert {icon["purpose"] for icon in data["icons"]} == {"any", "maskable"}
     for icon in data["icons"]:
@@ -141,21 +141,21 @@ def test_robots_and_sitemap_name_the_archives_and_the_private_parts(client):
     assert "<loc>http://localhost/</loc>" in c.get("/sitemap.xml").get_data(as_text=True)
 
 
-def test_link_previews_name_pulse(client):
+def test_link_previews_name_the_site(client):
     mia = person("mia")
     page = mia.get("/mia").get_data(as_text=True)
-    assert "<title>mia (@mia) auf Pulse</title>" in page
-    assert "Nex auf Pulse" in mia.get("/i/nex").get_data(as_text=True)
-    assert "<title>mia (@mia) auf Pulse</title>" not in flask_app.test_client().get("/mia").get_data(as_text=True), "a guest learns nothing about a profile"
+    assert "<title>mia (@mia) auf Nex</title>" in page
+    assert "Nex AI auf Nex" in mia.get("/i/nex").get_data(as_text=True)
+    assert "<title>mia (@mia) auf Nex</title>" not in flask_app.test_client().get("/mia").get_data(as_text=True), "a guest learns nothing about a profile"
 
 
 def test_the_error_and_legal_pages_are_pulse_too(client):
     c = flask_app.test_client()
     missing = c.get("/gibt-es-wirklich-nicht")
-    assert missing.status_code == 404 and "| Pulse</title>" in missing.get_data(as_text=True) and "yipi.css" in missing.get_data(as_text=True)
+    assert missing.status_code == 404 and "| Nex</title>" in missing.get_data(as_text=True) and "yipi.css" in missing.get_data(as_text=True)
     for path, words in (("/nutzungsbedingungen", ("GIF-Bibliothek", "Nex", "nex-agenten-archiv")), ("/datenschutz", ("yipi.nex", "Groq", "GIFs")), ("/impressum", ("§ 5 DDG", "GIFs"))):
         text = c.get(path).get_data(as_text=True)
-        assert "| Pulse</title>" in text, path
+        assert "| Nex</title>" in text, path
         for word in words:
             assert word in text, (path, word)
 
@@ -583,7 +583,7 @@ def test_nex_gets_its_own_instruction_and_the_conversation(client, monkeypatch):
     ask(mia, messages=[{"role": "user", "content": "Hi"}, {"role": "assistant", "content": "Hallo, ich bin Nex."}, {"role": "user", "content": "Wer bist du?"}])
     assert len(seen) == 1 and seen[0]["system"] == yipi.NEX_PROMPT and seen[0]["max_tokens"] == yipi.NEX_MAX_TOKENS >= 600
     assert seen[0]["message"] == "Nutzer: Hi\n\nNex: Hallo, ich bin Nex.\n\nNutzer: Wer bist du?"
-    assert "Nex" in yipi.NEX_PROMPT and "Pulse" in yipi.NEX_PROMPT and "Agent" not in yipi.NEX_PROMPT and "In Bearbeitung" not in yipi.NEX_PROMPT
+    assert "Nex" in yipi.NEX_PROMPT and "Nex" in yipi.NEX_PROMPT and "Agent" not in yipi.NEX_PROMPT and "In Bearbeitung" not in yipi.NEX_PROMPT
 
 
 def test_nex_only_takes_real_turns_the_last_ones_and_a_question_at_the_end(client, monkeypatch):

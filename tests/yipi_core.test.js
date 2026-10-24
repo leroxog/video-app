@@ -379,11 +379,11 @@ test("the watermark has the same size relative to the shorter side, wide or tall
 });
 
 test("a saved video is called pulse-name with the ending of the recording", () => {
-  assert.equal(core.videoFileName("mia_1", "video/webm;codecs=vp9,opus"), "pulse-mia_1.webm");
-  assert.equal(core.videoFileName("Tom", "video/mp4"), "pulse-Tom.mp4");
-  assert.equal(core.videoFileName("../../x y", ""), "pulse-xy.webm", "nothing but letters, digits and underscores");
-  assert.equal(core.videoFileName("", "video/webm"), "pulse-video.webm");
-  assert.equal(core.videoFileName(null, undefined), "pulse-video.webm");
+  assert.equal(core.videoFileName("mia_1", "video/webm;codecs=vp9,opus"), "nex-mia_1.webm");
+  assert.equal(core.videoFileName("Tom", "video/mp4"), "nex-Tom.mp4");
+  assert.equal(core.videoFileName("../../x y", ""), "nex-xy.webm", "nothing but letters, digits and underscores");
+  assert.equal(core.videoFileName("", "video/webm"), "nex-video.webm");
+  assert.equal(core.videoFileName(null, undefined), "nex-video.webm");
 });
 
 // ------------------------------------------------------------------------------------------ push key and game of the day

@@ -1,4 +1,4 @@
-"""The login wall (2026-10-18): somebody who is not signed in sees nothing of Pulse but the page to sign in. The pages answer with the same
+"""The login wall (2026-10-18): somebody who is not signed in sees nothing of Nex but the page to sign in. The pages answer with the same
 page for every address (without anything about the profile or the post that was asked for), and every call of the API except the ones to
 sign up, sign in, sign out, ask who is signed in and check a name answers "not_logged_in"."""
 import os
@@ -74,10 +74,10 @@ def test_every_address_gives_a_guest_the_same_page_without_anything_about_it(cli
     for text in pages:
         assert "Geheimer Satz" not in text and "(@mia)" not in text
         assert '"me": null' in text.replace('"me":null', '"me": null')
-    assert "<title>Pulse" in pages[0] and 'content="noindex"' not in pages[0]
+    assert "<title>Nex" in pages[0] and 'content="noindex"' not in pages[0]
     assert all('content="noindex"' in text for text in pages[1:])
     assert 'content="noindex"' not in mia.get("/mia").get_data(as_text=True)
-    assert "(@mia) auf Pulse" in mia.get("/mia").get_data(as_text=True)
+    assert "(@mia) auf Nex" in mia.get("/mia").get_data(as_text=True)
     assert guest.get("/gibt-es-nicht-oder-doch").status_code == 404 and guest.get("/nobody").status_code == 404
 
 
