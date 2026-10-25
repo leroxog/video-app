@@ -172,7 +172,7 @@
           e.text("Tippen!", W / 2, 210, { size: 38 });
           Art.sprite(g, "👆", W / 2, 270 + Math.sin(t * 6) * 8, 40);
         } else {
-          e.text(String(passed), W / 2, 70, { size: 52 });
+          e.text(String(passed), W / 2, 128, { size: 52 });
         }
       },
     };
