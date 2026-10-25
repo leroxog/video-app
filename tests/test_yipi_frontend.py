@@ -258,7 +258,7 @@ def test_every_theme_defines_the_same_colours():
 
 def test_every_animation_has_its_keyframes():
     keyframes = set(re.findall(r"@keyframes\s+([\w-]+)", CSS))
-    assert keyframes == {"spin", "fade", "pop", "shimmer", "toast-in", "drop", "blink", "sheet", "drawer-in", "bloop", "burst", "bit", "slide-in", "slide-back", "cam-pop", "cam-shake", "cam-nudge"}
+    assert keyframes == {"spin", "fade", "pop", "shimmer", "toast-in", "drop", "blink", "sheet", "drawer-in", "bloop", "burst", "bit", "slide-in", "slide-back", "cam-pop", "cam-shake", "cam-nudge", "try-shimmer"}
     for name in keyframes:
         assert re.search(rf"animation:[^;]*\b{name}\b", CSS), f"{name} is defined but never used"
     for declaration in re.findall(r"animation:\s*([a-z][\w-]*)", CSS):
@@ -429,10 +429,12 @@ def test_the_bar_at_the_top_has_the_picture_the_lettering_nex_and_in_landscape_t
 def test_the_look_is_white_by_default_and_the_symbols_are_round():
     assert 'var choice = "light";' in read("static/js/yipi-theme.js") and 'let choice = "light";' in JS["yipi.js"]
     assert 'localStorage.getItem("yipi.theme") || "light"' in JS["yipi-pages.js"]
-    for symbol in ("plane", "planeFill", "cameraFill", "videoFill", "sponsor"):
+    for symbol in ("plane", "planeFill", "cameraFill", "videoFill", "plusCircle", "sponsor"):
         assert f"{symbol}: S(" in JS["yipi-icons.js"], symbol
     assert ".cut { stroke: var(--bg); }" in CSS and ".tab-item.active { color: var(--text); }" in CSS
-    assert "border-radius: 14px" in CSS.split(".plus-tab .tab-ic {")[1].split("}")[0], "the plus is a rounded square like on Snapchat"
+    plus = CSS.split(".plus-tab .tab-ic {")[1].split("}")[0]
+    assert "background: none" in plus and 'icon: "plusCircle"' in JS["yipi.js"], "the plus is a circle with a plus like the other four symbols of the bar (thick grey outlines)"
+    assert "stroke-width: 2.4px" in CSS and "--tab-off: #d2d2d2" in CSS, "the same thick line and light grey on black"
 
 
 def test_the_boxes_gesponsert_are_where_the_advertisements_will_go():

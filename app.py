@@ -285,7 +285,8 @@ def ensure_sqlite_columns_exist():
         "yipi_media": [("gif_id", "VARCHAR(32)"), ("stored", "VARCHAR(4) NOT NULL DEFAULT 'db'")],
         "yipi_file": [("stored", "VARCHAR(4) NOT NULL DEFAULT 'db'")],
         "pulse_gif": [("stored", "VARCHAR(4) NOT NULL DEFAULT 'db'")],
-        "yipi_user": [("pinned_post_id", "BIGINT"), ("phone", "VARCHAR(16)"), ("google_sub", "VARCHAR(40)"), ("streak", "INTEGER NOT NULL DEFAULT 0"), ("streak_best", "INTEGER NOT NULL DEFAULT 0"), ("last_day", "VARCHAR(10)")],
+        "yipi_user": [("pinned_post_id", "BIGINT"), ("phone", "VARCHAR(16)"), ("google_sub", "VARCHAR(40)"), ("streak", "INTEGER NOT NULL DEFAULT 0"), ("streak_best", "INTEGER NOT NULL DEFAULT 0"), ("last_day", "VARCHAR(10)"), ("agent_kind", "INTEGER"), ("hide_ai", "BOOLEAN NOT NULL DEFAULT 0")],
+        "yipi_post": [("cam_id", "VARCHAR(24)")],
     }
     with db.engine.connect() as conn:
         for table, columns in wanted.items():
@@ -398,6 +399,11 @@ def ensure_columns_exist():
         "ALTER TABLE yipi_user ADD COLUMN IF NOT EXISTS streak INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE yipi_user ADD COLUMN IF NOT EXISTS streak_best INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE yipi_user ADD COLUMN IF NOT EXISTS last_day VARCHAR(10)",
+        # Nex (2026-10-24): the AI accounts (agent_kind = which kind of account) and the switch to hide them.
+        "ALTER TABLE yipi_user ADD COLUMN IF NOT EXISTS agent_kind INTEGER",
+        "ALTER TABLE yipi_user ADD COLUMN IF NOT EXISTS hide_ai BOOLEAN NOT NULL DEFAULT FALSE",
+        "CREATE INDEX IF NOT EXISTS ix_yipi_user_agent_kind ON yipi_user (agent_kind)",
+        "ALTER TABLE yipi_post ADD COLUMN IF NOT EXISTS cam_id VARCHAR(24)",
     ]
     with db.engine.connect() as conn:
         for statement in statements:

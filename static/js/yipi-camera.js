@@ -1,5 +1,5 @@
 /* Nex camera (yipi-camera.js): the camera tab, made like the camera of Snapchat. The front camera fills the screen (you see yourself), at the bottom
-   a row of "lenses" -- each lens is a small game. Tap the one in the middle and the game starts on top of your picture, and the recording starts
+   a row of "lenses": face lenses (masks and funny faces that follow your face, pl-face.js), the QR code, and small games. Tap the one in the middle and the game starts on top of your picture, and the recording starts
    with it: the camera, the game and your voice, up to 30 seconds. When the game is over (or you stop it) you see the clip and can post it (the video
    template), send it to friends, save it or throw it away. The games are in a second file (pg-*.js), loaded when this page opens. Without a camera
    (or without permission) the games run on a dark background, and the recording still works. Nothing is sent anywhere until you choose to. */
@@ -73,7 +73,8 @@
     const bottom = h("div", { class: "cam-bottom" }, lensName, lensHint, lensBar);
     const review = h("div", { class: "cam-review", hidden: true });
     const loadingBox = h("div", { class: "cam-loading" }, Y.pulseLoader({ compact: true }), h("span", {}, "Die Spiele werden geladen …"));
-    const el = h("div", { class: "view cam-view" }, stage, top, nocam, bottom, review, loadingBox);
+    const note = h("div", { class: "cam-note", role: "status", hidden: true });                  // "Linse wird geladen ...", "Schau in die Kamera"
+    const el = h("div", { class: "view cam-view" }, stage, top, nocam, note, bottom, review, loadingBox);
 
     let state = "idle";                                        // idle, starting, playing, over, review
     let dead = false;
@@ -90,6 +91,7 @@
     let recCanvas = null;
     let clip = null;                                           // {blob, url, name, score, game}
     let finalScore = 0;
+    let lens = null;                                           // the running face lens (a FaceLens of pl-face.js)
     const setState = (next) => { state = next; app.dataset.cam = next; el.dataset.state = next; };
     setState("idle");
 
@@ -136,13 +138,13 @@
       nocam.hidden = false;
     }
     nocam.addEventListener("click", () => openCamera());
-    board.addEventListener("click", () => { if (state === "idle" && list[active]) Y.leaderboard(list[active]); });
-    const todaysGame = () => list[Core.dailyIndex(new Date().toISOString().slice(0, 10), list.length)];
-    flip.addEventListener("click", () => { if (state !== "idle") return; facing = facing === "user" ? "environment" : "user"; openCamera(); });
+    board.addEventListener("click", () => { if (state === "idle" && list[active] && list[active].kind === "game") Y.leaderboard(list[active]); else if (state === "idle") toast("Eine Bestenliste gibt es nur bei Spielen."); });
+    const todaysGame = () => { const games = list.filter((entry) => entry.kind === "game"); return games[Core.dailyIndex(new Date().toISOString().slice(0, 10), games.length)]; };
+    flip.addEventListener("click", () => { if (state !== "idle") return; facing = facing === "user" ? "environment" : "user"; openCamera().then(() => lens?.setMirror(facing === "user")); });
 
     // ---------------------------------------------------------------------------------------------- the lenses
     function lensButton(game, index) {
-      const button = h("button", { class: "lens", type: "button", role: "option", "aria-selected": "false", "aria-label": `${game.name}: ${game.hint}`, "data-id": game.id },
+      const button = h("button", { class: `lens${game.kind === "create" ? " create" : ""}${game.kind === "lens" ? " face" : ""}`, type: "button", role: "option", "aria-selected": "false", "aria-label": `${game.name}: ${game.hint}`, "data-id": game.id },
         h("span", { class: "lens-ic", style: game.color ? `background:${game.color}` : "" }, h("span", { class: "lens-emoji", "aria-hidden": "true" }, game.emoji)));
       button.addEventListener("click", () => {
         if (state !== "idle") return;
@@ -156,7 +158,7 @@
       const first = lensBar.children[0];
       if (!first) return;
       const middle = lensBar.scrollLeft + lensBar.clientWidth / 2;
-      const step = (lensBar.children[1] ? lensBar.children[1].offsetLeft - first.offsetLeft : first.offsetWidth) || 1;
+      const step = (lensBar.children[2] ? lensBar.children[2].offsetLeft - lensBar.children[1].offsetLeft : first.offsetWidth) || 1;
       for (const button of lensBar.children) {
         const away = Math.abs(button.offsetLeft + button.offsetWidth / 2 - middle) / step;
         const grow = Math.max(0.52, 1.18 - 0.3 * away);
@@ -174,7 +176,8 @@
       const game = list[active];
       if (game) {
         lastGame = game.id;
-        fill(lensName, h("b", {}, game.name), h("span", { class: "cam-lens-cat" }, game.cat), todaysGame() === game ? h("span", { class: "cam-daily" }, "Spiel des Tages") : null);
+        fill(lensName, h("b", {}, game.name), h("span", { class: "cam-lens-cat" }, game.cat), todaysGame() === game ? h("span", { class: "cam-daily" }, "Spiel des Tages") : null,
+          game.by ? h("span", { class: "cam-lens-by" }, `von @${game.by.handle}`) : null);
         lensHint.textContent = game.hint;
         schedulePreview();
       }
@@ -192,8 +195,14 @@
         scrollFrame = 0;
         const first = lensBar.children[0];
         if (!first || state !== "idle") return;
-        const step = (lensBar.children[1] ? lensBar.children[1].offsetLeft - first.offsetLeft : first.offsetWidth) || 1;
-        const index = Math.max(0, Math.min(list.length - 1, Math.round((lensBar.scrollLeft + lensBar.clientWidth / 2 - first.offsetWidth / 2 - first.offsetLeft) / step)));
+        const middle = lensBar.scrollLeft + lensBar.clientWidth / 2;
+        let index = 0;
+        let nearest = Infinity;
+        for (let i = 0; i < lensBar.children.length; i += 1) {                     // the lens whose middle is nearest to the middle of the strip
+          const button = lensBar.children[i];
+          const away = Math.abs(button.offsetLeft + button.offsetWidth / 2 - middle);
+          if (away < nearest) { nearest = away; index = i; }
+        }
         sizeLenses();
         if (index !== active) { active = index; paintActive(); }
       });
@@ -243,9 +252,12 @@
       if (dead || state !== "idle" || !list[active]) return;
       const game = list[active];
       const mine = ++previewId;
+      stopLens();
       runner?.destroy();
       runner = null;
       host.replaceChildren();
+      el.dataset.kind = game.kind || "game";
+      if (game.kind && game.kind !== "game") { showSpecial(game, mine); return; }
       chosen = game;
       finalScore = 0;
       score.textContent = "0";
@@ -283,8 +295,64 @@
       canvas.focus({ preventScroll: true });
     }
 
+    // ---------------------------------------------------------------------------------------------- face lenses, "create" and the QR code
+    const lensNote = (text) => { note.textContent = text || ""; note.hidden = !text; };
+    function stopLens() {
+      if (lens) { lens.stop(); lens = null; }
+      feed.style.filter = "";
+      lensNote("");
+    }
+    const filterCss = (item) => (window.PulseFace && window.PulseFace.filters[item.filter] ? window.PulseFace.filters[item.filter].css : "");
+
+    async function showSpecial(item, mine) {
+      chosen = item;
+      current = null;
+      finalScore = 0;
+      wantFace = false;
+      syncFace();
+      tapHint.hidden = item.kind !== "lens";
+      if (item.kind === "lens") await openLens(item, mine);
+      else if (item.kind === "create") Y.cameraCreate?.panel({ host, camera: api });
+      else if (item.kind === "qr") Y.cameraQr?.panel({ host, camera: api });
+    }
+
+    async function openLens(item, mine) {
+      const canvas = h("canvas", { class: "lens-canvas", "aria-hidden": "true" });
+      host.append(canvas);
+      lensNote("Gesichtserkennung wird geladen …");
+      try { await loadScript(assets.lens); } catch (error) { lensNote("Die Linsen konnten nicht geladen werden."); return; }
+      if (mine !== previewId || dead) return;
+      if (!stream) { lensNote("Für Linsen braucht Nex die Kamera."); return; }
+      feed.style.filter = filterCss(item);
+      lens = new window.PulseFace.FaceLens({ video: feed, canvas, mirror: facing === "user", recipe: item, onStatus(status) {
+        if (mine !== previewId) return;
+        lensNote(status === "ready" ? "" : status === "noface" ? "Schau in die Kamera" : status === "error" ? "Diese Linse läuft auf deinem Gerät nicht." : "Gesichtserkennung wird geladen …");
+      } });
+      lens.start();
+    }
+    stage.addEventListener("click", (event) => {
+      if (state === "idle" && chosen && chosen.kind === "lens" && !event.target.closest("button")) startLensRound();
+    });
+
+    /* A lens is recorded like a game, only without points: the first touch starts the clip (up to 30 seconds), the red button ends it. */
+    function startLensRound() {
+      if (state !== "idle" || !chosen || chosen.kind !== "lens") return;
+      setState("playing");
+      clearTimeout(previewTimer);
+      previewId += 1;
+      tapHint.hidden = true;
+      lensBarHide(true);
+      hud.hidden = false;
+      timeBar.style.width = "100%";
+      startRecording();
+      startedAt = performance.now();
+      clearInterval(timer);
+      timer = setInterval(tick, 100);
+    }
+
     /* The first touch on the picture: the round and the recording begin together, at once. */
     async function startRound() {
+      if (chosen && chosen.kind === "lens") { startLensRound(); return; }
       if (state !== "idle" || !chosen || !current) return;
       const game = chosen;
       const def = window.PulseGames.get(game.id);
@@ -321,6 +389,7 @@
       if (state !== "playing") return;
       setState("over");
       clearInterval(timer);
+      if (chosen.kind === "lens") { navigator.vibrate?.(30); stopRecording().then(showReview); return; }
       finalScore = Math.max(finalScore, Number.isFinite(value) ? value : 0);
       const top = remember(chosen.id, finalScore);
       host.classList.add("shake");
@@ -375,6 +444,7 @@
         const w = feed.videoWidth * scale;
         const hh = feed.videoHeight * scale;
         g.save();
+        if (feed.style.filter) g.filter = feed.style.filter;
         if (facing === "user") { g.translate(REC_W, 0); g.scale(-1, 1); }
         g.drawImage(feed, (REC_W - w) / 2, (REC_H - hh) / 2, w, hh);
         g.restore();
@@ -425,15 +495,17 @@
           g.stroke();
         }
       }
-      g.font = "800 64px system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
       g.textAlign = "center";
       g.textBaseline = "middle";
       g.lineWidth = 10;
       g.lineJoin = "round";
       g.strokeStyle = "rgba(0,0,0,0.7)";
-      g.strokeText(String(finalScore), REC_W / 2, 90);
       g.fillStyle = "#fff";
-      g.fillText(String(finalScore), REC_W / 2, 90);
+      if (!chosen || chosen.kind === "game") {
+        g.font = "800 64px system-ui, -apple-system, Segoe UI, Roboto, sans-serif";
+        g.strokeText(String(finalScore), REC_W / 2, 90);
+        g.fillText(String(finalScore), REC_W / 2, 90);
+      }
       g.font = "800 28px system-ui, sans-serif";
       g.textAlign = "right";
       g.strokeText("Nex", REC_W - 24, REC_H - 28);
@@ -453,6 +525,7 @@
     function endGame() {
       clearInterval(timer);
       cancelAnimationFrame(raf);
+      stopLens();
       runner?.destroy();
       runner = null;
       host.replaceChildren();
@@ -478,7 +551,7 @@
         action("refresh", "Nochmal", () => { discard(); backToLenses(); }),
         h("button", { class: "cam-send", type: "button", onclick: sendDialog }, icon("send"), h("span", {}, "Senden")),
         h("button", { class: "cam-post", type: "button", onclick: post }, icon("plus"), h("span", {}, "Posten")));
-      fill(review, video, h("div", { class: "cam-review-top" }, h("b", {}, clip.game.name), h("span", {}, points(clip.score))), bar);
+      fill(review, video, h("div", { class: "cam-review-top" }, h("b", {}, clip.game.kind === "lens" ? `${clip.game.emoji} ${clip.game.name}` : clip.game.name), clip.game.kind === "lens" ? null : h("span", {}, points(clip.score))), bar);
       review.hidden = false;
       setState("review");
       video.play().catch(() => {});
@@ -493,6 +566,7 @@
     function backToLenses() {
       lensBarHide(false);
       setState("idle");
+      el.dataset.kind = chosen ? chosen.kind || "game" : "game";
       go(active, false);
       requestAnimationFrame(sizeLenses);
     }
@@ -506,7 +580,7 @@
     function fileOf() { return new File([clip.blob], clip.name, { type: clip.blob.type || "video/webm" }); }
     function post() {
       const file = fileOf();
-      Y.composeVideo({ file });
+      Y.composeVideo({ file, camId: clip.game.id });                  // the post remembers the lens or game: "Ausprobieren" / "Mitspielen" under the video
     }
 
     /* "Senden": pick friends; the clip goes to each of them as a message with the video (a private file). */
@@ -526,7 +600,7 @@
           if (!up.ok) { toast(Api.message(up)); return false; }
           let sent = 0;
           for (const handle of chosenFriends) {
-            const message = await Api.post(`/messages/${handle}`, { fileId: up.data.file.id, text: `Mein Clip aus ${clip.game.name}: ${points(clip.score)}` });
+            const message = await Api.post(`/messages/${handle}`, { fileId: up.data.file.id, text: clip.game.kind === "lens" ? `Mein Clip mit der Linse ${clip.game.name}` : `Mein Clip aus ${clip.game.name}: ${points(clip.score)}` });
             if (message.ok) sent += 1; else toast(`@${handle}: ${Api.message(message)}`);
           }
           if (sent) toast(`An ${sent} ${sent === 1 ? "Person" : "Personen"} gesendet.`);
@@ -543,11 +617,32 @@
         return;
       }
       if (dead) return;
-      list = window.PulseGames.list();
-      const wanted = route.game ? list.findIndex((game) => game.id === route.game) : list.findIndex((game) => game.id === lastGame);
-      active = wanted >= 0 ? wanted : 0;                       // the first lens: the newest main games (the game of the day is marked in the name line)
+      const games = window.PulseGames.list().map((game) => ({ ...game, kind: "game" }));
+      const create = { id: "create", kind: "create", name: "Erstellen", emoji: "✨", cat: "Neu", hint: "Baue eine eigene Linse oder ein eigenes Spiel und teile es", color: "#7a2cf0" };
+      const qr = { id: "qr", kind: "qr", name: "QR-Code", emoji: "🔳", cat: "Teilen", hint: "Dein QR-Code zum Teilen und Scannen", color: "#1a1a1f" };
+      const flagship = games.filter((game) => game.featured);
+      list = [create, ...flagship, ...(Y.lenses ? Y.lenses.PRESETS : []), qr, ...games.filter((game) => !game.featured)];
+      let wanted = route.game ? list.findIndex((game) => game.id === route.game) : list.findIndex((game) => game.id === lastGame);
+      if (wanted < 0 && route.game) wanted = await addShared(route.game);          // a lens or game of somebody else that was linked
+      active = wanted >= 0 ? wanted : Math.max(1, list.indexOf(flagship[0]));       // the first lens: the car race (the small "create" lens is on its left)
       loadingBox.hidden = true;
       drawLenses();
+      addCommunity();
+    }
+    /* The lenses and games that other people published come after the ready-made lenses (a moment later, when the list has arrived). */
+    async function addCommunity() {
+      const [lenses, games] = await Promise.all([Y.lenses ? Y.lenses.community() : [], Y.communityGames ? Y.communityGames.list() : []]);
+      if (dead || (!lenses.length && !games.length)) return;
+      const keep = list[active] && list[active].id;
+      const at = list.findIndex((entry) => entry.kind === "qr");
+      list.splice(at, 0, ...lenses.filter((entry) => !list.some((other) => other.id === entry.id)), ...games.filter((entry) => !list.some((other) => other.id === entry.id)));
+      if (state === "idle") { active = Math.max(0, list.findIndex((entry) => entry.id === keep)); drawLenses(); }
+    }
+    async function addShared(id) {
+      const found = (Y.lenses && /^lu-/.test(id) && await Y.lenses.find(id)) || (Y.communityGames && /^gu-/.test(id) && await Y.communityGames.find(id));
+      if (!found) return -1;
+      list.splice(Math.max(1, list.findIndex((entry) => entry.kind === "qr")), 0, found);
+      return list.indexOf(found);
     }
     function fit() {                                           // the play field is 9:16 and as big as the screen allows; the camera behind it fills the whole stage
       const box = stage.getBoundingClientRect();
@@ -561,6 +656,10 @@
     openCamera();
     loadGames();
 
+    const api = { feed, stage, host, toast, get stream() { return stream; }, get facing() { return facing; }, go: (id) => { const at = list.findIndex((entry) => entry.id === id); if (at >= 0) go(at, true); },
+      add: (item) => { const at = list.findIndex((entry) => entry.id === item.id); if (at < 0) list.splice(1, 0, item); active = Math.max(1, list.findIndex((entry) => entry.id === item.id)); drawLenses(); },
+      remove: (id) => { const at = list.findIndex((entry) => entry.id === id); if (at < 0) return; list.splice(at, 1); active = Math.min(Math.max(0, at), list.length - 1); drawLenses(); },
+      reload: () => ctx.reload(), reopen: () => openCamera() };
     return {
       element: el, title: "Kamera",
       onHide() { runner?.pause?.(true); },
@@ -568,6 +667,7 @@
       destroy() {
         dead = true;
         clearTimeout(previewTimer);
+        stopLens();
         endGame();
         recorder = null;
         window.removeEventListener("resize", fit);

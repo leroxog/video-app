@@ -2,7 +2,7 @@
    the screen, with the right shape and at the right pace (static/js/yipi-core.js says how well a stroke fits; 82 percent opens the chats). The page
    of the chats is then a dark field of grey dots that says "Chats sind gesperrt". Wrong tries lock it for longer and longer (3 in a row: a minute, then
    1, 5, 10, 15, 30, 60, 120, 240 minutes and so on); a right try wipes the record. The combination and the record stay in this browser only (a screen
-   lock against curious eyes, not a vault). The chats are locked again after the app was out of sight for a minute. */
+   lock against curious eyes, not a vault). The chats are locked again every time you come back to them from another page (and after the app was out of sight for a minute). */
 (function () {
   "use strict";
 
@@ -22,12 +22,16 @@
     else if (hiddenAt && Date.now() - hiddenAt > 60000) open = false;
   });
 
-  /* The pad: a canvas over its parent that draws the stroke of the finger and gives it back when the finger leaves the screen. */
+  /* The pad: a canvas over its parent that draws the stroke of the finger and gives it back when the finger leaves the screen. Nobody can read the shape
+     over your shoulder: the line is only a short bright tail behind the finger (a third of a second) and what is left disappears at once when the finger lifts. */
   function pad(onStroke) {
     const canvas = h("canvas", { class: "pad-canvas", "aria-label": "Fläche für die Wisch-Kombination" });
-    let points = [];
+    const TAIL = 340;                                   // how long a piece of the line stays visible (milliseconds)
+    const RELEASE = 120;                                // and how fast the rest goes when the finger has lifted
+    let points = [];                                    // the whole stroke (for the check)
+    let trail = [];                                     // the visible tail
     let drawing = false;
-    let fade = 0;
+    let releasedAt = 0;
     let color = "#fff";
     const ctx = canvas.getContext("2d");
     function fit() {
@@ -37,34 +41,42 @@
       canvas.height = Math.max(1, Math.round(box.height * dpr));
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     }
-    function paint() {
+    function paint(now) {
       const box = canvas.getBoundingClientRect();
       ctx.clearRect(0, 0, box.width, box.height);
-      if (points.length > 1) {
-        ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.lineWidth = 8; ctx.strokeStyle = color; ctx.globalAlpha = drawing ? 0.95 : Math.max(0, fade);
-        ctx.beginPath(); points.forEach((p, k) => (k ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))); ctx.stroke();
-        ctx.globalAlpha = 1;
+      const left = releasedAt ? Math.max(0, 1 - (now - releasedAt) / RELEASE) : 1;
+      ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.lineWidth = 8; ctx.strokeStyle = color;
+      for (let k = 1; k < trail.length; k += 1) {
+        const alpha = Math.max(0, 1 - (now - trail[k].t) / TAIL) * left;
+        if (alpha < 0.02) continue;
+        ctx.globalAlpha = alpha * 0.95;
+        ctx.beginPath(); ctx.moveTo(trail[k - 1].x, trail[k - 1].y); ctx.lineTo(trail[k].x, trail[k].y); ctx.stroke();
       }
+      ctx.globalAlpha = 1;
+      return left;
     }
     let frame = 0;
-    function loop() {
-      paint();
-      if (!drawing && fade > 0) fade -= 0.035;
-      if (drawing || fade > 0) frame = requestAnimationFrame(loop); else { frame = 0; points = []; paint(); }
+    function loop(now) {
+      const left = paint(now);
+      trail = trail.filter((point, k) => now - point.t < TAIL + 40 || k === trail.length - 1);
+      if (drawing || (left > 0 && trail.some((point) => now - point.t < TAIL))) frame = requestAnimationFrame(loop);
+      else { frame = 0; trail = []; paint(now); }
     }
     const at = (event) => { const box = canvas.getBoundingClientRect(); return { x: event.clientX - box.left, y: event.clientY - box.top, t: performance.now() }; };
     canvas.addEventListener("pointerdown", (event) => {
-      drawing = true; fade = 1; color = "#fff"; points = [at(event)];
+      drawing = true; releasedAt = 0; color = "#fff"; points = [at(event)]; trail = [points[0]];
       try { canvas.setPointerCapture(event.pointerId); } catch (error) { /* a mouse may not have one */ }
       event.preventDefault();
       if (!frame) frame = requestAnimationFrame(loop);
     });
-    canvas.addEventListener("pointermove", (event) => { if (drawing) points.push(at(event)); });
+    canvas.addEventListener("pointermove", (event) => { if (drawing) { const point = at(event); points.push(point); trail.push(point); } });
     const end = (event) => {
       if (!drawing) return;
       drawing = false;
-      points.push(at(event));
-      fade = 1;
+      const point = at(event);
+      points.push(point);
+      trail.push(point);
+      releasedAt = performance.now();
       if (!frame) frame = requestAnimationFrame(loop);
       onStroke(points.slice());
     };
@@ -199,6 +211,8 @@
   Y.chatLock = {
     enabled: () => !!(Y.me && stored()),
     locked: () => !!(Y.me && stored()) && !open,
+    /* Called with the name of every page that opens: leaving the chats (for any other page) closes the lock, so it asks again at every entry. */
+    seen(name) { if (name !== "messages" && name !== "thread" && name !== "group" && name !== "nex") open = false; },
     lockNow() { open = false; },
     forget() { open = false; },
   };

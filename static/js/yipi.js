@@ -40,7 +40,7 @@
   const TABS = [
     { id: "home", label: "Home", path: () => Y.HOME, icon: "home", on: "homeFill" },
     { id: "messages", label: "Chats", path: () => "/messages", icon: "plane", on: "planeFill", badge: "messages" },
-    { id: "plus", label: "Neu", icon: "plus", on: "plus", center: true, action: (event) => Y.newPost({ anchor: event.currentTarget }) },
+    { id: "plus", label: "Neu", icon: "plusCircle", on: "plusCircle", center: true, action: (event) => Y.newPost({ anchor: event.currentTarget }) },
     { id: "camera", label: "Kamera", path: () => "/camera", icon: "camera", on: "cameraFill" },
     { id: "videos", label: "Videos", path: () => "/videos", icon: "playCircle", on: "videoFill" },
   ];
@@ -205,7 +205,9 @@
     const key = location.pathname + location.search;
     let view = null;
     let ctx = null;
-    if (restore && cache.has(key)) {
+    Y.chatLock?.seen(route.name);                                  // the chat lock asks again at every entry from another page
+    const lockedChat = !!(Y.chatLock && Y.chatLock.locked() && ["messages", "thread", "group"].includes(route.name));
+    if (restore && cache.has(key) && !lockedChat) {
       view = cache.get(key);
       cache.delete(key);
       ctx = view.ctx;

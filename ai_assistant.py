@@ -403,6 +403,15 @@ def generate_reply_stream(message, history=None, persona=DEFAULT_PERSONA):
         yield from _generate_groq_stream_with_model(GROQ_FALLBACK_MODEL, messages, MAX_REPLY_TOKENS, 0.7, api_key)
 
 
+def generate_text(system_prompt, message, max_tokens=900, temperature=0.9):
+    """One whole answer (not streamed) to one short instruction with its own system prompt: the AI accounts of Nex (yipi_agents.py) ask for a batch of short posts this way.
+    Raises when the key is missing or the service does not answer; the caller has a fallback."""
+    message = (message or "").strip()[:8000]
+    if not message:
+        return ""
+    return _generate_groq([{"role": "system", "content": system_prompt}, {"role": "user", "content": message}], max_tokens, temperature)
+
+
 def generate_custom_stream(system_prompt, message, max_tokens=600, temperature=0.7):
     """Like generate_reply_stream, but for a caller with its own narrow, single-purpose system prompt instead of one of PERSONAS's
     general-purpose identities (and their long artifact protocol, wasted tokens for a one-off instruction) -- used by regal.py's

@@ -60,6 +60,7 @@ from siteauth import CookieAuth, RateLimiter, client_addresses, same_origin
 # ------------------------------------------------------------------------------------------------ settings
 COOKIE = "yipi_session"
 MAX_POST = 280
+CAM_ID_RE = re.compile(r"[a-z0-9-]{2,24}")
 MAX_BIO = 160
 MAX_NAME = 50
 MAX_LOCATION = 30
@@ -123,7 +124,7 @@ LIMITS = {
     "login-ip": (60, 600), "login-name": (8, 900), "login-flood": (600, 600), "signup-ip": (20, 3600), "signup-flood": (300, 3600),
     "password": (8, 900), "delete": (6, 900),
     "post-burst": (12, 60), "post-hour": (150, 3600), "like": (400, 3600), "follow": (120, 3600), "media": (40, 3600), "dm": (120, 3600),
-    "report": (20, 3600), "profile": (30, 3600), "search": (120, 600), "block": (60, 3600),
+    "report": (20, 3600), "lens-recipe": (30, 3600), "lens-make": (10, 86400), "lens-use": (300, 3600), "profile": (30, 3600), "search": (120, 600), "block": (60, 3600),
     "gif-make": (20, 3600), "gif-fav": (400, 3600), "gif-use": (300, 3600), "gif-list": (600, 600),
     "share": (240, 600), "attach": (40, 3600), "storage": (120, 3600), "story": (30, 3600), "story-view": (900, 600), "play": (200, 3600), "heart": (300, 3600), "push": (30, 3600), "nex-read": (30, 600), "google": (30, 600), "nex": (40, 600), "nex-flood": (80, 60), "factcheck": (120, 3600), "views": (90, 600), "vote": (200, 3600), "pin": (60, 3600), "group": (12, 3600),
 }
@@ -134,7 +135,7 @@ google_auth = CookieAuth("yipi_google", salt="yipi-google-v1", days=1 / 144)    
 
 # What the pages may load: only our own files (and the pictures people chose, shown from memory before they are sent).
 CONTENT_SECURITY_POLICY = (
-    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self'; "
+    "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self'; "
     "connect-src 'self'; manifest-src 'self'; base-uri 'none'; object-src 'none'; form-action 'self'; frame-ancestors 'none'"
 )
 
@@ -202,12 +203,40 @@ class YipiUser(db.Model):
     posts_count = db.Column(db.Integer, nullable=False, default=0)
     created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
     last_seen_at = db.Column(db.DateTime, nullable=True)
+    agent_kind = db.Column(db.Integer, nullable=True, index=True)              # an AI account (yipi_agents.py): which kind of account it is; None for a person
+    hide_ai = db.Column(db.Boolean, nullable=False, default=False)             # the person does not want to see the AI accounts
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+
+
+class PulseLens(db.Model):
+    """A face lens somebody wrote as a prompt and published (the recipe: names of effects of pl-face.js and a colour filter; never code)."""
+    __tablename__ = "pulse_lens"
+    id = db.Column(db.String(11), primary_key=True)                            # "lu-1a2b3c4d"
+    owner_id = db.Column(db.Integer, nullable=False, index=True)
+    title = db.Column(db.String(24), nullable=False)
+    prompt = db.Column(db.String(200), nullable=False, default="")
+    emoji = db.Column(db.String(8), nullable=False, default="✨")
+    color = db.Column(db.String(7), nullable=False, default="#7a2cf0")
+    fx = db.Column(db.String(200), nullable=False, default="")                 # names of effects, separated by commas
+    filter = db.Column(db.String(12), nullable=False, default="none")
+    uses = db.Column(db.Integer, nullable=False, default=0)
+    deleted = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow, index=True)
+
+
+class YipiAgentState(db.Model):
+    """One row (id 1): the switches of the AI accounts (yipi_agents.py)."""
+    __tablename__ = "yipi_agent_state"
+    id = db.Column(db.Integer, primary_key=True)
+    enabled = db.Column(db.Boolean, nullable=False, default=True)
+    activity = db.Column(db.String(10), nullable=False, default="normal")      # "ruhig", "normal" or "lebhaft"
+    last_tick = db.Column(db.DateTime, nullable=True)
+    backfilled_at = db.Column(db.DateTime, nullable=True)                      # when the first day of life was made
 
 
 class YipiPost(db.Model):
@@ -225,6 +254,7 @@ class YipiPost(db.Model):
     repost_count = db.Column(db.Integer, nullable=False, default=0)
     quote_count = db.Column(db.Integer, nullable=False, default=0)
     view_count = db.Column(db.Integer, nullable=False, default=0)
+    cam_id = db.Column(db.String(24), nullable=True)                           # the lens or game of the camera tab the video was made with (a button "Ausprobieren" / "Mitspielen" under it)
     fact_status = db.Column(db.String(12), nullable=False, default="")        # "" not checked yet, "ok", "false" or "misleading" (the last two come with a note)
     fact_note = db.Column(db.String(300), nullable=False, default="")
     deleted = db.Column(db.Boolean, nullable=False, default=False)
@@ -1024,14 +1054,28 @@ def favorite_ids(viewer, ids):
 
 
 def user_brief(user):
-    return {"handle": user.handle, "name": user.name, "avatar": media_url(user.avatar_id)}
+    return {"handle": user.handle, "name": user.name, "avatar": media_url(user.avatar_id), "ai": user.agent_kind is not None}
+
+
+_agent_cache = {"at": None, "ids": frozenset()}
+
+
+def agent_id_set():
+    """The ids of the AI accounts (looked up again after a minute)."""
+    now = utcnow()
+    if _agent_cache["at"] is None or now - _agent_cache["at"] > timedelta(seconds=60):
+        _agent_cache["ids"] = frozenset(row.id for row in YipiUser.query.filter(YipiUser.agent_kind.isnot(None)).with_entities(YipiUser.id))
+        _agent_cache["at"] = now
+    return _agent_cache["ids"]
 
 
 def hidden_user_ids(viewer):
-    """People whose posts this viewer does not see: those they blocked or muted, and those who blocked them."""
+    """People whose posts this viewer does not see: those they blocked or muted, those who blocked them, and the AI accounts if they switched them off."""
     if viewer is None:
         return set()
     ids = {row.blocked_id for row in YipiBlock.query.filter_by(blocker_id=viewer.id)}
+    if viewer.hide_ai:
+        ids |= agent_id_set()
     ids |= {row.muted_id for row in YipiMute.query.filter_by(muter_id=viewer.id)}
     ids |= {row.blocker_id for row in YipiBlock.query.filter_by(blocked_id=viewer.id)}
     return ids
@@ -1045,10 +1089,12 @@ def user_dict(user, viewer=None, relations=None):
     """A profile. `relations` (optional) already knows who the viewer follows, blocks, mutes and who follows the viewer."""
     data = {
         "id": user.id, "handle": user.handle, "name": user.name, "bio": user.bio, "location": user.location, "website": user.website,
-        "avatar": media_url(user.avatar_id), "banner": media_url(user.banner_id), "createdAt": iso(user.created_at),
+        "avatar": media_url(user.avatar_id), "banner": media_url(user.banner_id), "createdAt": iso(user.created_at), "ai": user.agent_kind is not None,
         "followers": user.followers_count, "following": user.following_count, "posts": user.posts_count,
         "isMe": bool(viewer and viewer.id == user.id), "suspended": user.suspended, "pinnedPostId": user.pinned_post_id,
     }
+    if data["isMe"]:
+        data["hideAi"] = bool(user.hide_ai)
     if viewer and viewer.id != user.id:
         rel = relations or relations_to(viewer, [user.id])
         data.update({"followedByMe": user.id in rel["following"], "followsMe": user.id in rel["followers"],
@@ -1192,6 +1238,8 @@ def feed_items(rows, viewer):
                 "viewer": {"liked": post.id in liked, "reposted": post.id in reposted, "bookmarked": post.id in bookmarked},
                 "views": post.view_count,
             }
+            if post.cam_id:
+                item["camId"] = post.cam_id
             if post.fact_status in ("false", "misleading") and post.fact_note:
                 item["factCheck"] = {"status": post.fact_status, "note": post.fact_note}
             if post.id in polls:
@@ -1291,7 +1339,8 @@ def notify(user_id, actor, kind, post_id=None):
     db.session.add(YipiNotification(user_id=user_id, actor_id=actor.id, kind=kind, post_id=post_id))
     db.session.flush()
     where = f"/{actor.handle}" if kind == "follow" else f"/{actor.handle}/status/{post_id}" if post_id else "/notifications"      # (a post opens under any name: the page finds its author)
-    push_later(user_id, "Nex", PUSH_KINDS[kind].format(name=actor.name), where, tag=f"{kind}-{actor.id}")
+    if actor.agent_kind is None:                                    # the AI accounts never buzz a phone
+        push_later(user_id, "Nex", PUSH_KINDS[kind].format(name=actor.name), where, tag=f"{kind}-{actor.id}")
 
 
 def bump(model, row_id, column, amount):
@@ -1536,15 +1585,16 @@ def manifest():
 # The scripts of the page, in the order they depend on each other. The page loads them as ONE file (/pulse.js, deferred), named after its content, so the
 # browser asks once, keeps it for good and the next visit is instant; the tests read this list.
 PULSE_SCRIPTS = ["yipi-core.js", "yipi-gif-core.js", "yipi-icons.js", "yipi-api.js", "yipi-ui.js", "yipi-fx.js", "yipi-gif.js", "yipi-components.js", "yipi-newpost.js",
-                 "yipi-views.js", "yipi-comments.js", "yipi-chats.js", "yipi-lock.js", "yipi-pages.js", "yipi-share.js", "yipi-progress.js", "yipi-nex.js", "yipi-download.js", "yipi-camera.js", "yipi-videos.js", "yipi-stories.js", "yipi-chrome.js", "yipi.js"]
+                 "yipi-views.js", "yipi-comments.js", "yipi-chats.js", "yipi-lock.js", "yipi-pages.js", "yipi-share.js", "yipi-progress.js", "yipi-nex.js", "yipi-download.js", "yipi-lenses.js", "yipi-camera.js", "yipi-videos.js", "yipi-stories.js", "yipi-chrome.js", "yipi.js"]
 # The games of the camera tab are a second file, loaded when the camera tab is opened (about a hundred small games; nobody who only reads needs them).
+PULSE_LENS_SCRIPTS = ["pl-face.js"]              # the face lenses (face tracking and the effects): a third file, loaded when the first lens is opened
 PULSE_GAME_SCRIPTS = ["pg-kit.js", "pg-racing.js", "pg-rank.js", "pg-runners.js", "pg-arcade.js", "pg-reflex.js", "pg-puzzle.js", "pg-board.js", "pg-numbers.js", "pg-skill.js", "pg-more.js", "pg-fruit.js"]
 _bundles = {}
 
 
 def pulse_bundle(root, which="main"):
     """The scripts of PULSE_SCRIPTS (or of PULSE_GAME_SCRIPTS) glued together, rebuilt when one of the files changed: {body, zipped, version}."""
-    names = PULSE_GAME_SCRIPTS if which == "games" else PULSE_SCRIPTS
+    names = PULSE_GAME_SCRIPTS if which == "games" else PULSE_LENS_SCRIPTS if which == "lens" else PULSE_SCRIPTS
     folder = os.path.join(root, "static", "js")
     paths = [os.path.join(folder, name) for name in names]
     stamp = tuple(os.path.getmtime(path) for path in paths if os.path.exists(path))
@@ -1742,6 +1792,8 @@ PUSH_RUNNER = lambda app, user_id, payload: threading.Thread(target=_push_thread
 
 # --------------------------------------------------------------------------------------------- the routes
 def register_routes(app):
+    import yipi_agents                                          # (here and not at the top: the module needs this one)
+    import yipi_lenses
     def route(rule, **options):
         """Like app.route, and remembers the endpoint for ENDPOINTS."""
         def decorator(function):
@@ -1759,6 +1811,7 @@ def register_routes(app):
                 return fail("not_logged_in", 401)             # nothing of Nex is for somebody who is not signed in
 
     app.before_request(api_guard)
+    yipi_agents.attach(app)                                       # the AI accounts: every request to the API may wake them (a thread does the work)
 
     @app.after_request
     def yipi_cache_and_compress(response):
@@ -1769,6 +1822,10 @@ def register_routes(app):
     @route("/pulse-games.js", endpoint="yipi_games_bundle")
     def yipi_games_bundle():
         return serve_bundle(pulse_bundle(app.root_path, "games"))
+
+    @route("/pulse-lens.js", endpoint="yipi_lens_bundle")
+    def yipi_lens_bundle():
+        return serve_bundle(pulse_bundle(app.root_path, "lens"))
 
     @route("/pulse.js")
     def yipi_bundle():
@@ -2532,8 +2589,11 @@ def register_routes(app):
                 return None, fail("video_alone")                     # a video stands alone: no photos next to it
             if reply_to is not None or quote_of is not None:
                 return None, fail("video_top")                       # and it is a post of its own, not an answer or a quote
+        cam_id = data.get("camId")
+        if not (isinstance(cam_id, str) and CAM_ID_RE.fullmatch(cam_id) and any(item.content_type.startswith("video/") for _, item in items)):
+            cam_id = None                                                      # only a video can say which lens or game of the camera it was made with
         post = YipiPost(user_id=user.id, text=text, reply_to_id=reply_to.id if reply_to else None, quote_of_id=quote_of.id if quote_of else None,
-                        root_id=(reply_to.root_id or reply_to.id) if reply_to else None)
+                        root_id=(reply_to.root_id or reply_to.id) if reply_to else None, cam_id=cam_id)
         db.session.add(post)
         db.session.flush()
         for position, item in items:
@@ -3391,7 +3451,7 @@ def register_routes(app):
             return problem
         following = {r.followee_id for r in YipiFollow.query.filter_by(follower_id=user.id)}
         followers = {r.follower_id for r in YipiFollow.query.filter_by(followee_id=user.id)}
-        mutual = (following & followers) - hidden_user_ids(user)
+        mutual = (following & followers) - hidden_user_ids(user) - agent_id_set()               # (the AI accounts do not chat)
         people = YipiUser.query.filter(YipiUser.id.in_(mutual), YipiUser.suspended.is_(False)).order_by(YipiUser.name).limit(200).all() if mutual else []
         return jsonify({"ok": True, "users": [user_brief(u) for u in people]})
 
@@ -3604,6 +3664,8 @@ def register_routes(app):
             return fail("self", 400)
         if other.id in hidden_user_ids(user):
             return fail("blocked", 403)
+        if other.agent_kind is not None:
+            return fail("ai_account", 403)                              # an AI account does not read or answer messages
         text = clean_text(data.get("text", ""), MAX_DM)
         if text is None:
             return fail("too_long")
@@ -4107,6 +4169,158 @@ def register_routes(app):
     def in_database(model):
         return (model.stored == "db", func.length(model.data) > 0)
 
+    # ------------------------------------------------------------------------------------------------ face lenses that people write as prompts
+    LENS_ID_RE = re.compile(r"lu-[0-9a-f]{8}")
+
+    def lens_json(row, viewer, owners=None):
+        owner = (owners or {}).get(row.owner_id) or db.session.get(YipiUser, row.owner_id)
+        return {"id": row.id, "title": row.title, "prompt": row.prompt, "emoji": row.emoji, "color": row.color, "fx": [name for name in row.fx.split(",") if name], "filter": row.filter,
+                "uses": row.uses, "user": user_brief(owner) if owner else None, "mine": bool(viewer and viewer.id == row.owner_id), "createdAt": iso(row.created_at)}
+
+    @route("/api/yipi/lenses")
+    def yipi_lenses_list():
+        """The lenses other people published: the most used first ("popular"), the newest ("new") or yours ("mine")."""
+        user, problem = need_user()
+        if problem:
+            return problem
+        sort = request.args.get("sort", "popular")
+        try:
+            limit = max(1, min(60, int(request.args.get("limit", "40"))))
+        except ValueError:
+            limit = 40
+        query = PulseLens.query.filter(PulseLens.deleted.is_(False))
+        hidden = hidden_user_ids(user) | suspended_ids()
+        if hidden:
+            query = query.filter(~PulseLens.owner_id.in_(hidden))
+        if sort == "mine":
+            query = query.filter(PulseLens.owner_id == user.id)
+        rows = (query.order_by(PulseLens.created_at.desc()) if sort in ("new", "mine") else query.order_by(PulseLens.uses.desc(), PulseLens.created_at.desc())).limit(limit).all()
+        owners = {row.id: row for row in YipiUser.query.filter(YipiUser.id.in_({lens.owner_id for lens in rows}))} if rows else {}
+        return jsonify({"ok": True, "items": [lens_json(row, user, owners) for row in rows]})
+
+    @route("/api/yipi/lenses/<lens_id>")
+    def yipi_lens_get(lens_id):
+        user, problem = need_user()
+        if problem:
+            return problem
+        row = PulseLens.query.filter_by(id=lens_id, deleted=False).first() if LENS_ID_RE.fullmatch(lens_id) else None
+        if row is None or row.owner_id in suspended_ids():
+            return fail("not_found", 404)
+        return jsonify({"ok": True, "lens": lens_json(row, user)})
+
+    @route("/api/yipi/lenses/recipe", methods=["POST"], endpoint="yipi_lens_recipe")
+    def yipi_lens_recipe():
+        """What a prompt becomes: {title, emoji, color, fx, filter, source}, not saved (the person tries it first, then publishes it)."""
+        user, problem = need_user()
+        if problem:
+            return problem
+        data, problem = body()
+        if problem:
+            return problem
+        if user.agent_kind is not None or limiter.too_many("lens-recipe", str(user.id)):
+            return fail("too_many", 429)
+        prompt = clean_text(data.get("prompt", ""), 200, keep_newlines=False)
+        if not prompt or len(prompt) < 3:
+            return fail("empty")
+        if yipi_agents.sensitive(prompt, hard_only=True):
+            return fail("not_allowed", 422)
+        return jsonify({"ok": True, "recipe": yipi_lenses.make_recipe(prompt)})
+
+    @route("/api/yipi/lenses", methods=["POST"], endpoint="yipi_lens_create")
+    def yipi_lens_create():
+        """Publishes a lens: a title, the prompt and a recipe (checked against the list of the effects); everybody on Nex can use it afterwards."""
+        user, problem = need_user()
+        if problem:
+            return problem
+        data, problem = body()
+        if problem:
+            return problem
+        if user.agent_kind is not None or limiter.too_many("lens-make", str(user.id)):
+            return fail("too_many", 429)
+        title = clean_text(data.get("title", ""), 24, keep_newlines=False)
+        prompt = clean_text(data.get("prompt", ""), 200, keep_newlines=False)
+        fx, filter_name = yipi_lenses.clean_recipe(data.get("fx"), data.get("filter"))
+        if not title or len(title) < 2 or not prompt or not fx:
+            return fail("empty")
+        if yipi_agents.sensitive(title, hard_only=True) or yipi_agents.sensitive(prompt, hard_only=True):
+            return fail("not_allowed", 422)
+        emoji = data.get("emoji") if isinstance(data.get("emoji"), str) else ""
+        emoji = emoji.strip() if 0 < len(emoji.strip()) <= 8 and not re.search(r"[A-Za-z0-9]", emoji) else "✨"
+        color = data.get("color") if isinstance(data.get("color"), str) and re.fullmatch(r"#[0-9a-fA-F]{6}", data["color"]) else "#7a2cf0"
+        row = PulseLens(id="lu-" + secrets.token_hex(4), owner_id=user.id, title=title, prompt=prompt, emoji=emoji, color=color.lower(), fx=",".join(fx), filter=filter_name)
+        db.session.add(row)
+        db.session.commit()
+        return jsonify({"ok": True, "lens": lens_json(row, user)}), 201
+
+    @route("/api/yipi/lenses/<lens_id>/use", methods=["POST"], endpoint="yipi_lens_use")
+    def yipi_lens_use(lens_id):
+        user, problem = need_user()
+        if problem:
+            return problem
+        if limiter.too_many("lens-use", str(user.id)):
+            return fail("too_many", 429)
+        if LENS_ID_RE.fullmatch(lens_id):
+            bump(PulseLens, lens_id, PulseLens.uses, 1)
+            db.session.commit()
+        return jsonify({"ok": True})
+
+    @route("/api/yipi/lenses/<lens_id>", methods=["DELETE"], endpoint="yipi_lens_delete")
+    def yipi_lens_delete(lens_id):
+        user, problem = need_user()
+        if problem:
+            return problem
+        row = PulseLens.query.filter_by(id=lens_id, deleted=False).first() if LENS_ID_RE.fullmatch(lens_id) else None
+        if row is None:
+            return fail("not_found", 404)
+        if row.owner_id != user.id and not is_admin(user):
+            return fail("forbidden", 403)
+        row.deleted = True
+        db.session.commit()
+        return jsonify({"ok": True})
+
+    @route("/api/yipi/admin/agents")
+    def yipi_admin_agents():
+        """The AI accounts: how many there are, what they did in the last day, and the switches."""
+        admin, problem = need_admin()
+        if problem:
+            return problem
+        return jsonify({"ok": True, **yipi_agents.report()})
+
+    @route("/api/yipi/admin/agents", methods=["POST"], endpoint="yipi_admin_agents_set")
+    def yipi_admin_agents_set():
+        admin, problem = need_admin()
+        if problem:
+            return problem
+        data, problem = body()
+        if problem:
+            return problem
+        state = yipi_agents.state_row()
+        if "enabled" in data:
+            if not isinstance(data["enabled"], bool):
+                return fail("bad_request")
+            state.enabled = data["enabled"]
+        if "activity" in data:
+            if data["activity"] not in yipi_agents.RATES:
+                return fail("bad_request")
+            state.activity = data["activity"]
+        db.session.commit()
+        return jsonify({"ok": True, **yipi_agents.report()})
+
+    @route("/api/yipi/settings/ai", methods=["POST"], endpoint="yipi_settings_ai")
+    def yipi_settings_ai():
+        """A person switches the AI accounts off for themselves (their posts, answers and likes disappear from this person's pages) or on again."""
+        user, problem = need_user()
+        if problem:
+            return problem
+        data, problem = body()
+        if problem:
+            return problem
+        if not isinstance(data.get("hide"), bool):
+            return fail("bad_request")
+        user.hide_ai = data["hide"]
+        db.session.commit()
+        return jsonify({"ok": True, "hideAi": user.hide_ai})
+
     @route("/api/yipi/admin/storage")
     def yipi_admin_storage():
         """What takes the room: files in the database, files in R2, and (PostgreSQL) the size of the biggest tables."""
@@ -4251,8 +4465,9 @@ def register_routes(app):
         private = path.startswith(PRIVATE_PATHS) or (user is None and path != "/")        # pages that only mean something to the person who is signed in
         bundle = pulse_bundle(app.root_path)
         games = pulse_bundle(app.root_path, "games")
+        lens = pulse_bundle(app.root_path, "lens")
         return page_headers(make_response(render_template("yipi.html", boot=boot, title=title, description=description, base=base_url(), path=shown, private=private,
-                                                          bundle=f"/pulse.js?v={bundle['version']}", games=f"/pulse-games.js?v={games['version']}")))
+                                                          bundle=f"/pulse.js?v={bundle['version']}", games=f"/pulse-games.js?v={games['version']}", lens=f"/pulse-lens.js?v={lens['version']}")))
 
     for page in ("/explore", "/notifications", "/messages", "/bookmarks", "/settings", "/search", "/moderation", "/i/login", "/i/signup", "/i/nex", "/camera", "/videos"):
         route(page, endpoint="yipi_shell_" + page.strip("/").replace("/", "_"))(lambda page=page: render_shell(page))

@@ -8,9 +8,22 @@
   const FILL = 'fill="currentColor"';
   const S = (inner, extra = LINE) => `<svg viewBox="0 0 24 24" ${extra} aria-hidden="true" focusable="false">${inner}</svg>`;
 
+  /* The five symbols of the bar (and every other place that shows a house, a plane, a camera or a play button): one thick round line, same weight, same size. */
+  const BOLD = LINE.replace('stroke-width="2"', 'stroke-width="2.4"');
+  const SOLID = `${FILL} stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"`;
+  const HOUSE = '<path d="M12 3.5L3.3 11.3h1.8v7.3a2.2 2.2 0 002.2 2.2h9.4a2.2 2.2 0 002.2-2.2v-7.3h1.8z"/>';
+  const PLANE = '<path d="M21.2 3L3.2 10.6l6.5 2.5 2.6 7.8z"/>';
+  const CAMERA = '<path d="M7.3 7.4l1.1-1.8a1.5 1.5 0 011.3-.7h4.6a1.5 1.5 0 011.3.7l1.1 1.8h1.7a2.4 2.4 0 012.4 2.4v7.4a2.4 2.4 0 01-2.4 2.4H5.6a2.4 2.4 0 01-2.4-2.4V9.8a2.4 2.4 0 012.4-2.4z"/>';
   const ICON = {
-    home: S('<path d="M3 11.5L12 4l9 7.5V19a2 2 0 01-2 2h-3.5v-6h-7v6H5a2 2 0 01-2-2z"/>'),
-    homeFill: S('<path d="M3 11.5L12 4l9 7.5V19a2 2 0 01-2 2h-3.5v-6h-7v6H5a2 2 0 01-2-2z"/>', `${FILL} stroke="currentColor" stroke-width="2" stroke-linejoin="round"`),
+    home: S(HOUSE, BOLD),
+    homeFill: S(HOUSE, SOLID),
+    plane: S(PLANE + '<path d="M21.2 3L9.7 13.1"/>', BOLD),
+    planeFill: S(PLANE + '<path class="cut" d="M21.2 3L9.7 13.1" fill="none"/>', SOLID),
+    camera: S(CAMERA + '<circle cx="12" cy="13.4" r="3.5"/><circle cx="17.5" cy="10.6" r=".4" fill="currentColor"/>', BOLD),
+    cameraFill: S(CAMERA + '<circle class="cut" cx="12" cy="13.4" r="3.5" fill="none"/>', SOLID),
+    playCircle: S('<circle cx="12" cy="12" r="9.2"/><path d="M10 8.4l5.7 3.6-5.7 3.6z"/>', BOLD),
+    videoFill: S('<circle cx="12" cy="12" r="9.2"/><path class="cut-fill" d="M10 8.4l5.7 3.6-5.7 3.6z" stroke="none"/>', SOLID),
+    plusCircle: S('<circle cx="12" cy="12" r="9.2"/><path d="M12 7.7v8.6M7.7 12h8.6"/>', BOLD),
     search: S('<circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21"/>'),
     searchBold: S('<circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21"/>', LINE.replace('stroke-width="2"', 'stroke-width="2.8"')),
     bell: S('<path d="M6 9a6 6 0 0112 0c0 5 2 6.500 2 7.500H4C4 15.500 6 14 6 9z"/><path d="M10 20a2 2 0 004 0"/>'),
@@ -68,7 +81,6 @@
     help: S('<circle cx="12" cy="12" r="9"/><path d="M9.500 9.500a2.500 2.500 0 114 2c-.9.6-1.500 1.100-1.500 2.200"/><circle cx="12" cy="17" r=".9" fill="currentColor"/>'),
     nexmark: S('<path d="M3.500 3.500L6.310 11.830A6 6 0 0 0 17.690 11.830L20.500 3.500"/><path d="M3.500 20.500L6.310 12.170A6 6 0 0 1 17.690 12.170L20.500 20.500"/>'),
     gamepad: S('<rect x="2.500" y="7" width="19" height="11" rx="5.500"/><path d="M8 10.500v4M6 12.500h4"/><circle cx="15.500" cy="11.500" r="1" fill="currentColor"/><circle cx="18" cy="14" r="1" fill="currentColor"/>'),
-    playCircle: S('<circle cx="12" cy="12" r="9"/><path d="M10 8.500l5.500 3.500-5.500 3.500z" fill="currentColor"/>'),
     usersFill: S('<circle cx="9" cy="8" r="3.500"/><path d="M2.500 20c.8-3.500 3.200-5.500 6.500-5.500s5.700 2 6.500 5.500z"/><path d="M16 4.800a3.500 3.500 0 010 6.400M18 14.800c2 .6 3.200 2.300 3.600 4.700" fill="none"/>', `${FILL} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"`),
     menuLines: S('<path d="M5 9h14M5 15h9"/>'),
     arrowUp: S('<path d="M12 19V6M6.500 11.500L12 6l5.500 5.500"/>', LINE.replace('stroke-width="2"', 'stroke-width="2.400"')),
@@ -77,17 +89,12 @@
     vol1: S('<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.500 9.500a3.500 3.500 0 010 5"/>'),
     vol2: S('<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.500 8.500a5 5 0 010 7"/>'),
     vol3: S('<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.500 8.500a5 5 0 010 7M19 6a8.500 8.500 0 010 12"/>'),
-    camera: S('<path d="M4 8h3l1.500-2h7L17 8h3a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z"/><circle cx="12" cy="13.500" r="3.500"/>'),
     file: S('<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/>'),
     hash: S('<path d="M9 4L7 20M17 4l-2 16M4 9h16M3.500 15h16"/>'),
     phone: S('<rect x="7" y="2.500" width="10" height="19" rx="2.500"/><path d="M11 18.500h2"/>'),
     google: S('<path d="M19.200 7.500A8.500 8.500 0 1 0 20.500 12H12"/>'),
     at: S('<circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 006 0v-1a10 10 0 10-4 8"/>'),
     flip: S('<path d="M4 9a8 8 0 0114-3l2 2M20 4v4h-4M20 15a8 8 0 01-14 3l-2-2M4 20v-4h4"/>'),
-    plane: S('<path d="M21 3L3 10.500l6.500 2.500L12 20z"/><path d="M9.500 13L21 3"/>'),
-    planeFill: S('<path d="M21 3L3 10.500l6.500 2.500L12 20z"/><path class="cut" d="M9.500 13L21 3" fill="none"/>', `${FILL} stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"`),
-    cameraFill: S('<path d="M4 8h3l1.500-2h7L17 8h3a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z"/><circle class="cut" cx="12" cy="13.500" r="3.500" fill="none"/>', `${FILL} stroke="currentColor" stroke-width="2" stroke-linejoin="round"`),
-    videoFill: S('<circle cx="12" cy="12" r="9"/><path class="cut-fill" d="M10 8.500l5.500 3.500-5.500 3.500z" stroke="none"/>', `${FILL} stroke="currentColor" stroke-width="2" stroke-linejoin="round"`),
     sponsor: S('<rect x="3.500" y="3.500" width="17" height="17" rx="5"/><circle cx="12" cy="8" r="1.200" fill="currentColor" stroke="none"/><path d="M12 11.500v5"/>'),
     flame: S('<path d="M12 2.500c0 3.500-5.500 6-5.500 11a5.500 5.500 0 0011 0c0-2.500-1.200-4-2.300-5.200-.2 1.800-1 2.700-2 3C13.300 8.500 12.500 5.500 12 2.500z"/>'),
     trophy: S('<path d="M8 4h8v5a4 4 0 01-8 0V4zM8 6H5v1.500A3 3 0 008 10.500M16 6h3v1.500a3 3 0 01-3 3M12 13v4M8.500 20h7M10 17h4"/>'),

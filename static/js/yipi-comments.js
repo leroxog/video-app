@@ -102,7 +102,7 @@
 
     const main = h("div", { class: "cm-main" },
       h("div", { class: "cm-head" },
-        link(`/${item.user.handle}`, { class: "cm-name" }, item.user.name),
+        link(`/${item.user.handle}`, { class: "cm-name" }, item.user.name, Y.aiTag(item.user)),
         h("span", { class: "handle" }, `@${item.user.handle}`),
         h("span", { class: "dot" }, "·"),
         link(Y.postPath(item), { class: "cm-time" }, timeEl(item.createdAt))),

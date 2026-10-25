@@ -67,7 +67,7 @@
   }
 
   /* The template for a video: name (required), the video (at most 30 seconds, the milliseconds do not count), hashtags. */
-  function composeVideo({ file: given } = {}) {
+  function composeVideo({ file: given, camId = "" } = {}) {
     if (!Y.requireLogin("Melde dich an, um ein Video hochzuladen.")) return null;
     let picked = null;                                            // {file, url, width, height}
     let busy = false;
@@ -127,7 +127,7 @@
         progress.setAttribute("aria-valuenow", String(Math.round(fraction * 100)));
         if (fraction >= 1) submit.textContent = "Wird verarbeitet …";
       });
-      const reply = up.ok ? await Api.post("/posts", { text, media: [up.data.media.id] }) : up;
+      const reply = up.ok ? await Api.post("/posts", { text, media: [up.data.media.id], ...(camId ? { camId } : {}) }) : up;
       busy = false;
       submit.classList.remove("busy");
       submit.textContent = "Hochladen";

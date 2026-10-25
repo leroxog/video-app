@@ -167,6 +167,7 @@
       if (message.role === "user") {
         const things = (message.attachments || []).map((entry) => h("span", { class: "nex-attached" }, icon(entry.kind === "image" ? "image" : "file"), entry.name));
         return h("div", { class: "bubble mine" },
+          index === 0 || list[index - 1].role !== message.role ? h("span", { class: "bubble-name" }, "Ich") : null,
           h("div", { class: "bubble-text" }, things.length ? h("div", { class: "nex-attachments" }, things) : null, richText(message.content)),
           endOfGroup ? timeLine(message) : null);
       }
@@ -178,7 +179,7 @@
         draw();
       } });
       blocksOf(message.content, text);
-      return h("div", { class: "bubble theirs ai" }, text, open ? actions(message, index) : null, endOfGroup ? timeLine(message) : null);
+      return h("div", { class: "bubble theirs ai" }, index === 0 || list[index - 1].role !== message.role ? h("span", { class: "bubble-name" }, "Nex AI") : null, text, open ? actions(message, index) : null, endOfGroup ? timeLine(message) : null);
     }
 
     function draw() {

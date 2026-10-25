@@ -19,6 +19,7 @@
 
 :root[data-theme="dark"] {
   --bar: #151515;
+  --tab-off: #d2d2d2;
   --bg: #000;
   --card: #111;
   --card-2: #1c1c1c;
@@ -41,6 +42,7 @@
 }
 :root[data-theme="dim"] {
   --bar: #262626;
+  --tab-off: #d2d2d2;
   --bg: #1a1a1a;
   --card: #262626;
   --card-2: #333;
@@ -63,6 +65,7 @@
 }
 :root[data-theme="light"] {
   --bar: #eeeeee;
+  --tab-off: #8a8a8a;
   --bg: #fff;
   --card: #f3f3f3;
   --card-2: #e6e6e6;
@@ -1446,13 +1449,12 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 
 /* ----- the bar at the bottom on a phone: flat, white, five symbols */
 .tabbar { left: 0; right: 0; bottom: 0; width: 100%; height: calc(var(--tabbar) + env(safe-area-inset-bottom)); padding: 0 6px env(safe-area-inset-bottom); transform: none; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: var(--bg); -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; }
-.tab-item { color: var(--muted); border-radius: 16px; }
+.tab-item { color: var(--tab-off); border-radius: 16px; }
 .tab-item.active { color: var(--text); }
 .tab-item.active::after { display: none; }
-.tab-ic svg { width: 28px; height: 28px; stroke-width: 2.1px; }
-.tab-item.plus-tab { flex: 0 0 76px; }
-.plus-tab .tab-ic { width: 52px; height: 38px; border-radius: 14px; background: var(--ink); color: var(--on-ink); box-shadow: none; transition: transform 0.12s, opacity 0.15s; }
-.plus-tab .tab-ic svg { width: 24px; height: 24px; stroke-width: 2.6px; }
+.tab-ic svg { width: 29px; height: 29px; stroke-width: 2.4px; }
+.tab-item.plus-tab { flex: 1; }
+.plus-tab .tab-ic { width: 30px; height: 30px; background: none; color: inherit; box-shadow: none; transition: transform 0.12s, opacity 0.15s; }
 .plus-tab:active .tab-ic { transform: scale(0.9); }
 .tab-extras { display: none; }
 .side-foot { display: none; }
@@ -1667,4 +1669,98 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
   .nex-intro { padding-top: 10vh; }
 }
 .chat-blank .empty { padding: 36px 20px 24px; }
+/* the "KI" mark next to the names of the AI accounts */
+.ai-badge { margin-left: 6px; }
+.bubble-time .ai-badge { margin-left: 0; }
+.convo-top .ai-badge { margin: 0 auto 0 6px; }
+.ph-name h2 .ai-badge { margin-left: 8px; font-size: 12px; line-height: 20px; vertical-align: 4px; }
+.post-name .ai-badge, .cm-name .ai-badge, .ur-name .ai-badge, .who .ai-badge { vertical-align: 1px; }
+
+/* the box "Gesponsert" in the side bar: not there while the bar is folded, and a tall banner that fills the free room when it is open */
+@media screen and (min-width: 820px) {
+  .sp-slot { display: none; }
+  .app.rail-open .side-foot { flex: 1 1 auto; min-height: 0; }
+  .app.rail-open .sp-slot { display: flex; flex: 1 1 auto; flex-direction: column; justify-content: center; align-items: center; gap: 12px; min-height: 190px; max-height: 480px; padding: 22px 16px; text-align: center; border-radius: 22px; }
+  .app.rail-open .sp-slot .sp-mark { width: 52px; height: 52px; border-radius: 18px; }
+  .app.rail-open .sp-slot .sp-mark svg { width: 30px; height: 30px; }
+  .app.rail-open .sp-slot .sp-text { display: grid; gap: 4px; justify-items: center; }
+  .app.rail-open .sp-slot .sp-text b { font-size: 16px; }
+  .app.rail-open .sp-slot .sp-text small { display: block; font-size: 13px; }
+}
+
+/* ----- chats like Snapchat: everything stands on the left, a small name above every run of messages, and your own messages are purple like on Instagram */
+.bubble, .bubble.mine, .bubble.theirs { align-self: flex-start; align-items: flex-start; max-width: 88%; }
+.bubble.mine .bubble-text { background: linear-gradient(135deg, #7357f6 0%, #a24cf0 58%, #c23fc7 100%); color: #fff; border-bottom-right-radius: 22px; border-bottom-left-radius: 7px; }
+.bubble.mine .bubble-text .tok { color: #fff; }
+.bubble-name { margin: 10px 4px 1px; font-size: 11.5px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
+.bubble.mine .bubble-name { color: #a47bff; }
+.bubble.theirs .bubble-name { color: #1b9bff; }
+.bubble-time { margin-left: 4px; }
+.bubble.loved { align-items: flex-start; }
+
+.convo-status { display: flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.convo-status .dot { opacity: 0.6; }
+.convo-status time { font-weight: 500; }
+.convo-ic { display: inline-grid; place-items: center; width: 16px; height: 16px; flex: none; }
+.convo-ic svg { width: 15px; height: 15px; stroke-width: 2.6px; }
+.convo-status.unread { color: #1b9bff; font-weight: 800; }
+.convo-status.unread .convo-ic svg { fill: currentColor; }
+.convo-status.sent { color: #a47bff; }
+.convo-status.sent .convo-ic svg { stroke: none; }
+.convo-status.new { color: #1b9bff; }
+.convo-top { justify-content: flex-start; }
+.convo-top .ai-badge { margin: 0 0 0 6px; }
+.convo-streak { display: inline-flex; align-items: center; gap: 2px; margin: 0 4px 0 auto; font-size: 14px; font-weight: 800; }
+.convo-streak svg { width: 18px; height: 18px; color: #ff8a1f; }
+.convo-nex .convo-last { color: var(--muted); }
+
+/* ----- the lenses of the camera: face lenses, the small "create" lens, the note under the head, the layer the effects are drawn on */
+.lens.create { width: 52px; height: 52px; margin-left: 11px; }
+.lens.create .lens-ic { background: rgba(255, 255, 255, 0.12); border: 2px dashed rgba(255, 255, 255, 0.8); box-shadow: none; }
+.lens.create .lens-emoji { font-size: 22px; }
+.lens.face .lens-ic { border-color: rgba(255, 255, 255, 0.95); }
+.lens-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.cam-note { position: absolute; left: 50%; top: calc(94px + env(safe-area-inset-top)); transform: translateX(-50%); z-index: 6; max-width: calc(100% - 32px); padding: 8px 15px; border-radius: 999px; background: rgba(0, 0, 0, 0.58); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); color: #fff; font-size: 13px; font-weight: 700; white-space: nowrap; pointer-events: none; }
+.cam-note[hidden] { display: none; }
+.cam-view:not([data-state="idle"]) .cam-note { display: none; }
+.cam-view[data-kind="lens"] .cam-score, .cam-view[data-kind="lens"] .cam-best { display: none; }
+.cam-lens-by { margin-left: 6px; color: rgba(255, 255, 255, 0.7); font-size: 13px; font-weight: 600; }
+
+/* ----- "Ausprobieren": the purple, shimmering button under a video that was made with a lens (or "Mitspielen" under a game clip) */
+.try-btn { position: relative; display: inline-flex; align-items: center; gap: 8px; margin-top: 10px; padding: 11px 20px 11px 16px; border: 0; border-radius: 999px; overflow: hidden; color: #fff; font-weight: 800; font-size: 15px;
+  background: linear-gradient(120deg, #6a3df0 0%, #a24bf0 45%, #d44ad0 100%); box-shadow: 0 6px 20px rgba(122, 44, 240, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.22); cursor: pointer; transition: transform 0.12s; }
+.try-btn:active { transform: scale(0.96); }
+.try-btn svg { width: 18px; height: 18px; }
+.try-btn::after { content: ""; position: absolute; top: 0; bottom: 0; left: -60%; width: 40%; background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.55), transparent); transform: skewX(-18deg); animation: try-shimmer 2.8s ease-in-out infinite; pointer-events: none; }
+.try-btn.compact { margin-top: 6px; padding: 8px 15px 8px 12px; font-size: 14px; }
+@keyframes try-shimmer { 0% { left: -60%; } 55%, 100% { left: 130%; } }
+@media (prefers-reduced-motion: reduce) { .try-btn::after { animation: none; display: none; } }
+.reel-info .try-btn { pointer-events: auto; }
+
+/* the panel of the small "create" lens, and the dialog to write a lens */
+.cam-create { width: min(86%, 340px); display: flex; flex-direction: column; gap: 10px; padding: 18px; border-radius: 28px; background: rgba(12, 12, 18, 0.72); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); color: #fff; pointer-events: auto; max-height: 70%; overflow-y: auto; scrollbar-width: none; }
+.cam-create h2 { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
+.cam-create h3 { margin: 6px 0 0; font-size: 13px; color: rgba(255, 255, 255, 0.7); text-transform: uppercase; letter-spacing: 0.06em; }
+.cc-sub { color: rgba(255, 255, 255, 0.72); font-size: 14px; margin-top: -4px; }
+.cc-card, .cc-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 11px 12px; border-radius: 20px; background: rgba(255, 255, 255, 0.1); text-align: left; color: inherit; }
+.cc-card:active { background: rgba(255, 255, 255, 0.18); }
+.cc-ic { display: grid; place-items: center; flex: none; width: 46px; height: 46px; border-radius: 50%; background: linear-gradient(135deg, #7a2cf0, #d44ad0); font-size: 24px; }
+.cc-ic.small { width: 38px; height: 38px; font-size: 20px; }
+.cc-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.cc-text b { font-size: 15.5px; }
+.cc-text small { color: rgba(255, 255, 255, 0.7); font-size: 12.5px; }
+.cc-row .icon-btn { color: #fff; }
+.lens-maker { display: flex; flex-direction: column; gap: 12px; }
+.lm-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.lm-actions { display: flex; gap: 10px; }
+.lm-card { display: flex; gap: 14px; padding: 14px; border-radius: 22px; background: var(--bg-2); border: 1px solid var(--line); }
+.lm-emoji { display: grid; place-items: center; flex: none; width: 64px; height: 64px; border-radius: 50%; font-size: 32px; border: 3px solid #fff; box-shadow: 0 3px 12px rgba(0, 0, 0, 0.3); }
+.lm-card-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.lm-effects { margin: 4px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 3px; font-size: 13.5px; color: var(--muted); }
+.lm-effects li::before { content: "✓ "; color: #7a2cf0; font-weight: 800; }
+.lm-filter { color: var(--text); font-weight: 600; }
+.cc-mine { display: flex; flex-direction: column; gap: 8px; }
+.cc-mine:empty { display: none; }
+.lm-result { display: flex; flex-direction: column; gap: 8px; }
+.lm-result[hidden] { display: none; }
 

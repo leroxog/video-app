@@ -63,7 +63,7 @@
   };
 
   const peopleLine = (actors) => {
-    const link1 = (actor) => link(`/${actor.handle}`, { class: "who" }, actor.name);
+    const link1 = (actor) => link(`/${actor.handle}`, { class: "who" }, actor.name, Y.aiTag(actor));
     if (actors.length === 1) return [link1(actors[0])];
     if (actors.length === 2) return [link1(actors[0]), " und ", link1(actors[1])];
     return [link1(actors[0]), ", ", link1(actors[1]), ` und ${actors.length - 2} weitere`];
@@ -503,7 +503,7 @@
           { label: `@${user.handle} melden`, icon: "flag", danger: true, run: () => Y.reportDialog({ handle: user.handle }) },
         ]));
         put(actions, more);
-        if (Y.me && !user.blockedByMe && !user.blockedMe) put(actions, link(`/messages/${user.handle}`, { class: "icon-btn outlined", "aria-label": `Nachricht an @${user.handle}` }, icon("mail")));
+        if (Y.me && !user.ai && !user.blockedByMe && !user.blockedMe) put(actions, link(`/messages/${user.handle}`, { class: "icon-btn outlined", "aria-label": `Nachricht an @${user.handle}` }, icon("mail")));
         const follow = Y.followButton(user, { onChange: relationChanged });
         if (follow) put(actions, follow);
       }
@@ -514,7 +514,7 @@
       fill(head, banner,
         h("div", { class: "ph-body" },
           h("div", { class: "ph-top" }, h("button", { class: "ph-avatar", type: "button", "aria-label": user.avatar ? "Profilbild vergrößern" : "Profilbild", onclick: () => { if (user.avatar) Y.viewer([{ url: user.avatar, alt: `Profilbild von ${user.name}` }], 0); } }, avatar(user, "xl")), actions),
-          h("div", { class: "ph-name" }, h("h2", {}, user.name), h("span", { class: "handle" }, `@${user.handle}`), user.followsMe ? h("span", { class: "tag" }, "Folgt dir") : null, user.mutedByMe ? h("span", { class: "tag" }, "Stummgeschaltet") : null),
+          h("div", { class: "ph-name" }, h("h2", {}, user.name, Y.aiTag(user)), h("span", { class: "handle" }, `@${user.handle}`), user.followsMe ? h("span", { class: "tag" }, "Folgt dir") : null, user.mutedByMe ? h("span", { class: "tag" }, "Stummgeschaltet") : null),
           user.bio ? h("p", { class: "ph-bio" }, richText(user.bio)) : null, meta,
           h("div", { class: "ph-counts" },
             link(`/${user.handle}/following`, {}, h("b", {}, Core.formatCount(user.following)), " Folge ich"),

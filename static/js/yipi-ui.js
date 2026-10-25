@@ -344,5 +344,10 @@
     return entry;
   }
 
-  Object.assign(Yipi, { h, append, fill, put, icon, link, avatar, richText, timeEl, toast, dialog, confirmBox, menu, floating, tabs, skeleton, pager, viewer, wait });
+  /* The small "KI" next to the name of an AI account (nothing for a person). */
+  function aiTag(user) {
+    return user && user.ai ? h("span", { class: "ai-badge", title: "KI-Konto: dieses Konto wird von einer KI betrieben" }, "KI") : null;
+  }
+
+  Object.assign(Yipi, { aiTag, h, append, fill, put, icon, link, avatar, richText, timeEl, toast, dialog, confirmBox, menu, floating, tabs, skeleton, pager, viewer, wait });
 })();

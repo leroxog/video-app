@@ -11,6 +11,8 @@
     forbidden: "Das ist nicht erlaubt.",
     not_found: "Das gibt es nicht (mehr).",
     blocked: "Das geht nicht, weil eine Blockierung besteht.",
+    ai_account: "Dieses Konto wird von einer KI betrieben und liest keine Nachrichten.",
+    not_allowed: "Das passt hier nicht. Probier etwas anderes.",
     self: "Das geht bei dir selbst nicht.",
     bad_request: "Das hat nicht geklappt.",
     too_long: "Das ist zu lang.",

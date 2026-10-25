@@ -126,7 +126,7 @@
     const row = h("div", { class: "user-row" },
       link(`/${user.handle}`, { class: "ur-av", tabindex: "-1", "aria-hidden": "true" }, avatar(user, "md")),
       h("div", { class: "ur-main" },
-        link(`/${user.handle}`, { class: "ur-name" }, h("b", {}, user.name), h("span", { class: "handle" }, `@${user.handle}`)),
+        link(`/${user.handle}`, { class: "ur-name" }, h("b", {}, user.name, Y.aiTag(user)), h("span", { class: "handle" }, `@${user.handle}`)),
         options.bio !== false && user.bio ? h("p", { class: "ur-bio" }, richText(user.bio)) : null),
       options.action === undefined ? followButton(user) : options.action);
     return row;
@@ -202,7 +202,7 @@
   function quoteCard(quote) {
     if (quote.unavailable) return h("div", { class: "quote gone" }, "Dieser Beitrag ist nicht verfügbar.");
     const card = h("div", { class: "quote", role: "link", tabindex: "0", "aria-label": `Zitierter Beitrag von ${quote.user.name}` },
-      h("div", { class: "quote-head" }, avatar(quote.user, "xs"), h("b", {}, quote.user.name), h("span", { class: "handle" }, `@${quote.user.handle}`), h("span", { class: "dot" }, "·"), timeEl(quote.createdAt)),
+      h("div", { class: "quote-head" }, avatar(quote.user, "xs"), h("b", {}, quote.user.name), Y.aiTag(quote.user), h("span", { class: "handle" }, `@${quote.user.handle}`), h("span", { class: "dot" }, "·"), timeEl(quote.createdAt)),
       quote.text ? h("div", { class: "post-text" }, richText(quote.text)) : null,
       quote.media && quote.media.length ? (quote.media[0].video ? h("div", { class: "quote-media quote-video" }, icon("playCircle"), "Video") : h("div", { class: "quote-media" }, h("img", { src: quote.media[0].url, alt: quote.media[0].alt || "", loading: "lazy" }))) : null);
     const open = () => Y.navigate(postPath(quote));
@@ -462,13 +462,14 @@
     const head = h("div", { class: "post-head" },
       link(`/${item.user.handle}`, { class: "post-av", tabindex: "-1", "aria-hidden": "true" }, avatar(item.user, "sm")),
       h("div", { class: "post-who" },
-        link(`/${item.user.handle}`, { class: "post-name" }, item.user.name),
+        link(`/${item.user.handle}`, { class: "post-name" }, item.user.name, Y.aiTag(item.user)),
         h("span", { class: "post-meta" }, h("span", { class: "handle" }, `@${item.user.handle}`), detail ? null : [h("span", { class: "dot" }, "·"), link(postPath(item), { class: "post-time" }, timeEl(item.createdAt))])));
 
     const body = h("div", { class: "post-body" },
       item.replyTo && item.replyTo.handle && !options.noReplyLine ? h("p", { class: "reply-line" }, "Antwort an ", link(`/${item.replyTo.handle}`, { class: "tok" }, `@${item.replyTo.handle}`)) : null,
       item.text ? h("div", { class: "post-text" }, richText(item.text)) : null,
       item.media && item.media.length ? mediaGrid(item.media) : null,
+      item.camId && Y.tryButton ? Y.tryButton(item.camId) : null,
       item.poll ? pollView(item) : null,
       item.quote ? quoteCard(item.quote) : null,
       item.factCheck ? factBox(item) : null);

@@ -115,14 +115,14 @@
       const group = item.kind === "group";
       const last = item.last;
       const who = last ? (last.mine ? "Du: " : last.sender ? `${last.sender}: ` : "") : "";
+      const status = !last ? ["new", "Neuer Chat", "reply"] : item.unread ? ["unread", "Neue Nachricht", "reply"] : last.mine ? ["sent", "Gesendet", "planeFill"] : ["got", "Empfangen", "reply"];
       const preview = last ? `${who}${snippet((last.text || "").replace(/\s+/g, " "), 80)}` : "Noch keine Nachrichten";
       return link(group ? `/g/${item.group.id}` : `/messages/${item.user.handle}`, { class: `convo${item.unread ? " unread" : ""}${keyOf(item) === active ? " active" : ""}` },
         group ? groupFace() : avatar(item.user, "md"),
         h("div", { class: "convo-main" },
-          h("div", { class: "convo-top" }, h("b", { class: "convo-name" }, group ? item.group.name : item.user.name),
-            item.streak >= 2 ? h("span", { class: "convo-streak", title: `${item.streak} Tage in Folge`, "aria-label": `${item.streak} Tage in Folge geschrieben` }, icon("flame"), String(item.streak)) : null,
-            h("span", { class: "convo-time" }, Y.timeEl(item.at))),
-          h("p", { class: "convo-last" }, preview)),
+          h("div", { class: "convo-top" }, h("b", { class: "convo-name" }, group ? item.group.name : item.user.name), group ? null : Y.aiTag(item.user)),
+          h("p", { class: `convo-last convo-status ${status[0]}`, title: preview }, h("span", { class: "convo-ic" }, icon(status[2])), h("span", {}, status[1]), h("span", { class: "dot" }, "·"), Y.timeEl(item.at))),
+        item.streak >= 2 ? h("span", { class: "convo-streak", title: `${item.streak} Tage in Folge`, "aria-label": `${item.streak} Tage in Folge geschrieben` }, String(item.streak), icon("flame")) : null,
         item.unread ? h("span", { class: "unread-dot", "aria-label": `${item.unread} ungelesen` }, item.unread > 99 ? "99+" : String(item.unread)) : null);
     }
 
@@ -274,9 +274,9 @@
         const endOfGroup = seen || !next || !sameSender(next, message) || dayLabel(next.createdAt) !== day || clock(next.createdAt) !== clock(message.createdAt);
         const gif = message.gif && !message.gif.gone ? message.gif : null;
         const file = message.file && !message.file.gone ? message.file : null;
-        const showName = group && !message.mine && (!previous || !sameSender(previous, message));
+        const showName = !previous || !sameSender(previous, message);
         nodes.push(h("div", { class: `bubble ${message.mine ? "mine" : "theirs"}${message.hearts ? " loved" : ""}`, "data-id": String(message.id) },
-          showName ? h("span", { class: "bubble-name" }, message.sender ? message.sender.name : "Gelöschtes Konto") : null,
+          showName ? h("span", { class: "bubble-name" }, message.mine ? "Ich" : message.sender ? message.sender.name : (state.other && state.other.name) || (group ? "Gelöschtes Konto" : `@${route.handle}`)) : null,
           gif ? h("div", { class: "bubble-gif-wrap" },
             h("button", { class: "bubble-gif", type: "button", "aria-label": `GIF vergrößern${gif.title ? `: ${gif.title}` : ""}`, onclick: () => Y.viewer([{ url: gif.url, alt: gif.title || "GIF" }], 0) }, h("img", { src: gif.url, alt: gif.title || "GIF", width: gif.width, height: gif.height, loading: "lazy" })),
             Y.gifStar(gif)) : null,

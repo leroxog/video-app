@@ -223,7 +223,8 @@
       const info = h("div", { class: "reel-info" },
         link(`/${item.user.handle}`, { class: "reel-user" }, h("b", {}, `@${item.user.handle}`), h("span", { class: "dot" }, "·"), timeEl(item.createdAt)),
         title ? h("p", { class: "reel-title" }, richText(title)) : null,
-        caption ? h("p", { class: "reel-text" }, richText(caption)) : null);
+        caption ? h("p", { class: "reel-text" }, richText(caption)) : null,
+        item.camId && Y.tryButton ? Y.tryButton(item.camId) : null);
       const actions = h("div", { class: "reel-actions" },
         h("span", { class: "reel-person" }, link(`/${item.user.handle}`, { class: "reel-av", "aria-label": `Profil von ${item.user.name}` }, avatar(item.user, "lg")), follow),
         like, comment, save, share, more);
