@@ -1,8 +1,8 @@
 /* Pulse games, the kit (pg-kit.js): what every small game of the camera tab is built from. A game is registered with PulseGames.register({id, name, emoji,
    cat, hint, create(env)}); create() returns {update(dt), draw()}. The game gets an `env` with the size of the play field (360 x 640, upright),
    the drawing helpers, the input of the finger or mouse (one pressed/released/tap/swipe per tick, plus the keys), a seeded random number generator
-   and score()/over(). Nothing is drawn behind the game: the canvas is see-through, so the picture of the camera shows behind it (and the recording
-   of the camera tab captures both). The same code runs without a browser in the tests (PulseGames.headless). No sound: the recording takes the
+   and score()/over(). The canvas is see-through where the game draws nothing, so the picture of the camera shows behind it (and the recording
+   of the camera tab captures both); a game that does not draw a whole scene of its own gets a backdrop in its colour (see `backdrop`), a game with `bubble: true` draws its scene itself. The same code runs without a browser in the tests (PulseGames.headless). No sound: the recording takes the
    voice of the player, not the game. */
 (function () {
   "use strict";
@@ -68,6 +68,7 @@
         ctx.beginPath();
         if (ctx.roundRect) ctx.roundRect(x, y, w, h, radius); else ctx.rect(x, y, w, h);
         ctx.fill();
+        if (alpha >= 0.12 && w > 24 && h > 24) { ctx.lineWidth = 1.2; ctx.strokeStyle = "rgba(255,255,255,0.15)"; ctx.stroke(); }     // a fine light edge, like glass
       },
       rect(x, y, w, h, fill, radius = 0) {
         ctx.fillStyle = fill;
@@ -108,13 +109,64 @@
       button(label, x, y, w, h, o = {}) {
         const { fill = "rgba(255,255,255,0.88)", color = "#111", size = 20, radius = 16 } = o;
         const hot = input.down && env.inside(input.x, input.y, x, y, w, h);
-        env.rect(x, y + (hot ? 2 : 0), w, h, fill, radius);
-        env.text(label, x + w / 2, y + h / 2 + (hot ? 2 : 0), { size, color, stroke: false });
+        const dy = hot ? 3 : 0;
+        if (!hot) env.rect(x, y + 4, w, h, "rgba(0,0,0,0.3)", radius);                          // the thickness of the button
+        env.rect(x, y + dy, w, h, fill, radius);
+        env.rect(x + 3, y + dy + 2, Math.max(0, w - 6), Math.max(0, h * 0.42), "rgba(255,255,255,0.22)", Math.max(2, radius - 3));
+        env.text(label, x + w / 2, y + h / 2 + dy, { size, color, stroke: false });
         return input.tap && env.inside(input.x, input.y, x, y, w, h);
       },
     };
     return env;
   }
+
+  /* ------------------------------------------------------------------------------------------------ the backdrop */
+  /* The games that do not draw a whole scene of their own get a backdrop in the colour of the game: a gradient, two soft lights, floating lights and a dark edge. It is not quite
+     opaque, so the camera still shines through a little. */
+  function mix(hex, to, amount) {
+    const m = /^#([0-9a-f]{6})$/i.exec(hex || "");
+    const n = m ? parseInt(m[1], 16) : 0x6c7bff;
+    const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    return c.map((v, i) => Math.round(v + (to[i] - v) * amount));
+  }
+  function backdrop(ctx, def, time) {
+    const color = def.color || "#6c7bff";
+    const top = mix(color, [0, 0, 0], 0.4);
+    const bottom = mix(color, [0, 0, 0], 0.78);
+    const light = mix(color, [255, 255, 255], 0.35);
+    const sky = ctx.createLinearGradient(0, 0, 0, H);
+    sky.addColorStop(0, `rgba(${top},0.66)`);
+    sky.addColorStop(1, `rgba(${bottom},0.86)`);
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, W, H);
+    for (const [cx, cy, r, a] of [[W * 0.15, H * 0.2, 260, 0.34], [W * 0.9, H * 0.82, 300, 0.26]]) {
+      const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+      glow.addColorStop(0, `rgba(${light},${a})`);
+      glow.addColorStop(1, `rgba(${light},0)`);
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, W, H);
+    }
+    let seed = 7;
+    for (let i = 0; i < def.id.length; i++) seed = (seed * 31 + def.id.charCodeAt(i)) >>> 0;
+    ctx.fillStyle = "#fff";
+    for (let k = 0; k < 9; k++) {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      const bx = (seed % 1000) / 1000 * W;
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      const by = (seed % 1000) / 1000 * H;
+      ctx.globalAlpha = 0.05 + (k % 3) * 0.025;
+      ctx.beginPath();
+      ctx.arc(bx + Math.sin(time * 0.35 + k) * 14, by + Math.cos(time * 0.3 + k * 1.3) * 18, 14 + (k % 4) * 11, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    const edge = ctx.createRadialGradient(W / 2, H / 2, H * 0.32, W / 2, H / 2, H * 0.72);
+    edge.addColorStop(0, "rgba(0,0,0,0)");
+    edge.addColorStop(1, "rgba(0,0,0,0.38)");
+    ctx.fillStyle = edge;
+    ctx.fillRect(0, 0, W, H);
+  }
+  const wantsBackdrop = (def) => !def.bubble && def.backdrop !== false;
 
   /* ------------------------------------------------------------------------------------------------ the loop around a game */
   /* run(def, canvas, hooks): plays the game on the canvas of the page. hooks: onScore, onOver. Returns {restart, destroy, env}. */
@@ -201,6 +253,7 @@
         if (armed && game.idle) { game.idle(env.input); env.input.endTick(); }     // while the game waits for the first touch it may still answer a touch on its own switches
       }
       ctx.clearRect(0, 0, W, H);
+      if (wantsBackdrop(def)) backdrop(ctx, def, now / 1000);
       game.draw?.();
     }
     start();
@@ -256,13 +309,13 @@
       options.script?.(frame, env.input, env);
       if (!env.finished) game.update?.(STEP);
       env.input.endTick();
-      if (frame % 3 === 0) { ctx.clearRect(0, 0, W, H); game.draw?.(); }
+      if (frame % 3 === 0) { ctx.clearRect(0, 0, W, H); if (wantsBackdrop(def)) backdrop(ctx, def, frame / 60); game.draw?.(); }
     }
     return { score: env.points, scores, over: events.over, finished: env.finished, drawn: ctx.__calls.n, env, game };
   }
 
   window.PulseGames = {
-    W, H, register, define, headless, run, createEnv, mulberry32,
+    W, H, register, define, headless, run, createEnv, mulberry32, backdrop,
     list: () => games.map((def, index) => ({ def, index })).sort((a, b) => (b.def.featured ? 1000 - (b.def.order || 0) : 0) - (a.def.featured ? 1000 - (a.def.order || 0) : 0) || a.index - b.index)
       .map(({ def: { id, name, emoji, cat, hint, color, external, featured } }) => ({ id, name, emoji, cat, hint, color: color || "", external: !!external, featured: !!featured })),
     get: (id) => byId.get(id) || null,
