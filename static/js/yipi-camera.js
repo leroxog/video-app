@@ -92,6 +92,8 @@
     let clip = null;                                           // {blob, url, name, score, game}
     let finalScore = 0;
     let lens = null;                                           // the running face lens (a FaceLens of pl-face.js)
+    let lastItem = null;                                       // the lens or game that was open before the QR code (the code can point to it)
+    let panelCleanup = null;                                   // what the panel of "QR-Code" has to stop (the scanner)
     const setState = (next) => { state = next; app.dataset.cam = next; el.dataset.state = next; };
     setState("idle");
 
@@ -138,8 +140,8 @@
       nocam.hidden = false;
     }
     nocam.addEventListener("click", () => openCamera());
-    board.addEventListener("click", () => { if (state === "idle" && list[active] && list[active].kind === "game") Y.leaderboard(list[active]); else if (state === "idle") toast("Eine Bestenliste gibt es nur bei Spielen."); });
-    const todaysGame = () => { const games = list.filter((entry) => entry.kind === "game"); return games[Core.dailyIndex(new Date().toISOString().slice(0, 10), games.length)]; };
+    board.addEventListener("click", () => { if (state === "idle" && list[active] && list[active].kind === "game" && !list[active].community) Y.leaderboard(list[active]); else if (state === "idle") toast("Eine Bestenliste gibt es nur bei den Spielen von Nex."); });
+    const todaysGame = () => { const games = list.filter((entry) => entry.kind === "game" && !entry.community); return games[Core.dailyIndex(new Date().toISOString().slice(0, 10), games.length)]; };
     flip.addEventListener("click", () => { if (state !== "idle") return; facing = facing === "user" ? "environment" : "user"; openCamera().then(() => lens?.setMirror(facing === "user")); });
 
     // ---------------------------------------------------------------------------------------------- the lenses
@@ -253,11 +255,15 @@
       const game = list[active];
       const mine = ++previewId;
       stopLens();
+      panelCleanup?.();
+      panelCleanup = null;
       runner?.destroy();
       runner = null;
       host.replaceChildren();
       el.dataset.kind = game.kind || "game";
+      if (game.kind === "game" || game.kind === "lens") lastItem = game;
       if (game.kind && game.kind !== "game") { showSpecial(game, mine); return; }
+      if (game.community && !window.PulseGames.get(game.id)) { ensureCommunity(game, mine); return; }
       chosen = game;
       finalScore = 0;
       score.textContent = "0";
@@ -295,6 +301,16 @@
       canvas.focus({ preventScroll: true });
     }
 
+    async function ensureCommunity(game, mine) {
+      lensNote("Das Spiel wird geladen …");
+      const row = await Y.communityGames.fetch(game.id);
+      lensNote("");
+      if (dead || mine !== previewId) return;
+      if (!row) { lensNote("Dieses Spiel gibt es nicht mehr."); return; }
+      window.PulseGames.define(window.PulseGames.community.communityDef(row));
+      showPreview();
+    }
+
     // ---------------------------------------------------------------------------------------------- face lenses, "create" and the QR code
     const lensNote = (text) => { note.textContent = text || ""; note.hidden = !text; };
     function stopLens() {
@@ -313,7 +329,7 @@
       tapHint.hidden = item.kind !== "lens";
       if (item.kind === "lens") await openLens(item, mine);
       else if (item.kind === "create") Y.cameraCreate?.panel({ host, camera: api });
-      else if (item.kind === "qr") Y.cameraQr?.panel({ host, camera: api });
+      else if (item.kind === "qr") panelCleanup = Y.cameraQr?.panel({ host, camera: api }) || null;
     }
 
     async function openLens(item, mine) {
@@ -399,7 +415,8 @@
       fill(over, h("div", { class: "cam-over-box" }, h("b", {}, "Fertig!"), h("span", { class: "cam-over-score" }, points(finalScore)), h("small", {}, finalScore >= top && finalScore > 0 ? "Neuer Bestwert!" : `Bestwert ${top}`), rank));
       over.hidden = false;
       const daily = todaysGame() === chosen && finalScore > 0;
-      Y.reportPlay(chosen.id, finalScore).then((info) => {
+      if (chosen.community) Y.communityGames?.played(chosen.id);
+      (chosen.community ? Promise.resolve(null) : Y.reportPlay(chosen.id, finalScore)).then((info) => {
         if (!info || !rank.isConnected) return;
         rank.textContent = `${info.record ? "Neuer Rekord! " : ""}Platz ${info.rank} der Bestenliste${daily ? " · Spiel des Tages geschafft" : ""}`;
       });
@@ -656,7 +673,7 @@
     openCamera();
     loadGames();
 
-    const api = { feed, stage, host, toast, get stream() { return stream; }, get facing() { return facing; }, go: (id) => { const at = list.findIndex((entry) => entry.id === id); if (at >= 0) go(at, true); },
+    const api = { feed, stage, host, toast, get before() { return lastItem; }, get stream() { return stream; }, get facing() { return facing; }, go: (id) => { const at = list.findIndex((entry) => entry.id === id); if (at >= 0) go(at, true); },
       add: (item) => { const at = list.findIndex((entry) => entry.id === item.id); if (at < 0) list.splice(1, 0, item); active = Math.max(1, list.findIndex((entry) => entry.id === item.id)); drawLenses(); },
       remove: (id) => { const at = list.findIndex((entry) => entry.id === id); if (at < 0) return; list.splice(at, 1); active = Math.min(Math.max(0, at), list.length - 1); drawLenses(); },
       reload: () => ctx.reload(), reopen: () => openCamera() };
@@ -668,6 +685,7 @@
         dead = true;
         clearTimeout(previewTimer);
         stopLens();
+        panelCleanup?.();
         endGame();
         recorder = null;
         window.removeEventListener("resize", fit);

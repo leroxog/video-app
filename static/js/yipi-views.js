@@ -486,11 +486,13 @@
       banner.style.setProperty("--hue", Core.avatarHue(user.handle));
       const actions = h("div", { class: "ph-actions" });
       if (user.isMe) {
+        put(actions, h("button", { class: "icon-btn outlined", type: "button", "aria-label": "Dein QR-Code", onclick: () => Y.qr.dialog({ path: `/${user.handle}`, title: "Dein QR-Code", subtitle: "Wer ihn scannt, landet auf deinem Profil." }) }, icon("qr")));
         put(actions, h("button", { class: "btn ghost", type: "button", onclick: () => editProfile(user, (me) => { Object.assign(user, { name: me.name, bio: me.bio, location: me.location, website: me.website, avatar: me.avatar, banner: me.banner }); drawHead(); bar.set(user.name, `${Core.formatCount(user.posts)} Beiträge`); result.title = `${user.name} (@${user.handle})`; ctx.setTitle(result.title); }) }, "Profil bearbeiten"));
       } else {
         const more = h("button", { class: "icon-btn outlined", type: "button", "aria-label": "Mehr", "aria-haspopup": "menu" }, icon("more"));
         more.addEventListener("click", () => menu(more, [
           { label: "Link kopieren", icon: "link", run: () => Y.copyLink(`/${user.handle}`) },
+          { label: "QR-Code", icon: "qr", run: () => Y.qr.dialog({ path: `/${user.handle}`, title: `QR-Code von @${user.handle}` }) },
           Y.me ? { label: user.mutedByMe ? `Stummschaltung von @${user.handle} aufheben` : `@${user.handle} stummschalten`, icon: "mute", run: async () => {
             const reply = user.mutedByMe ? await Api.del(`/users/${user.handle}/mute`) : await Api.post(`/users/${user.handle}/mute`);
             if (reply.ok) { Object.assign(user, reply.data.user); drawHead(); toast(user.mutedByMe ? `@${user.handle} ist stummgeschaltet.` : "Stummschaltung aufgehoben."); } else toast(Api.message(reply));

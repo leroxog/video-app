@@ -113,6 +113,17 @@
       h("button", { class: "cc-card", type: "button", onclick: () => (Y.gameMaker ? Y.gameMaker.code(camera) : toast("Das Hochladen von Spielen ist gleich da.")) }, h("span", { class: "cc-ic" }, "🧩"), h("span", { class: "cc-text" }, h("b", {}, "Spiel-Code hochladen"), h("small", {}, "Dein eigenes Spiel aus JavaScript, sicher in einer Sandbox"))),
       mine);
     host.append(panel);
+    Api.get("/community-games?sort=mine&limit=20").then((reply) => {
+      if (!reply.ok || !reply.data.items.length || !panel.isConnected) return;
+      panel.append(h("h3", {}, "Deine Spiele"), ...reply.data.items.map((row) => h("div", { class: "cc-row" },
+        h("span", { class: "cc-ic small", style: `background:${row.color}` }, row.emoji), h("span", { class: "cc-text" }, h("b", {}, row.title), h("small", {}, `${row.plays} ${row.plays === 1 ? "Mal" : "Mal"} gespielt`)),
+        h("button", { class: "icon-btn small", type: "button", "aria-label": `${row.title} spielen`, onclick: () => { const item = Y.communityGames.toItem(row); camera.add(item); } }, icon("camera")),
+        h("button", { class: "icon-btn small", type: "button", "aria-label": `${row.title} löschen`, onclick: async () => {
+          if (!(await Y.confirmBox({ title: "Spiel löschen?", text: `„${row.title}“ verschwindet für alle.`, yes: "Löschen", danger: true }))) return;
+          const gone = await Api.del(`/community-games/${row.id}`);
+          if (gone.ok) { camera.remove(row.id); toast("Das Spiel ist gelöscht."); } else toast(Api.message(gone));
+        } }, icon("trash")))));
+    });
     Api.get("/lenses?sort=mine&limit=20").then((reply) => {
       if (!reply.ok || !reply.data.items.length || !panel.isConnected) return;
       fill(mine, h("h3", {}, "Deine Linsen"), ...reply.data.items.map((row) => h("div", { class: "cc-row" },

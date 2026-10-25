@@ -13,6 +13,8 @@
     blocked: "Das geht nicht, weil eine Blockierung besteht.",
     ai_account: "Dieses Konto wird von einer KI betrieben und liest keine Nachrichten.",
     not_allowed: "Das passt hier nicht. Probier etwas anderes.",
+    bad_level: "Mit deinem Level stimmt etwas nicht. Probier es noch einmal.",
+    bad_code: "Mit dem Code stimmt etwas nicht.",
     self: "Das geht bei dir selbst nicht.",
     bad_request: "Das hat nicht geklappt.",
     too_long: "Das ist zu lang.",
@@ -117,6 +119,7 @@
     get: (path) => call("GET", path),
     post: (path, body) => call("POST", path, body === undefined ? {} : body),
     patch: (path, body) => call("PATCH", path, body),
+    put: (path, body) => call("PUT", path, body),
     del: (path) => call("DELETE", path),
     /* A picture or video upload: `file` is a File or Blob, `fields` more form fields (alt text), `onProgress(fraction)` is called while the bytes go
        out (a video can take a while). */

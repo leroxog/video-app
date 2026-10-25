@@ -340,7 +340,7 @@ def test_compacting_needs_postgres(client, monkeypatch):
 def test_the_page_may_load_pictures_and_videos_from_the_bucket_only_when_it_is_used(client, r2):
     policy = yipi.content_security_policy()
     assert "img-src 'self' data: blob: https://acc.r2.cloudflarestorage.com;" in policy and "media-src 'self' blob: https://acc.r2.cloudflarestorage.com;" in policy
-    assert "script-src 'self';" in policy and "connect-src 'self'" in policy, "scripts and requests still only from the site itself"
+    assert "script-src 'self' 'wasm-unsafe-eval';" in policy and "connect-src 'self'" in policy, "scripts and requests still only from the site itself (WebAssembly may run: the face lenses)"
     page = flask_app.test_client().get("/")
     assert "https://acc.r2.cloudflarestorage.com" in page.headers["Content-Security-Policy"]
     STORE.disable()

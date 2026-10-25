@@ -19,6 +19,12 @@
     byId.set(def.id, def);
   }
 
+  /* A game that is known (so that `get(id)` finds it and a run can start) but is not in the list of the strip: the games of the community, which the server lists. */
+  function define(def) {
+    byId.set(def.id, def);
+    return def;
+  }
+
   function mulberry32(seed) {
     let a = seed >>> 0;
     return function random() {
@@ -256,7 +262,7 @@
   }
 
   window.PulseGames = {
-    W, H, register, headless, run, createEnv, mulberry32,
+    W, H, register, define, headless, run, createEnv, mulberry32,
     list: () => games.map((def, index) => ({ def, index })).sort((a, b) => (b.def.featured ? 1000 - (b.def.order || 0) : 0) - (a.def.featured ? 1000 - (a.def.order || 0) : 0) || a.index - b.index)
       .map(({ def: { id, name, emoji, cat, hint, color, external, featured } }) => ({ id, name, emoji, cat, hint, color: color || "", external: !!external, featured: !!featured })),
     get: (id) => byId.get(id) || null,

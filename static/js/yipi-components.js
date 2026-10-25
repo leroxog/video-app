@@ -50,6 +50,7 @@
     return [
       video && Y.downloadVideo ? { label: "Video speichern", icon: "download", run: () => Y.downloadVideo(item) } : null,
       { label: "Link kopieren", icon: "link", run: () => copyLink(postPath(item)) },
+      Y.qr ? { label: "QR-Code", icon: "qr", run: () => Y.qr.dialog({ path: postPath(item), title: video ? "QR-Code des Videos" : "QR-Code des Beitrags", subtitle: `von @${item.user.handle}` }) } : null,
       { label: "Per Nachricht senden", icon: "mail", run: () => sendPostDialog(item) },
       navigator.share ? { label: "Teilen …", icon: "share", run: async () => {
         try { await navigator.share({ url: absolute(postPath(item)), title: `${item.user.name} auf Nex`, text: shareText(item) }); } catch (error) { /* closed */ }

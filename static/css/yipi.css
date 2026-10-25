@@ -1764,3 +1764,53 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .lm-result { display: flex; flex-direction: column; gap: 8px; }
 .lm-result[hidden] { display: none; }
 
+/* ----- QR codes: the dialog, and the "QR-Code" lens of the camera (the code on a card, or the picture of the camera with a frame to scan) */
+.qr-dialog { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+.qr-holder { width: min(320px, 100%); min-height: 120px; display: grid; place-items: center; }
+.qr-canvas { display: block; width: 100%; height: auto; border-radius: 22px; box-shadow: 0 8px 30px rgba(75, 33, 201, 0.25); }
+.qr-url { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+.qr-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.qr-found { padding: 12px 14px; border-radius: 16px; background: var(--bg-2); overflow-wrap: anywhere; text-align: left; font-size: 14px; max-height: 160px; overflow-y: auto; }
+.cam-qr { width: min(86%, 340px); display: flex; flex-direction: column; align-items: center; gap: 10px; pointer-events: auto; }
+.qr-modes { display: inline-flex; padding: 4px; border-radius: 999px; background: rgba(0, 0, 0, 0.55); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+.qr-mode { padding: 8px 18px; border-radius: 999px; color: rgba(255, 255, 255, 0.78); font-weight: 700; font-size: 14px; }
+.qr-mode.on { background: #fff; color: #000; }
+.qr-view { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 10px; min-height: 120px; justify-content: center; }
+.qr-view .qr-canvas { width: min(100%, 290px); }
+.qr-view .qr-url { color: #fff; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7); font-weight: 600; font-size: 14px; }
+.qr-note { padding: 8px 14px; border-radius: 999px; background: rgba(0, 0, 0, 0.55); color: #fff; font-size: 14px; font-weight: 600; }
+.qr-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.qr-chips .chip { background: rgba(0, 0, 0, 0.55); color: #fff; }
+.qr-chips .chip.on { background: #fff; color: #000; }
+.qr-chips[hidden] { display: none; }
+.qr-reticle { position: relative; width: 250px; height: 250px; }
+.qr-reticle i { position: absolute; width: 44px; height: 44px; border: 5px solid #fff; border-radius: 14px; box-shadow: 0 0 12px rgba(0, 0, 0, 0.5); }
+.qr-reticle i:nth-child(1) { top: 0; left: 0; border-right: 0; border-bottom: 0; }
+.qr-reticle i:nth-child(2) { top: 0; right: 0; border-left: 0; border-bottom: 0; }
+.qr-reticle i:nth-child(3) { bottom: 0; left: 0; border-right: 0; border-top: 0; }
+.qr-reticle i:nth-child(4) { bottom: 0; right: 0; border-left: 0; border-top: 0; }
+
+/* ----- the builder of jump-and-run levels and the uploader of games (dialogs), and the screen to try them */
+.game-maker { display: flex; flex-direction: column; gap: 12px; }
+.gm-board { overflow-x: auto; border-radius: 18px; border: 1px solid var(--line); background: var(--bg-2); scrollbar-width: thin; }
+.gm-canvas { display: block; touch-action: pan-x pinch-zoom; image-rendering: auto; }
+.gm-canvas.painting { touch-action: none; cursor: crosshair; }
+.gm-tools { display: flex; flex-wrap: wrap; gap: 6px; }
+.gm-tool { display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 62px; padding: 7px 8px; border-radius: 14px; background: var(--bg-2); border: 1px solid transparent; font-size: 20px; }
+.gm-tool small { font-size: 11px; color: var(--muted); font-weight: 700; }
+.gm-tool.on { border-color: #7a2cf0; background: color-mix(in srgb, #7a2cf0 14%, var(--bg)); }
+.gm-row { display: flex; flex-direction: column; gap: 6px; }
+.gm-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip.emoji { min-width: 42px; font-size: 20px; padding: 4px 8px; }
+.gm-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.gm-code { font-family: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; font-size: 13px; line-height: 1.45; white-space: pre; overflow: auto; min-height: 260px; tab-size: 2; }
+.gm-api { margin: 0; padding-left: 18px; font-size: 13.5px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
+.gm-api code { color: var(--text); background: var(--bg-2); padding: 1px 5px; border-radius: 6px; font-size: 12.5px; }
+.gm-test { position: fixed; inset: 0; z-index: 1500; display: grid; place-items: center; background: rgba(0, 0, 0, 0.82); }
+.gm-test-frame { position: relative; height: min(92dvh, 92vh); aspect-ratio: 9 / 16; max-width: 96vw; border-radius: 26px; overflow: hidden; background: linear-gradient(#10101a, #1b1b2c); box-shadow: 0 10px 50px rgba(0, 0, 0, 0.6); }
+.gm-test-canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.gm-test-result { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 22px 26px; border-radius: 26px; background: rgba(12, 12, 20, 0.88); color: #fff; font-size: 26px; text-align: center; }
+.gm-test-result[hidden] { display: none; }
+.gm-test-buttons { display: flex; gap: 8px; }
+.gm-test-close { position: absolute; top: calc(12px + env(safe-area-inset-top)); right: 12px; z-index: 2; width: 42px; height: 42px; border-radius: 50%; background: rgba(0, 0, 0, 0.55); color: #fff; display: grid; place-items: center; }
+.gm-test-result .btn.ghost { color: #fff; border-color: rgba(255, 255, 255, 0.45); }

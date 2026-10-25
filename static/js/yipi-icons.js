@@ -23,6 +23,7 @@
     cameraFill: S(CAMERA + '<circle class="cut" cx="12" cy="13.4" r="3.5" fill="none"/>', SOLID),
     playCircle: S('<circle cx="12" cy="12" r="9.2"/><path d="M10 8.4l5.7 3.6-5.7 3.6z"/>', BOLD),
     videoFill: S('<circle cx="12" cy="12" r="9.2"/><path class="cut-fill" d="M10 8.4l5.7 3.6-5.7 3.6z" stroke="none"/>', SOLID),
+    qr: S('<rect x="3.5" y="3.5" width="6.5" height="6.5" rx="1.6"/><rect x="14" y="3.5" width="6.5" height="6.5" rx="1.6"/><rect x="3.5" y="14" width="6.5" height="6.5" rx="1.6"/><path d="M14 14h2.6v2.6H14zM20.5 14v2.6M14 20.5h2.6M18.6 18.6h1.9v1.9h-1.9z"/>', BOLD),
     plusCircle: S('<circle cx="12" cy="12" r="9.2"/><path d="M12 7.7v8.6M7.7 12h8.6"/>', BOLD),
     search: S('<circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21"/>'),
     searchBold: S('<circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21"/>', LINE.replace('stroke-width="2"', 'stroke-width="2.8"')),
