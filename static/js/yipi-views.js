@@ -122,6 +122,28 @@
   }
   Y.menuButton = menuButton;
 
+  /* The column on the right of the feed (from 1100 px on): what is trending, whom to follow, and the small print. Nothing is loaded on a narrow screen, where the column is hidden. */
+  function homeRail() {
+    const trendBox = h("section", { class: "rail-card" }, h("h2", {}, "Im Trend"));
+    const peopleBox = h("section", { class: "rail-card" }, h("h2", {}, "Wem folgen"));
+    const rail = h("aside", { class: "home-rail", "aria-label": "Trends und Vorschläge" }, trendBox, peopleBox,
+      h("nav", { class: "rail-foot", "aria-label": "Rechtliches" }, h("a", { href: "/nutzungsbedingungen" }, "Nutzungsbedingungen"), h("a", { href: "/datenschutz" }, "Datenschutz"), h("a", { href: "/impressum" }, "Impressum"), h("a", { href: "/bildnachweise" }, "Bildnachweise"), h("span", {}, "© Nex")));
+    const wide = window.matchMedia ? window.matchMedia("(min-width: 1100px)") : null;
+    let loaded = false;
+    async function load() {
+      if (loaded || (wide && !wide.matches)) return;
+      loaded = true;
+      const [trends, people] = await Promise.all([Api.get("/trends"), Api.get("/suggestions")]);
+      if (trends.ok && trends.data.trends.length) fill(trendBox, h("h2", {}, "Im Trend"), trendRows(trends.data.trends.slice(0, 5)), link("/explore?tab=trends", { class: "card-more" }, "Mehr anzeigen"));
+      else trendBox.remove();
+      if (people.ok && people.data.users.length) fill(peopleBox, h("h2", {}, "Wem folgen"), people.data.users.slice(0, 4).map((user) => Y.userRow(user, { bio: false })), link("/explore?tab=people", { class: "card-more" }, "Mehr anzeigen"));
+      else peopleBox.remove();
+    }
+    load();
+    if (wide && wide.addEventListener) wide.addEventListener("change", load);
+    return rail;
+  }
+
   views.home = function home(route, ctx) {
     const signedIn = !!Y.me;
     let feed = signedIn && Y.readJson("yipi.feed", "foryou") === "following" ? "following" : "foryou";
@@ -136,7 +158,9 @@
     const stories = signedIn ? Y.storiesBar() : null;
     if (stories) Y.refreshStories = () => stories.reload();
     const bar = h("div", { class: "topbar home" }, tabBox);                  // the two tabs stay at the top while the posts scroll
-    const el = h("div", { class: "view home-view" }, stories ? stories.element : null, bar, pill);
+    const main = h("div", { class: "home-main" }, stories ? stories.element : null, bar, pill);
+    const rail = signedIn ? homeRail() : null;                                // on a wide screen: the feed in the middle and trends and people on the right, like the apps one knows
+    const el = h("div", { class: "view home-view" }, main, rail);
 
     function drawTabs() {
       if (!signedIn) { fill(tabBox, h("div", { class: "tabs single" }, h("span", { class: "tab on" }, "Neueste Beiträge"))); return; }
@@ -174,8 +198,8 @@
     }
 
     drawTabs();
-    if (!signedIn) put(el, welcomeCard());
-    put(el, feedBox);
+    if (!signedIn) put(main, welcomeCard());
+    put(main, feedBox);
     mountFeed();
     timer = setInterval(check, 30000);
 
