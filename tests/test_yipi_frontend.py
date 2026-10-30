@@ -676,3 +676,14 @@ def test_videos_in_the_feed_play_by_themselves_without_sound_one_at_a_time():
     assert "video.muted = true;" in shorts and "pointerenter" in shorts and 'event.pointerType === "mouse"' in shorts and "LONG_PRESS" in shorts
     assert "prefers-reduced-motion" in shorts and "document.hidden" in shorts, "less motion and a hidden tab stop the videos"
     assert "SHORTS = 5" in shorts and "Y.startVideo = item" in shorts and "Y.startVideo" in JS["yipi-videos.js"], "a short that was tapped is the first video of the Videos tab"
+
+
+def test_links_get_a_card_and_open_in_a_window_of_nex():
+    links = read("static", "js", "yipi-links.js")
+    assert "yipi-links.js" in SCRIPTS and SCRIPTS.index("yipi-links.js") < SCRIPTS.index("yipi-comments.js")
+    assert 'Y.qs("/link-preview"' in links and "sandbox:" in links and "allow-top-navigation" not in links, "a framed page can never navigate Nex away"
+    assert 'referrerpolicy: "no-referrer"' in links and "frame-src https:" in yipi.CONTENT_SECURITY_POLICY
+    assert "Yipi.openSite(piece.href)" in JS["yipi-ui.js"], "a link in a text opens in the window"
+    for place, snippet in (("yipi-components.js", "Y.linkCardFor(item.text)"), ("yipi-comments.js", "Y.linkCardFor(item.text"), ("yipi-chats.js", "Y.linkCardFor(message.text"), ("yipi-videos.js", "Y.linkCardFor(item.text")):
+        assert snippet in JS[place], place
+    assert ".site-view {" in CSS and ".link-card {" in CSS

@@ -124,6 +124,7 @@ LIMITS = {
     "login-ip": (60, 600), "login-name": (8, 900), "login-flood": (600, 600), "signup-ip": (20, 3600), "signup-flood": (300, 3600),
     "password": (8, 900), "delete": (6, 900),
     "post-burst": (12, 60), "post-hour": (150, 3600), "like": (400, 3600), "follow": (120, 3600), "media": (40, 3600), "dm": (120, 3600),
+    "link-preview": (120, 600), "link-image": (500, 600),
     "report": (20, 3600), "lens-recipe": (30, 3600), "lens-make": (10, 86400), "lens-use": (300, 3600), "game-make": (10, 86400), "game-edit": (120, 3600), "game-play": (400, 3600), "profile": (30, 3600), "search": (120, 600), "block": (60, 3600),
     "gif-make": (20, 3600), "gif-fav": (400, 3600), "gif-use": (300, 3600), "gif-list": (600, 600),
     "share": (240, 600), "attach": (40, 3600), "storage": (120, 3600), "story": (30, 3600), "story-view": (900, 600), "play": (200, 3600), "heart": (300, 3600), "push": (30, 3600), "nex-read": (30, 600), "google": (30, 600), "nex": (40, 600), "nex-flood": (80, 60), "factcheck": (120, 3600), "views": (90, 600), "vote": (200, 3600), "pin": (60, 3600), "group": (12, 3600),
@@ -136,7 +137,7 @@ google_auth = CookieAuth("yipi_google", salt="yipi-google-v1", days=1 / 144)    
 # What the pages may load: only our own files (and the pictures people chose, shown from memory before they are sent).
 CONTENT_SECURITY_POLICY = (
     "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self'; "
-    "connect-src 'self'; manifest-src 'self'; base-uri 'none'; object-src 'none'; form-action 'self'; frame-ancestors 'none'"
+    "connect-src 'self'; manifest-src 'self'; frame-src https:; base-uri 'none'; object-src 'none'; form-action 'self'; frame-ancestors 'none'"       # (frame-src: a linked page opens in a window of Nex)
 )
 
 
@@ -1591,7 +1592,7 @@ def manifest():
 # The scripts of the page, in the order they depend on each other. The page loads them as ONE file (/pulse.js, deferred), named after its content, so the
 # browser asks once, keeps it for good and the next visit is instant; the tests read this list.
 PULSE_SCRIPTS = ["yipi-core.js", "yipi-gif-core.js", "yipi-icons.js", "yipi-api.js", "yipi-ui.js", "yipi-fx.js", "yipi-gif.js", "yipi-components.js", "yipi-newpost.js",
-                 "yipi-views.js", "yipi-comments.js", "yipi-chats.js", "yipi-lock.js", "yipi-pages.js", "yipi-share.js", "yipi-progress.js", "yipi-nex.js", "yipi-download.js", "yipi-lenses.js", "yipi-qr.js", "yipi-gamemaker.js", "yipi-camera.js", "yipi-shorts.js", "yipi-videos.js", "yipi-stories.js", "yipi-chrome.js", "yipi.js"]
+                 "yipi-views.js", "yipi-links.js", "yipi-comments.js", "yipi-chats.js", "yipi-lock.js", "yipi-pages.js", "yipi-share.js", "yipi-progress.js", "yipi-nex.js", "yipi-download.js", "yipi-lenses.js", "yipi-qr.js", "yipi-gamemaker.js", "yipi-camera.js", "yipi-shorts.js", "yipi-videos.js", "yipi-stories.js", "yipi-chrome.js", "yipi.js"]
 # The games of the camera tab are a second file, loaded when the camera tab is opened (about a hundred small games; nobody who only reads needs them).
 PULSE_LENS_SCRIPTS = ["pl-face.js"]              # the face lenses (face tracking and the effects): a third file, loaded when the first lens is opened
 PULSE_GAME_SCRIPTS = ["pg-kit.js", "pg-art.js", "pg-racing.js", "pg-rank.js", "pg-community.js", "pg-runners.js", "pg-arcade.js", "pg-reflex.js", "pg-puzzle.js", "pg-board.js", "pg-numbers.js", "pg-skill.js", "pg-more.js", "pg-fruit.js"]
@@ -1801,6 +1802,7 @@ def register_routes(app):
     import yipi_agents                                          # (here and not at the top: the module needs this one)
     import yipi_lenses
     import yipi_games
+    import yipi_links
     def route(rule, **options):
         """Like app.route, and remembers the endpoint for ENDPOINTS."""
         def decorator(function):
@@ -3224,6 +3226,41 @@ def register_routes(app):
                 .join(YipiPost, YipiPost.id == YipiTag.post_id).filter(YipiTag.created_at > since, YipiPost.deleted.is_(False))
                 .group_by(YipiTag.tag).order_by(func.count(func.distinct(YipiTag.post_id)).desc(), YipiTag.tag).limit(min(max(clamp_cursor(request.args.get("limit")) or 8, 1), 30)).all())
         return jsonify({"ok": True, "trends": [{"tag": tag, "posts": n, "people": people} for tag, n, people in rows]})
+
+    @route("/api/yipi/link-preview")
+    def yipi_link_preview():
+        """The card of a link (title, text, picture, site) for a post, a video or a chat. The fetching is done here (see yipi_links.py), the pictures of the card are served by us."""
+        user, problem = need_user()
+        if problem:
+            return problem
+        if limiter.too_many("link-preview", str(user.id)):
+            return fail("too_many", 429)
+        try:
+            card = dict(yipi_links.preview(request.args.get("url", ""), request.host_url.rstrip("/")))
+        except yipi_links.LinkError as error:
+            return fail(error.code, 502 if error.code == "link_unreachable" else 400)
+        for key in ("image", "favicon"):
+            if card.get(key):
+                card[key] = "/yipi-linkimg?u=" + urllib.parse.quote(card[key], safe="")
+        return jsonify({"ok": True, **card})
+
+    @route("/yipi-linkimg")
+    def yipi_link_image():
+        """A picture of a link card, fetched by the server (the reader's browser never talks to the linked site) and shown for a few hours."""
+        user = current_user()
+        if user is None:
+            abort(401)
+        if limiter.too_many("link-image", str(user.id)):
+            abort(429)
+        try:
+            data, kind = yipi_links.image(request.args.get("u", ""))
+        except yipi_links.LinkError:
+            abort(404)
+        response = Response(data, mimetype=kind)
+        response.headers["Cache-Control"] = "private, max-age=21600"
+        response.headers["Content-Security-Policy"] = "default-src 'none'; sandbox"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        return response
 
     @route("/api/yipi/suggestions")
     def yipi_suggestions():

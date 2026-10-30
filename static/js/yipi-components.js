@@ -475,6 +475,7 @@
       item.camId && Y.tryButton ? Y.tryButton(item.camId) : null,
       item.poll ? pollView(item) : null,
       item.quote ? quoteCard(item.quote) : null,
+      item.text && !(item.media && item.media.length) && !item.quote && !item.poll && Y.linkCardFor ? Y.linkCardFor(item.text) : null,      // the card of a link in the text
       item.factCheck ? factBox(item) : null);
 
     draw();

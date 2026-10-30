@@ -79,7 +79,12 @@
       else {
         let inside = null;                                             // a link to a page of Nex itself stays inside the app
         try { const url = new URL(piece.href); if (url.origin === location.origin) inside = url.pathname + url.search; } catch (error) { inside = null; }
-        out.append(inside ? link(inside, { class: "tok" }, piece.text) : h("a", { class: "tok", href: piece.href, target: "_blank", rel: "noopener noreferrer nofollow ugc" }, piece.text));
+        out.append(inside ? link(inside, { class: "tok" }, piece.text) : h("a", { class: "tok", href: piece.href, target: "_blank", rel: "noopener noreferrer nofollow ugc", onclick: (event) => {
+          if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || !Yipi.openSite) return;
+          event.preventDefault();
+          event.stopPropagation();
+          Yipi.openSite(piece.href);                                  // the page opens in a window of Nex (yipi-links.js), the person does not leave
+        } }, piece.text));
       }
     }
     return out;

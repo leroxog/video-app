@@ -284,6 +284,7 @@
           file ? fileBubble(file) : null,
           message.file && message.file.gone ? h("div", { class: "bubble-text gone" }, "Diese Datei gibt es nicht mehr.") : null,
           message.text ? h("div", { class: "bubble-text" }, richText(message.text)) : null,
+          message.text && !gif && !file && Y.linkCardFor ? Y.linkCardFor(message.text, { compact: true }) : null,
           message.hearts ? h("button", { class: `bubble-hearts${message.hearted ? " on" : ""}`, type: "button", "aria-pressed": String(!!message.hearted), "aria-label": `${message.hearts} ${message.hearts === 1 ? "Herz" : "Herzen"}${message.hearted ? ", von dir" : ""}`, onclick: (event) => toggleHeart(message, event.clientX, event.clientY) },
             icon("heartFill"), message.hearts > 1 ? h("span", {}, String(message.hearts)) : null) : null,
           endOfGroup ? h("span", { class: "bubble-time" }, seen ? `${clock(message.createdAt)} · Gelesen` : clock(message.createdAt)) : null));

@@ -107,6 +107,7 @@
         h("span", { class: "dot" }, "·"),
         link(Y.postPath(item), { class: "cm-time" }, timeEl(item.createdAt))),
       item.text ? h("div", { class: "cm-text" }, richText(item.text)) : null,
+      item.text && !(item.media && item.media.length) && Y.linkCardFor ? Y.linkCardFor(item.text, { compact: true }) : null,
       item.media && item.media.length ? h("div", { class: "cm-media" }, Y.mediaGrid(item.media)) : null,
       h("div", { class: "cm-actions" }, likeButton, replyButton, moreButton),
       writer, toggle, answers);
