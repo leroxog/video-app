@@ -201,7 +201,7 @@ def _generate_groq_with_model(model, messages, max_tokens, temperature, api_key)
     raise last_exc
 
 
-def _generate_groq(messages, max_tokens, temperature=0.7):
+def _generate_groq(messages, max_tokens, temperature=0.7, model=None):
     """Calls Groq's hosted API. Falls back to GROQ_FALLBACK_MODEL once if
     the primary model itself is rejected (400/404 -- decommissioned/
     preview-ended), so live chat degrades gracefully instead of breaking
@@ -212,11 +212,12 @@ def _generate_groq(messages, max_tokens, temperature=0.7):
             "GROQ_API_KEY ist nicht gesetzt. Auf groq.com einen kostenlosen API-Key erstellen "
             "und als Umgebungsvariable GROQ_API_KEY hinterlegen."
         )
+    first_model = model or GROQ_MODEL
     try:
-        return _generate_groq_with_model(GROQ_MODEL, messages, max_tokens, temperature, api_key)
+        return _generate_groq_with_model(first_model, messages, max_tokens, temperature, api_key)
     except requests.exceptions.HTTPError as exc:
         status = exc.response.status_code if exc.response is not None else None
-        if status not in (400, 404) or GROQ_MODEL == GROQ_FALLBACK_MODEL:
+        if status not in (400, 404) or first_model == GROQ_FALLBACK_MODEL:
             raise
         logger.warning(
             "Groq-Modell '%s' hat mit Status %s abgelehnt -- weiche einmalig auf Fallback '%s' aus.",
@@ -403,13 +404,13 @@ def generate_reply_stream(message, history=None, persona=DEFAULT_PERSONA):
         yield from _generate_groq_stream_with_model(GROQ_FALLBACK_MODEL, messages, MAX_REPLY_TOKENS, 0.7, api_key)
 
 
-def generate_text(system_prompt, message, max_tokens=900, temperature=0.9):
+def generate_text(system_prompt, message, max_tokens=900, temperature=0.9, model=None):
     """One whole answer (not streamed) to one short instruction with its own system prompt: the AI accounts of Nex (yipi_agents.py) ask for a batch of short posts this way.
     Raises when the key is missing or the service does not answer; the caller has a fallback."""
     message = (message or "").strip()[:8000]
     if not message:
         return ""
-    return _generate_groq([{"role": "system", "content": system_prompt}, {"role": "user", "content": message}], max_tokens, temperature)
+    return _generate_groq([{"role": "system", "content": system_prompt}, {"role": "user", "content": message}], max_tokens, temperature, model=model)
 
 
 def generate_custom_stream(system_prompt, message, max_tokens=600, temperature=0.7, model=None):

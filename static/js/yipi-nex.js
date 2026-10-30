@@ -157,7 +157,9 @@
       const copy = h("button", { class: "nex-copy", type: "button", "aria-label": "Code kopieren", onclick: async () => {
         try { await navigator.clipboard.writeText(block.text); toast("Code kopiert."); } catch (error) { toast("Das Kopieren hat nicht geklappt."); }
       } }, "Kopieren");
-      return h("div", { class: "nex-codebox" }, h("div", { class: "nex-codehead" }, h("span", {}, block.lang || "Code"), copy), h("pre", { class: "nex-code", tabindex: "0" }, h("code", {}, block.text)));
+      const isGame = !!(Y.gameMaker && /\b(function\s+draw\s*\(|(const|let|var)\s+draw\s*=)/.test(block.text) && /\bgame\.(score|over)\b/.test(block.text));       // a game in the format of Nex
+      const upload = isGame ? h("button", { class: "nex-copy upload", type: "button", "aria-label": "Als Spiel hochladen", onclick: () => Y.gameMaker.code({ prefill: { title: "", code: block.text } }) }, "Als Spiel hochladen") : null;
+      return h("div", { class: "nex-codebox" }, h("div", { class: "nex-codehead" }, h("span", {}, block.lang || "Code"), h("span", { class: "nex-codeacts" }, upload, copy)), h("pre", { class: "nex-code", tabindex: "0" }, h("code", {}, block.text)));
     }
 
     function blocksOf(text, into) {

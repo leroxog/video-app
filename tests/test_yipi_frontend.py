@@ -406,7 +406,8 @@ def test_the_home_page_has_stories_on_top_then_the_posts_with_a_box_after_every_
     home = views.split("views.home = ")[1].split("views.explore = ")[0]
     assert "Y.storiesBar()" in home and 'class: "topbar home"' in home and "stories ? stories.element : null" in home
     assert 'signedIn && n % 6 === 0 ? Y.sponsored("card") : null' in home, "every seventh item is a box Gesponsert"
-    assert 'n === 4 && Y.shortsShelf ? Y.shortsShelf()' in home, "after four posts comes the shelf of five shorts"
+    assert "sideways() && n === 3 && Y.shortsShelf ? Y.shortsShelf(" in home, "after three posts comes the row of five videos, held sideways only"
+    assert 'novideo: sideways() ? "" : "1"' in home and "(orientation: landscape)" in views, "held upright Home has no videos"
     assert "Y.composer" not in home, "writing happens in a sheet, not in the feed"
     assert "between" in JS["yipi-ui.js"] and "list.append(extra)" in JS["yipi-ui.js"]
     assert "Y.openDrawer()" in views and "menuButton()" in views, "the menu of the drawer is still reachable (from your own profile)"
@@ -716,3 +717,18 @@ def test_the_bars_the_camera_and_the_videos_are_round_too():
     for rule in (".appbar { border-radius: 0 0 26px 26px; }", ".topbar { border-radius: 0 0 22px 22px; }", ".cam-stage { border-radius: 28px; }", ".reel-stage { border-radius: 26px; }",
                  ".tabbar { border-radius: 26px 26px 0 0; }", ".tabbar { border-radius: 0 28px 28px 0; }", "::-webkit-scrollbar-thumb { border: 3px solid transparent; border-radius: 999px;"):
         assert rule in tail, rule
+
+
+def test_the_create_window_has_a_plus_ai_first_the_code_upload_last_and_no_jump_and_run():
+    lenses = JS["yipi-lenses.js"]
+    panel = lenses.split("function createPanel")[1].split("function lensMaker")[0]
+    order = [panel.index(text) for text in ('"Mit KI erstellen"', '"Linse mit Prompt"', "lists,", '"Spiel-Code hochladen"')]
+    assert order == sorted(order), "AI first, then the lens, then the lists, and the upload of code at the very bottom"
+    assert "Jump" not in "".join(JS.values()) and "platformer" not in "".join(JS.values()), "the jump-and-run builder is gone"
+    camera = JS["yipi-camera.js"]
+    assert 'game.kind === "create" ? h("span", { class: "lens-emoji lens-plus"' in camera and "game.image ? h(\"img\", { class: \"lens-photo\"" in camera, "a plus and the photo of a game in the strip"
+    maker = read("static", "js", "yipi-gamemaker.js")
+    for text in ("Foto für die Linse", "Mit KI erstellen", "Wähle noch ein Foto für den runden Knopf", 'Api.post("/games/ai"', "ensureGames", "placeholder: \"Hier steht dein Code.\""):
+        assert text in maker, text
+    assert "SAMPLE_CODE" not in maker, "the field for the code starts empty"
+    assert "Als Spiel hochladen" in JS["yipi-nex.js"] and "Y.gameMaker.code({ prefill" in JS["yipi-nex.js"], "a game that the AI wrote in the chat can be uploaded"

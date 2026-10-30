@@ -2045,3 +2045,58 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
   ::-webkit-scrollbar-thumb:hover { background: var(--muted); background-clip: padding-box; }
   ::-webkit-scrollbar-track { background: transparent; }
 }
+
+/* ---------------------------------------------------------------------------------------------- the row of five videos on Home: side by side, no box around it */
+.shorts { margin: 18px 0; padding: 0; background: none; }
+.shorts-head { padding: 0 4px 10px; }
+.shorts-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; overflow: visible; padding: 0; scroll-snap-type: none; }
+.short-slot, .shorts .short-slot { width: auto; min-width: 0; }
+.short-card { border-radius: 16px; }
+.short-info { padding: 24px 8px 8px; }
+.short-info b { font-size: 12px; }
+.short-info small { font-size: 11px; }
+
+/* ---------------------------------------------------------------------------------------------- the buttons under a post: soft round chips (like on Snapchat) */
+.post-actions { justify-content: flex-start; gap: 8px; max-width: none; margin: 12px 0 0; }
+.act-btn { justify-content: center; gap: 7px; min-width: 42px; height: 42px; padding: 0 15px 0 13px; background: var(--card-2); color: var(--text); font-size: 14px; font-weight: 800; box-shadow: inset 0 0 0 1px var(--line); transition: background 0.15s, color 0.15s, transform 0.12s, box-shadow 0.15s; }
+.act-btn svg { width: 22px; height: 22px; }
+.act-btn:hover:not(:disabled) { background: var(--hover); color: var(--text); }
+.act-btn:active { transform: scale(0.94); }
+.act-btn.more, .act-btn.send { padding: 0; }
+.act-btn.more { margin-left: auto; }
+.act-btn.like.on { background: rgba(122, 44, 240, 0.14); color: #7a2cf0; box-shadow: inset 0 0 0 1.5px rgba(122, 44, 240, 0.4); }
+.act-btn.repost.on { background: var(--ink); color: var(--on-ink); box-shadow: none; }
+.post.detail .post-actions { padding-top: 12px; }
+
+/* ---------------------------------------------------------------------------------------------- the "+" lens, the photo of a lens and the new create window */
+.lens-ic.photo { background: #111; overflow: hidden; }
+.lens-photo { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; pointer-events: none; }
+.lens-plus { display: grid; place-items: center; }
+.lens-plus svg, .lens.create .lens-plus svg { width: 26px; height: 26px; stroke-width: 2.8; }
+.lens.create .lens-ic { border: 2.5px solid rgba(255, 255, 255, 0.95); background: rgba(255, 255, 255, 0.16); }
+.cc-card.hero { background: linear-gradient(120deg, #6a3df0 0%, #a24bf0 45%, #d44ad0 100%); box-shadow: 0 6px 20px rgba(122, 44, 240, 0.4); color: #fff; }
+.cc-card.hero .cc-ic { background: rgba(255, 255, 255, 0.2); }
+.cc-card.hero small { color: rgba(255, 255, 255, 0.85); }
+.cc-lists { display: flex; flex-direction: column; gap: 10px; }
+.cc-lists:empty { display: none; }
+.cc-card.upload { margin-top: 4px; }
+.cc-ic.photo { object-fit: cover; padding: 0; }
+.gm-kinds { display: flex; gap: 8px; }
+.gm-head { display: flex; align-items: center; gap: 14px; }
+.gm-head-main { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 6px; }
+.gm-photo { position: relative; display: flex; flex: none; flex-direction: column; align-items: center; gap: 4px; width: 84px; color: var(--muted); font-size: 11.5px; font-weight: 700; text-align: center; }
+.gm-photo img, .gm-photo-ic { display: grid; place-items: center; width: 72px; height: 72px; border-radius: 50%; object-fit: cover; background: var(--card-2); border: 2px dashed var(--line-strong, var(--line)); }
+.gm-photo img { border-style: solid; }
+.gm-photo-ic svg { width: 28px; height: 28px; }
+.gm-codebox { position: relative; }
+.gm-empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; border-radius: 18px; pointer-events: none; }
+.gm-empty[hidden] { display: none; }
+.gm-empty .try-btn { pointer-events: auto; margin-top: 0; }
+.gm-ai { display: flex; gap: 8px; }
+.gm-ai[hidden] { display: none; }
+.gm-ai .field { flex: 1; min-width: 0; }
+.gm-help { font-size: 14px; }
+.gm-help summary { cursor: pointer; font-weight: 700; color: var(--muted); }
+.nex-codeacts { display: flex; align-items: center; gap: 6px; }
+.nex-copy.upload { background: linear-gradient(120deg, #6a3df0, #d44ad0); color: #fff; }
+.cam-view[data-kind="create"] .cam-lens-name, .cam-view[data-kind="create"] .cam-lens-hint { display: none; }

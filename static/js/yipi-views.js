@@ -144,6 +144,10 @@
     return rail;
   }
 
+  /* Held sideways (or on a computer) Home is the feed as it was, with a row of five videos after the first few posts; held upright it has no videos at all (they are in the Videos tab). */
+  const landscapeQuery = window.matchMedia ? window.matchMedia("(orientation: landscape)") : null;
+  const sideways = () => !landscapeQuery || landscapeQuery.matches;
+
   views.home = function home(route, ctx) {
     const signedIn = !!Y.me;
     let feed = signedIn && Y.readJson("yipi.feed", "foryou") === "following" ? "following" : "foryou";
@@ -178,9 +182,9 @@
       firstCursor = 0;
       pill.hidden = true;
       feedPager = pager({
-        load: listLoader((cursor) => qs("/timeline", { feed, cursor })),
+        load: listLoader((cursor) => qs("/timeline", { feed, cursor, novideo: sideways() ? "" : "1" })),
         render: (item) => Y.postCard(item),
-        between: (n) => (signedIn && feed === "foryou" && n === 4 && Y.shortsShelf ? Y.shortsShelf() : signedIn && n % 6 === 0 ? Y.sponsored("card") : null),      // after four posts a shelf of five shorts, and every seventh item is a box "Gesponsert" (advertisements will go there)
+        between: (n) => (signedIn && sideways() && n === 3 && Y.shortsShelf ? Y.shortsShelf({ following: feed === "following" }) : signedIn && n % 6 === 0 ? Y.sponsored("card") : null),      // after three posts a row of five videos (sideways only), and every seventh item is a box "Gesponsert" (advertisements will go there)
         first: (reply) => { firstCursor = reply.items.length ? Math.max(...reply.items.map((item) => item.cursor || 0)) : 0; },
         empty: feed === "following"
           ? emptyState("Hier ist noch nichts los", "Folge Leuten, um ihre Beiträge hier zu sehen.", link("/explore", { class: "btn primary" }, "Leute entdecken"))
@@ -191,7 +195,7 @@
 
     async function check() {
       if (!visible || document.hidden || !firstCursor) return;
-      const reply = await Api.get(qs("/timeline/new", { feed, after: firstCursor }));
+      const reply = await Api.get(qs("/timeline/new", { feed, after: firstCursor, novideo: sideways() ? "" : "1" }));
       if (!reply.ok || !visible || !reply.data.count) return;
       pill.textContent = reply.data.count === 1 ? "1 neuer Beitrag" : `${reply.data.count} neue Beiträge`;
       pill.hidden = false;
@@ -202,6 +206,7 @@
     put(main, feedBox);
     mountFeed();
     timer = setInterval(check, 30000);
+    if (landscapeQuery && landscapeQuery.addEventListener) landscapeQuery.addEventListener("change", () => { if (el.isConnected) mountFeed(); });      // turning the phone changes what Home shows
 
     return {
       element: el, title: "Nex", keep: true,

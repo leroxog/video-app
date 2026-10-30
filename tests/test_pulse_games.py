@@ -1,6 +1,5 @@
-"""Nex: games of the community. A person builds a jump-and-run level (data) or uploads the code of a game (it runs only in a sealed worker); what the server checks, keeps and serves
-(yipi_games.py), and the header that seals the worker."""
-import json
+"""Nex: games of the community. A person (or the AI for a person) writes the code of a game and publishes it (it runs only in a sealed worker); what the server checks, keeps and
+serves (yipi_games.py), the games the AI writes, and the header that seals the worker. The jump-and-run builder is gone."""
 import os
 import re
 import sys
@@ -47,30 +46,8 @@ def person(handle):
     return c
 
 
-def level(cols=40, **extra):
-    rows = [["."] * cols for _ in range(9)]
-    for c in range(cols):
-        rows[7][c] = rows[8][c] = "#"
-    rows[6][cols - 6] = "F"
-    return {"map": ["".join(row) for row in rows], "theme": "night", "hero": "🦊", "speed": 3, **extra}
-
-
-def test_a_level_is_only_data_the_game_understands():
-    good = yipi_games.clean_platformer(level())
-    stored = json.loads(good)
-    assert stored["theme"] == "night" and stored["hero"] == "🦊" and stored["speed"] == 3 and len(stored["map"]) == 9 and stored["v"] == 1
-    assert yipi_games.clean_platformer(json.dumps(level())) == good, "also as a text"
-    for bad in (None, "no json", [], {"map": []}, level(cols=29), level(cols=121), {**level(), "map": level()["map"][:8]}, {**level(), "map": [row + "." for row in level()["map"][:1]] + level()["map"][1:]},
-                {**level(), "map": [row.replace(".", "x", 1) for row in level()["map"]]}, {**level(), "map": ["<script>" + row[8:] for row in level()["map"]]}):
-        assert yipi_games.clean_platformer(bad) is None, bad
-    two = level()
-    two["map"][5] = "F" + two["map"][5][1:]
-    assert yipi_games.clean_platformer(two) is None, "one goal at most"
-    many = level(cols=120)
-    many["map"] = [row.replace(".", "o") if i < 4 else row for i, row in enumerate(many["map"])]
-    assert yipi_games.clean_platformer(many) is None, "not a field of coins"
-    odd = json.loads(yipi_games.clean_platformer({**level(), "theme": "lava", "hero": "<b>x</b>", "speed": 9}))
-    assert odd["theme"] == "day" and odd["hero"] == yipi_games.HERO_DEFAULT and odd["speed"] == 2
+def publish(c, title="Ball", **extra):
+    return c.post("/api/yipi/community-games", json={"kind": "code", "title": title, "emoji": "🟡", "color": "#58cf56", "code": yipi_games.SAMPLE_CODE, **extra})
 
 
 def test_the_code_of_a_game_is_checked_and_the_worker_script_is_the_harness_and_the_code():
@@ -88,22 +65,16 @@ def test_the_code_of_a_game_is_checked_and_the_worker_script_is_the_harness_and_
     assert yipi_games.WORKER_CSP.startswith("default-src 'none'"), "no connections of any kind"
 
 
-def test_the_sample_code_of_the_page_is_the_sample_code_of_the_server():
-    source = open(os.path.join(JS_DIR, "yipi-gamemaker.js"), encoding="utf-8").read()
-    sample = re.search(r"const SAMPLE_CODE = `(.*?)`;\n", source, re.S).group(1)
-    assert sample == yipi_games.SAMPLE_CODE.replace("\\", "\\\\") or sample == yipi_games.SAMPLE_CODE
-
-
-def test_a_person_publishes_a_level_and_others_play_it(client):
+def test_a_person_publishes_a_game_and_others_play_it(client):
     mia, tom = person("mia"), person("tom")
-    made = mia.post("/api/yipi/community-games", json={"kind": "platformer", "title": "Mias Level", "emoji": "🦊", "color": "#58cf56", "level": level()})
+    made = publish(mia, "Mias Spiel")
     assert made.status_code == 201, made.get_json()
     game = made.get_json()["game"]
-    assert re.fullmatch(r"gu-[0-9a-f]{8}", game["id"]) and game["kind"] == "platformer" and game["mine"] is True and game["draft"] is False and game["plays"] == 0 and "data" not in game
+    assert re.fullmatch(r"gu-[0-9a-f]{8}", game["id"]) and game["kind"] == "code" and game["mine"] is True and game["draft"] is False and game["plays"] == 0 and "data" not in game and game["icon"] is None
     seen = tom.get("/api/yipi/community-games").get_json()["items"]
     assert [item["id"] for item in seen] == [game["id"]] and seen[0]["mine"] is False and seen[0]["user"]["handle"] == "mia" and "data" not in seen[0]
     full = tom.get(f"/api/yipi/community-games/{game['id']}").get_json()["game"]
-    assert json.loads(full["data"])["theme"] == "night"
+    assert full["data"].startswith("// Dein Spiel")
     for _ in range(3):
         assert tom.post(f"/api/yipi/community-games/{game['id']}/play").status_code == 200
     assert tom.get("/api/yipi/community-games?sort=new").get_json()["items"][0]["plays"] == 3
@@ -113,16 +84,78 @@ def test_a_person_publishes_a_level_and_others_play_it(client):
     assert flask_app.test_client().get("/api/yipi/community-games").status_code == 401
 
 
-def test_what_is_wrong_is_said_and_a_level_that_is_not_a_level_is_refused(client):
+def test_what_is_wrong_is_said_and_only_code_games_exist_now(client):
     mia = person("mia")
-    base = {"kind": "platformer", "title": "Level", "level": level()}
-    assert mia.post("/api/yipi/community-games", json={**base, "title": "x"}).status_code == 400
-    assert mia.post("/api/yipi/community-games", json={**base, "kind": "virus"}).status_code == 400
-    assert mia.post("/api/yipi/community-games", json={**base, "title": "Hurensohn"}).status_code == 422
-    assert mia.post("/api/yipi/community-games", json={**base, "level": {"map": ["#"]}}).status_code == 422
+    assert publish(mia, "x").status_code == 400
+    assert mia.post("/api/yipi/community-games", json={"kind": "virus", "title": "Spiel", "code": yipi_games.SAMPLE_CODE}).status_code == 400
+    assert mia.post("/api/yipi/community-games", json={"kind": "platformer", "title": "Level", "level": {"map": ["#"]}}).status_code == 400, "the level builder is gone"
+    assert publish(mia, "Hurensohn").status_code == 422
     bad = mia.post("/api/yipi/community-games", json={"kind": "code", "title": "Code", "code": "fetch('x')"})
     assert bad.status_code == 422 and bad.get_json()["error"] == "bad_code" and "draw" in bad.get_json()["message"]
-    assert mia.post("/api/yipi/community-games", json={**base, "emoji": "<script>", "color": "red"}).get_json()["game"]["emoji"] == "🎮"
+    assert publish(mia, "Spiel", emoji="<script>", color="red").get_json()["game"]["emoji"] == "🎮"
+
+
+def test_the_round_button_of_a_game_has_a_photo_of_the_author_and_only_of_the_author(client):
+    mia, tom = person("mia"), person("tom")
+    mia_id = yipi.YipiUser.query.filter_by(handle="mia").one().id
+    mine = "a" * 32
+    db.session.add(yipi.YipiMedia(id=mine, owner_id=mia_id, content_type="image/png", data=b"x", size=1, width=64, height=64, alt=""))
+    db.session.commit()
+    made = publish(mia, "Mit Foto", icon=mine).get_json()["game"]
+    assert made["icon"] == f"/yipi-media/{mine}"
+    assert publish(tom, "Geklaut", icon=mine).get_json()["game"]["icon"] is None, "a picture of somebody else is not taken"
+    assert publish(mia, "Kaputt", icon="not-an-id").get_json()["game"]["icon"] is None
+    changed = mia.put(f"/api/yipi/community-games/{made['id']}", json={"title": "Mit Foto 2", "code": yipi_games.SAMPLE_CODE}).get_json()["game"]
+    assert changed["icon"] == f"/yipi-media/{mine}", "saving again keeps the photo"
+
+
+def test_the_old_levels_are_removed_and_never_listed(client):
+    mia = person("mia")
+    mia_id = yipi.YipiUser.query.filter_by(handle="mia").one().id
+    db.session.add(yipi.PulseGame(id="gu-00000001", owner_id=mia_id, kind="platformer", title="Altes Level", data="{}"))
+    db.session.commit()
+    assert mia.get("/api/yipi/community-games").get_json()["items"] == []
+    assert mia.get("/api/yipi/community-games/gu-00000001").status_code == 404
+    import yipi_company
+    assert yipi_company.purge_levels() == 1 and yipi.PulseGame.query.count() == 0
+
+
+def test_the_ai_writes_a_game_checks_it_like_the_code_of_a_person_and_tries_again_once(client, monkeypatch):
+    mia = person("mia")
+    good = "TITEL: Ballspiel\nSYMBOL: 🟡\n```javascript\n" + yipi_games.SAMPLE_CODE + "\n```"
+    calls = []
+
+    def fake(system, message, max_tokens=900, temperature=0.9, model=None):
+        calls.append({"system": system, "message": message, "model": model})
+        return good
+    monkeypatch.setattr(yipi.ai_assistant, "generate_text", fake)
+    reply = mia.post("/api/yipi/games/ai", json={"prompt": "Ein Ball, der über Balken springt"}).get_json()
+    assert reply["ok"] and reply["title"] == "Ballspiel" and reply["emoji"] == "🟡" and "function draw(g)" in reply["code"]
+    assert calls[0]["model"] == yipi.ai_assistant.GROQ_FALLBACK_MODEL and "360 mal 640" in calls[0]["system"] and "Ball, der über Balken" in calls[0]["message"]
+    answers = iter(["Hier ist dein Spiel: function draw(g) {}", "TITEL: Zweiter Versuch\nSYMBOL: 🎯\n```js\nfunction draw(g) { g.fillRect(0, 0, 9, 9); }\n```"])
+    monkeypatch.setattr(yipi.ai_assistant, "generate_text", lambda *args, **kwargs: next(answers))
+    second = mia.post("/api/yipi/games/ai", json={"prompt": "Ein Zielspiel mit Punkten"}).get_json()
+    assert second["ok"] and second["title"] == "Zweiter Versuch", "the second try is used"
+    monkeypatch.setattr(yipi.ai_assistant, "generate_text", lambda *args, **kwargs: "TITEL: Böse\n```javascript\nfunction draw(g) { fetch('/x'); }\n```")
+    refused = mia.post("/api/yipi/games/ai", json={"prompt": "Ein böses Spiel mit Netz"})
+    assert refused.status_code == 502 and refused.get_json()["error"] == "ai_failed", "code that does not pass the checks is never handed out"
+    assert mia.post("/api/yipi/games/ai", json={"prompt": "ab"}).status_code == 400
+    assert mia.post("/api/yipi/games/ai", json={"prompt": "Ein Spiel mit Waffe und Bombe"}).status_code == 422
+    assert flask_app.test_client().post("/api/yipi/games/ai", json={"prompt": "Ein Spiel"}).status_code == 401
+
+
+def test_the_ai_that_chats_knows_the_game_format_when_somebody_talks_about_a_game(client, monkeypatch):
+    seen = []
+
+    def fake(system_prompt, message, max_tokens=600, temperature=0.7, model=None):
+        seen.append(system_prompt)
+        yield "ok"
+    monkeypatch.setattr(yipi.ai_assistant, "generate_custom_stream", fake)
+    mia = person("mia")
+    mia.post("/api/yipi/nex", json={"messages": [{"role": "user", "content": "Baue mir ein Spiel für Nex"}], "mode": "code"})
+    mia.post("/api/yipi/nex", json={"messages": [{"role": "user", "content": "Wie wird das Wetter morgen?"}], "mode": "code"})
+    assert "360 mal 640" in seen[0] and "Als Spiel hochladen" in seen[0]
+    assert "360 mal 640" not in seen[1], "not for every question"
 
 
 def test_a_code_game_is_tried_as_a_draft_served_by_the_sealed_worker_and_published_later(client):
@@ -145,20 +178,18 @@ def test_a_code_game_is_tried_as_a_draft_served_by_the_sealed_worker_and_publish
     assert mia.post(f"/api/yipi/community-games/{game_id}/publish").get_json()["game"]["draft"] is False
     assert [item["title"] for item in tom.get("/api/yipi/community-games").get_json()["items"]] == ["Ball 2"]
     assert tom.get(f"/api/yipi/game-worker/{game_id}").status_code == 200 and tom.get(f"/api/yipi/community-games/{game_id}").get_json()["game"]["data"].startswith("// Dein Spiel")
-    level_game = mia.post("/api/yipi/community-games", json={"kind": "platformer", "title": "Level", "level": level()}).get_json()["game"]
-    assert mia.get(f"/api/yipi/game-worker/{level_game['id']}").status_code == 404, "only a code game has a worker"
     assert mia.get("/api/yipi/game-worker/not-an-id").status_code == 404
 
 
 def test_games_of_people_who_were_blocked_are_hidden_and_the_number_of_new_games_is_limited(client):
     mia, tom = person("mia"), person("tom")
-    tom.post("/api/yipi/community-games", json={"kind": "platformer", "title": "Tomaten", "level": level()})
+    publish(tom, "Tomaten")
     assert len(mia.get("/api/yipi/community-games").get_json()["items"]) == 1
     assert mia.post("/api/yipi/users/tom/block").status_code == 200
     assert mia.get("/api/yipi/community-games").get_json()["items"] == []
     for _ in range(10):
-        assert mia.post("/api/yipi/community-games", json={"kind": "platformer", "title": "Level", "level": level(), "draft": True}).status_code == 201
-    assert mia.post("/api/yipi/community-games", json={"kind": "platformer", "title": "Level", "level": level()}).status_code == 429, "ten new games a day"
+        assert publish(mia, "Spiel", draft=True).status_code == 201
+    assert publish(mia, "Spiel").status_code == 429, "ten new games a day"
     assert [item["title"] for item in mia.get("/api/yipi/community-games?sort=mine").get_json()["items"]] == [], "drafts are not listed, not even for the author"
 
 
@@ -170,4 +201,4 @@ def test_the_camera_shows_the_games_and_the_page_may_run_workers_of_the_site_onl
     camera = open(os.path.join(JS_DIR, "yipi-camera.js"), encoding="utf-8").read()
     assert "Y.communityGames.fetch(game.id)" in camera and "ensureCommunity" in camera and "chosen.community" in camera
     bundle = flask_app.test_client().get("/pulse-games.js").data
-    assert b"codeDef" in bundle and b"jr-huegel" in bundle
+    assert b"codeDef" in bundle and b"jr-huegel" not in bundle and b"platformerDef" not in bundle, "the jump-and-run games and their builder are gone"

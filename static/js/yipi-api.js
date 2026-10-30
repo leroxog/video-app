@@ -12,6 +12,7 @@
     not_found: "Das gibt es nicht (mehr).",
     blocked: "Das geht nicht, weil eine Blockierung besteht.",
     ai_account: "Dieses Konto wird von einer KI betrieben und liest keine Nachrichten.",
+    ai_failed: "Die KI hat gerade kein gutes Ergebnis hinbekommen. Probier es noch einmal.",
     official_account: "Das ist ein offizielles Konto von Nex. Es liest keine Nachrichten.",
     bad_link: "Das ist kein Link, den Nex zeigen kann.",
     link_blocked: "Diesen Link kann Nex nicht öffnen.",

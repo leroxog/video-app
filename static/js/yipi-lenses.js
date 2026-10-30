@@ -104,19 +104,19 @@
   ];
 
   function createPanel({ host, camera }) {
-    const mine = h("div", { class: "cc-mine" });
+    const lists = h("div", { class: "cc-lists" });
     const panel = h("div", { class: "cam-create", role: "group", "aria-label": "Erstellen" },
       h("h2", {}, "Erstelle etwas Eigenes"),
       h("p", { class: "cc-sub" }, "Veröffentlichen und alle auf Nex können es benutzen."),
+      h("button", { class: "cc-card hero", type: "button", onclick: () => (Y.gameMaker ? Y.gameMaker.ai({ camera }) : toast("Das gibt es gleich.")) }, h("span", { class: "cc-ic" }, icon("sparkle")), h("span", { class: "cc-text" }, h("b", {}, "Mit KI erstellen"), h("small", {}, "Beschreib ein Spiel oder eine Linse, die KI baut es für dich"))),
       h("button", { class: "cc-card", type: "button", onclick: () => lensMaker(camera) }, h("span", { class: "cc-ic" }, "✨"), h("span", { class: "cc-text" }, h("b", {}, "Linse mit Prompt"), h("small", {}, "Schreib, wie du aussehen willst: dumm, mit großen Zähnen, als Roboter …"))),
-      h("button", { class: "cc-card", type: "button", onclick: () => (Y.gameMaker ? Y.gameMaker.platformer(camera) : toast("Der Spiele-Baukasten ist gleich da.")) }, h("span", { class: "cc-ic" }, "🎮"), h("span", { class: "cc-text" }, h("b", {}, "Jump & Run bauen"), h("small", {}, "Setz Blöcke, Münzen und Gegner und teile dein Level"))),
-      h("button", { class: "cc-card", type: "button", onclick: () => (Y.gameMaker ? Y.gameMaker.code(camera) : toast("Das Hochladen von Spielen ist gleich da.")) }, h("span", { class: "cc-ic" }, "🧩"), h("span", { class: "cc-text" }, h("b", {}, "Spiel-Code hochladen"), h("small", {}, "Dein eigenes Spiel aus JavaScript, sicher in einer Sandbox"))),
-      mine);
+      lists,
+      h("button", { class: "cc-card upload", type: "button", onclick: () => (Y.gameMaker ? Y.gameMaker.code({ camera }) : toast("Das Hochladen von Spielen ist gleich da.")) }, h("span", { class: "cc-ic" }, "🧩"), h("span", { class: "cc-text" }, h("b", {}, "Spiel-Code hochladen"), h("small", {}, "Dein eigenes Spiel aus JavaScript, sicher in einer Sandbox"))));
     host.append(panel);
     Api.get("/community-games?sort=mine&limit=20").then((reply) => {
       if (!reply.ok || !reply.data.items.length || !panel.isConnected) return;
-      panel.append(h("h3", {}, "Deine Spiele"), ...reply.data.items.map((row) => h("div", { class: "cc-row" },
-        h("span", { class: "cc-ic small", style: `background:${row.color}` }, row.emoji), h("span", { class: "cc-text" }, h("b", {}, row.title), h("small", {}, `${row.plays} ${row.plays === 1 ? "Mal" : "Mal"} gespielt`)),
+      lists.append(h("h3", {}, "Deine Spiele"), ...reply.data.items.map((row) => h("div", { class: "cc-row" },
+        row.icon ? h("img", { class: "cc-ic small photo", src: row.icon, alt: "" }) : h("span", { class: "cc-ic small", style: `background:${row.color}` }, row.emoji), h("span", { class: "cc-text" }, h("b", {}, row.title), h("small", {}, `${row.plays} Mal gespielt`)),
         h("button", { class: "icon-btn small", type: "button", "aria-label": `${row.title} spielen`, onclick: () => { const item = Y.communityGames.toItem(row); camera.add(item); } }, icon("camera")),
         h("button", { class: "icon-btn small", type: "button", "aria-label": `${row.title} löschen`, onclick: async () => {
           if (!(await Y.confirmBox({ title: "Spiel löschen?", text: `„${row.title}“ verschwindet für alle.`, yes: "Löschen", danger: true }))) return;
@@ -126,8 +126,8 @@
     });
     Api.get("/lenses?sort=mine&limit=20").then((reply) => {
       if (!reply.ok || !reply.data.items.length || !panel.isConnected) return;
-      fill(mine, h("h3", {}, "Deine Linsen"), ...reply.data.items.map((row) => h("div", { class: "cc-row" },
-        h("span", { class: "cc-ic small", style: `background:${row.color}` }, row.emoji), h("span", { class: "cc-text" }, h("b", {}, row.title), h("small", {}, `${row.uses} ${row.uses === 1 ? "Mal" : "Mal"} benutzt`)),
+      lists.append(h("h3", {}, "Deine Linsen"), ...reply.data.items.map((row) => h("div", { class: "cc-row" },
+        h("span", { class: "cc-ic small", style: `background:${row.color}` }, row.emoji), h("span", { class: "cc-text" }, h("b", {}, row.title), h("small", {}, `${row.uses} Mal benutzt`)),
         h("button", { class: "icon-btn small", type: "button", "aria-label": `${row.title} ausprobieren`, onclick: () => { known.set(row.id, fromServer(row)); camera.add(known.get(row.id)); } }, icon("camera")),
         h("button", { class: "icon-btn small", type: "button", "aria-label": `${row.title} löschen`, onclick: async () => {
           if (!(await Y.confirmBox({ title: "Linse löschen?", text: `„${row.title}“ verschwindet für alle.`, yes: "Löschen", danger: true }))) return;
@@ -138,7 +138,7 @@
   }
 
   /* The dialog to write a prompt for a lens: the server makes a recipe of it (the AI service chooses the effects), the person gives it a name and publishes it. */
-  function lensMaker(camera) {
+  function lensMaker(camera, { prompt: start = "", auto = false } = {}) {
     let entry = null;
     let recipe = null;
     const prompt = h("textarea", { class: "field", rows: 3, maxlength: 200, placeholder: "Zum Beispiel: Mach die Person dumm aussehend", "aria-label": "Beschreibe deine Linse" });
@@ -191,6 +191,7 @@
       result,
       h("div", { class: "lm-actions" }, publish)), initialFocus: prompt });
     title.id = "lm-title";
+    if (start) { prompt.value = start; if (auto) setTimeout(() => build.click(), 0); }
   }
 
   const FILTER_LABELS = { none: "Normal", warm: "Warm", cool: "Kühl", noir: "Schwarzweiß", vivid: "Knallig", retro: "Retro", dream: "Traum", night: "Nacht" };

@@ -287,6 +287,7 @@ def ensure_sqlite_columns_exist():
         "pulse_gif": [("stored", "VARCHAR(4) NOT NULL DEFAULT 'db'")],
         "yipi_user": [("pinned_post_id", "BIGINT"), ("phone", "VARCHAR(16)"), ("google_sub", "VARCHAR(40)"), ("streak", "INTEGER NOT NULL DEFAULT 0"), ("streak_best", "INTEGER NOT NULL DEFAULT 0"), ("last_day", "VARCHAR(10)"), ("agent_kind", "INTEGER"), ("hide_ai", "BOOLEAN NOT NULL DEFAULT 0"), ("company", "BOOLEAN NOT NULL DEFAULT 0")],
         "yipi_post": [("cam_id", "VARCHAR(24)")],
+        "pulse_game": [("icon_id", "VARCHAR(32)")],
     }
     with db.engine.connect() as conn:
         for table, columns in wanted.items():
@@ -406,6 +407,8 @@ def ensure_columns_exist():
         "ALTER TABLE yipi_post ADD COLUMN IF NOT EXISTS cam_id VARCHAR(24)",
         # Nex (2026-10-30): the official accounts (Nex-Web, Nex-AI) are marked with "company".
         "ALTER TABLE yipi_user ADD COLUMN IF NOT EXISTS company BOOLEAN NOT NULL DEFAULT FALSE",
+        # Nex (2026-10-31): the picture of the round button of a game of the community.
+        "ALTER TABLE pulse_game ADD COLUMN IF NOT EXISTS icon_id VARCHAR(32)",
     ]
     with db.engine.connect() as conn:
         for statement in statements:

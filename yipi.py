@@ -126,7 +126,7 @@ LIMITS = {
     "password": (8, 900), "delete": (6, 900),
     "post-burst": (12, 60), "post-hour": (150, 3600), "like": (400, 3600), "follow": (120, 3600), "media": (40, 3600), "dm": (120, 3600),
     "link-preview": (120, 600), "link-image": (500, 600),
-    "report": (20, 3600), "lens-recipe": (30, 3600), "lens-make": (10, 86400), "lens-use": (300, 3600), "game-make": (10, 86400), "game-edit": (120, 3600), "game-play": (400, 3600), "profile": (30, 3600), "search": (120, 600), "block": (60, 3600),
+    "game-ai": (12, 3600), "report": (20, 3600), "lens-recipe": (30, 3600), "lens-make": (10, 86400), "lens-use": (300, 3600), "game-make": (10, 86400), "game-edit": (120, 3600), "game-play": (400, 3600), "profile": (30, 3600), "search": (120, 600), "block": (60, 3600),
     "gif-make": (20, 3600), "gif-fav": (400, 3600), "gif-use": (300, 3600), "gif-list": (600, 600),
     "share": (240, 600), "attach": (40, 3600), "storage": (120, 3600), "story": (30, 3600), "story-view": (900, 600), "play": (200, 3600), "heart": (300, 3600), "push": (30, 3600), "nex-read": (30, 600), "google": (30, 600), "nex": (40, 600), "nex-flood": (80, 60), "factcheck": (120, 3600), "views": (90, 600), "vote": (200, 3600), "pin": (60, 3600), "group": (12, 3600),
 }
@@ -233,15 +233,16 @@ class PulseLens(db.Model):
 
 
 class PulseGame(db.Model):
-    """A game of the community (yipi_games.py): a level of a jump-and-run (data) or the code of a game (runs only in a sealed Web Worker)."""
+    """A game of the community (yipi_games.py): the code of a game (runs only in a sealed Web Worker)."""
     __tablename__ = "pulse_game"
     id = db.Column(db.String(11), primary_key=True)                            # "gu-1a2b3c4d"
     owner_id = db.Column(db.Integer, nullable=False, index=True)
-    kind = db.Column(db.String(10), nullable=False)                            # "platformer" or "code"
+    kind = db.Column(db.String(10), nullable=False)                            # "code" (the level builder is gone: its rows are removed at the start)
     title = db.Column(db.String(24), nullable=False)
     emoji = db.Column(db.String(8), nullable=False, default="🎮")
     color = db.Column(db.String(7), nullable=False, default="#7a2cf0")
-    data = db.Column(db.Text, nullable=False, default="")                      # the level as JSON, or the code
+    data = db.Column(db.Text, nullable=False, default="")                      # the code
+    icon_id = db.Column(db.String(32), nullable=True)                          # the picture of the round button in the lens strip (a photo of the author's choice)
     plays = db.Column(db.Integer, nullable=False, default=0)
     draft = db.Column(db.Boolean, nullable=False, default=False)               # saved to be tried (also by the sealed worker), not published yet
     deleted = db.Column(db.Boolean, nullable=False, default=False)
@@ -1361,6 +1362,12 @@ def random_video_page(query, viewer):
     rows = query.order_by(video_shuffle_key(seed), YipiPost.id).offset(offset).limit(limit + 1).all()
     more = len(rows) > limit
     return {"ok": True, "items": feed_items(rows[:limit], viewer), "next": offset + limit if more else None, "seed": seed}
+
+
+def without_videos(query):
+    """The posts of a query without those that carry a video (and without the reposts of them)."""
+    videos = select(YipiMedia.post_id).where(YipiMedia.post_id.isnot(None), YipiMedia.content_type.like("video/%"))
+    return query.filter(~YipiPost.id.in_(videos), or_(YipiPost.repost_of_id.is_(None), ~YipiPost.repost_of_id.in_(videos)))
 
 
 def visible_posts(viewer):
@@ -3016,6 +3023,8 @@ def register_routes(app):
                     query = query.filter(YipiPost.user_id.in_([r.followee_id for r in YipiFollow.query.filter_by(follower_id=viewer.id)]))
         if feed == "videos" and request.args.get("order") == "random":
             return jsonify(random_video_page(query, viewer))
+        if request.args.get("novideo") == "1" and feed in ("foryou", "following"):
+            query = without_videos(query)                         # Home on a phone held upright: no videos in the feed (they are in the Videos tab)
         if cursor:
             query = query.filter(YipiPost.id < cursor)
         return jsonify(feed_page(query, viewer))
@@ -3034,6 +3043,8 @@ def register_routes(app):
             query = visible_posts(viewer).filter(YipiPost.reply_to_id.is_(None), YipiPost.repost_of_id.is_(None))
             if viewer:
                 query = query.filter(YipiPost.user_id != viewer.id)
+        if request.args.get("novideo") == "1":
+            query = without_videos(query)
         return jsonify({"ok": True, "count": query.filter(YipiPost.id > after).count() if after else 0})
 
     @route("/api/yipi/users/<handle>")
@@ -4067,6 +4078,8 @@ def register_routes(app):
 
         mode = NEX_MODES.get(data.get("mode")) if isinstance(data.get("mode"), str) else None
         mode = mode or NEX_MODES["normal"]                          # (an unknown name is the normal mode; the instructions of a mode never come from the page)
+        if re.search(r"spiel|game|jump|runner|flappy|arcade", turns[-1][1], re.I):
+            mode = {**mode, "prompt": mode["prompt"] + " " + yipi_games.NEX_GAME_FORMAT}      # (somebody who talks about a game: the AI knows the format of the games of Nex)
 
         def generate():
             try:
@@ -4383,13 +4396,13 @@ def register_routes(app):
     def game_json(row, viewer, owners=None, with_data=False):
         owner = (owners or {}).get(row.owner_id) or db.session.get(YipiUser, row.owner_id)
         item = {"id": row.id, "kind": row.kind, "title": row.title, "emoji": row.emoji, "color": row.color, "plays": row.plays, "user": user_brief(owner) if owner else None,
-                "mine": bool(viewer and viewer.id == row.owner_id), "draft": row.draft, "createdAt": iso(row.created_at)}
+                "mine": bool(viewer and viewer.id == row.owner_id), "draft": row.draft, "createdAt": iso(row.created_at), "icon": media_url(row.icon_id)}
         if with_data:
             item["data"] = row.data
         return item
 
     def game_row(game_id):
-        return PulseGame.query.filter_by(id=game_id, deleted=False).first() if GAME_ID_RE.fullmatch(game_id) else None
+        return PulseGame.query.filter(PulseGame.id == game_id, PulseGame.deleted.is_(False), PulseGame.kind.in_(yipi_games.KINDS)).first() if GAME_ID_RE.fullmatch(game_id) else None
 
     @route("/api/yipi/community-games")
     def yipi_games_list():
@@ -4401,7 +4414,7 @@ def register_routes(app):
             limit = max(1, min(60, int(request.args.get("limit", "40"))))
         except ValueError:
             limit = 40
-        query = PulseGame.query.filter(PulseGame.deleted.is_(False), PulseGame.draft.is_(False))
+        query = PulseGame.query.filter(PulseGame.deleted.is_(False), PulseGame.draft.is_(False), PulseGame.kind.in_(yipi_games.KINDS))
         hidden = hidden_user_ids(user) | suspended_ids()
         if hidden:
             query = query.filter(~PulseGame.owner_id.in_(hidden))
@@ -4421,31 +4434,28 @@ def register_routes(app):
             return fail("not_found", 404)
         return jsonify({"ok": True, "game": game_json(row, user, with_data=True)})
 
-    def game_fields(data, kind=None):
-        """((kind, title, stored, emoji, color), None) from what the builder sent, or (None, the answer that says what is wrong)."""
+    def game_fields(data, user, kind=None):
+        """((kind, title, stored, emoji, color, icon), None) from what the form sent, or (None, the answer that says what is wrong)."""
         kind = kind or data.get("kind")
         title = clean_text(data.get("title", ""), 24, keep_newlines=False)
         if kind not in yipi_games.KINDS or not title or len(title) < 2:
             return None, fail("empty")
         if yipi_agents.sensitive(title, hard_only=True):
             return None, fail("not_allowed", 422)
-        if kind == "platformer":
-            stored = yipi_games.clean_platformer(data.get("level"))
-            if stored is None:
-                return None, fail("bad_level", 422)
-        else:
-            stored, reason = yipi_games.clean_code(data.get("code"))
-            if stored is None:
-                return None, (jsonify({"ok": False, "error": "bad_code", "message": reason}), 422)
+        stored, reason = yipi_games.clean_code(data.get("code"))
+        if stored is None:
+            return None, (jsonify({"ok": False, "error": "bad_code", "message": reason}), 422)
         emoji = data.get("emoji") if isinstance(data.get("emoji"), str) else ""
         emoji = emoji.strip() if 0 < len(emoji.strip()) <= 8 and not re.search(r"[A-Za-z0-9<>&\"']", emoji) else "🎮"
         color = data.get("color") if isinstance(data.get("color"), str) and re.fullmatch(r"#[0-9a-fA-F]{6}", data["color"]) else "#7a2cf0"
-        return (kind, title, stored, emoji, color.lower()), None
+        icon = data.get("icon") if isinstance(data.get("icon"), str) and re.fullmatch(r"[0-9a-f]{32}", data["icon"]) else None
+        if icon and YipiMedia.query.filter_by(id=icon, owner_id=user.id).first() is None:
+            icon = None                                                # (only a picture that the author uploaded)
+        return (kind, title, stored, emoji, color.lower(), icon), None
 
     @route("/api/yipi/community-games", methods=["POST"], endpoint="yipi_game_create")
     def yipi_game_create():
-        """Saves a game: {kind: "platformer", title, emoji, level} or {kind: "code", title, emoji, code}. With "draft": true it is only saved to be tried (the sealed worker
-        serves it to its author); "publish" makes it public."""
+        """Saves a game: {kind: "code", title, emoji, code, icon}. With "draft": true it is only saved to be tried (the sealed worker serves it to its author); "publish" makes it public."""
         user, problem = need_user()
         if problem:
             return problem
@@ -4454,11 +4464,11 @@ def register_routes(app):
             return problem
         if user.agent_kind is not None or limiter.too_many("game-make", str(user.id)):
             return fail("too_many", 429)
-        fields, answer = game_fields(data)
+        fields, answer = game_fields(data, user)
         if answer is not None:
             return answer
-        kind, title, stored, emoji, color = fields
-        row = PulseGame(id="gu-" + secrets.token_hex(4), owner_id=user.id, kind=kind, title=title, emoji=emoji, color=color, data=stored, draft=data.get("draft") is True)
+        kind, title, stored, emoji, color, icon = fields
+        row = PulseGame(id="gu-" + secrets.token_hex(4), owner_id=user.id, kind=kind, title=title, emoji=emoji, color=color, data=stored, icon_id=icon, draft=data.get("draft") is True)
         db.session.add(row)
         db.session.commit()
         return jsonify({"ok": True, "game": game_json(row, user)}), 201
@@ -4477,10 +4487,12 @@ def register_routes(app):
             return fail("not_found", 404)
         if limiter.too_many("game-edit", str(user.id)):
             return fail("too_many", 429)
-        fields, answer = game_fields(data, kind=row.kind)
+        fields, answer = game_fields(data, user, kind=row.kind)
         if answer is not None:
             return answer
-        _kind, row.title, row.data, row.emoji, row.color = fields
+        _kind, row.title, row.data, row.emoji, row.color, icon = fields
+        if icon or data.get("icon") is None:
+            row.icon_id = icon or row.icon_id
         db.session.commit()
         return jsonify({"ok": True, "game": game_json(row, user)})
 
@@ -4521,6 +4533,28 @@ def register_routes(app):
         row.deleted = True
         db.session.commit()
         return jsonify({"ok": True})
+
+    @route("/api/yipi/games/ai", methods=["POST"], endpoint="yipi_game_ai")
+    def yipi_game_ai():
+        """The AI writes a game for a description: {prompt} -> {title, emoji, code} (the person looks at it, tries it and publishes it from the form for code)."""
+        user, problem = need_user()
+        if problem:
+            return problem
+        data, problem = body()
+        if problem:
+            return problem
+        prompt = clean_text(data.get("prompt", ""), 400, keep_newlines=False) if isinstance(data.get("prompt"), str) else ""
+        if len(prompt) < 4:
+            return fail("empty")
+        if yipi_agents.sensitive(prompt, hard_only=True):
+            return fail("not_allowed", 422)
+        if limiter.too_many("game-ai", str(user.id)):
+            return fail("too_many", 429)
+        try:
+            return jsonify({"ok": True, **yipi_games.ai_game(prompt, ai_assistant.generate_text, model=ai_assistant.GROQ_FALLBACK_MODEL)})
+        except Exception:  # noqa: BLE001  (no key, no answer, or no game that passes the checks)
+            logger.exception("The AI could not write a game")
+            return fail("ai_failed", 502)
 
     @route("/api/yipi/game-worker/<game_id>", endpoint="yipi_game_worker")
     def yipi_game_worker(game_id):

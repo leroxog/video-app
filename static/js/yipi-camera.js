@@ -147,7 +147,10 @@
     // ---------------------------------------------------------------------------------------------- the lenses
     function lensButton(game, index) {
       const button = h("button", { class: `lens${game.kind === "create" ? " create" : ""}${game.kind === "lens" ? " face" : ""}`, type: "button", role: "option", "aria-selected": "false", "aria-label": `${game.name}: ${game.hint}`, "data-id": game.id },
-        h("span", { class: "lens-ic", style: game.color ? `background:${game.color}` : "" }, h("span", { class: "lens-emoji", "aria-hidden": "true" }, game.emoji)));
+        h("span", { class: `lens-ic${game.image ? " photo" : ""}`, style: game.color && !game.image ? `background:${game.color}` : "" },
+          game.image ? h("img", { class: "lens-photo", src: game.image, alt: "", loading: "lazy", draggable: false })
+            : game.kind === "create" ? h("span", { class: "lens-emoji lens-plus", "aria-hidden": "true" }, icon("plus"))
+              : h("span", { class: "lens-emoji", "aria-hidden": "true" }, game.emoji)));
       button.addEventListener("click", () => {
         if (state !== "idle") return;
         if (index === active) { if (runner && runner.go) runner.go(); else startRound(); } else go(index, true);
@@ -635,7 +638,7 @@
       }
       if (dead) return;
       const games = window.PulseGames.list().map((game) => ({ ...game, kind: "game" }));
-      const create = { id: "create", kind: "create", name: "Erstellen", emoji: "✨", cat: "Neu", hint: "Baue eine eigene Linse oder ein eigenes Spiel und teile es", color: "#7a2cf0" };
+      const create = { id: "create", kind: "create", name: "Erstellen", emoji: "+", cat: "Neu", hint: "Baue mit KI eine eigene Linse oder ein eigenes Spiel und teile es", color: "#7a2cf0" };
       const qr = { id: "qr", kind: "qr", name: "QR-Code", emoji: "🔳", cat: "Teilen", hint: "Dein QR-Code zum Teilen und Scannen", color: "#1a1a1f" };
       const flagship = games.filter((game) => game.featured);
       list = [create, ...flagship, ...(Y.lenses ? Y.lenses.PRESETS : []), qr, ...games.filter((game) => !game.featured)];

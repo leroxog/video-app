@@ -169,13 +169,13 @@
     return card;
   }
 
-  /* The row of shorts; it fetches its videos itself and removes itself when there are none. */
-  function shortsShelf() {
+  /* The row of five videos side by side (like the shorts between the long videos on YouTube); it fetches its videos itself and removes itself when there are none. */
+  function shortsShelf({ following = false } = {}) {
     const row = h("div", { class: "shorts-row", role: "list" });
-    const shelf = h("section", { class: "shorts", "aria-label": "Shorts", hidden: true },
-      h("div", { class: "shorts-head" }, h("span", { class: "shorts-ic" }, icon("playCircle")), h("h2", {}, "Shorts"), h("span", { class: "muted small" }, "Ohne Ton, halte ein Video gedrückt oder fahre mit der Maus darüber")),
+    const shelf = h("section", { class: "shorts", "aria-label": "Videos", hidden: true },
+      h("div", { class: "shorts-head" }, h("span", { class: "shorts-ic" }, icon("playCircle")), h("h2", {}, "Videos")),
       row);
-    Api.get(Y.qs("/timeline", { feed: "videos", order: "random", seed: 1 + Math.floor(Math.random() * 999999), offset: 0, limit: SHORTS })).then((reply) => {
+    Api.get(Y.qs("/timeline", { feed: "videos", order: "random", seed: 1 + Math.floor(Math.random() * 999999), offset: 0, limit: SHORTS, scope: following ? "following" : "" })).then((reply) => {
       const items = reply.ok ? reply.data.items.filter((item) => item.media && item.media.some((entry) => entry.video)) : [];
       if (!items.length) { shelf.remove(); return; }
       for (const item of items) put(row, h("div", { class: "short-slot", role: "listitem" }, shortCard(item)));

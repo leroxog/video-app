@@ -1,5 +1,5 @@
-// The games of the community (static/js/pg-community.js) without a browser: the jump-and-run engine on levels made by hand and by the generator (a simple bot that jumps in front of
-// every danger has to be able to finish what the generator makes), and the bridge to the sealed worker with a worker that is only an object here.
+// The games of the community (static/js/pg-community.js) without a browser: the bridge to the sealed worker, with a worker that is only an object here. (The jump-and-run engine and its
+// builder are gone.)
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -31,102 +31,6 @@ function environment(seed = 5) {
   const env = PG.createEnv(ctx, { onScore: (n) => log.scores.push(n), onOver: () => { log.over += 1; } }, seed);
   return { env, log, ctx };
 }
-const flat = (cols, extra = {}) => {
-  const rows = Array.from({ length: 9 }, () => ".".repeat(cols).split(""));
-  for (let c = 0; c < cols; c += 1) { rows[7][c] = "#"; rows[8][c] = "#"; }
-  for (const [row, col, ch] of extra.set || []) rows[row][col] = ch;
-  return { map: rows.map((row) => row.join("")), theme: extra.theme || "day", hero: "🐱", speed: extra.speed || 2 };
-};
-
-/* plays a level with a function that decides for every tick if the finger is down; returns what happened */
-function play(level, decide, { frames = 3000 } = {}) {
-  const { env, log } = environment();
-  const game = C.platformerDef({ id: "t-level", title: "T" }, level).create(env);
-  let pressedFrames = 0;
-  for (let frame = 0; frame < frames && !env.finished; frame += 1) {
-    const state = game.peek();
-    const want = decide(state, frame);
-    if (want && !env.input.down) { env.input.pressed = true; env.input.down = true; pressedFrames += 1; } else if (!want && env.input.down) { env.input.down = false; env.input.released = true; }
-    game.update(1 / 60);
-    env.input.endTick();
-    game.draw();
-  }
-  return { env, log, game, state: game.peek(), pressedFrames };
-}
-
-/* a bot that jumps when something is in the way: at the edge of a pit, a third of a jump in front of spikes, blocks and enemies */
-function bot(state) {
-  const { hero, tile, speed } = state;
-  if (!hero.ground) return hero.vy < 0;                                        // keep the finger down while it rises
-  if (tile(Math.floor((hero.x + 13) / 40), 7) !== "#") return true;            // the ground ends under the figure
-  const reach = speed * 0.71;                                                   // how far one jump flies
-  for (let k = 0; k < 5; k += 1) {
-    const col = Math.floor(hero.x / 40) + k;
-    if (["^", "#"].includes(tile(col, 6)) || tile(col, 5) === "#") { const gap = col * 40 - hero.x; if (gap <= reach * 0.34 && gap > -12) return true; break; }
-  }
-  for (const e of state.enemies) if (e.alive && e.x > hero.x - 10 && e.x - hero.x < reach * 0.3 + 12) return true;
-  return false;
-}
-
-test("a level that is only ground ends at the flag with the bonus", () => {
-  const level = flat(40, { set: [[6, 36, "F"]] });
-  const { env, state } = play(level, () => false);
-  assert.ok(env.finished && state.hero.won, "the figure runs to the flag by itself");
-  assert.ok(env.points >= 100 + 30, `points ${env.points}`);
-});
-
-test("a pit, spikes and an enemy from the side end the round when nobody jumps", () => {
-  for (const level of [flat(40, { set: [[7, 12, "."], [8, 12, "."], [7, 13, "."], [8, 13, "."], [6, 36, "F"]] }), flat(40, { set: [[6, 12, "^"], [6, 36, "F"]] }), flat(40, { set: [[6, 14, "e"], [6, 36, "F"]] }), flat(40, { set: [[6, 12, "#"], [5, 12, "#"], [6, 36, "F"]] })]) {
-    const { env, state } = play(level, () => false);
-    assert.ok(env.finished && !state.hero.won, "the round ended without the goal");
-  }
-});
-
-test("a jump gets over a pit, over spikes and over a step, coins give points and a stomped enemy gives more", () => {
-  const level = flat(60, { set: [[7, 14, "."], [8, 14, "."], [7, 15, "."], [8, 15, "."], [6, 24, "^"], [6, 32, "#"], [6, 40, "e"], [6, 52, "F"], [5, 20, "o"], [5, 21, "o"]] });
-  const { env, state } = play(level, bot, { frames: 4000 });
-  assert.ok(state.hero.won, `the bot reached the flag (points ${env.points})`);
-  assert.ok(state.coins >= 0 && env.points > 100);
-});
-
-test("a spring throws the figure high and holding the finger jumps higher than a tap", () => {
-  const spring = flat(40, { set: [[6, 10, "s"], [6, 36, "F"]] });
-  let top = 1e9;
-  play(spring, (state) => { top = Math.min(top, state.hero.y); return false; }, { frames: 400 });
-  assert.ok(top < 7 * 40 - 3.2 * 40, `the spring lifted the figure by ${(7 * 40 - top) / 40} fields`);
-  const heights = [];
-  for (const hold of [false, true]) {
-    let high = 1e9, jumped = false;
-    play(flat(40, { set: [[6, 36, "F"]] }), (state, frame) => {
-      if (frame === 30) jumped = true;
-      high = Math.min(high, state.hero.y);
-      return jumped && (hold ? frame < 60 : frame < 32);
-    }, { frames: 120 });
-    heights.push(7 * 40 - high);
-  }
-  assert.ok(heights[1] > heights[0] + 10, `tap ${heights[0]}, hold ${heights[1]}`);
-});
-
-for (let seed = 1; seed <= 60; seed += 1) {
-  test(`the generated level ${seed} is a good level and the bot can finish it`, () => {
-    const level = C.generateLevel({ seed, cols: 40 + (seed % 5) * 14, theme: ["day", "night", "sunset", "cave", "candy"][seed % 5], speed: 1 + (seed % 3), hard: (seed % 7) / 7 });
-    const parsed = C.parseLevel(level);
-    assert.equal(parsed.map.length, 9);
-    assert.equal(parsed.map.join("").split("F").length - 1, 1, "one goal");
-    assert.ok(/^[.#^oesF]+$/.test(parsed.map.join("")));
-    const gaps = parsed.map[7].split("#").filter(Boolean).length;
-    assert.ok((parsed.map[7].match(/\.+/g) || []).every((gap) => gap.length <= 3), `a pit is at most three fields wide (${gaps} pieces of ground)`);
-    assert.ok((parsed.map.join("").match(/o/g) || []).length >= 4, "some coins");
-    const { state, env } = play(level, bot, { frames: 6000 });
-    assert.ok(state.hero.won, `the bot did not finish (seed ${seed}, x ${Math.round(state.hero.x)} of ${parsed.cols * 40}, points ${env.points})`);
-  });
-}
-
-test("the three ready-made levels are in the list of games, before the other games", () => {
-  const ids = PG.list().map((game) => game.id);
-  for (const id of ["jr-huegel", "jr-nacht", "jr-zucker"]) assert.ok(ids.includes(id), id);
-  assert.ok(PG.list().filter((game) => game.featured).map((game) => game.id).includes("jr-huegel"));
-});
 
 // ------------------------------------------------------------------------------------------------ the sealed worker
 class FakeWorker {
@@ -208,4 +112,10 @@ test("without Worker (an old browser) the game says it cannot start", () => {
   game.draw();
   assert.ok(game);
   void ctx; void texts;
+});
+
+test("the jump-and-run games and their engine are gone, only the bridge to the worker is left", () => {
+  assert.ok(!PG.list().some((game) => /^jr-/.test(game.id)));
+  assert.deepEqual(Object.keys(C).sort(), ["codeDef", "communityDef"]);
+  assert.equal(C.communityDef({ id: "gu-0a1b2c3d", title: "Ball", emoji: "x", color: "#000000", kind: "code" }).community, true);
 });

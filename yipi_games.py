@@ -1,49 +1,15 @@
-"""Nex games of the community (yipi_games.py): what a person builds in the camera tab ("Erstellen") and publishes. There are two kinds:
+"""Nex games of the community (yipi_games.py): what a person builds in the camera tab ("Erstellen") and publishes: a game written as code (a person, or the AI, wrote it).
 
-* "platformer": a level of a jump-and-run, made with the builder. It is only data (a grid of letters, a theme, a figure), checked here against what the game of the camera
-  (static/js/pg-community.js) understands, so it can never be more than a level.
-* "code": a game somebody wrote in JavaScript. It never runs on the page of Nex. The browser starts it in a Web Worker whose script comes from `worker_script()` below with a
-  header that forbids every connection (Content-Security-Policy: default-src 'none'); the worker has no page, no cookies and no network, it only gets the input of the finger and
-  gives back pictures (OffscreenCanvas), points and "game over" with postMessage. A game that hangs is stopped by the page (the worker is terminated).
+A game never runs on the page of Nex. The browser starts it in a Web Worker whose script comes from `worker_script()` below with a header that forbids every connection
+(Content-Security-Policy: default-src 'none'); the worker has no page, no cookies and no network, it only gets the input of the finger and gives back pictures
+(OffscreenCanvas), points and "game over" with postMessage. A game that hangs is stopped by the page (the worker is terminated).
 
-The checks here are about the form and about words nobody may use; the safety of the code comes from the worker and its header."""
-import json
+The checks here are about the form and about words nobody may use; the safety of the code comes from the worker and its header. (Earlier there were also levels of a
+jump-and-run builder; they are gone, `purge_levels` removes the rows that are left.)"""
 import re
 
-PLATFORMER_ROWS = 9
-PLATFORMER_COLS = (30, 120)
-TILES = ".#^oesF"
-THEMES = ("day", "night", "sunset", "cave", "candy")
 MAX_CODE = 20000
-KINDS = ("platformer", "code")
-HERO_DEFAULT = "🐱"
-
-# the pieces of a level and what they are called in the builder
-TILE_NAMES = {"#": "Block", "^": "Stacheln", "o": "Münze", "e": "Gegner", "s": "Sprungfeder", "F": "Ziel"}
-
-
-def clean_platformer(raw):
-    """The level as a JSON text in its one form, or None if it is not a level the game understands."""
-    try:
-        data = json.loads(raw) if isinstance(raw, str) else raw
-    except ValueError:
-        return None
-    if not isinstance(data, dict):
-        return None
-    rows = data.get("map")
-    if not isinstance(rows, list) or len(rows) != PLATFORMER_ROWS or not all(isinstance(row, str) for row in rows):
-        return None
-    cols = len(rows[0])
-    if not PLATFORMER_COLS[0] <= cols <= PLATFORMER_COLS[1] or any(len(row) != cols for row in rows):
-        return None
-    if any(ch not in TILES for row in rows for ch in row):
-        return None
-    if sum(row.count("F") for row in rows) > 1 or sum(row.count("o") for row in rows) > 400 or sum(row.count("e") for row in rows) > 80:
-        return None
-    theme = data.get("theme") if data.get("theme") in THEMES else "day"
-    hero = data.get("hero") if isinstance(data.get("hero"), str) and 0 < len(data["hero"].strip()) <= 8 and not re.search(r"[A-Za-z0-9<>&\"']", data["hero"]) else HERO_DEFAULT
-    speed = data.get("speed") if data.get("speed") in (1, 2, 3) else 2
-    return json.dumps({"v": 1, "map": rows, "theme": theme, "hero": hero.strip(), "speed": speed}, ensure_ascii=False, separators=(",", ":"))
+KINDS = ("code",)
 
 
 # what code may not even mention (the worker could not do it anyway; this keeps the games honest and the page of the game free of surprises)
@@ -137,3 +103,66 @@ function draw(g) {
   g.fillText("🟡", 140, y);
 }
 '''
+
+
+# ------------------------------------------------------------------------------------------------------------------ a game written by the AI
+GAME_AI_SYSTEM = (
+    "Du bist ein erfahrener Spiele-Entwickler und schreibst ein kleines, richtig gut aussehendes Handyspiel in JavaScript für das Spielformat von Nex.\n\n"
+    "Das Format:\n"
+    "- Das Spielfeld ist 360 mal 640 Pixel groß (hochkant). Es ist durchsichtig: dahinter sieht der Spieler seine Kamera mit seinem Gesicht. Male deshalb nur das Spiel selbst "
+    "(Figuren, Hindernisse, Boden, Punkte), keinen vollflächigen Hintergrund, und lass in der Mitte oben Platz, damit das Gesicht zu sehen bleibt.\n"
+    "- Du schreibst die Funktionen update(dt, input) und draw(g), und wenn nötig start() (läuft einmal am Anfang).\n"
+    "- dt sind Sekunden seit dem letzten Bild (höchstens 0.05). input hat x und y (der Finger in Spielkoordinaten), down (der Finger liegt auf), pressed (gerade aufgesetzt), "
+    "tap, released und swipe (\"left\", \"right\", \"up\", \"down\" oder null).\n"
+    "- draw(g): g ist ein Canvas-2D-Kontext. Male in jedem Bild alles neu. Es soll professionell aussehen: kräftige Farben, Verläufe, runde Formen, weiche Schatten, kleine "
+    "Animationen, große Emojis als Figuren (zum Beispiel g.font = \"48px sans-serif\"; g.fillText(\"🚗\", x, y)).\n"
+    "- game.score(n) setzt die Punkte (eine ganze Zahl, die nur steigt), game.over() beendet die Runde, game.random() gibt eine Zufallszahl von 0 bis 1.\n"
+    "- Verboten sind fetch, Netzwerk, import, eval, localStorage, navigator, setTimeout und alles, was nicht reines Rechnen und Malen ist.\n"
+    "- Es soll mit einem Finger spielbar sein, langsam schwerer werden und enden (game.over()), wenn man verliert. Zeige die Punkte im Bild.\n\n"
+    "Antworte genau so und sonst mit nichts:\n"
+    "TITEL: <der Name des Spiels, höchstens 24 Zeichen>\n"
+    "SYMBOL: <ein einzelnes Emoji, das zum Spiel passt>\n"
+    "```javascript\n<der komplette Code>\n```"
+)
+
+
+def parse_ai_game(answer):
+    """(title, emoji, code) out of the answer of the AI, or None when it does not have the form."""
+    if not isinstance(answer, str):
+        return None
+    block = re.search(r"```(?:javascript|js)?\s*\n(.*?)```", answer, re.S) or re.search(r"```(?:javascript|js)?\s*\n(.*)\Z", answer, re.S)
+    if block is None:
+        return None
+    title = re.search(r"^\s*TITEL:\s*(.+)$", answer, re.M)
+    symbol = re.search(r"^\s*SYMBOL:\s*(.+)$", answer, re.M)
+    title = (title.group(1).strip().strip("\"„“ ")[:24] if title else "") or "Mein Spiel"
+    emoji = symbol.group(1).strip() if symbol else ""
+    emoji = emoji if 0 < len(emoji) <= 8 and not re.search(r"[A-Za-z0-9<>&\"']", emoji) else "🎮"
+    return title, emoji, block.group(1).strip("\n")
+
+
+def ai_game(prompt, generate, model=None, tries=2):
+    """A game for a description: asks `generate(system, message, ...)` (the AI service), checks the code like the code of a person, and asks once more with the complaint when it is
+    not right. Returns {title, emoji, code}; raises ValueError when no good game came out."""
+    message = f"Das Spiel, das ich mir wünsche: {prompt}"
+    reason = "keine Antwort"
+    for _ in range(max(1, tries)):
+        answer = generate(GAME_AI_SYSTEM, message, max_tokens=7000, temperature=0.5, model=model)
+        parsed = parse_ai_game(answer)
+        if parsed is None:
+            reason = "Der Code stand nicht in einem Block."
+        else:
+            title, emoji, code = parsed
+            checked, reason = clean_code(code)
+            if checked is not None:
+                return {"title": title, "emoji": emoji, "code": checked}
+        message = f"Das Spiel, das ich mir wünsche: {prompt}\n\nDeine letzte Antwort ging nicht: {reason} Schreib das ganze Spiel noch einmal im richtigen Format."
+    raise ValueError(reason)
+
+
+NEX_GAME_FORMAT = (
+    "Wenn der Nutzer ein Spiel für Nex bauen will, schreib es im Spielformat von Nex in genau einem Codeblock (```javascript): Das Spielfeld ist 360 mal 640 Pixel, durchsichtig (dahinter ist "
+    "die Kamera des Spielers). Du schreibst update(dt, input) und draw(g) und, wenn nötig, start(). dt sind Sekunden, input hat x, y, down, pressed, tap, released und swipe. g ist ein "
+    "Canvas-2D-Kontext und malt jedes Bild neu, mit kräftigen Farben und Emojis. game.score(n) setzt die Punkte, game.over() beendet die Runde, game.random() gibt Zufall. Kein fetch, "
+    "import, eval, localStorage, navigator oder setTimeout. Unter dem Code steht ein Satz, dass man das Spiel unter dem Code mit dem Knopf „Als Spiel hochladen“ auf Nex stellen kann."
+)
