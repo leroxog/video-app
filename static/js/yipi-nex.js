@@ -95,10 +95,24 @@
 
     // ---- the page is made like any other conversation: the same head, the same bubbles, the same box to write in; only the small "KI" under the time tells that the contact is an AI
     const back = h("button", { class: "icon-btn round chat-back", type: "button", "aria-label": "Zurück", onclick: () => Y.back("/messages") }, icon("back"));
+    // ---- the modes: Normal, Superintelligent, Human and Code (only the names are shown; what each one is told is kept on the server)
+    const MODES = [["normal", "Normal"], ["super", "Superintelligent"], ["human", "Human"], ["code", "Code"]];
+    let mode = Y.readJson("yipi.nex.mode", "normal");
+    if (!MODES.some(([id]) => id === mode)) mode = "normal";
+    const modeName = h("span", {}, "");
+    const modeButton = h("button", { class: "nex-mode", type: "button", "aria-haspopup": "menu", "aria-label": "Modus von Nex AI wählen" }, modeName, icon("chevron"));
+    const drawMode = () => { modeName.textContent = MODES.find(([id]) => id === mode)[1]; };
+    drawMode();
+    modeButton.addEventListener("click", () => menu(modeButton, MODES.map(([id, label]) => ({ label, icon: id === mode ? "check" : { normal: "sparkle", super: "sparkleFill", human: "emoji", code: "text" }[id], run: () => {
+      mode = id;
+      Y.writeJson("yipi.nex.mode", mode);
+      drawMode();
+      toast(`Nex AI: ${label}`);
+    } }))));
     const moreButton = h("button", { class: "icon-btn round", type: "button", "aria-label": "Mehr", "aria-haspopup": "menu" }, icon("more"));
     const head = h("div", { class: "chat-head" }, back,
       h("div", { class: "chat-head-main" }, h("span", { class: "avatar md nex-face", "aria-hidden": "true" }, icon("nexmark")),
-        h("div", { class: "chat-head-text" }, h("b", {}, "Nex AI"), h("small", {}, "KI-Assistent"))),
+        h("div", { class: "chat-head-text" }, h("b", {}, "Nex AI"), modeButton)),
       moreButton);
 
     const postBox = h("div", { class: "nex-post-box", hidden: true });
@@ -139,8 +153,15 @@
       redrawHistory();
     }
 
+    function codeBox(block) {
+      const copy = h("button", { class: "nex-copy", type: "button", "aria-label": "Code kopieren", onclick: async () => {
+        try { await navigator.clipboard.writeText(block.text); toast("Code kopiert."); } catch (error) { toast("Das Kopieren hat nicht geklappt."); }
+      } }, "Kopieren");
+      return h("div", { class: "nex-codebox" }, h("div", { class: "nex-codehead" }, h("span", {}, block.lang || "Code"), copy), h("pre", { class: "nex-code", tabindex: "0" }, h("code", {}, block.text)));
+    }
+
     function blocksOf(text, into) {
-      fill(into, ...Core.nexBlocks(text).map((block) => (block.type === "list"
+      fill(into, ...Core.nexBlocks(text).map((block) => (block.type === "code" ? codeBox(block) : block.type === "list"
         ? h("ul", { class: "nex-list" }, block.items.map((item) => h("li", {}, richText(item))))
         : h("p", { class: "nex-p" }, richText(block.text)))));
     }
@@ -249,7 +270,7 @@
       toBottom();
       controller = new AbortController();
       const mine = chat.id;
-      const result = await stream({ messages: Core.nexMessages(chat.messages), ...extra }, (soFar) => {
+      const result = await stream({ messages: Core.nexMessages(chat.messages), mode, ...extra }, (soFar) => {
         if (chat.id !== mine) return;
         const stick = nearBottom();
         blocksOf(soFar, text);

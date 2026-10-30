@@ -414,3 +414,30 @@ test("the game of the day is the same for a whole day and moves on the next", ()
   assert.equal(core.dailyIndex("2026-10-21", 0), 0);
   assert.equal(core.dailyIndex("2026-10-21", 1), 0);
 });
+
+test("nexBlocks: code between three backticks is a block of its own, kept as written, and an open fence counts as code", () => {
+  const blocks = core.nexBlocks("Hier:\n\n```python\nprint(1)\n\n  if x:\n    y\n```\nFertig.\n\n- eins\n- zwei");
+  assert.deepEqual(blocks.map((block) => block.type), ["p", "code", "p", "list"]);
+  assert.equal(blocks[1].lang, "python");
+  assert.equal(blocks[1].text, "print(1)\n\n  if x:\n    y");
+  assert.deepEqual(blocks[3].items, ["eins", "zwei"]);
+  const open = core.nexBlocks("Offen:\n```js\nlet a = 1;");
+  assert.deepEqual(open.map((block) => block.type), ["p", "code"]);
+  assert.equal(open[1].text, "let a = 1;");
+  assert.deepEqual(core.nexBlocks("nur Text").map((block) => block.type), ["p"]);
+  assert.equal(core.nexBlocks("```\nohne Sprache\n```")[0].lang, "");
+});
+
+test("defaultColors: the same two colours for the same name every time, never the same for the picture and the banner", () => {
+  const seen = new Set();
+  for (const name of ["mia", "MIA", "Jonas", "x", "nexweb", "nexai", "lea_sun", "demo1186", "Toilettentaucher"]) {
+    const a = core.defaultColors(name);
+    assert.deepEqual(core.defaultColors(name), a, "stable");
+    assert.match(a.banner, /^#[0-9a-f]{6}$/);
+    assert.match(a.avatar, /^#[0-9a-f]{6}$/);
+    assert.notEqual(a.banner, a.avatar, name);
+    seen.add(a.banner);
+  }
+  assert.deepEqual(core.defaultColors("MIA"), core.defaultColors("mia"), "upper and lower case are the same person");
+  assert.ok(seen.size >= 4, "the colours are spread");
+});

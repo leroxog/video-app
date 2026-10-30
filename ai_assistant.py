@@ -412,7 +412,7 @@ def generate_text(system_prompt, message, max_tokens=900, temperature=0.9):
     return _generate_groq([{"role": "system", "content": system_prompt}, {"role": "user", "content": message}], max_tokens, temperature)
 
 
-def generate_custom_stream(system_prompt, message, max_tokens=600, temperature=0.7):
+def generate_custom_stream(system_prompt, message, max_tokens=600, temperature=0.7, model=None):
     """Like generate_reply_stream, but for a caller with its own narrow, single-purpose system prompt instead of one of PERSONAS's
     general-purpose identities (and their long artifact protocol, wasted tokens for a one-off instruction) -- used by regal.py's
     agent passes (static/js/regal-agents.js), each of which is one short-lived role, not an open-ended conversation. `message` is the
@@ -427,11 +427,12 @@ def generate_custom_stream(system_prompt, message, max_tokens=600, temperature=0
             "und als Umgebungsvariable GROQ_API_KEY hinterlegen."
         )
     messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": message}]
+    first_model = model or GROQ_MODEL                    # (Nex AI picks a stronger model for some of its modes)
     try:
-        yield from _generate_groq_stream_with_model(GROQ_MODEL, messages, max_tokens, temperature, api_key)
+        yield from _generate_groq_stream_with_model(first_model, messages, max_tokens, temperature, api_key)
     except requests.exceptions.HTTPError as exc:
         status = exc.response.status_code if exc.response is not None else None
-        if status not in (400, 404) or GROQ_MODEL == GROQ_FALLBACK_MODEL:
+        if status not in (400, 404) or first_model == GROQ_FALLBACK_MODEL or (model is None and GROQ_MODEL == GROQ_FALLBACK_MODEL):
             raise
         logger.warning(
             "Groq-Modell '%s' hat mit Status %s abgelehnt -- weiche einmalig auf Fallback '%s' aus.",

@@ -347,6 +347,17 @@
     return hash;
   }
 
+  /* The colours of somebody without a picture: one for the picture (with the first letter) and another for the banner (with the whole name). They are chosen from the name once
+     and are the same every time, on every device. Black text reads on all of them. */
+  const DEFAULT_COLORS = ["#58cc02", "#ff9600", "#ffc800", "#1cb0f6", "#ce82ff", "#ff86d0", "#ff4b4b", "#00cd9c", "#a5ed6e", "#6dd5fa"];
+  function defaultColors(handle) {
+    let hash = 2166136261;
+    for (const ch of String(handle).toLowerCase()) hash = Math.imul(hash ^ ch.charCodeAt(0), 16777619) >>> 0;
+    const banner = hash % DEFAULT_COLORS.length;
+    const picture = (banner + 1 + ((hash >>> 8) % (DEFAULT_COLORS.length - 1))) % DEFAULT_COLORS.length;       // never the same as the banner
+    return { banner: DEFAULT_COLORS[banner], avatar: DEFAULT_COLORS[picture] };
+  }
+
   function initials(name, handle) {
     const words = String(name || "").trim().split(/\s+/).filter(Boolean);
     const letters = words.length > 1 ? Array.from(words[0])[0] + Array.from(words[1])[0] : Array.from(words[0] || String(handle || "?"))[0];
@@ -460,24 +471,40 @@
      paragraph; lines that begin with "- ", "* ", "• " or "1. " are the items of a list. */
   function nexBlocks(text) {
     const blocks = [];
-    for (const part of String(text == null ? "" : text).replace(/\r\n?/g, "\n").split(/\n{2,}/)) {
-      let paragraph = null;
-      let list = null;
-      for (const raw of part.split("\n")) {
-        const line = raw.trim();
-        if (!line) continue;
-        const bullet = /^(?:[-*•]|\d+[.)])\s+(.*)$/.exec(line);
-        if (bullet) {
-          paragraph = null;
-          if (!list) { list = { type: "list", items: [] }; blocks.push(list); }
-          list.items.push(bullet[1]);
-        } else {
-          list = null;
-          if (!paragraph) { paragraph = { type: "p", text: line }; blocks.push(paragraph); }
-          else paragraph.text += `\n${line}`;
+    const plain = (chunk) => {                                           // paragraphs and lists (the answers of the normal modes)
+      for (const part of chunk.split(/\n{2,}/)) {
+        let paragraph = null;
+        let list = null;
+        for (const raw of part.split("\n")) {
+          const line = raw.trim();
+          if (!line) continue;
+          const bullet = /^(?:[-*•]|\d+[.)])\s+(.*)$/.exec(line);
+          if (bullet) {
+            paragraph = null;
+            if (!list) { list = { type: "list", items: [] }; blocks.push(list); }
+            list.items.push(bullet[1]);
+          } else {
+            list = null;
+            if (!paragraph) { paragraph = { type: "p", text: line }; blocks.push(paragraph); }
+            else paragraph.text += `\n${line}`;
+          }
         }
       }
+    };
+    // code between lines with three backticks (the mode "Code") is a block of its own, kept as it is; a fence that is still open (the answer is being written) counts as code
+    let rest = [];
+    let code = null;
+    const finish = () => { code.text = code.lines.join("\n").replace(/^\n+|\s+$/g, ""); delete code.lines; blocks.push(code); code = null; };
+    for (const line of String(text == null ? "" : text).replace(/\r\n?/g, "\n").split("\n")) {
+      if (code) {
+        if (/^\s*```\s*$/.test(line)) finish(); else code.lines.push(line);
+        continue;
+      }
+      const open = /^\s*```\s*([A-Za-z0-9_+#.-]*)\s*$/.exec(line);
+      if (open) { plain(rest.join("\n")); rest = []; code = { type: "code", lang: open[1].toLowerCase(), lines: [] }; continue; }
+      rest.push(line);
     }
+    if (code) finish(); else plain(rest.join("\n"));
     return blocks;
   }
 
@@ -501,6 +528,6 @@
 
   return {
     HOME, MAX_POST, MAX_MEDIA, MAX_VIDEO_BYTES, MAX_VIDEO_SECONDS, videoTooLong, watermarkPlan, videoFileName, base64UrlBytes, dailyIndex, gestureTemplate, gestureScore, GESTURE_PASS, GESTURE_POINTS, lockMinutes, lockAfterWrong, NEX_CHATS, nexTitle, newChatId, nexStore, nexUpsert, nexRemove, MAX_POLL_OPTION, POLL_OPTIONS, POLL_LENGTHS, pollTimeLeft, pollPercent, pollVotes, pollAnswers, NEX_TURNS, NEX_KEEP, nexMessages, nexBlocks, gifQuery, gifColumns, cleanText, charCount, counterState, tokenize, shortUrl, formatCount, relativeTime, fullTime, joinedLabel,
-    isHandle, parsePath, buildPath, groupNotifications, fitSize, coverCrop, avatarHue, initials,
+    isHandle, parsePath, buildPath, groupNotifications, fitSize, coverCrop, avatarHue, defaultColors, initials,
   };
 });

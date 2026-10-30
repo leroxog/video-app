@@ -62,8 +62,14 @@
       wrap.append(h("img", { src: user.avatar, alt: "", loading: "lazy", decoding: "async" }));
     } else {
       wrap.classList.add("letters");
-      wrap.style.setProperty("--hue", String(Core.avatarHue((user && user.handle) || "?")));
-      wrap.append(Core.initials(user && user.name, user && user.handle));
+      if (user && user.company) {                                                // an official account: the mark of Nex on black (Nex-AI in purple)
+        wrap.classList.add("official");
+        if (user.handle === "nexai") wrap.classList.add("nexai");
+        wrap.append(icon("nexmark"));
+      } else {
+        wrap.style.background = Core.defaultColors((user && user.handle) || "?").avatar;
+        wrap.append(Core.initials(user && user.name, user && user.handle));
+      }
     }
     return wrap;
   }
@@ -351,6 +357,7 @@
 
   /* The small "KI" next to the name of an AI account (nothing for a person). */
   function aiTag(user) {
+    if (user && user.company) return h("span", { class: "co-badge", title: "Offizielles Konto von Nex", role: "img", "aria-label": "Offizielles Konto" }, icon("check"));       // (the mark of the official accounts, yipi_company.py)
     return user && user.ai ? h("span", { class: "ai-badge", title: "KI-Konto: dieses Konto wird von einer KI betrieben" }, "KI") : null;
   }
 

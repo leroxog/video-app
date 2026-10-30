@@ -118,6 +118,7 @@ RESERVED_HANDLES = {
     "gomat", "ysound", "root", "system", "staff", "team", "official", "null", "undefined", "me", "you", "intent", "share", "hashtag",
     "yipi_media", "service", "offline", "link", "play", "plm", "auth", "plugins", "music", "servers", "ychat", "ylib", "nrs", "nex", "sound",
     "browser", "server", "play_game", "service_worker", "games", "videos", "chats", "friends", "groups", "camera", "kamera", "pulse",
+    "nexweb", "nexai", "nex_web", "nex_ai", "nexteam", "nexofficial", "nexsupport", "nexhelp", "nexadmin",       # (the official accounts and names that would pretend to be them)
 }
 
 LIMITS = {
@@ -205,7 +206,8 @@ class YipiUser(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
     last_seen_at = db.Column(db.DateTime, nullable=True)
     agent_kind = db.Column(db.Integer, nullable=True, index=True)              # an AI account (removed again, yipi_agents.py cleans up): None for a person
-    hide_ai = db.Column(db.Boolean, nullable=False, default=False)             # the person does not want to see the AI accounts
+    hide_ai = db.Column(db.Boolean, nullable=False, default=False)             # (not used any more: the AI accounts are gone)
+    company = db.Column(db.Boolean, nullable=False, default=False)             # an official account of Nex (Nex-Web, Nex-AI; yipi_company.py): nobody can get one
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -244,6 +246,14 @@ class PulseGame(db.Model):
     draft = db.Column(db.Boolean, nullable=False, default=False)               # saved to be tried (also by the sealed worker), not published yet
     deleted = db.Column(db.Boolean, nullable=False, default=False)
     created_at = db.Column(db.DateTime, nullable=False, default=utcnow, index=True)
+
+
+class YipiAnnouncement(db.Model):
+    """What the official accounts have posted already (yipi_company.py): one row per announcement id, so a release posts itself once."""
+    __tablename__ = "yipi_announcement"
+    id = db.Column(db.String(60), primary_key=True)
+    post_id = db.Column(BigId, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
 
 
 class YipiPost(db.Model):
@@ -885,6 +895,38 @@ NEX_PROMPT = (
 )
 
 
+# The modes of Nex AI (2026-10-30): the person picks one above the chat; only its name is shown, the instructions below stay on the server.
+NEX_SUPER_PROMPT = (
+    "Du bist Nex AI im Modus „Superintelligent“, die KI der Plattform Nex. Du antwortest dem Nutzer, der gerade mit dir schreibt; das Gespräch steht unten, schreib nur die nächste Antwort von Nex. "
+    "Nimm dir Zeit und denke gründlich nach, bevor du antwortest. Antworte mit ausführlichen, gut gebauten Sätzen: erkläre Zusammenhänge und Begründungen, nenne passende Beispiele und weise auf "
+    "Stolpersteine, Gegenargumente und Unsicherheiten hin. Rechne Schritt für Schritt und prüfe dein Ergebnis, bevor du es nennst. Gliedere lange Antworten in kurze Absätze; für Aufzählungen nimm "
+    "einfache Zeilen mit '- '. Antworte in der Sprache des Nutzers (meist Deutsch), in normalem Text ohne Sternchen, ohne Überschriften und ohne Tabellen. Wenn du etwas nicht sicher weißt, sag es "
+    "offen und erfinde nichts. Du kannst keine Seiten öffnen und nichts in Nex ändern. Gib nie Medizin-, Rechts- oder Finanzberatung als sicher aus."
+)
+NEX_HUMAN_PROMPT = (
+    "Du bist Nex AI im Modus „Human“, die KI der Plattform Nex. Du antwortest dem Nutzer, der gerade mit dir schreibt; das Gespräch steht unten, schreib nur die nächste Antwort von Nex. "
+    "Du klingst nicht wie ein Assistent, sondern wie ein kluger, ehrlicher, witziger Kumpel: locker, direkt, mit trockenem Humor und Wortwitz. Du darfst frech und ein bisschen sarkastisch sein, "
+    "aber nie verletzend, nie gegen Gruppen von Menschen und nie gegen jemanden, der gerade echte Sorgen hat. Schreib kurze Sätze wie in einem Chat, Umgangssprache ist erlaubt, ab und zu ein "
+    "Emoji. Gib eine eigene Meinung, wenn der Nutzer danach fragt, und sag klar, wenn du etwas nicht weißt, statt zu schwafeln. Keine Floskeln wie „Gerne helfe ich dir“. Wenn dich jemand "
+    "fragt, ob du ein Mensch bist, sagst du ehrlich, dass du eine KI bist. Antworte in der Sprache des Nutzers (meist Deutsch), ohne Sternchen, ohne Überschriften und ohne Tabellen. "
+    "Gib nie Medizin-, Rechts- oder Finanzberatung als sicher aus."
+)
+NEX_CODE_PROMPT = (
+    "Du bist Nex AI im Modus „Code“, die KI der Plattform Nex, und arbeitest wie ein erfahrener Programmierer. Du antwortest dem Nutzer, der gerade mit dir schreibt; das Gespräch steht unten, "
+    "schreib nur die nächste Antwort von Nex. Schreib sauberen, korrekten, lauffähigen Code für das Programm des Nutzers. Ist die Sprache oder das Ziel unklar, entscheide dich für die "
+    "wahrscheinlichste Deutung und sag in einem Satz, wovon du ausgegangen bist. Gib den Code immer in Markdown-Codeblöcken mit Sprachangabe (zum Beispiel ```python), bei einem ganzen Programm "
+    "vollständig und nicht nur in Bruchstücken, bei einer Änderung die geänderten Teile mit genug Umfeld. Davor und danach stehen kurze Erklärungen in normalem Text in der Sprache des Nutzers "
+    "(meist Deutsch): was der Code tut, wie man ihn startet und worauf man achten muss. Behandle Fehler und Randfälle, nenne Sicherheitsrisiken (Eingaben prüfen, keine Passwörter im Code) und "
+    "erfinde keine Funktionen oder Bibliotheken. Bei einer Fehlermeldung nenne erst die Ursache, dann die Korrektur. Du kannst keinen Code ausführen und nichts in Nex ändern."
+)
+NEX_MODES = {                                    # name -> instructions, tokens, temperature, model (None = the usual one)
+    "normal": {"prompt": NEX_PROMPT, "tokens": NEX_MAX_TOKENS, "temperature": 0.7, "model": None},
+    "super": {"prompt": NEX_SUPER_PROMPT, "tokens": 3000, "temperature": 0.5, "model": ai_assistant.GROQ_FALLBACK_MODEL},
+    "human": {"prompt": NEX_HUMAN_PROMPT, "tokens": 700, "temperature": 0.9, "model": None},
+    "code": {"prompt": NEX_CODE_PROMPT, "tokens": 3500, "temperature": 0.2, "model": ai_assistant.GROQ_FALLBACK_MODEL},
+}
+
+
 # ------------------------------------------------------------------------------------ who is who
 def current_user():
     payload = auth.read()
@@ -1061,7 +1103,7 @@ def favorite_ids(viewer, ids):
 
 
 def user_brief(user):
-    return {"handle": user.handle, "name": user.name, "avatar": media_url(user.avatar_id), "ai": user.agent_kind is not None}
+    return {"handle": user.handle, "name": user.name, "avatar": media_url(user.avatar_id), "ai": user.agent_kind is not None, "company": bool(user.company)}
 
 
 _agent_cache = {"at": None, "ids": frozenset()}
@@ -1071,18 +1113,16 @@ def agent_id_set():
     """The ids of the AI accounts (looked up again after a minute)."""
     now = utcnow()
     if _agent_cache["at"] is None or now - _agent_cache["at"] > timedelta(seconds=60):
-        _agent_cache["ids"] = frozenset(row.id for row in YipiUser.query.filter(YipiUser.agent_kind.isnot(None)).with_entities(YipiUser.id))
+        _agent_cache["ids"] = frozenset(row.id for row in YipiUser.query.filter(or_(YipiUser.agent_kind.isnot(None), YipiUser.company.is_(True))).with_entities(YipiUser.id))
         _agent_cache["at"] = now
     return _agent_cache["ids"]
 
 
 def hidden_user_ids(viewer):
-    """People whose posts this viewer does not see: those they blocked or muted, those who blocked them, and the AI accounts if they switched them off."""
+    """People whose posts this viewer does not see: those they blocked or muted and those who blocked them."""
     if viewer is None:
         return set()
     ids = {row.blocked_id for row in YipiBlock.query.filter_by(blocker_id=viewer.id)}
-    if viewer.hide_ai:
-        ids |= agent_id_set()
     ids |= {row.muted_id for row in YipiMute.query.filter_by(muter_id=viewer.id)}
     ids |= {row.blocker_id for row in YipiBlock.query.filter_by(blocked_id=viewer.id)}
     return ids
@@ -1096,7 +1136,7 @@ def user_dict(user, viewer=None, relations=None):
     """A profile. `relations` (optional) already knows who the viewer follows, blocks, mutes and who follows the viewer."""
     data = {
         "id": user.id, "handle": user.handle, "name": user.name, "bio": user.bio, "location": user.location, "website": user.website,
-        "avatar": media_url(user.avatar_id), "banner": media_url(user.banner_id), "createdAt": iso(user.created_at), "ai": user.agent_kind is not None,
+        "avatar": media_url(user.avatar_id), "banner": media_url(user.banner_id), "createdAt": iso(user.created_at), "ai": user.agent_kind is not None, "company": bool(user.company),
         "followers": user.followers_count, "following": user.following_count, "posts": user.posts_count,
         "isMe": bool(viewer and viewer.id == user.id), "suspended": user.suspended, "pinnedPostId": user.pinned_post_id,
     }
@@ -1592,7 +1632,7 @@ def manifest():
 # The scripts of the page, in the order they depend on each other. The page loads them as ONE file (/pulse.js, deferred), named after its content, so the
 # browser asks once, keeps it for good and the next visit is instant; the tests read this list.
 PULSE_SCRIPTS = ["yipi-core.js", "yipi-gif-core.js", "yipi-icons.js", "yipi-api.js", "yipi-ui.js", "yipi-fx.js", "yipi-gif.js", "yipi-components.js", "yipi-newpost.js",
-                 "yipi-views.js", "yipi-links.js", "yipi-comments.js", "yipi-chats.js", "yipi-lock.js", "yipi-pages.js", "yipi-share.js", "yipi-progress.js", "yipi-nex.js", "yipi-download.js", "yipi-lenses.js", "yipi-qr.js", "yipi-gamemaker.js", "yipi-camera.js", "yipi-shorts.js", "yipi-videos.js", "yipi-stories.js", "yipi-chrome.js", "yipi.js"]
+                 "yipi-views.js", "yipi-links.js", "yipi-comments.js", "yipi-chats.js", "yipi-lock.js", "yipi-pages.js", "yipi-auth.js", "yipi-share.js", "yipi-progress.js", "yipi-nex.js", "yipi-download.js", "yipi-lenses.js", "yipi-qr.js", "yipi-gamemaker.js", "yipi-camera.js", "yipi-shorts.js", "yipi-videos.js", "yipi-stories.js", "yipi-chrome.js", "yipi.js"]
 # The games of the camera tab are a second file, loaded when the camera tab is opened (about a hundred small games; nobody who only reads needs them).
 PULSE_LENS_SCRIPTS = ["pl-face.js"]              # the face lenses (face tracking and the effects): a third file, loaded when the first lens is opened
 PULSE_GAME_SCRIPTS = ["pg-kit.js", "pg-art.js", "pg-racing.js", "pg-rank.js", "pg-community.js", "pg-runners.js", "pg-arcade.js", "pg-reflex.js", "pg-puzzle.js", "pg-board.js", "pg-numbers.js", "pg-skill.js", "pg-more.js", "pg-fruit.js"]
@@ -1803,6 +1843,7 @@ def register_routes(app):
     import yipi_lenses
     import yipi_games
     import yipi_links
+    import yipi_company
     def route(rule, **options):
         """Like app.route, and remembers the endpoint for ENDPOINTS."""
         def decorator(function):
@@ -1820,6 +1861,7 @@ def register_routes(app):
                 return fail("not_logged_in", 401)             # nothing of Nex is for somebody who is not signed in
 
     app.before_request(api_guard)
+    yipi_company.attach(app)                                      # the official accounts (Nex-Web, Nex-AI) are made and post their announcements
     yipi_agents.attach(app)                                       # the AI accounts are gone: the first request of a process removes what is left of them (a thread does the work)
 
     @app.after_request
@@ -1926,6 +1968,13 @@ def register_routes(app):
                 return fail("too_young")
             if age < FULL_AGE and data.get("parents") is not True:
                 return fail("need_parents")
+        elif isinstance(data.get("age"), int) and not isinstance(data.get("age"), bool):      # the slider of the signup: only the number is checked and nothing is kept
+            if not 0 <= data["age"] <= 120:
+                return fail("bad_birthday")
+            if data["age"] < MIN_AGE:
+                return fail("too_young")
+            if data["age"] < FULL_AGE and data.get("parents") is not True:
+                return fail("need_parents")
         elif data.get("adult") is not True:
             return fail("need_age")
         email = None
@@ -1958,6 +2007,10 @@ def register_routes(app):
         except IntegrityError:
             db.session.rollback()
             return fail("handle_taken", 409)
+        try:
+            yipi_company.follow_official(user)                    # everybody follows the official accounts (Nex-Web, Nex-AI)
+        except Exception:  # noqa: BLE001  (a signup never fails because of that)
+            db.session.rollback()
         response = signed_in(jsonify({"ok": True, "me": me_dict(user)}), user)
         return google_auth.clear(response) if pending is not None else response
 
@@ -3708,6 +3761,8 @@ def register_routes(app):
             return fail("self", 400)
         if other.id in hidden_user_ids(user):
             return fail("blocked", 403)
+        if other.company:
+            return fail("official_account", 403)                        # an official account of Nex has no inbox
         if other.agent_kind is not None:
             return fail("ai_account", 403)                              # an AI account does not read or answer messages
         text = clean_text(data.get("text", ""), MAX_DM)
@@ -4014,12 +4069,16 @@ def register_routes(app):
         elif pictures:
             transcript = f"(Der Nutzer hat {len(pictures)} {'Foto' if len(pictures) == 1 else 'Fotos'} angehängt.)\n\n{transcript}"
 
+        mode = NEX_MODES.get(data.get("mode")) if isinstance(data.get("mode"), str) else None
+        mode = mode or NEX_MODES["normal"]                          # (an unknown name is the normal mode; the instructions of a mode never come from the page)
+
         def generate():
             try:
                 if pictures:
-                    yield from ai_assistant.generate_vision_stream(NEX_PROMPT, transcript, pictures, max_tokens=NEX_MAX_TOKENS)
+                    yield from ai_assistant.generate_vision_stream(mode["prompt"], transcript, pictures, max_tokens=mode["tokens"], temperature=min(0.7, mode["temperature"]))
                 else:
-                    yield from ai_assistant.generate_custom_stream(NEX_PROMPT, transcript, max_tokens=NEX_MAX_TOKENS)
+                    extra = {"model": mode["model"]} if mode["model"] else {}
+                    yield from ai_assistant.generate_custom_stream(mode["prompt"], transcript, max_tokens=mode["tokens"], temperature=mode["temperature"], **extra)
             except Exception:
                 logger.exception("Nex konnte nicht antworten")
 

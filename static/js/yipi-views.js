@@ -414,7 +414,9 @@
         h("div", { class: "edit-tools" },
           h("button", { class: "icon-btn glass", type: "button", "aria-label": "Titelbild ändern", onclick: () => choose("banner") }, icon("image")),
           bannerUrl ? h("button", { class: "icon-btn glass", type: "button", "aria-label": "Titelbild entfernen", onclick: () => { draft.banner = null; draw(); } }, icon("close")) : null));
-      banner.style.setProperty("--hue", Core.avatarHue(user.handle));
+      banner.style.setProperty("--banner", Core.defaultColors(user.handle).banner);
+      banner.classList.toggle("plain", !bannerUrl);
+      if (!bannerUrl) banner.prepend(h("span", { class: "banner-name" }, user.name));
       const faceUrl = current("avatar");
       fill(face, avatar({ ...user, avatar: faceUrl }, "xl"),
         h("button", { class: "icon-btn glass", type: "button", "aria-label": "Profilbild ändern", onclick: () => choose("avatar") }, icon("image")),
@@ -507,7 +509,11 @@
 
     function drawHead() {
       const banner = h("div", { class: "banner" }, user.banner ? h("a", { href: user.banner, onclick: (event) => { event.preventDefault(); Y.viewer([{ url: user.banner, alt: "Titelbild" }], 0); } }, h("img", { src: user.banner, alt: "" })) : null);
-      banner.style.setProperty("--hue", Core.avatarHue(user.handle));
+      if (!user.banner) {
+        banner.classList.add("plain");
+        banner.style.setProperty("--banner", Core.defaultColors(user.handle).banner);
+        banner.append(h("span", { class: "banner-name" }, user.name));
+      }
       const actions = h("div", { class: "ph-actions" });
       if (user.isMe) {
         put(actions, h("button", { class: "icon-btn outlined", type: "button", "aria-label": "Dein QR-Code", onclick: () => Y.qr.dialog({ path: `/${user.handle}`, title: "Dein QR-Code", subtitle: "Wer ihn scannt, landet auf deinem Profil." }) }, icon("qr")));

@@ -242,7 +242,7 @@ def defined_variables():
 def test_every_style_variable_that_is_used_is_defined():
     used = set(re.findall(r"var\((--[\w-]+)", CSS))
     set_by_script = {variable for source in JS.values() for variable in re.findall(r"setProperty\(\"(--[\w-]+)\"", source)}
-    assert set_by_script == {"--hue", "--fill", "--gw", "--gh", "--grow"}
+    assert set_by_script == {"--banner", "--fill", "--gw", "--gh", "--grow"}
     in_style_text = {"--dx", "--dy"}                          # the little pieces of the like burst get their way in a style attribute (yipi-fx.js)
     assert used - defined_variables() - set_by_script - in_style_text == set(), sorted(used - defined_variables() - set_by_script - in_style_text)
 
@@ -473,7 +473,7 @@ def test_nex_ai_is_a_contact_like_any_other_with_a_small_ki_under_the_time():
     assert ".ai-badge {" in CSS and ".nex-face {" in CSS and ".bubble.ai {" in CSS
     assert "Y.nexAsk" not in "".join(JS.values()), "the right column with its question box is gone"
     assert "at: Date.now()" in nex and "Core.nexMessages(chat.messages, Core.NEX_KEEP, true)" in nex, "every message keeps its time in the browser"
-    assert "Core.nexMessages(chat.messages), ...extra" in nex, "the server gets the turns without the times"
+    assert "Core.nexMessages(chat.messages), mode, ...extra" in nex, "the server gets the turns without the times, and the mode"
 
 
 def test_the_composer_offers_polls_and_up_to_three_photos():
@@ -491,9 +491,11 @@ def test_nobody_who_is_not_signed_in_sees_anything_but_the_page_to_sign_in():
     assert "if (!Y.me && !BARE.has(route.name)) view = Y.views.login(route, ctx);" in shell, "the page to sign in takes the place of every other page"
     pages = JS["yipi-pages.js"]
     assert "needLogin" not in "".join(JS.values()), "there is no 'please sign in' page for single pages any more"
-    assert "afterSignIn(route)" in pages and "Y.navigate(target, { replace: true })" in pages, "after signing in the page that was asked for opens"
+    auth = read("static", "js", "yipi-auth.js")
+    assert "yipi-auth.js" in SCRIPTS and SCRIPTS.index("yipi-auth.js") > SCRIPTS.index("yipi-pages.js")
+    assert "afterSignIn(route)" in auth and "Y.navigate(target, { replace: true })" in auth, "after signing in the page that was asked for opens"
     for link in ("/nutzungsbedingungen", "/datenschutz", "/impressum"):
-        assert link in pages.split("function authFrame")[1].split("function passwordField")[0], f"{link} stays reachable from the page to sign in"
+        assert link in auth.split("function legalLinks")[1].split("/* One white page")[0], f"{link} stays reachable from the page to sign in"
     server = read("yipi.py")
     assert "OPEN_ENDPOINTS" in server and "current_user() is None" in server.split("def api_guard")[1].split("app.before_request")[0]
 
@@ -687,3 +689,12 @@ def test_links_get_a_card_and_open_in_a_window_of_nex():
     for place, snippet in (("yipi-components.js", "Y.linkCardFor(item.text)"), ("yipi-comments.js", "Y.linkCardFor(item.text"), ("yipi-chats.js", "Y.linkCardFor(message.text"), ("yipi-videos.js", "Y.linkCardFor(item.text")):
         assert snippet in JS[place], place
     assert ".site-view {" in CSS and ".link-card {" in CSS
+
+
+def test_nex_ai_has_four_modes_and_shows_only_their_names():
+    nex = JS["yipi-nex.js"]
+    for name in ('["normal", "Normal"]', '["super", "Superintelligent"]', '["human", "Human"]', '["code", "Code"]'):
+        assert name in nex, name
+    assert 'Y.readJson("yipi.nex.mode"' in nex and "nex-mode" in nex and "nex-codebox" in nex
+    assert "Du bist Nex AI" not in "".join(JS.values()), "the instructions of the modes never reach the page"
+    assert "```" in JS["yipi-core.js"], "the answers of the mode Code have blocks of code"
