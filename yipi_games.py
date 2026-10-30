@@ -9,7 +9,7 @@ jump-and-run builder; they are gone, `purge_levels` removes the rows that are le
 import re
 
 MAX_CODE = 20000
-KINDS = ("code",)
+KINDS = ("code", "ranking")                     # a game written as code, or a ranking that somebody made (yipi_ranking.py)
 
 
 # what code may not even mention (the worker could not do it anyway; this keeps the games honest and the page of the game free of surprises)

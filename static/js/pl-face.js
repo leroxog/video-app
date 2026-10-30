@@ -29,7 +29,7 @@
       engine.loading = (async () => {
         const vision = await import(`${BASE}/vision_bundle.js?v=1`);
         const files = await vision.FilesetResolver.forVisionTasks(BASE);
-        const options = (delegate) => ({ baseOptions: { modelAssetPath: `${BASE}/face_landmarker.task`, delegate }, runningMode: "VIDEO", numFaces: 1, outputFaceBlendshapes: true,
+        const options = (delegate) => ({ baseOptions: { modelAssetPath: `${BASE}/face_landmarker.task`, delegate }, runningMode: "VIDEO", numFaces: 1, outputFaceBlendshapes: true, outputFacialTransformationMatrixes: true,
           minFaceDetectionConfidence: 0.4, minFacePresenceConfidence: 0.4, minTrackingConfidence: 0.4 });
         try {
           engine.landmarker = await vision.FaceLandmarker.createFromOptions(files, options("GPU"));
@@ -741,16 +741,42 @@
       this.t0 = performance.now();
       this.blend = {};
       this.head = { x: 0, y: 0, vx: 0, vy: 0 };
+      this.layer = null;                                 // the 3D layer of pl-ar.js (made when the recipe has an effect that belongs to it)
+      this.glCanvas = null;
+      this.arPoints = Array.from({ length: 478 }, () => ({ x: 0, y: 0, z: 0 }));
+      this.matrix = null;
       this.tick = this.tick.bind(this);
     }
     setStatus(state) { if (state !== this.state) { this.state = state; this.onStatus(state); } }
-    setRecipe(recipe) { this.recipe = recipe || { fx: [], filter: "none" }; this.fx = {}; }
-    setMirror(on) { this.mirror = !!on; }
+    setRecipe(recipe) { this.recipe = recipe || { fx: [], filter: "none" }; this.fx = {}; this.syncLayer(); }
+    setMirror(on) { this.mirror = !!on; if (this.layer) this.layer.setMirror(this.mirror); }
+    /* The 3D layer exists while the recipe has an effect of pl-ar.js (it draws the picture of the camera itself when something has to be warped). */
+    syncLayer() {
+      const AR = window.PulseAR;
+      const needs = !!(AR && (this.recipe.fx || []).some((id) => AR.has(id)));
+      if (needs && !this.layer) {
+        this.glCanvas = document.createElement("canvas");
+        this.glCanvas.className = this.canvas.className + " gl";
+        this.glCanvas.setAttribute("aria-hidden", "true");
+        this.canvas.parentNode.insertBefore(this.glCanvas, this.canvas);
+        this.layer = new AR.Layer({ video: this.video, canvas: this.glCanvas, mirror: this.mirror });
+      }
+      if (this.layer) {
+        if (needs) this.layer.setRecipe(this.recipe);
+        else { this.layer.destroy(); this.glCanvas.remove(); this.layer = null; this.glCanvas = null; }
+      }
+    }
     start() {
+      this.syncLayer();
       load().then((landmarker) => { this.landmarker = landmarker; this.setStatus("noface"); }).catch((error) => { this.error = error; this.setStatus("error"); });
       this.raf = requestAnimationFrame(this.tick);
     }
-    stop() { this.dead = true; cancelAnimationFrame(this.raf); this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height); }
+    stop() {
+      this.dead = true;
+      cancelAnimationFrame(this.raf);
+      this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+      if (this.layer) { this.layer.destroy(); this.glCanvas.remove(); this.layer = null; this.glCanvas = null; }
+    }
     size() {
       const box = this.canvas.getBoundingClientRect();
       const dpr = Math.min(1.5, window.devicePixelRatio || 1);
@@ -769,6 +795,13 @@
       this.lostAt = 0;
       const { w, h } = this.size();
       const vw = v.videoWidth, vh = v.videoHeight;
+      const smoothAr = this.have ? 0.6 : 1;
+      for (let i = 0; i < Math.min(478, face.length); i += 1) {                            // the points for the 3D layer (in 0..1 of the camera picture)
+        const q = this.arPoints[i];
+        q.x = lerp(q.x, face[i].x, smoothAr); q.y = lerp(q.y, face[i].y, smoothAr); q.z = lerp(q.z, face[i].z, smoothAr);
+      }
+      const pose = result.facialTransformationMatrixes && result.facialTransformationMatrixes[0];
+      this.matrix = pose ? pose.data : this.matrix;
       const k = Math.max(w / vw, h / vh);
       const ox = (w - vw * k) / 2, oy = (h - vh * k) / 2;
       this.map = { W: w, H: h, k, ox, oy };
@@ -834,13 +867,18 @@
       this.detect(now);
       const c = this.ctx;
       c.clearRect(0, 0, w, h);
+      const time = (now - this.t0) / 1000;
+      if (this.layer) {
+        const ok = this.have && this.map;
+        this.layer.update({ lm: ok ? this.arPoints : null, matrix: ok ? this.matrix : null, blend: this.blend, dt, t: time });
+      }
       if (!this.have || !this.map) return;
-      const f = this.frame(dt, (now - this.t0) / 1000);
+      const f = this.frame(dt, time);
       if (this.map.W !== w || this.map.H !== h) return;
       c.save();
       for (const id of this.recipe.fx || []) {
         const fx = FX[id];
-        if (!fx) continue;
+        if (!fx || (this.layer && !this.layer.failed && window.PulseAR && window.PulseAR.has(id))) continue;           // (what the 3D layer draws is not drawn here too; without WebGL the flat versions stay)
         try { fx.draw(c, f); } catch (error) { /* a broken effect must not stop the others */ }
         c.globalAlpha = 1; c.globalCompositeOperation = "source-over"; noShade(c);
       }

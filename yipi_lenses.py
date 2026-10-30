@@ -7,63 +7,63 @@ import json
 import os
 import re
 
-# the effects of pl-face.js: name -> what it does (German; this text is also what the AI service reads to choose)
+# the effects of the lenses (pl-face.js draws the flat ones, pl-ar*.js the three-dimensional ones): name -> what it does (German; this text is also what the AI service reads to choose)
 EFFECTS = {
     "sunglasses": "schwarze Sonnenbrille", "heartGlasses": "Brille aus pinken Herzen", "roundGlasses": "runde goldene Brille", "nerdGlasses": "dicke Nerd-Brille mit Pflaster",
-    "starGlasses": "gelbe Sternenbrille", "catEars": "Katzenohren, Nase und Schnurrhaare", "dogEars": "Hundeohren, Hundenase und Zunge", "bunnyEars": "lange Hasenohren",
-    "devilHorns": "rote Teufelshörner", "halo": "goldener Heiligenschein", "crown": "goldene Krone", "clownNose": "rote Clownsnase", "clownWig": "bunte Clownsperücke",
-    "mustache": "großer Schnurrbart", "beard": "dunkler Vollbart", "blush": "rosa Wangen", "freckles": "Sommersprossen", "bigTeeth": "riesige Zähne", "buckTeeth": "zwei große Hasenzähne",
-    "tongue": "Zunge raus, wenn der Mund aufgeht", "drool": "Sabberfaden", "crossEyes": "schielende Augen", "googlyEyes": "große Wackelaugen", "bigEyes": "vergrößerte Augen",
-    "bigHead": "aufgeblasener dicker Kopf", "bigNose": "riesige Nase", "bigMouth": "riesiger Mund", "hearts": "Herzchen steigen auf, wenn man lächelt", "sparkles": "funkelnde Sterne um den Kopf",
-    "tears": "Tränen laufen über die Wangen", "fireEyes": "brennende Augen", "propellerHat": "bunte Mütze mit Propeller (dumm, lustig)", "dunceHat": "Narrenkappe mit einem D",
-    "balaclava": "schwarze Strickmaske (Sturmhaube) mit Löchern für Augen und Mund", "pirate": "Augenklappe und rotes Kopftuch", "robot": "Roboter mit Metallplatten und Antenne",
-    "rainbow": "Regenbogen kommt aus dem Mund", "swirlEyes": "Spiralen in den Augen (Hypnose)", "moneyEyes": "Dollarzeichen als Augen", "heartEyes": "pochende Herzen als Augen",
-    "monocle": "Monokel", "topHat": "schwarzer Zylinder", "zombie": "grüne Haut, Augenringe, Narben", "confetti": "Konfetti fällt", "snow": "es schneit", "angry": "wütende Augenbrauen, roter Kopf",
-    "tophatCane": "Zylinder, Schnurrbart und Monokel",
+    "starGlasses": "gelbe Sternenbrille", "catEars": "Katzenohren", "catNose": "rosa Katzennase", "whiskers": "Katzen-Schnurrhaare", "dogEars": "braune Hundeohren", "dogNose": "schwarze Hundenase",
+    "bunnyEars": "lange Hasenohren", "bunnyNose": "rosa Hasennase", "devilHorns": "rote Teufelshörner", "halo": "goldener Heiligenschein", "crown": "goldene Krone", "clownNose": "rote Clownsnase",
+    "clownWig": "bunte Clownsperücke", "clownFace": "weiß geschminktes Clowngesicht", "mustache": "großer Schnurrbart", "beard": "dunkler Vollbart", "greyBeard": "grauer Opa-Bart",
+    "blush": "rosa Wangen", "freckles": "Sommersprossen", "bigTeeth": "riesige Zähne", "buckTeeth": "zwei große Hasenzähne", "tongue": "Zunge raus, wenn der Mund aufgeht",
+    "drool": "Sabberfaden", "crossEyes": "schielende Augen", "googlyEyes": "große Wackelaugen", "bigEyes": "vergrößerte Augen", "bigHead": "aufgeblasener dicker Kopf", "bigNose": "riesige Nase",
+    "bigMouth": "riesiger Mund", "hearts": "Herzchen steigen auf, wenn man lächelt", "sparkles": "funkelnde Sterne um den Kopf", "tears": "Tränen laufen über die Wangen",
+    "fireEyes": "brennende Augen", "propellerHat": "bunte Mütze mit Propeller (dumm, lustig)", "dunceHat": "Narrenkappe mit einem D",
+    "balaclava": "schwarze Strickmaske (Sturmhaube) mit Löchern für Augen und Mund", "pirate": "Augenklappe und rotes Kopftuch", "robot": "Roboter-Antenne und Ohren aus Metall",
+    "robotFace": "Metallplatten und leuchtende Augen", "rainbow": "Regenbogen kommt aus dem Mund", "swirlEyes": "Spiralen in den Augen (Hypnose)", "moneyEyes": "Dollarzeichen als Augen",
+    "heartEyes": "pochende Herzen als Augen", "monocle": "Monokel", "topHat": "schwarzer Zylinder", "zombie": "grüne Haut, Augenringe, Narben", "confetti": "Konfetti fällt", "snow": "es schneit",
+    "angry": "wütende Augenbrauen, roter Kopf", "tophatCane": "Zylinder, Schnurrbart und Monokel",
 }
+# these still work (lenses of people that were published before use them) but they are not offered any more: the AI service does not hear of them and a new lens cannot name them
+RETIRED = frozenset({"drool", "crossEyes", "googlyEyes", "sparkles", "tears", "fireEyes", "dunceHat", "swirlEyes", "moneyEyes", "heartEyes", "tophatCane"})
 FILTERS = ("none", "warm", "cool", "noir", "vivid", "retro", "dream", "night")
 MAX_FX = 6
 
 # words of a prompt (the beginnings of words, lower case) -> effects; the first matches win
 KEYWORDS = [
-    (("dumm", "doof", "blöd", "trottel", "idiot", "depp", "verdummt", "dämlich", "bescheuert", "schwachsinn"), ["crossEyes", "buckTeeth", "tongue", "propellerHat"]),
-    (("schiel", "schielen", "cross"), ["crossEyes"]),
+    (("dumm", "doof", "blöd", "trottel", "idiot", "depp", "verdummt", "dämlich", "bescheuert", "schwachsinn"), ["propellerHat", "bigEyes", "tongue", "buckTeeth"]),
+    (("schiel", "schielen", "cross", "hypno", "spirale", "schwindel", "dizzy", "wackelaugen", "wackel", "glubsch", "glotz"), ["bigEyes"]),
     (("zähne", "zahn", "gebiss", "teeth"), ["bigTeeth"]),
-    (("hase", "hasen", "bunny", "kaninchen"), ["bunnyEars", "buckTeeth"]),
-    (("katze", "kater", "kitty", "cat"), ["catEars", "blush"]),
-    (("hund", "dog", "welpe"), ["dogEars"]),
+    (("hase", "hasen", "bunny", "kaninchen"), ["bunnyEars", "bunnyNose", "buckTeeth"]),
+    (("katze", "kater", "kitty", "cat"), ["catEars", "catNose", "whiskers"]),
+    (("hund", "dog", "welpe"), ["dogEars", "dogNose", "tongue"]),
     (("sturmhaube", "strickmaske", "balaclava", "skimaske", "maske", "ninja"), ["balaclava"]),
     (("sonnenbrille", "cool", "lässig", "boss", "gangster"), ["sunglasses"]),
-    (("herz", "verliebt", "liebe", "love", "süß"), ["heartEyes", "hearts", "blush"]),
-    (("clown", "zirkus", "narr", "witzig"), ["clownNose", "clownWig"]),
+    (("herz", "verliebt", "liebe", "love", "süß"), ["heartGlasses", "hearts", "blush"]),
+    (("clown", "zirkus", "narr", "witzig"), ["clownWig", "clownNose", "clownFace"]),
     (("teufel", "devil", "böse", "dämon"), ["devilHorns", "angry"]),
-    (("engel", "angel", "heilig", "brav"), ["halo", "sparkles"]),
-    (("könig", "königin", "krone", "prinz", "prinzessin", "king", "queen", "reich"), ["crown", "sparkles"]),
+    (("engel", "angel", "heilig", "brav"), ["halo", "blush"]),
+    (("könig", "königin", "krone", "prinz", "prinzessin", "king", "queen", "reich", "geld", "dollar", "money", "millionär", "popstar", "berühmt"), ["crown", "sunglasses"]),
     (("pirat", "pirate"), ["pirate", "beard"]),
-    (("roboter", "robot", "cyborg", "android"), ["robot"]),
+    (("roboter", "robot", "cyborg", "android"), ["robot", "robotFace"]),
     (("zombie", "untot", "gruselig", "monster"), ["zombie"]),
     (("regenbogen", "rainbow", "kotzen", "spucken"), ["rainbow"]),
-    (("weinen", "heul", "träne", "traurig", "sad"), ["tears"]),
-    (("feuer", "brenn", "flamme", "heiß"), ["fireEyes"]),
-    (("hypno", "spirale", "schwindel", "dizzy"), ["swirlEyes"]),
-    (("geld", "dollar", "money", "millionär", "reich"), ["moneyEyes"]),
-    (("riesenaugen", "große augen", "grosse augen", "glubsch", "glotz"), ["bigEyes"]),
-    (("dicker kopf", "dicke backen", "aufgeblasen", "riesenkopf", "ballon", "hamster"), ["bigHead"]),
+    (("weinen", "heul", "träne", "traurig", "sad"), ["bigEyes", "blush"]),
+    (("feuer", "brenn", "flamme", "heiß"), ["devilHorns", "angry"]),
+    (("riesenaugen", "große augen", "grosse augen"), ["bigEyes"]),
+    (("dicker kopf", "dicke backen", "aufgeblasen", "riesenkopf", "ballon", "hamster"), ["bigHead", "blush"]),
     (("nase",), ["bigNose"]),
     (("mund", "lippen", "maul"), ["bigMouth"]),
-    (("wackelaugen", "wackel"), ["googlyEyes"]),
-    (("sabber", "sabbern"), ["drool"]),
-    (("nerd", "streber", "brille", "schlau"), ["nerdGlasses"]),
-    (("gentleman", "herr", "fein", "monokel", "zylinder"), ["tophatCane"]),
-    (("stern", "star", "popstar", "berühmt"), ["starGlasses", "sparkles"]),
+    (("sabber", "sabbern"), ["tongue", "bigTeeth"]),
+    (("nerd", "streber", "brille", "schlau"), ["nerdGlasses", "buckTeeth"]),
+    (("gentleman", "herr", "fein", "monokel", "zylinder"), ["topHat", "mustache", "monocle"]),
+    (("stern", "star"), ["starGlasses"]),
     (("party", "konfetti", "feier", "geburtstag"), ["confetti"]),
     (("schnee", "winter", "kalt", "eis"), ["snow"]),
-    (("opa", "bart", "alt", "weise"), ["beard", "roundGlasses"]),
+    (("opa", "bart", "alt", "weise"), ["greyBeard", "roundGlasses"]),
     (("schnurrbart", "schnauzer"), ["mustache"]),
     (("sommersprossen", "sommer"), ["freckles", "blush"]),
-    (("wütend", "sauer", "wut", "zornig", "angry"), ["angry", "fireEyes"]),
-    (("glitzer", "funkel", "traum", "magisch", "märchen"), ["sparkles"]),
-    (("lach", "lol", "haha"), ["bigTeeth", "tears"]),
+    (("wütend", "sauer", "wut", "zornig", "angry"), ["angry"]),
+    (("glitzer", "funkel", "traum", "magisch", "märchen"), ["halo", "blush"]),
+    (("lach", "lol", "haha"), ["bigTeeth", "bigEyes"]),
     (("zunge",), ["tongue"]),
     (("alien", "außerirdisch", "ausserirdisch"), ["bigEyes", "bigHead"]),
 ]
@@ -80,7 +80,7 @@ def clean_recipe(fx, filter_name):
     """The effects that exist (in order, none twice, at most six) and a filter that exists."""
     names = []
     for name in fx if isinstance(fx, list) else []:
-        if isinstance(name, str) and name in EFFECTS and name not in names:
+        if isinstance(name, str) and name in EFFECTS and name not in RETIRED and name not in names:
             names.append(name)
     return names[:MAX_FX], filter_name if filter_name in FILTERS else "none"
 
@@ -97,7 +97,7 @@ def recipe_from_words(prompt):
         if len(chosen) >= MAX_FX:
             break
     if not chosen:
-        chosen = ["sparkles", "blush", "sunglasses"]
+        chosen = ["blush", "sunglasses"]
     filter_name = "none"
     for stems, name in FILTER_WORDS:
         if any(f" {stem}" in low for stem in stems):
@@ -106,9 +106,9 @@ def recipe_from_words(prompt):
     words = [w for w in re.findall(r"[A-Za-zÄÖÜäöüß]+", prompt) if len(w) > 2 and w.lower() not in STOPWORDS]
     title = f"{words[0].capitalize()}-Linse"[:24] if words else "Meine Linse"
     first = chosen[0]
-    from_emoji = {"crossEyes": "🤪", "bigTeeth": "😁", "bunnyEars": "🐰", "catEars": "🐱", "dogEars": "🐶", "balaclava": "🥷", "sunglasses": "😎", "heartEyes": "😍", "clownNose": "🤡", "devilHorns": "😈",
-                  "halo": "😇", "crown": "👑", "pirate": "🏴‍☠️", "robot": "🤖", "zombie": "🧟", "rainbow": "🌈", "tears": "😭", "fireEyes": "🔥", "swirlEyes": "😵‍💫", "moneyEyes": "🤑", "bigEyes": "👀",
-                  "bigHead": "🎈", "nerdGlasses": "🤓", "tophatCane": "🧐", "starGlasses": "🤩", "confetti": "🎉", "snow": "❄️", "beard": "🧔", "mustache": "🥸", "angry": "😠", "sparkles": "✨"}
+    from_emoji = {"propellerHat": "🤪", "bigTeeth": "😁", "bunnyEars": "🐰", "catEars": "🐱", "dogEars": "🐶", "balaclava": "🥷", "sunglasses": "😎", "heartGlasses": "😍", "clownWig": "🤡", "devilHorns": "😈",
+                  "halo": "😇", "crown": "👑", "pirate": "🏴‍☠️", "robot": "🤖", "zombie": "🧟", "rainbow": "🌈", "bigEyes": "👀", "bigHead": "🎈", "nerdGlasses": "🤓", "topHat": "🧐", "starGlasses": "🤩",
+                  "confetti": "🎉", "snow": "❄️", "beard": "🧔", "greyBeard": "🧔", "mustache": "🥸", "angry": "😠", "blush": "😊"}
     return title, from_emoji.get(first, "✨"), COLORS[sum(map(ord, prompt)) % len(COLORS)], chosen[:MAX_FX], filter_name
 
 
@@ -118,7 +118,7 @@ def ask_ai(prompt):
         return None
     try:
         import ai_assistant
-        listing = "\n".join(f"- {name}: {about}" for name, about in EFFECTS.items())
+        listing = "\n".join(f"- {name}: {about}" for name, about in EFFECTS.items() if name not in RETIRED)
         raw = ai_assistant.generate_text(
             "Du baust Gesichts-Linsen für eine Kamera-App (wie bei Snapchat). Aus der Beschreibung einer Person wählst du EINE bis SECHS passende Effekte aus dieser Liste (nur die Namen) und einen Farbfilter, "
             "dazu einen kurzen Titel (höchstens 24 Zeichen), ein einzelnes passendes Emoji und eine Farbe (#rrggbb).\nEffekte:\n" + listing + "\nFilter: " + ", ".join(FILTERS)

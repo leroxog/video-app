@@ -53,6 +53,7 @@ import ai_assistant
 import docread
 import siteauth
 import ysound
+import yipi_ranking
 from blobstore import STORE
 from models import db
 from siteauth import CookieAuth, RateLimiter, client_addresses, same_origin
@@ -126,7 +127,7 @@ LIMITS = {
     "password": (8, 900), "delete": (6, 900),
     "post-burst": (12, 60), "post-hour": (150, 3600), "like": (400, 3600), "follow": (120, 3600), "media": (40, 3600), "dm": (120, 3600),
     "link-preview": (120, 600), "link-image": (500, 600),
-    "game-ai": (12, 3600), "report": (20, 3600), "lens-recipe": (30, 3600), "lens-make": (10, 86400), "lens-use": (300, 3600), "game-make": (10, 86400), "game-edit": (120, 3600), "game-play": (400, 3600), "profile": (30, 3600), "search": (120, 600), "block": (60, 3600),
+    "game-ai": (12, 3600), "rank-ai": (20, 3600), "rank-search": (90, 3600), "rank-pick": (120, 3600), "report": (20, 3600), "lens-recipe": (30, 3600), "lens-make": (10, 86400), "lens-use": (300, 3600), "game-make": (10, 86400), "game-edit": (120, 3600), "game-play": (400, 3600), "profile": (30, 3600), "search": (120, 600), "block": (60, 3600),
     "gif-make": (20, 3600), "gif-fav": (400, 3600), "gif-use": (300, 3600), "gif-list": (600, 600),
     "share": (240, 600), "attach": (40, 3600), "storage": (120, 3600), "story": (30, 3600), "story-view": (900, 600), "play": (200, 3600), "heart": (300, 3600), "push": (30, 3600), "nex-read": (30, 600), "google": (30, 600), "nex": (40, 600), "nex-flood": (80, 60), "factcheck": (120, 3600), "views": (90, 600), "vote": (200, 3600), "pin": (60, 3600), "group": (12, 3600),
 }
@@ -237,11 +238,11 @@ class PulseGame(db.Model):
     __tablename__ = "pulse_game"
     id = db.Column(db.String(11), primary_key=True)                            # "gu-1a2b3c4d"
     owner_id = db.Column(db.Integer, nullable=False, index=True)
-    kind = db.Column(db.String(10), nullable=False)                            # "code" (the level builder is gone: its rows are removed at the start)
+    kind = db.Column(db.String(10), nullable=False)                            # "code", or "ranking" (the data is then the JSON of yipi_ranking.py); the level builder is gone
     title = db.Column(db.String(24), nullable=False)
     emoji = db.Column(db.String(8), nullable=False, default="🎮")
     color = db.Column(db.String(7), nullable=False, default="#7a2cf0")
-    data = db.Column(db.Text, nullable=False, default="")                      # the code
+    data = db.Column(db.Text, nullable=False, default="")                      # the code (or the JSON of a ranking)
     icon_id = db.Column(db.String(32), nullable=True)                          # the picture of the round button in the lens strip (a photo of the author's choice)
     plays = db.Column(db.Integer, nullable=False, default=0)
     draft = db.Column(db.Boolean, nullable=False, default=False)               # saved to be tried (also by the sealed worker), not published yet
@@ -980,6 +981,21 @@ RANK_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "r
 RANK_TITLES = (("footballers", "Fußballer"), ("musicians", "Musikerinnen und Musiker"), ("countries", "Flaggen"))
 
 
+def user_rank_credits():
+    """The pictures that people took from Wikimedia Commons for their own rankings (author, licence, source), for the page /bildnachweise."""
+    rows = PulseGame.query.filter(PulseGame.kind == "ranking", PulseGame.deleted.is_(False), PulseGame.draft.is_(False)).order_by(PulseGame.created_at.desc()).limit(200).all()
+    entries = []
+    seen = set()
+    for row in rows:
+        data = yipi_ranking.parse(row.data)
+        for entry in (data["entries"] if data else []):
+            credit = entry.get("credit") if isinstance(entry, dict) else None
+            if credit and credit.get("page") not in seen:
+                seen.add(credit["page"])
+                entries.append({"name": entry.get("name", ""), "author": credit.get("author", ""), "licence": credit.get("licence", ""), "pageUrl": credit["page"], "game": row.title})
+    return entries
+
+
 def rank_credits():
     """The pictures of the ranking games (static/rank, collected by scripts/fetch_rank_images.py) with who made them and under which licence,
     in groups, for the page /bildnachweise."""
@@ -1573,6 +1589,11 @@ def purge_stories():
 def cleanup_orphans(user):
     """Pictures that were uploaded but never used (not in a post, not an avatar or banner, not in a story) disappear after a day."""
     keep = [x for x in (user.avatar_id, user.banner_id) if x]
+    for icon, kind, data in db.session.query(PulseGame.icon_id, PulseGame.kind, PulseGame.data).filter(PulseGame.owner_id == user.id, PulseGame.deleted.is_(False)):
+        if icon:
+            keep.append(icon)                                                    # (the photo of the round button of a game)
+        if kind == "ranking":
+            keep.extend(yipi_ranking.media_ids(data))                            # (the pictures of the entries of a ranking)
     criteria = [YipiMedia.owner_id == user.id, YipiMedia.post_id.is_(None), YipiMedia.created_at < utcnow() - timedelta(days=1), ~YipiMedia.id.in_(select(YipiStory.media_id))]
     if keep:
         criteria.append(~YipiMedia.id.in_(keep))
@@ -1641,8 +1662,8 @@ def manifest():
 PULSE_SCRIPTS = ["yipi-core.js", "yipi-gif-core.js", "yipi-icons.js", "yipi-api.js", "yipi-ui.js", "yipi-fx.js", "yipi-gif.js", "yipi-components.js", "yipi-newpost.js",
                  "yipi-views.js", "yipi-links.js", "yipi-comments.js", "yipi-chats.js", "yipi-lock.js", "yipi-pages.js", "yipi-auth.js", "yipi-share.js", "yipi-progress.js", "yipi-nex.js", "yipi-download.js", "yipi-lenses.js", "yipi-qr.js", "yipi-gamemaker.js", "yipi-camera.js", "yipi-shorts.js", "yipi-videos.js", "yipi-stories.js", "yipi-chrome.js", "yipi.js"]
 # The games of the camera tab are a second file, loaded when the camera tab is opened (about a hundred small games; nobody who only reads needs them).
-PULSE_LENS_SCRIPTS = ["pl-face.js"]              # the face lenses (face tracking and the effects): a third file, loaded when the first lens is opened
-PULSE_GAME_SCRIPTS = ["pg-kit.js", "pg-art.js", "pg-racing.js", "pg-rank.js", "pg-community.js", "pg-runners.js", "pg-arcade.js", "pg-reflex.js", "pg-puzzle.js", "pg-board.js", "pg-numbers.js", "pg-skill.js", "pg-more.js", "pg-fruit.js"]
+PULSE_LENS_SCRIPTS = ["pl-face.js", "pl-ar.js", "pl-ar-models.js", "pl-ar-decals.js"]   # the face lenses (face tracking, the flat effects and the 3D engine): a third file, loaded when the first lens is opened
+PULSE_GAME_SCRIPTS = ["pg-kit.js", "pg-art.js", "pg-racing.js", "pg-race3d.js", "pg-rank.js", "pg-community.js", "pg-runners.js", "pg-arcade.js", "pg-reflex.js", "pg-puzzle.js", "pg-board.js", "pg-numbers.js", "pg-skill.js", "pg-more.js", "pg-fruit.js"]
 _bundles = {}
 
 
@@ -4397,7 +4418,10 @@ def register_routes(app):
         owner = (owners or {}).get(row.owner_id) or db.session.get(YipiUser, row.owner_id)
         item = {"id": row.id, "kind": row.kind, "title": row.title, "emoji": row.emoji, "color": row.color, "plays": row.plays, "user": user_brief(owner) if owner else None,
                 "mine": bool(viewer and viewer.id == row.owner_id), "draft": row.draft, "createdAt": iso(row.created_at), "icon": media_url(row.icon_id)}
-        if with_data:
+        if with_data and row.kind == "ranking":
+            data = yipi_ranking.parse(row.data) or {"size": 5, "entries": []}
+            item["ranking"] = {"size": data["size"], "entries": [{"name": entry.get("name", ""), "url": media_url(entry.get("media")), "credit": entry.get("credit")} for entry in data["entries"] if isinstance(entry, dict)]}
+        elif with_data:
             item["data"] = row.data
         return item
 
@@ -4442,7 +4466,12 @@ def register_routes(app):
             return None, fail("empty")
         if yipi_agents.sensitive(title, hard_only=True):
             return None, fail("not_allowed", 422)
-        stored, reason = yipi_games.clean_code(data.get("code"))
+        if kind == "ranking":
+            owned = {row.id for row in YipiMedia.query.options(defer(YipiMedia.data)).filter(YipiMedia.owner_id == user.id, YipiMedia.id.in_(
+                [entry.get("media") for entry in (data.get("ranking") or {}).get("entries", []) if isinstance(entry, dict) and isinstance(entry.get("media"), str)][:60]))} if isinstance(data.get("ranking"), dict) else set()
+            stored, reason = yipi_ranking.clean_ranking(data.get("ranking"), owned.__contains__, lambda word: yipi_agents.sensitive(word, hard_only=True))
+        else:
+            stored, reason = yipi_games.clean_code(data.get("code"))
         if stored is None:
             return None, (jsonify({"ok": False, "error": "bad_code", "message": reason}), 422)
         emoji = data.get("emoji") if isinstance(data.get("emoji"), str) else ""
@@ -4555,6 +4584,64 @@ def register_routes(app):
         except Exception:  # noqa: BLE001  (no key, no answer, or no game that passes the checks)
             logger.exception("The AI could not write a game")
             return fail("ai_failed", 502)
+
+    @route("/api/yipi/ranking/suggest", methods=["POST"], endpoint="yipi_ranking_suggest")
+    def yipi_ranking_suggest():
+        """The AI suggests names of entries for the title of a ranking: {title} -> {entries: [names]}."""
+        user, problem = need_user()
+        if problem:
+            return problem
+        data, problem = body()
+        if problem:
+            return problem
+        title = clean_text(data.get("title", ""), 60, keep_newlines=False) if isinstance(data.get("title"), str) else ""
+        if len(title) < 3:
+            return fail("empty")
+        if yipi_agents.sensitive(title, hard_only=True):
+            return fail("not_allowed", 422)
+        if limiter.too_many("rank-ai", str(user.id)):
+            return fail("too_many", 429)
+        try:
+            names = yipi_ranking.suggest(title, ai_assistant.generate_text)
+        except Exception:  # noqa: BLE001  (no key, no answer)
+            logger.exception("The AI could not suggest entries")
+            names = []
+        names = [name for name in names if not yipi_agents.sensitive(name, hard_only=True)]
+        if not names:
+            return fail("ai_failed", 502)
+        return jsonify({"ok": True, "entries": names})
+
+    @route("/api/yipi/ranking/images")
+    def yipi_ranking_images():
+        """Freely licensed pictures of Wikimedia Commons for a name: ?q=Messi -> {items: [{url, title, author, licence, page}]}."""
+        user, problem = need_user()
+        if problem:
+            return problem
+        if limiter.too_many("rank-search", str(user.id)):
+            return fail("too_many", 429)
+        return jsonify({"ok": True, "items": yipi_ranking.search_images(request.args.get("q", ""))})
+
+    @route("/api/yipi/ranking/pick", methods=["POST"], endpoint="yipi_ranking_pick")
+    def yipi_ranking_pick():
+        """The person chose one of the pictures: it is fetched (a thumbnail from upload.wikimedia.org only) and kept as a picture of the person: {url} -> {media, credit}."""
+        user, problem = need_user()
+        if problem:
+            return problem
+        data, problem = body()
+        if problem:
+            return problem
+        if limiter.too_many("rank-pick", str(user.id)):
+            return fail("too_many", 429)
+        raw = yipi_ranking.fetch_thumb(data.get("url"))
+        info = image_info(raw) if raw else None
+        if info is None or info[1] < 1 or info[2] < 1 or info[1] * info[2] > MAX_PIXELS:
+            return fail("bad_image", 415)
+        cleanup_orphans(user)
+        item = YipiMedia(id=uuid.uuid4().hex, owner_id=user.id, content_type=info[0], data=b"", size=len(raw), width=info[1], height=info[2], alt="")
+        keep_bytes("media", item, raw)
+        db.session.add(item)
+        db.session.commit()
+        return jsonify({"ok": True, "media": media_json(item), "credit": yipi_ranking.clean_credit(data.get("credit"))})
 
     @route("/api/yipi/game-worker/<game_id>", endpoint="yipi_game_worker")
     def yipi_game_worker(game_id):
@@ -4751,7 +4838,7 @@ def register_routes(app):
 
     # ---------------------------------------------------------------------- legal pages, files for browsers and crawlers
     def legal(page):
-        return page_headers(make_response(render_template("legal.html", page=page, imprint=ysound.imprint(), credits=credits_list() if page == "credits" else (), rank_credits=rank_credits() if page == "credits" else ())))
+        return page_headers(make_response(render_template("legal.html", page=page, imprint=ysound.imprint(), credits=credits_list() if page == "credits" else (), rank_credits=rank_credits() if page == "credits" else (), user_rank_credits=user_rank_credits() if page == "credits" else ())))
 
     @route("/nutzungsbedingungen")
     def yipi_terms():

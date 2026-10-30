@@ -1,8 +1,8 @@
-/* Nex games: the ranking games (pg-rank.js). "Ranke die Fußballer" (musicians, countries): a machine like a slot machine spins pictures one after the other and stops on one
-   person; you tap the place (1 to 5, or 1 to 10) where that person belongs in your own ranking, the picture flies there, and the machine spins again until every place is taken.
-   The pictures are freely licensed ones from Wikimedia Commons (static/rank, collected by scripts/fetch_rank_images.py; the page /bildnachweise credits them). Without the
-   pictures (or in a test without a browser) the games work with names and coloured circles. Before the first touch the game shows its machine and its places and two switches
-   for "Top 5" and "Top 10"; the first touch somewhere else starts it (and the recording). */
+/* Nex games: the ranking games (pg-rank.js). "Ranke die Fußballer" (musicians, countries, and the rankings that people made themselves): a reel like a slot machine rolls above the head
+   of the player (the camera tab finds the forehead, see `hooks.face`) and stops on one picture; you tap the place (1 to 5, or 1 to 10) at the side of the screen where that picture
+   belongs in your own ranking, the picture flies there, and the reel rolls again until every place is taken. The pictures of the games of Nex are freely licensed ones from Wikimedia
+   Commons (static/rank, collected by scripts/fetch_rank_images.py; the page /bildnachweise credits them). Without the pictures (or in a test without a browser) the games work
+   with names and coloured circles. Nothing but the reel, the places and a small title is drawn, so the player is seen. */
 (function () {
   "use strict";
   const R = window.PulseGames.register;
@@ -68,167 +68,180 @@
     g.restore();
   }
 
-  for (const cat of CATEGORIES) {
-    R({ id: cat.id, name: cat.name, emoji: cat.emoji, cat: "Ranglisten", featured: true, order: cat.order, color: cat.color, hint: "Tippe auf den Platz, auf den die Person gehört", create(e) {
-      const g = e.g;
-      let items = cat.names.map((name) => ({ name, pic: null }));
-      let ready = typeof fetch !== "function" || typeof Image === "undefined";      // without a browser (the tests) the game plays with names only
-      if (!ready) loadIndex().then((data) => {
-        const list = data && data[cat.key];
-        if (Array.isArray(list) && list.length >= 12) {
-          items = list.map((entry) => ({ name: entry.name, pic: picture(`/static/rank/${cat.key}/${entry.file}`) }));
-          if (phase === "wait") reset();                                          // the round starts from the list with the pictures, not from the one with the names only
+  const clampn = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+  /* The game of one ranking: meta = {id, short, color, fit, size (5 or 10), names (without pictures) or entries [{name, url}], loadItems(): Promise<[{name, url}]> or nothing}. */
+  function makeRank(meta, e) {
+    const g = e.g;
+    let items = (meta.names || []).map((name) => ({ name, pic: null }));
+    if (meta.entries) items = meta.entries.map((entry) => ({ name: entry.name, pic: entry.url ? picture(entry.url) : null }));
+    let ready = !meta.loadItems || typeof fetch !== "function" || typeof Image === "undefined";      // without a browser (the tests) the game plays with names only
+    if (!ready) meta.loadItems().then((list) => {
+      if (Array.isArray(list) && list.length >= 12) {
+        items = list.map((entry) => ({ name: entry.name, pic: picture(entry.url) }));
+        if (phase === "wait") reset();                                          // the round starts from the list with the pictures, not from the one with the names only
+      }
+      ready = true;
+    });
+    const size = meta.size === 10 ? 10 : 5;
+    let slots = [];
+    let pool = [];
+    let current = null;
+    let strip = [];
+    let phase = "wait";
+    let t = 0, flyT = 0, flyTo = -1, doneT = 0, hover = -1, pulse = 0, shown = 0;
+    const reelAt = { x: W / 2, y: 150, roll: 0, size: 112 };
+    const SPIN = 1.5, PICK_MAX = 7, FLY = 0.5;
+
+    function reset() {
+      slots = Array.from({ length: size }, () => null);
+      pool = e.shuffle(items);
+      current = null;
+      phase = "wait";
+      shown = 0;
+    }
+    reset();
+    /* the places stand at the edge of the screen: 1 to 5 on the right, 6 to 10 on the left (smaller) */
+    const slotRect = (i) => (size === 5 ? { x: W - 82, y: 128 + i * 76, w: 70, h: 66 } : i < 5 ? { x: W - 70, y: 112 + i * 64, w: 58, h: 56 } : { x: 12, y: 112 + (i - 5) * 64, w: 58, h: 56 });
+    const seen = (item) => !item.pic || item.pic.ok;                         // its picture has arrived (or it has none)
+    function nextSpin() {
+      if (!pool.length) pool = e.shuffle(items);
+      current = pool.pop();
+      for (let tries = pool.length; tries > 0 && !seen(current); tries--) { pool.unshift(current); current = pool.pop(); }       // the one that stops should show its picture
+      const others = items.filter((item) => item !== current);
+      const decoys = e.shuffle(others.filter(seen).length >= 12 ? others.filter(seen) : others).slice(0, 12);
+      strip = [...decoys, current];                                   // the reel shows these one after the other and stops on the last
+      phase = "spin";
+      t = 0;
+      shown = 0;
+    }
+    function place(i) {
+      slots[i] = current;
+      flyTo = i; flyT = 0; phase = "fly";
+      e.score(slots.filter(Boolean).length * 10);
+    }
+    /* where the reel hangs: on the forehead of the player (when the camera has found it), tilted with the head */
+    function follow() {
+      const f = e.hooks && e.hooks.face ? e.hooks.face() : null;
+      let tx = W / 2, ty = 150, roll = 0, sz = 112;
+      if (f && f.have) { sz = clampn(f.w * 0.95, 96, 134); tx = clampn(f.x, sz / 2 + 8, W - sz / 2 - 8); ty = f.y - sz * 0.6 - 10; roll = clampn(f.roll, -0.6, 0.6); }
+      ty = Math.max(ty, 112 + sz / 2);
+      const k = f && f.have ? 0.35 : 0.1;
+      reelAt.x += (tx - reelAt.x) * k; reelAt.y += (ty - reelAt.y) * k; reelAt.roll += (roll - reelAt.roll) * k; reelAt.size += (sz - reelAt.size) * k;
+    }
+
+    return {
+      peek: () => ({ items, pool, current, slots, ready }),                    // for the tests
+      update(dt) {
+        const i = e.input;
+        pulse += dt;
+        hover = -1;
+        if (phase === "wait") { if (ready) nextSpin(); return; }
+        if (phase === "spin") {
+          t += dt;
+          shown = Math.min(1, t / SPIN);
+          if (t >= SPIN) { phase = "pick"; t = 0; navigator.vibrate?.(15); }
+          return;
         }
-        ready = true;
-      });
-      let size = 5;
-      let slots = [];
-      let pool = [];
-      let current = null;
-      let strip = [];
-      let phase = "wait";
-      let t = 0, started = false, flyT = 0, flyTo = -1, doneT = 0, hover = -1, pulse = 0, shown = 0;
-      const SPIN = 1.5, PICK_MAX = 7, FLY = 0.5;
-      const TOGGLES = [{ n: 5, x: 112, y: 96, w: 62, h: 28 }, { n: 10, x: 186, y: 96, w: 62, h: 28 }];
-      const WIN = { x: 100, y: 134, w: 160, h: 160 };
-
-      function reset() {
-        slots = Array.from({ length: size }, () => null);
-        pool = e.shuffle(items);
-        current = null;
-        phase = "wait";
-        shown = 0;
-      }
-      reset();
-      const rowRect = (i) => {
-        const rows = size, top = 326, bottom = 626, gap = rows === 5 ? 6 : 3;
-        const h = (bottom - top - gap * (rows - 1)) / rows;
-        return { x: 20, y: top + i * (h + gap), w: 320, h };
-      };
-      const seen = (item) => !item.pic || item.pic.ok;                         // its picture has arrived (or it has none)
-      function nextSpin() {
-        if (!pool.length) pool = e.shuffle(items);
-        current = pool.pop();
-        for (let tries = pool.length; tries > 0 && !seen(current); tries--) { pool.unshift(current); current = pool.pop(); }       // the one that stops should show its picture
-        const others = items.filter((item) => item !== current);
-        const decoys = e.shuffle(others.filter(seen).length >= 12 ? others.filter(seen) : others).slice(0, 12);
-        strip = [...decoys, current];                                   // the machine shows these one after the other and stops on the last
-        phase = "spin";
-        t = 0;
-        shown = 0;
-      }
-      function place(i) {
-        slots[i] = current;
-        flyTo = i; flyT = 0; phase = "fly";
-        e.score(slots.filter(Boolean).length * 10);
-      }
-
-      return {
-        peek: () => ({ items, pool, current, slots, ready }),                    // for the tests
-        canStart(x, y) { return !TOGGLES.some((tg) => e.inside(x, y, tg.x, tg.y, tg.w, tg.h)); },
-        idle(input) {                                                      // before the first touch only the two switches answer
-          if (input.tap) for (const tg of TOGGLES) if (e.inside(input.x, input.y, tg.x, tg.y, tg.w, tg.h) && size !== tg.n) { size = tg.n; reset(); }
-        },
-        update(dt) {
-          started = true;
-          const i = e.input;
-          pulse += dt;
-          hover = -1;
-          if (phase === "wait") { if (ready) nextSpin(); return; }
-          if (phase === "spin") {
-            t += dt;
-            shown = Math.min(1, t / SPIN);
-            if (t >= SPIN) { phase = "pick"; t = 0; navigator.vibrate?.(15); }
-            return;
-          }
-          if (phase === "pick") {
-            t += dt;
-            for (let k = 0; k < size; k++) {
-              const r = rowRect(k);
-              if (slots[k]) continue;
-              if (i.down && e.inside(i.x, i.y, r.x, r.y, r.w, r.h)) hover = k;
-              if (i.tap && e.inside(i.x, i.y, r.x, r.y, r.w, r.h)) { place(k); return; }
-            }
-            if (t > PICK_MAX) { const free = slots.map((s, k) => (s ? -1 : k)).filter((k) => k >= 0); place(free[0]); }
-            return;
-          }
-          if (phase === "fly") {
-            flyT += dt;
-            if (flyT >= FLY) {
-              if (slots.every(Boolean)) { phase = "done"; doneT = 0; } else nextSpin();
-            }
-            return;
-          }
-          if (phase === "done") { doneT += dt; if (doneT > 2.4) e.over(); }
-        },
-
-        draw() {
-          g.fillStyle = "rgba(0,0,0,0.38)";
-          rr(g, 8, 62, W - 16, 590, 28); g.fill();
-          e.text(`Meine Top ${size}: ${cat.short}`, W / 2, 80, { size: 20 });
-          if (!started) {                                                   // the two switches (only before the game starts)
-            for (const tg of TOGGLES) {
-              const on = size === tg.n;
-              g.fillStyle = on ? "#fff" : "rgba(255,255,255,0.18)"; rr(g, tg.x, tg.y, tg.w, tg.h, 14); g.fill();
-              e.text(`Top ${tg.n}`, tg.x + tg.w / 2, tg.y + tg.h / 2 + 1, { size: 15, color: on ? "#111" : "#fff", stroke: false });
-            }
-          }
-          // ---- the machine
-          g.fillStyle = "rgba(255,255,255,0.12)"; rr(g, WIN.x - 12, WIN.y - 12, WIN.w + 24, WIN.h + 24, 30); g.fill();
-          g.fillStyle = cat.color; rr(g, WIN.x - 6, WIN.y - 6, WIN.w + 12, WIN.h + 12, 26); g.fill();
-          g.save();
-          rr(g, WIN.x, WIN.y, WIN.w, WIN.h, 22); g.clip();
-          g.fillStyle = "#14161c"; g.fillRect(WIN.x, WIN.y, WIN.w, WIN.h);
-          if (phase === "spin" && strip.length) {
-            const eased = 1 - Math.pow(1 - shown, 3);
-            const pos = eased * (strip.length - 1) * WIN.h;
-            for (let k = Math.max(0, Math.floor(pos / WIN.h) - 1); k <= Math.min(strip.length - 1, Math.floor(pos / WIN.h) + 1); k++) {
-              drawPicture(g, strip[k], WIN.x, WIN.y + k * WIN.h - pos, WIN.w, WIN.h, 0, cat.fit);
-            }
-            const speed = 1 - shown;
-            g.fillStyle = `rgba(0,0,0,${0.35 * speed})`; g.fillRect(WIN.x, WIN.y, WIN.w, WIN.h);
-          } else if (current && (phase === "pick" || phase === "fly")) {
-            if (phase === "pick") drawPicture(g, current, WIN.x, WIN.y, WIN.w, WIN.h, 0, cat.fit);
-          } else if (phase === "done") {
-            e.text("Fertig!", WIN.x + WIN.w / 2, WIN.y + WIN.h / 2, { size: 34 });
-          } else {
-            e.text("?", WIN.x + WIN.w / 2, WIN.y + WIN.h / 2, { size: 80, color: "rgba(255,255,255,0.7)" });
-          }
-          g.restore();
-          if (phase === "pick") { g.strokeStyle = `rgba(255,255,255,${0.55 + 0.4 * Math.sin(pulse * 8)})`; g.lineWidth = 4; rr(g, WIN.x - 3, WIN.y - 3, WIN.w + 6, WIN.h + 6, 25); g.stroke(); }
-          // the name under the machine
-          const label = current && (phase === "pick" || phase === "fly") ? current.name : phase === "spin" ? "…" : phase === "done" ? `Deine Top ${size}!` : ready ? `Tippe, um zu starten` : "Bilder werden geladen …";
-          e.text(label, W / 2, 312, { size: current && phase === "pick" ? 22 : 18 });
-          // ---- the places
+        if (phase === "pick") {
+          t += dt;
           for (let k = 0; k < size; k++) {
-            const r = rowRect(k);
-            const item = slots[k];
-            const free = !item;
-            const open = phase === "pick" && free;
-            const hot = hover === k;
-            g.fillStyle = item ? "rgba(255,255,255,0.92)" : hot ? "rgba(255,255,255,0.4)" : open ? `rgba(255,255,255,${0.16 + 0.07 * Math.sin(pulse * 6 + k)})` : "rgba(255,255,255,0.1)";
-            rr(g, r.x, r.y, r.w, r.h, Math.min(16, r.h / 2)); g.fill();
-            if (!item) { g.setLineDash?.([5, 5]); g.strokeStyle = "rgba(255,255,255,0.45)"; g.lineWidth = 2; rr(g, r.x + 1, r.y + 1, r.w - 2, r.h - 2, Math.min(15, r.h / 2)); g.stroke(); g.setLineDash?.([]); }
-            const b = Math.min(26, r.h - 6);
-            g.fillStyle = item ? cat.color : "rgba(255,255,255,0.88)"; g.beginPath(); g.arc(r.x + 8 + b / 2, r.y + r.h / 2, b / 2, 0, TAU); g.fill();
-            e.text(String(k + 1), r.x + 8 + b / 2, r.y + r.h / 2 + 1, { size: Math.round(b * 0.62), color: item ? "#fff" : "#111", stroke: false });
-            if (item && !(phase === "fly" && flyTo === k && flyT < FLY)) {
-              const ph = r.h - 8;
-              drawPicture(g, item, r.x + 18 + b, r.y + 4, ph * (cat.fit === "contain" ? 1.35 : 1), ph, 8, cat.fit);
-              e.text(item.name, r.x + 28 + b + ph * (cat.fit === "contain" ? 1.35 : 1), r.y + r.h / 2 + 1, { size: size === 5 ? 20 : 15, color: "#111", align: "left", stroke: false });
-            }
+            const r = slotRect(k);
+            if (slots[k]) continue;
+            if (i.down && e.inside(i.x, i.y, r.x - 6, r.y - 4, r.w + 12, r.h + 8)) hover = k;
+            if (i.tap && e.inside(i.x, i.y, r.x - 6, r.y - 4, r.w + 12, r.h + 8)) { place(k); return; }
           }
-          // ---- the card that flies to its place
-          if (phase === "fly" && current) {
-            const r = rowRect(flyTo);
-            const u = Math.min(1, flyT / FLY);
-            const k = u * u * (3 - 2 * u);
-            const fx = WIN.x + (r.x + 18 + 26 - WIN.x) * k, fy = WIN.y + (r.y + 4 - WIN.y) * k - Math.sin(u * Math.PI) * 26;
-            const w = WIN.w + ((r.h - 8) - WIN.w) * k;
-            drawPicture(g, current, fx, fy, w, w, 12 * (1 - k) + 8 * k, cat.fit);
+          if (t > PICK_MAX) { const free = slots.map((s, k) => (s ? -1 : k)).filter((k) => k >= 0); place(free[0]); }
+          return;
+        }
+        if (phase === "fly") {
+          flyT += dt;
+          if (flyT >= FLY) {
+            if (slots.every(Boolean)) { phase = "done"; doneT = 0; } else nextSpin();
           }
-        },
-      };
+          return;
+        }
+        if (phase === "done") { doneT += dt; if (doneT > 2.4) e.over(); }
+      },
+
+      draw() {
+        follow();
+        // ---- the title, small
+        e.panel(W / 2 - 92, 540, 184, 28, 14, 0.5);
+        e.text(`Meine Top ${size}: ${meta.short}`, W / 2, 554, { size: 14, stroke: false });
+        // ---- the places at the side
+        for (let k = 0; k < size; k++) {
+          const r = slotRect(k);
+          const item = slots[k];
+          const open = phase === "pick" && !item;
+          const hot = hover === k;
+          g.fillStyle = item ? "rgba(255,255,255,0.95)" : hot ? "rgba(255,255,255,0.5)" : open ? `rgba(255,255,255,${0.2 + 0.08 * Math.sin(pulse * 6 + k)})` : "rgba(20,22,28,0.42)";
+          rr(g, r.x, r.y, r.w, r.h, 16); g.fill();
+          g.lineWidth = 2; g.strokeStyle = open ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.4)";
+          rr(g, r.x + 1, r.y + 1, r.w - 2, r.h - 2, 15); g.stroke();
+          if (item && !(phase === "fly" && flyTo === k && flyT < FLY)) {
+            drawPicture(g, item, r.x + 3, r.y + 3, r.w - 6, r.h - 6, 13, meta.fit);
+            g.fillStyle = "rgba(0,0,0,0.5)"; rr(g, r.x + 3, r.y + r.h - 19, r.w - 6, 16, 8); g.fill();
+            e.text(item.name.length > 11 ? `${item.name.slice(0, 10)}…` : item.name, r.x + r.w / 2, r.y + r.h - 11, { size: 9.5, weight: 700, stroke: false });
+          }
+          g.fillStyle = item ? meta.color : "rgba(255,255,255,0.92)"; g.beginPath(); g.arc(r.x + 3, r.y + 3, 10, 0, TAU); g.fill();
+          e.text(String(k + 1), r.x + 3, r.y + 4, { size: 12, color: item ? "#fff" : "#111", stroke: false });
+        }
+        // ---- the reel above the head
+        const rs = reelAt.size;
+        g.save();
+        g.translate(reelAt.x, reelAt.y);
+        g.rotate(reelAt.roll);
+        const glow = g.createRadialGradient(0, 0, rs * 0.3, 0, 0, rs * 0.95);
+        glow.addColorStop(0, "rgba(255,255,255,0.22)"); glow.addColorStop(1, "rgba(255,255,255,0)");
+        g.fillStyle = glow; g.fillRect(-rs, -rs, rs * 2, rs * 2);
+        g.fillStyle = "rgba(255,255,255,0.95)";                              // the little tail that points to the head
+        g.beginPath(); g.moveTo(-10, rs / 2 + 4); g.lineTo(10, rs / 2 + 4); g.lineTo(0, rs / 2 + 16); g.closePath(); g.fill();
+        g.fillStyle = meta.color; rr(g, -rs / 2 - 5, -rs / 2 - 5, rs + 10, rs + 10, 24); g.fill();
+        g.lineWidth = 3; g.strokeStyle = "rgba(255,255,255,0.95)"; rr(g, -rs / 2 - 5, -rs / 2 - 5, rs + 10, rs + 10, 24); g.stroke();
+        g.save();
+        rr(g, -rs / 2, -rs / 2, rs, rs, 19); g.clip();
+        g.fillStyle = "#14161c"; g.fillRect(-rs / 2, -rs / 2, rs, rs);
+        if (phase === "spin" && strip.length) {
+          const eased = 1 - Math.pow(1 - shown, 3);
+          const pos = eased * (strip.length - 1) * rs;
+          for (let k = Math.max(0, Math.floor(pos / rs) - 1); k <= Math.min(strip.length - 1, Math.floor(pos / rs) + 1); k++) drawPicture(g, strip[k], -rs / 2, -rs / 2 + k * rs - pos, rs, rs, 0, meta.fit);
+          g.fillStyle = `rgba(0,0,0,${0.35 * (1 - shown)})`; g.fillRect(-rs / 2, -rs / 2, rs, rs);
+        } else if (current && phase === "pick") {
+          drawPicture(g, current, -rs / 2, -rs / 2, rs, rs, 0, meta.fit);
+        } else if (phase === "done") {
+          e.text("Fertig!", 0, 0, { size: 26 });
+        } else if (phase !== "fly") {
+          e.text("?", 0, 2, { size: 64, color: "rgba(255,255,255,0.75)" });
+        }
+        g.restore();
+        if (phase === "pick") { g.strokeStyle = `rgba(255,255,255,${0.5 + 0.45 * Math.sin(pulse * 8)})`; g.lineWidth = 4; rr(g, -rs / 2 - 9, -rs / 2 - 9, rs + 18, rs + 18, 27); g.stroke(); }
+        g.restore();
+        // the name, above the reel
+        if (current && (phase === "pick" || phase === "fly")) e.text(current.name, reelAt.x, reelAt.y - rs / 2 - 16, { size: 18 });
+        // ---- the card that flies to its place
+        if (phase === "fly" && current) {
+          const r = slotRect(flyTo);
+          const u = Math.min(1, flyT / FLY);
+          const k = u * u * (3 - 2 * u);
+          const x0 = reelAt.x - rs / 2, y0 = reelAt.y - rs / 2;
+          const w1 = r.w - 6, h1 = r.h - 6;
+          drawPicture(g, current, x0 + (r.x + 3 - x0) * k, y0 + (r.y + 3 - y0) * k - Math.sin(u * Math.PI) * 30, rs + (w1 - rs) * k, rs + (h1 - rs) * k, 18 * (1 - k) + 13 * k, meta.fit);
+        }
+      },
+    };
+  }
+
+  for (const cat of CATEGORIES) {
+    R({ id: cat.id, name: cat.name, emoji: cat.emoji, cat: "Ranglisten", featured: true, bubble: false, backdrop: false, face: true, order: cat.order, color: cat.color, hint: "Tippe auf den Platz, auf den die Person gehört", create(e) {
+      return makeRank({ id: cat.id, short: cat.short, color: cat.color, fit: cat.fit, size: 5, names: cat.names,
+        loadItems: () => loadIndex().then((data) => { const list = data && data[cat.key]; return Array.isArray(list) ? list.map((entry) => ({ name: entry.name, url: `/static/rank/${cat.key}/${entry.file}` })) : null; }) }, e);
     } });
   }
+
+  /* the game of a ranking that a person made: meta = {id, title, color, size, entries: [{name, url}]} (see pg-community.js) */
+  window.PulseGames.rankDef = (meta) => ({
+    id: meta.id, name: meta.title, emoji: meta.emoji || "🏆", cat: "Community", hint: "Tippe auf den Platz, auf den es gehört", color: meta.color, bubble: false, backdrop: false, face: true, community: true,
+    create: (e) => makeRank({ id: meta.id, short: meta.title.length > 18 ? `${meta.title.slice(0, 17)}…` : meta.title, color: meta.color || "#6c7bff", fit: "cover", size: meta.size === 10 ? 10 : 5, entries: meta.entries }, e),
+  });
 })();

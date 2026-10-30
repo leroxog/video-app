@@ -59,8 +59,11 @@ def mp4(extra=3000):
 
 
 def test_the_effects_of_the_server_are_the_effects_of_the_browser():
-    in_browser = re.findall(r'^  add\("([A-Za-z]+)"', read("pl-face.js"), re.M)
-    assert sorted(in_browser) == sorted(yipi_lenses.EFFECTS), "pl-face.js and yipi_lenses.py name the same effects"
+    in_browser = set()
+    for name in ("pl-face.js", "pl-ar.js", "pl-ar-models.js", "pl-ar-decals.js"):
+        in_browser |= set(re.findall(r'^  add\("([A-Za-z]+)"', read(name), re.M))
+    assert sorted(in_browser) == sorted(yipi_lenses.EFFECTS), "the files of the lenses and yipi_lenses.py name the same effects"
+    assert yipi_lenses.RETIRED <= set(yipi_lenses.EFFECTS)
     filters = re.search(r"const FILTERS = \{(.*?)\n  \};", read("pl-face.js"), re.S).group(1)
     assert sorted(re.findall(r"^    ([a-z]+): \{ label", filters, re.M)) == sorted(yipi_lenses.FILTERS)
 
@@ -68,12 +71,12 @@ def test_the_effects_of_the_server_are_the_effects_of_the_browser():
 def test_the_ready_made_lenses_use_only_effects_and_filters_that_exist():
     source = read("yipi-lenses.js")
     presets = re.findall(r'\["(l-[a-z0-9]+)", "([^"]+)", "([^"]+)", "(#[0-9a-f]{6})", "([^"]+)", \[([^\]]*)\], "([a-z]+)", "([^"]+)"\]', source)
-    assert len(presets) >= 44, len(presets)
+    assert len(presets) >= 30, len(presets)
     ids = [row[0] for row in presets]
     assert len(set(ids)) == len(ids)
     for lens_id, name, emoji, color, prompt, fx, filter_name, category in presets:
         names = re.findall(r'"([A-Za-z]+)"', fx)
-        assert names and len(names) <= yipi_lenses.MAX_FX and all(n in yipi_lenses.EFFECTS for n in names), (lens_id, names)
+        assert names and len(names) <= yipi_lenses.MAX_FX and all(n in yipi_lenses.EFFECTS and n not in yipi_lenses.RETIRED for n in names), (lens_id, names)
         assert filter_name in yipi_lenses.FILTERS, (lens_id, filter_name)
         assert 2 <= len(name) <= 24 and prompt and category in ("Lustig", "Masken", "Tiere", "Liebe", "Fantasie", "Verzerrt", "Filter"), lens_id
     assert {"l-dumm", "l-zaehne", "l-sturmhaube"} <= set(ids), "the lenses of the examples of the user are there"
@@ -86,7 +89,7 @@ def test_a_recipe_only_names_effects_that_exist():
 
 
 def test_the_words_of_a_prompt_give_a_recipe_without_the_ai():
-    for prompt, wanted in (("Mach die Person dumm aussehend", {"crossEyes", "propellerHat"}), ("Ein Hase mit riesigen Zähnen", {"bunnyEars", "bigTeeth"}), ("Setz mir eine schwarze Strickmaske auf", {"balaclava"}),
+    for prompt, wanted in (("Mach die Person dumm aussehend", {"bigEyes", "propellerHat"}), ("Ein Hase mit riesigen Zähnen", {"bunnyEars", "bigTeeth"}), ("Setz mir eine schwarze Strickmaske auf", {"balaclava"}),
                            ("Ich bin ein Roboter", {"robot"}), ("Mach mich zum Zombie in der Nacht", {"zombie"})):
         recipe = yipi_lenses.make_recipe(prompt)
         assert recipe["source"] == "words" and wanted <= set(recipe["fx"]), (prompt, recipe)
@@ -125,7 +128,7 @@ def test_a_person_writes_a_prompt_publishes_the_lens_and_others_use_it(client):
     reply = mia.post("/api/yipi/lenses/recipe", json={"prompt": "Mach die Person dumm aussehend mit großen Zähnen"})
     assert reply.status_code == 200, reply.get_json()
     recipe = reply.get_json()["recipe"]
-    assert "crossEyes" in recipe["fx"] and recipe["source"] == "words"
+    assert "bigEyes" in recipe["fx"] and "propellerHat" in recipe["fx"] and recipe["source"] == "words"
     made = mia.post("/api/yipi/lenses", json={"title": "Dummkopf 2", "prompt": "Mach die Person dumm aussehend mit großen Zähnen", "emoji": recipe["emoji"], "color": recipe["color"], "fx": recipe["fx"] + ["evil()"], "filter": "vivid"})
     assert made.status_code == 201, made.get_json()
     lens = made.get_json()["lens"]

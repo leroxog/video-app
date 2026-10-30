@@ -146,11 +146,17 @@
 
     // ---------------------------------------------------------------------------------------------- the lenses
     function lensButton(game, index) {
-      const button = h("button", { class: `lens${game.kind === "create" ? " create" : ""}${game.kind === "lens" ? " face" : ""}`, type: "button", role: "option", "aria-selected": "false", "aria-label": `${game.name}: ${game.hint}`, "data-id": game.id },
-        h("span", { class: `lens-ic${game.image ? " photo" : ""}`, style: game.color && !game.image ? `background:${game.color}` : "" },
-          game.image ? h("img", { class: "lens-photo", src: game.image, alt: "", loading: "lazy", draggable: false })
-            : game.kind === "create" ? h("span", { class: "lens-emoji lens-plus", "aria-hidden": "true" }, icon("plus"))
-              : h("span", { class: "lens-emoji", "aria-hidden": "true" }, game.emoji)));
+      const circle = h("span", { class: `lens-ic${game.image ? " photo" : ""}`, style: game.color && !game.image ? `background:${game.color}` : "" },
+        game.image ? h("img", { class: "lens-photo", src: game.image, alt: "", loading: "lazy", draggable: false })
+          : game.kind === "create" ? h("span", { class: "lens-emoji lens-plus", "aria-hidden": "true" }, icon("plus"))
+            : h("span", { class: "lens-emoji", "aria-hidden": "true" }, game.emoji));
+      const photo = circle.querySelector("img");
+      if (photo) photo.addEventListener("error", () => {                       // a picture that is not there: the emoji on the colour of the game
+        circle.classList.remove("photo");
+        if (game.color) circle.style.background = game.color;
+        photo.replaceWith(h("span", { class: "lens-emoji", "aria-hidden": "true" }, game.emoji));
+      });
+      const button = h("button", { class: `lens${game.kind === "create" ? " create" : ""}${game.kind === "lens" ? " face" : ""}`, type: "button", role: "option", "aria-selected": "false", "aria-label": `${game.name}: ${game.hint}`, "data-id": game.id }, circle);
       button.addEventListener("click", () => {
         if (state !== "idle") return;
         if (index === active) { if (runner && runner.go) runner.go(); else startRound(); } else go(index, true);
@@ -302,6 +308,27 @@
       if (mine !== previewId) return;
       runner = window.PulseGames.run(def, canvas, current.hooks, { armed: true });
       canvas.focus({ preventScroll: true });
+      if (def.face) trackFace(mine, current.hooks);
+    }
+
+    /* A game with `face: true` (the ranking games: the reel hangs on the forehead of the player) gets the place of the face: the lens engine finds it, without drawing anything. */
+    async function trackFace(mine, hooks) {
+      try { await loadScript(assets.lens); } catch (error) { return; }
+      for (let waited = 0; !stream && waited < 12000; waited += 250) await new Promise((resolve) => setTimeout(resolve, 250));          // (the camera may still be opening)
+      if (mine !== previewId || dead || !stream || !window.PulseFace) return;
+      const canvas = h("canvas", { class: "lens-canvas", "aria-hidden": "true" });
+      host.append(canvas);
+      lens = new window.PulseFace.FaceLens({ video: feed, canvas, mirror: facing === "user", recipe: { fx: [], filter: "none" }, onStatus() {} });
+      lens.start();
+      hooks.face = () => {
+        if (!lens || !lens.have || !lens.arPoints || !feed.videoWidth) return null;
+        const vw = feed.videoWidth, vh = feed.videoHeight, k = Math.max(360 / vw, 640 / vh), ox = (360 - vw * k) / 2, oy = (640 - vh * k) / 2;
+        const mirror = facing === "user";
+        const pt = (i) => { const x = lens.arPoints[i].x * vw * k + ox; return { x: mirror ? 360 - x : x, y: lens.arPoints[i].y * vh * k + oy }; };
+        const top = pt(10), a = pt(234), b = pt(454), e1 = pt(33), e2 = pt(263);
+        const left = e1.x < e2.x ? e1 : e2, right = e1.x < e2.x ? e2 : e1;
+        return { have: true, x: top.x, y: top.y, w: Math.hypot(a.x - b.x, a.y - b.y), roll: Math.atan2(right.y - left.y, right.x - left.x) };
+      };
     }
 
     async function ensureCommunity(game, mine) {
@@ -310,7 +337,8 @@
       lensNote("");
       if (dead || mine !== previewId) return;
       if (!row) { lensNote("Dieses Spiel gibt es nicht mehr."); return; }
-      window.PulseGames.define(window.PulseGames.community.communityDef(row));
+      window.PulseGames.define(row.kind === "ranking" && row.ranking ? window.PulseGames.rankDef({ id: row.id, title: row.title, emoji: row.emoji, color: row.color, size: row.ranking.size, entries: row.ranking.entries })
+        : window.PulseGames.community.communityDef(row));
       showPreview();
     }
 
@@ -637,7 +665,7 @@
         return;
       }
       if (dead) return;
-      const games = window.PulseGames.list().map((game) => ({ ...game, kind: "game" }));
+      const games = window.PulseGames.list().map((game) => ({ ...game, kind: "game", image: game.external ? null : `/static/img/games/${game.id}.jpg` }));
       const create = { id: "create", kind: "create", name: "Erstellen", emoji: "+", cat: "Neu", hint: "Baue mit KI eine eigene Linse oder ein eigenes Spiel und teile es", color: "#7a2cf0" };
       const qr = { id: "qr", kind: "qr", name: "QR-Code", emoji: "🔳", cat: "Teilen", hint: "Dein QR-Code zum Teilen und Scannen", color: "#1a1a1f" };
       const flagship = games.filter((game) => game.featured);

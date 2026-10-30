@@ -1,6 +1,6 @@
-/* Nex games: racing (pg-racing.js). Two games that are made with more care than the small ones: a car race on a busy motorway seen from above (lanes, traffic of cars, vans and
-   lorries that change lanes, coins, nitro, a landscape of grass, trees and rocks that rushes past) and a motorbike that rides over hills and ramps and does flips in the air.
-   Both show their scenery and their buttons before the first touch (the camera tab draws the first picture and waits), and both end when somebody crashes. */
+/* Nex games: the motorbike (pg-racing.js). A motorbike that rides over hills and ramps, does flips in the air and crashes when it lands badly. It draws only the ground, the bike and the
+   dashboard, on a see-through picture: the player (the camera of the phone) is the background. It shows its scenery and its buttons before the first touch (the camera tab draws the
+   first picture and waits). The car race is in pg-race3d.js. */
 (function () {
   "use strict";
   const R = window.PulseGames.register;
@@ -20,384 +20,79 @@
   }
   const clampf = (v, a, b) => Math.max(a, Math.min(b, v));
 
-  /* ======================================================================================================================================== Auto-Rennen */
-  /* A car seen from above, its nose up. kind: "sedan", "sport", "taxi", "van", "truck". */
-  function drawCar(g, cx, cy, w, h, color, kind, angle = 0, o = {}) {
-    g.save();
-    g.translate(cx, cy);
-    if (angle) g.rotate(angle);
-    g.fillStyle = "rgba(0,0,0,0.30)";
-    rr(g, -w / 2 + 4, -h / 2 + 6, w, h, 10);
-    g.fill();
-    g.fillStyle = "#15161a";                                                  // wheels
-    for (const wy of [-h * 0.3, h * 0.3]) for (const sx of [-1, 1]) { rr(g, sx < 0 ? -w / 2 - 1 : w / 2 - 6, wy - 8, 7, 16, 3); g.fill(); }
-    const body = g.createLinearGradient(-w / 2, 0, w / 2, 0);
-    body.addColorStop(0, shade(color, -0.28));
-    body.addColorStop(0.28, shade(color, 0.14));
-    body.addColorStop(0.55, color);
-    body.addColorStop(1, shade(color, -0.3));
-    if (kind === "truck") {
-      g.fillStyle = shade(color, -0.1);                                       // cab
-      rr(g, -w / 2 + 2, -h / 2, w - 4, h * 0.27, 8); g.fill();
-      g.fillStyle = "rgba(150,200,235,0.9)";
-      rr(g, -w / 2 + 6, -h / 2 + 4, w - 12, h * 0.08, 3); g.fill();
-      g.fillStyle = "#e9ecef";                                                // the load
-      rr(g, -w / 2, -h / 2 + h * 0.29, w, h * 0.71, 5); g.fill();
-      g.fillStyle = "rgba(0,0,0,0.12)";
-      for (let k = 1; k < 6; k++) g.fillRect(-w / 2 + 2, -h / 2 + h * 0.29 + k * h * 0.118, w - 4, 2);
-      g.fillStyle = color;
-      g.fillRect(-w / 2 + 3, -h / 2 + h * 0.34, w - 6, 6);
-    } else {
-      g.fillStyle = body;
-      rr(g, -w / 2, -h / 2, w, h, kind === "van" ? 9 : 12); g.fill();
-      g.fillStyle = "rgba(255,255,255,0.14)";                                 // hood and boot
-      rr(g, -w / 2 + 5, -h / 2 + 3, w - 10, h * 0.2, 7); g.fill();
-      g.fillStyle = "rgba(0,0,0,0.12)";
-      rr(g, -w / 2 + 5, h / 2 - h * 0.17, w - 10, h * 0.14, 6); g.fill();
-      const glass = "rgba(28,40,56,0.94)";
-      g.fillStyle = glass;                                                    // windscreen, roof, rear window
-      g.beginPath();
-      g.moveTo(-w / 2 + 5, -h * 0.17); g.lineTo(w / 2 - 5, -h * 0.17); g.lineTo(w / 2 - 3, -h * 0.03); g.lineTo(-w / 2 + 3, -h * 0.03); g.closePath(); g.fill();
-      g.beginPath();
-      g.moveTo(-w / 2 + 3, h * 0.22); g.lineTo(w / 2 - 3, h * 0.22); g.lineTo(w / 2 - 5, h * 0.3); g.lineTo(-w / 2 + 5, h * 0.3); g.closePath(); g.fill();
-      g.fillStyle = shade(color, kind === "van" ? 0.05 : 0.18);
-      rr(g, -w / 2 + 3, -h * 0.03, w - 6, h * 0.25, 6); g.fill();
-      if (kind === "sport") {
-        g.fillStyle = "rgba(255,255,255,0.85)";                               // two stripes
-        g.fillRect(-4, -h / 2 + 2, 3, h - 4); g.fillRect(1, -h / 2 + 2, 3, h - 4);
-      }
-      if (kind === "taxi") {
-        g.fillStyle = "#fff";
-        rr(g, -8, -h * 0.01, 16, 7, 2); g.fill();
-        g.fillStyle = "#111";
-        g.fillRect(-5, h * 0.01, 10, 2);
-      }
-      if (kind === "van") {
-        g.fillStyle = "rgba(255,255,255,0.2)";
-        g.fillRect(-w / 2 + 4, h * 0.05, w - 8, 2); g.fillRect(-w / 2 + 4, h * 0.14, w - 8, 2);
-      }
-    }
-    g.fillStyle = o.lights ? "#fff7c2" : "#ffe9a3";                           // headlights
-    for (const sx of [-1, 1]) { g.beginPath(); g.ellipse(sx * (w / 2 - 7), -h / 2 + 3.5, 4, 2.6, 0, 0, TAU); g.fill(); }
-    g.fillStyle = o.brake ? "#ff2f2f" : "#b01818";                            // tail lights
-    for (const sx of [-1, 1]) rr(g, sx * (w / 2 - 8) - 4, h / 2 - 5, 8, 3.6, 1.5), g.fill();
-    if (o.brake) { g.fillStyle = "rgba(255,40,40,0.35)"; g.fillRect(-w / 2 + 2, h / 2, w - 4, 7); }
-    if (o.blink) {
-      g.fillStyle = "#ffb11c";
-      const x = o.blink * (w / 2 - 1.5);
-      g.beginPath(); g.arc(x, -h / 2 + 4, 2.6, 0, TAU); g.arc(x, h / 2 - 4, 2.6, 0, TAU); g.fill();
-    }
-    g.restore();
-  }
-
-  function drawTree(g, x, y, s, big) {
-    g.fillStyle = "rgba(0,0,0,0.25)";
-    g.beginPath(); g.ellipse(x + 5 * s, y + 7 * s, 15 * s, 11 * s, 0, 0, TAU); g.fill();
-    const tones = big ? ["#1f6b34", "#2a8a43", "#38a655"] : ["#2c7d3e", "#3b9a52", "#58b86e"];
-    g.fillStyle = tones[0]; g.beginPath(); g.arc(x, y, 15 * s, 0, TAU); g.fill();
-    g.fillStyle = tones[1]; g.beginPath(); g.arc(x - 2 * s, y - 2 * s, 11 * s, 0, TAU); g.fill();
-    g.fillStyle = tones[2]; g.beginPath(); g.arc(x - 4 * s, y - 4 * s, 6 * s, 0, TAU); g.fill();
-  }
-  function drawRock(g, x, y, s) {
-    g.fillStyle = "rgba(0,0,0,0.25)";
-    g.beginPath(); g.ellipse(x + 3 * s, y + 4 * s, 11 * s, 7 * s, 0, 0, TAU); g.fill();
-    g.fillStyle = "#8d9096"; g.beginPath(); g.ellipse(x, y, 10 * s, 7 * s, 0.3, 0, TAU); g.fill();
-    g.fillStyle = "#b5b8bd"; g.beginPath(); g.ellipse(x - 2 * s, y - 2 * s, 6 * s, 3.5 * s, 0.3, 0, TAU); g.fill();
-  }
-  function drawSign(g, x, y, s, left) {
-    g.fillStyle = "rgba(0,0,0,0.25)"; g.fillRect(x - 2 * s + 3, y - 2 + 3, 5 * s, 16 * s);
-    g.fillStyle = "#cfd3d8"; g.fillRect(x - 1.5 * s, y, 3 * s, 14 * s);
-    g.fillStyle = "#1c62c4"; rr(g, x - 9 * s, y - 14 * s, 18 * s, 14 * s, 3); g.fill();
-    g.fillStyle = "#fff";
-    g.beginPath(); g.moveTo(x + (left ? -4 : 4) * s, y - 7 * s); g.lineTo(x + (left ? 4 : -4) * s, y - 11 * s); g.lineTo(x + (left ? 4 : -4) * s, y - 3 * s); g.closePath(); g.fill();
-  }
-
-  function drawButton(e, x, y, w, h, label, active) {
-    const g = e.g;
-    g.fillStyle = active ? "rgba(255,255,255,0.78)" : "rgba(20,22,28,0.5)";
-    rr(g, x, y + (active ? 2 : 0), w, h, 24); g.fill();
-    g.lineWidth = 3; g.strokeStyle = active ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.55)";
-    rr(g, x + 1.5, y + 1.5 + (active ? 2 : 0), w - 3, h - 3, 22); g.stroke();
-    g.fillStyle = active ? "#111" : "#fff";
-    g.beginPath();
-    const cx = x + w / 2, cy = y + h / 2 + (active ? 2 : 0);
-    if (label === "left") { g.moveTo(cx + 10, cy - 15); g.lineTo(cx - 12, cy); g.lineTo(cx + 10, cy + 15); g.lineTo(cx + 3, cy); }
-    else if (label === "right") { g.moveTo(cx - 10, cy - 15); g.lineTo(cx + 12, cy); g.lineTo(cx - 10, cy + 15); g.lineTo(cx - 3, cy); }
-    g.closePath(); g.fill();
-  }
-
-  R({ id: "car-race", name: "Auto-Rennen", emoji: "🏎️", cat: "Rennen", featured: true, bubble: true, order: 1, color: "#d63a2f", hint: "Lenke mit den Pfeilen oder dem Finger · sammle Münzen und Nitro", create(e) {
-    const g = e.g;
-    const ROAD0 = 52, ROAD1 = 308, LANES = 4, LW = (ROAD1 - ROAD0) / LANES, PY = 468;
-    const laneX = (i) => ROAD0 + LW * (i + 0.5);
-    const KINDS = [
-      { kind: "sedan", w: 34, h: 62, colors: ["#2b6fd6", "#e8e8ec", "#1f9d73", "#7b4cc4", "#d98a1f"], weight: 5 },
-      { kind: "sport", w: 33, h: 58, colors: ["#e23b3b", "#f0c419", "#25b5c9", "#e0489b"], weight: 3 },
-      { kind: "taxi", w: 34, h: 62, colors: ["#f4c20d"], weight: 2 },
-      { kind: "van", w: 38, h: 74, colors: ["#e8e8ec", "#4a5568", "#c8d1dc"], weight: 2 },
-      { kind: "truck", w: 42, h: 120, colors: ["#d2452c", "#2f6fb5", "#3d3f46"], weight: 1 },
-    ];
-    let t = 0, scroll = 0, speed = 300, dist = 0, px = laneX(1) + LW / 2, pvx = 0, tilt = 0, crash = 0, spin = 0, turbo = 0, coins = 0, near = 0, shake = 0;
-    let nextCar = 0.5, nextCoin = 1.6, nextNitro = 7, stripe = 0, steer = 0, braking = 0;
-    const cars = [], picks = [], popups = [], parts = [], scenery = [];
-    const BL = { x: 12, y: 552, w: 96, h: 66 }, BR = { x: 252, y: 552, w: 96, h: 66 };
-
-    for (let k = 0; k < 16; k++) {
-      const left = k % 2 === 0;
-      scenery.push({ x: left ? e.rand(6, 40) : e.rand(320, 354), y: (k / 16) * 760 - 60, kind: e.pick(["tree", "tree", "tree", "rock", "sign"]), s: e.rand(0.8, 1.3), left });
-    }
-    function addCar(lane, y, relVel, ahead) {
-      const spec = (() => { let r = e.rand(0, KINDS.reduce((a, k) => a + k.weight, 0)); for (const k of KINDS) { r -= k.weight; if (r <= 0) return k; } return KINDS[0]; })();
-      cars.push({ spec, color: e.pick(spec.colors), lane, x: laneX(lane), y, v: relVel, change: e.rand(2, 6), blink: 0, target: lane, near: false, ahead });
-    }
-    addCar(1, 150, 190, true);
-    addCar(3, 300, 150, true);
-    addCar(0, 40, 210, true);
-    picks.push(...[0, 1, 2, 3, 4].map((k) => ({ kind: "coin", x: laneX(2), y: 220 - k * 44, spin: k * 0.5 })));
-
-    function puff(x, y, n, color, speedMul = 1) {
-      for (let k = 0; k < n; k++) parts.push({ x, y, vx: e.rand(-60, 60) * speedMul, vy: e.rand(-40, 120) * speedMul, life: e.rand(0.35, 0.8), age: 0, r: e.rand(2, 6), color });
-    }
-    const say = (text, x, y, color = "#fff") => popups.push({ text, x, y, age: 0, color });
-
-    function freeLane() {
-      const blocked = new Set(cars.filter((c) => c.y < 190 && c.y > -260).map((c) => c.target));
-      const options = [0, 1, 2, 3].filter((l) => !blocked.has(l));
-      return options.length >= 2 ? e.pick(options) : -1;                      // never close the whole motorway
-    }
-
-    function crashNow() {
-      crash = 0.001;
-      speed *= 0.4;
-      shake = 0.5;
-      puff(px, PY, 26, "#ffcf5a", 2.2);
-      puff(px, PY, 18, "#888", 1.4);
-      say("CRASH!", px, PY - 50, "#ff5a4d");
-      navigator.vibrate?.(60);
-    }
-
-    return {
-      canStart() { return true; },
-      update(dt) {
-        const i = e.input;
-        t += dt;
-        shake = Math.max(0, shake - dt);
-        if (crash) {
-          crash += dt;
-          speed = Math.max(0, speed - 520 * dt);
-          scroll += speed * dt;
-          spin += (6 + crash * 5) * dt;
-          px += pvx * dt; pvx *= 0.97;
-          if (e.rand() < 0.5) puff(px, PY + 10, 1, "#666", 0.6);
-          for (const c of cars) c.y += (speed - c.v) * dt;
-          for (const p of parts) { p.age += dt; p.x += p.vx * dt; p.y += p.vy * dt; }
-          for (let k = parts.length - 1; k >= 0; k--) if (parts[k].age > parts[k].life) parts.splice(k, 1);
-          if (crash > 1.15) e.over();
-          return;
-        }
-        // ---- steering: the arrows (held), the keys, or the finger anywhere above the arrows
-        steer = 0;
-        if (i.down && e.inside(i.x, i.y, BL.x, BL.y, BL.w, BL.h)) steer = -1;
-        else if (i.down && e.inside(i.x, i.y, BR.x, BR.y, BR.w, BR.h)) steer = 1;
-        else if (i.down && i.y < 540) steer = clampf((i.x - px) / 16, -1, 1);
-        if (i.keys.has("ArrowLeft") || i.keys.has("a") || i.keys.has("A")) steer = -1;
-        if (i.keys.has("ArrowRight") || i.keys.has("d") || i.keys.has("D")) steer = 1;
-        pvx += (steer * 470 - pvx) * Math.min(1, dt * 8);
-        px += pvx * dt;
-        if (px < ROAD0 + 18) { px = ROAD0 + 18; pvx = Math.abs(pvx) * 0.2; }
-        if (px > ROAD1 - 18) { px = ROAD1 - 18; pvx = -Math.abs(pvx) * 0.2; }
-        tilt += (clampf(pvx / 700, -0.2, 0.2) - tilt) * Math.min(1, dt * 12);
-        // ---- speed
-        const goal = Math.min(580, 300 + t * 5.2) * (turbo > 0 ? 1.45 : 1);
-        speed += (goal - speed) * Math.min(1, dt * 1.7);
-        turbo = Math.max(0, turbo - dt);
-        scroll += speed * dt;
-        dist += speed * dt;
-        stripe = (stripe + speed * dt) % 96;
-        e.score(Math.floor(dist / 80) + coins * 5 + near * 3);
-        // ---- traffic
-        nextCar -= dt;
-        if (nextCar <= 0) {
-          const lane = freeLane();
-          if (lane >= 0) addCar(lane, -140, e.rand(120, 235), false);
-          nextCar = Math.max(0.34, 1.0 - t * 0.011) * e.rand(0.7, 1.3);
-        }
-        braking = 0;
-        for (const c of cars) {
-          c.y += (speed - c.v) * dt;
-          c.change -= dt;
-          if (c.change <= 0 && c.blink === 0 && c.y > -80 && c.y < 420) {      // a car that wants to change lanes shows it first
-            const side = e.pick([-1, 1]);
-            const lane = c.lane + side;
-            if (lane >= 0 && lane < LANES && !cars.some((o) => o !== c && o.target === lane && Math.abs(o.y - c.y) < 130)) { c.blink = side; c.target = lane; c.blinkAt = 0.7; }
-            c.change = e.rand(3, 7);
-          }
-          if (c.blink) {
-            c.blinkAt -= dt;
-            if (c.blinkAt <= 0) { c.lane = c.target; c.blink = 0; }
-          }
-          c.x += (laneX(c.lane) - c.x) * Math.min(1, dt * 4);
-          // crash?
-          const hw = c.spec.w / 2 - 1, hh = c.spec.h / 2 - 3;
-          if (Math.abs(c.x - px) < hw + 17 && Math.abs(c.y - PY) < hh + 27) { crashNow(); return; }
-          // close shave
-          if (!c.near && c.y > PY - 30 && c.y < PY + 30) {
-            const gap = Math.abs(c.x - px) - hw - 17;
-            if (gap > 0 && gap < 12) { c.near = true; near += 1; say("KNAPP! +3", c.x, PY - 56, "#ffe45c"); }
-          }
-        }
-        for (let k = cars.length - 1; k >= 0; k--) if (cars[k].y > 780) cars.splice(k, 1);
-        // ---- coins and nitro
-        nextCoin -= dt;
-        if (nextCoin <= 0) {
-          const lane = e.randInt(0, LANES - 1), n = e.randInt(4, 7);
-          for (let k = 0; k < n; k++) picks.push({ kind: "coin", x: laneX(lane), y: -30 - k * 42, spin: k * 0.5 });
-          nextCoin = e.rand(3.2, 5.5);
-        }
-        nextNitro -= dt;
-        if (nextNitro <= 0) { picks.push({ kind: "nitro", x: laneX(e.randInt(0, LANES - 1)), y: -40, spin: 0 }); nextNitro = e.rand(11, 17); }
-        for (const p of picks) {
-          p.y += speed * dt;
-          p.spin += dt * 7;
-          if (!p.gone && Math.abs(p.x - px) < 26 && Math.abs(p.y - PY) < 38) {
-            p.gone = true;
-            if (p.kind === "coin") { coins += 1; say("+5", p.x, p.y - 12, "#ffd34d"); puff(p.x, p.y, 5, "#ffd34d", 0.8); }
-            else { turbo = 3.2; say("TURBO!", p.x, p.y - 20, "#7fe3ff"); puff(p.x, p.y, 14, "#7fe3ff", 1.4); navigator.vibrate?.(20); }
-          }
-        }
-        for (let k = picks.length - 1; k >= 0; k--) if (picks[k].gone || picks[k].y > 760) picks.splice(k, 1);
-        // ---- landscape
-        for (const s of scenery) {
-          s.y += speed * dt;
-          if (s.y > 700) { s.y -= 780 + e.rand(0, 120); s.x = s.left ? e.rand(6, 40) : e.rand(320, 354); s.kind = e.pick(["tree", "tree", "tree", "rock", "sign"]); s.s = e.rand(0.8, 1.3); }
-        }
-        // ---- smoke and flames
-        if (turbo > 0) puff(px + e.rand(-6, 6), PY + 34, 1, "#7fe3ff", 0.8);
-        else if (e.rand() < 0.25) puff(px + e.rand(-8, 8), PY + 34, 1, "rgba(200,200,200,0.8)", 0.4);
-        for (const p of parts) { p.age += dt; p.x += p.vx * dt; p.y += (p.vy + speed * 0.9) * dt; }
-        for (let k = parts.length - 1; k >= 0; k--) if (parts[k].age > parts[k].life) parts.splice(k, 1);
-        for (const p of popups) { p.age += dt; p.y -= 34 * dt; }
-        for (let k = popups.length - 1; k >= 0; k--) if (popups[k].age > 0.9) popups.splice(k, 1);
-      },
-
-      draw() {
-        g.save();
-        if (shake > 0) g.translate(e.rand(-5, 5) * shake * 2, e.rand(-5, 5) * shake * 2);
-        // grass in two kinds of green that run past, the road, the kerbs and the lane lines
-        for (let y = -96 + (scroll % 96); y < H + 96; y += 96) {
-          g.fillStyle = "rgba(48,140,62,0.66)"; g.fillRect(0, y, ROAD0 - 7, 48); g.fillRect(ROAD1 + 7, y, W - ROAD1 - 7, 48);
-          g.fillStyle = "rgba(40,124,54,0.7)"; g.fillRect(0, y + 48, ROAD0 - 7, 48); g.fillRect(ROAD1 + 7, y + 48, W - ROAD1 - 7, 48);
-        }
-        g.fillStyle = "rgba(38,40,47,0.86)"; g.fillRect(ROAD0, 0, ROAD1 - ROAD0, H);
-        g.fillStyle = "rgba(255,255,255,0.05)"; for (let k = 0; k < LANES; k += 2) g.fillRect(ROAD0 + k * LW, 0, LW, H);
-        for (let y = -48 + (scroll % 48); y < H + 48; y += 48) {
-          g.fillStyle = "#d6342a"; g.fillRect(ROAD0 - 7, y, 7, 24); g.fillRect(ROAD1, y, 7, 24);
-          g.fillStyle = "#f5f5f5"; g.fillRect(ROAD0 - 7, y + 24, 7, 24); g.fillRect(ROAD1, y + 24, 7, 24);
-        }
-        g.fillStyle = "rgba(255,255,255,0.9)"; g.fillRect(ROAD0 + 2, 0, 3, H); g.fillRect(ROAD1 - 5, 0, 3, H);
-        for (let lane = 1; lane < LANES; lane++) for (let y = -56 + (stripe % 56); y < H + 56; y += 56) { g.fillStyle = lane === 2 ? "rgba(255,214,64,0.9)" : "rgba(255,255,255,0.78)"; g.fillRect(ROAD0 + lane * LW - 1.5, y, 3, 28); }
-        for (const s of scenery) { if (s.kind === "tree") drawTree(g, s.x, s.y, s.s, s.s > 1.1); else if (s.kind === "rock") drawRock(g, s.x, s.y, s.s); else drawSign(g, s.x, s.y, s.s, s.left); }
-        // pickups
-        for (const p of picks) {
-          if (p.kind === "coin") {
-            const squeeze = Math.abs(Math.cos(p.spin));
-            g.fillStyle = "rgba(0,0,0,0.25)"; g.beginPath(); g.ellipse(p.x + 3, p.y + 5, 9 * squeeze + 1, 8, 0, 0, TAU); g.fill();
-            g.fillStyle = "#ffcc1f"; g.beginPath(); g.ellipse(p.x, p.y, 10 * squeeze + 1.5, 10, 0, 0, TAU); g.fill();
-            g.fillStyle = "#ffe98a"; g.beginPath(); g.ellipse(p.x - 1, p.y - 1, 6 * squeeze + 1, 6.5, 0, 0, TAU); g.fill();
-          } else {
-            g.fillStyle = "rgba(0,0,0,0.25)"; rr(g, p.x - 9, p.y - 12, 22, 28, 6); g.fill();
-            g.fillStyle = "#1a8de0"; rr(g, p.x - 11, p.y - 15, 22, 28, 6); g.fill();
-            g.fillStyle = "#cdeeff"; rr(g, p.x - 5, p.y - 19, 10, 6, 2); g.fill();
-            g.fillStyle = "#fff"; g.beginPath(); g.moveTo(p.x + 2, p.y - 9); g.lineTo(p.x - 5, p.y + 2); g.lineTo(p.x, p.y + 2); g.lineTo(p.x - 2, p.y + 10); g.lineTo(p.x + 6, p.y - 2); g.lineTo(p.x + 1, p.y - 2); g.closePath(); g.fill();
-          }
-        }
-        // the cars of the others, then yours
-        for (const c of cars) drawCar(g, c.x, c.y, c.spec.w, c.spec.h, c.color, c.spec.kind, 0, { blink: c.blink && Math.floor(t * 6) % 2 ? c.blink : 0, brake: c.v < 150, lights: true });
-        for (const p of parts) { const k = 1 - p.age / p.life; g.fillStyle = p.color; g.globalAlpha = Math.max(0, k); g.beginPath(); g.arc(p.x, p.y, p.r * (0.6 + k * 0.6), 0, TAU); g.fill(); }
-        g.globalAlpha = 1;
-        if (turbo > 0) {                                                       // flames and speed lines
-          g.fillStyle = "rgba(127,227,255,0.85)"; g.beginPath(); g.moveTo(px - 8, PY + 31); g.lineTo(px, PY + 31 + 30 + e.rand(0, 12)); g.lineTo(px + 8, PY + 31); g.closePath(); g.fill();
-          g.fillStyle = "#fff"; g.beginPath(); g.moveTo(px - 4, PY + 31); g.lineTo(px, PY + 31 + 16 + e.rand(0, 6)); g.lineTo(px + 4, PY + 31); g.closePath(); g.fill();
-          g.strokeStyle = "rgba(255,255,255,0.5)"; g.lineWidth = 2;
-          for (let k = 0; k < 8; k++) { const x = (k * 53 + t * 40) % W, y = (k * 97 + t * 900) % H; g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + 46); g.stroke(); }
-        }
-        drawCar(g, px, PY, 34, 62, "#e6322d", "sport", crash ? spin : tilt, { brake: !!crash, lights: true });
-        for (const p of popups) { const k = Math.max(0, 1 - p.age / 0.9); g.globalAlpha = k; e.text(p.text, p.x, p.y, { size: 20, color: p.color }); }
-        g.globalAlpha = 1;
-        g.restore();
-        // ---- the dashboard
-        const kmh = Math.round(speed * 0.36);
-        e.panel(10, 70, 104, 46, 16, 0.5);
-        e.text(String(kmh), 52, 93, { size: 26, stroke: false });
-        e.text("km/h", 92, 97, { size: 12, weight: 700, stroke: false, color: "#d8dbe2" });
-        e.panel(W - 114, 70, 104, 46, 16, 0.5);
-        g.fillStyle = "#ffcc1f"; g.beginPath(); g.arc(W - 92, 93, 9, 0, TAU); g.fill(); g.fillStyle = "#ffe98a"; g.beginPath(); g.arc(W - 93, 92, 5, 0, TAU); g.fill();
-        e.text(String(coins), W - 58, 93, { size: 24, stroke: false });
-        if (turbo > 0) { e.panel(W / 2 - 62, 126, 124, 14, 7, 0.5); e.rect(W / 2 - 60, 128, 120 * (turbo / 3.2), 10, "#7fe3ff", 5); }
-        // ---- the arrows to steer with
-        const i = e.input;
-        drawButton(e, BL.x, BL.y, BL.w, BL.h, "left", i.down && e.inside(i.x, i.y, BL.x, BL.y, BL.w, BL.h));
-        drawButton(e, BR.x, BR.y, BR.w, BR.h, "right", i.down && e.inside(i.x, i.y, BR.x, BR.y, BR.w, BR.h));
-      },
-    };
-  } });
-
   /* ======================================================================================================================================== Motorrad */
   const norm = (a) => { while (a > Math.PI) a -= TAU; while (a < -Math.PI) a += TAU; return a; };
 
+  /* the bike and its rider, drawn at 25 pixels per half wheelbase and shown 20 % bigger */
   function drawBike(g, o) {
     // o: {x, y (centre), ang, rot (wheel turning), lean}
     const L = 25, RW = 12.5;
+    const RED = "#e1352c";
     g.save();
     g.translate(o.x, o.y);
     g.rotate(o.ang);
-    g.scale(1.2, 1.2);                                                          // the bike is drawn at 25 pixels per half wheelbase and shown 20 % bigger
+    g.scale(1.2, 1.2);
+    g.lineCap = "round";
+    g.lineJoin = "round";
     const wheel = (wx, wy) => {
       g.save(); g.translate(wx, wy);
-      g.fillStyle = "#191a1f"; g.beginPath(); g.arc(0, 0, RW, 0, TAU); g.fill();
-      g.fillStyle = "#4d515a"; g.beginPath(); g.arc(0, 0, RW - 3.2, 0, TAU); g.fill();
-      g.strokeStyle = "#d5d9e0"; g.lineWidth = 1.6;
-      for (let k = 0; k < 6; k++) { const a = o.rot + k * TAU / 6; g.beginPath(); g.moveTo(0, 0); g.lineTo(Math.cos(a) * (RW - 3.6), Math.sin(a) * (RW - 3.6)); g.stroke(); }
-      g.fillStyle = "#eef0f4"; g.beginPath(); g.arc(0, 0, 2.6, 0, TAU); g.fill();
+      g.fillStyle = "#0f1115"; g.beginPath(); g.arc(0, 0, RW, 0, TAU); g.fill();
+      g.strokeStyle = "#2b2e36"; g.lineWidth = 1; g.beginPath(); g.arc(0, 0, RW - 1.6, 0, TAU); g.stroke();
+      g.strokeStyle = "#cdd3dc"; g.lineWidth = 2; g.beginPath(); g.arc(0, 0, RW - 4.2, 0, TAU); g.stroke();
+      g.strokeStyle = "rgba(205,211,220,0.8)"; g.lineWidth = 1;
+      for (let k = 0; k < 8; k++) { const a = o.rot + k * TAU / 8; g.beginPath(); g.moveTo(Math.cos(a) * 2.4, Math.sin(a) * 2.4); g.lineTo(Math.cos(a) * (RW - 4.4), Math.sin(a) * (RW - 4.4)); g.stroke(); }
+      g.fillStyle = "rgba(125,131,142,0.6)"; g.beginPath(); g.arc(0, 0, 5.2, 0, TAU); g.fill();
+      g.fillStyle = "#eef0f4"; g.beginPath(); g.arc(0, 0, 2.2, 0, TAU); g.fill();
       g.restore();
     };
     wheel(-L, 10);
     wheel(L, 10);
-    // swing arm and fork
-    g.lineCap = "round";
-    g.strokeStyle = "#8c929c"; g.lineWidth = 4;
-    g.beginPath(); g.moveTo(-L, 10); g.lineTo(-6, 4); g.stroke();
-    g.strokeStyle = "#c7ccd4"; g.lineWidth = 3.4;
-    g.beginPath(); g.moveTo(L, 10); g.lineTo(L - 7, -14); g.stroke();
-    // engine, exhaust, tank, seat
-    g.fillStyle = "#3a3e47"; rr(g, -14, -2, 22, 14, 4); g.fill();
-    g.fillStyle = "#6b717c"; rr(g, -9, 1, 12, 8, 3); g.fill();
-    g.fillStyle = "#b9bec7"; rr(g, -29, 4, 20, 4.4, 2.2); g.fill();
-    g.fillStyle = "#e1352c";
-    g.beginPath(); g.moveTo(-10, -8); g.quadraticCurveTo(2, -17, 16, -9); g.lineTo(14, -2); g.lineTo(-8, -1); g.closePath(); g.fill();
-    g.fillStyle = "#f5655a"; g.beginPath(); g.moveTo(-4, -10); g.quadraticCurveTo(3, -14, 10, -10); g.lineTo(3, -8); g.closePath(); g.fill();
-    g.fillStyle = "#1d1f26"; rr(g, -26, -8, 19, 6, 3); g.fill();
-    g.fillStyle = "#e1352c"; g.beginPath(); g.moveTo(-26, -5); g.lineTo(-33, -9); g.lineTo(-24, -9); g.closePath(); g.fill();
-    // handlebar and light
-    g.strokeStyle = "#2a2d34"; g.lineWidth = 3; g.beginPath(); g.moveTo(L - 7, -14); g.lineTo(L - 12, -19); g.stroke();
-    g.fillStyle = "#fff6c4"; g.beginPath(); g.arc(L + 1, -9, 3.2, 0, TAU); g.fill();
-    // the rider
+    // swing arm, shock, fork
+    g.strokeStyle = "#3a3e47"; g.lineWidth = 4.6; g.beginPath(); g.moveTo(-L, 10); g.lineTo(-8, 3); g.stroke();
+    g.strokeStyle = "#f0b81f"; g.lineWidth = 2.6; g.beginPath(); g.moveTo(-18, 7); g.lineTo(-13, -5); g.stroke();
+    g.strokeStyle = "#cfd4dc"; g.lineWidth = 3.6; g.beginPath(); g.moveTo(L, 10); g.lineTo(L - 8, -13); g.stroke();
+    g.strokeStyle = "#8c93a0"; g.lineWidth = 1.1; g.beginPath(); g.moveTo(L - 1, 9); g.lineTo(L - 8.8, -12); g.stroke();
+    // exhaust and engine
+    const pipe = g.createLinearGradient(0, 2, 0, 8); pipe.addColorStop(0, "#e9edf2"); pipe.addColorStop(1, "#7d838e");
+    g.fillStyle = pipe; rr(g, -33, 3.4, 27, 4.6, 2.3); g.fill();
+    g.fillStyle = "#2a2c33"; rr(g, -35, 3.4, 5, 4.6, 2.2); g.fill();
+    g.fillStyle = "#2c2f37"; rr(g, -13, -2, 24, 15, 4); g.fill();
+    g.strokeStyle = "rgba(255,255,255,0.12)"; g.lineWidth = 1;
+    for (let k = 0; k < 4; k++) { g.beginPath(); g.moveTo(-11, 2 + k * 3.2); g.lineTo(9, 2 + k * 3.2); g.stroke(); }
+    g.fillStyle = "#5d636e"; rr(g, -8, 1, 12, 8, 3); g.fill();
+    // tail, seat, tank and fairing
+    const paint = g.createLinearGradient(0, -20, 0, 4); paint.addColorStop(0, "#ff6a5c"); paint.addColorStop(0.45, RED); paint.addColorStop(1, "#9b1d17");
+    g.fillStyle = paint;
+    g.beginPath(); g.moveTo(-12, -12); g.lineTo(-30, -13.5); g.quadraticCurveTo(-37, -12.5, -33, -7); g.lineTo(-14, -3.5); g.closePath(); g.fill();
+    g.fillStyle = "#16181d"; rr(g, -27, -15, 17, 3.8, 1.9); g.fill();
+    g.fillStyle = paint;
+    g.beginPath(); g.moveTo(-13, -11.5); g.quadraticCurveTo(-4, -20, 8, -17.5); g.lineTo(L - 7, -14.5); g.quadraticCurveTo(L + 4, -11.5, L + 3.4, -5); g.lineTo(L - 4, 2.5); g.lineTo(6, 3); g.lineTo(-6, -1); g.closePath(); g.fill();
+    g.fillStyle = "rgba(255,255,255,0.32)"; g.beginPath(); g.moveTo(-6, -14); g.quadraticCurveTo(2, -18, 10, -15.5); g.quadraticCurveTo(2, -14.5, -6, -12); g.closePath(); g.fill();
+    g.strokeStyle = "rgba(255,255,255,0.9)"; g.lineWidth = 1.3; g.beginPath(); g.moveTo(8, -3); g.quadraticCurveTo(L - 8, -4, L + 1, -7); g.stroke();
+    g.fillStyle = "rgba(190,226,255,0.5)"; g.beginPath(); g.moveTo(L - 10, -15.5); g.lineTo(L - 3.5, -23); g.lineTo(L - 0.8, -14); g.closePath(); g.fill();
+    g.fillStyle = "#fff4c2"; g.beginPath(); g.ellipse(L + 1.4, -8.2, 3.3, 2.3, 0.4, 0, TAU); g.fill();
+    g.strokeStyle = "#1e2026"; g.lineWidth = 2.6; g.beginPath(); g.moveTo(L - 8, -15); g.lineTo(L - 12, -19.5); g.stroke();
+    // the rider: boots, legs, back, arm, gloves, helmet with a visor
     const lean = o.lean || 0;
     const hipX = -13, hipY = -9;
     const shX = hipX + 14 + lean * 8, shY = hipY - 19 + Math.abs(lean) * 2;
-    g.strokeStyle = "#233a8f"; g.lineWidth = 6.2;
-    g.beginPath(); g.moveTo(hipX, hipY); g.lineTo(shX, shY); g.stroke();
-    g.strokeStyle = "#1c2f78"; g.lineWidth = 5;
-    g.beginPath(); g.moveTo(hipX, hipY); g.lineTo(2, 4); g.lineTo(-3, 11); g.stroke();
-    g.strokeStyle = "#2d49b5"; g.lineWidth = 4.2;
-    g.beginPath(); g.moveTo(shX, shY + 1); g.lineTo(shX + 8, shY + 8); g.lineTo(L - 12, -18); g.stroke();
-    g.fillStyle = "#f2f2f5"; g.beginPath(); g.arc(shX + 4.5, shY - 7, 7.2, 0, TAU); g.fill();
-    g.fillStyle = "#e1352c"; g.beginPath(); g.arc(shX + 4.5, shY - 7, 7.2, Math.PI * 1.05, Math.PI * 1.9); g.lineTo(shX + 4.5, shY - 7); g.fill();
-    g.fillStyle = "#17202c"; rr(g, shX + 5, shY - 10, 7.6, 5.2, 2.4); g.fill();
+    g.strokeStyle = "#1a1d26"; g.lineWidth = 5.4; g.beginPath(); g.moveTo(-3, 11); g.lineTo(0, 12); g.stroke();
+    g.strokeStyle = "#1c2f78"; g.lineWidth = 5.2; g.beginPath(); g.moveTo(hipX, hipY); g.lineTo(2, 3); g.lineTo(-3, 10); g.stroke();
+    const jacket = g.createLinearGradient(hipX, hipY, shX, shY); jacket.addColorStop(0, "#1f358f"); jacket.addColorStop(1, "#3b5fd9");
+    g.strokeStyle = jacket; g.lineWidth = 7; g.beginPath(); g.moveTo(hipX, hipY); g.lineTo(shX, shY); g.stroke();
+    g.strokeStyle = "rgba(255,255,255,0.75)"; g.lineWidth = 1.2; g.beginPath(); g.moveTo(hipX + 2, hipY - 3); g.lineTo(shX - 2, shY + 4); g.stroke();
+    g.strokeStyle = "#2f4fc4"; g.lineWidth = 4.2; g.beginPath(); g.moveTo(shX, shY + 1); g.lineTo(shX + 8, shY + 8); g.lineTo(L - 12, -18); g.stroke();
+    g.fillStyle = "#15171c"; g.beginPath(); g.arc(L - 12, -18, 2.7, 0, TAU); g.fill();
+    const hx = shX + 4.5, hy = shY - 7;
+    g.fillStyle = "#f4f5f8"; g.beginPath(); g.arc(hx, hy, 7.3, 0, TAU); g.fill();
+    g.fillStyle = RED; g.beginPath(); g.arc(hx, hy, 7.3, Math.PI * 1.05, Math.PI * 1.85); g.lineTo(hx, hy); g.fill();
+    const visor = g.createLinearGradient(hx + 4, hy - 3, hx + 12, hy + 2); visor.addColorStop(0, "#1a2433"); visor.addColorStop(1, "#4a6a96");
+    g.fillStyle = visor; rr(g, hx + 3.6, hy - 3.8, 8.4, 5.6, 2.6); g.fill();
+    g.strokeStyle = "rgba(255,255,255,0.55)"; g.lineWidth = 1; g.beginPath(); g.moveTo(hx + 5.4, hy - 2.4); g.lineTo(hx + 10, hy - 2.4); g.stroke();
     g.restore();
   }
 
-  R({ id: "moto", name: "Motorrad", emoji: "🏍️", cat: "Rennen", featured: true, bubble: true, order: 2, color: "#2a6fdb", hint: "Gas rechts · Bremse links · in der Luft neigen", create(e) {
+  R({ id: "moto", name: "Motorrad", emoji: "🏍️", cat: "Rennen", featured: true, bubble: false, backdrop: false, order: 2, color: "#2a6fdb", hint: "Gas rechts · Bremse links · in der Luft neigen", create(e) {
     const g = e.g;
     const G = 1500, STEPX = 8, L = 30, RW = 15, OFF = 12, BIKE_X = 108;
     const heights = [];                                                         // the ground every 8 pixels, from x = 0
@@ -453,6 +148,7 @@
     const startX = bike.x;
     let t = 0, best = 0, coins = 0, flips = 0, bonus = 0, camX = 0, camY = 0, shake = 0, gas = 0, brake = 0;
     const dust = [], pops = [];
+    let gravel = null;
     const BL = { x: 12, y: 548, w: 104, h: 70 }, BR = { x: 244, y: 548, w: 104, h: 70 };
     function wheels() {
       const c = Math.cos(bike.ang), s = Math.sin(bike.ang);
@@ -574,32 +270,51 @@
       draw() {
         g.save();
         if (shake > 0) g.translate(e.rand(-4, 4) * shake * 2, e.rand(-4, 4) * shake * 2);
-        // the far hills (they move slower than the ground) and clouds
-        for (const [k, par, base, amp, col] of [[0, 0.18, 330, 56, "rgba(46,86,128,0.34)"], [1, 0.34, 392, 44, "rgba(36,72,104,0.42)"]]) {
-          g.fillStyle = col; g.beginPath(); g.moveTo(0, H);
-          for (let x = 0; x <= W + 12; x += 12) { const wx = x + camX * par; g.lineTo(x, base - camY * 0.18 + Math.sin(wx / (90 + k * 50)) * amp + Math.sin(wx / 37 + k) * amp * 0.25); }
-          g.lineTo(W, H); g.closePath(); g.fill();
-        }
-        g.fillStyle = "rgba(255,255,255,0.55)";
-        for (let k = 0; k < 4; k++) { const cx = ((k * 211 - camX * 0.08) % 520 + 520) % 520 - 80, cy = 120 + k * 34; g.beginPath(); g.arc(cx, cy, 15, 0, TAU); g.arc(cx + 20, cy - 6, 19, 0, TAU); g.arc(cx + 42, cy, 14, 0, TAU); g.fill(); }
-        // the ground
+        // no sky, no hills: the player is the background. Only the ground, with a lit edge, marker posts and a pattern of tiny stones that slides along
+        const surface = g.createLinearGradient(0, 0, 0, H);
+        surface.addColorStop(0, "rgba(58,63,76,0.97)"); surface.addColorStop(0.6, "rgba(30,33,41,0.98)"); surface.addColorStop(1, "rgba(18,20,26,0.99)");
         g.beginPath();
         g.moveTo(-4, H + 4);
         for (let x = -4; x <= W + 8; x += 6) g.lineTo(x, ground(x + camX) - camY);
         g.lineTo(W + 8, H + 4); g.closePath();
-        const dirt = g.createLinearGradient(0, 0, 0, H);
-        dirt.addColorStop(0, "rgba(120,84,48,0.96)"); dirt.addColorStop(1, "rgba(70,48,30,0.97)");
-        g.fillStyle = dirt; g.fill();
+        g.fillStyle = surface; g.fill();
+        if (!gravel && typeof document.createElement === "function") {
+          gravel = document.createElement("canvas"); gravel.width = gravel.height = 96;
+          const gc = gravel.getContext("2d");
+          for (let n = 0; n < 150; n++) { gc.fillStyle = n % 3 ? `rgba(255,255,255,${0.04 + e.rand() * 0.07})` : `rgba(0,0,0,${0.1 + e.rand() * 0.14})`; gc.fillRect(e.rand(96), e.rand(96), 1 + e.rand(2.4), 1 + e.rand(2)); }
+        }
+        if (gravel) {
+          g.save();
+          g.clip();
+          g.translate(-(camX % 96), -(camY % 96));
+          g.fillStyle = g.createPattern(gravel, "repeat");
+          g.fillRect(0, 0, W + 96, H + 96);
+          g.restore();
+        }
         g.lineJoin = "round";
-        const edge = (off, color, width) => {
+        const edge = (off, color, width, dash) => {
           g.strokeStyle = color; g.lineWidth = width;
+          g.setLineDash(dash || []);
           g.beginPath();
           for (let x = -4; x <= W + 8; x += 6) { const y = ground(x + camX) - camY + off; if (x === -4) g.moveTo(x, y); else g.lineTo(x, y); }
           g.stroke();
+          g.setLineDash([]);
         };
-        edge(0, "#5fc04d", 8);
-        edge(-3, "#8ee070", 2.4);
-        for (const off of [26, 58, 96]) edge(off, "rgba(0,0,0,0.12)", 2);
+        edge(2, "rgba(110,190,255,0.22)", 12);                                 // a soft glow, then the lit edge and a coloured line under it
+        edge(0, "#eaf5ff", 3.4);
+        edge(5, "#3f9bff", 1.8);
+        g.lineDashOffset = camX % 36;
+        edge(30, "rgba(255,255,255,0.2)", 3, [18, 18]);                        // dashes along the ground
+        g.lineDashOffset = 0;
+        // posts every 100 m with the distance
+        for (let m = Math.max(1, Math.floor((camX - 20 - startX) / 1600)); m * 1600 + startX - camX < W + 40; m++) {
+          const px = m * 1600 + startX - camX;
+          if (px < -30) continue;
+          const py = ground(px + camX) - camY;
+          g.fillStyle = "rgba(255,255,255,0.9)"; rr(g, px - 1.5, py - 30, 3, 30, 1.5); g.fill();
+          g.fillStyle = "#3f9bff"; rr(g, px - 18, py - 50, 36, 22, 6); g.fill();
+          e.text(`${m * 100}`, px, py - 39, { size: 12, stroke: false });
+        }
         // coins
         for (const c of coinsList) {
           if (c.taken) continue;

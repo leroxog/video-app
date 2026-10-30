@@ -187,6 +187,7 @@
     const arm = () => { if (!armed) return; armed = false; hooks.onStart?.(); };
 
     function start() {
+      game?.destroy?.();                                 // (a game that restarts lets go of what it holds, like a 3D scene)
       env = createEnv(ctx, hooks);
       game = def.create(env);
       acc = 0;

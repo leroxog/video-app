@@ -2082,6 +2082,16 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .cc-card.upload { margin-top: 4px; }
 .cc-ic.photo { object-fit: cover; padding: 0; }
 .gm-kinds { display: flex; gap: 8px; }
+.rk-list { display: flex; flex-direction: column; gap: 8px; max-height: 40vh; overflow-y: auto; }
+.rk-item { display: flex; flex-direction: column; gap: 6px; }
+.rk-row { display: flex; align-items: center; gap: 8px; }
+.rk-row .field { flex: 1; min-width: 0; }
+.rk-thumb { flex: none; width: 44px; height: 44px; border-radius: 14px; object-fit: cover; background: var(--bg-2); }
+.rk-thumb.none { display: grid; place-items: center; font-weight: 800; font-size: 14px; color: var(--muted); }
+.rk-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 6px; padding: 6px; border-radius: 16px; background: var(--bg-2); }
+.rk-choice { padding: 0; border-radius: 12px; overflow: hidden; aspect-ratio: 1; background: var(--bg); }
+.rk-choice img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.rk-credit { color: var(--muted); font-size: 11px; padding-left: 52px; }
 .gm-head { display: flex; align-items: center; gap: 14px; }
 .gm-head-main { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 6px; }
 .gm-photo { position: relative; display: flex; flex: none; flex-direction: column; align-items: center; gap: 4px; width: 84px; color: var(--muted); font-size: 11.5px; font-weight: 700; text-align: center; }
