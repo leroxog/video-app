@@ -25,6 +25,7 @@ PASSWORD_HASH = "!"                          # fits no password: nobody can sign
 # (id, account, text): add new lines at the END; an id is never reused. The text is posted once, the first time the site runs with the line.
 ANNOUNCEMENTS = [
     ("2026-10-30-web", "web", "Neu auf Nex: Links zeigen eine Vorschau und öffnen sich direkt hier, ohne dass du Nex verlässt. Videos im Feed laufen stumm von allein, und nach den ersten Beiträgen kommen fünf Shorts. Dazu ein neuer Start mit Bedingungen, einfachem Anmelden und bunten Standardbildern. #neu"),
+    ("2026-10-30-round", "web", "Neu auf Nex: Videos halten mit einem Klick an und spielen mit einem Klick weiter. Es gibt keine Leiste zum Vor- und Zurückspulen und keinen Knopf mehr, um sie groß zu machen. Dazu sind jetzt auch die Leisten oben und unten, die Kamera und die Videos schön abgerundet. #neu"),
     ("2026-10-30-ai", "ai", "Neu: Nex AI hat jetzt vier Modi. Normal, Superintelligent (längere, gründlichere Antworten), Human (locker und direkt) und Code (für gute Programme). Du wählst sie oben im Chat. #nexai"),
 ]
 

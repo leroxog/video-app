@@ -24,7 +24,10 @@
   const watcher = "IntersectionObserver" in window ? new IntersectionObserver((list) => {
     for (const item of list) {
       const entry = item.target._autoplay;
-      if (entry) entry.shown = item.isIntersecting ? item.intersectionRatio : 0;
+      if (entry) {
+        entry.shown = item.isIntersecting ? item.intersectionRatio : 0;
+        if (!item.isIntersecting) entry.stopped = false;                  // somebody who scrolls away and back gets the video playing again
+      }
     }
     schedule();
   }, { threshold: [0, 0.1, 0.25, 0.5, 0.75, 1] }) : null;
@@ -38,14 +41,14 @@
   function choose() {
     for (const entry of [...entries]) if (!entry.video.isConnected) { watcher?.unobserve(entry.video); entries.delete(entry); }
     if (document.hidden || reduced() || saving()) return null;
-    if (hovered && entries.has(hovered) && hovered.shown > 0.2) return hovered;
-    if (pinned && entries.has(pinned) && pinned.shown > 0.3) return pinned;
+    if (hovered && entries.has(hovered) && hovered.shown > 0.2 && !hovered.stopped) return hovered;
+    if (pinned && entries.has(pinned) && pinned.shown > 0.3 && !pinned.stopped) return pinned;
     pinned = null;
     const middle = window.innerHeight / 2;
     let best = null;
     let bestScore = -1;
     for (const entry of entries) {
-      if (entry.shown < MIN_SHOWN) continue;
+      if (entry.shown < MIN_SHOWN || entry.stopped) continue;
       const box = entry.video.getBoundingClientRect();
       const score = entry.shown * 1000 - Math.abs(box.top + box.height / 2 - middle) / 10;
       if (score > bestScore) { best = entry; bestScore = score; }
@@ -101,7 +104,50 @@
   window.addEventListener("scroll", schedule, { passive: true });
   window.addEventListener("resize", schedule);
 
-  Y.autoplay = { add, reselect: schedule, entries: () => entries.size };
+  /* One click on a video of the feed: it stops (and stays stopped while it is on the screen), or, when it was stopped, it plays and is the one that plays. */
+  function toggle(video) {
+    const entry = video._autoplay;
+    if (!entry) { if (video.paused) video.play().catch(() => {}); else video.pause(); return; }
+    if (video.paused) {
+      entry.stopped = false;
+      pinned = entry;
+      video.muted = true;
+      const attempt = video.play();
+      if (attempt && attempt.catch) attempt.catch(() => {});
+    } else {
+      entry.stopped = true;
+      if (pinned === entry) pinned = null;
+      video.pause();
+    }
+    schedule();
+  }
+
+  /* A video with nothing but a click: one click stops it or plays it, there is no bar to wind it forward or back, no button to make it big, no picture-in-picture and no menu
+     of the browser. A round play sign shows while it is stopped. `host` is the box around the video (it gets the click). */
+  function plainVideo(video, host) {
+    video.controls = false;
+    video.removeAttribute("controls");
+    video.disablePictureInPicture = true;
+    video.setAttribute("disablepictureinpicture", "");
+    video.setAttribute("disableremoteplayback", "");
+    video.setAttribute("controlslist", "nodownload nofullscreen noremoteplayback");
+    video.tabIndex = -1;
+    video.addEventListener("contextmenu", (event) => event.preventDefault());
+    host.classList.add("tap-video");
+    host.append(h("span", { class: "video-play", "aria-hidden": "true" }, icon("playCircle")));
+    const sync = () => host.classList.toggle("is-paused", video.paused);
+    for (const type of ["play", "pause", "ended"]) video.addEventListener(type, sync);
+    sync();
+    host.tabIndex = 0;
+    host.setAttribute("role", "button");
+    host.setAttribute("aria-label", "Video anhalten oder abspielen");
+    host.addEventListener("click", (event) => { event.stopPropagation(); toggle(video); });
+    host.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); toggle(video); } });
+    return video;
+  }
+
+  Y.autoplay = { add, toggle, reselect: schedule, entries: () => entries.size };
+  Y.plainVideo = plainVideo;
 
   // ------------------------------------------------------------------------------------------------ the shelf
   const SHORTS = 5;

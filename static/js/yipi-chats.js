@@ -223,7 +223,12 @@
       return h("button", { class: "bubble-img", type: "button", "aria-label": `Foto vergrößern${file.name ? `: ${file.name}` : ""}`, onclick: () => Y.viewer([{ url: file.url, alt: file.name || "Foto" }], 0) },
         h("img", { src: file.url, alt: file.name || "Foto", width: file.width || undefined, height: file.height || undefined, loading: "lazy", decoding: "async" }));
     }
-    if (file.kind === "video") return h("video", { class: "bubble-video", src: `${file.url}#t=0.001`, controls: true, playsinline: true, preload: "metadata", "aria-label": file.name || "Video" });
+    if (file.kind === "video") {                                          // (like every video: one click stops or plays it, nothing to wind, nothing to make big)
+      const video = h("video", { class: "bubble-video", src: `${file.url}#t=0.001`, playsinline: true, preload: "metadata", "aria-label": file.name || "Video" });
+      const box = h("div", { class: "bubble-video-box" }, video);
+      Y.plainVideo?.(video, box);
+      return box;
+    }
     return h("a", { class: "bubble-doc", href: file.url, download: file.name, target: "_blank", rel: "noopener", "aria-label": `Dokument herunterladen: ${file.name}` },
       h("span", { class: "bubble-doc-ic" }, icon("file")), h("span", { class: "bubble-doc-main" }, h("b", {}, file.name), h("small", {}, `${(file.name.split(".").pop() || "").toUpperCase()} · ${formatSize(file.size)}`)), h("span", { class: "bubble-doc-dl" }, icon("download")));
   }

@@ -176,7 +176,18 @@
         else if (reply.data.counts) { state.likes = reply.data.counts.likes; draw(); }
       }
       like.addEventListener("click", () => toggleLike());
-      Y.onDoubleTap(stage, (x, y) => { if (state.liked) { Y.likeBurst(x, y, { size: 120 }); Y.sound.play("like"); } else toggleLike(x, y); }, { ignore: "button, a, input, .reel-volume, .menu" });
+      let tapTimer = 0;
+      let doubledAt = 0;
+      Y.onDoubleTap(stage, (x, y) => { clearTimeout(tapTimer); doubledAt = performance.now(); if (state.liked) { Y.likeBurst(x, y, { size: 120 }); Y.sound.play("like"); } else toggleLike(x, y); }, { ignore: "button, a, input, .reel-volume, .menu" });
+      stage.addEventListener("click", (event) => {                          // one tap stops the video or plays it again (a second tap at once is the like)
+        if (event.target.closest("button, a, input, .reel-volume, .menu") || performance.now() - doubledAt < 450) return;
+        clearTimeout(tapTimer);
+        tapTimer = setTimeout(() => {
+          const made = reels.find((entry) => entry.video === video);
+          if (!made) return;
+          if (video.paused) play(made); else { video.pause(); made.stage.classList.add("stuck"); }
+        }, 260);
+      });
       comment.addEventListener("click", () => Y.commentsSheet(item, (n) => { state.replies = Math.max(0, state.replies + n); draw(); }));
       save.addEventListener("click", async () => {
         if (!Y.requireLogin("Melde dich an, um Lesezeichen zu setzen.")) return;

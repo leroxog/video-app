@@ -698,3 +698,21 @@ def test_nex_ai_has_four_modes_and_shows_only_their_names():
     assert 'Y.readJson("yipi.nex.mode"' in nex and "nex-mode" in nex and "nex-codebox" in nex
     assert "Du bist Nex AI" not in "".join(JS.values()), "the instructions of the modes never reach the page"
     assert "```" in JS["yipi-core.js"], "the answers of the mode Code have blocks of code"
+
+
+def test_videos_have_no_bar_to_wind_and_no_button_to_make_them_big_one_click_stops_or_plays():
+    shorts = read("static", "js", "yipi-shorts.js")
+    assert "function plainVideo(video, host)" in shorts and 'nofullscreen' in shorts and "disablepictureinpicture" in shorts and 'event.preventDefault()' in shorts
+    assert "controls" not in "".join(line for line in JS["yipi-components.js"].splitlines() if 'class: "post-video"' in line), "the video of a post has no controls"
+    assert "controls" not in "".join(line for line in JS["yipi-chats.js"].splitlines() if 'class: "bubble-video"' in line), "nor has the video of a chat"
+    assert "Y.plainVideo?.(video, box)" in JS["yipi-components.js"] and "Y.plainVideo?.(video, box)" in JS["yipi-chats.js"]
+    assert "stage.addEventListener(\"click\"" in JS["yipi-videos.js"] and 'classList.add("stuck")' in JS["yipi-videos.js"], "one tap stops a video of the Videos tab"
+    assert "entry.stopped" in shorts, "a video that was stopped by hand is not started again by the autoplay"
+    assert ".tap-video.is-paused > .video-play { display: grid; }" in CSS
+
+
+def test_the_bars_the_camera_and_the_videos_are_round_too():
+    tail = CSS.split("the round look: whatever was still square gets round corners")[1]
+    for rule in (".appbar { border-radius: 0 0 26px 26px; }", ".topbar { border-radius: 0 0 22px 22px; }", ".cam-stage { border-radius: 28px; }", ".reel-stage { border-radius: 26px; }",
+                 ".tabbar { border-radius: 26px 26px 0 0; }", ".tabbar { border-radius: 0 28px 28px 0; }", "::-webkit-scrollbar-thumb { border: 3px solid transparent; border-radius: 999px;"):
+        assert rule in tail, rule

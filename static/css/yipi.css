@@ -2016,3 +2016,32 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .banner.plain, .edit-banner.plain { background: var(--banner, var(--card-2)); }
 .banner-name { position: absolute; inset: 0; display: flex; align-items: center; padding: 0 clamp(16px, 4vw, 36px); color: #000; font-size: clamp(22px, 5vw, 46px); font-weight: 900; line-height: 1.05; letter-spacing: -0.02em; word-break: break-word; }
 @media (prefers-reduced-motion: reduce) { .au-btn, .au-progress i { transition: none; } }
+
+/* ---------------------------------------------------------------------------------------------- videos: one click stops or plays, nothing to wind, nothing to make big */
+.tap-video { position: relative; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.tap-video:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+.video-play { position: absolute; inset: 0; display: none; place-items: center; pointer-events: none; }
+.tap-video.is-paused > .video-play { display: grid; }
+.video-play svg { width: 64px; height: 64px; color: #fff; opacity: 0.92; filter: drop-shadow(0 2px 10px rgba(0, 0, 0, 0.55)); }
+.bubble-video-box { width: min(280px, 100%); overflow: hidden; border-radius: 20px; background: #000; }
+.bubble-video-box .bubble-video { width: 100%; }
+
+/* ---------------------------------------------------------------------------------------------- the round look: whatever was still square gets round corners */
+.appbar { border-radius: 0 0 26px 26px; }
+.topbar { border-radius: 0 0 22px 22px; }
+.sp-bar, .reels-view .sp-bar { border-radius: 0 0 18px 18px; }
+.cam-stage { border-radius: 28px; }
+.reel-stage { border-radius: 26px; }
+@media screen and (max-width: 819px) {
+  .tabbar { border-radius: 26px 26px 0 0; }
+}
+@media screen and (max-width: 999px) {
+  .chat-head { border-radius: 0 0 22px 22px; }
+}
+@media screen and (min-width: 820px) {
+  .tabbar { border-radius: 0 28px 28px 0; }
+  ::-webkit-scrollbar { width: 12px; height: 12px; }
+  ::-webkit-scrollbar-thumb { border: 3px solid transparent; border-radius: 999px; background: var(--line); background-clip: padding-box; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--muted); background-clip: padding-box; }
+  ::-webkit-scrollbar-track { background: transparent; }
+}

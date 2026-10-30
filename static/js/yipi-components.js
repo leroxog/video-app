@@ -180,12 +180,12 @@
   }
 
   // ------------------------------------------------------------------------------------------- posts
-  /* The player of a video in a post: its own controls, the first picture as the poster, a click on it does not open the post. */
+  /* The player of a video in a post: no controls (one click stops it or plays it, nothing to wind or to make big), the first picture as the poster, a click on it does not open the post. */
   function videoPlayer(item) {
     const ratio = Math.max(0.5, Math.min(1.78, (item.width || 9) / (item.height || 16)));
-    const video = h("video", { class: "post-video", src: `${item.url}#t=0.001`, controls: true, playsinline: true, preload: "metadata", "aria-label": item.alt || "Video" });
-    video.addEventListener("click", (event) => event.stopPropagation());
+    const video = h("video", { class: "post-video", src: `${item.url}#t=0.001`, muted: true, loop: true, playsinline: true, preload: "metadata", "aria-label": item.alt || "Video" });
     const box = h("div", { class: "media media-video", style: `aspect-ratio: ${ratio.toFixed(3)}` }, video);
+    Y.plainVideo?.(video, box);
     Y.autoplay?.add(video, { host: box });                                  // plays by itself, without sound, one at a time (yipi-shorts.js)
     return box;
   }
