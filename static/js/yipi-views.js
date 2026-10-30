@@ -180,7 +180,7 @@
       feedPager = pager({
         load: listLoader((cursor) => qs("/timeline", { feed, cursor })),
         render: (item) => Y.postCard(item),
-        between: (n) => (signedIn && n % 6 === 0 ? Y.sponsored("card") : null),      // every seventh item is a box "Gesponsert" (advertisements will go there)
+        between: (n) => (signedIn && feed === "foryou" && n === 4 && Y.shortsShelf ? Y.shortsShelf() : signedIn && n % 6 === 0 ? Y.sponsored("card") : null),      // after four posts a shelf of five shorts, and every seventh item is a box "Gesponsert" (advertisements will go there)
         first: (reply) => { firstCursor = reply.items.length ? Math.max(...reply.items.map((item) => item.cursor || 0)) : 0; },
         empty: feed === "following"
           ? emptyState("Hier ist noch nichts los", "Folge Leuten, um ihre Beiträge hier zu sehen.", link("/explore", { class: "btn primary" }, "Leute entdecken"))

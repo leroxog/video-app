@@ -405,7 +405,8 @@ def test_the_home_page_has_stories_on_top_then_the_posts_with_a_box_after_every_
     views = JS["yipi-views.js"]
     home = views.split("views.home = ")[1].split("views.explore = ")[0]
     assert "Y.storiesBar()" in home and 'class: "topbar home"' in home and "stories ? stories.element : null" in home
-    assert 'between: (n) => (signedIn && n % 6 === 0 ? Y.sponsored("card") : null)' in home, "every seventh item is a box Gesponsert"
+    assert 'signedIn && n % 6 === 0 ? Y.sponsored("card") : null' in home, "every seventh item is a box Gesponsert"
+    assert 'n === 4 && Y.shortsShelf ? Y.shortsShelf()' in home, "after four posts comes the shelf of five shorts"
     assert "Y.composer" not in home, "writing happens in a sheet, not in the feed"
     assert "between" in JS["yipi-ui.js"] and "list.append(extra)" in JS["yipi-ui.js"]
     assert "Y.openDrawer()" in views and "menuButton()" in views, "the menu of the drawer is still reachable (from your own profile)"
@@ -666,3 +667,12 @@ def test_every_script_of_the_page_is_valid_javascript():
     for name in SCRIPTS + ["yipi-theme.js"]:
         result = subprocess.run([shutil.which("node"), "--check", os.path.join(JS_DIR, name)], capture_output=True, text=True, timeout=60)
         assert result.returncode == 0, f"{name}: {result.stderr[-800:]}"
+
+
+def test_videos_in_the_feed_play_by_themselves_without_sound_one_at_a_time():
+    shorts = read("static", "js", "yipi-shorts.js")
+    assert "yipi-shorts.js" in SCRIPTS and SCRIPTS.index("yipi-shorts.js") < SCRIPTS.index("yipi-videos.js")
+    assert "Y.autoplay?.add(video, { host: box })" in JS["yipi-components.js"], "the player of a post registers its video"
+    assert "video.muted = true;" in shorts and "pointerenter" in shorts and 'event.pointerType === "mouse"' in shorts and "LONG_PRESS" in shorts
+    assert "prefers-reduced-motion" in shorts and "document.hidden" in shorts, "less motion and a hidden tab stop the videos"
+    assert "SHORTS = 5" in shorts and "Y.startVideo = item" in shorts and "Y.startVideo" in JS["yipi-videos.js"], "a short that was tapped is the first video of the Videos tab"

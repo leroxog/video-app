@@ -203,7 +203,7 @@ class YipiUser(db.Model):
     posts_count = db.Column(db.Integer, nullable=False, default=0)
     created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
     last_seen_at = db.Column(db.DateTime, nullable=True)
-    agent_kind = db.Column(db.Integer, nullable=True, index=True)              # an AI account (yipi_agents.py): which kind of account it is; None for a person
+    agent_kind = db.Column(db.Integer, nullable=True, index=True)              # an AI account (removed again, yipi_agents.py cleans up): None for a person
     hide_ai = db.Column(db.Boolean, nullable=False, default=False)             # the person does not want to see the AI accounts
 
     def set_password(self, password):
@@ -243,16 +243,6 @@ class PulseGame(db.Model):
     draft = db.Column(db.Boolean, nullable=False, default=False)               # saved to be tried (also by the sealed worker), not published yet
     deleted = db.Column(db.Boolean, nullable=False, default=False)
     created_at = db.Column(db.DateTime, nullable=False, default=utcnow, index=True)
-
-
-class YipiAgentState(db.Model):
-    """One row (id 1): the switches of the AI accounts (yipi_agents.py)."""
-    __tablename__ = "yipi_agent_state"
-    id = db.Column(db.Integer, primary_key=True)
-    enabled = db.Column(db.Boolean, nullable=False, default=True)
-    activity = db.Column(db.String(10), nullable=False, default="normal")      # "ruhig", "normal" or "lebhaft"
-    last_tick = db.Column(db.DateTime, nullable=True)
-    backfilled_at = db.Column(db.DateTime, nullable=True)                      # when the first day of life was made
 
 
 class YipiPost(db.Model):
@@ -1601,7 +1591,7 @@ def manifest():
 # The scripts of the page, in the order they depend on each other. The page loads them as ONE file (/pulse.js, deferred), named after its content, so the
 # browser asks once, keeps it for good and the next visit is instant; the tests read this list.
 PULSE_SCRIPTS = ["yipi-core.js", "yipi-gif-core.js", "yipi-icons.js", "yipi-api.js", "yipi-ui.js", "yipi-fx.js", "yipi-gif.js", "yipi-components.js", "yipi-newpost.js",
-                 "yipi-views.js", "yipi-comments.js", "yipi-chats.js", "yipi-lock.js", "yipi-pages.js", "yipi-share.js", "yipi-progress.js", "yipi-nex.js", "yipi-download.js", "yipi-lenses.js", "yipi-qr.js", "yipi-gamemaker.js", "yipi-camera.js", "yipi-videos.js", "yipi-stories.js", "yipi-chrome.js", "yipi.js"]
+                 "yipi-views.js", "yipi-comments.js", "yipi-chats.js", "yipi-lock.js", "yipi-pages.js", "yipi-share.js", "yipi-progress.js", "yipi-nex.js", "yipi-download.js", "yipi-lenses.js", "yipi-qr.js", "yipi-gamemaker.js", "yipi-camera.js", "yipi-shorts.js", "yipi-videos.js", "yipi-stories.js", "yipi-chrome.js", "yipi.js"]
 # The games of the camera tab are a second file, loaded when the camera tab is opened (about a hundred small games; nobody who only reads needs them).
 PULSE_LENS_SCRIPTS = ["pl-face.js"]              # the face lenses (face tracking and the effects): a third file, loaded when the first lens is opened
 PULSE_GAME_SCRIPTS = ["pg-kit.js", "pg-art.js", "pg-racing.js", "pg-rank.js", "pg-community.js", "pg-runners.js", "pg-arcade.js", "pg-reflex.js", "pg-puzzle.js", "pg-board.js", "pg-numbers.js", "pg-skill.js", "pg-more.js", "pg-fruit.js"]
@@ -1828,7 +1818,7 @@ def register_routes(app):
                 return fail("not_logged_in", 401)             # nothing of Nex is for somebody who is not signed in
 
     app.before_request(api_guard)
-    yipi_agents.attach(app)                                       # the AI accounts: every request to the API may wake them (a thread does the work)
+    yipi_agents.attach(app)                                       # the AI accounts are gone: the first request of a process removes what is left of them (a thread does the work)
 
     @app.after_request
     def yipi_cache_and_compress(response):
@@ -4455,49 +4445,6 @@ def register_routes(app):
         response.headers["Cache-Control"] = "private, no-cache"
         response.headers["X-Content-Type-Options"] = "nosniff"
         return response
-
-    @route("/api/yipi/admin/agents")
-    def yipi_admin_agents():
-        """The AI accounts: how many there are, what they did in the last day, and the switches."""
-        admin, problem = need_admin()
-        if problem:
-            return problem
-        return jsonify({"ok": True, **yipi_agents.report()})
-
-    @route("/api/yipi/admin/agents", methods=["POST"], endpoint="yipi_admin_agents_set")
-    def yipi_admin_agents_set():
-        admin, problem = need_admin()
-        if problem:
-            return problem
-        data, problem = body()
-        if problem:
-            return problem
-        state = yipi_agents.state_row()
-        if "enabled" in data:
-            if not isinstance(data["enabled"], bool):
-                return fail("bad_request")
-            state.enabled = data["enabled"]
-        if "activity" in data:
-            if data["activity"] not in yipi_agents.RATES:
-                return fail("bad_request")
-            state.activity = data["activity"]
-        db.session.commit()
-        return jsonify({"ok": True, **yipi_agents.report()})
-
-    @route("/api/yipi/settings/ai", methods=["POST"], endpoint="yipi_settings_ai")
-    def yipi_settings_ai():
-        """A person switches the AI accounts off for themselves (their posts, answers and likes disappear from this person's pages) or on again."""
-        user, problem = need_user()
-        if problem:
-            return problem
-        data, problem = body()
-        if problem:
-            return problem
-        if not isinstance(data.get("hide"), bool):
-            return fail("bad_request")
-        user.hide_ai = data["hide"]
-        db.session.commit()
-        return jsonify({"ok": True, "hideAi": user.hide_ai})
 
     @route("/api/yipi/admin/storage")
     def yipi_admin_storage():

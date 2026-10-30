@@ -185,7 +185,9 @@
     const ratio = Math.max(0.5, Math.min(1.78, (item.width || 9) / (item.height || 16)));
     const video = h("video", { class: "post-video", src: `${item.url}#t=0.001`, controls: true, playsinline: true, preload: "metadata", "aria-label": item.alt || "Video" });
     video.addEventListener("click", (event) => event.stopPropagation());
-    return h("div", { class: "media media-video", style: `aspect-ratio: ${ratio.toFixed(3)}` }, video);
+    const box = h("div", { class: "media media-video", style: `aspect-ratio: ${ratio.toFixed(3)}` }, video);
+    Y.autoplay?.add(video, { host: box });                                  // plays by itself, without sound, one at a time (yipi-shorts.js)
+    return box;
   }
 
   function mediaGrid(media) {

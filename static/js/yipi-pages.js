@@ -103,22 +103,6 @@
     return listPager;
   }
 
-  function aiSection() {
-    const box = h("input", { type: "checkbox", id: "hide-ai", "aria-label": "KI-Konten ausblenden" });
-    box.checked = !!(Y.me && Y.me.hideAi);
-    box.addEventListener("change", async () => {
-      const reply = await Api.post("/settings/ai", { hide: box.checked });
-      if (!reply.ok) { box.checked = !box.checked; toast(Api.message(reply)); return; }
-      Y.me.hideAi = reply.data.hideAi;
-      toast(reply.data.hideAi ? "KI-Konten sind für dich ausgeblendet." : "KI-Konten sind wieder da.");
-    });
-    return h("div", { class: "settings-body" },
-      h("section", { class: "card" }, h("h2", {}, "KI-Konten"),
-        h("p", { class: "muted" }, "Auf Nex gibt es etwa tausend Konten, die eine KI betreibt. Sie schreiben, antworten, liken und stimmen in Umfragen ab, damit hier etwas los ist. Sie sind überall mit „KI“ gekennzeichnet und keine Menschen."),
-        h("label", { class: "toggle-row", for: "hide-ai" }, h("span", {}, "KI-Konten für mich ausblenden"), box),
-        h("p", { class: "muted small" }, "Ausgeblendet siehst du keine Beiträge, Antworten und Likes von KI-Konten mehr, und sie schreiben dir nicht. Einzelne Konten kannst du auch blockieren oder stummschalten.")));
-  }
-
   function aboutSection() {
     return h("div", { class: "settings-body" },
       h("section", { class: "card" }, h("h2", {}, "Rechtliches"),
@@ -139,7 +123,6 @@
       ["display", "Darstellung", "Hell, gedimmt oder dunkel", "sun", false],
       ["push", "Mitteilungen", "Auf diesem Gerät bei Likes, Nachrichten und neuen Followern", "bell", true],
       ["chatlock", "Chat-Sperre", "Chats nur mit deiner Wisch-Kombination öffnen", "lock", true],
-      ["ai", "KI-Konten", "Konten von KI auf Nex ein- oder ausblenden", "sparkle", true],
       ["muted", "Stummgeschaltet", "Konten, die du nicht sehen willst", "mute", true],
       ["blocked", "Blockiert", "Konten, die dir nicht schreiben dürfen", "block", true],
       ["about", "Hilfe und Rechtliches", "Regeln, Datenschutz, Impressum", "shield", false],
@@ -157,7 +140,6 @@
     else if (section === "display") put(el, displaySection());
     else if (section === "chatlock") put(el, Y.chatLockSettings());
     else if (section === "push") put(el, Y.pushSettings());
-    else if (section === "ai") put(el, aiSection());
     else if (section === "about") put(el, aboutSection());
     else { const listPager = relationSection(section); put(el, listPager.element); destroy = () => listPager.destroy(); }
     return { element: el, title: entry[1], destroy };
@@ -213,35 +195,10 @@
     return card;
   }
 
-  /* The card of the admins for the AI accounts: how many there are, what they did, on and off, and how lively they are. */
-  function agentCard() {
-    const info = h("p", { class: "muted small" }, "Wird geladen …");
-    const on = h("input", { type: "checkbox", id: "agents-on", "aria-label": "KI-Konten aktiv" });
-    const pace = h("select", { class: "field", "aria-label": "Wie lebhaft" }, ["ruhig", "normal", "lebhaft"].map((name) => h("option", { value: name }, name[0].toUpperCase() + name.slice(1))));
-    const status = h("p", { class: "muted small", role: "status" });
-    const card = h("section", { class: "card" }, h("h2", {}, "KI-Konten"), info,
-      h("label", { class: "toggle-row", for: "agents-on" }, h("span", {}, "Aktiv (schreiben, antworten, liken)"), on),
-      h("label", { class: "toggle-row" }, h("span", {}, "Wie lebhaft"), pace), status);
-    function show(data) {
-      fill(info, `${data.accounts} von ${data.target} Konten · ${data.posts24h} Beiträge und Antworten in 24 Stunden · ${data.llm ? "Texte von der KI" : "Texte aus Vorlagen (kein KI-Dienst)"}${data.envOn ? "" : " · per Umgebungsvariable ausgeschaltet"}${data.lastTurn ? ` · zuletzt aktiv um ${new Date(data.lastTurn).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })} Uhr` : ""}`);
-      on.checked = data.enabled;
-      pace.value = data.activity;
-    }
-    async function send(change) {
-      const reply = await Api.post("/admin/agents", change);
-      status.textContent = reply.ok ? "Gespeichert." : Api.message(reply);
-      if (reply.ok) show(reply.data);
-    }
-    on.addEventListener("change", () => send({ enabled: on.checked }));
-    pace.addEventListener("change", () => send({ activity: pace.value }));
-    Api.get("/admin/agents").then((reply) => { if (reply.ok) show(reply.data); else fill(info, Api.message(reply)); });
-    return card;
-  }
-
   views.moderation = function moderation() {
     if (!Y.me || !Y.me.isAdmin) return views.notfound();
     const box = h("div", { class: "reports" });
-    const el = h("div", { class: "view" }, topbar({ title: "Moderation", sub: "Offene Meldungen" }), agentCard(), storageCard(), box);
+    const el = h("div", { class: "view" }, topbar({ title: "Moderation", sub: "Offene Meldungen" }), storageCard(), box);
     let dead = false;
 
     async function act(report, action, card) {

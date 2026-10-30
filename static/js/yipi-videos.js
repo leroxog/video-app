@@ -256,6 +256,7 @@
       const first = offset;
       reply.data.items.forEach((item, index) => {
         if (!item.media || !item.media.some((entry) => entry.video)) return;
+        if (reels.some((other) => other.item.id === item.id)) return;          // (the video that was chosen on Home is already the first one)
         const made = reel(item, first + index);
         applySound(made);
         reels.push(made);
@@ -297,7 +298,7 @@
     drawScopes();
     put(status, h("div", { class: "reels-wait" }, Y.pulseLoader()));
     more();
-    return {
+    const result = {
       element: el, title: "Videos",
       onShow() { if (active) play(active); scroller.focus({ preventScroll: true }); },
       onHide() { active?.video.pause(); },
@@ -321,5 +322,7 @@
         for (const made of reels) { made.video.pause(); made.video.removeAttribute("src"); made.video.load(); }
       },
     };
+    if (Y.startVideo) { const chosen = Y.startVideo; Y.startVideo = null; result.onPosted(chosen); }       // a short that was tapped on Home comes first
+    return result;
   };
 })();

@@ -18,7 +18,7 @@
     home: S(HOUSE, BOLD),
     homeFill: S(HOUSE, SOLID),
     plane: S(PLANE + '<path d="M21.2 3L9.7 13.1"/>', BOLD),
-    planeFill: S(PLANE + '<path class="cut" d="M21.2 3L9.7 13.1" fill="none"/>', SOLID),
+    planeFill: S(PLANE, SOLID),                                                       // filled all over: no line through it when the chats are open
     camera: S(CAMERA + '<circle cx="12" cy="13.4" r="3.5"/><circle cx="17.5" cy="10.6" r=".4" fill="currentColor"/>', BOLD),
     cameraFill: S(CAMERA + '<circle class="cut" cx="12" cy="13.4" r="3.5" fill="none"/>', SOLID),
     playCircle: S('<circle cx="12" cy="12" r="9.2"/><path d="M10 8.4l5.7 3.6-5.7 3.6z"/>', BOLD),
