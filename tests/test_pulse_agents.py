@@ -72,7 +72,7 @@ def test_the_clean_up_removes_the_robots_with_everything_they_did_and_leaves_peo
     assert removed == 45
     db.session.expire_all()                                              # (the clean-up works in its own session, like the thread on the server)
     assert yipi.YipiUser.query.filter(yipi.YipiUser.agent_kind.isnot(None)).count() == 0
-    assert yipi.YipiUser.query.count() == 1, "the person is still there"
+    assert yipi.YipiUser.query.filter(yipi.YipiUser.company.is_(False)).count() == 1, "the person is still there"
     assert yipi.YipiLike.query.count() == 0 and yipi.YipiFollow.query.count() == 0
     kept = db.session.get(yipi.YipiPost, post.id)
     assert kept is not None and kept.like_count == 0 and kept.reply_count == 0, "the counters of the person's post are right again"

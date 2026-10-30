@@ -1,6 +1,6 @@
 """The official accounts of Nex (2026-10-30). Two accounts belong to Nex itself and nobody can get one: "Nex-Web" (everything new about the website) and "Nex-AI" (everything new
 about the AI). They are marked "Offiziell" next to their name, nobody can sign in as them (their password fits nothing), their handles are reserved, they read no messages, and
-everybody follows them (a new account at the start, the accounts that exist already once).
+their posts show in everybody's "Für dich" feed; they are suggested under "Wem folgen" (nobody is made to follow them).
 
 Every new feature gets a post on one of them: whoever adds something to Nex adds a line to ANNOUNCEMENTS (below). The first request to the API after a start of the site makes the
 accounts if they are missing and publishes the announcements that were not published yet (each id once; the table `yipi_announcement` remembers). So a release posts itself.
@@ -56,22 +56,6 @@ def official_ids():
     return [official(kind).id for kind in ACCOUNTS]
 
 
-def follow_official(user):
-    """The person follows both official accounts (no notification to them: they have no inbox)."""
-    if user is None or user.company:
-        return 0
-    added = 0
-    for official_id in official_ids():
-        if yipi.YipiFollow.query.filter_by(follower_id=user.id, followee_id=official_id).first() is None:
-            yipi.db.session.add(yipi.YipiFollow(follower_id=user.id, followee_id=official_id))
-            yipi.bump(yipi.YipiUser, official_id, yipi.YipiUser.followers_count, 1)
-            yipi.bump(yipi.YipiUser, user.id, yipi.YipiUser.following_count, 1)
-            added += 1
-    if added:
-        yipi.db.session.commit()
-    return added
-
-
 # ------------------------------------------------------------------------------------------------------------------ the announcements
 def post_as(user, text):
     post = yipi.YipiPost(user_id=user.id, text=text)
@@ -103,40 +87,9 @@ def publish_pending(announcements=None):
     return made
 
 
-def follow_everybody():
-    """Once: everybody who has an account follows the official accounts (new accounts do it at signup)."""
-    key = "_follow_everybody_1"
-    if yipi.db.session.get(yipi.YipiAnnouncement, key) is not None:
-        return 0
-    ids = official_ids()
-    count = 0
-    start = 0
-    while True:
-        users = yipi.YipiUser.query.filter(yipi.YipiUser.id > start, yipi.YipiUser.company.is_(False)).order_by(yipi.YipiUser.id).limit(200).all()
-        if not users:
-            break
-        for user in users:
-            have = {row.followee_id for row in yipi.YipiFollow.query.filter(yipi.YipiFollow.follower_id == user.id, yipi.YipiFollow.followee_id.in_(ids))}
-            for official_id in ids:
-                if official_id not in have:
-                    yipi.db.session.add(yipi.YipiFollow(follower_id=user.id, followee_id=official_id))
-                    yipi.bump(yipi.YipiUser, official_id, yipi.YipiUser.followers_count, 1)
-                    yipi.bump(yipi.YipiUser, user.id, yipi.YipiUser.following_count, 1)
-                    count += 1
-        start = users[-1].id
-        yipi.db.session.commit()
-    yipi.db.session.add(yipi.YipiAnnouncement(id=key, post_id=None))
-    try:
-        yipi.db.session.commit()
-    except IntegrityError:
-        yipi.db.session.rollback()
-    return count
-
-
 def start_up(app):
     with app.app_context():
         official_ids()
-        follow_everybody()
         publish_pending()
 
 

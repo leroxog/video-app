@@ -1,4 +1,4 @@
-"""Nex: the official accounts (yipi_company.py): "Nex-Web" and "Nex-AI" belong to Nex itself, nobody can sign in as them or get one, everybody follows them, they read no
+"""Nex: the official accounts (yipi_company.py): "Nex-Web" and "Nex-AI" belong to Nex itself, nobody can sign in as them or get one, they read no
 messages, they are marked, and a release posts its announcements by itself, once."""
 import os
 import sys
@@ -79,19 +79,15 @@ def test_a_release_posts_its_announcements_once(client):
     assert yipi.YipiPost.query.count() == len(yipi_company.ANNOUNCEMENTS) + 1
 
 
-def test_new_people_follow_both_accounts_and_the_ones_who_were_there_follow_once(client):
-    old = person("olga")
-    old_id = yipi.YipiUser.query.filter_by(handle="olga").one().id
-    assert yipi.YipiFollow.query.filter_by(follower_id=old_id).count() == 2, "a new account follows Nex-Web and Nex-AI from the start"
-    yipi.YipiFollow.query.delete()
-    yipi.YipiUser.query.update({"followers_count": 0, "following_count": 0})
-    db.session.commit()
-    assert yipi_company.follow_everybody() == 2
-    assert yipi_company.follow_everybody() == 0, "only once"
-    assert yipi.YipiFollow.query.filter_by(follower_id=old_id).count() == 2
-    assert yipi.YipiUser.query.filter_by(handle="nexweb").one().followers_count == 1
-    assert yipi.YipiUser.query.filter_by(handle="olga").one().following_count == 2
-    assert old.get("/api/yipi/me").get_json()["me"]["following"] == 2
+def test_nobody_is_made_to_follow_them_but_their_posts_are_in_the_feed_and_they_are_suggested(client):
+    olga = person("olga")
+    yipi_company.start_up(flask_app)
+    assert olga.get("/api/yipi/me").get_json()["me"]["following"] == 0, "a new account follows nobody"
+    timeline = olga.get("/api/yipi/timeline?feed=foryou").get_json()["items"]
+    assert {item["user"]["handle"] for item in timeline} >= {"nexweb", "nexai"}, "the announcements are in everybody's feed"
+    assert olga.get("/api/yipi/timeline?feed=following").get_json()["items"] == []
+    suggested = {user["handle"] for user in olga.get("/api/yipi/suggestions?limit=20").get_json()["users"]}
+    assert {"nexweb", "nexai"} <= suggested, "and they are suggested under 'Wem folgen'"
 
 
 def test_the_profile_says_official_and_nobody_can_write_to_them(client):

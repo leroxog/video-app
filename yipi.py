@@ -2007,10 +2007,6 @@ def register_routes(app):
         except IntegrityError:
             db.session.rollback()
             return fail("handle_taken", 409)
-        try:
-            yipi_company.follow_official(user)                    # everybody follows the official accounts (Nex-Web, Nex-AI)
-        except Exception:  # noqa: BLE001  (a signup never fails because of that)
-            db.session.rollback()
         response = signed_in(jsonify({"ok": True, "me": me_dict(user)}), user)
         return google_auth.clear(response) if pending is not None else response
 
