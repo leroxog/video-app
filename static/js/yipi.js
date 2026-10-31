@@ -80,7 +80,7 @@
     const me = Y.me;
     appbar = Y.appBar();
     const extras = h("div", { class: "tab-extras" }, extraItem("/notifications", "bell", "Mitteilungen", "notifications", "notifications"),
-      extraItem("/explore", "search", "Suche", "", "explore"), extraItem(`/${me.handle}`, "user", "Profil", "", "profile"), me.isAdmin ? extraItem("/moderation", "shield", "Moderation", "", "moderation") : null);
+      extraItem("/explore", "search", "Suche", "", "explore"), me.isAdmin ? extraItem("/moderation", "shield", "Moderation", "", "moderation") : null);
     const more = h("button", { class: "rail-more", type: "button", "aria-label": "Mehr zu deinem Konto", "aria-haspopup": "menu", onclick: (event) => {
       event.preventDefault();
       event.stopPropagation();
