@@ -547,11 +547,12 @@
     const micButton = h("button", { class: "icon-btn tool cb-dict", type: "button", "aria-label": "Diktieren", "aria-pressed": "false" }, icon("mic"));
     const emojiButton = h("button", { class: "icon-btn tool", type: "button", "aria-label": "Emoji einfügen", "aria-haspopup": "dialog" }, icon("emoji"));
     const pollButton = h("button", { class: "icon-btn tool", type: "button", "aria-label": "Umfrage hinzufügen", hidden: true }, icon("poll"));     // (the poll is in the panel of the "+")
-    const attachPanel = Y.composerPanel(["photo", "camera", "location", "contact"].concat(replyTo || quoteOf ? [] : ["poll"], ["sticker"]), async (id) => {
+    const attachPanel = Y.composerPanel(["photo", "camera", "ai", "location", "contact"].concat(replyTo || quoteOf ? [] : ["poll"], ["sticker"]), async (id) => {
       const T = Y.composerTools;
       const put = (text) => { textarea.focus(); textarea.setRangeText(text, textarea.selectionStart, textarea.selectionEnd, "end"); update(); };
       if (id === "photo") picker.click();
       else if (id === "camera") { const file = Y.cameraCapture ? await Y.cameraCapture({ photoOnly: true }) : (await T.pickFiles("image/*", { capture: "environment" }))[0]; if (file) addFiles([file]); }
+      else if (id === "ai") { const file = await T.aiImage(); if (file) addFiles([file]); }
       else if (id === "location") { const text = await T.place(); if (text) put(text); }
       else if (id === "contact") { const handle = await T.contact(); if (handle) put(`@${handle} `); }
       else if (id === "poll") pollButton.click();
@@ -630,7 +631,7 @@
         if (file.type === "image/gif" && picked.length) { toast(Api.MESSAGES.gif_alone); continue; }
         try {
           const blob = await prepareImage(file);
-          picked.push({ blob, url: URL.createObjectURL(blob), alt: "", uploaded: null, name: file.name, gif: file.type === "image/gif" });
+          picked.push({ blob, url: URL.createObjectURL(blob), alt: file.alt || "", uploaded: null, name: file.name, gif: file.type === "image/gif" });
           if (file.type === "image/gif") break;
         } catch (error) {
           toast("Dieses Foto konnte nicht gelesen werden.");

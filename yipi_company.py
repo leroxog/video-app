@@ -43,6 +43,7 @@ ANNOUNCEMENTS = [
     ("2026-10-31-roast", "ai", "Neu: Nex AI im Modus Human ist jetzt ein Roast. Sie zieht dich auf und beleidigt dich frech, antwortet aber trotzdem richtig. Es bleibt ein Spaß: nichts gegen Herkunft, Religion oder Aussehen. Du wählst den Modus oben im Chat. #nexai"),
     ("2026-10-30-ai", "ai", "Neu: Nex AI hat jetzt vier Modi. Normal, Superintelligent (längere, gründlichere Antworten), Human (locker und direkt) und Code (für gute Programme). Du wählst sie oben im Chat. #nexai"),
     ("2026-10-31-aigames", "ai", "Neu: Nex AI baut Spiele. Sag ihr im Chat, was für ein Spiel du willst, und unter dem Code erscheint der Knopf „Als Spiel hochladen“. Dann steht es in der Kamera und alle können es spielen. Du kannst auch in der Kamera unter dem Plus „Mit KI erstellen“ wählen. #nexai"),
+    ("2026-10-31-aiimage", "web", "Neu: KI-Bilder! Tippe im Chat oder beim Posten auf das Plus und „KI-Bild“: Beschreibe, was du sehen willst, wähle einen Stil, und eine KI malt es. Das macht der kostenlose Dienst Pollinations, bei vielen Wünschen gibt es eine Warteschlange. #neu #kibild"),
 ]
 
 _state = {"started": False}

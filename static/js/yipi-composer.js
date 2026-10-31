@@ -10,7 +10,7 @@
 
   const ENTRIES = {
     photo: ["Fotos", "image", "#7a2cf0"], camera: ["Kamera", "camera", "#ec4899"], location: ["Standort", "pin", "#16a34a"], contact: ["Kontakt", "user", "#2a8cff"],
-    document: ["Dokument", "file", "#5b5bd6"], poll: ["Abstimmung", "poll", "#f59e0b"], sticker: ["Sticker", "sticker", "#14b8a6"],
+    document: ["Dokument", "file", "#5b5bd6"], poll: ["Abstimmung", "poll", "#f59e0b"], sticker: ["Sticker", "sticker", "#14b8a6"], ai: ["KI-Bild", "sparkle", "#8b5cf6"],
   };
 
   /* The panel under the line: round coloured buttons with a name, it slides open and the keyboard goes away. `ids` are the entries (see ENTRIES), `onPick(id)` answers a tap. */
@@ -41,6 +41,119 @@
       input.addEventListener("cancel", () => done([]));
       document.body.append(input);
       input.click();
+    });
+  }
+
+  /* "KI-Bild": a window to write what a picture shows and in which style; the server paints it with the free service Pollinations (yipi_aiimage.py). The service gives one picture a minute to everybody
+     in Satürn, so the request waits in a queue and the window shows the place in it. Answers a File (ki-bild.jpg; `alt` says "KI-Bild: ...") or null when the person gives up. */
+  const AI_STYLES = [["free", "Frei"], ["cartoon", "Comic"], ["photo", "Foto"], ["paint", "Gemälde"], ["pixel", "Pixel"], ["anime", "Anime"], ["render", "3D"]];
+
+  function aiImage() {
+    return new Promise((resolve) => {
+      let entry = null;
+      let job = "";                       // the request that is waiting or being painted
+      let timer = 0;
+      let picked = null;                  // {blob, url} of the picture that is shown
+      let answered = false;
+      let style = "free";
+      let asked = "";
+      const prompt = h("textarea", { class: "field-area ai-prompt", rows: 3, maxlength: 200, placeholder: "Zum Beispiel: ein Fuchs im Raumanzug auf dem Mond", "aria-label": "Was soll auf dem Bild sein?" });
+      const stage = h("div", { class: "ai-box" });
+      const waitLine = h("b", {});
+      const waitEta = h("span", { class: "hint" });
+      const waitNote = h("p", { class: "hint ai-note" });
+
+      function stopWork() {
+        clearTimeout(timer);
+        timer = 0;
+        if (job) { Api.del(`/ai-image/${job}`); job = ""; }
+      }
+      function dropPicture() { if (picked) { URL.revokeObjectURL(picked.url); picked = null; } }
+      function finish(file) { answered = true; resolve(file); entry.close(); }
+
+      function showForm(problem = "") {
+        stopWork();
+        dropPicture();
+        const chips = AI_STYLES.map(([id, label]) => h("button", { class: `ai-style${id === style ? " on" : ""}`, type: "button", "aria-pressed": String(id === style), onclick: (event) => {
+          style = id;
+          for (const chip of event.currentTarget.parentNode.children) { chip.classList.toggle("on", chip === event.currentTarget); chip.setAttribute("aria-pressed", String(chip === event.currentTarget)); }
+        } }, label));
+        fill(stage, prompt, h("div", { class: "ai-styles", role: "group", "aria-label": "Stil" }, chips), problem ? h("p", { class: "ai-problem", role: "alert" }, problem) : null,
+          h("button", { class: "btn primary ai-go", type: "button", onclick: start }, icon("sparkle"), "Bild malen"),
+          h("p", { class: "hint ai-note" }, "Dein Text geht an den Bilder-Dienst Pollinations. Schreib keine Namen, Adressen oder Fotos echter Leute hinein. Wenn viele gleichzeitig malen, musst du kurz warten."));
+        prompt.focus();
+      }
+
+      function showWaiting() {
+        fill(stage, h("div", { class: "ai-wait", role: "status" }, h("div", { class: "spinner", "aria-hidden": "true" }), waitLine, waitEta), waitNote,
+          h("button", { class: "btn ghost", type: "button", onclick: () => showForm() }, "Abbrechen"));
+      }
+      function updateWaiting(info) {
+        waitLine.textContent = info.position > 1 ? `Du bist Nr. ${info.position} in der Warteschlange.` : "Dein Bild wird gemalt …";
+        waitEta.textContent = info.wait > 5 ? `Das dauert etwa ${info.wait < 90 ? `${info.wait} Sekunden` : `${Math.ceil(info.wait / 60)} Minuten`}.` : "";
+        waitNote.textContent = info.free ? "Der kostenlose Dienst malt nur ein Bild pro Minute für alle in Satürn. Du kannst warten oder abbrechen." : "";
+      }
+
+      async function start() {
+        const text = prompt.value.replace(/\s+/g, " ").trim();
+        if (!text) { prompt.focus(); return; }
+        stopWork();
+        dropPicture();
+        asked = text;
+        const reply = await Api.post("/ai-image", { prompt: text, style });
+        if (!reply.ok) { showForm(Api.message(reply)); return; }
+        job = reply.data.job;
+        showWaiting();
+        updateWaiting(reply.data);
+        timer = setTimeout(poll, 2000);
+      }
+
+      async function poll() {
+        if (!job) return;
+        const reply = await Api.get(`/ai-image/${job}`);
+        if (!job) return;                 // (the person left while the answer came)
+        if (!reply.ok) {
+          if (reply.offline) { timer = setTimeout(poll, 4000); return; }
+          job = "";
+          showForm(Api.message(reply));
+          return;
+        }
+        const info = reply.data;
+        if (info.status === "done") { await show(); return; }
+        if (info.status === "error" || info.status === "cancelled") { job = ""; showForm(Api.message({ data: { error: info.error || "ai_image_failed" } })); return; }
+        updateWaiting(info);
+        timer = setTimeout(poll, info.position > 1 ? 3000 : 2000);
+      }
+
+      async function show() {
+        const mine = job;
+        let blob = null;
+        try {
+          const response = await fetch(`/api/yipi/ai-image/${mine}/file`, { credentials: "same-origin" });
+          if (response.ok) blob = await response.blob();
+        } catch (error) { /* no connection */ }
+        if (job !== mine) return;
+        clearTimeout(timer);
+        timer = 0;
+        if (!blob || !/^image\/(jpeg|png)$/.test(blob.type)) { showForm(Api.MESSAGES.ai_image_failed); return; }
+        Api.del(`/ai-image/${mine}`);      // (the server may forget the picture now)
+        job = "";
+        picked = { blob, url: URL.createObjectURL(blob) };
+        const png = blob.type === "image/png";
+        const take = () => {
+          const file = new File([blob], png ? "ki-bild.png" : "ki-bild.jpg", { type: png ? "image/png" : "image/jpeg" });
+          file.alt = `KI-Bild: ${asked}`.slice(0, 200);
+          finish(file);
+        };
+        fill(stage, h("img", { class: "ai-pic", src: picked.url, alt: `KI-Bild: ${asked}` }),
+          h("div", { class: "ai-actions" }, h("button", { class: "btn primary", type: "button", onclick: take }, "Nehmen"), h("button", { class: "btn ghost", type: "button", onclick: start }, "Neu malen"),
+            h("button", { class: "btn ghost", type: "button", onclick: () => showForm() }, "Text ändern")),
+          h("p", { class: "hint ai-note" }, "Dieses Bild hat eine KI gemalt. Es kann Fehler haben."));
+      }
+
+      prompt.addEventListener("keydown", (event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); start(); } });
+      showForm();
+      entry = dialog({ title: "KI-Bild", body: stage, initialFocus: prompt, onClose: () => { stopWork(); dropPicture(); if (!answered) resolve(null); } });
     });
   }
 
@@ -153,5 +266,5 @@
   const voiceName = (blob) => `Sprachnachricht.${/mp4/.test(blob.type) ? "m4a" : /ogg/.test(blob.type) ? "ogg" : "webm"}`;
 
   Y.composerPanel = composerPanel;
-  Y.composerTools = { pickFiles, place, contact, dictation, record, voiceName };
+  Y.composerTools = { pickFiles, place, contact, dictation, record, voiceName, aiImage };
 })();

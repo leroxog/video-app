@@ -96,6 +96,11 @@
     ai_account: "Eine KI kann man nicht anrufen.",
     official_account: "Dieses Konto gehört Satürn und nimmt keine Anrufe an.",
     not_joined: "Du bist in diesem Anruf nicht mehr dabei.",
+    bad_prompt: "Dazu macht Satürn kein Bild. Beschreibe etwas anderes (ohne Namen, Adressen oder Links).",
+    ai_image_running: "Dein Bild wird schon gemacht. Warte, bis es fertig ist.",
+    ai_image_full: "Gerade wollen zu viele ein KI-Bild. Versuch es in ein paar Minuten noch einmal.",
+    ai_image_busy: "Der kostenlose Bilder-Dienst ist gerade überlastet. Versuch es in ein paar Minuten noch einmal.",
+    ai_image_failed: "Dieses Bild hat nicht geklappt. Probier es mit einer anderen Beschreibung.",
   };
 
   async function call(method, path, body, form) {

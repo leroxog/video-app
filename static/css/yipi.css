@@ -2433,3 +2433,19 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
   .nu-card small { font-size: 16px; }
 }
 .nu-main { width: 100%; }
+
+/* ----- KI-Bild: the window of the "+" panel (write what the picture shows, pick a style, wait in the queue, take or repaint) */
+.ai-box { display: flex; flex-direction: column; gap: 12px; min-width: min(420px, 78vw); }
+.ai-prompt { min-height: 88px; font: inherit; font-size: 16px; }
+.ai-styles { display: flex; flex-wrap: wrap; gap: 8px; }
+.ai-style { padding: 7px 14px; border: 1px solid var(--line-strong); border-radius: 999px; background: transparent; color: var(--text); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+.ai-style:hover { background: var(--hover); }
+.ai-style.on { border-color: var(--ink); background: var(--ink); color: var(--on-ink); }
+.ai-go { display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; }
+.ai-go svg { width: 18px; height: 18px; }
+.ai-problem { margin: 0; color: var(--danger); font-size: 14px; font-weight: 700; }
+.ai-note { margin: 0; }
+.ai-wait { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 24px 8px 12px; text-align: center; }
+.ai-pic { display: block; width: 100%; max-height: 56vh; border-radius: 16px; background: var(--bg-2); object-fit: contain; }
+.ai-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.ai-actions .btn { flex: 1 1 auto; }

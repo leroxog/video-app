@@ -256,7 +256,7 @@
     const stickerButton = h("button", { class: "cb-in-btn", type: "button", "aria-label": "Sticker" }, icon("sticker"));
     const photoButton = h("button", { class: "icon-btn tool cb-photo", type: "button", "aria-label": "Foto machen" }, icon("camera"));
     const micButton = h("button", { class: "icon-btn tool cb-mic", type: "button", "aria-label": "Sprachnachricht aufnehmen" }, icon("mic"));
-    const attachPanel = Y.composerPanel(["photo", "camera", "location", "contact", "document", "sticker"], (id) => attachEntry(id));
+    const attachPanel = Y.composerPanel(["photo", "camera", "ai", "location", "contact", "document", "sticker"], (id) => attachEntry(id));
     const picker = h("input", { type: "file", hidden: true, "aria-hidden": "true", tabindex: "-1" });
     const staged = h("div", { class: "dm-staged", hidden: true });
     const note = h("p", { class: "notice", hidden: true });
@@ -536,6 +536,7 @@
       const T = Y.composerTools;
       if (id === "photo") { const [file] = await T.pickFiles(PHOTO_OR_VIDEO); if (file) stage(file, kindOf(file)); }
       else if (id === "camera") { const file = Y.cameraCapture ? await Y.cameraCapture() : (await T.pickFiles("image/*", { capture: "environment" }))[0]; if (file) stage(file, /^video\//.test(file.type) ? "video" : "image"); }
+      else if (id === "ai") { const file = await T.aiImage(); if (file) stage(file, "image"); }
       else if (id === "document") { const [file] = await T.pickFiles(".pdf,.txt,.md,.csv,.rtf,.docx,.xlsx,.pptx,.odt,.ods,.odp"); if (file) stage(file, "document"); }
       else if (id === "location") { const text = await T.place(); if (text) deliver({ text }, false); }
       else if (id === "contact") { const handle = await T.contact(); if (handle) deliver({ text: `👤 Kontakt: @${handle}` }, false); }
