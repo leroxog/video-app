@@ -171,7 +171,7 @@ def test_the_pages_the_router_knows_are_served_by_the_server():
     """A reload or a shared link on any address of the app must find a page (the shell) and not an error."""
     adapter = flask_app.url_map.bind("localhost")
     for path in ("/", "/explore", "/notifications", "/messages", "/messages/mia", "/bookmarks", "/settings", "/settings/display", "/search",
-                 "/moderation", "/i/login", "/i/signup", "/i/nex", "/mia", "/mia/status/1", "/mia/followers", "/mia/following"):
+                 "/moderation", "/i/login", "/i/signup", "/i/nex", "/new", "/new/post", "/new/video", "/mia", "/mia/status/1", "/mia/followers", "/mia/following"):
         adapter.match(path, method="GET")
 
 
@@ -396,7 +396,7 @@ def test_hashtags_are_light_pink_and_the_text_of_a_new_post_has_a_template():
     assert 'h("label", { class: "field-title", for: "post-text" }, "Text")' in components and "Y.hashtagEditor" in components
     assert "function hashtagEditor" in newpost and ".tag-chip {" in CSS and "var(--tag)" in CSS.split(".tag-chip {")[1].split("}")[0]
     assert "template: !target" in components, "a new post uses the template, a reply or a quote does not"
-    assert 'tile("Beitrag"' in newpost and 'tile("Video"' in newpost and "animation: bloop" in CSS.split(".menu.post-choose {")[1].split("}")[0], "the pop-up pops open"
+    assert 'chooseCard("video", "Ein Video"' in newpost and 'chooseCard("post", "Ein Beitrag"' in newpost and "Was willst du hochladen?" in newpost, "the + leads to the page of the choice"
     for place in ("yipi.js", "yipi-chrome.js"):
         assert "Y.newPost({ anchor: event.currentTarget })" in JS[place], place
     assert "Core.videoTooLong(facts.seconds)" in newpost and "aria-required" in newpost and "Pflichtfeld" in newpost, "the name is required"

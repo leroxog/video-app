@@ -123,7 +123,7 @@ def test_the_story_script_uses_the_story_routes_and_the_row_is_on_home():
         assert route in SERVER, route
     assert "Core.videoTooLong(facts.seconds)" in source and "Core.MAX_VIDEO_BYTES" in source, "a story video is at most 30 seconds, like every video"
     assert ".innerHTML" not in source and "insertAdjacentHTML" not in source
-    assert "Y.storiesBar()" in js("yipi-views.js") and 'tile("Story"' in js("yipi-newpost.js"), "the row on Home and the entry in the pop-up of the plus"
+    assert "Y.storiesBar()" in js("yipi-views.js") and 'class: "nu-story"' in js("yipi-newpost.js") and "Y.newStory(" in js("yipi-newpost.js"), "the row on Home and the entry on the page of the plus"
     order = yipi.PULSE_SCRIPTS
     assert order.index("yipi-stories.js") < order.index("yipi.js") and order.index("yipi-chrome.js") < order.index("yipi.js")
     assert order.index("yipi-icons.js") < order.index("yipi-chrome.js"), "the lettering is drawn by the icons file"

@@ -1,7 +1,7 @@
-/* Satürn new post (yipi-newpost.js): what happens when somebody taps the "+" -- a small pop-up (it pops open) asks "Beitrag" or "Video".
-   "Beitrag" opens the template for a post (the field "Text" at the top, photos, GIF or a poll below it, and hashtags that are added one by one
-   and shown in light pink); "Video" opens the template for a video (the name is required, then the video itself, at most 30 seconds, then
-   hashtags; the upload shows how far it has come). */
+/* Satürn new post (yipi-newpost.js): what happens when somebody taps the "+" or "Posten": a page of its own (white, in the round font of the sign-up) asks "Was willst du hochladen?"
+   with "Ein Video" on the left and "Ein Beitrag" on the right (/new). "Ein Beitrag" is a whole page for a post, like the one of X (/new/post: the field "Text" at the top, photos, a sticker or a poll
+   below it, and hashtags that are added one by one and shown in light pink); "Ein Video" is a whole page for a video, like the one of TikTok (/new/video: the video in a tall frame, the name,
+   which is required, the video itself, at most 30 seconds, then hashtags; the upload shows how far it has come). A reply or a quote is still a window (yipi-components.js). */
 (function () {
   "use strict";
 
@@ -66,12 +66,10 @@
     }).then((result) => { probe.removeAttribute("src"); return result; });
   }
 
-  /* The template for a video: name (required), the video (at most 30 seconds, the milliseconds do not count), hashtags. */
-  function composeVideo({ file: given, camId = "" } = {}) {
-    if (!Y.requireLogin("Melde dich an, um ein Video hochzuladen.")) return null;
+  /* The template for a video: name (required), the video (at most 30 seconds, the milliseconds do not count), hashtags. Returns {body, focus, destroy}; `done()` is called when the video is online. */
+  function videoTemplate({ file: given, camId = "", done = () => {} } = {}) {
     let picked = null;                                            // {file, url, width, height}
     let busy = false;
-    let entry = null;
     const name = h("input", { class: "field", type: "text", maxlength: MAX_NAME, placeholder: "Wie heißt dein Video?", autocomplete: "off", "aria-label": "Name des Videos (Pflichtfeld)", "aria-required": "true" });
     const nameCount = h("span", { class: "hint" }, `0 / ${MAX_NAME}`);
     const picker = h("input", { type: "file", accept: "video/mp4,video/quicktime,video/webm,.mp4,.m4v,.mov,.webm", hidden: true, "aria-hidden": "true", tabindex: "-1" });
@@ -136,8 +134,9 @@
       submit.textContent = "Hochladen";
       if (!reply.ok) { progress.hidden = true; fail(Api.message(reply)); update(); drawSlot(); return; }
       URL.revokeObjectURL(picked.url);
-      entry.close();
+      picked = null;
       Y.onPosted?.(reply.data.post, {});
+      done();
       toast("Dein Video ist online.", { label: "Ansehen", run: () => Y.navigate(Core.buildPath({ name: "videos" })) });
     }
 
@@ -146,37 +145,84 @@
     picker.addEventListener("change", () => { const file = picker.files[0]; picker.value = ""; if (file) take(file); });
     submit.addEventListener("click", send);
     drawSlot();
-    const body = h("div", { class: "template video-template" },
-      h("div", { class: "field-head" }, h("label", { class: "field-title", for: "vt-name" }, "Name"), h("span", { class: "hint req" }, "Pflichtfeld")), name, nameCount,
-      h("div", { class: "field-head" }, h("span", { class: "field-title" }, "Video"), h("span", { class: "hint" }, "höchstens 30 Sekunden")), slot, picker, problem, progress,
-      tags.element,
-      h("div", { class: "template-foot" }, submit));
+    const nameHead = h("div", { class: "field-head" }, h("label", { class: "field-title", for: "vt-name" }, "Name"), h("span", { class: "hint req" }, "Pflichtfeld"));
+    const body = h("div", { class: "template video-template vt-page" },                       // the video in a tall frame on the left, the name and the hashtags on the right (one under the other on a phone)
+      h("div", { class: "vt-left" }, slot, picker, h("p", { class: "hint vt-limit" }, "höchstens 30 Sekunden")),
+      h("div", { class: "vt-right" }, nameHead, name, nameCount, problem, progress, tags.element, h("div", { class: "template-foot" }, submit)));
     name.id = "vt-name";
-    entry = dialog({ title: "Neues Video", label: "Neues Video", body, initialFocus: name, onClose: () => { if (picked && !busy) URL.revokeObjectURL(picked.url); } });
     if (given) take(given);
     update();
-    return entry;
+    return { body, focus: () => name.focus(), destroy() { if (picked && !busy) URL.revokeObjectURL(picked.url); } };
   }
 
-  /* ----------------------------------------------------------------------------------------------- the "+" pop-up */
-  function newPost({ anchor, only } = {}) {
+  /* A page like the one of the sign-up: white, the round font, a button to go back at the top left and a column in the middle. `body` is what the page holds. */
+  function whitePage({ back, closeIcon = "back", label, wide = false, body, modifier = "" }) {
+    const top = h("div", { class: "au-top" }, h("button", { class: "au-back", type: "button", "aria-label": label || "Zurück", onclick: () => Y.back(back) }, icon(closeIcon)), h("span", { class: "au-back-gap" }));
+    return h("div", { class: "view au-holder" }, h("div", { class: `au auth-white nu ${modifier}` }, top, h("div", { class: "au-main nu-main" }, h("div", { class: `nu-column${wide ? " wide" : ""}` }, body))));
+  }
+
+  /* ---------------------------------------------------------------------------------------------- the pages */
+  const pages = {};                                           // the views of these pages (yipi-views.js takes them into Y.views: it is loaded after this file)
+  function chooseCard(kind, title, text, symbol, go) {
+    return h("button", { class: `nu-card ${kind}`, type: "button", onclick: go },
+      h("span", { class: "nu-ic", "aria-hidden": "true" }, icon(symbol)), h("b", {}, title), h("small", {}, text));
+  }
+
+  /* /new: "Was willst du hochladen?": a video on the left, a post on the right. */
+  pages.new = function chooseView() {
+    if (!Y.requireLogin("Melde dich an, um etwas hochzuladen.")) return { element: h("div", { class: "view" }), title: "Hochladen" };
+    const body = h("div", { class: "nu-choose" },
+      h("h1", { class: "au-title nu-title" }, "Was willst du hochladen?"),
+      h("div", { class: "nu-choices" },
+        chooseCard("video", "Ein Video", "Hochkant, bis 30 Sekunden", "film", () => Y.navigate("/new/video")),
+        chooseCard("post", "Ein Beitrag", "Text, Fotos, Sticker, Umfrage", "feather", () => Y.navigate("/new/post"))),
+      h("button", { class: "nu-story", type: "button", onclick: () => Y.newStory(() => { Y.refreshStories?.(); Y.back(); }) }, icon("image"), "Oder eine Story für 24 Stunden"));
+    return { element: whitePage({ back: "/", closeIcon: "close", label: "Schließen", body, modifier: "nu-choosing" }), title: "Hochladen" };
+  };
+
+  /* /new/post: a whole page for a post (what a photo from the camera or a text of Nex AI brings along is waiting in Y.pendingPost). */
+  pages.newpost = function postView() {
+    if (!Y.requireLogin("Melde dich an, um zu posten.")) return { element: h("div", { class: "view" }), title: "Neuer Beitrag" };
+    const pending = Y.pendingPost || {};
+    Y.pendingPost = null;
+    const box = Y.composer({
+      template: true, autofocus: true, text: pending.text, files: pending.files,
+      onPosted: (post) => {
+        pending.onPosted?.(post);
+        Y.onPosted?.(post, {});
+        Y.navigate("/", { replace: true });
+        toast("Dein Beitrag wurde gesendet.", { label: "Anzeigen", run: () => Y.navigate(Y.postPath(post)) });
+      },
+    });
+    const body = h("div", { class: "nu-post" }, h("h1", { class: "au-title nu-title left" }, "Ein Beitrag"), h("p", { class: "au-sub nu-sub left" }, "Schreib, was gerade los ist."), box);
+    return { element: whitePage({ back: "/new", label: "Zurück", wide: true, body, modifier: "nu-posting" }), title: "Neuer Beitrag", onShow() { box.focusText?.(); } };
+  };
+
+  /* /new/video: a whole page for a video (the video in a tall frame next to the name and the hashtags; one under the other on a phone). */
+  pages.newvideo = function videoView() {
+    if (!Y.requireLogin("Melde dich an, um ein Video hochzuladen.")) return { element: h("div", { class: "view" }), title: "Neues Video" };
+    const pending = Y.pendingVideo || {};
+    Y.pendingVideo = null;
+    const template = videoTemplate({ file: pending.file, camId: pending.camId || "", done: () => Y.navigate("/videos", { replace: true }) });
+    const body = h("div", { class: "nu-video" }, h("h1", { class: "au-title nu-title left" }, "Ein Video"), h("p", { class: "au-sub nu-sub left" }, "Zeig es allen, hochkant und bis zu 30 Sekunden lang."), template.body);
+    return { element: whitePage({ back: "/new", label: "Zurück", wide: true, body, modifier: "nu-videoing" }), title: "Neues Video", onShow() { if (!pending.file) template.focus(); }, destroy() { template.destroy(); } };
+  };
+
+  /* A video that was made in the camera (or chosen) goes to its page. */
+  function composeVideo(options = {}) {
+    if (!Y.requireLogin("Melde dich an, um ein Video hochzuladen.")) return null;
+    Y.pendingVideo = options;
+    Y.navigate("/new/video");
+    return null;
+  }
+
+  /* ----------------------------------------------------------------------------------------------- the "+" */
+  /* "+" and "Posten": the page "Was willst du hochladen?" (or, when the place already knows what it is, the page of the video or of the post). */
+  function newPost({ only } = {}) {
     if (!Y.requireLogin("Melde dich an, um etwas hochzuladen.")) return null;
-    if (only === "video") return composeVideo();
-    if (only === "post") return Y.compose();
-    let entry = null;
-    const tile = (label, text, symbol, run) => h("button", { class: "pc-tile", type: "button", role: "menuitem", onclick: () => { entry.close(); run(); } },
-      h("span", { class: "pc-ic" }, icon(symbol)), h("span", { class: "pc-text" }, h("b", {}, label), h("span", { class: "hint" }, text)), h("span", { class: "pc-go", "aria-hidden": "true" }, icon("chevron")));
-    const tiles = h("div", { class: "pc-tiles" }, tile("Beitrag", "Text, Fotos, Sticker", "feather", () => Y.compose()), tile("Video", "bis 30 Sekunden", "film", () => composeVideo()),
-      tile("Story", "Foto oder Video, 24 Stunden", "image", () => Y.newStory(() => Y.refreshStories?.())));
-    if (!anchor) {
-      entry = dialog({ title: "Was möchtest du hochladen?", body: tiles });
-      return entry;
-    }
-    const pop = h("div", { class: "menu post-choose", role: "menu", "aria-label": "Was möchtest du hochladen?" }, h("p", { class: "pc-title" }, "Was möchtest du hochladen?"), tiles);
-    const placed = floating(anchor, pop, { arrows: true });
-    entry = { close: placed.close };
-    return entry;
+    Y.navigate(only === "video" ? "/new/video" : only === "post" ? "/new/post" : "/new");
+    return null;
   }
 
-  Object.assign(Y, { newPost, composeVideo, hashtagEditor, readVideo });
+  Object.assign(Y, { newPost, composeVideo, hashtagEditor, readVideo, uploadPages: pages });
 })();

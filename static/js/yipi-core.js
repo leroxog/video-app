@@ -257,7 +257,7 @@
   function parsePath(pathname, search = "") {
     const path = String(pathname || "/").replace(/\/+$/, "") || "/";
     const params = new URLSearchParams(search);
-    const fixed = { "/": "home", "/explore": "explore", "/notifications": "notifications", "/messages": "messages", "/bookmarks": "bookmarks", "/moderation": "moderation", "/camera": "camera", "/games": "camera", "/videos": "videos", "/i/login": "login", "/i/signup": "signup" };
+    const fixed = { "/": "home", "/explore": "explore", "/notifications": "notifications", "/messages": "messages", "/bookmarks": "bookmarks", "/moderation": "moderation", "/camera": "camera", "/games": "camera", "/videos": "videos", "/i/login": "login", "/i/signup": "signup", "/new": "new", "/new/post": "newpost", "/new/video": "newvideo" };
     if (path === "/explore") return { name: "explore", tab: ["trends", "media", "people"].includes(params.get("tab")) ? params.get("tab") : "" };
     if (path === "/i/signup") return { name: "signup", google: params.get("google") === "1" };
     if (fixed[path]) return { name: fixed[path] };
@@ -288,6 +288,9 @@
       case "notifications": case "messages": case "bookmarks": case "moderation": return `/${route.name}`;
       case "camera": return route.game ? `/camera/${route.game}` : "/camera";
       case "videos": return "/videos";
+      case "new": return "/new";
+      case "newpost": return "/new/post";
+      case "newvideo": return "/new/video";
       case "group": return `/g/${route.id}`;
       case "nex": return route.post ? `/i/nex?post=${route.post}` : route.q ? `/i/nex?q=${encodeURIComponent(route.q)}` : "/i/nex";
       case "login": return "/i/login";

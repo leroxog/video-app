@@ -114,7 +114,7 @@ NOTIFICATION_KINDS = ("like", "repost", "reply", "quote", "mention", "follow")
 
 # Names that must not be a handle: the page's own addresses, and names that would pretend to be the site.
 RESERVED_HANDLES = {
-    "api", "static", "explore", "notifications", "messages", "bookmarks", "settings", "search", "compose", "login", "signup", "logout",
+    "api", "static", "new", "neu", "explore", "notifications", "messages", "bookmarks", "settings", "search", "compose", "login", "signup", "logout",
     "home", "i", "m", "admin", "administrator", "moderation", "yipi", "yips", "support", "help", "about", "terms", "privacy", "rules",
     "datenschutz", "impressum", "bildnachweise", "nutzungsbedingungen", "regeln", "hilfe", "suche", "entdecken", "robots", "sitemap", "manifest",
     "gomat", "ysound", "root", "system", "staff", "team", "official", "null", "undefined", "me", "you", "intent", "share", "hashtag",
@@ -162,7 +162,7 @@ POST_PATH_RE = re.compile(r"/([A-Za-z0-9_]{3,15})/status/(\d{1,19})")
 DESCRIPTION = "Satürn: Was gerade passiert. Kurze Beiträge, Fotos und Sticker, Antworten, Reposts und Likes, dazu Nex AI, die KI, die dir weiterhilft."
 # Old home pages of the site that stay reachable but are not for search engines.
 ARCHIVE_PATHS = ("/nex-agenten-archiv", "/gomat-archiv", "/ysound-archiv", "/sound-archiv", "/server-archiv", "/browser-archiv", "/ylib-archiv", "/ychat-archiv", "/nex-archiv", "/modelle-archiv", "/nex-ai-archiv", "/nstl-archiv")
-PRIVATE_PATHS = ("/i/", "/g/", "/games/", "/camera", "/search", "/messages", "/notifications", "/bookmarks", "/settings", "/moderation")   # not for search engines
+PRIVATE_PATHS = ("/i/", "/g/", "/games/", "/new", "/camera", "/search", "/messages", "/notifications", "/bookmarks", "/settings", "/moderation")   # not for search engines
 OLD_HOME = "/yipi-archiv"                         # the address of the earlier yipi home page: it leads to "/" now
 STARTER_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "gifs")
 logger = logging.getLogger(__name__)
@@ -4984,7 +4984,7 @@ def register_routes(app):
         return page_headers(make_response(render_template("yipi.html", boot=boot, title=title, description=description, base=base_url(), path=shown, private=private,
                                                           bundle=f"/pulse.js?v={bundle['version']}", games=f"/pulse-games.js?v={games['version']}", lens=f"/pulse-lens.js?v={lens['version']}")))
 
-    for page in ("/explore", "/notifications", "/messages", "/bookmarks", "/settings", "/search", "/moderation", "/i/login", "/i/signup", "/i/nex", "/camera", "/videos"):
+    for page in ("/explore", "/notifications", "/messages", "/bookmarks", "/settings", "/search", "/moderation", "/i/login", "/i/signup", "/i/nex", "/camera", "/videos", "/new", "/new/post", "/new/video"):
         route(page, endpoint="yipi_shell_" + page.strip("/").replace("/", "_"))(lambda page=page: render_shell(page))
 
     @route("/camera/<slug>")

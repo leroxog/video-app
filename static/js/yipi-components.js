@@ -749,6 +749,7 @@
   Y.compose = function compose({ replyTo, quoteOf, onPosted, text, files } = {}) {
     if (!Y.requireLogin("Melde dich an, um zu posten.")) return null;
     const target = replyTo || quoteOf;
+    if (!target) { Y.pendingPost = { text, files, onPosted }; Y.navigate("/new/post"); return null; }          // a new post is a whole page (a reply or a quote stays a window)
     let entry;
     const box = composer({
       replyTo, quoteOf, autofocus: true, text, files, template: !target,

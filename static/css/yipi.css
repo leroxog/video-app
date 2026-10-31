@@ -2379,3 +2379,57 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
   .reel-count { display: none; }
 }
 
+/* ----- uploading: the page "Was willst du hochladen?" (a video on the left, a post on the right) and the two whole pages, white and round like the sign-up */
+.nu .au-main { align-items: start; padding-top: 8px; }
+.nu-choosing .au-main { align-items: center; padding-top: 0; padding-bottom: 8vh; }
+.nu-column { display: flex; width: min(100%, 560px); flex-direction: column; gap: 22px; }
+.nu-column.wide { width: min(100%, 900px); }
+.nu-title { font-size: clamp(28px, 7vw, 44px); font-weight: 900; line-height: 1.1; letter-spacing: -0.02em; text-align: center; }
+.nu-title.left, .nu-sub.left { text-align: left; }
+.nu-sub { margin-top: -12px; }
+.nu-choose { display: flex; flex-direction: column; gap: 28px; }
+.nu-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.nu-card { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; min-height: min(44vh, 330px); padding: 22px 12px; border: 2px solid #e5e5e5; border-radius: 28px; background: #fff; box-shadow: 0 5px 0 #e5e5e5; color: #0a0a0a; text-align: center; font: inherit; cursor: pointer; transition: transform 0.08s, box-shadow 0.08s, border-color 0.15s; }
+.nu-card:hover { border-color: #0a0a0a; }
+.nu-card:active { transform: translateY(4px); box-shadow: 0 1px 0 #e5e5e5; }
+.nu-card:focus-visible { outline: 3px solid #0a0a0a; outline-offset: 3px; }
+.nu-ic { display: grid; place-items: center; width: clamp(72px, 22vw, 104px); height: clamp(72px, 22vw, 104px); border-radius: 30px; color: #fff; }
+.nu-ic svg { width: 52%; height: 52%; }
+.nu-card.video .nu-ic { background: linear-gradient(135deg, #7a2cf0 0%, #c13bd8 55%, #ec4899 100%); }
+.nu-card.post .nu-ic { background: #0a0a0a; }
+.nu-card b { font-size: clamp(19px, 5vw, 26px); font-weight: 900; letter-spacing: -0.01em; }
+.nu-card small { max-width: 18ch; color: #6b6b6b; font-size: 14px; font-weight: 700; line-height: 1.3; }
+.nu-story { align-self: center; display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 14px; color: #6b6b6b; font: inherit; font-size: 15px; font-weight: 800; }
+.nu-story:hover { background: rgba(0, 0, 0, 0.05); color: #0a0a0a; }
+.nu-story svg { width: 20px; height: 20px; }
+.au-back-gap { flex: none; width: 40px; height: 40px; }
+.nu .au-top { justify-content: space-between; }
+/* a post: a whole page */
+.nu-post { display: flex; flex-direction: column; gap: 18px; }
+.nu-posting .composer.template { padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+.nu-posting .compose-text { min-height: 28vh; padding: 14px 16px; border: 2px solid #e5e5e5; border-radius: 20px; background: #f7f7f7; color: #0a0a0a; font-size: 20px; font-weight: 600; line-height: 1.4; outline: none; }
+.nu-posting .compose-text:focus { border-color: #0a0a0a; background: #fff; }
+.nu-posting .btn.primary, .nu-videoing .btn.primary { padding: 13px 28px; border: 2px solid #0a0a0a; border-radius: 16px; background: #0a0a0a; color: #fff; font-weight: 800; box-shadow: 0 4px 0 #4b4b4b; }
+.nu-posting .btn.primary:active:not(:disabled), .nu-videoing .btn.primary:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 1px 0 rgba(0, 0, 0, 0.25); }
+.nu-posting .btn.primary:disabled, .nu-videoing .btn.primary:disabled { opacity: 0.4; box-shadow: none; }
+/* a video: a whole page */
+.nu-video { display: flex; flex-direction: column; gap: 18px; }
+.vt-page { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 32px; align-items: start; padding: 0; background: none; box-shadow: none; }
+.vt-left { display: flex; flex-direction: column; gap: 8px; }
+.vt-right { display: flex; flex-direction: column; gap: 12px; }
+.vt-page .vt-slot { position: relative; aspect-ratio: 9 / 16; max-height: 66vh; overflow: hidden; border: 2px dashed #d4d4d8; border-radius: 26px; background: #f4f4f5; }
+.vt-page .vt-drop { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; width: 100%; height: 100%; padding: 14px; color: #0a0a0a; font: inherit; text-align: center; }
+.vt-page .vt-preview { position: absolute; inset: 0; }
+.vt-page .vt-preview video { width: 100%; height: 100%; object-fit: cover; background: #000; }
+.vt-limit { margin: 0; text-align: center; }
+@media (max-width: 720px) {
+  .vt-page { grid-template-columns: 1fr; gap: 18px; }
+  .vt-left { width: min(240px, 70%); margin: 0 auto; }
+  .nu-card { min-height: 220px; }
+}
+.nu-choosing .nu-column { width: min(100%, 820px); }
+@media (min-width: 900px) {
+  .nu-card { min-height: min(46vh, 380px); gap: 16px; }
+  .nu-card small { font-size: 16px; }
+}
+.nu-main { width: 100%; }

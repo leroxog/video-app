@@ -9,7 +9,7 @@
   const Api = window.YipiApi;
   const { fill, put, h, icon, link, avatar, richText, toast, dialog, confirmBox, menu, tabs, pager } = Y;
 
-  const views = (Y.views = {});
+  const views = (Y.views = { ...(Y.uploadPages || {}) });                       // (the pages of the upload come from yipi-newpost.js)
 
   // ------------------------------------------------------------------------------------------ helpers
   function qs(path, params) {
