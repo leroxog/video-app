@@ -1,5 +1,5 @@
-/* Nex (the file keeps the name yipi.js): the frame around everything -- the router (the address bar changes without reloading the page),
-   the floating bar at the bottom with five tabs (Home, Chats, Nex in the middle, Games, Videos), the menu from the left, the badges for new
+/* Satürn (the file keeps the name yipi.js): the frame around everything -- the router (the address bar changes without reloading the page),
+   the floating bar at the bottom with five tabs (Home, Chats, Satürn in the middle, Games, Videos), the menu from the left, the badges for new
    messages and the themes. The pages themselves are in yipi-views.js, yipi-chats.js, yipi-pages.js and yipi-nex.js. The app is made for a phone
    held upright. */
 (function () {
@@ -86,18 +86,18 @@
       event.stopPropagation();
       Y.menu(event.currentTarget, [{ label: "Dein Profil", icon: "user", run: () => Y.navigate(`/${me.handle}`) }, { label: `@${me.handle} abmelden`, icon: "logout", danger: true, run: () => Y.logout() }]);
     } }, icon("more"));
-    const legal = h("div", { class: "rail-links" }, h("a", { href: "/datenschutz" }, "Datenschutz"), h("a", { href: "/nutzungsbedingungen" }, "Nutzungsbedingungen"), h("a", { href: "/bildnachweise" }, "Bildnachweise"), h("a", { href: "/impressum" }, "Impressum"), h("small", {}, "© 2026 Nex"));
+    const legal = h("div", { class: "rail-links" }, h("a", { href: "/datenschutz" }, "Datenschutz"), h("a", { href: "/nutzungsbedingungen" }, "Nutzungsbedingungen"), h("a", { href: "/bildnachweise" }, "Bildnachweise"), h("a", { href: "/impressum" }, "Impressum"), h("small", {}, "© 2026 Satürn"));
     const foot = h("div", { class: "side-foot" }, Y.sponsored("slot"),
       h("button", { class: "rail-post", type: "button", "aria-label": "Neu: Beitrag, Video oder Story", "aria-haspopup": "menu", onclick: (event) => Y.newPost({ anchor: event.currentTarget }) }, icon("plus"), h("span", {}, "Neu")),
       h("div", { class: "rail-me" }, link(`/${me.handle}`, { class: "side-me", "aria-label": `Dein Profil, @${me.handle}` }, avatar(me, "md"), h("span", { class: "side-me-text" }, h("b", {}, me.name), h("small", {}, `@${me.handle}`))), more), legal);
-    const top = h("div", { class: "rail-top" }, link(Y.HOME, { class: "rail-brand", "aria-label": "Nex, zur Startseite" }, Icons.logo(), Icons.wordmark()));
+    const top = h("div", { class: "rail-top" }, link(Y.HOME, { class: "rail-brand", "aria-label": "Satürn, zur Startseite" }, Icons.logo(), Icons.wordmark()));
     const tabbar = h("nav", { class: "tabbar", "aria-label": "Hauptmenü" }, top, TABS.map(tabItem), extras, foot);       // (on a phone held upright only the five tabs show, at the bottom)
     Y.put(app, appbar.element, main, tabbar, announcer);
   }
 
   function activeTab(route) {
     if (route.name === "messages" || route.name === "thread" || route.name === "group") return "messages";
-    if (route.name === "nex") return "messages";                  // Nex is a contact in the chats now
+    if (route.name === "nex") return "messages";                  // Satürn is a contact in the chats now
     if (route.name === "camera" || route.name === "videos") return route.name;
     return "home";
   }
@@ -131,11 +131,11 @@
 
   // ---------------------------------------------------------------------------------------------- badges
   const unreadTotal = () => (Y.me ? (Y.me.unreadNotifications || 0) + (Y.me.unreadMessages || 0) : 0);
-  let pageTitle = "Nex";
+  let pageTitle = "Satürn";
 
   function updateTitle() {
     const count = unreadTotal();
-    document.title = `${count ? `(${count > 99 ? "99+" : count}) ` : ""}${pageTitle === "Nex" ? "Nex: was gerade passiert" : `${pageTitle} / Nex`}`;
+    document.title = `${count ? `(${count > 99 ? "99+" : count}) ` : ""}${pageTitle === "Satürn" ? "Satürn: was gerade passiert" : `${pageTitle} / Satürn`}`;
   }
 
   Y.updateBadges = () => {
@@ -247,7 +247,7 @@
     enterTimer = setTimeout(() => { main.dataset.enter = ""; }, 380);
     main.replaceChildren(view.element);
     app.dataset.route = route.name;
-    pageTitle = view.title || "Nex";
+    pageTitle = view.title || "Satürn";
     updateTitle();
     updateNav(route);
     appbar?.route(route.name);
@@ -302,7 +302,7 @@
   /* The page that is shown is asked to load itself again (after a post was pinned, for instance). */
   Y.refreshView = () => { current?.view.refresh?.(); };
 
-  /* A panel that slides in from the left over the page (the menu of Home, the list of conversations of Nex). `build(panel, close)` puts its
+  /* A panel that slides in from the left over the page (the menu of Home, the list of conversations of Satürn). `build(panel, close)` puts its
      content in; it closes with the button, a tap next to it, Escape, or a tap on a link inside. Returns `close`. */
   Y.sidePanel = (label, build, extraClass = "") => {
     const old = document.querySelector(".drawer-back");
@@ -346,7 +346,7 @@
         h("button", { class: "drawer-item logout", type: "button", onclick: () => { close(); Y.logout(); } }, icon("logout"), h("span", {}, `@${me.handle} abmelden`)));
     } else {
       panel.append(
-        h("div", { class: "dr-name" }, h("b", {}, "Nex"), h("span", { class: "handle" }, "Was gerade passiert.")),
+        h("div", { class: "dr-name" }, h("b", {}, "Satürn"), h("span", { class: "handle" }, "Was gerade passiert.")),
         h("nav", { class: "drawer-nav", "aria-label": "Menü" }, entry("/i/login", "user", "Anmelden"), entry("/i/signup", "feather", "Konto erstellen"), ...common));
     }
   });
@@ -356,7 +356,7 @@
     let entry = null;
     const go = (path) => () => { entry.close(); Y.navigate(path); };
     entry = dialog({ label: "Anmelden", title: "", body: h("div", { class: "auth-prompt" },
-      h("span", { class: "hero-logo" }, Icons.logo()), h("h2", {}, "Mach mit bei Nex"), h("p", { class: "dialog-text" }, message || "Melde dich an, um das zu tun."),
+      h("span", { class: "hero-logo" }, Icons.logo()), h("h2", {}, "Mach mit bei Satürn"), h("p", { class: "dialog-text" }, message || "Melde dich an, um das zu tun."),
       h("div", { class: "hero-actions" }, h("button", { class: "btn primary", type: "button", onclick: go("/i/signup") }, "Konto erstellen"), h("button", { class: "btn ghost", type: "button", onclick: go("/i/login") }, "Anmelden"))) });
     return false;
   };

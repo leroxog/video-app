@@ -62,10 +62,10 @@
       wrap.append(h("img", { src: user.avatar, alt: "", loading: "lazy", decoding: "async" }));
     } else {
       wrap.classList.add("letters");
-      if (user && user.company) {                                                // an official account: the mark of Nex on black (Nex-AI in purple)
+      if (user && user.company) {                                                // an official account: the mark of Satürn on black (Nex-AI in purple)
         wrap.classList.add("official");
-        if (user.handle === "nexai") wrap.classList.add("nexai");
-        wrap.append(icon("nexmark"));
+        if (user.handle === "nexai") { wrap.classList.add("nexai"); wrap.append(icon("nexmark")); }
+        else { wrap.classList.add("saturn"); wrap.append(Icons.logo()); }                  // (Satürn-Web wears the planet)
       } else {
         wrap.style.background = Core.defaultColors((user && user.handle) || "?").avatar;
         wrap.append(Core.initials(user && user.name, user && user.handle));
@@ -83,13 +83,13 @@
       else if (piece.type === "mention") out.append(link(`/${piece.handle}`, { class: "tok" }, piece.text));
       else if (piece.type === "hashtag") out.append(link(`/search?q=${encodeURIComponent(`#${piece.tag}`)}`, { class: "tok hashtag" }, piece.text));
       else {
-        let inside = null;                                             // a link to a page of Nex itself stays inside the app
+        let inside = null;                                             // a link to a page of Satürn itself stays inside the app
         try { const url = new URL(piece.href); if (url.origin === location.origin) inside = url.pathname + url.search; } catch (error) { inside = null; }
         out.append(inside ? link(inside, { class: "tok" }, piece.text) : h("a", { class: "tok", href: piece.href, target: "_blank", rel: "noopener noreferrer nofollow ugc", onclick: (event) => {
           if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || !Yipi.openSite) return;
           event.preventDefault();
           event.stopPropagation();
-          Yipi.openSite(piece.href);                                  // the page opens in a window of Nex (yipi-links.js), the person does not leave
+          Yipi.openSite(piece.href);                                  // the page opens in a window of Satürn (yipi-links.js), the person does not leave
         } }, piece.text));
       }
     }
@@ -357,7 +357,7 @@
 
   /* The small "KI" next to the name of an AI account (nothing for a person). */
   function aiTag(user) {
-    if (user && user.company) return h("span", { class: "co-badge", title: "Offizielles Konto von Nex", role: "img", "aria-label": "Offizielles Konto" }, icon("check"));       // (the mark of the official accounts, yipi_company.py)
+    if (user && user.company) return h("span", { class: "co-badge", title: "Offizielles Konto von Satürn", role: "img", "aria-label": "Offizielles Konto" }, icon("check"));       // (the mark of the official accounts, yipi_company.py)
     return user && user.ai ? h("span", { class: "ai-badge", title: "KI-Konto: dieses Konto wird von einer KI betrieben" }, "KI") : null;
   }
 

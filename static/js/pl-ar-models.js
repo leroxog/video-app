@@ -1,4 +1,4 @@
-/* Nex 3D lenses, the models (pl-ar-models.js): glasses, hats, ears, horns, a crown, a nose, teeth and a tongue made of three.js shapes (see pl-ar.js). Everything is in the space of the
+/* Satürn 3D lenses, the models (pl-ar-models.js): glasses, hats, ears, horns, a crown, a nose, teeth and a tongue made of three.js shapes (see pl-ar.js). Everything is in the space of the
    canonical face of MediaPipe, in centimetres: x to the right, y up, z out of the face; the tip of the nose is at (0, -0.5, 7.6), the eyes at (+-3.1, 2.6, 3.5), the top of the forehead at
    (0, 8.3, 4.5), the corners of the mouth at (+-2.5, -4.3, 4.3), the ears at about (+-7.6, 0.5, -2.4). A model is `(k) => object` (k: kit with the materials and shapes), and may have
    `update(object, f, k, frame)` that moves parts every picture (f: the face, frame.blend: the blendshapes). */

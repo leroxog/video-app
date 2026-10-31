@@ -1,4 +1,4 @@
-"""Nex, round 6, the page side of what brings people back (the flame, level and badges, hearts on messages, the lists of the best players,
+"""Satürn, round 6, the page side of what brings people back (the flame, level and badges, hearts on messages, the lists of the best players,
 notifications on the device) and of saving a video with the watermark and making a sticker: the files agree with each other and with the server."""
 import os
 import re
@@ -31,7 +31,7 @@ def test_saving_a_video_draws_the_watermark_in_the_browser_and_sends_nothing():
     source = js("yipi-download.js")
     assert "MediaRecorder" in source and "captureStream" in source and "Core.watermarkPlan" in source and "Core.videoFileName" in source
     assert "fetch(" not in source and "Api." not in source and "XMLHttpRequest" not in source, "the video is not sent anywhere"
-    assert '"Nex"' in source and "`@${handle}`" in source, "the logo's name and the name of whoever made the video"
+    assert '"Satürn"' in source and "`@${handle}`" in source, "the logo's name and the name of whoever made the video"
     assert "item.user.handle" in source, "the creator, not the person who saves it"
     assert "createMediaElementSource" in source and "createMediaStreamDestination" in source, "the sound goes along (and not out of the speakers)"
     assert "Abbrechen" in source, "a running save can be cancelled"

@@ -1,4 +1,4 @@
-"""Nex: the official accounts (yipi_company.py): "Nex-Web" and "Nex-AI" belong to Nex itself, nobody can sign in as them or get one, they read no
+"""Satürn: the official accounts (yipi_company.py): "Satürn-Web" and "Nex-AI" belong to Satürn itself, nobody can sign in as them or get one, they read no
 messages, they are marked, and a release posts its announcements by itself, once."""
 import os
 import sys
@@ -56,7 +56,7 @@ def test_the_two_accounts_are_made_marked_and_nobody_can_sign_in_as_one(client):
     yipi_company.start_up(flask_app)
     web = yipi.YipiUser.query.filter_by(handle="nexweb").one()
     ai = yipi.YipiUser.query.filter_by(handle="nexai").one()
-    assert web.name == "Nex-Web" and ai.name == "Nex-AI" and web.company and ai.company
+    assert web.name == "Satürn-Web" and ai.name == "Nex-AI" and web.company and ai.company
     assert web.password_hash == "!" and ai.password_hash == "!"
     for handle in ("nexweb", "nexai"):
         for password in (PASSWORD, "!", ""):
@@ -75,7 +75,7 @@ def test_a_release_posts_its_announcements_once(client):
     assert authors == {"nexweb", "nexai"}
     assert yipi.YipiUser.query.filter_by(handle="nexweb").one().posts_count == sum(1 for _, kind, _ in yipi_company.ANNOUNCEMENTS if kind == "web")
     assert yipi.YipiTag.query.count() >= 1, "the hashtags of the announcements are searchable"
-    yipi_company.publish_pending([("2026-11-01-test", "web", "Ein neuer Test-Eintrag für Nex-Web.")])
+    yipi_company.publish_pending([("2026-11-01-test", "web", "Ein neuer Test-Eintrag für Satürn-Web.")])
     assert yipi.YipiPost.query.count() == len(yipi_company.ANNOUNCEMENTS) + 1
 
 
@@ -94,7 +94,7 @@ def test_the_profile_says_official_and_nobody_can_write_to_them(client):
     olga = person("olga")
     yipi_company.official_ids()
     profile = olga.get("/api/yipi/users/nexweb").get_json()
-    assert profile["user"]["company"] is True and profile["user"]["name"] == "Nex-Web"
+    assert profile["user"]["company"] is True and profile["user"]["name"] == "Satürn-Web"
     assert olga.get("/api/yipi/users/olga").get_json()["user"]["company"] is False
     reply = olga.post("/api/yipi/messages/nexweb", json={"text": "Hallo"})
     assert reply.status_code == 403 and reply.get_json()["error"] == "official_account"

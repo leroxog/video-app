@@ -1,4 +1,4 @@
-"""Nex: voice messages in chats (2026-10-31): the page records with the microphone and sends the sound as a private file of the kind "audio", which only the people of the chat may open and which
+"""Satürn: voice messages in chats (2026-10-31): the page records with the microphone and sends the sound as a private file of the kind "audio", which only the people of the chat may open and which
 plays in the chat (the new line above the keyboard with the "+", the sticker button and the microphone is checked in test_yipi_frontend.py)."""
 import io
 import os

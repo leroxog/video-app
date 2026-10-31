@@ -1,4 +1,4 @@
-"""Nex: rankings that people make themselves (yipi_ranking.py): a title, a Top 5 or Top 10 and entries with a name and a picture; the AI suggests entries; the pictures come from the
+"""Satürn: rankings that people make themselves (yipi_ranking.py): a title, a Top 5 or Top 10 and entries with a name and a picture; the AI suggests entries; the pictures come from the
 person or from Wikimedia Commons (thumbnails of freely licensed pictures only, with author and licence on the page of credits); everybody plays the ranking in the camera."""
 import io
 import json

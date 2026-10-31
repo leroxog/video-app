@@ -1,5 +1,5 @@
-/* Nex sign-in and sign-up (yipi-auth.js), made like the start of YouTube and of Duolingo:
-   * Somebody who is new first sees the page behind (the shape of Nex, blurred) and in front of it the terms in short (`consent`), with two buttons: "Akzeptieren" (the terms are
+/* Satürn sign-in and sign-up (yipi-auth.js), made like the start of YouTube and of Duolingo:
+   * Somebody who is new first sees the page behind (the shape of Satürn, blurred) and in front of it the terms in short (`consent`), with two buttons: "Akzeptieren" (the terms are
      accepted, the account is made next) and "Anmelden". What was chosen is remembered in the browser (`nex.start`), so the screen comes once.
    * Signing in is two white pages in the round font of Duolingo (Nunito): "Willkommen zurück!" asks for the name (and offers a phone number, e-mail or Google instead), then
      "Bitte gib nun dein Passwort ein!" asks for the password.
@@ -43,24 +43,24 @@
 
   // ------------------------------------------------------------------------------------------------ the terms in short (and the page behind)
   const TERMS = [
-    ["Willkommen bei Nex", "Nex ist ein soziales Netzwerk für kurze Beiträge, Fotos, Sticker und Videos, für Chats und Gruppen, für Spiele und Linsen mit der Kamera und für Nex AI, eine KI, die dir weiterhilft. Nex ist kostenlos, zeigt keine Werbung anderer Firmen und folgt dir nicht durchs Internet."],
-    ["Wer Nex benutzen darf", "Du musst mindestens 13 Jahre alt sein; bis 15 brauchst du die Erlaubnis deiner Eltern. Du hast ein Konto für dich allein und bist für dein Passwort verantwortlich. Ein vergessenes Passwort kann nicht zurückgesetzt werden, weil Nex keine E-Mails verschickt."],
-    ["Was du schreibst und zeigst", "Beiträge, Antworten, Likes, Videos und dein Profil sind öffentlich. Nachrichten sehen nur die Leute im Chat, sie sind aber nicht Ende-zu-Ende verschlüsselt. Deine Inhalte gehören dir; du erlaubst Nex, sie zu speichern und anderen zu zeigen. Poste nur, was du selbst gemacht hast oder verwenden darfst."],
+    ["Willkommen bei Satürn", "Satürn ist ein soziales Netzwerk für kurze Beiträge, Fotos, Sticker und Videos, für Chats und Gruppen, für Spiele und Linsen mit der Kamera und für Nex AI, eine KI, die dir weiterhilft. Satürn ist kostenlos, zeigt keine Werbung anderer Firmen und folgt dir nicht durchs Internet."],
+    ["Wer Satürn benutzen darf", "Du musst mindestens 13 Jahre alt sein; bis 15 brauchst du die Erlaubnis deiner Eltern. Du hast ein Konto für dich allein und bist für dein Passwort verantwortlich. Ein vergessenes Passwort kann nicht zurückgesetzt werden, weil Satürn keine E-Mails verschickt."],
+    ["Was du schreibst und zeigst", "Beiträge, Antworten, Likes, Videos und dein Profil sind öffentlich. Nachrichten sehen nur die Leute im Chat, sie sind aber nicht Ende-zu-Ende verschlüsselt. Deine Inhalte gehören dir; du erlaubst Satürn, sie zu speichern und anderen zu zeigen. Poste nur, was du selbst gemacht hast oder verwenden darfst."],
     ["Die Regeln", "Kein Hass, keine Drohungen, keine Gewalt, nichts Sexuelles mit oder über Kinder, kein Spam, keine Fälschungen und nichts Rechtswidriges. Du kannst Beiträge und Konten melden, Leute blockieren oder stummschalten. Wer die Regeln bricht, kann gesperrt werden."],
-    ["Deine Daten", "Nex speichert nur, was für dein Konto nötig ist: Nutzername, Name, dein Passwort (nur als Prüfwert, nicht lesbar), Beiträge, Nachrichten und Bilder. Dazu kommen ein Cookie, damit du angemeldet bleibst, und Einstellungen in deinem Browser. Dein Alter wird nur geprüft und nicht gespeichert. Es gibt kein Tracking und keine Werbe-Cookies."],
-    ["KI, Kamera und Links", "Fragst du Nex AI etwas, geht deine Frage an einen KI-Dienst (Groq, USA). Unter manchen Beiträgen kann ein Fact Check stehen. Kamera und Mikrofon nutzt Nex nur, wenn du sie erlaubst; Gesichts-Linsen laufen auf deinem Gerät. Zeigt ein Beitrag einen Link, ruft Nex die Seite ab, um eine Vorschau zu zeigen, und die Seite öffnet sich in einem Fenster von Nex. Diese Seiten gehören nicht zu Nex."],
-    ["Offizielle Konten", "Nex-Web und Nex-AI sind die offiziellen Konten von Nex. Nur dort stehen die Neuigkeiten der Webseite und der KI. Diese Konten lesen keine Nachrichten, und niemand sonst kann so ein Konto bekommen."],
+    ["Deine Daten", "Satürn speichert nur, was für dein Konto nötig ist: Nutzername, Name, dein Passwort (nur als Prüfwert, nicht lesbar), Beiträge, Nachrichten und Bilder. Dazu kommen ein Cookie, damit du angemeldet bleibst, und Einstellungen in deinem Browser. Dein Alter wird nur geprüft und nicht gespeichert. Es gibt kein Tracking und keine Werbe-Cookies."],
+    ["KI, Kamera und Links", "Fragst du Nex AI etwas, geht deine Frage an einen KI-Dienst (Groq, USA). Unter manchen Beiträgen kann ein Fact Check stehen. Kamera und Mikrofon nutzt Satürn nur, wenn du sie erlaubst; Gesichts-Linsen laufen auf deinem Gerät. Zeigt ein Beitrag einen Link, ruft Satürn die Seite ab, um eine Vorschau zu zeigen, und die Seite öffnet sich in einem Fenster von Satürn. Diese Seiten gehören nicht zu Satürn."],
+    ["Offizielle Konten", "Satürn-Web und Nex-AI sind die offiziellen Konten von Satürn. Nur dort stehen die Neuigkeiten der Webseite und der KI. Diese Konten lesen keine Nachrichten, und niemand sonst kann so ein Konto bekommen."],
     ["Dein Konto gehört dir", "Du kannst es jederzeit in den Einstellungen löschen. Dann werden deine Beiträge, Nachrichten und Bilder entfernt. Die vollständigen Nutzungsbedingungen und die Datenschutzerklärung findest du unten."],
   ];
 
-  /* What stands behind the question, like the page of YouTube behind its question: the shape of Nex with its feed, blurred (nothing of it is real). */
+  /* What stands behind the question, like the page of YouTube behind its question: the shape of Satürn with its feed, blurred (nothing of it is real). */
   function backdrop() {
     const post = (k) => h("div", { class: "wb-post" },
       h("span", { class: "wb-av", style: `background:${Core.defaultColors(`x${k}`).avatar}` }),
       h("div", { class: "wb-lines" }, h("i", { style: "width:34%" }), h("i", { style: "width:92%" }), h("i", { style: `width:${58 + (k * 13) % 30}%` }),
         k % 2 ? h("b", { class: "wb-pic", style: `background:linear-gradient(135deg, ${Core.defaultColors(`p${k}`).banner}, ${Core.defaultColors(`q${k}`).avatar})` }) : null));
     return h("div", { class: "wb-bg", "aria-hidden": "true" },
-      h("div", { class: "wb-bar" }, h("span", { class: "wb-word" }, window.YipiIcons.wordmark ? window.YipiIcons.wordmark() : "Nex"), h("span", { class: "wb-search" })),
+      h("div", { class: "wb-bar" }, h("span", { class: "wb-word" }, window.YipiIcons.wordmark ? window.YipiIcons.wordmark() : "Satürn"), h("span", { class: "wb-search" })),
       h("div", { class: "wb-body" },
         h("div", { class: "wb-side" }, ...[1, 2, 3, 4].map(() => h("i"))),
         h("div", { class: "wb-feed" }, post(1), post(2),
@@ -74,8 +74,8 @@
       h("p", { class: "wb-end" }, "Mit „Akzeptieren“ stimmst du den ", h("a", { href: "/nutzungsbedingungen", target: "_blank", rel: "noopener" }, "Nutzungsbedingungen"), " und der ",
         h("a", { href: "/datenschutz", target: "_blank", rel: "noopener" }, "Datenschutzerklärung"), " zu und legst danach dein Konto an. Hast du schon eins, tippe auf „Anmelden“."));
     const dialog = h("section", { class: "wb-dialog", role: "dialog", "aria-modal": "true", "aria-labelledby": "wb-title" },
-      h("span", { class: "wb-logo" }, window.YipiIcons.wordmark ? window.YipiIcons.wordmark() : "Nex"),
-      h("h1", { id: "wb-title" }, "Bevor du zu Nex weitergehst"),
+      h("span", { class: "wb-logo" }, window.YipiIcons.wordmark ? window.YipiIcons.wordmark() : "Satürn"),
+      h("h1", { id: "wb-title" }, "Bevor du zu Satürn weitergehst"),
       scroll,
       h("div", { class: "wb-actions" }, button("Anmelden", { kind: "plain", onclick: onLogin }), button("Akzeptieren", { kind: "solid", onclick: onAccept })));
     return h("div", { class: "welcome auth-white" }, backdrop(), h("div", { class: "wb-scrim" }), dialog);
@@ -227,7 +227,7 @@
       const line = h("p", { class: "au-small", "aria-live": "polite" });
       const parents = h("input", { type: "checkbox", id: "au-parents" });
       parents.checked = answers.parents;
-      const parentsBox = h("label", { class: "au-check", hidden: true }, parents, h("span", {}, "Meine Eltern erlauben mir, Nex zu benutzen."));
+      const parentsBox = h("label", { class: "au-check", hidden: true }, parents, h("span", {}, "Meine Eltern erlauben mir, Satürn zu benutzen."));
       const error = formError();
       const submit = button("Konto erstellen", { type: "submit", kind: "solid" });
       function update() {
@@ -236,7 +236,7 @@
         number.textContent = String(answers.age);
         range.style.setProperty("--fill", `${((answers.age - 5) / 95) * 100}%`);
         parentsBox.hidden = !(answers.age >= 13 && answers.age < 16);
-        line.textContent = answers.age < 13 ? "Nex gibt es erst ab 13 Jahren." : "";
+        line.textContent = answers.age < 13 ? "Satürn gibt es erst ab 13 Jahren." : "";
         line.className = `au-small${answers.age < 13 ? " bad" : ""}`;
         submit.disabled = answers.age < 13 || (answers.age < 16 && !parents.checked);
       }
@@ -253,7 +253,7 @@
         const reply = await Api.post("/signup", body);
         if (!reply.ok) { submit.disabled = false; showError(error, Api.message(reply)); return; }
         Y.setMe(reply.data.me);
-        toast("Willkommen bei Nex!");
+        toast("Willkommen bei Satürn!");
         styleStep();
       } }, number, range, line, parentsBox, error, submit);
       show("age", [h("h1", { class: "au-title" }, "Wie alt bist du???"), form], { back: before("age") });
@@ -291,7 +291,7 @@
         const file = picker.files[0];
         picker.value = "";
         if (!file || !picking) return;
-        if (!/^image\/(jpeg|png|gif|webp)$/.test(file.type)) { showError(error, "Das ist kein Foto, das Nex kennt (JPEG, PNG, GIF oder WebP)."); return; }
+        if (!/^image\/(jpeg|png|gif|webp)$/.test(file.type)) { showError(error, "Das ist kein Foto, das Satürn kennt (JPEG, PNG, GIF oder WebP)."); return; }
         showError(error, "");
         try {
           const blob = await Y.prepareImage(file, { crop: picking === "avatar" ? { width: 400, height: 400 } : { width: 1500, height: 500 } });
@@ -334,7 +334,7 @@
   }
 
   views.login = function login(route) {
-    if (Y.me) { setTimeout(() => Y.navigate(Y.HOME, { replace: true }), 0); return { element: h("div"), title: "Nex" }; }
+    if (Y.me) { setTimeout(() => Y.navigate(Y.HOME, { replace: true }), 0); return { element: h("div"), title: "Satürn" }; }
     const holder = swapper((redraw) => (startState() ? loginView(route).element : consent({
       onAccept: () => { setStart("accepted"); Y.navigate("/i/signup"); },
       onLogin: () => { setStart("login"); redraw(); },
@@ -343,7 +343,7 @@
   };
 
   views.signup = function signup(route) {
-    if (Y.me) { setTimeout(() => Y.navigate(Y.HOME, { replace: true }), 0); return { element: h("div"), title: "Nex" }; }
+    if (Y.me) { setTimeout(() => Y.navigate(Y.HOME, { replace: true }), 0); return { element: h("div"), title: "Satürn" }; }
     const holder = swapper((redraw) => (startState() === "accepted" || route.google ? signupView(route).element : consent({
       onAccept: () => { setStart("accepted"); redraw(); },
       onLogin: () => { setStart("login"); Y.navigate("/i/login"); },

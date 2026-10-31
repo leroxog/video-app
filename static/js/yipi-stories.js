@@ -1,4 +1,4 @@
-/* Nex stories (yipi-stories.js): the row of round pictures at the top of Home, like on Snapchat and Instagram. Yours comes first with a "+" to add a photo or a short video
+/* Satürn stories (yipi-stories.js): the row of round pictures at the top of Home, like on Snapchat and Instagram. Yours comes first with a "+" to add a photo or a short video
    (at most 30 seconds); then the people you follow who have a story from the last 24 hours, the ones you have not seen yet first, with a dark ring (grey once you have seen
    them all). A tap opens the stories full screen: bars at the top show how far it is, a tap on the right side goes on, on the left side back, holding stops it, and when
    somebody's stories are over the next person's start. Stories disappear after 24 hours (the server removes them). */

@@ -1,4 +1,4 @@
-/* Nex 3D lenses (pl-ar.js): the part of the lenses that is really three-dimensional, drawn with three.js (MIT, static/js/vendor/three) on a canvas of its own that lies under the 2D canvas
+/* Satürn 3D lenses (pl-ar.js): the part of the lenses that is really three-dimensional, drawn with three.js (MIT, static/js/vendor/three) on a canvas of its own that lies under the 2D canvas
    of pl-face.js. It does three things with the face that the Face Landmarker of MediaPipe finds in every picture of the camera (on the device of the person, nothing is sent anywhere):
    1. WARPS: the picture of the camera is drawn by a shader, and big eyes, a big head, a big nose or a big mouth are real distortions of that picture around the points of the face
       (the eye is magnified where the eye is, not in a circle somewhere near it).
@@ -127,7 +127,7 @@
       this.needsVideo = false;
       this.W = 0;
       this.H = 0;
-      this.init().catch((error) => { this.failed = true; this.error = error; try { console.warn("Nex: the 3D lenses do not run on this device", error); } catch (problem) { /* no console */ } });
+      this.init().catch((error) => { this.failed = true; this.error = error; try { console.warn("Satürn: the 3D lenses do not run on this device", error); } catch (problem) { /* no console */ } });
     }
 
     async init() {

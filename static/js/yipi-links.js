@@ -1,4 +1,4 @@
-/* Nex links (yipi-links.js): a link in a post, a video, a comment or a chat gets a card (picture, title, text, site) and opens in a window of Nex itself, so that nobody has to
+/* Satürn links (yipi-links.js): a link in a post, a video, a comment or a chat gets a card (picture, title, text, site) and opens in a window of Satürn itself, so that nobody has to
    leave the page. `Y.linkCardFor(text)` makes the card for the first outside link in a text (or nothing), `Y.openSite(href)` opens the window.
    The server fetches the card and serves its pictures (yipi_links.py); the reader's browser never talks to the linked site until the window is opened. A page that forbids being
    shown in a frame (most big sites do) is not forced: the window then shows what the card knows and a button that opens the page in the browser. */
@@ -19,7 +19,7 @@
     return known.get(href);
   }
 
-  /* The first link in a text that does not lead to Nex itself. */
+  /* The first link in a text that does not lead to Satürn itself. */
   function firstOutside(text) {
     if (!text) return null;
     for (const piece of Core.tokenize(text)) if (piece.type === "url" && isOutside(piece.href)) return piece.href;
@@ -92,7 +92,7 @@
       if (!view.isConnected) return;
       if (!data) {
         title.textContent = domain.textContent || "Webseite";
-        fill(body, h("div", { class: "sv-fallback" }, h("h2", {}, "Diese Seite lässt sich hier nicht zeigen"), h("p", { class: "muted" }, "Sie antwortet nicht, oder Nex darf sie nicht abrufen."),
+        fill(body, h("div", { class: "sv-fallback" }, h("h2", {}, "Diese Seite lässt sich hier nicht zeigen"), h("p", { class: "muted" }, "Sie antwortet nicht, oder Satürn darf sie nicht abrufen."),
           h("a", { class: "btn primary", href, target: "_blank", rel: "noopener noreferrer nofollow ugc" }, "Im Browser öffnen")));
         return;
       }
@@ -100,7 +100,7 @@
       if (data.embeddable) {
         const frame = h("iframe", { class: "sv-frame", src: data.embed || data.url, title: data.title || data.domain, referrerpolicy: "no-referrer", loading: "eager",
           sandbox: "allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-presentation", allow: "fullscreen; picture-in-picture; encrypted-media" });
-        fill(body, h("div", { class: "sv-warn" }, icon("warn"), h("span", {}, `Das ist eine Seite von ${data.domain}, nicht von Nex. Gib hier keine Passwörter ein, die du nicht dort benutzt.`)), frame);
+        fill(body, h("div", { class: "sv-warn" }, icon("warn"), h("span", {}, `Das ist eine Seite von ${data.domain}, nicht von Satürn. Gib hier keine Passwörter ein, die du nicht dort benutzt.`)), frame);
         return;
       }
       fill(body, h("div", { class: "sv-fallback" },

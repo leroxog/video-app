@@ -1,7 +1,7 @@
-/* Nex music (yipi-music.js): songs for the clips of the camera. `Y.music.pick({upload, onPick})` is the window to choose a song (search, preview, "Zufällig", the start second, and for a lens
+/* Satürn music (yipi-music.js): songs for the clips of the camera. `Y.music.pick({upload, onPick})` is the window to choose a song (search, preview, "Zufällig", the start second, and for a lens
    also a file from the folder of the person); `Y.music.player()` plays the chosen song while a clip is recorded and mixes it with the microphone into the sound of the clip; `credit(song)` is the line
    that stands in the clip (the author and the licence of the song). Only music that may be used is offered (the server asks the Internet Archive for audio with a Creative Commons licence that
-   allows it, yipi_music.py) and nothing connects to another site: the audio comes from the server of Nex. A song is {src: "archive", id, file, title, creator, licence, licenceUrl, length, start}
+   allows it, yipi_music.py) and nothing connects to another site: the audio comes from the server of Satürn. A song is {src: "archive", id, file, title, creator, licence, licenceUrl, length, start}
    or {src: "upload", media, title, start}. */
 (function () {
   "use strict";
@@ -100,7 +100,7 @@
       if (file.size > 8_000_000) { status.textContent = "Die Datei ist zu groß (höchstens 8 MB)."; return; }
       status.textContent = "Der Song wird hochgeladen …";
       const up = await Api.uploadSong(file, file.name.replace(/\.[^.]+$/, ""));
-      if (!up.ok) { status.textContent = up.data && up.data.error === "bad_audio" ? "Das ist keine Audio-Datei, die Nex kennt (MP3, Ogg, M4A, WAV)." : Api.message(up); return; }
+      if (!up.ok) { status.textContent = up.data && up.data.error === "bad_audio" ? "Das ist keine Audio-Datei, die Satürn kennt (MP3, Ogg, M4A, WAV)." : Api.message(up); return; }
       entry.close();
       onPick({ src: "upload", media: up.data.media.id, title: up.data.media.title || file.name.replace(/\.[^.]+$/, ""), start: 0, url: up.data.media.url });
     });

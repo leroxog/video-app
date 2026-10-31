@@ -1,4 +1,4 @@
-/* Nex core (the file keeps the name yipi-core.js): everything about the page that does not need a screen, as plain functions -- cutting a text into
+/* Satürn core (the file keeps the name yipi-core.js): everything about the page that does not need a screen, as plain functions -- cutting a text into
    links, mentions and hashtags, counting characters the way the server does, German times and counts, the addresses of
    the pages, grouping notifications, and the arithmetic for picture sizes. It runs in the browser and in Node (that is
    how the tests run it). */
@@ -9,7 +9,7 @@
   "use strict";
 
   const MAX_POST = 280;
-  const HOME = "/";                                      // the home page of Nex is the home page of the site
+  const HOME = "/";                                      // the home page of Satürn is the home page of the site
   const MAX_MEDIA = 3;                                  // photos per post (yipi.py: MAX_MEDIA)
   const MAX_VIDEO_BYTES = 25 * 1024 * 1024;             // a video (yipi.py: MAX_VIDEO_BYTES)
   const MAX_VIDEO_SECONDS = 30;                         // and how long it may be (only the browser can measure that; the milliseconds do not count)
@@ -400,8 +400,8 @@
     return { options, valid: !problem, problem };
   }
 
-  // --------------------------------------------------------------------------------------------- Nex
-  const NEX_CHATS = 30;                                 // how many conversations with Nex are kept in this browser
+  // --------------------------------------------------------------------------------------------- Satürn
+  const NEX_CHATS = 30;                                 // how many conversations with Satürn are kept in this browser
 
   /* The name of a conversation: its first question, cut to fit. */
   function nexTitle(text) {
@@ -467,7 +467,7 @@
     return clean.slice(-keep);
   }
 
-  /* An answer of Nex cut into paragraphs and lists: [{type: "p", text} | {type: "list", items: [text]}]. A blank line starts a new
+  /* An answer of Satürn cut into paragraphs and lists: [{type: "p", text} | {type: "list", items: [text]}]. A blank line starts a new
      paragraph; lines that begin with "- ", "* ", "• " or "1. " are the items of a list. */
   function nexBlocks(text) {
     const blocks = [];

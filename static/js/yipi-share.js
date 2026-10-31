@@ -1,7 +1,7 @@
-/* Nex share page (yipi-share.js): what somebody sees who is NOT signed in and opens the link of a post that was sent to them. A video plays once,
+/* Satürn share page (yipi-share.js): what somebody sees who is NOT signed in and opens the link of a post that was sent to them. A video plays once,
    as big as the screen (with sound if the browser allows it). When it is over -- or when the person swipes, scrolls or presses a key to get
    to the next one -- the next video appears, but blurred, without sound, running in a loop, the page can no longer be scrolled and an invitation to
-   sign up stands in front of it. A post without a video is shown as a card with the same invitation. Nothing else of Nex is open without an account. */
+   sign up stands in front of it. A post without a video is shown as a card with the same invitation. Nothing else of Satürn is open without an account. */
 (function () {
   "use strict";
 
@@ -31,7 +31,7 @@
 
     function top() {
       return h("div", { class: "share-top" },
-        h("span", { class: "share-brand" }, Icons.logo(), "Nex"),
+        h("span", { class: "share-brand" }, Icons.logo(), "Satürn"),
         h("button", { class: "btn ghost small", type: "button", onclick: () => Y.navigate("/i/login") }, "Anmelden"));
     }
 
@@ -102,7 +102,7 @@
     })();
 
     return {
-      element: el, title: "Nex",
+      element: el, title: "Satürn",
       destroy() { dead = true; for (const undo of cleanups.splice(0)) undo(); },
     };
   };

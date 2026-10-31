@@ -1,4 +1,4 @@
-/* Nex games: the 3D car race (pg-race3d.js). A real 3D road made with three.js (the same files as the 3D lenses, loaded when the game is opened first): a sports car with paint, glass and
+/* Satürn games: the 3D car race (pg-race3d.js). A real 3D road made with three.js (the same files as the 3D lenses, loaded when the game is opened first): a sports car with paint, glass and
    reflections drives on a motorway behind other cars, vans and lorries, the camera floats behind it. The road fills only the lower part of the picture and fades out at the horizon, so
    the player (the camera of the phone) is seen above it, with no bubble. Steer with the finger (the car drives to where the finger is) or the arrow keys; coins give points, the blue
    lightning gives nitro. The car has a spring-damper suspension (it rolls in the curves of the steering, dips when it brakes, rises when it speeds up) and crashes with a tumble.

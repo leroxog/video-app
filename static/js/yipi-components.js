@@ -1,4 +1,4 @@
-/* Nex components (the file keeps the name yipi-components.js): the parts that make the page -- a post (card with its buttons and
+/* Satürn components (the file keeps the name yipi-components.js): the parts that make the page -- a post (card with its buttons and
    menus), the box to write a post (with photos or one GIF, emojis and the ring that counts characters), a row for a person with its
    follow button, and the dialogs to compose and to report. Photos are made smaller in the browser before they are sent (which also
    removes where and with what they were taken). Videos are not taken at all. */
@@ -41,7 +41,7 @@
   /* What goes with a link when somebody sends a post or a video: the page does not say "look at this", it says it like a person would. */
   function shareText(item) {
     const video = !!(item && item.media && item.media.some((entry) => entry.video));
-    return video ? "Ich habe ein tolles Video auf Nex gefunden willst du es auch sehen?!" : "Ich habe einen tollen Beitrag auf Nex gefunden willst du ihn auch sehen?!";
+    return video ? "Ich habe ein tolles Video auf Satürn gefunden willst du es auch sehen?!" : "Ich habe einen tollen Beitrag auf Satürn gefunden willst du ihn auch sehen?!";
   }
 
   /* The entries of the menus that share a post: copy the link, send it to somebody in a message, the share sheet of the phone. */
@@ -53,7 +53,7 @@
       Y.qr ? { label: "QR-Code", icon: "qr", run: () => Y.qr.dialog({ path: postPath(item), title: video ? "QR-Code des Videos" : "QR-Code des Beitrags", subtitle: `von @${item.user.handle}` }) } : null,
       { label: "Per Nachricht senden", icon: "mail", run: () => sendPostDialog(item) },
       navigator.share ? { label: "Teilen …", icon: "share", run: async () => {
-        try { await navigator.share({ url: absolute(postPath(item)), title: `${item.user.name} auf Nex`, text: shareText(item) }); } catch (error) { /* closed */ }
+        try { await navigator.share({ url: absolute(postPath(item)), title: `${item.user.name} auf Satürn`, text: shareText(item) }); } catch (error) { /* closed */ }
       } } : null,
     ];
   }
@@ -335,7 +335,7 @@
     return entry;
   }
 
-  /* The "Fact Check" under a post whose claim is wrong (like the notes of X): written by Nex, the AI, which can be wrong, so there is a way to say so. */
+  /* The "Fact Check" under a post whose claim is wrong (like the notes of X): written by Satürn, the AI, which can be wrong, so there is a way to say so. */
   function factBox(item) {
     const note = item.factCheck;
     return h("div", { class: `factcheck ${note.status}`, role: "note" },

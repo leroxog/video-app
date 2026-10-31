@@ -1,4 +1,4 @@
-"""Nex, round 6: what brings people back -- the streak of days, level and badges, the lists of the best players, hearts on chat messages, the flame of
+"""Satürn, round 6: what brings people back -- the streak of days, level and badges, the lists of the best players, hearts on chat messages, the flame of
 two friends who write every day, and notifications on the device (Web Push)."""
 import base64
 import os
@@ -228,7 +228,7 @@ def test_a_like_a_message_and_a_follow_send_a_notification_to_the_other_device(c
     user.last_seen_at = yipi.utcnow() - timedelta(minutes=10)
     db.session.commit()
     api(ben, "post", "/users/mia/follow", {}, status=200)
-    assert len(sent) == 1 and sent[0][0] == subscription(1)["endpoint"] and sent[0][1]["title"] == "Nex" and "folgt dir" in sent[0][1]["body"] and sent[0][1]["url"] == "/ben"
+    assert len(sent) == 1 and sent[0][0] == subscription(1)["endpoint"] and sent[0][1]["title"] == "Satürn" and "folgt dir" in sent[0][1]["body"] and sent[0][1]["url"] == "/ben"
     api(mia, "post", "/users/ben/follow", {}, status=200)
     user.last_seen_at = yipi.utcnow() - timedelta(minutes=10)
     db.session.commit()

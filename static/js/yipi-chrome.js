@@ -1,5 +1,5 @@
-/* Nex frame (yipi-chrome.js): the parts around the pages -- the bar at the top (on a phone held upright your picture on the left that opens your profile and the lettering
-   "Nex" in a slightly darker grey row; sideways or on a computer the three lines that fold the side bar out, the lettering, the search, the bell and the "+" at the right
+/* Satürn frame (yipi-chrome.js): the parts around the pages -- the bar at the top (on a phone held upright your picture on the left that opens your profile and the lettering
+   "Satürn" in a slightly darker grey row; sideways or on a computer the three lines that fold the side bar out, the lettering, the search, the bell and the "+" at the right
    edge), the side bar (always folded in to its symbols until the three lines are pressed) and the small boxes marked "¡ Gesponsert": the places where advertisements will
    go one day (the end of the side bar, every fifth video, every seventh post, the end of the chat list, the top of the videos on a phone). Nothing is sold or shown yet. */
 (function () {
@@ -21,7 +21,7 @@
     const me = Y.me;
     const menu = h("button", { class: "appbar-btn appbar-menu", type: "button", "aria-label": "Seitenleiste ein- oder ausklappen", "aria-expanded": "false", onclick: () => Y.toggleRail() }, icon("menuLines"));
     const mine = link(`/${me.handle}`, { class: "appbar-me", "aria-label": "Dein Profil" }, avatar(me, "md"));
-    const brand = link(Y.HOME, { class: "appbar-brand", "aria-label": "Nex, zur Startseite" }, Icons.wordmark());
+    const brand = link(Y.HOME, { class: "appbar-brand", "aria-label": "Satürn, zur Startseite" }, Icons.logo(), Icons.wordmark());
     const pulse = h("span", { class: "appbar-pulse", "aria-hidden": "true" });
     const search = h("div", { class: "appbar-search" }, Y.searchForm(""));
     const find = link("/explore", { class: "appbar-btn appbar-find", "aria-label": "Suchen" }, icon("search"));

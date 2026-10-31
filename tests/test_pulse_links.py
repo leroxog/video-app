@@ -1,6 +1,6 @@
-"""Nex: link previews (yipi_links.py and the two routes). The fetching of an address somebody else chose must never reach the inner network of the server: private, loopback and
+"""Satürn: link previews (yipi_links.py and the two routes). The fetching of an address somebody else chose must never reach the inner network of the server: private, loopback and
 link-local addresses are refused (also behind a redirect and behind a name that points there), only the usual ports and schemes are fetched, the page is read in pieces, and the answer
-is plain text plus the address of a picture that Nex serves itself."""
+is plain text plus the address of a picture that Satürn serves itself."""
 import os
 import socket
 import sys
@@ -223,7 +223,7 @@ def test_the_route_needs_a_login_and_hands_out_cards_with_pictures_of_our_own(cl
     serve(monkeypatch, FakeResponse(200, {"Content-Type": "text/html; charset=utf-8"}, PAGE))
     data = ana.get("/api/yipi/link-preview?url=https://example.org/artikel").get_json()
     assert data["ok"] and data["title"] == "Ein & Titel" and data["domain"] == "example.org"
-    assert data["image"].startswith("/yipi-linkimg?u=https%3A%2F%2Fexample.org%2Fbild.jpg"), "the picture is served by Nex, not hot-linked"
+    assert data["image"].startswith("/yipi-linkimg?u=https%3A%2F%2Fexample.org%2Fbild.jpg"), "the picture is served by Satürn, not hot-linked"
     bad = ana.get("/api/yipi/link-preview?url=http://169.254.169.254/latest/")
     assert bad.status_code == 400 and bad.get_json()["error"] == "bad_link"
     assert ana.get("/api/yipi/link-preview").get_json()["error"] == "bad_link"

@@ -1,4 +1,4 @@
-/* Nex face lenses (pl-face.js): masks and funny faces that follow your face live, like the lenses of Snapchat. A model of Google (MediaPipe Face Landmarker, Apache 2.0,
+/* Satürn face lenses (pl-face.js): masks and funny faces that follow your face live, like the lenses of Snapchat. A model of Google (MediaPipe Face Landmarker, Apache 2.0,
    static/js/vendor/mediapipe) finds 478 points of the face in every picture of the camera, on your own device (nothing is sent anywhere); the effects below are drawn with
    them on a canvas that lies over the camera picture (and goes into the recording like a game does). A lens is a recipe: a list of effect names and a colour filter
    (yipi-lenses.js has the recipes of the ready-made lenses; a lens somebody wrote as a prompt is turned into such a recipe by the server). The file is loaded when the

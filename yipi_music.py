@@ -1,6 +1,6 @@
-"""Nex music (yipi_music.py): songs for the clips of the camera. Only music that may be used is offered: audio of the Internet Archive that carries a Creative Commons licence that allows it
+"""Satürn music (yipi_music.py): songs for the clips of the camera. Only music that may be used is offered: audio of the Internet Archive that carries a Creative Commons licence that allows it
 (CC0, CC BY, CC BY-SA: no "non commercial" and no "no derivatives", because a song under a video is a use that those licences do not allow) and files that a person uploads from their own
-folder. The Internet Archive is asked on the server (a search, the data of one item) and the audio is passed on by the server (`stream`), so the page of Nex never connects to another
+folder. The Internet Archive is asked on the server (a search, the data of one item) and the audio is passed on by the server (`stream`), so the page of Satürn never connects to another
 site and the browser can mix the song into the recording. Nothing here runs as code. The honest size of the offer is what the Internet Archive has under these licences: some 400 000 audio
 items (songs, albums, sessions; a part of them is not music), see `count()`."""
 import random

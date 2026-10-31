@@ -1,4 +1,4 @@
-/* Nex icons (the file keeps the name yipi-icons.js): the small pictures of the page and the logo, drawn in code (all original).
+/* Satürn icons (the file keeps the name yipi-icons.js): the small pictures of the page and the logo, drawn in code (all original).
    `YipiIcons.icon(name)` gives an <svg> element that takes the colour of the text around it; `YipiIcons.logo()` the heartbeat on its
    black tile. The only place in the page that uses innerHTML is here, for these fixed drawings. */
 (function () {
@@ -104,6 +104,7 @@
     micOff: S('<path d="M15 9.500V6a3 3 0 00-5.700-1.300M9 9v2a3 3 0 004.500 2.600"/><path d="M5.500 11.500a6.500 6.500 0 009.800 5.600M18.500 11.500c0 .9-.2 1.700-.5 2.500M12 18v3M9 21h6M3 3l18 18"/>'),
     minimize: S('<path d="M5 14h5v5M19 10h-5V5M10 14l-6 6M14 10l6-6"/>'),
     maximize: S('<path d="M4 9V4h5M20 15v5h-5M4 4l6 6M20 20l-6-6"/>'),
+    captions: S('<rect x="3" y="5" width="18" height="14" rx="3.500"/><path d="M10.400 10.200a2.300 2.300 0 100 3.600M16.400 10.200a2.300 2.300 0 100 3.600"/>'),
     flip: S('<path d="M4 9a8 8 0 0114-3l2 2M20 4v4h-4M20 15a8 8 0 01-14 3l-2-2M4 20v-4h4"/>'),
     sponsor: S('<rect x="3.500" y="3.500" width="17" height="17" rx="5"/><circle cx="12" cy="8" r="1.200" fill="currentColor" stroke="none"/><path d="M12 11.500v5"/>'),
     flame: S('<path d="M12 2.500c0 3.500-5.500 6-5.500 11a5.500 5.500 0 0011 0c0-2.500-1.200-4-2.300-5.200-.2 1.800-1 2.700-2 3C13.300 8.500 12.500 5.500 12 2.500z"/>'),
@@ -120,20 +121,17 @@
     return holder.firstElementChild;
   }
 
-  /* The heartbeat of Nex, white on a black tile (the same drawing as static/img/pulse-icon.svg). */
+  /* The planet of Satürn (the picture static/img/saturn-mark.png, purple on a see-through background) inside an <svg>, so that every place that sizes the logo as an svg keeps working. */
   function logo() {
     const holder = document.createElement("span");
-    holder.innerHTML = `<svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">
-      <rect x="2.500" y="2.500" width="59" height="59" rx="16" fill="#000" stroke="#767676" stroke-width="1.500"/>
-      <path d="M11.800 33.700L22.800 33.700L27.800 19.400L36.200 46.300L41.200 30.300L45.400 33.700L52.200 33.700" fill="none" stroke="#fff" stroke-width="5.500" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    holder.innerHTML = `<svg viewBox="0 0 64 64" aria-hidden="true" focusable="false"><image href="/static/img/saturn-mark.png" x="0" y="0" width="64" height="64" preserveAspectRatio="xMidYMid meet"/></svg>`;
     return holder.firstElementChild;
   }
 
-  /* The lettering "Nex": three letters drawn with fat round strokes, leaning forward a little; it takes the colour of the text around it. */
+  /* The lettering "Satürn": the rounded letters of Nunito in the heaviest weight, leaning forward a little; it takes the colour of the text around it. */
   function wordmark() {
     const holder = document.createElement("span");
-    holder.innerHTML = `<svg viewBox="0 0 92 40" role="img" aria-label="Nex" focusable="false"><g transform="skewX(-7) translate(4 0)" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M8 33V7l19 26V7"/><path d="M36 21h19a9.500 9.500 0 10-2.800 6.700"/><path d="M62 12l19 21M81 12L62 33"/></g></svg>`;
+    holder.innerHTML = `<svg viewBox="0 0 132 40" role="img" aria-label="Satürn" focusable="false"><text x="4" y="31" transform="skewX(-7)" textLength="120" lengthAdjust="spacingAndGlyphs" fill="currentColor" font-family="Nunito, 'Segoe UI Rounded', 'Varela Round', system-ui, sans-serif" font-size="33" font-weight="1000">Satürn</text></svg>`;
     return holder.firstElementChild;
   }
 

@@ -1,6 +1,6 @@
-"""Nex rankings that people make themselves (yipi_ranking.py): a person gives a ranking a title, a Top 5 or Top 10 and a list of entries (a name and a picture each), and everybody on Nex
+"""Satürn rankings that people make themselves (yipi_ranking.py): a person gives a ranking a title, a Top 5 or Top 10 and a list of entries (a name and a picture each), and everybody on Satürn
 can play it in the camera (the reel above the head, see static/js/pg-rank.js). The list is stored as JSON in the row of the game (kind "ranking"); a picture is a file of the person on
-Nex (uploaded, or fetched here from Wikimedia Commons for the person: only thumbnails of freely licensed pictures from upload.wikimedia.org, with the author and the licence kept for the
+Satürn (uploaded, or fetched here from Wikimedia Commons for the person: only thumbnails of freely licensed pictures from upload.wikimedia.org, with the author and the licence kept for the
 page /bildnachweise). The AI can suggest the entries for a title. Nothing from a person ever runs as code."""
 import json
 import re

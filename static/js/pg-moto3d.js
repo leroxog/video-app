@@ -1,4 +1,4 @@
-/* Nex games: the 3D motorbike (pg-moto3d.js). A sports bike with a rider rides along a track of hills, bumps and ramps, seen from the side and a bit from the front (three.js, loaded when the game
+/* Satürn games: the 3D motorbike (pg-moto3d.js). A sports bike with a rider rides along a track of hills, bumps and ramps, seen from the side and a bit from the front (three.js, loaded when the game
    is opened first, like the car race). Only the track and the bike are drawn: the player (the camera of the phone) is the background. Gas on the right, brake on the left, and in the air the
    same buttons turn the bike (gas: nose down, brake: nose up). The bike is a real rigid body in the plane: its mass and its turning weight, two tyres that are springs with damping and that
    push on the ground along its normal, an engine that pushes at the back tyre (so the front goes up when it speeds up on a slope: wheelies come by themselves), brakes that grip as much as the

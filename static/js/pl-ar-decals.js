@@ -1,4 +1,4 @@
-/* Nex 3D lenses, the paint (pl-ar-decals.js): pictures painted on the map of the face (see pl-ar.js). `decal(g, d)` paints on a canvas of 1024 x 1024 whose places are the places of the 468
+/* Satürn 3D lenses, the paint (pl-ar-decals.js): pictures painted on the map of the face (see pl-ar.js). `decal(g, d)` paints on a canvas of 1024 x 1024 whose places are the places of the 468
    points of the face: d.at(i) is the place of point i, d.poly(ids, grow) makes a path through points, d.region(test) makes a mask of the triangles of the face whose points pass the test
    (the points are given as {x, y, z} of the canonical face in centimetres: y < -2.5 is the lower face). What is painted sticks to the skin and follows every expression. The knitted
    hood of the balaclava is a `hood`: a piece of knitted cloth around the head, drawn behind the face. */

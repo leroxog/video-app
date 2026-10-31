@@ -1,4 +1,4 @@
-/* Nex views, part 2 (the file keeps the name yipi-pages.js): messages, settings, moderation, the pages to sign in and sign up, and the
+/* Satürn views, part 2 (the file keeps the name yipi-pages.js): messages, settings, moderation, the pages to sign in and sign up, and the
    pages for "not found" and "please sign in". Same shape as part 1: each view is a function (route, ctx) answering {element, title, ...}. */
 (function () {
   "use strict";
@@ -46,7 +46,7 @@
       h("section", { class: "card" }, h("h2", {}, "Dein Konto"),
         h("dl", { class: "facts" }, h("dt", {}, "Nutzername"), h("dd", {}, `@${me.handle}`), h("dt", {}, "E-Mail"), h("dd", {}, me.email || "nicht angegeben"), h("dt", {}, "Dabei seit"), h("dd", {}, Core.joinedLabel(me.createdAt).replace("Beigetreten ", "")))),
       h("section", { class: "card" }, h("h2", {}, "Passwort ändern"), field("Aktuelles Passwort", oldPassword), field("Neues Passwort", newPassword, "Mindestens 8 Zeichen."), passwordError, changePassword,
-        h("p", { class: "muted small" }, "Nex verschickt keine E-Mails. Ein vergessenes Passwort lässt sich deshalb nicht zurücksetzen. Bewahre es sicher auf.")),
+        h("p", { class: "muted small" }, "Satürn verschickt keine E-Mails. Ein vergessenes Passwort lässt sich deshalb nicht zurücksetzen. Bewahre es sicher auf.")),
       h("section", { class: "card danger-zone" }, h("h2", {}, "Konto löschen"),
         h("p", { class: "muted" }, "Dabei werden dein Profil, alle deine Beiträge, Fotos, Sticker, Nachrichten und Likes endgültig gelöscht. Das lässt sich nicht rückgängig machen."),
         button("Konto löschen …", "danger", () => {
@@ -108,12 +108,12 @@
       h("section", { class: "card" }, h("h2", {}, "Rechtliches"),
         h("ul", { class: "plain-links" }, ["nutzungsbedingungen|Nutzungsbedingungen und Regeln", "datenschutz|Datenschutzerklärung", "impressum|Impressum", "bildnachweise|Bildnachweise (freie Sticker)"].map((entry) => { const [path, text] = entry.split("|"); return h("li", {}, h("a", { href: `/${path}` }, text, icon("chevron"))); }))),
       h("section", { class: "card" }, h("h2", {}, "Hilfe"),
-        h("p", { class: "muted small" }, "Beiträge sind öffentlich. Nachrichten sind nur für die Beteiligten sichtbar (zwei Personen oder die Mitglieder einer Gruppe), aber nicht Ende-zu-Ende-verschlüsselt. Etwas Unpassendes siehst du? Tippe beim Beitrag, beim Sticker oder beim Profil auf „Melden“. In einem Beitrag gehen bis zu 3 Fotos, ein Sticker, eine Umfrage oder ein Video (bis 30 Sekunden). Mit einem Doppeltipp gibst du einem Beitrag oder Video ein Like und einer Nachricht ein Herz. Ein Video speicherst du über „Teilen“, dann bekommt es ein Nex-Wasserzeichen mit dem Namen der Person, die es gemacht hat. In der Kamera spielst du Spiele und nimmst sie auf, dort gibt es auch die Bestenlisten. Mit der Chat-Sperre (Einstellungen) kommst du in deine Chats nur mit deiner Wisch-Kombination.")),
-      h("section", { class: "card" }, h("h2", {}, "Nex weitersagen"),
-        h("p", { class: "muted" }, "Zeig den QR-Code von Nex: Wer ihn scannt, kommt direkt hierher."),
-        h("button", { class: "btn primary", type: "button", onclick: () => Y.qr.dialog({ path: "/", title: "Nex weitersagen", subtitle: "Scannen öffnet Nex." }) }, icon("qr"), "QR-Code von Nex")),
-      h("section", { class: "card" }, h("h2", {}, "Über Nex"),
-        h("p", { class: "muted" }, "Nex ist ein unabhängiges, kostenloses Projekt, ohne Werbung und ohne Tracking. Es speichert nur ein Anmelde-Cookie, wenn du dich anmeldest, und deine Einstellungen im Browser. Nex AI, die KI, antwortet mit Hilfe eines KI-Dienstes (Groq): was du Nex AI schreibst, wird dafür an den Server und von dort an den Dienst geschickt, aber nicht gespeichert.")));
+        h("p", { class: "muted small" }, "Beiträge sind öffentlich. Nachrichten sind nur für die Beteiligten sichtbar (zwei Personen oder die Mitglieder einer Gruppe), aber nicht Ende-zu-Ende-verschlüsselt. Etwas Unpassendes siehst du? Tippe beim Beitrag, beim Sticker oder beim Profil auf „Melden“. In einem Beitrag gehen bis zu 3 Fotos, ein Sticker, eine Umfrage oder ein Video (bis 30 Sekunden). Mit einem Doppeltipp gibst du einem Beitrag oder Video ein Like und einer Nachricht ein Herz. Ein Video speicherst du über „Teilen“, dann bekommt es ein Satürn-Wasserzeichen mit dem Namen der Person, die es gemacht hat. In der Kamera spielst du Spiele und nimmst sie auf, dort gibt es auch die Bestenlisten. Mit der Chat-Sperre (Einstellungen) kommst du in deine Chats nur mit deiner Wisch-Kombination.")),
+      h("section", { class: "card" }, h("h2", {}, "Satürn weitersagen"),
+        h("p", { class: "muted" }, "Zeig den QR-Code von Satürn: Wer ihn scannt, kommt direkt hierher."),
+        h("button", { class: "btn primary", type: "button", onclick: () => Y.qr.dialog({ path: "/", title: "Satürn weitersagen", subtitle: "Scannen öffnet Satürn." }) }, icon("qr"), "QR-Code von Satürn")),
+      h("section", { class: "card" }, h("h2", {}, "Über Satürn"),
+        h("p", { class: "muted" }, "Satürn ist ein unabhängiges, kostenloses Projekt, ohne Werbung und ohne Tracking. Es speichert nur ein Anmelde-Cookie, wenn du dich anmeldest, und deine Einstellungen im Browser. Nex AI, die KI, antwortet mit Hilfe eines KI-Dienstes (Groq): was du Nex AI schreibst, wird dafür an den Server und von dort an den Dienst geschickt, aber nicht gespeichert.")));
   }
 
   views.settings = function settings(route, ctx) {

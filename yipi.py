@@ -1,4 +1,4 @@
-"""Nex (formerly Pulse; internally still called "yipi": the module, the tables, the cookie and the /api/yipi/ addresses keep that name so that
+"""Satürn (formerly Pulse; internally still called "yipi": the module, the tables, the cookie and the /api/yipi/ addresses keep that name so that
 nothing that already exists breaks): a short-post social network (all code, texts and artwork are original; it works like the
 well-known microblogs, but nothing here is copied from any of them).  Since 2026-10-17 it is the home page of the whole site.
 
@@ -9,7 +9,7 @@ What people do:
   * look at profiles (Posts, Antworten, Medien, Gefällt mir), search for Posts and people, see what is trending (hashtags);
   * get notifications (likes, reposts, replies, quotes, mentions, new followers) and send private messages (text or a GIF);
   * pick a GIF from the shared library, mark favourites, make their own (or upload one) and let others favourite and send it;
-  * ask Nex, the assistant of the site (Groq, streamed word by word), anything -- or let Nex explain a post;
+  * ask Satürn, the assistant of the site (Groq, streamed word by word), anything -- or let Satürn explain a post;
   * block or mute people and report Posts and GIFs; people named in the environment variable YIPI_ADMINS can handle reports.
 
 How it is built:
@@ -93,11 +93,11 @@ MAX_POLL_OPTION = 25                             # characters of one answer of a
 POLL_OPTIONS = (2, 4)                            # fewest and most answers
 POLL_MINUTES = (5, 7 * 24 * 60, 24 * 60)         # shortest, longest and usual running time of a poll
 MAX_VIEWS_AT_ONCE = 40
-NEX_TURNS = 12                                   # how many of the last messages of a Nex conversation are sent along
+NEX_TURNS = 12                                   # how many of the last messages of a Satürn conversation are sent along
 MAX_NEX_MESSAGE = 1500
 NEX_FILES = 3                                     # how many attachments (photos, documents) go with one question
 NEX_IMAGE_CHARS = 900_000                         # a photo the page has made small, as base64
-NEX_DOC_CHARS = 5000                              # how much of the documents of one question Nex gets to read (all together)
+NEX_DOC_CHARS = 5000                              # how much of the documents of one question Satürn gets to read (all together)
 NEX_DOC_BYTES = 8 * 1024 * 1024
 MIN_PASSWORD = 8
 MAX_PASSWORD = 200
@@ -120,7 +120,7 @@ RESERVED_HANDLES = {
     "gomat", "ysound", "root", "system", "staff", "team", "official", "null", "undefined", "me", "you", "intent", "share", "hashtag",
     "yipi_media", "service", "offline", "link", "play", "plm", "auth", "plugins", "music", "servers", "ychat", "ylib", "nrs", "nex", "sound",
     "browser", "server", "play_game", "service_worker", "games", "videos", "chats", "friends", "groups", "camera", "kamera", "pulse",
-    "nexweb", "nexai", "nex_web", "nex_ai", "nexteam", "nexofficial", "nexsupport", "nexhelp", "nexadmin",       # (the official accounts and names that would pretend to be them)
+    "nexweb", "nexai", "nex_web", "nex_ai", "nexteam", "nexofficial", "nexsupport", "nexhelp", "nexadmin", "saturn", "saturnweb", "saturnai", "satuern", "saturnteam", "saturnofficial", "saturnsupport",       # (the official accounts and names that would pretend to be them)
 }
 
 LIMITS = {
@@ -131,7 +131,7 @@ LIMITS = {
     "game-ai": (12, 3600), "music-search": (120, 3600), "music-pick": (60, 3600), "music-up": (30, 3600), "rank-ai": (20, 3600), "rank-search": (90, 3600), "rank-pick": (120, 3600), "report": (20, 3600), "lens-recipe": (30, 3600), "lens-make": (10, 86400), "lens-use": (300, 3600), "game-make": (10, 86400), "game-edit": (120, 3600), "game-play": (400, 3600), "profile": (30, 3600), "search": (120, 600), "block": (60, 3600),
     "gif-make": (20, 3600), "gif-fav": (400, 3600), "gif-use": (300, 3600), "gif-list": (600, 600),
     "share": (240, 600), "attach": (40, 3600), "storage": (120, 3600), "story": (30, 3600), "story-view": (900, 600), "play": (200, 3600), "heart": (300, 3600), "push": (30, 3600), "nex-read": (30, 600), "google": (30, 600), "nex": (40, 600), "nex-flood": (80, 60), "factcheck": (120, 3600), "views": (90, 600), "vote": (200, 3600), "pin": (60, 3600), "group": (12, 3600),
-    "call-start": (30, 3600), "call-poll": (3000, 3600), "call-act": (300, 3600), "call-sync": (12000, 3600),
+    "caption": (600, 3600), "call-start": (30, 3600), "call-poll": (3000, 3600), "call-act": (300, 3600), "call-sync": (12000, 3600),
 }
 _hits = {}
 limiter = RateLimiter(LIMITS, _hits)
@@ -141,7 +141,7 @@ google_auth = CookieAuth("yipi_google", salt="yipi-google-v1", days=1 / 144)    
 # What the pages may load: only our own files (and the pictures people chose, shown from memory before they are sent).
 CONTENT_SECURITY_POLICY = (
     "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self'; "
-    "connect-src 'self'; manifest-src 'self'; frame-src https:; base-uri 'none'; object-src 'none'; form-action 'self'; frame-ancestors 'none'"       # (frame-src: a linked page opens in a window of Nex)
+    "connect-src 'self'; manifest-src 'self'; frame-src https:; base-uri 'none'; object-src 'none'; form-action 'self'; frame-ancestors 'none'"       # (frame-src: a linked page opens in a window of Satürn)
 )
 
 
@@ -153,13 +153,13 @@ def content_security_policy():
     return CONTENT_SECURITY_POLICY.replace("img-src 'self' data: blob:", f"img-src 'self' data: blob: {host}").replace("media-src 'self' blob:", f"media-src 'self' blob: {host}")
 
 
-SITE_NAME = "Nex"
+SITE_NAME = "Satürn"
 # What goes with a link that somebody sends (the preview of the link says it, and so do the messages and the share sheet of the page).
-SHARE_SITE = "Ich habe Nex gefunden!!!!"
-SHARE_VIDEO = "Ich habe ein tolles Video auf Nex gefunden willst du es auch sehen?!"
-SHARE_POST = "Ich habe einen tollen Beitrag auf Nex gefunden willst du ihn auch sehen?!"
+SHARE_SITE = "Ich habe Satürn gefunden!!!!"
+SHARE_VIDEO = "Ich habe ein tolles Video auf Satürn gefunden willst du es auch sehen?!"
+SHARE_POST = "Ich habe einen tollen Beitrag auf Satürn gefunden willst du ihn auch sehen?!"
 POST_PATH_RE = re.compile(r"/([A-Za-z0-9_]{3,15})/status/(\d{1,19})")
-DESCRIPTION = "Nex: Was gerade passiert. Kurze Beiträge, Fotos und Sticker, Antworten, Reposts und Likes, dazu Nex AI, die KI, die dir weiterhilft."
+DESCRIPTION = "Satürn: Was gerade passiert. Kurze Beiträge, Fotos und Sticker, Antworten, Reposts und Likes, dazu Nex AI, die KI, die dir weiterhilft."
 # Old home pages of the site that stay reachable but are not for search engines.
 ARCHIVE_PATHS = ("/nex-agenten-archiv", "/gomat-archiv", "/ysound-archiv", "/sound-archiv", "/server-archiv", "/browser-archiv", "/ylib-archiv", "/ychat-archiv", "/nex-archiv", "/modelle-archiv", "/nex-ai-archiv", "/nstl-archiv")
 PRIVATE_PATHS = ("/i/", "/g/", "/games/", "/camera", "/search", "/messages", "/notifications", "/bookmarks", "/settings", "/moderation")   # not for search engines
@@ -191,7 +191,7 @@ class YipiUser(db.Model):
     email = db.Column(db.String(254), unique=True, nullable=True)
     phone = db.Column(db.String(16), unique=True, nullable=True)               # "+491511234567": a way to sign in (nothing is sent to it, so it is not confirmed)
     google_sub = db.Column(db.String(40), unique=True, nullable=True)          # the id Google gave this person when they signed in with Google
-    streak = db.Column(db.Integer, nullable=False, default=0)                  # days in a row on which the person was on Nex
+    streak = db.Column(db.Integer, nullable=False, default=0)                  # days in a row on which the person was on Satürn
     streak_best = db.Column(db.Integer, nullable=False, default=0)
     last_day = db.Column(db.String(10), nullable=True)                         # the last day (UTC, "2026-10-21") that counted for the streak
     password_hash = db.Column(db.String(255), nullable=False)
@@ -210,7 +210,7 @@ class YipiUser(db.Model):
     last_seen_at = db.Column(db.DateTime, nullable=True)
     agent_kind = db.Column(db.Integer, nullable=True, index=True)              # an AI account (removed again, yipi_agents.py cleans up): None for a person
     hide_ai = db.Column(db.Boolean, nullable=False, default=False)             # (not used any more: the AI accounts are gone)
-    company = db.Column(db.Boolean, nullable=False, default=False)             # an official account of Nex (Nex-Web, Nex-AI; yipi_company.py): nobody can get one
+    company = db.Column(db.Boolean, nullable=False, default=False)             # an official account of Satürn (Satürn-Web, Nex-AI; yipi_company.py): nobody can get one
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -296,6 +296,21 @@ class YipiMedia(db.Model):
     height = db.Column(db.Integer, nullable=False)
     alt = db.Column(db.String(200), nullable=False, default="")
     gif_id = db.Column(db.String(32), nullable=True)                  # the GIF of the library this picture was copied from, if it was
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+
+
+class YipiCaption(db.Model):
+    """What a video says (yipi_captions.py): one row for the language spoken in it ("original"), one for every language it was translated into, one "_pitch" row with the pitch of the voice
+    (a JSON list, one number per tenth of a second), and rows that say why there are no subtitles ("_none", "_error")."""
+    __tablename__ = "yipi_caption"
+    __table_args__ = (db.UniqueConstraint("media_id", "lang"),)
+    id = db.Column(BigId, primary_key=True, autoincrement=True)
+    media_id = db.Column(db.String(32), nullable=False, index=True)
+    lang = db.Column(db.String(12), nullable=False)
+    kind = db.Column(db.String(6), nullable=False, default="text")        # "text" or "pitch"
+    original = db.Column(db.Boolean, nullable=False, default=False)
+    status = db.Column(db.String(8), nullable=False, default="ready")     # "ready", "none" or "error"
+    data = db.Column(db.Text, nullable=False, default="{}")
     created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
 
 
@@ -901,25 +916,25 @@ def gif_info(data):
 
 NEX_MAX_TOKENS = 900                              # the model reasons before it writes: a small number would leave nothing visible
 NEX_PROMPT = (
-    "Du bist Nex AI, die KI der Plattform Nex für kurze Beiträge. Du antwortest dem Nutzer, der gerade mit dir schreibt. "
+    "Du bist Nex AI, die KI der Plattform Satürn für kurze Beiträge. Du antwortest dem Nutzer, der gerade mit dir schreibt. "
     "Das Gespräch steht unten; schreib nur die nächste Antwort von Nex. Antworte kurz, klar und freundlich, in der Sprache des Nutzers "
     "(meist Deutsch), in normalem Text ohne Sternchen, ohne Überschriften und ohne Tabellen; für Aufzählungen nimm einfache Zeilen mit "
     "'- '. Entscheide dich für die wahrscheinlichste Deutung, statt nachzufragen. Wenn du etwas nicht sicher weißt, sag es offen. "
     "Du hilfst beim Schreiben von Beiträgen (höchstens 280 Zeichen), erklärst Beiträge und beantwortest Fragen. Du kannst keine Seiten "
-    "öffnen und nichts in Nex ändern. Gib nie Medizin-, Rechts- oder Finanzberatung als sicher aus."
+    "öffnen und nichts in Satürn ändern. Gib nie Medizin-, Rechts- oder Finanzberatung als sicher aus."
 )
 
 
 # The modes of Nex AI (2026-10-30): the person picks one above the chat; only its name is shown, the instructions below stay on the server.
 NEX_SUPER_PROMPT = (
-    "Du bist Nex AI im Modus „Superintelligent“, die KI der Plattform Nex. Du antwortest dem Nutzer, der gerade mit dir schreibt; das Gespräch steht unten, schreib nur die nächste Antwort von Nex. "
+    "Du bist Nex AI im Modus „Superintelligent“, die KI der Plattform Satürn. Du antwortest dem Nutzer, der gerade mit dir schreibt; das Gespräch steht unten, schreib nur die nächste Antwort von Nex. "
     "Nimm dir Zeit und denke gründlich nach, bevor du antwortest. Antworte mit ausführlichen, gut gebauten Sätzen: erkläre Zusammenhänge und Begründungen, nenne passende Beispiele und weise auf "
     "Stolpersteine, Gegenargumente und Unsicherheiten hin. Rechne Schritt für Schritt und prüfe dein Ergebnis, bevor du es nennst. Gliedere lange Antworten in kurze Absätze; für Aufzählungen nimm "
     "einfache Zeilen mit '- '. Antworte in der Sprache des Nutzers (meist Deutsch), in normalem Text ohne Sternchen, ohne Überschriften und ohne Tabellen. Wenn du etwas nicht sicher weißt, sag es "
-    "offen und erfinde nichts. Du kannst keine Seiten öffnen und nichts in Nex ändern. Gib nie Medizin-, Rechts- oder Finanzberatung als sicher aus."
+    "offen und erfinde nichts. Du kannst keine Seiten öffnen und nichts in Satürn ändern. Gib nie Medizin-, Rechts- oder Finanzberatung als sicher aus."
 )
 NEX_HUMAN_PROMPT = (
-    "Du bist Nex AI im Modus „Human“, die KI der Plattform Nex. Du antwortest dem Nutzer, der gerade mit dir schreibt; das Gespräch steht unten, schreib nur die nächste Antwort von Nex. "
+    "Du bist Nex AI im Modus „Human“, die KI der Plattform Satürn. Du antwortest dem Nutzer, der gerade mit dir schreibt; das Gespräch steht unten, schreib nur die nächste Antwort von Nex. "
     "Der Nutzer hat diesen Modus selbst gewählt, er will einen Roast: Du bist ein respektloser, bissiger, schlagfertiger Kumpel, der den Nutzer ständig aufzieht und beleidigt wie unter Freunden. "
     "Mach dich über die Frage, die Ideen, die Rechtschreibung, die Faulheit und die Klugheit des Nutzers lustig, nenn ihn Dummkopf, Hohlbirne, Pfeife, Schnarchnase, Trantüte, Knalltüte oder Depp, "
     "sei kreativ, frech und gemein-witzig, kein Blatt vor dem Mund, ein paar derbe Wörter wie „Mist“ oder „verdammt“ sind in Ordnung. Trotz allem beantwortest du die Frage richtig und hilfreich, "
@@ -931,12 +946,12 @@ NEX_HUMAN_PROMPT = (
     "Finanzberatung als sicher aus."
 )
 NEX_CODE_PROMPT = (
-    "Du bist Nex AI im Modus „Code“, die KI der Plattform Nex, und arbeitest wie ein erfahrener Programmierer. Du antwortest dem Nutzer, der gerade mit dir schreibt; das Gespräch steht unten, "
+    "Du bist Nex AI im Modus „Code“, die KI der Plattform Satürn, und arbeitest wie ein erfahrener Programmierer. Du antwortest dem Nutzer, der gerade mit dir schreibt; das Gespräch steht unten, "
     "schreib nur die nächste Antwort von Nex. Schreib sauberen, korrekten, lauffähigen Code für das Programm des Nutzers. Ist die Sprache oder das Ziel unklar, entscheide dich für die "
     "wahrscheinlichste Deutung und sag in einem Satz, wovon du ausgegangen bist. Gib den Code immer in Markdown-Codeblöcken mit Sprachangabe (zum Beispiel ```python), bei einem ganzen Programm "
     "vollständig und nicht nur in Bruchstücken, bei einer Änderung die geänderten Teile mit genug Umfeld. Davor und danach stehen kurze Erklärungen in normalem Text in der Sprache des Nutzers "
     "(meist Deutsch): was der Code tut, wie man ihn startet und worauf man achten muss. Behandle Fehler und Randfälle, nenne Sicherheitsrisiken (Eingaben prüfen, keine Passwörter im Code) und "
-    "erfinde keine Funktionen oder Bibliotheken. Bei einer Fehlermeldung nenne erst die Ursache, dann die Korrektur. Du kannst keinen Code ausführen und nichts in Nex ändern."
+    "erfinde keine Funktionen oder Bibliotheken. Bei einer Fehlermeldung nenne erst die Ursache, dann die Korrektur. Du kannst keinen Code ausführen und nichts in Satürn ändern."
 )
 NEX_MODES = {                                    # name -> instructions, tokens, temperature, model (None = the usual one)
     "normal": {"prompt": NEX_PROMPT, "tokens": NEX_MAX_TOKENS, "temperature": 0.7, "model": None},
@@ -974,7 +989,7 @@ def starter_id(slug):
 
 
 def starter_index():
-    """The GIFs that ship with the site: the ones Nex drew itself (static/gifs/index.json) and the freely licensed ones from Wikimedia Commons
+    """The GIFs that ship with the site: the ones Satürn drew itself (static/gifs/index.json) and the freely licensed ones from Wikimedia Commons
     (static/gifs/cc/index.json, collected by scripts/fetch_cc_gifs.py; the page /bildnachweise credits them)."""
     if not _starters:
         for folder in ("", "cc"):
@@ -1427,7 +1442,7 @@ def notify(user_id, actor, kind, post_id=None):
     db.session.flush()
     where = f"/{actor.handle}" if kind == "follow" else f"/{actor.handle}/status/{post_id}" if post_id else "/notifications"      # (a post opens under any name: the page finds its author)
     if actor.agent_kind is None:                                    # the AI accounts never buzz a phone
-        push_later(user_id, "Nex", PUSH_KINDS[kind].format(name=actor.name), where, tag=f"{kind}-{actor.id}")
+        push_later(user_id, "Satürn", PUSH_KINDS[kind].format(name=actor.name), where, tag=f"{kind}-{actor.id}")
 
 
 def bump(model, row_id, column, amount):
@@ -1647,7 +1662,7 @@ def page_meta(path, guest=False):
     if path == "/camera" or path.startswith("/camera/"):          # (these look like a profile address, so they are answered first)
         return f"Kamera und Games auf {SITE_NAME}", "Spiele vor deiner Selfie-Kamera: das Spiel wird mit dir aufgenommen, und du kannst den Clip posten oder an Freunde schicken."
     if path == "/videos":
-        return f"Videos auf {SITE_NAME}: kommt bald", "Kurze Videos auf Nex. Kommt bald!"
+        return f"Videos auf {SITE_NAME}: kommt bald", "Kurze Videos auf Satürn. Kommt bald!"
     match = re.fullmatch(r"/([A-Za-z0-9_]{3,15})(?:/status/(\d+))?", path)
     if match:
         user = YipiUser.query.filter_by(handle_lc=match.group(1).lower()).first()
@@ -1680,7 +1695,7 @@ def manifest():
 
 # The scripts of the page, in the order they depend on each other. The page loads them as ONE file (/pulse.js, deferred), named after its content, so the
 # browser asks once, keeps it for good and the next visit is instant; the tests read this list.
-PULSE_SCRIPTS = ["yipi-core.js", "yipi-gif-core.js", "yipi-icons.js", "yipi-api.js", "yipi-ui.js", "yipi-fx.js", "yipi-gif.js", "yipi-composer.js", "yipi-components.js", "yipi-calls.js", "yipi-newpost.js",
+PULSE_SCRIPTS = ["yipi-core.js", "yipi-gif-core.js", "yipi-icons.js", "yipi-api.js", "yipi-ui.js", "yipi-fx.js", "yipi-gif.js", "yipi-composer.js", "yipi-components.js", "yipi-calls.js", "yipi-captions.js", "yipi-newpost.js",
                  "yipi-views.js", "yipi-links.js", "yipi-comments.js", "yipi-chats.js", "yipi-lock.js", "yipi-pages.js", "yipi-auth.js", "yipi-share.js", "yipi-progress.js", "yipi-nex.js", "yipi-download.js", "yipi-music.js", "yipi-lenses.js", "yipi-qr.js", "yipi-gamemaker.js", "yipi-camera.js", "yipi-shorts.js", "yipi-videos.js", "yipi-stories.js", "yipi-chrome.js", "yipi.js"]
 # The games of the camera tab are a second file, loaded when the camera tab is opened (about a hundred small games; nobody who only reads needs them).
 PULSE_LENS_SCRIPTS = ["pl-face.js", "pl-ar.js", "pl-ar-models.js", "pl-ar-decals.js"]   # the face lenses (face tracking, the flat effects and the 3D engine): a third file, loaded when the first lens is opened
@@ -1719,7 +1734,7 @@ def compress_response(response):
         if "gzip" not in request.headers.get("Accept-Encoding", "").lower() or response.mimetype not in COMPRESSIBLE:
             return response
         if response.is_streamed and not response.direct_passthrough:
-            return response                                   # a stream (the answer of Nex arrives piece by piece) stays one
+            return response                                   # a stream (the answer of Satürn arrives piece by piece) stays one
         if response.direct_passthrough:
             if int(response.headers.get("Content-Length", "0") or 0) > 3 * 1024 * 1024:
                 return response
@@ -1903,7 +1918,7 @@ def notify_followers_of_post(post, author):
     kinds = {row.content_type.split("/")[0] for row in media_rows(post.id)}
     what = "ein neues Video" if "video" in kinds else "ein neues Foto" if "image" in kinds else "etwas Neues"
     for user_id in targets:
-        push_later(user_id, "Nex", f"{author.name} hat {what} gepostet", f"/{author.handle}/status/{post.id}", tag=f"post-{author.id}")
+        push_later(user_id, "Satürn", f"{author.name} hat {what} gepostet", f"/{author.handle}/status/{post.id}", tag=f"post-{author.id}")
     return len(targets)
 
 
@@ -1931,10 +1946,10 @@ def register_routes(app):
             if request.method not in ("GET", "HEAD") and not same_origin():
                 return fail("forbidden", 403)
             if request.endpoint not in OPEN_ENDPOINTS and current_user() is None:
-                return fail("not_logged_in", 401)             # nothing of Nex is for somebody who is not signed in
+                return fail("not_logged_in", 401)             # nothing of Satürn is for somebody who is not signed in
 
     app.before_request(api_guard)
-    yipi_company.attach(app)                                      # the official accounts (Nex-Web, Nex-AI) are made and post their announcements
+    yipi_company.attach(app)                                      # the official accounts (Satürn-Web, Nex-AI) are made and post their announcements
     yipi_agents.attach(app)                                       # the AI accounts are gone: the first request of a process removes what is left of them (a thread does the work)
 
     @app.after_request
@@ -1991,6 +2006,8 @@ def register_routes(app):
 
     import yipi_calls
     yipi_calls.register(route, need_user, body, find_user)         # calls: the handset in the head of a chat (see yipi_calls.py)
+    import yipi_captions
+    yipi_captions.register(route, need_user)                       # subtitles and the spoken translation of videos (see yipi_captions.py)
 
     def touch(user):
         now = utcnow()
@@ -2198,9 +2215,9 @@ def register_routes(app):
         xp = user.posts_count * 10 + int(likes) * 2 + user.followers_count * 5 + user.following_count + (user.streak_best or 0) * 10 + int(plays) * 2 + friends * 5 + videos * 10
         level, floor, ceiling = level_of(xp)
         badges = [
-            ("first-post", "Hallo Nex", "Dein erster Beitrag", "✍️", 1, user.posts_count), ("likes-10", "Beliebt", "10 Likes für deine Beiträge", "❤️", 10, int(likes)),
+            ("first-post", "Hallo Satürn", "Dein erster Beitrag", "✍️", 1, user.posts_count), ("likes-10", "Beliebt", "10 Likes für deine Beiträge", "❤️", 10, int(likes)),
             ("likes-100", "Star", "100 Likes für deine Beiträge", "🌟", 100, int(likes)), ("followers-10", "Netzwerker", "10 Follower", "👥", 10, user.followers_count),
-            ("friends-5", "Freundeskreis", "5 Freunde (ihr folgt euch gegenseitig)", "🤝", 5, friends), ("streak-3", "Dranbleiber", "3 Tage in Folge auf Nex", "🔥", 3, user.streak_best or 0),
+            ("friends-5", "Freundeskreis", "5 Freunde (ihr folgt euch gegenseitig)", "🤝", 5, friends), ("streak-3", "Dranbleiber", "3 Tage in Folge auf Satürn", "🔥", 3, user.streak_best or 0),
             ("streak-7", "Wochenserie", "7 Tage in Folge", "🔥", 7, user.streak_best or 0), ("streak-30", "Feuerzeug", "30 Tage in Folge", "🏆", 30, user.streak_best or 0),
             ("video", "Filmemacher", "Dein erstes Video", "🎬", 1, int(videos)), ("plays-10", "Spieler", "10 Runden in der Kamera gespielt", "🎮", 10, int(plays)),
             ("games-5", "Allrounder", "5 verschiedene Spiele probiert", "🎯", 5, games), ("chatter", "Plauderer", "50 Nachrichten geschickt", "💬", 50, sent),
@@ -2517,6 +2534,10 @@ def register_routes(app):
             keep_bytes("media", item, data)
             db.session.add(item)
             db.session.commit()
+            if request.form.get("captions") == "1":                              # (a video of a post, not a story: it gets subtitles)
+                import yipi_captions
+                yipi_captions.keep_pitch(item.id, request.form.get("pitch"))     # (the browser measured the pitch of the voice: it tells women from men in the voice of the translation)
+                yipi_captions.later(item.id)                                     # (the sound goes to the speech recognition in the background)
             return jsonify({"ok": True, "media": media_json(item)})
         if len(data) > MAX_IMAGE_BYTES:
             return fail("too_big", 413)
@@ -3722,7 +3743,7 @@ def register_routes(app):
             bump(PulseGif, gif_id, PulseGif.uses, 1)
         db.session.commit()
         for other_member in YipiGroupMember.query.filter(YipiGroupMember.group_id == group.id, YipiGroupMember.user_id != user.id).all():
-            push_later(other_member.user_id, "Nex", f"{user.name} in „{group.name}“", f"/g/{group.id}", tag=f"group-{group.id}")
+            push_later(other_member.user_id, "Satürn", f"{user.name} in „{group.name}“", f"/g/{group.id}", tag=f"group-{group.id}")
         return jsonify({"ok": True, "message": group_message_json(row, {user.id: user}, gifs, user, {stored.id: stored} if stored else None)}), 201
 
     @route("/api/yipi/groups/<int(min=1, max=2147483647):group_id>/poll")
@@ -3848,7 +3869,7 @@ def register_routes(app):
         if other.id in hidden_user_ids(user):
             return fail("blocked", 403)
         if other.company:
-            return fail("official_account", 403)                        # an official account of Nex has no inbox
+            return fail("official_account", 403)                        # an official account of Satürn has no inbox
         if other.agent_kind is not None:
             return fail("ai_account", 403)                              # an AI account does not read or answer messages
         text = clean_text(data.get("text", ""), MAX_DM)
@@ -3875,7 +3896,7 @@ def register_routes(app):
         if gif_id:
             bump(PulseGif, gif_id, PulseGif.uses, 1)
         db.session.commit()
-        push_later(other.id, "Nex", f"{user.name} hat dir geschrieben", f"/messages/{user.handle}", tag=f"dm-{user.id}")
+        push_later(other.id, "Satürn", f"{user.name} hat dir geschrieben", f"/messages/{user.handle}", tag=f"dm-{user.id}")
         return jsonify({"ok": True, "message": message_json(message, gifs, True, favorite_ids(user, [gif_id]), {stored.id: stored} if stored else None), "gate": dm_gate(user, other)}), 201
 
     @route("/api/yipi/messages/<handle>/poll")
@@ -4090,10 +4111,10 @@ def register_routes(app):
         forget_stored(PulseGif, PulseGif.id == gif_id)
         PulseGif.query.filter_by(id=gif_id).delete()
 
-    # ------------------------------------------------------------------------------------------------ Nex
+    # ------------------------------------------------------------------------------------------------ Satürn
     @route("/api/yipi/nex", methods=["POST"])
     def pulse_nex():
-        """One answer of Nex, streamed as plain text.  The page sends the last turns of the conversation (it keeps them in the
+        """One answer of Satürn, streamed as plain text.  The page sends the last turns of the conversation (it keeps them in the
         browser; nothing is stored here); `postId` hands over a post to explain."""
         user, problem = need_user()
         if problem:
@@ -4158,7 +4179,7 @@ def register_routes(app):
         mode = NEX_MODES.get(data.get("mode")) if isinstance(data.get("mode"), str) else None
         mode = mode or NEX_MODES["normal"]                          # (an unknown name is the normal mode; the instructions of a mode never come from the page)
         if re.search(r"spiel|game|jump|runner|flappy|arcade", turns[-1][1], re.I):
-            mode = {**mode, "prompt": mode["prompt"] + " " + yipi_games.NEX_GAME_FORMAT}      # (somebody who talks about a game: the AI knows the format of the games of Nex)
+            mode = {**mode, "prompt": mode["prompt"] + " " + yipi_games.NEX_GAME_FORMAT}      # (somebody who talks about a game: the AI knows the format of the games of Satürn)
 
         def generate():
             try:
@@ -4168,13 +4189,13 @@ def register_routes(app):
                     extra = {"model": mode["model"]} if mode["model"] else {}
                     yield from ai_assistant.generate_custom_stream(mode["prompt"], transcript, max_tokens=mode["tokens"], temperature=mode["temperature"], **extra)
             except Exception:
-                logger.exception("Nex konnte nicht antworten")
+                logger.exception("Satürn konnte nicht antworten")
 
         return Response(stream_with_context(generate()), mimetype="text/plain")
 
     @route("/api/yipi/nex/read", methods=["POST"])
     def pulse_nex_read():
-        """The text of a document that somebody wants to ask Nex about (nothing is stored): {name, text, cut}."""
+        """The text of a document that somebody wants to ask Satürn about (nothing is stored): {name, text, cut}."""
         user, problem = need_user()
         if problem:
             return problem
@@ -4433,7 +4454,7 @@ def register_routes(app):
 
     @route("/api/yipi/lenses", methods=["POST"], endpoint="yipi_lens_create")
     def yipi_lens_create():
-        """Publishes a lens: a title, the prompt and a recipe (checked against the list of the effects); everybody on Nex can use it afterwards."""
+        """Publishes a lens: a title, the prompt and a recipe (checked against the list of the effects); everybody on Satürn can use it afterwards."""
         user, problem = need_user()
         if problem:
             return problem

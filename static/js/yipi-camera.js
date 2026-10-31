@@ -1,4 +1,4 @@
-/* Nex camera (yipi-camera.js): the camera tab, made like the camera of Snapchat. The front camera fills the screen (you see yourself), at the bottom
+/* Satürn camera (yipi-camera.js): the camera tab, made like the camera of Snapchat. The front camera fills the screen (you see yourself), at the bottom
    a row of "lenses": face lenses (masks and funny faces that follow your face, pl-face.js), the QR code, and small games. Tap the one in the middle and the game starts on top of your picture, and the recording starts
    with it: the camera, the game and your voice, up to 30 seconds. When the game is over (or you stop it) you see the clip and can post it (the video
    template), send it to friends, save it or throw it away. The games are in a second file (pg-*.js), loaded when this page opens. Without a camera
@@ -241,7 +241,7 @@
     });
     volume.addEventListener("input", () => { sound.set(Number(volume.value) / 100); saveSettings(); paintControls(); });
     sound.listeners.add(paintControls);
-    board.addEventListener("click", () => { if (state === "idle" && list[active] && list[active].kind === "game" && !list[active].community) Y.leaderboard(list[active]); else if (state === "idle") toast("Eine Bestenliste gibt es nur bei den Spielen von Nex."); });
+    board.addEventListener("click", () => { if (state === "idle" && list[active] && list[active].kind === "game" && !list[active].community) Y.leaderboard(list[active]); else if (state === "idle") toast("Eine Bestenliste gibt es nur bei den Spielen von Satürn."); });
     const todaysGame = () => { const games = list.filter((entry) => entry.kind === "game" && !entry.community); return games[Core.dailyIndex(new Date().toISOString().slice(0, 10), games.length)]; };
     flip.addEventListener("click", () => { if (state !== "idle") return; facing = facing === "user" ? "environment" : "user"; openCamera().then(() => lens?.setMirror(facing === "user")); });
 
@@ -463,7 +463,7 @@
       syncFace();
       tapHint.hidden = item.kind !== "lens" && item.kind !== "randomsong";
       if (item.kind === "lens") await openLens(item, mine);
-      else if (item.kind === "randomsong") { if (!stream) lensNote(camOn ? "Dafür braucht Nex die Kamera." : "Die Kamera ist aus. Schalte sie oben rechts wieder an."); }
+      else if (item.kind === "randomsong") { if (!stream) lensNote(camOn ? "Dafür braucht Satürn die Kamera." : "Die Kamera ist aus. Schalte sie oben rechts wieder an."); }
       else if (item.kind === "create") Y.cameraCreate?.panel({ host, camera: api });
       else if (item.kind === "qr") panelCleanup = Y.cameraQr?.panel({ host, camera: api }) || null;
     }
@@ -474,7 +474,7 @@
       lensNote("Gesichtserkennung wird geladen …");
       try { await loadScript(assets.lens); } catch (error) { lensNote("Die Linsen konnten nicht geladen werden."); return; }
       if (mine !== previewId || dead) return;
-      if (!stream) { lensNote(camOn ? "Für Linsen braucht Nex die Kamera." : "Die Kamera ist aus. Schalte sie oben rechts wieder an."); return; }
+      if (!stream) { lensNote(camOn ? "Für Linsen braucht Satürn die Kamera." : "Die Kamera ist aus. Schalte sie oben rechts wieder an."); return; }
       feed.style.filter = filterCss(item);
       lens = new window.PulseFace.FaceLens({ video: feed, canvas, mirror: facing === "user", recipe: item, onStatus(status) {
         if (mine !== previewId) return;
@@ -544,7 +544,7 @@
     }
     async function startSongRound() {
       if (state !== "idle" || !chosen || chosen.kind !== "randomsong" || !musicPlayer) return;
-      if (!stream) { toast(camOn ? "Dafür braucht Nex die Kamera." : "Die Kamera ist aus. Schalte sie oben rechts wieder an."); return; }
+      if (!stream) { toast(camOn ? "Dafür braucht Satürn die Kamera." : "Die Kamera ist aus. Schalte sie oben rechts wieder an."); return; }
       const mine = ++previewId;
       clearTimeout(previewTimer);
       setState("starting");
@@ -744,8 +744,8 @@
       }
       g.font = "800 28px system-ui, sans-serif";
       g.textAlign = "right";
-      g.strokeText("Nex", REC_W - 24, REC_H - 28);
-      g.fillText("Nex", REC_W - 24, REC_H - 28);
+      g.strokeText("Satürn", REC_W - 24, REC_H - 28);
+      g.fillText("Satürn", REC_W - 24, REC_H - 28);
       if (song) {                                                      // the author and the licence of the song (a licence asks for it)
         const line = Y.music.credit(song);
         g.font = "700 19px system-ui, sans-serif";

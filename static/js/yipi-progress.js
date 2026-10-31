@@ -1,4 +1,4 @@
-/* Nex progress (yipi-progress.js): what makes you come back tomorrow -- the streak of days in a row (the flame on Home), the level with its
+/* Satürn progress (yipi-progress.js): what makes you come back tomorrow -- the streak of days in a row (the flame on Home), the level with its
    bar and the badges (one tap on the flame), a toast when you reach a new level or when your streak grows, the lists of the best players of a
    game (with a tab for friends), and notifications on the device (Web Push, switched on in the settings). The numbers come from the server
    (/api/yipi/progress); the page only remembers the last level and the last day it announced (localStorage "yipi.progress"). */
@@ -122,7 +122,7 @@
   // ------------------------------------------------------------------------------------------------ notifications on the device
   const push = {
     supported: () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window,
-    /* An iPhone or iPad (iPadOS says "Mac" but has a touch screen) and Nex is open in Safari, not as an app of the home screen: only the app of the home screen can show notifications. */
+    /* An iPhone or iPad (iPadOS says "Mac" but has a touch screen) and Satürn is open in Safari, not as an app of the home screen: only the app of the home screen can show notifications. */
     needsInstall: () => (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) && !(window.navigator.standalone === true || (window.matchMedia && matchMedia("(display-mode: standalone)").matches)),
     /* "unsupported", "blocked" (the person said no in the browser), "on" or "off" */
     async state() {
@@ -156,11 +156,11 @@
     },
   };
 
-  /* The steps that make Nex an app on the home screen of an iPhone or iPad (the notifications come to that app). */
+  /* The steps that make Satürn an app on the home screen of an iPhone or iPad (the notifications come to that app). */
   function installSteps() {
     return h("div", { class: "push-install" }, h("b", {}, "So bekommst du Mitteilungen auf dem iPhone oder iPad"),
-      h("ol", {}, h("li", {}, "Öffne Nex in Safari."), h("li", {}, "Tippe unten auf das Teilen-Symbol (das Quadrat mit dem Pfeil)."), h("li", {}, "Wähle „Zum Home-Bildschirm“ und tippe auf „Hinzufügen“."),
-        h("li", {}, "Öffne Nex jetzt vom Home-Bildschirm und schalte hier die Mitteilungen ein.")));
+      h("ol", {}, h("li", {}, "Öffne Satürn in Safari."), h("li", {}, "Tippe unten auf das Teilen-Symbol (das Quadrat mit dem Pfeil)."), h("li", {}, "Wähle „Zum Home-Bildschirm“ und tippe auf „Hinzufügen“."),
+        h("li", {}, "Öffne Satürn jetzt vom Home-Bildschirm und schalte hier die Mitteilungen ein.")));
   }
 
   /* The page /settings/push. */
@@ -172,9 +172,9 @@
       const state = await push.state();
       toggle.checked = state === "on";
       toggle.disabled = state === "unsupported" || state === "blocked";
-      note.textContent = state === "unsupported" ? "Dieser Browser kann keine Mitteilungen anzeigen. Auf dem iPhone geht es erst, wenn du Nex zum Home-Bildschirm hinzugefügt hast."
+      note.textContent = state === "unsupported" ? "Dieser Browser kann keine Mitteilungen anzeigen. Auf dem iPhone geht es erst, wenn du Satürn zum Home-Bildschirm hinzugefügt hast."
         : state === "blocked" ? "Du hast Mitteilungen für diese Seite im Browser blockiert. Erlaube sie in den Einstellungen der Seite."
-          : "Du bekommst eine Mitteilung bei Likes, Antworten, neuen Followern und Nachrichten und wenn jemand, dem du folgst, etwas Neues postet, auch wenn Nex zu ist. Den Text einer Nachricht enthält sie nie.";
+          : "Du bekommst eine Mitteilung bei Likes, Antworten, neuen Followern und Nachrichten und wenn jemand, dem du folgst, etwas Neues postet, auch wenn Satürn zu ist. Den Text einer Nachricht enthält sie nie.";
     }
     toggle.addEventListener("change", async () => {
       toggle.disabled = true;
@@ -191,7 +191,7 @@
   async function pushInvite() {
     if (Y.me && push.needsInstall()) return installSteps();                      // (on an iPhone the page cannot ask before it is an app of the home screen)
     if (!Y.me || !push.supported() || Notification.permission !== "default") return null;
-    const card = h("div", { class: "push-invite" }, icon("bell"), h("div", {}, h("b", {}, "Nichts mehr verpassen"), h("small", {}, "Mitteilungen auf dieses Gerät, auch wenn Nex zu ist.")));
+    const card = h("div", { class: "push-invite" }, icon("bell"), h("div", {}, h("b", {}, "Nichts mehr verpassen"), h("small", {}, "Mitteilungen auf dieses Gerät, auch wenn Satürn zu ist.")));
     const go = h("button", { class: "btn primary small", type: "button" }, "Einschalten");
     go.addEventListener("click", async () => {
       go.disabled = true;

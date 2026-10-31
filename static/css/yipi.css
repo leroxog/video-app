@@ -1470,7 +1470,7 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .appbar-me { flex: none; border-radius: 50%; transition: transform 0.1s; }
 .appbar-me:active { transform: scale(0.92); }
 .appbar-me .avatar { width: 38px; height: 38px; box-shadow: 0 0 0 2px var(--bg); }
-.appbar-brand { display: inline-flex; align-items: center; flex: none; height: 40px; color: var(--text); }
+.appbar-brand { display: inline-flex; align-items: center; gap: 6px; flex: none; height: 40px; color: var(--text); }
 .appbar-brand svg { width: auto; height: 30px; }
 .appbar-pulse { display: block; flex: 1 1 0; min-width: 0; overflow: hidden; line-height: 0; color: var(--muted); }
 .appbar-pulse .pulse-loader { color: var(--muted); }
@@ -2049,6 +2049,8 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .avatar.official { background: var(--ink); color: var(--on-ink); }
 .avatar.official svg { width: 62%; height: 62%; }
 .avatar.official.nexai { background: #6a3df0; color: #fff; }
+.avatar.official.saturn { background: #fff; box-shadow: inset 0 0 0 1px var(--line); }
+.avatar.official.saturn svg { width: 78%; height: 78%; }
 .banner.plain, .edit-banner.plain { background: var(--banner, var(--card-2)); }
 .banner-name { position: absolute; inset: 0; display: flex; align-items: center; padding: 0 clamp(16px, 4vw, 36px); color: #000; font-size: clamp(22px, 5vw, 46px); font-weight: 900; line-height: 1.05; letter-spacing: -0.02em; word-break: break-word; }
 @media (prefers-reduced-motion: reduce) { .au-btn, .au-progress i { transition: none; } }
@@ -2311,3 +2313,15 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .call-screen.mini .call-top { order: 3; }
 @keyframes call-in { from { transform: translate(-50%, -140%); } to { transform: translate(-50%, 0); } }
 @keyframes call-pulse { 0% { transform: scale(0.9); opacity: 0.7; } 100% { transform: scale(1.5); opacity: 0; } }
+
+/* ----- subtitles in the videos and the window to choose the language of the subtitles and of the voice */
+.reel-subs { position: absolute; left: 12px; right: 84px; bottom: 30%; display: flex; justify-content: center; pointer-events: none; z-index: 2; }
+.reel-subs[hidden] { display: none; }
+.reel-subs-line { max-width: 100%; padding: 5px 11px; border-radius: 9px; background: rgba(0, 0, 0, 0.62); color: #fff; font-size: 16px; font-weight: 700; line-height: 1.3; text-align: center; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); }
+.reel-subs-line:empty { display: none; }
+.cc-sheet { display: flex; flex-direction: column; gap: 6px; }
+.cc-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; font-weight: 700; }
+.cc-row .field { flex: 1; max-width: 250px; }
+.cc-note { display: block; min-height: 0; }
+.cc-help { margin-top: 10px; font-size: 13px; line-height: 1.4; }
+

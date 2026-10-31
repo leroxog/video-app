@@ -1,4 +1,4 @@
-/* Nex calls (yipi-calls.js): a call with a friend or a group, live, from the head of a chat. The handset in the chat starts it (`Y.calls.start`), the page asks the server every few seconds whether somebody
+/* Satürn calls (yipi-calls.js): a call with a friend or a group, live, from the head of a chat. The handset in the chat starts it (`Y.calls.start`), the page asks the server every few seconds whether somebody
    is ringing (a window with a ringing sound appears, a phone that is locked gets a notification), and in a call the browser does two things every third of a second in one request: it sends the sound of
    the microphone and it fetches the sound of the others. The sound travels as short pieces (16 kHz, one byte per sample, 8 bit companded) and is never recorded: the server keeps a piece in memory
    until ten seconds after the person it was for has played it (this page reports that with the next request) and deletes it then. */
@@ -290,7 +290,7 @@
   async function microphone() {
     const ctx = audio();
     if (!ctx || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { toast("Dein Browser kann keine Anrufe."); return null; }
-    try { return await openMicrophone(ctx); } catch (error) { toast("Das Mikrofon darf Nex nicht hören. Erlaube es in den Einstellungen des Browsers."); return null; }
+    try { return await openMicrophone(ctx); } catch (error) { toast("Das Mikrofon darf Satürn nicht hören. Erlaube es in den Einstellungen des Browsers."); return null; }
   }
 
   /* Rings a friend ({handle}) or a group ({groupId}): the microphone first (this tap is the one that lets the page make sound), then the call. */

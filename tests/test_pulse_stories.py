@@ -1,4 +1,4 @@
-"""Nex: stories (a photo or short video for 24 hours, like on Snapchat and Instagram)."""
+"""Satürn: stories (a photo or short video for 24 hours, like on Snapchat and Instagram)."""
 import io
 import os
 import struct

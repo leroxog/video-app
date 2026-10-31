@@ -1,6 +1,6 @@
-"""Nex games of the community (yipi_games.py): what a person builds in the camera tab ("Erstellen") and publishes: a game written as code (a person, or the AI, wrote it).
+"""Satürn games of the community (yipi_games.py): what a person builds in the camera tab ("Erstellen") and publishes: a game written as code (a person, or the AI, wrote it).
 
-A game never runs on the page of Nex. The browser starts it in a Web Worker whose script comes from `worker_script()` below with a header that forbids every connection
+A game never runs on the page of Satürn. The browser starts it in a Web Worker whose script comes from `worker_script()` below with a header that forbids every connection
 (Content-Security-Policy: default-src 'none'); the worker has no page, no cookies and no network, it only gets the input of the finger and gives back pictures
 (OffscreenCanvas), points and "game over" with postMessage. A game that hangs is stopped by the page (the worker is terminated).
 
@@ -107,7 +107,7 @@ function draw(g) {
 
 # ------------------------------------------------------------------------------------------------------------------ a game written by the AI
 GAME_AI_SYSTEM = (
-    "Du bist ein erfahrener Spiele-Entwickler und schreibst ein kleines, richtig gut aussehendes Handyspiel in JavaScript für das Spielformat von Nex.\n\n"
+    "Du bist ein erfahrener Spiele-Entwickler und schreibst ein kleines, richtig gut aussehendes Handyspiel in JavaScript für das Spielformat von Satürn.\n\n"
     "Das Format:\n"
     "- Das Spielfeld ist 360 mal 640 Pixel groß (hochkant). Es ist durchsichtig: dahinter sieht der Spieler seine Kamera mit seinem Gesicht. Male deshalb nur das Spiel selbst "
     "(Figuren, Hindernisse, Boden, Punkte), keinen vollflächigen Hintergrund, und lass in der Mitte oben Platz, damit das Gesicht zu sehen bleibt.\n"
@@ -161,8 +161,8 @@ def ai_game(prompt, generate, model=None, tries=2):
 
 
 NEX_GAME_FORMAT = (
-    "Wenn der Nutzer ein Spiel für Nex bauen will, schreib es im Spielformat von Nex in genau einem Codeblock (```javascript): Das Spielfeld ist 360 mal 640 Pixel, durchsichtig (dahinter ist "
+    "Wenn der Nutzer ein Spiel für Satürn bauen will, schreib es im Spielformat von Satürn in genau einem Codeblock (```javascript): Das Spielfeld ist 360 mal 640 Pixel, durchsichtig (dahinter ist "
     "die Kamera des Spielers). Du schreibst update(dt, input) und draw(g) und, wenn nötig, start(). dt sind Sekunden, input hat x, y, down, pressed, tap, released und swipe. g ist ein "
     "Canvas-2D-Kontext und malt jedes Bild neu, mit kräftigen Farben und Emojis. game.score(n) setzt die Punkte, game.over() beendet die Runde, game.random() gibt Zufall. Kein fetch, "
-    "import, eval, localStorage, navigator oder setTimeout. Unter dem Code steht ein Satz, dass man das Spiel unter dem Code mit dem Knopf „Als Spiel hochladen“ auf Nex stellen kann."
+    "import, eval, localStorage, navigator oder setTimeout. Unter dem Code steht ein Satz, dass man das Spiel unter dem Code mit dem Knopf „Als Spiel hochladen“ auf Satürn stellen kann."
 )

@@ -1,4 +1,4 @@
-"""Nex's page (the files keep the name yipi): the files the page is made of agree with each other and with the server (every address the script calls exists,
+"""Satürn's page (the files keep the name yipi): the files the page is made of agree with each other and with the server (every address the script calls exists,
 every style the script uses exists, nothing writes user text as HTML), and the pages around the app (legal pages, manifest, robots,
 error pages) are there. The behaviour of the helper functions is tested in yipi_core.test.js, the API in test_yipi.py."""
 import os
@@ -97,7 +97,7 @@ def test_every_file_the_templates_load_exists():
 
 
 def test_the_images_of_the_page_and_the_manifest_exist():
-    for name in ("pulse-icon.svg", "pulse-180.png", "pulse-192.png", "pulse-512.png", "pulse-512-maskable.png", "pulse-og.png"):
+    for name in ("saturn-tab.png", "saturn-mark.png", "pulse-180.png", "pulse-192.png", "pulse-512.png", "pulse-512-maskable.png", "pulse-og.png"):
         assert os.path.getsize(os.path.join(ROOT, "static", "img", name)) > 200, name
     for icon in yipi.manifest()["icons"]:
         assert os.path.exists(os.path.join(ROOT, icon["src"].lstrip("/").replace("/", os.sep))), icon["src"]
@@ -149,11 +149,11 @@ def test_every_address_the_script_calls_exists_on_the_server_with_that_method():
 
 
 def test_the_calls_the_pattern_above_cannot_see_use_addresses_the_server_knows():
-    """The GIF upload goes through its own helper, Nex through fetch (a stream, not JSON)."""
+    """The GIF upload goes through its own helper, Satürn through fetch (a stream, not JSON)."""
     assert 'call("POST", "/gifs", undefined, form)' in JS["yipi-api.js"] and matches("/api/yipi/gifs", "POST")
     nex = JS["yipi-nex.js"]
     assert 'fetch("/api/yipi/nex", { method: "POST"' in nex and matches("/api/yipi/nex", "POST")
-    assert nex.count("fetch(") == 1, "Nex is the one page that does not use YipiApi: its answer is a stream"
+    assert nex.count("fetch(") == 1, "Satürn is the one page that does not use YipiApi: its answer is a stream"
     assert 'credentials: "same-origin"' in nex
 
 
@@ -215,7 +215,7 @@ def test_user_text_is_never_written_as_html():
         code = re.sub(r"/\*.*?\*/", "", source, flags=re.S)
         code = re.sub(r"(?m)^\s*//.*$", "", code)
         if name == "yipi-icons.js":
-            assert code.count("innerHTML") == 3, "only the fixed drawings of the icons, the logo and the lettering Nex may use innerHTML"
+            assert code.count("innerHTML") == 3, "only the fixed drawings of the icons, the logo and the lettering Satürn may use innerHTML"
             continue
         for sink in ("innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", "eval(", "new Function", "setTimeout(\"", "javascript:"):
             assert sink not in code, f"{name} uses {sink}"
@@ -223,8 +223,9 @@ def test_user_text_is_never_written_as_html():
 
 def test_the_icon_drawings_do_not_contain_anything_but_shapes():
     icons = JS["yipi-icons.js"]
+    only_ours = icons.replace('href="/static/img/saturn-mark.png"', "")                  # (the one picture the logo shows: the planet of Satürn, a file of the site)
     for forbidden in ("<script", "onload", "onerror", "<foreignObject", "href="):
-        assert forbidden not in icons
+        assert forbidden not in only_ours
 
 
 def test_links_to_other_sites_do_not_hand_over_the_page():
@@ -361,10 +362,10 @@ def test_the_five_tabs_are_home_chats_plus_camera_videos_and_nex_is_a_contact():
     assert "Y.newPost({ anchor: event.currentTarget })" in block and "center: true" in block
     for name in ('icon: "plane", on: "planeFill"', 'icon: "camera", on: "cameraFill"', 'icon: "playCircle", on: "videoFill"', 'icon: "home", on: "homeFill"'):
         assert name in block, "a grey outline, filled and dark when the page is open: " + name
-    assert '"/i/nex"' not in block, "Nex is no tab any more"
-    assert 'if (route.name === "nex") return "messages";' in shell, "the page of Nex belongs to the chats"
+    assert '"/i/nex"' not in block, "Satürn is no tab any more"
+    assert 'if (route.name === "nex") return "messages";' in shell, "the page of Satürn belongs to the chats"
     chats = JS["yipi-chats.js"]
-    assert 'link("/i/nex", { class: `convo convo-nex' in chats and "Nex" in chats and 'Y.sponsored("row")' in chats, "Nex is in the list of chats like a contact, with a box at the end"
+    assert 'link("/i/nex", { class: `convo convo-nex' in chats and "Satürn" in chats and 'Y.sponsored("row")' in chats, "Satürn is in the list of chats like a contact, with a box at the end"
     assert ".tabbar {" in CSS and ".plus-tab .tab-ic" in CSS
     for route in ("thread", "group", "nex"):
         assert f'.app[data-route="{route}"] .tabbar' in CSS, f"{route}: the bar is out of the way in a conversation"
@@ -421,7 +422,7 @@ def test_the_bar_at_the_top_has_the_picture_the_lettering_nex_and_in_landscape_t
     assert "Y.streakChip ? Y.streakChip() : null" in chrome and "Y.searchForm" in chrome
     assert 'Y.put(app, appbar.element, main, tabbar, announcer)' in shell and "appbar?.route(route.name)" in shell
     assert 'id="app"' in read("templates/yipi.html") or True
-    assert "wordmark" in JS["yipi-icons.js"] and 'aria-label="Nex"' in JS["yipi-icons.js"]
+    assert "wordmark" in JS["yipi-icons.js"] and 'aria-label="Satürn"' in JS["yipi-icons.js"]
     folded = CSS.split("@media (min-width: 820px) {")[-1]
     for rule in (".appbar-menu { display: grid; }", ".appbar-plus { display: grid; }", ".app.rail-open .tabbar { width: 252px;", ".tab-item.plus-tab { display: none; }"):
         assert rule in folded, f"sideways: {rule}"
@@ -610,7 +611,7 @@ def test_manifest_robots_and_sitemap(client):
     manifest = client.get("/manifest.webmanifest")
     assert manifest.mimetype == "application/manifest+json"
     data = manifest.get_json()
-    assert data["short_name"] == "Nex" and data["start_url"] == "/" and data["display"] == "standalone"
+    assert data["short_name"] == "Satürn" and data["start_url"] == "/" and data["display"] == "standalone"
     assert {icon["purpose"] for icon in data["icons"]} == {"any", "maskable"}
     robots = client.get("/robots.txt").get_data(as_text=True)
     for private in ("/api/", "/messages", "/settings", "/nex-agenten-archiv", "/gomat-archiv", "/ysound-archiv"):
@@ -626,7 +627,7 @@ def test_error_pages_are_pulse_pages(client):
     page = client.get("/gibt-es-nicht-1234")
     assert page.status_code == 404
     text = page.get_data(as_text=True)
-    assert "Nex" in text and "Diese Seite gibt es nicht" in text and "gomat" not in text.lower() and "Nex Ai" not in text
+    assert "Satürn" in text and "Diese Seite gibt es nicht" in text and "gomat" not in text.lower() and "Nex Ai" not in text
     assert "Content-Security-Policy" in page.headers
     api = client.get("/api/yipi/gibt-es-nicht")
     assert api.status_code == 404 and api.get_json() == {"ok": False, "error": "not_found"}
@@ -684,7 +685,7 @@ def test_videos_in_the_feed_play_by_themselves_without_sound_one_at_a_time():
 def test_links_get_a_card_and_open_in_a_window_of_nex():
     links = read("static", "js", "yipi-links.js")
     assert "yipi-links.js" in SCRIPTS and SCRIPTS.index("yipi-links.js") < SCRIPTS.index("yipi-comments.js")
-    assert 'Y.qs("/link-preview"' in links and "sandbox:" in links and "allow-top-navigation" not in links, "a framed page can never navigate Nex away"
+    assert 'Y.qs("/link-preview"' in links and "sandbox:" in links and "allow-top-navigation" not in links, "a framed page can never navigate Satürn away"
     assert 'referrerpolicy: "no-referrer"' in links and "frame-src https:" in yipi.CONTENT_SECURITY_POLICY
     assert "Yipi.openSite(piece.href)" in JS["yipi-ui.js"], "a link in a text opens in the window"
     for place, snippet in (("yipi-components.js", "Y.linkCardFor(item.text)"), ("yipi-comments.js", "Y.linkCardFor(item.text"), ("yipi-chats.js", "Y.linkCardFor(message.text"), ("yipi-videos.js", "Y.linkCardFor(item.text")):

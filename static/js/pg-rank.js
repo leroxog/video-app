@@ -1,6 +1,6 @@
-/* Nex games: the ranking games (pg-rank.js). "Ranke die Fußballer" (musicians, countries, and the rankings that people made themselves): a reel like a slot machine rolls above the head
+/* Satürn games: the ranking games (pg-rank.js). "Ranke die Fußballer" (musicians, countries, and the rankings that people made themselves): a reel like a slot machine rolls above the head
    of the player (the camera tab finds the forehead, see `hooks.face`) and stops on one picture; you tap the place (1 to 5, or 1 to 10) at the side of the screen where that picture
-   belongs in your own ranking, the picture flies there, and the reel rolls again until every place is taken. The pictures of the games of Nex are freely licensed ones from Wikimedia
+   belongs in your own ranking, the picture flies there, and the reel rolls again until every place is taken. The pictures of the games of Satürn are freely licensed ones from Wikimedia
    Commons (static/rank, collected by scripts/fetch_rank_images.py; the page /bildnachweise credits them). Without the pictures (or in a test without a browser) the games work
    with names and coloured circles. Nothing but the reel, the places and a small title is drawn, so the player is seen. */
 (function () {

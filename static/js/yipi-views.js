@@ -1,4 +1,4 @@
-/* Nex views, part 1 (the file keeps the name yipi-views.js): the pages that show posts -- home, explore, search, notifications,
+/* Satürn views, part 1 (the file keeps the name yipi-views.js): the pages that show posts -- home, explore, search, notifications,
    bookmarks, profiles, a single post, and the lists of followers. Each view is a function (route, ctx) that answers at once with {element, title, ...} and fills itself when
    the data arrives. `keep: true` lets the router keep the page (and its scroll position) when you go on to a post and come back. */
 (function () {
@@ -106,7 +106,7 @@
     return h("section", { class: "hero" },
       h("span", { class: "hero-logo" }, window.YipiIcons.logo()),
       h("h2", {}, "Was gerade passiert."),
-      h("p", {}, "Auf Nex teilst du kurze Beiträge, Fotos und Sticker, antwortest, reposts und folgst Leuten, die dich interessieren. Und Nex AI, die KI, hilft dir weiter. Ohne Werbung und ohne Tracking."),
+      h("p", {}, "Auf Satürn teilst du kurze Beiträge, Fotos und Sticker, antwortest, reposts und folgst Leuten, die dich interessieren. Und Nex AI, die KI, hilft dir weiter. Ohne Werbung und ohne Tracking."),
       h("div", { class: "hero-actions" },
         link("/i/signup", { class: "btn primary" }, "Konto erstellen"),
         link("/i/login", { class: "btn ghost" }, "Anmelden")));
@@ -127,7 +127,7 @@
     const trendBox = h("section", { class: "rail-card" }, h("h2", {}, "Im Trend"));
     const peopleBox = h("section", { class: "rail-card" }, h("h2", {}, "Wem folgen"));
     const rail = h("aside", { class: "home-rail", "aria-label": "Trends und Vorschläge" }, trendBox, peopleBox,
-      h("nav", { class: "rail-foot", "aria-label": "Rechtliches" }, h("a", { href: "/nutzungsbedingungen" }, "Nutzungsbedingungen"), h("a", { href: "/datenschutz" }, "Datenschutz"), h("a", { href: "/impressum" }, "Impressum"), h("a", { href: "/bildnachweise" }, "Bildnachweise"), h("span", {}, "© Nex")));
+      h("nav", { class: "rail-foot", "aria-label": "Rechtliches" }, h("a", { href: "/nutzungsbedingungen" }, "Nutzungsbedingungen"), h("a", { href: "/datenschutz" }, "Datenschutz"), h("a", { href: "/impressum" }, "Impressum"), h("a", { href: "/bildnachweise" }, "Bildnachweise"), h("span", {}, "© Satürn")));
     const wide = window.matchMedia ? window.matchMedia("(min-width: 1100px)") : null;
     let loaded = false;
     async function load() {
@@ -209,7 +209,7 @@
     if (landscapeQuery && landscapeQuery.addEventListener) landscapeQuery.addEventListener("change", () => { if (el.isConnected) mountFeed(); });      // turning the phone changes what Home shows
 
     return {
-      element: el, title: "Nex", keep: true,
+      element: el, title: "Satürn", keep: true,
       onShow() { visible = true; check(); },
       onHide() { visible = false; },
       refresh() { feedPager.reload(); },
@@ -433,7 +433,7 @@
       const file = picker.files[0];
       picker.value = "";
       if (!file || !picking) return;
-      if (!/^image\/(jpeg|png|gif|webp)$/.test(file.type)) { toast("Das ist kein Foto, das Nex kennt (JPEG, PNG, GIF oder WebP)."); return; }
+      if (!/^image\/(jpeg|png|gif|webp)$/.test(file.type)) { toast("Das ist kein Foto, das Satürn kennt (JPEG, PNG, GIF oder WebP)."); return; }
       try {
         const blob = await Y.prepareImage(file, { crop: picking === "avatar" ? { width: 400, height: 400 } : { width: 1500, height: 500 } });
         const old = draft[picking];
@@ -567,7 +567,7 @@
       user = reply.data.user;
       if (user.suspended && !user.createdAt) {
         bar.set(`@${user.handle}`);
-        fill(head, emptyState("Dieses Konto ist gesperrt", `@${user.handle} hat gegen die Regeln von Nex verstoßen.`));
+        fill(head, emptyState("Dieses Konto ist gesperrt", `@${user.handle} hat gegen die Regeln von Satürn verstoßen.`));
         return;
       }
       result.title = `${user.name} (@${user.handle})`;
@@ -603,7 +603,7 @@
       detail = Y.postCard(item, { detail: true, onDelete: () => Y.back(Y.HOME), onReply: (post) => { replies.prepend(post); } });
       fill(main, detail);
       if (item.user) {
-        result.title = `${item.user.name} auf Nex: „${snippet(item.text || (item.media && item.media[0] && item.media[0].gif ? "Sticker" : "Beitrag mit Bild"), 60)}“`;
+        result.title = `${item.user.name} auf Satürn: „${snippet(item.text || (item.media && item.media[0] && item.media[0].gif ? "Sticker" : "Beitrag mit Bild"), 60)}“`;
         ctx.setTitle(result.title);
       }
       if (!item.deleted) {

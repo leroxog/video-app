@@ -81,7 +81,7 @@ def test_the_free_gifs_are_part_of_the_library_and_are_seeded_once(client):
 def test_the_page_of_credits_names_everybody(client):
     page = flask_app.test_client().get("/bildnachweise")
     text = page.get_data(as_text=True)
-    assert page.status_code == 200 and "<title>Bildnachweise | Nex</title>" in text
+    assert page.status_code == 200 and "<title>Bildnachweise | Satürn</title>" in text
     found = entries()
     for entry in found[:25]:
         assert entry["pageUrl"] in text.replace("&amp;", "&") or entry["pageUrl"].replace("'", "&#39;") in text, entry["slug"]

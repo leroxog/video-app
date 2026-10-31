@@ -1,11 +1,11 @@
-"""Link previews for Nex (2026-10-30): a link in a post, a video, a comment or a chat gets a card (picture, title, text, site) and opens in a window of Nex itself, without leaving the page.
+"""Link previews for Satürn (2026-10-30): a link in a post, a video, a comment or a chat gets a card (picture, title, text, site) and opens in a window of Satürn itself, without leaving the page.
 
 The server does the fetching, never the browser of the reader (the site that is linked does not see who looks at it, and the page keeps its strict content security policy: the
 pictures of the cards are served by us too). Fetching an address that somebody else chose is dangerous, so:
 
 * only http and https on the usual ports, no user name in the address, no `localhost`-like names;
 * every connection goes to an address that was looked up and checked in that very moment: private, loopback, link-local, reserved and multicast addresses are refused (a host with even
-  one such address is refused, and a redirect is checked like a new request, at most three of them), so Nex cannot be made to read its own network;
+  one such address is refused, and a redirect is checked like a new request, at most three of them), so Satürn cannot be made to read its own network;
 * only the first 300 KB of a page are read, at most 1.5 MB of a picture, a few seconds of time, no cookies, no proxy;
 * what comes back is plain text (cut to length), an address of a picture that is served by us afterwards, and never HTML of the other site.
 The answers are kept in memory for a few hours (a failed address for ten minutes) so that a popular link is fetched once."""
@@ -212,7 +212,7 @@ def _decode(response, body):
 
 
 def frame_allowed(headers, origin):
-    """May the page be shown inside a frame of Nex? Not when it says so itself (X-Frame-Options, or a `frame-ancestors` that does not name everybody or us)."""
+    """May the page be shown inside a frame of Satürn? Not when it says so itself (X-Frame-Options, or a `frame-ancestors` that does not name everybody or us)."""
     if headers.get("X-Frame-Options"):
         return False
     match = re.search(r"frame-ancestors([^;,]*)", headers.get("Content-Security-Policy", ""), re.I)

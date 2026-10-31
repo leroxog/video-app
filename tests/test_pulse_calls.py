@@ -1,4 +1,4 @@
-"""Nex calls (2026-10-31): a call with a friend or a group, live, from a chat. What is checked: who may ring whom, the notification (a push that is sent even when the page was open a moment
+"""Satürn calls (2026-10-31): a call with a friend or a group, live, from a chat. What is checked: who may ring whom, the notification (a push that is sent even when the page was open a moment
 ago), the call from ringing to talking to the end, the voice pieces (they reach the others and nobody else, they are deleted ten seconds after they were played, at the latest thirty seconds
 after they came in, and they are never kept in the database), the line in the chat when a call is over, one call at a time, group calls, and people who went quiet."""
 import base64

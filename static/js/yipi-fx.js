@@ -1,6 +1,6 @@
-/* Nex effects (yipi-fx.js): the small things that make the page feel alive. Sounds (made in the browser with the Web Audio API, no files; they can
+/* Satürn effects (yipi-fx.js): the small things that make the page feel alive. Sounds (made in the browser with the Web Audio API, no files; they can
    be switched off in the settings), the heart that bursts out where a finger or the mouse just was, double tap / double click, the loading
-   animation (the heartbeat of the Nex logo, like a heart monitor: beats of any height, up or down, but smooth), the page that slides in from the
+   animation (the heartbeat of the Satürn logo, like a heart monitor: beats of any height, up or down, but smooth), the page that slides in from the
    right when something is opened and slides back with a swipe to the right. Nothing here needs the network. */
 (function () {
   "use strict";

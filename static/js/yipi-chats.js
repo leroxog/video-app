@@ -1,4 +1,4 @@
-/* Nex chats (yipi-chats.js): the Chats tab, made like the messages of Instagram -- one list with the conversations with a person and the group
+/* Satürn chats (yipi-chats.js): the Chats tab, made like the messages of Instagram -- one list with the conversations with a person and the group
    chats (tabs "Nachrichten" and "Anfragen", a search line), the conversation itself (a person: /messages/<name>, a group: /g/<number>) and
    the dialogs to start a new message or a new group. On a wide screen the list and the conversation are side by side.
    A message to somebody who follows you back lands in their main chats; to somebody who does not follow you it is a request they have to accept
@@ -126,7 +126,7 @@
         item.unread ? h("span", { class: "unread-dot", "aria-label": `${item.unread} ungelesen` }, item.unread > 99 ? "99+" : String(item.unread)) : null);
     }
 
-    /* Nex, the assistant, is in everybody's list like a contact. */
+    /* Satürn, the assistant, is in everybody's list like a contact. */
     function nexRow() {
       return link("/i/nex", { class: `convo convo-nex${active === "nex" ? " active" : ""}` },
         h("span", { class: "avatar md nex-face", "aria-hidden": "true" }, icon("nexmark")),

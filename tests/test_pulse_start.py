@@ -1,4 +1,4 @@
-"""The start of Nex (yipi-auth.js): the terms in short with "Akzeptieren" and "Anmelden", signing in in two pages, signing up in pages of one question each (the age is a slider: the server
+"""The start of Satürn (yipi-auth.js): the terms in short with "Akzeptieren" and "Anmelden", signing in in two pages, signing up in pages of one question each (the age is a slider: the server
 only checks the number), and a colour for the picture and another for the banner of everybody who has none."""
 import os
 import sys
@@ -61,7 +61,7 @@ def test_the_slider_age_is_checked_and_not_kept(client):
 
 def test_the_pages_say_what_the_person_asked_for():
     auth = read("static", "js", "yipi-auth.js")
-    for text in ('"Akzeptieren"', '"Anmelden"', "Bevor du zu Nex weitergehst", "Willkommen zurück!", "Bitte gib deinen Namen ein", "Bitte gib nun dein Passwort ein!", "Wie willst du heißen?",
+    for text in ('"Akzeptieren"', '"Anmelden"', "Bevor du zu Satürn weitergehst", "Willkommen zurück!", "Bitte gib deinen Namen ein", "Bitte gib nun dein Passwort ein!", "Wie willst du heißen?",
                  "Gib bitte dein zukünftiges Passwort ein!", "Wir bitten dich für deine eigene Account Sicherheit dein Passwort erneut einzugeben", "Wie alt bist du???", 'type: "range"',
                  "Style verbessern?", "Dein Account sieht noch etwas leer aus willst du ihn verbessern?", '"Ja, gerne!"', '"Nein, danke"', "Mit Google anmelden"):
         assert text in auth, text

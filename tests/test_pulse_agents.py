@@ -1,4 +1,4 @@
-"""Nex: the AI accounts are gone again (yipi_agents.py). What is left: the clean-up that removes every account that was made as an AI account, with what belongs to it,
+"""Satürn: the AI accounts are gone again (yipi_agents.py). What is left: the clean-up that removes every account that was made as an AI account, with what belongs to it,
 and the list of words that nobody may use in the prompt of a lens."""
 import os
 import sys

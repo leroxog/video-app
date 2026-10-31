@@ -1,4 +1,4 @@
-/* Nex api (the file keeps the name yipi-api.js): the calls to the server (/api/yipi/...). Every call answers {ok, status, data}; with no connection it answers
+/* Satürn api (the file keeps the name yipi-api.js): the calls to the server (/api/yipi/...). Every call answers {ok, status, data}; with no connection it answers
    {ok: false, offline: true, data: {error: "network"}} instead of throwing. `YipiApi.message(reply)` is the German sentence
    for what went wrong. */
 (function () {
@@ -13,9 +13,9 @@
     blocked: "Das geht nicht, weil eine Blockierung besteht.",
     ai_account: "Dieses Konto wird von einer KI betrieben und liest keine Nachrichten.",
     ai_failed: "Die KI hat gerade kein gutes Ergebnis hinbekommen. Probier es noch einmal.",
-    official_account: "Das ist ein offizielles Konto von Nex. Es liest keine Nachrichten.",
-    bad_link: "Das ist kein Link, den Nex zeigen kann.",
-    link_blocked: "Diesen Link kann Nex nicht öffnen.",
+    official_account: "Das ist ein offizielles Konto von Satürn. Es liest keine Nachrichten.",
+    bad_link: "Das ist kein Link, den Satürn zeigen kann.",
+    link_blocked: "Diesen Link kann Satürn nicht öffnen.",
     link_unreachable: "Diese Seite antwortet gerade nicht.",
     not_allowed: "Das passt hier nicht. Probier etwas anderes.",
     bad_level: "Mit deinem Level stimmt etwas nicht. Probier es noch einmal.",
@@ -28,22 +28,22 @@
     duplicate: "Das hast du gerade schon gepostet.",
     bad_media: "Mit den Bildern stimmt etwas nicht.",
     too_many_stories: "Du hast schon 30 Stories. Lösche eine oder warte, bis eine abläuft.",
-    bad_image: "Das ist kein Foto, das Nex kennt (JPEG, PNG, GIF oder WebP).",
+    bad_image: "Das ist kein Foto, das Satürn kennt (JPEG, PNG, GIF oder WebP).",
     too_big: "Das Foto ist zu groß (höchstens 5 MB).",
     no_file: "Es wurde keine Datei gesendet.",
     no_video: "In einen Sticker der Bibliothek gehört kein Video.",
-    bad_video: "Dieses Video kann nicht abgespielt werden. Nex nimmt MP4-, MOV- und WebM-Videos.",
+    bad_video: "Dieses Video kann nicht abgespielt werden. Satürn nimmt MP4-, MOV- und WebM-Videos.",
     video_too_big: "Das Video ist zu groß (höchstens 25 MB).",
     video_too_long: "Das Video ist zu lang (höchstens 30 Sekunden).",
-    bad_audio: "Das ist keine Audio-Datei, die Nex kennt (MP3, Ogg, M4A oder WAV).",
+    bad_audio: "Das ist keine Audio-Datei, die Satürn kennt (MP3, Ogg, M4A oder WAV).",
     bad_song: "Dieser Song darf nicht benutzt werden.",
     bad_attachment: "Diese Datei kann nicht gesendet werden (Foto, Video, PDF, Text oder Office-Dokument).",
     attachment_too_big: "Die Datei ist zu groß (höchstens 15 MB, Fotos 8 MB, Videos 25 MB).",
-    doc_empty: "In diesem Dokument steht kein Text, den Nex lesen kann.",
+    doc_empty: "In diesem Dokument steht kein Text, den Satürn lesen kann.",
     doc_too_big: "Das Dokument ist zu groß.",
-    doc_encrypted: "Das PDF ist geschützt, Nex kann es nicht öffnen.",
-    doc_no_pdf_reader: "PDFs kann Nex gerade nicht lesen.",
-    doc_bad: "Dieses Dokument kann Nex nicht lesen (PDF, Text, Word, Excel, PowerPoint oder OpenDocument).",
+    doc_encrypted: "Das PDF ist geschützt, Satürn kann es nicht öffnen.",
+    doc_no_pdf_reader: "PDFs kann Satürn gerade nicht lesen.",
+    doc_bad: "Dieses Dokument kann Satürn nicht lesen (PDF, Text, Word, Excel, PowerPoint oder OpenDocument).",
     video_alone: "Ein Video steht allein: ohne Fotos oder Sticker im selben Beitrag.",
     video_top: "Ein Video gehört in einen eigenen Beitrag, nicht in eine Antwort oder ein Zitat.",
     gif_alone: "Ein Sticker steht allein: entweder ein Sticker, ein Video oder bis zu 3 Fotos.",
@@ -61,8 +61,8 @@
     bad_password: "Das Passwort braucht mindestens 8 Zeichen.",
     need_age: "Du musst bestätigen, dass du mindestens 16 Jahre alt bist (oder die Erlaubnis deiner Eltern hast).",
     bad_birthday: "Dieses Datum gibt es nicht. Prüfe Tag, Monat und Jahr.",
-    too_young: "Nex ist erst ab 13 Jahren. Komm gern später wieder.",
-    need_parents: "Unter 16 geht Nex nur mit der Erlaubnis deiner Eltern.",
+    too_young: "Satürn ist erst ab 13 Jahren. Komm gern später wieder.",
+    need_parents: "Unter 16 geht Satürn nur mit der Erlaubnis deiner Eltern.",
     bad_phone: "Das sieht nicht wie eine Telefonnummer aus. Schreib sie mit Vorwahl, zum Beispiel 151 12345678.",
     phone_taken: "Mit dieser Telefonnummer gibt es schon ein Konto.",
     google_expired: "Die Anmeldung mit Google ist abgelaufen. Tippe noch einmal auf „Mit Google“.",
@@ -78,7 +78,7 @@
     accept_first: "Nimm die Anfrage zuerst an, dann kannst du antworten.",
     request_pending: "Deine Nachricht ist eine Anfrage. Du kannst weiterschreiben, sobald die Person sie annimmt.",
     bad_reason: "Bitte wähle einen Grund.",
-    bad_action: "Das kennt Nex nicht.",
+    bad_action: "Das kennt Satürn nicht.",
     bad_poll: "Mit der Umfrage stimmt etwas nicht: sie braucht zwei bis vier verschiedene Antworten.",
     poll_text: "Schreib zur Umfrage eine Frage.",
     poll_closed: "Diese Umfrage ist schon beendet.",
@@ -94,7 +94,7 @@
     call_nobody: "In der Gruppe ist niemand, den du anrufen kannst.",
     call_not_allowed: "Du kannst die Person erst anrufen, wenn sie dir folgt oder deine Nachricht angenommen hat.",
     ai_account: "Eine KI kann man nicht anrufen.",
-    official_account: "Dieses Konto gehört Nex und nimmt keine Anrufe an.",
+    official_account: "Dieses Konto gehört Satürn und nimmt keine Anrufe an.",
     not_joined: "Du bist in diesem Anruf nicht mehr dabei.",
   };
 
@@ -146,7 +146,7 @@
       if (!onProgress || typeof XMLHttpRequest === "undefined") return call("POST", "/media", undefined, form);
       return sendWithProgress("/media", form, onProgress);
     },
-    /* A document for Nex to read: answers {ok, data: {name, text, cut}} (nothing is stored). */
+    /* A document for Satürn to read: answers {ok, data: {name, text, cut}} (nothing is stored). */
     readDocument(file) {
       const form = new FormData();
       form.append("file", file, file.name || "dokument");

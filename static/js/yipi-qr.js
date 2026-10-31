@@ -1,7 +1,7 @@
-/* Nex QR codes (yipi-qr.js): a QR code for almost everything -- the whole page, a profile, a post or video, a lens or a game of the camera -- drawn in purple soft squares with the
-   Nex heartbeat in the middle, to save, share or scan. The code itself is made by a small free library (static/js/vendor/qrcode.js, MIT) and read by another one
+/* Satürn QR codes (yipi-qr.js): a QR code for almost everything -- the whole page, a profile, a post or video, a lens or a game of the camera -- drawn in purple soft squares with the
+   Satürn heartbeat in the middle, to save, share or scan. The code itself is made by a small free library (static/js/vendor/qrcode.js, MIT) and read by another one
    (jsqr.js, Apache 2.0) or by the browser's own reader when it has one; both are loaded when the first code is shown. Scanning happens on the device: the camera picture goes nowhere.
-   A code that points to Nex opens in the app; any other address is only shown (and opened if the person says so). */
+   A code that points to Satürn opens in the app; any other address is only shown (and opened if the person says so). */
 (function () {
   "use strict";
 
@@ -40,8 +40,21 @@
 
   function roundedRect(g, x, y, w, h2, r) { g.beginPath(); if (g.roundRect) g.roundRect(x, y, w, h2, r); else g.rect(x, y, w, h2); }
 
-  /* The heartbeat of Nex on its black tile (the same drawing as the logo of the page). */
+  const planet = new Image();                                     // the planet of Satürn (loaded once; until it is there the old tile is drawn)
+  planet.src = "/static/img/saturn-mark.png";
+
+  /* The planet of Satürn on a white tile (the logo of the page); the heartbeat on a black tile where the picture is not there. */
   function drawLogo(g, x, y, size) {
+    if (planet.complete && planet.naturalWidth) {
+      g.save();
+      g.fillStyle = "#fff";
+      roundedRect(g, x, y, size, size, size * 0.25);
+      g.fill();
+      const room = size * 0.76;
+      g.drawImage(planet, x + (size - room) / 2, y + (size - room * planet.naturalHeight / planet.naturalWidth) / 2, room, room * planet.naturalHeight / planet.naturalWidth);
+      g.restore();
+      return;
+    }
     g.save();
     g.translate(x, y);
     g.scale(size / 64, size / 64);
@@ -127,7 +140,7 @@
     Y.copyLink ? Y.copyLink(new URL(url).pathname) : toast(url);
   }
 
-  /* A dialog with the code of one thing: `path` is where it lives on Nex ("/mia", "/mia/status/12", "/camera/l-dumm", "/"). */
+  /* A dialog with the code of one thing: `path` is where it lives on Satürn ("/mia", "/mia/status/12", "/camera/l-dumm", "/"). */
   async function showDialog({ path, title, subtitle = "" }) {
     const url = absolute(path);
     const holder = h("div", { class: "qr-holder" }, h("span", { class: "muted" }, "Der Code wird gemacht …"));
@@ -141,7 +154,7 @@
       canvas.setAttribute("aria-label", `QR-Code für ${url}`);
       fill(holder, canvas);
       fill(buttons, h("button", { class: "btn primary", type: "button", onclick: () => save(canvas, `nex-${path.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "web"}`) }, icon("download"), "Speichern"),
-        h("button", { class: "btn ghost", type: "button", onclick: () => share(canvas, url, title || "Nex") }, icon("share"), "Teilen"));
+        h("button", { class: "btn ghost", type: "button", onclick: () => share(canvas, url, title || "Satürn") }, icon("share"), "Teilen"));
     } catch (error) {
       fill(holder, h("span", { class: "muted" }, "Der QR-Code konnte nicht gemacht werden."));
     }
@@ -179,14 +192,14 @@
     return () => { stopped = true; };
   }
 
-  /* What a scanned text does: an address on Nex opens in the app, another address is shown first, plain text is only shown. */
+  /* What a scanned text does: an address on Satürn opens in the app, another address is shown first, plain text is only shown. */
   async function opened(text) {
     let url = null;
     try { url = new URL(text); } catch (error) { url = null; }
     if (url && url.origin === location.origin) { toast("QR-Code erkannt"); Y.navigate(`${url.pathname}${url.search}`); return; }
     const web = url && /^https?:$/.test(url.protocol);
     dialog({ title: "QR-Code erkannt", body: h("div", { class: "qr-dialog" }, h("p", { class: "qr-found" }, text.slice(0, 400)),
-      h("p", { class: "muted small" }, web ? "Das ist eine Adresse außerhalb von Nex. Öffne sie nur, wenn du ihr traust." : "Das ist kein Link, nur ein Text.")),
+      h("p", { class: "muted small" }, web ? "Das ist eine Adresse außerhalb von Satürn. Öffne sie nur, wenn du ihr traust." : "Das ist kein Link, nur ein Text.")),
       actions: [...(web ? [{ label: "Öffnen", kind: "primary", run: () => { window.open(url.href, "_blank", "noopener,noreferrer"); } }] : []),
         { label: "Kopieren", run: async () => { try { await navigator.clipboard.writeText(text); toast("Kopiert"); } catch (error) { toast("Das Kopieren hat nicht geklappt."); } return false; } }] });
   }
@@ -197,7 +210,7 @@
     const before = camera.before;
     const choices = [
       me ? { id: "me", label: "Mein Profil", path: `/${me.handle}`, text: `@${me.handle}` } : null,
-      { id: "web", label: "Nex", path: "/", text: "die ganze Seite" },
+      { id: "web", label: "Satürn", path: "/", text: "die ganze Seite" },
       before ? { id: "item", label: `${before.emoji} ${before.name}`, path: `/camera/${before.id}`, text: before.kind === "lens" ? "diese Linse" : "dieses Spiel" } : null,
     ].filter(Boolean);
     let mode = "code";
@@ -216,7 +229,7 @@
     async function drawBody() {
       if (mode === "scan") {
         chips.hidden = true;
-        if (!camera.stream) { fill(view, h("p", { class: "qr-note" }, "Zum Scannen braucht Nex die Kamera.")); return; }
+        if (!camera.stream) { fill(view, h("p", { class: "qr-note" }, "Zum Scannen braucht Satürn die Kamera.")); return; }
         fill(view, h("div", { class: "qr-reticle", "aria-hidden": "true" }, h("i"), h("i"), h("i"), h("i")), h("p", { class: "qr-note" }, "Halte die Kamera auf einen QR-Code"));
         try { stopScan = await scan(camera.feed, (text) => { stopScan?.(); stopScan = null; navigator.vibrate?.(40); opened(text); }); } catch (error) { fill(view, h("p", { class: "qr-note" }, "Das Scannen geht auf diesem Gerät nicht.")); }
         return;
@@ -232,7 +245,7 @@
         canvas.setAttribute("aria-label", `QR-Code für ${choice.label}`);
         fill(view, canvas, h("p", { class: "qr-url" }, `${choice.label} · ${choice.text}`),
           h("div", { class: "qr-actions" }, h("button", { class: "btn primary small", type: "button", onclick: () => save(canvas, `nex-${choice.id}`) }, icon("download"), "Speichern"),
-            h("button", { class: "btn ghost small", type: "button", onclick: () => share(canvas, url, `Nex: ${choice.label}`) }, icon("share"), "Teilen")));
+            h("button", { class: "btn ghost small", type: "button", onclick: () => share(canvas, url, `Satürn: ${choice.label}`) }, icon("share"), "Teilen")));
       } catch (error) { fill(view, h("span", { class: "qr-note" }, "Der QR-Code konnte nicht gemacht werden.")); }
     }
     drawModes();

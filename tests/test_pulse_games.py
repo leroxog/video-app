@@ -1,4 +1,4 @@
-"""Nex: games of the community. A person (or the AI for a person) writes the code of a game and publishes it (it runs only in a sealed worker); what the server checks, keeps and
+"""Satürn: games of the community. A person (or the AI for a person) writes the code of a game and publishes it (it runs only in a sealed worker); what the server checks, keeps and
 serves (yipi_games.py), the games the AI writes, and the header that seals the worker. The jump-and-run builder is gone."""
 import os
 import re
@@ -152,7 +152,7 @@ def test_the_ai_that_chats_knows_the_game_format_when_somebody_talks_about_a_gam
         yield "ok"
     monkeypatch.setattr(yipi.ai_assistant, "generate_custom_stream", fake)
     mia = person("mia")
-    mia.post("/api/yipi/nex", json={"messages": [{"role": "user", "content": "Baue mir ein Spiel für Nex"}], "mode": "code"})
+    mia.post("/api/yipi/nex", json={"messages": [{"role": "user", "content": "Baue mir ein Spiel für Satürn"}], "mode": "code"})
     mia.post("/api/yipi/nex", json={"messages": [{"role": "user", "content": "Wie wird das Wetter morgen?"}], "mode": "code"})
     assert "360 mal 640" in seen[0] and "Als Spiel hochladen" in seen[0]
     assert "360 mal 640" not in seen[1], "not for every question"

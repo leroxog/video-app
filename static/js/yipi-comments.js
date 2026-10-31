@@ -1,4 +1,4 @@
-/* Nex comments (yipi-comments.js): the answers under a post, laid out like on X -- every comment is a row with the picture at the left and a thin
+/* Satürn comments (yipi-comments.js): the answers under a post, laid out like on X -- every comment is a row with the picture at the left and a thin
    line running down from it to the answers of that comment, which are shown (loaded when you ask) right below it with their own line. Like,
    answer and more are small buttons under each comment; "Antworten" opens a small box right under the comment, so nothing needs a second
    window. The same list is used in the sheet of a video and under a post. */

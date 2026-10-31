@@ -350,9 +350,9 @@ def _chat_id(client):
 
 
 def test_root_serves_pulse_not_the_archived_pages(client):
-    """The home page cycled Nex, browser, ychat, ylib, the browser again, NRS Server, NRS Sound, ysound, gomat, yipi, Nex Ai
+    """The home page cycled Satürn, browser, ychat, ylib, the browser again, NRS Server, NRS Sound, ysound, gomat, yipi, Nex Ai
     (2026-10-11), NSTL (2026-10-16, a few hours), Nex Ai again with real AI agents (2026-10-16) and is now Pulse (2026-10-17, the old
-    yipi grown up: GIFs, Nex, glass). The maths course, song site, sound studio, server panel, browser, ylib, ychat, Nex, plain Nex Ai,
+    yipi grown up: GIFs, Satürn, glass). The maths course, song site, sound studio, server panel, browser, ylib, ychat, Satürn, plain Nex Ai,
     the five agents and NSTL UIs still fully work at /gomat-archiv, /ysound-archiv, /sound-archiv, /server-archiv, /browser-archiv,
     /ylib-archiv, /ychat-archiv, /nex-archiv, /nex-ai-archiv, /nex-agenten-archiv and /nstl-archiv, unlinked from anywhere."""
     signup(client, "alice")
@@ -482,13 +482,13 @@ def test_stream_returns_chunks_and_persists_both_messages(client, monkeypatch):
     signup(client, "alice")
     cid = _chat_id(client)
     _mock_stream(monkeypatch, ["Hallo ", "zurück!"])
-    r = client.post(f"/api/ai/chats/{cid}/stream", json={"message": "Hallo Nex"})
+    r = client.post(f"/api/ai/chats/{cid}/stream", json={"message": "Hallo Satürn"})
     assert r.get_data(as_text=True) == "Hallo zurück!"
     with flask_app.app_context():
         msgs = AiChatMessage.query.filter_by(chat_id=cid).order_by(AiChatMessage.created_at).all()
-        assert [(m.role, m.content) for m in msgs] == [("user", "Hallo Nex"), ("assistant", "Hallo zurück!")]
+        assert [(m.role, m.content) for m in msgs] == [("user", "Hallo Satürn"), ("assistant", "Hallo zurück!")]
         chat = db.session.get(AiChat, cid)
-        assert chat.title == "Hallo Nex"
+        assert chat.title == "Hallo Satürn"
 
 
 def test_generate_chat_title_uses_a_large_enough_token_budget(monkeypatch):
@@ -548,9 +548,9 @@ def test_stream_falls_back_to_truncated_title_if_generation_fails_on_first_messa
     cid = _chat_id(client)
     _mock_stream(monkeypatch, ["Hallo zurück!"])
     # the autouse fixture already mocks generate_chat_title to return ""
-    client.post(f"/api/ai/chats/{cid}/stream", json={"message": "Hallo Nex"})
+    client.post(f"/api/ai/chats/{cid}/stream", json={"message": "Hallo Satürn"})
     with flask_app.app_context():
-        assert db.session.get(AiChat, cid).title == "Hallo Nex"
+        assert db.session.get(AiChat, cid).title == "Hallo Satürn"
 
 
 def test_generate_next_suggestion_uses_a_large_enough_token_budget(monkeypatch):
@@ -605,7 +605,7 @@ def test_stream_keeps_previous_suggestion_if_generation_fails(client, monkeypatc
         db.session.commit()
     _mock_stream(monkeypatch, ["Hallo zurück!"])
     # the autouse fixture already mocks generate_next_suggestion to return ""
-    client.post(f"/api/ai/chats/{cid}/stream", json={"message": "Hallo Nex"})
+    client.post(f"/api/ai/chats/{cid}/stream", json={"message": "Hallo Satürn"})
     with flask_app.app_context():
         assert db.session.get(AiChat, cid).next_suggestion == "Alter Vorschlag"
 
@@ -2969,7 +2969,7 @@ def test_stream_handles_ai_failure_gracefully(client, monkeypatch):
         assert [m.role for m in chat.messages] == ["user"]
 
 
-# ---------------- Nex chat sidebar (list / create / rename / delete) ----------------
+# ---------------- Satürn chat sidebar (list / create / rename / delete) ----------------
 
 def test_chats_endpoints_require_login(client):
     assert client.get("/api/ai/chats").status_code == 401

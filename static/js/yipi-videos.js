@@ -1,4 +1,4 @@
-/* Nex videos (yipi-videos.js): the Videos tab, made like TikTok -- one video after the other, each as big as the screen, you scroll (or press the
+/* Satürn videos (yipi-videos.js): the Videos tab, made like TikTok -- one video after the other, each as big as the screen, you scroll (or press the
    arrow keys) to the next one, the one on screen plays by itself and cannot be stopped. The order is a shuffle (not the newest first); when every video
    has been shown the page shuffles again and starts over. Only five videos are asked for at a time, only the ones near the screen are fetched (and
    they are fetched piece by piece while they play), the ones far away are let go again. In the video itself, small and see-through, a row to set the
@@ -48,7 +48,7 @@
     /* ------------------------------------------------------------------ sound */
     const heard = () => (blocked ? 0 : volume);
     function applySound(reel) {
-      reel.video.volume = Math.min(1, Math.max(0, volume / 10));
+      reel.video.volume = Math.min(1, Math.max(0, volume / 10)) * (reel.cc && reel.cc.ducking ? 0.12 : 1);       // (a voice speaks the translation: the original sound stays low)
       reel.video.muted = blocked || volume === 0;
       const shown = heard();
       fill(reel.volumeIcon, icon(soundIcon(shown)));
@@ -84,6 +84,7 @@
     /* ------------------------------------------------------------------ loading */
     const fetchFile = (reel) => { if (!reel.video.getAttribute("src")) { reel.video.preload = "auto"; reel.video.src = reel.url; } };
     function letGo(reel) {                                      // far from the screen: no file, no memory
+      reel.cc?.stop();
       if (!reel.video.getAttribute("src")) return;
       reel.video.pause();
       reel.video.removeAttribute("src");
@@ -101,6 +102,7 @@
     function setActive(reel) {
       if (active === reel) return;
       active?.video.pause();
+      active?.cc?.stop();
       active = reel;
       clearTimeout(watching);
       if (!reel) return;
@@ -109,6 +111,7 @@
       fetchFile(reel);
       reel.video.currentTime = 0;
       play(reel);
+      reel.cc?.start();                                         // subtitles and the spoken translation of this video
       manage();
       watching = setTimeout(() => Y.queueView?.(reel.item.id), 1500);
       if (index >= reels.length - 3) more();
@@ -120,7 +123,7 @@
       const height = scroller.clientHeight;
       const boundary = reels[0] ? reels[0].element : null;
       let removed = 0;
-      for (const made of drop) { watcher?.unobserve(made.element); made.video.pause(); made.video.removeAttribute("src"); made.video.load(); }
+      for (const made of drop) { watcher?.unobserve(made.element); made.cc?.stop(); made.video.pause(); made.video.removeAttribute("src"); made.video.load(); }
       for (const page of [...scroller.children]) {
         if (page === boundary || !page.classList.contains("reel")) { if (page === boundary) break; continue; }
         page.remove();
@@ -134,7 +137,7 @@
         const reel = reels.find((candidate) => candidate.element === entry.target);
         if (!reel) continue;
         if (entry.isIntersecting && entry.intersectionRatio >= 0.6) setActive(reel);
-        else if (active === reel && !entry.isIntersecting) { reel.video.pause(); active = null; }
+        else if (active === reel && !entry.isIntersecting) { reel.video.pause(); reel.cc?.stop(); active = null; }
       }
     }, { root: scroller, threshold: [0, 0.6, 1] }) : null;
 
@@ -152,6 +155,9 @@
       const save = h("button", { class: "reel-btn", type: "button", "aria-label": "Lesezeichen" }, h("span", { class: "reel-btn-ic" }), h("span", { class: "reel-count" }, "Merken"));
       const share = h("button", { class: "reel-btn", type: "button", "aria-label": "Teilen", "aria-haspopup": "menu" }, h("span", { class: "reel-btn-ic" }, icon("send")), h("span", { class: "reel-count" }, "Teilen"));
       const more = h("button", { class: "reel-btn", type: "button", "aria-label": "Mehr", "aria-haspopup": "menu" }, h("span", { class: "reel-btn-ic" }, icon("more")));
+      const cc = Y.captions ? Y.captions.bind({ video, mediaId: media.id, volume: () => (blocked ? 0 : volume / 10) || 0.0001, onChange: () => { const made = reels.find((entry) => entry.video === video); if (made) applySound(made); } }) : null;
+      const language = cc ? h("button", { class: "reel-btn", type: "button", "aria-label": "Untertitel und Sprache" }, h("span", { class: "reel-btn-ic" }, icon("captions")), h("span", { class: "reel-count" }, "Sprache")) : null;
+      if (language) language.addEventListener("click", () => Y.captions.sheet(cc));
       const mine = !!(Y.me && Y.me.handle === item.user.handle);
       const follow = !mine && !item.user.followedByMe ? h("button", { class: "reel-follow", type: "button", "aria-label": `@${item.user.handle} folgen` }, icon("plus")) : null;
 
@@ -248,11 +254,11 @@
         item.camId && Y.tryButton ? Y.tryButton(item.camId) : null);
       const actions = h("div", { class: "reel-actions" },
         h("span", { class: "reel-person" }, link(`/${item.user.handle}`, { class: "reel-av", "aria-label": `Profil von ${item.user.name}` }, avatar(item.user, "lg")), follow),
-        like, comment, save, share, more);
-      put(stage, video, volumeRow, resume, bar, info);
+        like, comment, language, save, share, more);
+      put(stage, video, cc ? cc.element : null, volumeRow, resume, bar, info);
       const element = h("section", { class: "reel", "data-id": String(item.id), "aria-label": `Video von ${item.user.name}` }, stage, actions);
       draw();
-      return { element, video, stage, item, url: media.url, draw, position, volumeIcon, volumeButton, range };
+      return { element, video, stage, item, url: media.url, draw, position, volumeIcon, volumeButton, range, cc };
     }
 
     function showEmpty() {

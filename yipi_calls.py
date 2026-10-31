@@ -1,4 +1,4 @@
-"""Nex calls (2026-10-31): a call with a friend or with a group, live, from the chat.
+"""Satürn calls (2026-10-31): a call with a friend or with a group, live, from the chat.
 
 How it works: the caller taps the handset in the head of a chat. The people called get a notification (a window with a ringing sound in the page, and a push on a phone that is
 locked), one of them answers, and from then on every browser sends its microphone in short pieces (half a second of 16 kHz sound, one byte per sample) and asks for the pieces of the
@@ -112,7 +112,7 @@ def log_line(call):
         yipi.db.session.add(yipi.YipiMessage(sender_id=call.caller_id, recipient_id=callee.user_id, text=text, read=heard or call.reason == "declined"))
         yipi.db.session.commit()
         if not heard and call.reason != "declined":
-            yipi.push_later(callee.user_id, "Nex", f"Verpasster Anruf von {call.people[call.caller_id].brief['name']}", f"/messages/{call.people[call.caller_id].brief['handle']}", tag=f"call-{call.id}", urgent=True)
+            yipi.push_later(callee.user_id, "Satürn", f"Verpasster Anruf von {call.people[call.caller_id].brief['name']}", f"/messages/{call.people[call.caller_id].brief['handle']}", tag=f"call-{call.id}", urgent=True)
     else:
         text = f"📞 Gruppenanruf · {minutes(seconds)}" if heard else "📞 Verpasster Gruppenanruf"
         yipi.db.session.add(yipi.YipiGroupMessage(group_id=call.group_id, sender_id=call.caller_id, text=text))
@@ -208,7 +208,7 @@ def register(route, need_user, body, find_user):
         return None
 
     def ring(call, caller, targets):
-        title = "Nex"
+        title = "Satürn"
         for target in targets:
             text = f"{caller.name} ruft dich an" if call.kind == "dm" else f"{caller.name} ruft in „{call.group_name}“ an"
             url = f"/messages/{caller.handle}" if call.kind == "dm" else f"/g/{call.group_id}"

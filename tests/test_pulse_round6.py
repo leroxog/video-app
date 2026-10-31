@@ -1,5 +1,5 @@
-"""Nex, round 6 (2026-10-21): the Videos tab shows a shuffle (five at a time, and it starts over), videos are at most 30 seconds, somebody who is not
-signed in may watch the video that was sent to them (and nothing else), photos / videos / documents go into chats (private), and Nex can read
+"""Satürn, round 6 (2026-10-21): the Videos tab shows a shuffle (five at a time, and it starts over), videos are at most 30 seconds, somebody who is not
+signed in may watch the video that was sent to them (and nothing else), photos / videos / documents go into chats (private), and Satürn can read
 documents and look at photos."""
 import base64
 import io
@@ -191,15 +191,15 @@ def test_the_link_preview_says_what_a_person_would_say(client):
     text = api(mia, "post", "/posts", {"text": "Nur Text"}, status=201)["post"]
     guest = flask_app.test_client()
     home = guest.get("/").get_data(as_text=True)
-    assert 'property="og:description" content="Ich habe Nex gefunden!!!!"' in home and 'name="description" content="Ich habe Nex gefunden!!!!"' in home
+    assert 'property="og:description" content="Ich habe Satürn gefunden!!!!"' in home and 'name="description" content="Ich habe Satürn gefunden!!!!"' in home
     page = guest.get(f"/mia/status/{video['id']}").get_data(as_text=True)
-    assert 'property="og:description" content="Ich habe ein tolles Video auf Nex gefunden willst du es auch sehen?!"' in page
+    assert 'property="og:description" content="Ich habe ein tolles Video auf Satürn gefunden willst du es auch sehen?!"' in page
     assert "Mein Hund" not in page and 'content="noindex"' in page and '"me": null' in page.replace('"me":null', '"me": null')
     page = guest.get(f"/mia/status/{text['id']}").get_data(as_text=True)
-    assert "Ich habe einen tollen Beitrag auf Nex gefunden willst du ihn auch sehen?!" in page and "Nur Text" not in page
+    assert "Ich habe einen tollen Beitrag auf Satürn gefunden willst du ihn auch sehen?!" in page and "Nur Text" not in page
     assert guest.get("/mia/status/999999").status_code == 404, "a post that is not there is not there"
     signed_in = mia.get("/").get_data(as_text=True)
-    assert "Ich habe Nex gefunden!!!!" not in signed_in
+    assert "Ich habe Satürn gefunden!!!!" not in signed_in
 
 
 # ------------------------------------------------------------------------------------ files in chats
@@ -322,7 +322,7 @@ def test_the_names_of_files_are_made_safe():
     assert yipi.safe_filename("Bericht\x00\n.pdf") == "Bericht.pdf"
 
 
-# ------------------------------------------------------------------------------------------ Nex reads
+# ------------------------------------------------------------------------------------------ Satürn reads
 def test_docread_takes_the_text_out_of_documents():
     word = make_zip({"word/document.xml": "<w:document><w:body><w:p><w:r><w:t>Erster Absatz</w:t></w:r></w:p><w:p><w:r><w:t>Zweiter &amp; letzter</w:t></w:r></w:p></w:body></w:document>"})
     text, cut = docread.extract(word, "brief.docx")

@@ -1,4 +1,4 @@
-/* Nex new post (yipi-newpost.js): what happens when somebody taps the "+" -- a small pop-up (it pops open) asks "Beitrag" or "Video".
+/* Satürn new post (yipi-newpost.js): what happens when somebody taps the "+" -- a small pop-up (it pops open) asks "Beitrag" or "Video".
    "Beitrag" opens the template for a post (the field "Text" at the top, photos, GIF or a poll below it, and hashtags that are added one by one
    and shown in light pink); "Video" opens the template for a video (the name is required, then the video itself, at most 30 seconds, then
    hashtags; the upload shows how far it has come). */
@@ -122,7 +122,10 @@
       submit.classList.add("busy");
       submit.textContent = "Lädt hoch …";
       update();
-      const up = await Api.upload(picked.file, { alt: title, width: String(picked.width), height: String(picked.height) }, (fraction) => {
+      const fields = { alt: title, width: String(picked.width), height: String(picked.height), captions: "1" };
+      const pitch = Y.captions && Y.captions.pitchOf ? await Y.captions.pitchOf(picked.file) : "";          // (the pitch of the voice: women and men get their own voice in the translation)
+      if (pitch) fields.pitch = pitch;
+      const up = await Api.upload(picked.file, fields, (fraction) => {
         bar.style.width = `${Math.round(fraction * 100)}%`;
         progress.setAttribute("aria-valuenow", String(Math.round(fraction * 100)));
         if (fraction >= 1) submit.textContent = "Wird verarbeitet …";

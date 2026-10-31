@@ -1,7 +1,7 @@
 /* Nex AI: the page of the assistant (/i/nex). It is made like every other chat, so that it looks like a normal contact: the same head (back, round picture, name), the
    same bubbles (yours on the right, the answers on the left), the same box to write in, and under the time of an answer a small "KI". Nex AI is in the list of chats
    like a person. You can have many conversations; they stay in this browser (localStorage, for the signed-in person only). The server gets the last turns of the one
-   you are in, passes them to the AI service and keeps nothing. "Mit Nex erklären" on a post opens a fresh conversation with that post (/i/nex?post=ID). What Nex AI
+   you are in, passes them to the AI service and keeps nothing. "Mit Satürn erklären" on a post opens a fresh conversation with that post (/i/nex?post=ID). What Nex AI
    writes is put on the page as text (richText makes the links), never as HTML. */
 (function () {
   "use strict";
@@ -39,7 +39,7 @@
     "Schreib einen motivierenden Satz für Montagmorgen", "Was ist der Unterschied zwischen Virus und Bakterie?", "Erkläre mir, wie ein Kompass funktioniert",
     "Schlag mir ein Rätsel vor, das ich meinen Freunden stellen kann", "Wie rechne ich Prozente im Kopf?", "Was sind die Planeten unseres Sonnensystems?",
     "Gib mir Tipps für ein gutes Foto mit dem Handy", "Schreib mir eine Antwort auf eine freundliche Kritik", "Wie funktioniert Bluetooth?",
-    "Erkläre mir die Regeln von Schach in fünf Punkten", "Hilf mir, einen Reim auf „Nex“ zu finden", "Was ist der Unterschied zwischen Wal und Fisch?",
+    "Erkläre mir die Regeln von Schach in fünf Punkten", "Hilf mir, einen Reim auf „Satürn“ zu finden", "Was ist der Unterschied zwischen Wal und Fisch?",
     "Wie schreibe ich eine E-Mail an meine Lehrerin?", "Gib mir drei Fragen, um jemanden besser kennenzulernen", "Was ist ein Algorithmus? Erkläre es mit Kuchenbacken",
   ];
   let lastShown = [];
@@ -166,7 +166,7 @@
       const copy = h("button", { class: "nex-copy", type: "button", "aria-label": "Code kopieren", onclick: async () => {
         try { await navigator.clipboard.writeText(block.text); toast("Code kopiert."); } catch (error) { toast("Das Kopieren hat nicht geklappt."); }
       } }, "Kopieren");
-      const isGame = !!(Y.gameMaker && /\b(function\s+draw\s*\(|(const|let|var)\s+draw\s*=)/.test(block.text) && /\bgame\.(score|over)\b/.test(block.text));       // a game in the format of Nex
+      const isGame = !!(Y.gameMaker && /\b(function\s+draw\s*\(|(const|let|var)\s+draw\s*=)/.test(block.text) && /\bgame\.(score|over)\b/.test(block.text));       // a game in the format of Satürn
       const upload = isGame ? h("button", { class: "nex-copy upload", type: "button", "aria-label": "Als Spiel hochladen", onclick: () => Y.gameMaker.code({ prefill: { title: "", code: block.text } }) }, "Als Spiel hochladen") : null;
       return h("div", { class: "nex-codebox" }, h("div", { class: "nex-codehead" }, h("span", {}, block.lang || "Code"), h("span", { class: "nex-codeacts" }, upload, copy)), h("pre", { class: "nex-code", tabindex: "0" }, h("code", {}, block.text)));
     }

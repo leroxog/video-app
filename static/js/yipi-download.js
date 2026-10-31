@@ -1,4 +1,4 @@
-/* Nex video download (yipi-download.js): "Video speichern" -- like on TikTok the saved video carries a watermark, the Nex logo with the name of
+/* Satürn video download (yipi-download.js): "Video speichern" -- like on TikTok the saved video carries a watermark, the Satürn logo with the name of
    whoever made it (@name). It first sits in the top left corner, in the second half it slides over to the bottom right one. The server sends the
    file as it is; the page plays it once (as fast as it is long), draws every picture together with the watermark on a canvas and records that with
    the recorder of the browser, with the sound of the video. Nothing leaves the device. While it works a small card shows how far it is and has a
@@ -32,7 +32,10 @@
     ctx.closePath();
   }
 
-  /* The watermark: the black tile with the heartbeat, "Nex" and "@name" next to it. */
+  const planet = new Image();                                     // the planet of Satürn (loaded once; until it is there the old tile is drawn)
+  planet.src = "/static/img/saturn-mark.png";
+
+  /* The watermark: the planet of Satürn (a white tile with the planet in it, so it shows on every video), "Satürn" and "@name" next to it. */
   function drawMark(ctx, plan, handle, logo) {
     const tile = plan.h;
     const left = plan.x + tile * 1.16;
@@ -42,28 +45,35 @@
     ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
     ctx.shadowBlur = tile * 0.16;
     roundedRect(ctx, plan.x, plan.y, tile, tile, tile * 0.26);
-    ctx.fillStyle = "#000";
+    const withPlanet = planet.complete && planet.naturalWidth > 0;
+    ctx.fillStyle = withPlanet ? "#fff" : "#000";
     ctx.fill();
     ctx.shadowColor = "transparent";
-    ctx.strokeStyle = "#767676";
-    ctx.lineWidth = Math.max(1, tile * 0.024);
-    ctx.stroke();
-    ctx.save();
-    ctx.translate(plan.x, plan.y);
-    ctx.scale(tile / 64, tile / 64);
-    ctx.strokeStyle = "#fff";
-    ctx.lineWidth = 5.5;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.stroke(logo);
-    ctx.restore();
+    if (withPlanet) {
+      const side = tile * 0.8;
+      const high = side * planet.naturalHeight / planet.naturalWidth;
+      ctx.drawImage(planet, plan.x + (tile - side) / 2, plan.y + (tile - high) / 2, side, high);
+    } else {
+      ctx.strokeStyle = "#767676";
+      ctx.lineWidth = Math.max(1, tile * 0.024);
+      ctx.stroke();
+      ctx.save();
+      ctx.translate(plan.x, plan.y);
+      ctx.scale(tile / 64, tile / 64);
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 5.5;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.stroke(logo);
+      ctx.restore();
+    }
     ctx.shadowColor = "rgba(0, 0, 0, 0.75)";
     ctx.shadowBlur = tile * 0.14;
     ctx.fillStyle = "#fff";
     ctx.textBaseline = "alphabetic";
     let size = tile * 0.5;
     ctx.font = `800 ${size}px ${FONT}`;
-    ctx.fillText("Nex", left, plan.y + tile * 0.47);
+    ctx.fillText("Satürn", left, plan.y + tile * 0.47);
     size = tile * 0.34;
     ctx.font = `700 ${size}px ${FONT}`;
     const text = `@${handle}`;

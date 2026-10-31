@@ -1,4 +1,4 @@
-/* Nex game art (pg-art.js): the pieces the games use to look good and not like boxes -- skies with a sun and clouds, rolling hills, ground, soft shadows, little puffs and sparks when
+/* Satürn game art (pg-art.js): the pieces the games use to look good and not like boxes -- skies with a sun and clouds, rolling hills, ground, soft shadows, little puffs and sparks when
    something happens, glass chips for the numbers. Everything is drawn with a few lines of canvas code (no pictures to load), is see-through where the camera should show, and
    works with the fake context of the tests. A scene is a set of colours (a "palette"); `Art.PALETTES` has a few. */
 (function () {

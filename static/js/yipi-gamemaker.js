@@ -1,4 +1,4 @@
-/* Nex game maker (yipi-gamemaker.js): what the "+" lens of the camera offers for games. A game is code (it runs in a sealed Web Worker, see yipi_games.py), and there are two ways to get
+/* Satürn game maker (yipi-gamemaker.js): what the "+" lens of the camera offers for games. A game is code (it runs in a sealed Web Worker, see yipi_games.py), and there are two ways to get
    one: "Mit KI erstellen" (the AI writes it for a description, `ai`) and "Spiel-Code hochladen" (`code`: a name, a photo for the round button in the strip, and the code, which a person writes,
    pastes or lets the AI write when the field is empty). The Nex AI chat has the same dialog behind the button "Als Spiel hochladen" under a block of code. The games of other people come into
    the strip of the camera as "Community" games. The bridge to the worker is in pg-community.js (loaded with the games of the camera; `ensureGames` loads it when it is needed somewhere else). */
@@ -109,7 +109,7 @@
       const file = photoPicker.files[0];
       photoPicker.value = "";
       if (!file) return;
-      if (!/^image\/(jpeg|png|webp|gif)$/.test(file.type)) { status.textContent = "Das ist kein Foto, das Nex kennt."; return; }
+      if (!/^image\/(jpeg|png|webp|gif)$/.test(file.type)) { status.textContent = "Das ist kein Foto, das Satürn kennt."; return; }
       status.textContent = "Das Foto wird hochgeladen …";
       try {
         const blob = await Y.prepareImage(file, { crop: { width: 256, height: 256 } });
@@ -186,7 +186,7 @@
       photoPicker,
       h("div", { class: "gm-codebox" }, source, emptyBox), aiBox, picker, status,
       h("details", { class: "gm-help" }, h("summary", {}, "Wie funktioniert der Code?"),
-        h("p", { class: "muted small" }, "Das Spiel läuft abgeschottet: ohne Internet, ohne Zugriff auf Nex, nur mit dem Finger als Eingabe und einer Fläche von 360 × 640."),
+        h("p", { class: "muted small" }, "Das Spiel läuft abgeschottet: ohne Internet, ohne Zugriff auf Satürn, nur mit dem Finger als Eingabe und einer Fläche von 360 × 640."),
         h("ul", { class: "gm-api" },
           h("li", {}, h("code", {}, "function start()"), " läuft einmal am Anfang."),
           h("li", {}, h("code", {}, "function update(dt, input)"), ": ", h("code", {}, "dt"), " sind Sekunden, ", h("code", {}, "input"), " hat x, y, down, pressed, tap, released, swipe."),
@@ -257,7 +257,7 @@
       const row = uploadFor;
       uploadFor = null;
       if (!file || !row) return;
-      if (!/^image\/(jpeg|png|webp|gif)$/.test(file.type)) { status.textContent = "Das ist kein Foto, das Nex kennt."; return; }
+      if (!/^image\/(jpeg|png|webp|gif)$/.test(file.type)) { status.textContent = "Das ist kein Foto, das Satürn kennt."; return; }
       status.textContent = "Das Foto wird hochgeladen …";
       try {
         const blob = await Y.prepareImage(file, { crop: { width: 256, height: 256 } });

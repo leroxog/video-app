@@ -1,4 +1,4 @@
-"""The KI-Konten are gone again (2026-10-30: "lösche wieder die Bots"). Nex made about a thousand accounts that wrote, liked and voted so that the site felt alive; they were always
+"""The KI-Konten are gone again (2026-10-30: "lösche wieder die Bots"). Satürn made about a thousand accounts that wrote, liked and voted so that the site felt alive; they were always
 marked "KI" and now they are removed on request. What is left of this module is small:
 
 * `attach(app)`: once per process, at the first request to the API, a thread deletes every account that was made as an AI account (`yipi_user.agent_kind` is set) with everything

@@ -1,4 +1,4 @@
-/* Nex lenses (yipi-lenses.js): the ready-made face lenses of the camera tab, and what belongs to them: the lens a person writes as a prompt ("mach mich dumm aussehend"),
+/* Satürn lenses (yipi-lenses.js): the ready-made face lenses of the camera tab, and what belongs to them: the lens a person writes as a prompt ("mach mich dumm aussehend"),
    which the server turns into a recipe of the effects below, the lenses that other people published, and the button "Ausprobieren" under a video that was made with one.
    The effects themselves (and the face tracking) are in pl-face.js, loaded when a lens is opened first. A recipe is {fx: [effect names], filter: name of a colour filter}. */
 (function () {
@@ -94,7 +94,7 @@
     const lists = h("div", { class: "cc-lists" });
     const panel = h("div", { class: "cam-create", role: "group", "aria-label": "Erstellen" },
       h("h2", {}, "Erstelle etwas Eigenes"),
-      h("p", { class: "cc-sub" }, "Veröffentlichen und alle auf Nex können es benutzen."),
+      h("p", { class: "cc-sub" }, "Veröffentlichen und alle auf Satürn können es benutzen."),
       h("button", { class: "cc-card hero", type: "button", onclick: () => (Y.gameMaker ? Y.gameMaker.ai({ camera }) : toast("Das gibt es gleich.")) }, h("span", { class: "cc-ic" }, icon("sparkle")), h("span", { class: "cc-text" }, h("b", {}, "Mit KI erstellen"), h("small", {}, "Beschreib ein Spiel oder eine Linse, die KI baut es für dich"))),
       h("button", { class: "cc-card", type: "button", onclick: () => lensMaker(camera) }, h("span", { class: "cc-ic" }, "✨"), h("span", { class: "cc-text" }, h("b", {}, "Linse mit Prompt"), h("small", {}, "Schreib, wie du aussehen willst: dumm, mit großen Zähnen, als Roboter …"))),
       h("button", { class: "cc-card", type: "button", onclick: () => (Y.gameMaker ? Y.gameMaker.ranking({ camera }) : toast("Das gibt es gleich.")) }, h("span", { class: "cc-ic" }, "🏆"), h("span", { class: "cc-text" }, h("b", {}, "Rangliste erstellen"), h("small", {}, "Titel, Top 5 oder Top 10 und deine Einträge mit Bildern"))),

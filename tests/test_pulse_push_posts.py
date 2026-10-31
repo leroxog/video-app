@@ -1,4 +1,4 @@
-"""Nex: a notification on the phone when somebody you follow posts something new (the ones for likes, answers, follows and messages are in test_pulse_engage6.py). An iPhone shows
+"""Satürn: a notification on the phone when somebody you follow posts something new (the ones for likes, answers, follows and messages are in test_pulse_engage6.py). An iPhone shows
 notifications only for an app of the home screen: the page says how to make one."""
 import io
 import os

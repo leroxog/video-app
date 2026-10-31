@@ -1,4 +1,4 @@
-/* Nex GIF core: makes a GIF file out of pictures, in plain functions that need no screen (so Node can test them). The page draws the
+/* Satürn GIF core: makes a GIF file out of pictures, in plain functions that need no screen (so Node can test them). The page draws the
    frames (photos, text) on a canvas and hands their pixels over; this file picks the colours (one shared palette of up to 256, by
    median cut), turns every pixel into a colour number (optionally spreading the rounding error to its neighbours, which makes photos
    look smooth), squeezes the numbers with the LZW method GIF uses, and writes the file: header, looping note, one block per frame. */

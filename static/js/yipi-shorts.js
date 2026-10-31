@@ -1,4 +1,4 @@
-/* Nex shorts (yipi-shorts.js): videos that are on the screen while somebody scrolls through the feed. Two things:
+/* Satürn shorts (yipi-shorts.js): videos that are on the screen while somebody scrolls through the feed. Two things:
    1. `Y.autoplay.add(video)`: the videos of the feed play by themselves, always without sound and never more than one at a time. Which one: the one under the mouse (just
       resting on it, no click), or on a phone the one that was pressed for a while; otherwise the one of which most is on the screen (and nearest to the middle of it).
       Videos that nobody sees are stopped, and so is everything while the tab is hidden or when the person asked the system for less motion.

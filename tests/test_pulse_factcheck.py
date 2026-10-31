@@ -1,4 +1,4 @@
-"""The fact check (2026-10-18): like the notes of X, a post whose claim is wrong gets a "Fact Check" under it.  Nex (the AI) judges it in the
+"""The fact check (2026-10-18): like the notes of X, a post whose claim is wrong gets a "Fact Check" under it.  Satürn (the AI) judges it in the
 background, when the post is written or when somebody sees it for the first time; a note is only shown when the AI is sure.  Nobody can write
 the note, and a person who thinks it is wrong can report it ("factcheck"), after which an admin can remove it."""
 import json

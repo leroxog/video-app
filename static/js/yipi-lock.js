@@ -1,4 +1,4 @@
-/* Nex chat lock (yipi-lock.js): an option from the settings. When it is on, the chats open only with a combination: one stroke of the finger across
+/* Satürn chat lock (yipi-lock.js): an option from the settings. When it is on, the chats open only with a combination: one stroke of the finger across
    the screen, with the right shape and at the right pace (static/js/yipi-core.js says how well a stroke fits; 82 percent opens the chats). The page
    of the chats is then a dark field of grey dots that says "Chats sind gesperrt". Wrong tries lock it for longer and longer (3 in a row: a minute, then
    1, 5, 10, 15, 30, 60, 120, 240 minutes and so on); a right try wipes the record. The combination and the record stay in this browser only (a screen

@@ -1,4 +1,4 @@
-/* Nex games of the community (pg-community.js): the bridge to the sealed worker in which a game written as code runs (the code of a person never runs on the page of Nex). Code games:
+/* Satürn games of the community (pg-community.js): the bridge to the sealed worker in which a game written as code runs (the code of a person never runs on the page of Satürn). Code games:
    see codeDef() -- the code runs in a worker (static script with header "default-src 'none'", served by the server) that gets the finger and gives back pictures, points and "over". */
 (function () {
   "use strict";

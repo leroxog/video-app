@@ -1,6 +1,6 @@
-/* Nex composer (yipi-composer.js): the pieces of the line above the keyboard that every place to write has, like the line of WhatsApp: a "+" at the left that slides a panel out under the line
+/* Satürn composer (yipi-composer.js): the pieces of the line above the keyboard that every place to write has, like the line of WhatsApp: a "+" at the left that slides a panel out under the line
    (it takes the place of the keyboard), a sticker button in the line, a photo button, and the microphone (a voice message in a chat, dictation everywhere else). `Y.composerPanel(ids, onPick)` is the panel,
-   `Y.composerTools` has what the entries do (pick a file, the place of the person, a contact, dictation, a voice message). The stickers are the GIFs of Nex: from now on they are called stickers. */
+   `Y.composerTools` has what the entries do (pick a file, the place of the person, a contact, dictation, a voice message). The stickers are the GIFs of Satürn: from now on they are called stickers. */
 (function () {
   "use strict";
 
@@ -51,7 +51,7 @@
       navigator.geolocation.getCurrentPosition((position) => {
         const lat = position.coords.latitude.toFixed(4), lon = position.coords.longitude.toFixed(4);      // (about 10 metres: enough to find a place, not a door)
         resolve(`📍 Mein Standort: https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=16/${lat}/${lon}`);
-      }, () => { toast("Den Standort darf Nex gerade nicht lesen. Erlaube ihn in den Einstellungen des Browsers."); resolve(null); }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 });
+      }, () => { toast("Den Standort darf Satürn gerade nicht lesen. Erlaube ihn in den Einstellungen des Browsers."); resolve(null); }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 });
     });
   }
 
@@ -87,7 +87,7 @@
           if (text) { textarea.value = `${textarea.value}${textarea.value && !/\s$/.test(textarea.value) ? " " : ""}${text}`; onChange?.(); }
         }
       };
-      recognition.onerror = () => { toast("Das Mikrofon darf Nex nicht hören. Erlaube es in den Einstellungen des Browsers."); };
+      recognition.onerror = () => { toast("Das Mikrofon darf Satürn nicht hören. Erlaube es in den Einstellungen des Browsers."); };
       recognition.onend = () => { running = null; button.classList.remove("rec"); button.setAttribute("aria-pressed", "false"); };
       try { recognition.start(); running = recognition; button.classList.add("rec"); button.setAttribute("aria-pressed", "true"); } catch (error) { running = null; }
     });
@@ -99,7 +99,7 @@
     if (host.classList.contains("recording")) return;
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === "undefined") { toast("Dein Browser kann keine Sprachnachricht aufnehmen."); return; }
     let stream;
-    try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch (error) { toast("Das Mikrofon darf Nex nicht hören. Erlaube es in den Einstellungen des Browsers."); return; }
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch (error) { toast("Das Mikrofon darf Satürn nicht hören. Erlaube es in den Einstellungen des Browsers."); return; }
     const type = ["audio/webm;codecs=opus", "audio/mp4", "audio/webm", "audio/ogg;codecs=opus"].find((candidate) => MediaRecorder.isTypeSupported(candidate)) || "";
     let recorder;
     try { recorder = new MediaRecorder(stream, type ? { mimeType: type } : undefined); } catch (error) { stream.getTracks().forEach((track) => track.stop()); toast("Dein Browser kann keine Sprachnachricht aufnehmen."); return; }

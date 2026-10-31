@@ -1,4 +1,4 @@
-"""Nex lenses on the server (yipi_lenses.py): what a person writes as a prompt for a face lens ("mach mich dumm aussehend", "ein Hase mit großen Zähnen") is turned into a recipe
+"""Satürn lenses on the server (yipi_lenses.py): what a person writes as a prompt for a face lens ("mach mich dumm aussehend", "ein Hase mit großen Zähnen") is turned into a recipe
 of the ready-made effects that the camera knows (static/js/pl-face.js): a short list of effect names and a colour filter. Nothing from a person ever runs as code: the recipe
 can only name effects of the list below (the AI service is asked to choose from it, and whatever comes back is checked against it), so a lens can show a text and some
 masks, never anything else. If the AI service is not there the words of the prompt are matched with a list of keywords instead. A test keeps the list in step with the

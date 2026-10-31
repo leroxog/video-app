@@ -1,4 +1,4 @@
-"""Nex: music for the clips (yipi_music.py): only audio of the Internet Archive with a Creative Commons licence that allows it (CC0, CC BY, CC BY-SA), passed on by the server, and files of the person's
+"""Satürn: music for the clips (yipi_music.py): only audio of the Internet Archive with a Creative Commons licence that allows it (CC0, CC BY, CC BY-SA), passed on by the server, and files of the person's
 own folder; a lens can bring a song. The Internet Archive is never really asked here: the answers are made up."""
 import io
 import json

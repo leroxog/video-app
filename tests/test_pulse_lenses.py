@@ -1,4 +1,4 @@
-"""Nex: face lenses. The effects are drawn in the browser (static/js/pl-face.js, tested in tests/pulse_face.test.js); here is what the server does: it turns a prompt
+"""Satürn: face lenses. The effects are drawn in the browser (static/js/pl-face.js, tested in tests/pulse_face.test.js); here is what the server does: it turns a prompt
 into a recipe of effect names (never code), keeps the lenses people publish, and remembers on a video which lens (or game) of the camera it was made with."""
 import io
 import json
