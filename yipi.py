@@ -1868,6 +1868,29 @@ def push_later(user_id, title, body, url="/", tag=None):
     PUSH_RUNNER(current_app._get_current_object(), user_id, {"title": title, "body": body, "url": url, "tag": tag or "pulse"})
 
 
+MAX_POST_BUZZ = 150                                             # so many followers of one author are told about one new post at most
+
+
+def notify_followers_of_post(post, author):
+    """A notification on the phones of the people who follow the author (and have switched notifications on): "Anna hat ein neues Video gepostet". Not for answers and plain reposts, not for the AI
+    accounts and the official accounts, not for people who blocked or muted the author. A phone that is in use right now is left alone (`push_later` checks that)."""
+    if post.reply_to_id is not None or post.repost_of_id is not None or author.agent_kind is not None or author.company:
+        return 0
+    follower_ids = [row.follower_id for row in YipiFollow.query.filter_by(followee_id=author.id).order_by(YipiFollow.id.desc()).limit(MAX_POST_BUZZ * 3)]
+    if not follower_ids:
+        return 0
+    with_push = {row[0] for row in db.session.query(YipiPush.user_id).filter(YipiPush.user_id.in_(follower_ids)).distinct()}
+    hidden = {row.blocker_id for row in YipiBlock.query.filter(YipiBlock.blocked_id == author.id, YipiBlock.blocker_id.in_(follower_ids))} | {row.muter_id for row in YipiMute.query.filter(YipiMute.muted_id == author.id, YipiMute.muter_id.in_(follower_ids))}
+    targets = [user_id for user_id in follower_ids if user_id in with_push and user_id not in hidden][:MAX_POST_BUZZ]
+    if not targets:
+        return 0
+    kinds = {row.content_type.split("/")[0] for row in media_rows(post.id)}
+    what = "ein neues Video" if "video" in kinds else "ein neues Foto" if "image" in kinds else "etwas Neues"
+    for user_id in targets:
+        push_later(user_id, "Nex", f"{author.name} hat {what} gepostet", f"/{author.handle}/status/{post.id}", tag=f"post-{author.id}")
+    return len(targets)
+
+
 PUSH_RUNNER = lambda app, user_id, payload: threading.Thread(target=_push_thread, args=(app, user_id, payload), daemon=True).start()   # noqa: E731  (the tests run it at once)
 
 
@@ -2729,6 +2752,10 @@ def register_routes(app):
         if problem:
             return problem
         schedule_fact_check([post])
+        try:
+            notify_followers_of_post(post, user)
+        except Exception:  # noqa: BLE001  (a notification must never stop a post)
+            logger.exception("Could not tell the followers about a post")
         return jsonify({"ok": True, "post": feed_items([post], user)[0]}), 201
 
     def schedule_fact_check(posts):

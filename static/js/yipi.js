@@ -64,11 +64,11 @@
     return el;
   }
 
-  /* An entry of the folded-out side bar below the four pages (only there): notifications, bookmarks, settings. */
-  function extraItem(path, name, label, badge) {
+  /* An entry of the folded-out side bar below the four pages (only there): notifications, bookmarks, settings. `nav` names it for the entry that is marked as the open page. */
+  function extraItem(path, name, label, badge, nav = "") {
     const box = h("span", { class: "tab-ic" }, icon(name));
     if (badge) box.append(Y.badge(badge));
-    return link(path, { class: "tab-extra", "aria-label": label }, box, h("span", { class: "tab-label" }, label));
+    return link(path, { class: "tab-extra", "data-nav": nav || name, "aria-label": label }, box, h("span", { class: "tab-label" }, label));
   }
 
   function buildShell(bare) {
@@ -79,10 +79,19 @@
     if (bare) { app.append(main, announcer); return; }
     const me = Y.me;
     appbar = Y.appBar();
-    const extras = h("div", { class: "tab-extras" }, extraItem("/notifications", "bell", "Benachrichtigungen", "notifications"), extraItem("/bookmarks", "bookmark", "Lesezeichen"), extraItem("/settings", "settings", "Einstellungen"));
+    const extras = h("div", { class: "tab-extras" }, extraItem("/notifications", "bell", "Mitteilungen", "notifications", "notifications"), extraItem("/bookmarks", "bookmark", "Lesezeichen", "", "bookmarks"), extraItem("/settings", "settings", "Einstellungen", "", "settings"),
+      extraItem("/explore", "search", "Suche", "", "explore"), extraItem(`/${me.handle}`, "user", "Profil", "", "profile"), me.isAdmin ? extraItem("/moderation", "shield", "Moderation", "", "moderation") : null);
+    const more = h("button", { class: "rail-more", type: "button", "aria-label": "Mehr zu deinem Konto", "aria-haspopup": "menu", onclick: (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      Y.menu(event.currentTarget, [{ label: "Dein Profil", icon: "user", run: () => Y.navigate(`/${me.handle}`) }, { label: "Einstellungen", icon: "settings", run: () => Y.navigate("/settings") }, { label: `@${me.handle} abmelden`, icon: "logout", danger: true, run: () => Y.logout() }]);
+    } }, icon("more"));
+    const legal = h("div", { class: "rail-links" }, h("a", { href: "/datenschutz" }, "Datenschutz"), h("a", { href: "/nutzungsbedingungen" }, "Nutzungsbedingungen"), h("a", { href: "/bildnachweise" }, "Bildnachweise"), h("a", { href: "/impressum" }, "Impressum"), h("small", {}, "© 2026 Nex"));
     const foot = h("div", { class: "side-foot" }, Y.sponsored("slot"),
-      link(`/${me.handle}`, { class: "side-me", "aria-label": `Dein Profil, @${me.handle}` }, avatar(me, "md"), h("span", { class: "side-me-text" }, h("b", {}, me.name), h("small", {}, `@${me.handle}`))));
-    const tabbar = h("nav", { class: "tabbar", "aria-label": "Hauptmenü" }, TABS.map(tabItem), extras, foot);       // (on a phone held upright only the five tabs show, at the bottom)
+      h("button", { class: "rail-post", type: "button", "aria-label": "Neu: Beitrag, Video oder Story", "aria-haspopup": "menu", onclick: (event) => Y.newPost({ anchor: event.currentTarget }) }, icon("plus"), h("span", {}, "Neu")),
+      h("div", { class: "rail-me" }, link(`/${me.handle}`, { class: "side-me", "aria-label": `Dein Profil, @${me.handle}` }, avatar(me, "md"), h("span", { class: "side-me-text" }, h("b", {}, me.name), h("small", {}, `@${me.handle}`))), more), legal);
+    const top = h("div", { class: "rail-top" }, link(Y.HOME, { class: "rail-brand", "aria-label": "Nex, zur Startseite" }, Icons.logo(), Icons.wordmark()), h("div", { class: "rail-search" }, Y.searchForm("")));
+    const tabbar = h("nav", { class: "tabbar", "aria-label": "Hauptmenü" }, top, TABS.map(tabItem), extras, foot);       // (on a phone held upright only the five tabs show, at the bottom)
     Y.put(app, appbar.element, main, tabbar, announcer);
   }
 
@@ -93,11 +102,25 @@
     return "home";
   }
 
+  /* The entry of the wide side bar that stands for the open page (besides the four tabs: search, notifications, your profile, bookmarks, settings, moderation). */
+  function extraActive(route) {
+    if (["explore", "search"].includes(route.name)) return "explore";
+    if (["notifications", "bookmarks", "settings", "moderation"].includes(route.name)) return route.name;
+    if (route.name === "profile" && Y.me && String(route.handle || "").toLowerCase() === Y.me.handle.toLowerCase()) return "profile";
+    return "";
+  }
+
   function updateNav(route) {
     const active = activeTab(route);
+    const extra = extraActive(route);
+    for (const el of app.querySelectorAll(".tab-extra")) {
+      const on = el.dataset.nav === extra;
+      el.classList.toggle("active", on);
+      if (on) el.setAttribute("aria-current", "page"); else el.removeAttribute("aria-current");
+    }
     for (const el of app.querySelectorAll(".tab-item")) {
       const entry = TABS.find((item) => item.id === el.dataset.nav);
-      const on = el.dataset.nav === active && entry.id !== "plus";
+      const on = el.dataset.nav === active && entry.id !== "plus" && !extra;
       el.classList.toggle("active", on);
       if (on) el.setAttribute("aria-current", "page"); else el.removeAttribute("aria-current");
       const old = el._icon.querySelector("svg");

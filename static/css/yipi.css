@@ -2143,3 +2143,57 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .nex-codeacts { display: flex; align-items: center; gap: 6px; }
 .nex-copy.upload { background: linear-gradient(120deg, #6a3df0, #d44ad0); color: #fff; }
 .cam-view[data-kind="create"] .cam-lens-name, .cam-view[data-kind="create"] .cam-lens-hint { display: none; }
+
+/* ----- on a big screen the side bar is always open, like the one of a big app: the name, the search, the pages, "Neu", your account and the small links (the bar at the top is gone) */
+@media screen and (min-width: 1200px) {
+  :root { --side: 268px; }
+  .rail-top { display: flex; flex-direction: column; gap: 16px; order: 0; margin: 4px 0 14px; padding: 0 4px; }
+  .rail-brand { display: flex; align-items: center; gap: 12px; color: var(--text); }
+  .rail-brand svg:first-child { width: 40px; height: 40px; flex: none; }
+  .rail-brand svg:last-child { width: auto; height: 26px; }
+  .rail-search .search-box { width: 100%; height: 46px; background: var(--bg-2); border-color: transparent; }
+  .app:not(.bare) { --top: 0px; }
+  .app:not(.bare) .appbar { display: none; }
+  .app:not(.bare) .tabbar { top: 0; width: var(--side); padding: 16px 14px 14px; gap: 4px; background: var(--bg); box-shadow: none; overflow-y: auto; }
+  .app:not(.bare) .tab-item, .app:not(.bare) .tab-extra { justify-content: flex-start; height: 48px; padding: 0 16px; gap: 14px; }
+  .app:not(.bare) .tab-label { display: inline; font-size: 15px; font-weight: 600; }
+  .app:not(.bare) .tab-item.active, .app:not(.bare) .tab-extra.active { background: var(--bg-3); color: var(--text); }
+  .app:not(.bare) .tab-item.active .tab-label, .app:not(.bare) .tab-extra.active .tab-label { font-weight: 800; }
+  .app:not(.bare) .tab-extras { display: contents; }
+  .app:not(.bare) .tab-extra .badge { top: auto; right: 14px; position: absolute; }
+  .app:not(.bare) .tab-item .badge { position: absolute; top: 14px; right: 14px; }
+  .tabbar .rail-top { order: 0; }
+  .tabbar [data-nav="home"] { order: 1; }
+  .tabbar [data-nav="explore"] { order: 2; }
+  .tabbar [data-nav="notifications"] { order: 3; }
+  .tabbar [data-nav="messages"] { order: 4; }
+  .tabbar [data-nav="camera"] { order: 5; }
+  .tabbar [data-nav="videos"] { order: 6; }
+  .tabbar [data-nav="profile"] { order: 7; }
+  .tabbar [data-nav="bookmarks"] { order: 8; }
+  .tabbar [data-nav="settings"] { order: 9; }
+  .tabbar [data-nav="moderation"] { order: 10; }
+  .tabbar .side-foot { order: 20; margin-top: auto; gap: 12px; padding-top: 12px; }
+  .app:not(.bare) .sp-slot { justify-content: flex-start; }
+  .app:not(.bare) .sp-slot .sp-text { display: grid; }
+  .rail-post { display: flex; align-items: center; justify-content: center; gap: 10px; height: 48px; border-radius: 24px; background: var(--ink); color: var(--on-ink); font-size: 15px; font-weight: 800; }
+  .rail-post svg { width: 22px; height: 22px; stroke-width: 2.6px; }
+  .rail-post:hover { opacity: 0.88; }
+  .rail-me { display: flex; align-items: center; gap: 4px; }
+  .rail-me .side-me { flex: 1; min-width: 0; justify-content: flex-start; }
+  .rail-me .side-me-text { display: flex; }
+  .rail-more { display: grid; place-items: center; flex: none; width: 36px; height: 36px; border-radius: 50%; color: var(--muted); }
+  .rail-more:hover { background: var(--bg-3); color: var(--text); }
+  .rail-more svg { width: 22px; height: 22px; }
+  .rail-links { display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 0 8px 2px; font-size: 12px; color: var(--muted); }
+  .rail-links a { color: var(--muted); }
+  .rail-links a:hover { color: var(--text); text-decoration: underline; }
+  .rail-links small { width: 100%; font-size: 12px; }
+  .home-main { margin-top: 0; }
+}
+@media screen and (max-width: 1199px) {
+  .rail-top, .rail-post, .rail-more, .rail-links { display: none; }
+  .tab-extra[data-nav="explore"], .tab-extra[data-nav="profile"], .tab-extra[data-nav="moderation"] { display: none !important; }
+}
+.push-install { display: grid; gap: 6px; margin: 4px 0 12px; padding: 12px 14px; border-radius: 16px; background: var(--bg-2); font-size: 14px; }
+.push-install ol { margin: 0; padding-left: 20px; display: grid; gap: 4px; color: var(--muted); }

@@ -122,6 +122,8 @@
   // ------------------------------------------------------------------------------------------------ notifications on the device
   const push = {
     supported: () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window,
+    /* An iPhone or iPad (iPadOS says "Mac" but has a touch screen) and Nex is open in Safari, not as an app of the home screen: only the app of the home screen can show notifications. */
+    needsInstall: () => (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) && !(window.navigator.standalone === true || (window.matchMedia && matchMedia("(display-mode: standalone)").matches)),
     /* "unsupported", "blocked" (the person said no in the browser), "on" or "off" */
     async state() {
       if (!push.supported()) return "unsupported";
@@ -154,6 +156,13 @@
     },
   };
 
+  /* The steps that make Nex an app on the home screen of an iPhone or iPad (the notifications come to that app). */
+  function installSteps() {
+    return h("div", { class: "push-install" }, h("b", {}, "So bekommst du Mitteilungen auf dem iPhone oder iPad"),
+      h("ol", {}, h("li", {}, "Öffne Nex in Safari."), h("li", {}, "Tippe unten auf das Teilen-Symbol (das Quadrat mit dem Pfeil)."), h("li", {}, "Wähle „Zum Home-Bildschirm“ und tippe auf „Hinzufügen“."),
+        h("li", {}, "Öffne Nex jetzt vom Home-Bildschirm und schalte hier die Mitteilungen ein.")));
+  }
+
   /* The page /settings/push. */
   function pushSettings() {
     const toggle = h("input", { type: "checkbox", id: "push-on", "aria-label": "Mitteilungen auf diesem Gerät" });
@@ -165,7 +174,7 @@
       toggle.disabled = state === "unsupported" || state === "blocked";
       note.textContent = state === "unsupported" ? "Dieser Browser kann keine Mitteilungen anzeigen. Auf dem iPhone geht es erst, wenn du Nex zum Home-Bildschirm hinzugefügt hast."
         : state === "blocked" ? "Du hast Mitteilungen für diese Seite im Browser blockiert. Erlaube sie in den Einstellungen der Seite."
-          : "Du bekommst eine Mitteilung bei Likes, Antworten, neuen Followern und Nachrichten, auch wenn Nex zu ist. Den Text einer Nachricht enthält sie nie.";
+          : "Du bekommst eine Mitteilung bei Likes, Antworten, neuen Followern und Nachrichten und wenn jemand, dem du folgst, etwas Neues postet, auch wenn Nex zu ist. Den Text einer Nachricht enthält sie nie.";
     }
     toggle.addEventListener("change", async () => {
       toggle.disabled = true;
@@ -175,11 +184,12 @@
       await show();
     });
     show();
-    return h("div", { class: "settings-body" }, h("section", { class: "card" }, h("h2", {}, "Mitteilungen"), row, note));
+    return h("div", { class: "settings-body" }, h("section", { class: "card" }, h("h2", {}, "Mitteilungen"), push.needsInstall() ? installSteps() : null, row, note));
   }
 
   /* A card on the notifications page that asks once, while the browser has not been asked yet. */
   async function pushInvite() {
+    if (Y.me && push.needsInstall()) return installSteps();                      // (on an iPhone the page cannot ask before it is an app of the home screen)
     if (!Y.me || !push.supported() || Notification.permission !== "default") return null;
     const card = h("div", { class: "push-invite" }, icon("bell"), h("div", {}, h("b", {}, "Nichts mehr verpassen"), h("small", {}, "Mitteilungen auf dieses Gerät, auch wenn Nex zu ist.")));
     const go = h("button", { class: "btn primary small", type: "button" }, "Einschalten");
