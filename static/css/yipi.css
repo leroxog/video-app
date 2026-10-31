@@ -2325,3 +2325,12 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .cc-note { display: block; min-height: 0; }
 .cc-help { margin-top: 10px; font-size: 13px; line-height: 1.4; }
 
+/* ----- the buttons under a post: only the symbol, small, with no button shape behind it */
+.post-actions { justify-content: space-between; gap: 2px; max-width: 340px; margin: 6px 0 0 -6px; }
+.post.detail .post-actions { max-width: none; margin-left: -6px; }
+.post-actions .act-btn, .post-actions .act-btn.more, .post-actions .act-btn.send { flex: 0 0 auto; min-width: 34px; max-width: none; height: 30px; padding: 0 6px; gap: 4px; border-radius: 8px; background: none; box-shadow: none; color: var(--muted); font-size: 12.5px; font-weight: 600; }
+.post-actions .act-btn svg { width: 17px; height: 17px; }
+.post-actions .act-btn:hover:not(:disabled) { background: none; color: var(--text); }
+.post-actions .act-btn.like.on { background: none; box-shadow: none; color: #7a2cf0; }
+.post-actions .act-btn.repost.on { background: none; box-shadow: none; color: var(--text); }
+
