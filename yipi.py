@@ -1699,7 +1699,7 @@ PULSE_SCRIPTS = ["yipi-core.js", "yipi-gif-core.js", "yipi-icons.js", "yipi-api.
                  "yipi-views.js", "yipi-links.js", "yipi-comments.js", "yipi-chats.js", "yipi-lock.js", "yipi-pages.js", "yipi-auth.js", "yipi-share.js", "yipi-progress.js", "yipi-nex.js", "yipi-download.js", "yipi-music.js", "yipi-lenses.js", "yipi-qr.js", "yipi-gamemaker.js", "yipi-camera.js", "yipi-shorts.js", "yipi-videos.js", "yipi-stories.js", "yipi-chrome.js", "yipi.js"]
 # The games of the camera tab are a second file, loaded when the camera tab is opened (about a hundred small games; nobody who only reads needs them).
 PULSE_LENS_SCRIPTS = ["pl-face.js", "pl-ar.js", "pl-ar-models.js", "pl-ar-decals.js"]   # the face lenses (face tracking, the flat effects and the 3D engine): a third file, loaded when the first lens is opened
-PULSE_GAME_SCRIPTS = ["pg-kit.js", "pg-art.js", "pg-moto3d.js", "pg-race3d.js", "pg-rank.js", "pg-community.js", "pg-runners.js", "pg-arcade.js", "pg-reflex.js", "pg-puzzle.js", "pg-board.js", "pg-numbers.js", "pg-skill.js", "pg-more.js", "pg-fruit.js"]
+PULSE_GAME_SCRIPTS = ["pg-kit.js", "pg-lift3d.js", "pg-art.js", "pg-moto3d.js", "pg-race3d.js", "pg-rank.js", "pg-community.js", "pg-runners.js", "pg-arcade.js", "pg-reflex.js", "pg-puzzle.js", "pg-board.js", "pg-numbers.js", "pg-skill.js", "pg-more.js", "pg-fruit.js"]
 _bundles = {}
 
 
@@ -4699,6 +4699,7 @@ def register_routes(app):
             return problem
         if limiter.too_many("music-search", str(user.id)):
             return fail("too_many", 429)
+        yipi_music.warm_top()                                                     # (the first time: the best known songs are fetched in the background)
         return jsonify({"ok": True, "items": yipi_music.search(request.args.get("q", ""), request.args.get("page", "1")), "total": yipi_music.count()})
 
     @route("/api/yipi/music/track/<identifier>")
@@ -4712,6 +4713,7 @@ def register_routes(app):
         track = yipi_music.resolve(identifier)
         if track is None:
             return fail("not_found", 404)
+        yipi_music.warm(track["id"])                                              # (the file is fetched now, so that it starts at once when it is played)
         return jsonify({"ok": True, "track": {**track, "url": f"/yipi-music/{track['id']}/{urllib.parse.quote(track['file'])}"}})
 
     @route("/api/yipi/music/random")

@@ -7,7 +7,7 @@
 @font-face { font-family: "Nunito"; src: url("/static/fonts/Nunito-Variable.ttf") format("truetype"); font-weight: 200 1000; font-style: normal; font-display: swap; }
 
 :root {
-  --danger: #ff4d5e;
+  --danger: #fe2c55;
   --warn: #f5b942;
   --radius: 24px;
   --radius-lg: 30px;
@@ -204,7 +204,7 @@ main:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-vi
 .field-label { display: block; margin-top: 14px; }
 .field-label > span { display: block; margin-bottom: 6px; color: var(--muted); font-size: 13px; font-weight: 600; }
 .field-count { display: block; text-align: right; color: var(--muted); font-size: 12px; margin-top: 2px; }
-.form-error { margin-top: 12px; padding: 11px 14px; border-radius: 14px; background: rgba(255, 77, 94, 0.14); color: var(--danger); font-size: 14px; }
+.form-error { margin-top: 12px; padding: 11px 14px; border-radius: 14px; background: rgba(254, 44, 85, 0.14); color: var(--danger); font-size: 14px; }
 .notice { margin-top: 12px; padding: 11px 14px; border-radius: 14px; background: var(--bg-2); color: var(--muted); font-size: 14px; }
 
 /* ---------------------------------------------------------------------------------------------- top bars, tabs */
@@ -759,7 +759,7 @@ main:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-vi
 .settings-body .card > .muted { margin-top: 10px; }
 .facts { display: grid; grid-template-columns: auto 1fr; gap: 6px 20px; padding: 0 18px; }
 .facts dt { color: var(--muted); }
-.danger-zone { box-shadow: inset 0 0 0 1px rgba(255, 77, 94, 0.5); }
+.danger-zone { box-shadow: inset 0 0 0 1px rgba(254, 44, 85, 0.5); }
 .plain-links a { display: flex; align-items: center; justify-content: space-between; padding: 13px 18px; }
 .plain-links svg { width: 16px; height: 16px; color: var(--muted); }
 .reports { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: 12px; padding-top: 10px; align-items: start; }
@@ -1168,7 +1168,8 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .cam-song { display: inline-flex; align-items: center; gap: 5px; max-width: 190px; padding: 4px 11px; border-radius: 999px; background: rgba(40, 40, 40, 0.55); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); color: #fff; font-size: 12px; font-weight: 700; }
 .cam-song span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cam-song.on { background: rgba(255, 255, 255, 0.92); color: #111; }
-.cam-song-note { font-size: 14px; line-height: 1; }
+.cam-song-note { display: inline-grid; place-items: center; line-height: 1; }
+.cam-song-note svg { width: 15px; height: 15px; }
 .cam-song-x { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: rgba(40, 40, 40, 0.55); color: #fff; }
 .cam-song-x svg { width: 14px; height: 14px; }
 .cam-song-x[hidden] { display: none; }
@@ -1218,7 +1219,7 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .cam-time-fill { display: block; height: 100%; width: 100%; background: #fff; }
 .cam-score { position: absolute; top: calc(24px + env(safe-area-inset-top)); left: 0; right: 0; text-align: center; font-size: 46px; font-weight: 800; letter-spacing: -0.03em; line-height: 1; -webkit-text-stroke: 6px rgba(0, 0, 0, 0.6); paint-order: stroke fill; text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5); }
 .cam-stop { position: absolute; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom)); display: grid; place-items: center; width: 62px; height: 62px; margin-left: -31px; border-radius: 50%; border: 4px solid #fff; background: rgba(0, 0, 0, 0.3); pointer-events: auto; }
-.cam-stop span { width: 24px; height: 24px; border-radius: 6px; background: #ff3b4e; }
+.cam-stop span { width: 24px; height: 24px; border-radius: 6px; background: #fe2c55; }
 .cam-over { position: absolute; inset: 0; z-index: 6; display: grid; place-items: center; background: rgba(0, 0, 0, 0.4); }
 .cam-over-box { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 24px 34px; border-radius: 26px; background: rgba(0, 0, 0, 0.6); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); animation: bloop 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.2); }
 .cam-over-box b { font-size: 30px; font-weight: 800; }
@@ -1334,7 +1335,7 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 
 /* ---------------------------------------------------------------------------------------------- effects: hearts, the heartbeat, pages that slide, light animations everywhere */
 .like-burst { position: fixed; z-index: 2500; width: 0; height: 0; pointer-events: none; }
-.burst-heart { position: absolute; left: 0; top: 0; display: block; color: #ff4d6d; transform: translate(-50%, -50%) scale(0); filter: drop-shadow(0 6px 14px rgba(255, 60, 100, 0.55)); animation: burst 0.85s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
+.burst-heart { position: absolute; left: 0; top: 0; display: block; color: #fe2c55; transform: translate(-50%, -50%) scale(0); filter: drop-shadow(0 6px 14px rgba(254, 44, 85, 0.55)); animation: burst 0.85s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
 .burst-heart svg { width: 100%; height: 100%; }
 .burst-bit { position: absolute; left: 0; top: 0; width: 18px; height: 18px; margin: -9px 0 0 -9px; color: #ff7a93; opacity: 0; animation: bit 0.8s ease-out both; }
 .burst-bit svg { width: 100%; height: 100%; }
@@ -1660,7 +1661,8 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .cam-tap span { padding: 9px 18px; border-radius: 999px; background: rgba(0, 0, 0, 0.55); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); color: #fff; font-size: 14px; font-weight: 700; animation: cam-nudge 1.8s ease-in-out infinite; }
 @keyframes cam-nudge { 0%, 100% { transform: translateY(0); opacity: 1; } 50% { transform: translateY(4px); opacity: 0.78; } }
 .cam-ext { display: grid; place-items: center; gap: 8px; width: min(80%, 300px); padding: 34px 22px; border-radius: 30px; background: rgba(0, 0, 0, 0.55); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); color: #fff; text-align: center; }
-.cam-ext-ic { font-size: 56px; line-height: 1; }
+.cam-ext-ic { display: grid; place-items: center; width: 72px; height: 72px; }
+.cam-ext-ic svg { width: 48px; height: 48px; }
 .cam-ext b { font-size: 22px; font-weight: 800; }
 .cam-ext small { color: rgba(255, 255, 255, 0.8); font-size: 14px; }
 @media (prefers-reduced-motion: reduce) { .cam-tap span { animation: none; } }
@@ -1983,7 +1985,7 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .au-hint, .au-small, .au-note { color: var(--muted); font-size: 14px; font-weight: 700; line-height: 1.4; }
 .au-small, .au-note { text-align: center; }
 .au-hint.good { color: #1a8a3a; }
-.au-hint.bad, .au-small.bad { color: #d93025; }
+.au-hint.bad, .au-small.bad { color: #fe2c55; }
 .au-check { display: flex; align-items: flex-start; gap: 10px; font-size: 15px; font-weight: 700; }
 .au-check[hidden] { display: none; }
 .au-check input { width: 20px; height: 20px; margin-top: 1px; accent-color: #0a0a0a; }
@@ -2249,7 +2251,7 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .cb-ic svg { width: 26px; height: 26px; }
 .dm-box.recording > :not(.cb-rec) { display: none; }
 .cb-rec { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; padding: 0 2px; }
-.cb-dot { flex: none; width: 11px; height: 11px; border-radius: 50%; background: #ef4444; }
+.cb-dot { flex: none; width: 11px; height: 11px; border-radius: 50%; background: #fe2c55; }
 .cb-time { min-width: 38px; font-variant-numeric: tabular-nums; font-weight: 700; }
 .cb-meter { flex: 1; height: 8px; border-radius: 4px; background: var(--bg-3); overflow: hidden; }
 .cb-meter-fill { display: block; width: 100%; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #7a2cf0, #ec4899); transform-origin: left; transform: scaleX(0); transition: transform 0.08s linear; }
@@ -2272,7 +2274,7 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .call-btn svg { width: 30px; height: 30px; }
 .call-btn:active { transform: scale(0.92); }
 .call-btn.on { background: #fff; color: #5b21b6; }
-.call-btn.hang { background: #ef4444; }
+.call-btn.hang { background: #fe2c55; }
 .call-btn.hang svg { transform: none; }
 .call-btn.answer { background: #22c55e; }
 .call-btn.small { width: 42px; height: 42px; }
@@ -2350,7 +2352,7 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .cam-stop span { width: 20px; height: 20px; }
 .cam-view[data-kind="lens"] .cam-stop, .cam-view[data-kind="randomsong"] .cam-stop { display: none; }
 .lens.on.holding { transform: scale(1.32); }
-.lens.holding .lens-ic { border-color: #ff3b4e; box-shadow: 0 0 0 9px rgba(255, 59, 78, 0.38), 0 6px 22px rgba(0, 0, 0, 0.55); }
+.lens.holding .lens-ic { border-color: #fe2c55; box-shadow: 0 0 0 9px rgba(254, 44, 85, 0.4), 0 6px 22px rgba(0, 0, 0, 0.55); }
 .cam-overlay { --pad: 0px; --tabbar: 0px; position: fixed; inset: 0; z-index: 3400; background: #000; }
 .cam-overlay .cam-view { margin: 0; height: 100%; }
 .cam-overlay-x { position: absolute; top: calc(12px + env(safe-area-inset-top)); left: 12px; z-index: 12; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: rgba(0, 0, 0, 0.45); color: #fff; }
@@ -2449,3 +2451,24 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .ai-pic { display: block; width: 100%; max-height: 56vh; border-radius: 16px; background: var(--bg-2); object-fit: contain; }
 .ai-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .ai-actions .btn { flex: 1 1 auto; }
+
+/* ----- the shutter of the normal camera: a plain white disc without a symbol, red while it films */
+.lens-ic.plain, .lens.face .lens-ic.plain { background: #fff; border-color: #fff; }
+.lens.on .lens-ic.plain { box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.35), 0 6px 22px rgba(0, 0, 0, 0.55); }
+.lens.holding .lens-ic.plain { background: #fe2c55; border-color: #fe2c55; }
+
+/* ----- TikTok red (#fe2c55) is the one red of the site; the shutter of a lens glides up with the finger and, when it is slid far enough, the clip is locked: the circle glides back to its place and hops a little every 3 seconds */
+:root { --tt-red: #fe2c55; }
+.cam-lenses { touch-action: pan-x; }
+.lens-emoji svg { width: 44%; height: 44%; }
+.cam-tile-ic { overflow: hidden; }
+.cam-tile-ic svg { width: 46%; height: 46%; }
+.cam-tile-ic .lens-photo { width: 100%; height: 100%; }
+.lens.holding, .lens.locked { position: relative; z-index: 3; }
+.lens.holding { translate: 0 calc(var(--lift, 0px) * -1); transition: transform 0.12s linear, opacity 0.12s linear; }
+.lens.holding::before { content: ""; position: absolute; left: 50%; top: -26px; width: 11px; height: 11px; border: solid #fff; border-width: 3px 0 0 3px; border-radius: 2px; transform: translateX(-50%) rotate(45deg); opacity: calc(0.95 - var(--lift, 0px) / 60); filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.5)); }
+.lens.holding.locked { translate: 0 0; transition: translate 0.7s cubic-bezier(0.2, 1.2, 0.3, 1), transform 0.3s ease; animation: lock-hop 3s ease-in-out 1s infinite; }
+.lens.holding.locked::before { display: none; }
+.lens.holding.locked .lens-ic { border-color: var(--tt-red); box-shadow: 0 0 0 7px rgba(254, 44, 85, 0.3), 0 6px 22px rgba(0, 0, 0, 0.55); }
+@keyframes lock-hop { 0%, 14%, 100% { translate: 0 0; } 6% { translate: 0 -6px; } }
+@media (prefers-reduced-motion: reduce) { .lens.holding.locked { animation: none; } }

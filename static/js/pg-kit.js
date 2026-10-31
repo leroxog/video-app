@@ -3,7 +3,8 @@
    the drawing helpers, the input of the finger or mouse (one pressed/released/tap/swipe per tick, plus the keys), a seeded random number generator
    and score()/over(). The canvas is see-through where the game draws nothing, so the picture of the camera shows behind it (and the recording
    of the camera tab captures both); a game that does not draw a whole scene of its own gets a backdrop in its colour (see `backdrop`), a game with `bubble: true` draws its scene itself. The same code runs without a browser in the tests (PulseGames.headless). No sound: the recording takes the
-   voice of the player, not the game. */
+   voice of the player, not the game. Every game is shown in 3D (pg-lift3d.js): `run` gives it a recorder in place of the canvas and turns what it draws into solids with light and shadows; a game that makes
+   its own 3D says `lift: false`, and where WebGL is missing (or too slow) the games are drawn flat as before. */
 (function () {
   "use strict";
 
@@ -185,18 +186,23 @@
     let acc = 0;
     let dead = false;
     let paused = false;
+    const Lift = window.PulseGames && window.PulseGames.lift;
+    let view = options.lift !== false && def.lift !== false && Lift && Lift.wanted && Lift.wanted() ? Lift.view(ctx, dpr) : null;          // the 3D picture of the game (see pg-lift3d.js)
+    if (view) view.onFail = () => { view = null; if (!dead) start(); };                                                                         // (it is too slow or three.js is missing: flat, from the start)
     let armed = !!options.armed;                       // the first picture is drawn and then the game waits: the first touch (or key) starts it, and hooks.onStart() is called
     const arm = () => { if (!armed) return; armed = false; hooks.onStart?.(); };
 
     function start() {
       game?.destroy?.();                                 // (a game that restarts lets go of what it holds, like a 3D scene)
-      env = createEnv(ctx, hooks);
+      env = createEnv(view ? view.ctx : ctx, hooks);
       game = def.create(env);
       acc = 0;
       last = 0;
     }
     function point(event) {
       const box = canvas.getBoundingClientRect();
+      const on = view && view.unproject ? view.unproject(event.clientX, event.clientY, box) : null;       // through the camera of the 3D picture
+      if (on) return [Math.max(0, Math.min(W, on[0])), Math.max(0, Math.min(H, on[1]))];
       return [((event.clientX - box.left) / Math.max(1, box.width)) * W, ((event.clientY - box.top) / Math.max(1, box.height)) * H];
     }
     const down = (event) => {
@@ -256,6 +262,15 @@
         if (armed && game.idle) { game.idle(env.input); env.input.endTick(); }     // while the game waits for the first touch it may still answer a touch on its own switches
       }
       ctx.clearRect(0, 0, W, H);
+      if (view) {
+        if (view.ready) {                                // (until three.js is there, the field stays empty for a moment)
+          view.begin();
+          if (wantsBackdrop(def)) backdrop(view.ctx, def, now / 1000);
+          game.draw?.();
+          view.render(now / 1000);
+        }
+        return;
+      }
       if (wantsBackdrop(def)) backdrop(ctx, def, now / 1000);
       game.draw?.();
     }
@@ -270,6 +285,7 @@
       destroy() {
         dead = true;
         cancelAnimationFrame(raf);
+        if (view) { view.destroy(); view = null; }
         canvas.removeEventListener("pointerdown", down);
         canvas.removeEventListener("pointermove", move);
         canvas.removeEventListener("pointerup", up);

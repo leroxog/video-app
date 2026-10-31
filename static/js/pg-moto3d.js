@@ -127,7 +127,7 @@
   }
 
   // ------------------------------------------------------------------------------------------------------------------ the game
-  R({ id: "moto", name: "Motorrad", emoji: "🏍️", cat: "Rennen", featured: true, bubble: false, backdrop: false, order: 2, color: "#2a6fdb", hint: "Gas rechts · Bremse links · in der Luft neigen", create(e) {
+  R({ id: "moto", name: "Motorrad", emoji: "🏍️", cat: "Rennen", featured: true, lift: false, bubble: false, backdrop: false, order: 2, color: "#2a6fdb", hint: "Gas rechts · Bremse links · in der Luft neigen", create(e) {
     const g = e.g;
     // ---- the ground: heights every SAMPLE metres, made as far as it is needed
     const hs = [0];

@@ -539,7 +539,7 @@
       else if (id === "ai") { const file = await T.aiImage(); if (file) stage(file, "image"); }
       else if (id === "document") { const [file] = await T.pickFiles(".pdf,.txt,.md,.csv,.rtf,.docx,.xlsx,.pptx,.odt,.ods,.odp"); if (file) stage(file, "document"); }
       else if (id === "location") { const text = await T.place(); if (text) deliver({ text }, false); }
-      else if (id === "contact") { const handle = await T.contact(); if (handle) deliver({ text: `👤 Kontakt: @${handle}` }, false); }
+      else if (id === "contact") { const handle = await T.contact(); if (handle) deliver({ text: `Kontakt: @${handle}` }, false); }
       else if (id === "sticker") Y.gifPicker({ onPick: (gif) => deliver({ gifId: gif.id }, false) });
     }
     plusButton.addEventListener("click", () => { attachPanel.toggle(); plusButton.setAttribute("aria-expanded", String(attachPanel.isOpen)); plusButton.classList.toggle("open", attachPanel.isOpen); });

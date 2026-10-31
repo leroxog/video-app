@@ -25,6 +25,14 @@
     if (audio.state === "suspended") audio.resume().catch(() => {});
     return audio;
   }
+  /* A browser lets a page make sound only after a touch has ended (pointerup, click, key), not when it begins. The sound context is made and woken at the first of those, so that the next sounds
+     are there at once; a sound that is asked for while the context still sleeps is left out (it used to wait and then play late, many at a time). */
+  const WAKE = ["pointerup", "touchend", "click", "keydown"];
+  function wake() {
+    const ctx = context();
+    if (ctx && ctx.state === "running") WAKE.forEach((name) => document.removeEventListener(name, wake, true));
+  }
+  WAKE.forEach((name) => document.addEventListener(name, wake, { capture: true, passive: true }));
   /* One note: frequency (and where it slides to), start (seconds from now), length, loudness, wave. */
   function note(ctx, { f, to, at = 0, dur = 0.08, gain = 0.05, type = "sine" }) {
     const start = ctx.currentTime + at;
@@ -63,7 +71,7 @@
       if (!on || document.hidden || quiet()) return;
       const ctx = context();
       const parts = SOUNDS[name];
-      if (!ctx || !parts) return;
+      if (!ctx || !parts || ctx.state !== "running") return;
       const pitch = name === "type" ? 0.9 + Math.random() * 0.25 : 1;
       for (const part of parts) note(ctx, { ...part, f: part.f * pitch, to: part.to ? part.to * pitch : undefined });
     },

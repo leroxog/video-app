@@ -135,6 +135,7 @@
     },
     async enable() {
       if (!push.supported()) return { ok: false, message: "Dieser Browser kann keine Mitteilungen anzeigen." };
+      const remembered = () => { try { localStorage.removeItem("saturn.push"); } catch (error) { /* no storage */ } };
       if ((await Notification.requestPermission()) !== "granted") return { ok: false, message: "Du hast Mitteilungen nicht erlaubt." };
       const key = await Api.get("/push/key");
       if (!key.ok) return { ok: false, message: Api.message(key) };
@@ -143,6 +144,7 @@
         await navigator.serviceWorker.ready;
         const subscription = (await registration.pushManager.getSubscription()) || await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: Core.base64UrlBytes(key.data.key) });
         const reply = await Api.post("/push/subscribe", { subscription: subscription.toJSON() });
+        if (reply.ok) remembered();
         return reply.ok ? { ok: true } : { ok: false, message: Api.message(reply) };
       } catch (error) { return { ok: false, message: "Mitteilungen ließen sich auf diesem Gerät nicht einschalten." }; }
     },
@@ -151,6 +153,7 @@
         const registration = await navigator.serviceWorker.getRegistration("/");
         const subscription = registration && await registration.pushManager.getSubscription();
         if (subscription) { await Api.post("/push/unsubscribe", { endpoint: subscription.endpoint }); await subscription.unsubscribe(); }
+        try { localStorage.setItem("saturn.push", "off"); } catch (error) { /* no storage */ }              // (switched off by the person: never switched on again by itself)
         return { ok: true };
       } catch (error) { return { ok: false, message: "Mitteilungen ließen sich nicht ausschalten." }; }
     },
@@ -202,6 +205,21 @@
     return card;
   }
 
-  Object.assign(Y, { streakChip, checkProgress, progressDialog, reportPlay, leaderboard, push, pushSettings, pushInvite });
+  /* Notifications are on from the start: the first touch of a person who is signed in asks the browser once (it shows its own question; Safari wants a touch for it). Who switched them off in the
+     settings is never asked again; who closed the question or said no is not asked again either (the card on the notifications page and the settings still offer them). */
+  async function autoOn() {
+    if (!Y.me || !push.supported() || push.needsInstall() || Notification.permission === "denied") return;
+    let memory = "";
+    try { memory = localStorage.getItem("saturn.push") || ""; } catch (error) { /* no storage */ }
+    if (memory === "off" || (memory === "asked" && Notification.permission === "default")) return;
+    if ((await push.state()) === "on") return;
+    const result = await push.enable();
+    if (result.ok) { toast("Mitteilungen sind an."); return; }
+    if (Notification.permission === "default") { try { localStorage.setItem("saturn.push", "asked"); } catch (error) { /* no storage */ } }
+  }
+  let autoTried = false;
+  document.addEventListener("pointerup", () => { if (autoTried || !Y.me) return; autoTried = true; setTimeout(autoOn, 500); }, { capture: true, passive: true });
+
+  Object.assign(Y, { streakChip, checkProgress, progressDialog, reportPlay, leaderboard, push, pushSettings, pushInvite, pushAuto: autoOn });
   if (Y.me) setTimeout(checkProgress, 1200);
 })();

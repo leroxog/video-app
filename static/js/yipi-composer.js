@@ -163,7 +163,7 @@
       if (!navigator.geolocation) { toast("Dein Gerät kann den Standort nicht bestimmen."); resolve(null); return; }
       navigator.geolocation.getCurrentPosition((position) => {
         const lat = position.coords.latitude.toFixed(4), lon = position.coords.longitude.toFixed(4);      // (about 10 metres: enough to find a place, not a door)
-        resolve(`📍 Mein Standort: https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=16/${lat}/${lon}`);
+        resolve(`Mein Standort: https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=16/${lat}/${lon}`);
       }, () => { toast("Den Standort darf Satürn gerade nicht lesen. Erlaube ihn in den Einstellungen des Browsers."); resolve(null); }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 });
     });
   }

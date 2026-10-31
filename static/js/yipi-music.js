@@ -1,7 +1,7 @@
 /* Satürn music (yipi-music.js): songs for the clips of the camera. `Y.music.pick({upload, onPick})` is the window to choose a song (search, preview, "Zufällig", the start second, and for a lens
    also a file from the folder of the person); `Y.music.player()` plays the chosen song while a clip is recorded and mixes it with the microphone into the sound of the clip; `credit(song)` is the line
-   that stands in the clip (the author and the licence of the song). Only music that may be used is offered (the server asks the Internet Archive for audio with a Creative Commons licence that
-   allows it, yipi_music.py) and nothing connects to another site: the audio comes from the server of Satürn. A song is {src: "archive", id, file, title, creator, licence, licenceUrl, length, start}
+   that stands in the clip (the author and the licence of the song). Only a short, chosen list of music that fits short videos is offered, all of it under a Creative Commons licence that
+   allows it (yipi_music.py, yipi_music_catalogue.py); the server keeps the file of a song, and the player loads the whole song before it plays it, so that it starts at once and in the right place and nothing connects to another site: the audio comes from the server of Satürn. A song is {src: "archive", id, file, title, creator, licence, licenceUrl, length, start}
    or {src: "upload", media, title, start}. */
 (function () {
   "use strict";
@@ -12,7 +12,7 @@
 
   const urlOf = (song) => song.url || (song.src === "upload" ? `/yipi-media/${song.media}` : `/yipi-music/${song.id}/${encodeURIComponent(song.file)}`);
   const label = (song) => (song ? `${song.title}${song.creator ? ` · ${song.creator}` : ""}` : "");
-  const credit = (song) => (song ? (song.src === "archive" ? `♪ ${song.title} · ${song.creator} · ${song.licence}` : `♪ ${song.title}`) : "");
+  const credit = (song) => (song ? (song.src === "archive" ? `Musik: ${song.title} · ${song.creator} · ${song.licence}` : `Musik: ${song.title}`) : "");
   const minutes = (seconds) => (seconds ? `${Math.floor(seconds / 60)}:${String(Math.round(seconds % 60)).padStart(2, "0")}` : "");
 
   /* ------------------------------------------------------------------------------------------------ the window to choose a song */
@@ -24,7 +24,7 @@
     const input = h("input", { class: "field", type: "search", placeholder: "Song oder Künstler suchen", maxlength: 60, "aria-label": "Song suchen" });
     const list = h("div", { class: "mu-list", role: "list" });
     const status = h("p", { class: "muted small", role: "status" });
-    const genres = h("div", { class: "lm-chips" }, [["Pop", "pop"], ["Rock", "rock"], ["Hip-Hop", "hiphop"], ["Elektro", "electronic"], ["Chill", "ambient"], ["Jazz", "jazz"], ["Klassik", "classical"], ["Folk", "folk"]]
+    const genres = h("div", { class: "lm-chips" }, [["Alle", ""], ["Beliebt", "Beliebt"], ["Funk", "Funk"], ["Dance", "Dance"], ["Hip-Hop", "Hip-Hop"], ["Lo-Fi", "Lo-Fi"], ["Chill", "Chill"], ["Retro", "Retro"]]
       .map(([name, word]) => h("button", { class: "chip", type: "button", onclick: () => { input.value = word; search(true); } }, name)));
     const more = h("button", { class: "btn ghost small", type: "button", hidden: true }, "Mehr");
     const fileInput = h("input", { type: "file", accept: "audio/mpeg,audio/ogg,audio/mp4,audio/wav,.mp3,.ogg,.m4a,.wav", hidden: true, "aria-hidden": "true", tabindex: "-1" });
@@ -35,7 +35,7 @@
       const take = h("button", { class: "btn primary small", type: "button" }, "Nehmen");
       const start = h("input", { class: "mu-start", type: "range", min: 0, max: 0, value: 0, hidden: true, "aria-label": "Startpunkt im Song" });
       const startText = h("small", { class: "muted", hidden: true });
-      const line = h("div", { class: "mu-row", role: "listitem" }, play, h("div", { class: "mu-main" }, h("b", {}, item.title), h("small", { class: "muted" }, `${item.creator} · ${item.licence}`), start, startText), take);
+      const line = h("div", { class: "mu-row", role: "listitem" }, play, h("div", { class: "mu-main" }, h("b", {}, item.title), h("small", { class: "muted" }, `${item.creator}${item.tag ? ` · ${item.tag}` : ""} · ${item.licence}`), start, startText), take);
       let track = null;
       async function resolve() {
         if (track) return track;
@@ -78,7 +78,7 @@
       if (reset && !reply.data.items.length) { status.textContent = "Dazu habe ich nichts gefunden. Probier ein anderes Wort."; more.hidden = true; return; }
       list.append(...reply.data.items.map(row));
       more.hidden = reply.data.items.length < 20;
-      status.textContent = reply.data.total ? `Frei benutzbare Musik (Creative Commons) vom Internet Archive: über ${reply.data.total.toLocaleString("de-DE")} Audio-Dateien.` : "";
+      status.textContent = reply.data.total ? `${reply.data.total} ausgewählte Songs, frei benutzbar (Creative Commons).` : "";
     }
     more.addEventListener("click", () => { page += 1; search(false); });
     input.addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); search(true); } });
@@ -115,8 +115,22 @@
 
   /* ------------------------------------------------------------------------------------------------ the player of a clip */
   /* One audio element for the song of the camera; `prepare(song, micStream)` makes it ready (also the mix with the microphone), `track()` is the sound for the recording, `play()` starts it. */
+  const blobs = new Map();                                          // address -> {url} of a song that is loaded as a whole (the last three)
+  function loadWhole(address) {
+    const hit = blobs.get(address);
+    if (hit) { blobs.delete(address); blobs.set(address, hit); return hit.ready; }
+    const entry = { url: "", ready: null };
+    entry.ready = fetch(address, { credentials: "same-origin" }).then((reply) => (reply.ok ? reply.blob() : Promise.reject(new Error("no song")))).then((blob) => { entry.url = URL.createObjectURL(blob); return entry.url; })
+      .catch(() => { blobs.delete(address); return ""; });
+    blobs.set(address, entry);
+    while (blobs.size > 3) { const old = blobs.keys().next().value; const gone = blobs.get(old); blobs.delete(old); if (gone.url) URL.revokeObjectURL(gone.url); }
+    return entry.ready;
+  }
+
   function player() {
     let audio = null;
+    let loaded = Promise.resolve();                                // the song is in the player (a whole file) or it plays from the server
+    let generation = 0;
     let ctx = null;
     let gain = null;
     let dest = null;
@@ -125,6 +139,7 @@
     const volumeNow = () => (Y.camSound ? Y.camSound.volume : 1);
     const follow = () => { if (gain) gain.gain.value = volumeNow(); else if (audio) audio.volume = volumeNow(); };
     function drop() {
+      generation += 1;
       if (audio) { audio.pause(); audio.removeAttribute("src"); audio.load(); }
       if (mic) { try { mic.disconnect(); } catch (error) { /* gone */ } }
       if (ctx) { ctx.close().catch(() => {}); }
@@ -137,8 +152,15 @@
       audio = new Audio();
       audio.preload = "auto";
       audio.loop = true;
-      audio.src = urlOf(next);
-      audio.addEventListener("loadedmetadata", () => { try { if (next.start && audio.duration > next.start + 5) audio.currentTime = next.start; } catch (error) { /* no ranges */ } }, { once: true });
+      const mine = generation;
+      const element = audio;
+      loaded = loadWhole(urlOf(next)).then((blobUrl) => new Promise((resolve) => {
+        if (mine !== generation) { resolve(); return; }
+        element.addEventListener("loadedmetadata", () => { try { if (next.start && element.duration > next.start + 5) element.currentTime = next.start; } catch (error) { /* no ranges */ } resolve(); }, { once: true });
+        element.addEventListener("error", () => resolve(), { once: true });
+        element.src = blobUrl || urlOf(next);                       // (no whole file: it plays from the server)
+        element.load();
+      }));
       const Context = window.AudioContext || window.webkitAudioContext;
       if (Context) {
         try {
@@ -165,7 +187,13 @@
       async play() {
         if (!audio) return;
         follow();
-        try { if (ctx && ctx.state === "suspended") await ctx.resume(); await audio.play(); } catch (error) { /* blocked: the song stays silent */ }
+        try { await Promise.race([loaded, new Promise((resolve) => setTimeout(resolve, 4000))]); if (ctx && ctx.state === "suspended") await ctx.resume(); await audio.play(); } catch (error) { /* blocked: the song stays silent */ }
+      },
+      /* From the start of the song (its starting point) to the sound: resolves when the song really plays (or after `wait` milliseconds), so that a clip can begin at that moment. */
+      async start(wait = 450) {
+        if (!audio) return;
+        this.rewind();
+        await Promise.race([this.play(), new Promise((resolve) => setTimeout(resolve, wait))]);
       },
       pause() { if (audio) audio.pause(); },
       rewind() { if (audio) { try { audio.currentTime = (song && song.start) || 0; } catch (error) { /* no ranges */ } } },

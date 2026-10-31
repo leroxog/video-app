@@ -238,7 +238,7 @@
   }
 
   // ------------------------------------------------------------------------------------------------------------------ the game
-  R({ id: "car-race", name: "Auto-Rennen", emoji: "🏎️", cat: "Rennen", featured: true, bubble: false, backdrop: false, order: 1, color: "#d63a2f", hint: "Zieh den Finger nach links oder rechts · sammle Münzen und Nitro", create(e) {
+  R({ id: "car-race", name: "Auto-Rennen", emoji: "🏎️", cat: "Rennen", featured: true, lift: false, bubble: false, backdrop: false, order: 1, color: "#d63a2f", hint: "Zieh den Finger nach links oder rechts · sammle Münzen und Nitro", create(e) {
     const g = e.g;
     const state = { speed: 26, dist: 0, bonus: 0, coins: 0, nitro: 0, t: 0, crash: 0, shake: 0, banner: null, hint: 3.2, bestPass: 0 };
     const p = { x: 0, vx: 0, target: 0, yaw: 0, roll: 0, bob: 0, bobV: 0, pitch: 0, pitchV: 0, speedPrev: 26 };

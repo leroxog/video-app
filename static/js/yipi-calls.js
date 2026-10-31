@@ -334,7 +334,7 @@
     const element = h("div", { class: "call-incoming", role: "alertdialog", "aria-label": "Eingehender Anruf" },
       Y.avatar(caller, "lg"), h("div", { class: "call-incoming-text" }, h("b", {}, call.group ? call.group.name : caller.name), h("span", {}, text)), decline, answer);
     card = { id: call.id, element, ringer: resume ? null : ringer("incoming"), title: document.title };
-    if (!resume) document.title = `📞 ${call.group ? call.group.name : caller.name} ruft an`;
+    if (!resume) document.title = `${call.group ? call.group.name : caller.name} ruft an`;
     document.body.append(element);
     answer.addEventListener("click", async () => {
       answer.disabled = decline.disabled = true;

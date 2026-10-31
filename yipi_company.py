@@ -44,6 +44,10 @@ ANNOUNCEMENTS = [
     ("2026-10-30-ai", "ai", "Neu: Nex AI hat jetzt vier Modi. Normal, Superintelligent (längere, gründlichere Antworten), Human (locker und direkt) und Code (für gute Programme). Du wählst sie oben im Chat. #nexai"),
     ("2026-10-31-aigames", "ai", "Neu: Nex AI baut Spiele. Sag ihr im Chat, was für ein Spiel du willst, und unter dem Code erscheint der Knopf „Als Spiel hochladen“. Dann steht es in der Kamera und alle können es spielen. Du kannst auch in der Kamera unter dem Plus „Mit KI erstellen“ wählen. #nexai"),
     ("2026-10-31-aiimage", "web", "Neu: KI-Bilder! Tippe im Chat oder beim Posten auf das Plus und „KI-Bild“: Beschreibe, was du sehen willst, wähle einen Stil, und eine KI malt es. Das macht der kostenlose Dienst Pollinations, bei vielen Wünschen gibt es eine Warteschlange. #neu #kibild"),
+    ("2026-10-31-games3d", "web", "Neu: Alle Spiele sind jetzt in 3D! Klötze, Kugeln, Münzen und Figuren haben Tiefe, Licht und Schatten, die Kamera schwebt leicht über dem Feld. Auto-Rennen und Motorrad waren schon echte 3D-Welten. Tippen und Wischen klappt wie vorher. #neu #3d"),
+    ("2026-10-31-notify", "web", "Neu: Mitteilungen sind jetzt von Anfang an an. Beim ersten Tippen fragt dein Browser einmal, danach meldet sich Satürn bei Likes, Antworten, Nachrichten und neuen Followern. Ausschalten geht unter Einstellungen > Mitteilungen. #neu #mitteilungen"),
+    ("2026-10-31-songs", "web", "Neu: Weniger Songs, dafür die richtigen. Satürn hat jetzt eine ausgewählte Liste mit Funk, Dance, Hip-Hop, Lo-Fi und den Songs aus den Memes. Sie starten sofort und genau am Anfang, auch im Clip. Dazu: alles Rot ist jetzt TikTok-Rot. #neu #songs"),
+    ("2026-10-31-lock", "web", "Neu in der Kamera: Halte den Kreis zum Filmen und zieh ihn nach oben, dann filmt Satürn von allein weiter. Der Kreis gleitet zurück und hüpft leicht. Tippen beendet die Aufnahme. Der Kreis der normalen Kamera ist weiß, beim Filmen rot. #neu #kamera"),
 ]
 
 _state = {"started": False}

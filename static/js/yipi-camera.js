@@ -51,7 +51,7 @@
   const pickType = () => Y.pickRecorderType();
 
   /* A plain camera: a photo or a video without any effect (the first of the strip in the capture window and next to "Erstellen" in the tab). */
-  const NORMAL = { id: "l-normal", kind: "lens", name: "Normal", emoji: "📷", cat: "Kamera", hint: "Foto und Video ohne Effekt", color: "#4a4a55", fx: [], filter: "none" };
+  const NORMAL = { id: "l-normal", kind: "lens", name: "Normal", emoji: "", cat: "Kamera", hint: "Foto und Video ohne Effekt", color: "#4a4a55", fx: [], filter: "none" };
 
   Y.views.camera = function camera(route, ctx) {
     const capture = route && route.capture ? route.capture : null;            // {photoOnly, resolve(file)}: the camera was opened by a place to write that wants a photo or a clip (Y.cameraCapture)
@@ -83,7 +83,7 @@
     const ctlQr = h("button", { class: "cam-tool small", type: "button", "aria-label": "QR-Code und Teilen: dieses Spiel oder diese Linse", "aria-haspopup": "dialog" }, icon("qr"));
     const ctl = h("div", { class: "cam-ctl", role: "group", "aria-label": "Kamera, Mikrofon, Ton und QR-Code" }, ctlCam, ctlMic, h("div", { class: "cam-ctl-sound" }, volume, ctlSound), ctlQr);
     const songText = h("span", {}, "Sound hinzufügen");
-    const songBtn = h("button", { class: "cam-song", type: "button", "aria-label": "Sound hinzufügen" }, h("span", { class: "cam-song-note", "aria-hidden": "true" }, "♪"), songText);
+    const songBtn = h("button", { class: "cam-song", type: "button", "aria-label": "Sound hinzufügen" }, h("span", { class: "cam-song-note", "aria-hidden": "true" }, icon("music")), songText);
     const songClear = h("button", { class: "cam-song-x", type: "button", "aria-label": "Sound entfernen", hidden: true }, icon("close"));
     const top = h("div", { class: "cam-top" }, h("h1", { class: "sr-only" }, "Kamera"), h("div", { class: "cam-tool-group" }, all), h("div", { class: "cam-mid" }, h("span", { class: "cam-title" }, "Kamera"), h("div", { class: "cam-song-box" }, songBtn, songClear)), h("div", { class: "cam-tool-group end" }, board, flip));
     const lensName = h("div", { class: "cam-lens-name" });
@@ -118,7 +118,8 @@
     let frozen = null;                                         // the photo of the lens "Zufalls-Song" (and its card) while the clip is made
     let lastItem = null;                                       // the lens or game that was open before the QR code (the code can point to it)
     let panelCleanup = null;                                   // what the panel of "QR-Code" has to stop (the scanner)
-    const setState = (next) => { state = next; app.dataset.cam = next; el.dataset.state = next; };
+    let lockedRound = false;                                       // the finger is up and the clip goes on (slid up while holding the shutter)
+    const setState = (next) => { state = next; app.dataset.cam = next; el.dataset.state = next; if (next !== "playing" && lockedRound) endLock(); };
     setState("idle");
 
     // ---------------------------------------------------------------------------------------------- the camera
@@ -252,20 +253,27 @@
     flip.addEventListener("click", () => { if (state !== "idle") return; facing = facing === "user" ? "environment" : "user"; openCamera().then(() => lens?.setMirror(facing === "user")); });
 
     // ---------------------------------------------------------------------------------------------- the lenses
+    /* the picture of a game or lens, or a drawn symbol when it has none: no emoji */
+    const glyphOf = (game) => (game.image ? h("img", { class: "lens-photo", src: game.image, alt: "", loading: "lazy", draggable: false })
+      : icon(game.kind === "qr" ? "qr" : game.kind === "randomsong" ? "music" : game.kind === "lens" ? "camera" : "gamepad"));
+
     function lensButton(game, index) {
-      const circle = h("span", { class: `lens-ic${game.image ? " photo" : ""}`, style: game.color && !game.image ? `background:${game.color}` : "" },
+      const plain = game.id === "l-normal";                                    // the normal camera is a plain white shutter without a symbol (red while it films)
+      const circle = h("span", { class: `lens-ic${game.image ? " photo" : ""}${plain ? " plain" : ""}`, style: game.color && !game.image && !plain ? `background:${game.color}` : "" },
         game.image ? h("img", { class: "lens-photo", src: game.image, alt: "", loading: "lazy", draggable: false })
-          : game.kind === "create" ? h("span", { class: "lens-emoji lens-plus", "aria-hidden": "true" }, icon("plus"))
-            : h("span", { class: "lens-emoji", "aria-hidden": "true" }, game.emoji));
+          : plain ? null
+            : game.kind === "create" ? h("span", { class: "lens-emoji lens-plus", "aria-hidden": "true" }, icon("plus"))
+              : h("span", { class: "lens-emoji", "aria-hidden": "true" }, glyphOf(game)));
       const photo = circle.querySelector("img");
       if (photo) photo.addEventListener("error", () => {                       // a picture that is not there: the emoji on the colour of the game
         circle.classList.remove("photo");
         if (game.color) circle.style.background = game.color;
-        photo.replaceWith(h("span", { class: "lens-emoji", "aria-hidden": "true" }, game.emoji));
+        photo.replaceWith(h("span", { class: "lens-emoji", "aria-hidden": "true" }, glyphOf({ ...game, image: "" })));
       });
       const button = h("button", { class: `lens${game.kind === "create" ? " create" : ""}${game.kind === "lens" ? " face" : ""}`, type: "button", role: "option", "aria-selected": "false", "aria-label": `${game.name}: ${game.hint}`, "data-id": game.id }, circle);
       button.addEventListener("click", () => {
         if (state !== "idle" && state !== "playing") return;
+        if (lockedRound && state === "playing") { finish(finalScore); return; }       // a tap on the red circle ends a locked clip
         if (index !== active) { go(index, true); return; }
         if (lensLike(game)) return;                                          // (a lens: the shutter below, with the finger)
         if (state === "playing") { abortRound(); schedulePreview(); }         // a game: a touch on its own circle starts it again
@@ -315,7 +323,7 @@
       scrollFrame = requestAnimationFrame(() => {
         scrollFrame = 0;
         const first = lensBar.children[0];
-        if (!first || (state !== "idle" && state !== "playing") || (shutter && shutter.holding)) return;
+        if (!first || (state !== "idle" && state !== "playing") || (shutter && shutter.holding) || lockedRound) return;
         const middle = lensBar.scrollLeft + lensBar.clientWidth / 2;
         let index = 0;
         let nearest = Infinity;
@@ -349,7 +357,7 @@
         const shown = list.filter((game) => (topic === "Alle" || game.cat === topic) && (!term || game.name.toLowerCase().includes(term)));
         const scores = best();
         fill(grid, ...(shown.length ? shown.map((game) => h("button", { class: "cam-tile", type: "button", onclick: () => { entry.close(); go(list.indexOf(game), true); } },
-          h("span", { class: "cam-tile-ic", style: game.color ? `background:${game.color}` : "" }, game.emoji), h("b", {}, game.name), h("small", {}, scores[game.id] ? `Bestwert ${scores[game.id]}` : game.cat)))
+          h("span", { class: "cam-tile-ic", style: game.color && !game.image ? `background:${game.color}` : "" }, glyphOf(game)), h("b", {}, game.name), h("small", {}, scores[game.id] ? `Bestwert ${scores[game.id]}` : game.cat)))
           : [h("p", { class: "muted games-none" }, "Dazu gibt es kein Spiel.")]));
       }
       search.addEventListener("input", () => { term = search.value.trim().toLowerCase(); draw(); });
@@ -367,6 +375,27 @@
     // ---------------------------------------------------------------------------------------------- the shutter of a lens: a tap is a photo, a finger that stays is a clip
     const lensLike = (item) => !!item && (item.kind === "lens" || item.kind === "randomsong");
     let shutter = null;
+    const LOCK_AT = 78;                                                       // how far up (in pixels) the finger has to slide
+    function endLock() {
+      lockedRound = false;
+      for (const b of lensBar.querySelectorAll(".lens.locked, .lens.holding")) { b.classList.remove("locked", "holding"); b.style.removeProperty("--lift"); b.removeAttribute("data-lock"); }
+    }
+    function lockRound(held) {
+      held.locked = true;
+      lockedRound = true;
+      held.button.classList.add("locked");
+      held.button.style.setProperty("--lift", "0px");                          // (it glides back to its place, see the stylesheet)
+      held.button.setAttribute("data-lock", "1");
+      navigator.vibrate?.([12, 50, 18]);
+      tapHint.firstChild.textContent = "Tippe auf den Kreis, um die Aufnahme zu beenden";
+    }
+    const shutterMove = (event) => {
+      if (!shutter || !shutter.holding || shutter.locked || event.pointerId !== shutter.id) return;
+      const lift = Math.max(0, Math.min(150, shutter.y - event.clientY));
+      shutter.button.style.setProperty("--lift", `${lift.toFixed(0)}px`);
+      if (lift >= LOCK_AT) lockRound(shutter);
+    };
+    window.addEventListener("pointermove", shutterMove);
     lensBar.addEventListener("pointerdown", (event) => {
       const button = event.target.closest(".lens");
       const item = list[active];
@@ -388,7 +417,9 @@
       const held = shutter;
       shutter = null;
       clearTimeout(held.timer);
-      held.button.classList.remove("holding");
+      if (held.holding && held.locked && state === "playing") return;          // locked: the finger may go, the clip goes on
+      held.button.classList.remove("holding", "locked");
+      held.button.style.removeProperty("--lift");
       if (held.holding) { if (state === "playing") finish(finalScore); return; }
       if (cancelled || state !== "idle") return;
       const item = list[active];
@@ -435,7 +466,7 @@
     // ---------------------------------------------------------------------------------------------- a game and its recording
     let previewTimer = 0;
     let previewId = 0;
-    const tapHint = h("div", { class: "cam-tap", "aria-live": "polite" }, h("span", {}, "Tippen: Foto · Halten: Video"));
+    const tapHint = h("div", { class: "cam-tap", "aria-live": "polite" }, h("span", {}, "Tippen: Foto · Halten: Video · Hochziehen: Sperren"));
     stage.append(tapHint);
 
     /* A moment after a lens is chosen the game is shown on the camera picture, not running yet: the scenery, the figure and the buttons to steer it are there. */
@@ -450,7 +481,7 @@
       const mine = ++previewId;
       if (game.song) setSong(game.song, true);                  // a lens that brings its song: the song is on, and can be changed at the top
       else if (songFromLens) setSong(null);
-      tapHint.firstChild.textContent = game.kind === "randomsong" ? "Tippe auf den Kreis: Foto mit Zufalls-Song" : capture && capture.photoOnly ? "Tippe auf den Kreis: Foto" : "Tippen: Foto · Halten: Video";
+      tapHint.firstChild.textContent = game.kind === "randomsong" ? "Tippe auf den Kreis: Foto mit Zufalls-Song" : capture && capture.photoOnly ? "Tippe auf den Kreis: Foto" : "Tippen: Foto · Halten: Video · Hochziehen: Sperren";
       stopLens();
       panelCleanup?.();
       panelCleanup = null;
@@ -487,7 +518,7 @@
       } };
       if (def.external) {                                     // a game that brings its own page (Fruit Merge): a card, the first touch loads it
         const card = h("button", { class: "cam-ext", type: "button", onclick: () => startRound() },
-          h("span", { class: "cam-ext-ic" }, game.emoji), h("b", {}, game.name), h("small", {}, game.hint));
+          h("span", { class: "cam-ext-ic" }, glyphOf({ ...game, image: "" })), h("b", {}, game.name), h("small", {}, game.hint));
         host.append(card);
         setTimeout(() => { if (mine === previewId && state === "idle" && chosen === game) startRound(); }, 250);
         return;
@@ -647,7 +678,7 @@
       frozen = { photo, card };
       host.classList.add("flash");
       setTimeout(() => host.classList.remove("flash"), 400);
-      paintCard(card, "Dein Song wird gewählt …", "", "🎲 Zufalls-Song");
+      paintCard(card, "Dein Song wird gewählt …", "", "Zufalls-Song");
       const reply = await Api.get("/music/random");
       if (dead || mine !== previewId) return;
       if (!reply.ok) {
@@ -659,7 +690,7 @@
       }
       const t = reply.data.track;
       setSong({ src: "archive", id: t.id, file: t.file, title: t.title, creator: t.creator, licence: t.licence, licenceUrl: t.licenceUrl, length: t.length, start: t.length && t.length > 60 ? Math.min(30, Math.floor(t.length / 4)) : 0, url: t.url }, false);
-      paintCard(card, t.title, `${t.creator} · ${t.licence}`, "🎲 Dein Song");
+      paintCard(card, t.title, `${t.creator} · ${t.licence}`, "Dein Song");
       setState("playing");
       hud.hidden = false;
       timeBar.style.width = "100%";
@@ -695,6 +726,7 @@
       timer = setInterval(tick, 100);
     }
     let current = null;
+    let recordingPending = false;                                 // the recorder waits for the song to begin (a few milliseconds)
     const lensBarHide = (on) => { top.hidden = on; lensName.hidden = on; lensHint.hidden = on; };       // (the strip itself stays, always)
 
     function tick() {
@@ -731,7 +763,8 @@
     function startRecording() {
       recorder = null;
       chunks = [];
-      if (song && musicPlayer && musicPlayer.ready) { musicPlayer.rewind(); musicPlayer.play(); }           // the player hears the song, and the clip gets it
+      recordingPending = false;
+      const lead = song && musicPlayer && musicPlayer.ready ? musicPlayer.start() : null;               // the player hears the song, and the clip gets it; the clip begins when the song does
       const type = pickType();
       recCanvas = document.createElement("canvas");
       const shape = stage.getBoundingClientRect();
@@ -750,14 +783,20 @@
         return;
       }
       recorder.ondataavailable = (event) => { if (event.data && event.data.size) chunks.push(event.data); };
-      recorder.start(500);
       const g = recCanvas.getContext("2d");
+      const mineRecorder = recorder;
       const draw = () => {
         if (!recorder || recorder.state === "inactive") return;
         compose(g);
         raf = requestAnimationFrame(draw);
       };
-      raf = requestAnimationFrame(draw);
+      const begin = () => {
+        if (!recordingPending || recorder !== mineRecorder) return;       // (the round was left before the song began)
+        recordingPending = false;
+        mineRecorder.start(500);
+        raf = requestAnimationFrame(draw);
+      };
+      if (lead) { recordingPending = true; lead.then(begin, begin); } else { recordingPending = true; begin(); }
     }
 
     /* The picture of one moment: the camera (as big as the screen, cut to the shape), the layers of the game on top, the score. */
@@ -848,6 +887,7 @@
     function stopRecording() {
       cancelAnimationFrame(raf);
       musicPlayer?.pause();
+      recordingPending = false;
       return new Promise((resolve) => {
         if (!recorder || recorder.state === "inactive") { resolve(null); return; }
         const done = () => resolve(chunks.length ? new Blob(chunks, { type: recorder.mimeType || "video/webm" }) : null);
@@ -888,7 +928,7 @@
           action("share", "Teilen", shareOut),
           h("button", { class: "cam-send", type: "button", onclick: sendDialog }, icon("send"), h("span", {}, "Senden")),
           h("button", { class: "cam-post", type: "button", onclick: post }, icon("plus"), h("span", {}, "Posten")));
-      fill(review, video, h("div", { class: "cam-review-top" }, h("b", {}, clip.game.kind === "lens" || clip.game.kind === "randomsong" ? `${clip.game.emoji} ${clip.game.name}` : clip.game.name), clip.game.kind === "lens" || clip.game.kind === "randomsong" ? null : h("span", {}, points(clip.score))), bar);
+      fill(review, video, h("div", { class: "cam-review-top" }, h("b", {}, clip.game.name), clip.game.kind === "lens" || clip.game.kind === "randomsong" ? null : h("span", {}, points(clip.score))), bar);
       review.hidden = false;
       setState("review");
       if (!photo) video.play().catch(() => {});
@@ -978,9 +1018,9 @@
       window.PulseGames.setCamera(camOn && !!stream);
       const games = window.PulseGames.list().map((game) => ({ ...game, kind: "game", image: game.external ? null : `/static/img/games/${game.id}.jpg` }));
       const create = { id: "create", kind: "create", name: "Erstellen", emoji: "+", cat: "Neu", hint: "Baue mit KI eine eigene Linse oder ein eigenes Spiel und teile es", color: "#7a2cf0" };
-      const qr = { id: "qr", kind: "qr", name: "QR-Code", emoji: "🔳", cat: "Teilen", hint: "Dein QR-Code zum Teilen und Scannen", color: "#1a1a1f" };
+      const qr = { id: "qr", kind: "qr", name: "QR-Code", emoji: "", cat: "Teilen", hint: "Dein QR-Code zum Teilen und Scannen", color: "#1a1a1f" };
       const flagship = games.filter((game) => game.featured);
-      const randomSong = { id: "l-zufallssong", kind: "randomsong", name: "Zufalls-Song", emoji: "🎲", cat: "Musik", color: "#7a2cf0", hint: "Mach ein Foto von dir, dann kommt ein zufälliger Song" };
+      const randomSong = { id: "l-zufallssong", kind: "randomsong", name: "Zufalls-Song", emoji: "", cat: "Musik", color: "#7a2cf0", hint: "Mach ein Foto von dir, dann kommt ein zufälliger Song" };
       list = [create, NORMAL, ...flagship, randomSong, ...(Y.lenses ? Y.lenses.PRESETS : []), qr, ...games.filter((game) => !game.featured)];
       let wanted = route.game ? list.findIndex((game) => game.id === route.game) : list.findIndex((game) => game.id === lastGame);
       if (wanted < 0 && route.game) wanted = await addShared(route.game);          // a lens or game of somebody else that was linked
@@ -1037,6 +1077,7 @@
         window.removeEventListener("resize", fit);
         window.removeEventListener("pointerup", shutterUp);
         window.removeEventListener("pointercancel", shutterCancel);
+        window.removeEventListener("pointermove", shutterMove);
         closeCamera();
         if (micStream) { micStream.getTracks().forEach((track) => track.stop()); micStream = null; micAllowed = null; }
         if (clip) URL.revokeObjectURL(clip.url);

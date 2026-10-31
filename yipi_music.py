@@ -1,30 +1,33 @@
-"""Satürn music (yipi_music.py): songs for the clips of the camera. Only music that may be used is offered: audio of the Internet Archive that carries a Creative Commons licence that allows it
-(CC0, CC BY, CC BY-SA: no "non commercial" and no "no derivatives", because a song under a video is a use that those licences do not allow) and files that a person uploads from their own
-folder. The Internet Archive is asked on the server (a search, the data of one item) and the audio is passed on by the server (`stream`), so the page of Satürn never connects to another
-site and the browser can mix the song into the recording. Nothing here runs as code. The honest size of the offer is what the Internet Archive has under these licences: some 400 000 audio
-items (songs, albums, sessions; a part of them is not music), see `count()`."""
+"""Satürn music (yipi_music.py): songs for the clips of the camera. Not everything under the sun: a short, chosen list of music that fits short videos (yipi_music_catalogue.py: funk, dance, hip-hop beats,
+lo-fi, chill, retro and the tracks that are used in memes), all under a Creative Commons licence that allows it (CC0, CC BY, CC BY-SA: no "non commercial" and no "no derivatives", because a song under
+a video is a use that those licences do not allow), plus the files that a person uploads from their own folder. The audio comes from the Internet Archive and is passed on by the server (`open_stream`), so
+the page of Satürn never connects to another site and the browser can mix the song into the recording. A song is fetched ONCE as a whole and kept in a folder of the server (at most MAX_CACHED files), so
+that it starts at once and can be started in the middle without asking the Internet Archive again; `warm` starts that download in the background as soon as somebody looks at a song. Nothing here runs as code."""
+import os
 import random
 import re
+import tempfile
 import threading
-import time
 import urllib.parse
 
 import requests
 
+import yipi_music_catalogue
+
 ARCHIVE = "https://archive.org"
 HEADERS = {"User-Agent": "NexBot/1.0 (https://nexai.up.railway.app; music for clips) python-requests"}
-ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{2,99}")
-FILE_RE = re.compile(r"[A-Za-z0-9][^\x00-\x1f\\<>\"?#]{0,180}\.(?:mp3|ogg|oga|m4a)", re.I)
 LICENCE_URL = re.compile(r"^https?://(?:www\.)?creativecommons\.org/(publicdomain/zero|licenses/by|licenses/by-sa)/(\d\.\d)/?")
-GOOD_FORMATS = ("VBR MP3", "MP3", "128Kbps MP3", "64Kbps MP3", "192Kbps MP3", "256Kbps MP3", "Ogg Vorbis", "OGG")
 MAX_FILE = 18_000_000
 MAX_UPLOAD = 8_000_000
-LICENCE_QUERY = r"(licenseurl:*creativecommons.org\/publicdomain\/zero* OR licenseurl:*creativecommons.org\/licenses\/by\/* OR licenseurl:*creativecommons.org\/licenses\/by-sa\/*)"
-WHERE = ("mediatype:audio AND (collection:(netlabels OR audio_music) OR subject:(music OR song OR songs OR album OR electronic OR rock OR pop OR jazz OR ambient OR hiphop OR instrumental))"
-         " AND NOT collection:(librivoxaudio OR podcasts OR radioprograms)")
+MAX_CACHED = 26
+CACHE_DIR = os.path.join(tempfile.gettempdir(), "saturn-music")
 
-_cache = {}
+SONGS = {row["id"]: row for row in yipi_music_catalogue.SONGS}
+ORDER = [row["id"] for row in yipi_music_catalogue.SONGS]
+TAGS = list(yipi_music_catalogue.TAGS)
+
 _lock = threading.Lock()
+_fetching = {}                                         # song id -> Event (a download that is running)
 
 
 def licence_label(url):
@@ -36,182 +39,201 @@ def licence_label(url):
     return {"publicdomain/zero": "CC0", "licenses/by": "CC BY", "licenses/by-sa": "CC BY-SA"}[kind] + f" {version}"
 
 
-def _remember(key, value, seconds):
-    with _lock:
-        if len(_cache) > 3000:
-            _cache.clear()
-        _cache[key] = (time.time() + seconds, value)
-
-
-def _recall(key):
-    with _lock:
-        got = _cache.get(key)
-    return got[1] if got and got[0] > time.time() else None
-
-
 def _text(value, limit):
     if isinstance(value, list):
         value = value[0] if value else ""
     return re.sub(r"\s+", " ", re.sub(r"[\x00-\x1f<>]", " ", str(value or ""))).strip()[:limit]
 
 
+# ---------------------------------------------------------------------------------------------------------------- the list
 def search(text, page=1, rows=20):
-    """[{id, title, creator, licence, licenceUrl, downloads}] for some words (empty: the most loved), only allowed licences."""
-    words = re.findall(r"[0-9A-Za-zÄÖÜäöüß]{2,30}", text if isinstance(text, str) else "")[:6]
+    """[{id, title, creator, tag, licence, licenceUrl}] of the chosen songs that have all the words (empty: all of them, in the order of the list)."""
+    words = [w.lower() for w in re.findall(r"[0-9A-Za-zÄÖÜäöüß]{2,30}", text if isinstance(text, str) else "")[:6]]
     page = max(1, min(300, int(page) if str(page).isdigit() else 1))
-    query = f"{WHERE} AND {LICENCE_QUERY}" + "".join(f" AND (title:{w} OR creator:{w} OR subject:{w})" for w in words)
-    key = ("search", query, page, rows)
-    got = _recall(key)
-    if got is not None:
-        return got
-    params = {"q": query, "fl[]": ["identifier", "title", "creator", "licenseurl", "downloads"], "rows": rows, "page": page, "output": "json", "sort[]": "downloads desc"}
-    try:
-        reply = requests.get(f"{ARCHIVE}/advancedsearch.php", params=params, headers=HEADERS, timeout=15)
-        docs = ((reply.json().get("response") or {}).get("docs")) or []
-    except (requests.RequestException, ValueError):
-        return []
     found = []
-    for doc in docs:
-        label = licence_label(_text(doc.get("licenseurl"), 200))
-        identifier = _text(doc.get("identifier"), 100)
-        if label and ID_RE.fullmatch(identifier):
-            found.append({"id": identifier, "title": _text(doc.get("title"), 80) or identifier, "creator": _text(doc.get("creator"), 60) or "Unbekannt", "licence": label,
-                          "licenceUrl": _text(doc.get("licenseurl"), 200), "downloads": int(doc.get("downloads") or 0) if str(doc.get("downloads") or "0").isdigit() else 0})
-    _remember(key, found, 600)
-    return found
+    for identifier in ORDER:
+        row = SONGS[identifier]
+        haystack = f"{row['title']} {row['creator']} {row['tag']}".lower()
+        if all(word in haystack for word in words):
+            found.append({"id": row["id"], "title": row["title"], "creator": row["creator"], "tag": row["tag"], "licence": row["licence"], "licenceUrl": row["licenceUrl"], "downloads": 0})
+    return found[(page - 1) * rows: page * rows]
 
 
 def count():
-    """How many audio items of the Internet Archive have an allowed licence (cached for a day)."""
-    got = _recall(("count",))
-    if got is not None:
-        return got
-    try:
-        reply = requests.get(f"{ARCHIVE}/advancedsearch.php", params={"q": f"mediatype:audio AND {LICENCE_QUERY}", "fl[]": "identifier", "rows": 0, "output": "json"}, headers=HEADERS, timeout=15)
-        number = int(reply.json()["response"]["numFound"])
-    except (requests.RequestException, ValueError, KeyError, TypeError):
-        return 0
-    _remember(("count",), number, 86400)
-    return number
-
-
-def _seconds(value):
-    if value is None:
-        return None
-    text = str(value).strip()
-    try:
-        if ":" in text:
-            total = 0.0
-            for part in text.split(":"):
-                total = total * 60 + float(part)
-            return total
-        return float(text)
-    except ValueError:
-        return None
-
-
-def metadata(identifier):
-    if not ID_RE.fullmatch(identifier or ""):
-        return None
-    key = ("meta", identifier)
-    got = _recall(key)
-    if got is not None:
-        return got or None
-    try:
-        reply = requests.get(f"{ARCHIVE}/metadata/{urllib.parse.quote(identifier)}", headers=HEADERS, timeout=15)
-        data = reply.json()
-    except (requests.RequestException, ValueError):
-        return None
-    if not isinstance(data, dict) or not isinstance(data.get("metadata"), dict):
-        _remember(key, False, 300)
-        return None
-    _remember(key, data, 6 * 3600)
-    return data
+    """How many songs are offered."""
+    return len(ORDER)
 
 
 def resolve(identifier):
-    """The song to play for an item: {id, title, creator, licence, licenceUrl, file, length, size, page} or None (not allowed, no usable file, not reachable)."""
-    data = metadata(identifier)
-    if not data:
+    """The song to play for an id of the list: {id, title, creator, licence, licenceUrl, file, length, size, page} or None (not in the list)."""
+    row = SONGS.get(identifier) if isinstance(identifier, str) else None
+    if row is None:
         return None
-    meta = data["metadata"]
-    licence_url = _text(meta.get("licenseurl"), 200)
-    label = licence_label(licence_url)
-    if meta.get("mediatype") != "audio" or not label:
-        return None
-    candidates = []
-    for entry in data.get("files") or []:
-        name = entry.get("name") if isinstance(entry, dict) else None
-        if not isinstance(name, str) or not FILE_RE.fullmatch(name) or entry.get("format") not in GOOD_FORMATS or entry.get("source") == "metadata":
-            continue
-        try:
-            size = int(entry.get("size") or 0)
-        except (TypeError, ValueError):
-            size = 0
-        length = _seconds(entry.get("length"))
-        if 0 < size <= MAX_FILE and (length is None or length >= 15):
-            candidates.append((name, size, length))
-    if not candidates:
-        return None
-    # the best: a file of one to five minutes (a song), then the nearest to that
-    candidates.sort(key=lambda c: (0 if c[0].lower().endswith(".mp3") else 1, abs((c[2] or 200) - 180), c[1]))      # (MP3 first: every browser plays it, Safari does not play Ogg)
-    name, size, length = candidates[0]
-    return {"id": identifier, "title": _text(meta.get("title"), 80) or identifier, "creator": _text(meta.get("creator"), 60) or "Unbekannt", "licence": label, "licenceUrl": licence_url,
-            "file": name, "length": round(length) if length else None, "size": size, "page": f"{ARCHIVE}/details/{urllib.parse.quote(identifier)}"}
+    return {"id": row["id"], "title": row["title"], "creator": row["creator"], "licence": row["licence"], "licenceUrl": row["licenceUrl"], "file": row["file"], "length": row["length"],
+            "size": row["size"], "page": f"{ARCHIVE}/details/{urllib.parse.quote(row['item'])}"}
 
 
-def random_track(tries=5):
-    """A random song among the best loved ones (a random page of the most downloaded), or None."""
-    for _ in range(tries):
-        found = search("", random.randint(1, 120))
-        if not found:
-            continue
-        for item in random.sample(found, min(4, len(found))):
-            track = resolve(item["id"])
-            if track and (track["length"] is None or track["length"] <= 900):
-                return track
-    return None
+def random_track():
+    """A random song of the list (and its download starts at once)."""
+    track = resolve(random.choice(ORDER))
+    if track:
+        warm(track["id"])
+    return track
 
 
-def open_stream(identifier, name, range_header=None):
-    """(status, headers, chunks) of the file of an allowed item, passed on from the Internet Archive (only archive.org is ever asked), or None."""
-    track = resolve(identifier)
-    if not track or name != track["file"]:
-        found = metadata(identifier)                                              # (another file of the item may be used when it is one the item really has)
-        names = {entry.get("name") for entry in (found or {}).get("files", []) if isinstance(entry, dict)}
-        if not found or name not in names or not FILE_RE.fullmatch(name or "") or not licence_label(_text(found["metadata"].get("licenseurl"), 200)):
-            return None
-    url = f"{ARCHIVE}/download/{urllib.parse.quote(identifier)}/{urllib.parse.quote(name)}"
-    headers = dict(HEADERS)
-    if range_header and re.fullmatch(r"bytes=\d*-\d*", range_header):
-        headers["Range"] = range_header
+# ---------------------------------------------------------------------------------------------------------------- the files of the songs
+def _path(row):
+    return os.path.join(CACHE_DIR, f"{row['id']}.mp3")
+
+
+def _download(row):
+    """The whole file of a song from the Internet Archive into the folder of the cache (only archive.org is ever asked); its path, or None."""
+    path = _path(row)
+    if os.path.exists(path):
+        return path
+    url = f"{ARCHIVE}/download/{urllib.parse.quote(row['item'])}/{urllib.parse.quote(row['file'])}"
+    temp = f"{path}.{os.getpid()}.{threading.get_ident()}.part"
+    reply = None
     try:
         for _ in range(4):
-            reply = requests.get(url, headers=headers, stream=True, timeout=20, allow_redirects=False)
+            reply = requests.get(url, headers=HEADERS, stream=True, timeout=25, allow_redirects=False)
             if reply.status_code in (301, 302, 303, 307, 308):
                 url = urllib.parse.urljoin(url, reply.headers.get("Location", ""))
                 host = urllib.parse.urlparse(url).hostname or ""
+                reply.close()
                 if urllib.parse.urlparse(url).scheme != "https" or not (host == "archive.org" or host.endswith(".archive.org")):
                     return None
-                reply.close()
                 continue
             break
         else:
             return None
-    except requests.RequestException:
+        if reply.status_code != 200 or int(reply.headers.get("Content-Length") or 0) > MAX_FILE:
+            return None
+        os.makedirs(CACHE_DIR, exist_ok=True)
+        size = 0
+        with open(temp, "wb") as out:
+            for chunk in reply.iter_content(65536):
+                size += len(chunk)
+                if size > MAX_FILE:
+                    raise ValueError("too big")
+                out.write(chunk)
+        if size < 10_000:
+            raise ValueError("too small")
+        os.replace(temp, path)
+        _trim()
+        return path
+    except (requests.RequestException, OSError, ValueError):
         return None
-    if reply.status_code not in (200, 206):
-        reply.close()
+    finally:
+        if reply is not None:
+            reply.close()
+        try:
+            os.remove(temp)
+        except OSError:
+            pass
+
+
+def _trim():
+    """Not more than MAX_CACHED songs on the disk: the least recently used go."""
+    try:
+        files = sorted((os.path.join(CACHE_DIR, name) for name in os.listdir(CACHE_DIR) if name.endswith(".mp3")), key=os.path.getmtime)
+        for old in files[:-MAX_CACHED]:
+            os.remove(old)
+    except OSError:
+        pass
+
+
+def ensure(row):
+    """The path of the file of a song, downloaded when it is not there yet (one download at a time for a song; others wait for it)."""
+    path = _path(row)
+    if os.path.exists(path):
+        try:
+            os.utime(path)                                               # (used just now: it stays)
+        except OSError:
+            pass
+        return path
+    with _lock:
+        event = _fetching.get(row["id"])
+        owner = event is None
+        if owner:
+            event = _fetching[row["id"]] = threading.Event()
+    if not owner:
+        event.wait(60)
+        return path if os.path.exists(path) else None
+    try:
+        return _download(row)
+    finally:
+        with _lock:
+            _fetching.pop(row["id"], None)
+        event.set()
+
+
+def warm(identifier):
+    """Starts the download of a song in the background (it is looked at, so it will probably be played)."""
+    row = SONGS.get(identifier) if isinstance(identifier, str) else None
+    if not AUTO_WARM or row is None or os.path.exists(_path(row)) or row["id"] in _fetching:
+        return False
+    threading.Thread(target=ensure, args=(row,), daemon=True).start()
+    return True
+
+
+AUTO_WARM = True                                        # (the tests switch this off: they never ask the Internet Archive)
+_warmed = []
+
+
+def warm_top(count=6):
+    """The first time somebody opens the list: the best known songs are fetched one after the other in the background, so that the first plays start at once."""
+    if not AUTO_WARM or _warmed:
+        return False
+    _warmed.append(True)
+    ids = [identifier for identifier in ORDER if SONGS[identifier]["tag"] == "Beliebt"][:count]
+
+    def work():
+        for identifier in ids:
+            ensure(SONGS[identifier])
+    threading.Thread(target=work, daemon=True).start()
+    return True
+
+
+def open_stream(identifier, name, range_header=None):
+    """(status, headers, chunks) of the file of a song of the list, with ranges (so that a player can start in the middle), or None."""
+    row = SONGS.get(identifier) if isinstance(identifier, str) else None
+    if row is None or name != row["file"]:
         return None
-    if int(reply.headers.get("Content-Length") or 0) > MAX_FILE:
-        reply.close()
+    path = ensure(row)
+    if path is None:
         return None
-    kind = "audio/ogg" if name.lower().endswith((".ogg", ".oga")) else "audio/mp4" if name.lower().endswith(".m4a") else "audio/mpeg"
-    out = {"Content-Type": kind, "Accept-Ranges": "bytes", "Cache-Control": "private, max-age=3600"}
-    for key in ("Content-Length", "Content-Range"):
-        if reply.headers.get(key):
-            out[key] = reply.headers[key]
-    return reply.status_code, out, reply.iter_content(65536)
+    try:
+        size = os.path.getsize(path)
+    except OSError:
+        return None
+    start, end, status = 0, size - 1, 200
+    found = re.fullmatch(r"bytes=(\d*)-(\d*)", range_header or "")
+    if found and (found.group(1) or found.group(2)):
+        if found.group(1):
+            start = int(found.group(1))
+            end = int(found.group(2)) if found.group(2) else size - 1
+        else:
+            start = max(0, size - int(found.group(2)))
+        if start >= size:
+            return 416, {"Content-Range": f"bytes */{size}", "Content-Type": "audio/mpeg"}, iter(())
+        end = min(end, size - 1)
+        status = 206
+    headers = {"Content-Type": "audio/mpeg", "Accept-Ranges": "bytes", "Cache-Control": "private, max-age=3600", "Content-Length": str(end - start + 1)}
+    if status == 206:
+        headers["Content-Range"] = f"bytes {start}-{end}/{size}"
+
+    def chunks():
+        with open(path, "rb") as handle:
+            handle.seek(start)
+            left = end - start + 1
+            while left > 0:
+                data = handle.read(min(65536, left))
+                if not data:
+                    break
+                left -= len(data)
+                yield data
+    return status, headers, chunks()
 
 
 # ---------------------------------------------------------------------------------------------------------------- a song of a person's own folder
