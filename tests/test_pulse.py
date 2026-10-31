@@ -153,7 +153,7 @@ def test_the_error_and_legal_pages_are_pulse_too(client):
     c = flask_app.test_client()
     missing = c.get("/gibt-es-wirklich-nicht")
     assert missing.status_code == 404 and "| Nex</title>" in missing.get_data(as_text=True) and "yipi.css" in missing.get_data(as_text=True)
-    for path, words in (("/nutzungsbedingungen", ("GIF-Bibliothek", "Nex", "nex-agenten-archiv")), ("/datenschutz", ("yipi.nex", "Groq", "GIFs")), ("/impressum", ("§ 5 DDG", "GIFs"))):
+    for path, words in (("/nutzungsbedingungen", ("Sticker-Bibliothek", "Nex", "nex-agenten-archiv")), ("/datenschutz", ("yipi.nex", "Groq", "Sticker")), ("/impressum", ("§ 5 DDG", "Sticker"))):
         text = c.get(path).get_data(as_text=True)
         assert "| Nex</title>" in text, path
         for word in words:
@@ -503,7 +503,7 @@ def test_a_gif_can_be_sent_in_a_message(client):
     assert listing["text"] == "mit Text" and listing["gif"] is True
     api(mia, "post", "/messages/tom", {"gifId": gif["id"]}, status=201)
     last = api(tom, "get", "/messages", status=200)["items"][0]["last"]
-    assert last["text"] == "GIF" and last["gif"] is True and last["mine"] is False
+    assert last["text"] == "Sticker" and last["gif"] is True and last["mine"] is False
 
 
 def test_a_message_needs_text_or_a_real_gif(client):

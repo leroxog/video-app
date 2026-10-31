@@ -215,7 +215,16 @@
         if (!Y.requireLogin("Melde dich an, um zu folgen.")) return;
         const reply = await Api.post(`/users/${item.user.handle}/follow`);
         if (!reply.ok) { toast(Api.message(reply)); return; }
-        for (const other of reels) if (other.item.user.handle === item.user.handle) other.element.querySelector(".reel-follow")?.remove();
+        for (const other of reels) {
+          if (other.item.user.handle !== item.user.handle) continue;
+          const plus = other.element.querySelector(".reel-follow"), ring = other.element.querySelector(".reel-av");
+          if (!plus) continue;
+          plus.replaceChildren(icon("check"));                      // the plus turns into a check, the ring of the picture swells, then the badge goes
+          plus.classList.add("done");
+          ring?.classList.add("pulse");
+          setTimeout(() => plus.classList.add("gone"), 900);
+          setTimeout(() => { plus.remove(); ring?.classList.remove("pulse"); }, 1300);
+        }
         toast(`Du folgst jetzt @${item.user.handle}.`);
       });
 
@@ -268,14 +277,14 @@
       const first = offset;
       reply.data.items.forEach((item, index) => {
         if (!item.media || !item.media.some((entry) => entry.video)) return;
-        if (reels.some((other) => other.item.id === item.id)) return;          // (the video that was chosen on Home is already the first one)
+        if (!wrapped && reels.some((other) => other.item.id === item.id)) return;          // (the video that was chosen on Home is already the first one; when the whole list has been seen the videos come round again)
         const made = reel(item, first + index);
         applySound(made);
         reels.push(made);
+        if (shown > 0 && shown % 4 === 0) scroller.append(sponsorPage());       // after four videos comes the fifth page: a box "Gesponsert" (before the next video, never at the very end: there is always a page to scroll to)
         scroller.append(made.element);
         watcher?.observe(made.element);
         shown += 1;
-        if (shown % 4 === 0) scroller.append(sponsorPage());       // after four videos comes the fifth page: a box "Gesponsert"
       });
       if (reply.data.next) offset = reply.data.next; else ended = true;
       if (!reels.length) showEmpty();

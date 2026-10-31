@@ -163,7 +163,7 @@
     let entry = null;
     const tile = (label, text, symbol, run) => h("button", { class: "pc-tile", type: "button", role: "menuitem", onclick: () => { entry.close(); run(); } },
       h("span", { class: "pc-ic" }, icon(symbol)), h("span", { class: "pc-text" }, h("b", {}, label), h("span", { class: "hint" }, text)), h("span", { class: "pc-go", "aria-hidden": "true" }, icon("chevron")));
-    const tiles = h("div", { class: "pc-tiles" }, tile("Beitrag", "Text, Fotos, GIF", "feather", () => Y.compose()), tile("Video", "bis 30 Sekunden", "film", () => composeVideo()),
+    const tiles = h("div", { class: "pc-tiles" }, tile("Beitrag", "Text, Fotos, Sticker", "feather", () => Y.compose()), tile("Video", "bis 30 Sekunden", "film", () => composeVideo()),
       tile("Story", "Foto oder Video, 24 Stunden", "image", () => Y.newStory(() => Y.refreshStories?.())));
     if (!anchor) {
       entry = dialog({ title: "Was möchtest du hochladen?", body: tiles });

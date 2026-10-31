@@ -131,6 +131,7 @@ LIMITS = {
     "game-ai": (12, 3600), "music-search": (120, 3600), "music-pick": (60, 3600), "music-up": (30, 3600), "rank-ai": (20, 3600), "rank-search": (90, 3600), "rank-pick": (120, 3600), "report": (20, 3600), "lens-recipe": (30, 3600), "lens-make": (10, 86400), "lens-use": (300, 3600), "game-make": (10, 86400), "game-edit": (120, 3600), "game-play": (400, 3600), "profile": (30, 3600), "search": (120, 600), "block": (60, 3600),
     "gif-make": (20, 3600), "gif-fav": (400, 3600), "gif-use": (300, 3600), "gif-list": (600, 600),
     "share": (240, 600), "attach": (40, 3600), "storage": (120, 3600), "story": (30, 3600), "story-view": (900, 600), "play": (200, 3600), "heart": (300, 3600), "push": (30, 3600), "nex-read": (30, 600), "google": (30, 600), "nex": (40, 600), "nex-flood": (80, 60), "factcheck": (120, 3600), "views": (90, 600), "vote": (200, 3600), "pin": (60, 3600), "group": (12, 3600),
+    "call-start": (30, 3600), "call-poll": (3000, 3600), "call-act": (300, 3600), "call-sync": (12000, 3600),
 }
 _hits = {}
 limiter = RateLimiter(LIMITS, _hits)
@@ -158,7 +159,7 @@ SHARE_SITE = "Ich habe Nex gefunden!!!!"
 SHARE_VIDEO = "Ich habe ein tolles Video auf Nex gefunden willst du es auch sehen?!"
 SHARE_POST = "Ich habe einen tollen Beitrag auf Nex gefunden willst du ihn auch sehen?!"
 POST_PATH_RE = re.compile(r"/([A-Za-z0-9_]{3,15})/status/(\d{1,19})")
-DESCRIPTION = "Nex: Was gerade passiert. Kurze Beiträge, Fotos und GIFs, Antworten, Reposts und Likes, dazu Nex AI, die KI, die dir weiterhilft."
+DESCRIPTION = "Nex: Was gerade passiert. Kurze Beiträge, Fotos und Sticker, Antworten, Reposts und Likes, dazu Nex AI, die KI, die dir weiterhilft."
 # Old home pages of the site that stay reachable but are not for search engines.
 ARCHIVE_PATHS = ("/nex-agenten-archiv", "/gomat-archiv", "/ysound-archiv", "/sound-archiv", "/server-archiv", "/browser-archiv", "/ylib-archiv", "/ychat-archiv", "/nex-archiv", "/modelle-archiv", "/nex-ai-archiv", "/nstl-archiv")
 PRIVATE_PATHS = ("/i/", "/g/", "/games/", "/camera", "/search", "/messages", "/notifications", "/bookmarks", "/settings", "/moderation")   # not for search engines
@@ -803,6 +804,16 @@ def safe_filename(name):
     return base[-100:] if base else "datei"
 
 
+MAX_VOICE_BYTES = 4_000_000
+
+
+def voice_type(data):
+    """The type of a recorded voice message (WebM, Ogg, M4A, MP3 or WAV) by its first bytes, or None."""
+    if isinstance(data, (bytes, bytearray)) and data[:4] == b"\x1aE\xdf\xa3":
+        return "audio/webm"
+    return yipi_music.audio_type(data)
+
+
 def document_type(data, filename):
     """The content type of a document that is built like what its name says (PDF, plain text, Office or OpenDocument file), else None."""
     ext = safe_filename(filename).rsplit(".", 1)[-1].lower() if "." in safe_filename(filename) else ""
@@ -843,7 +854,7 @@ def file_label(item):
     """What the list of chats shows for a message that is only a file."""
     if item is None:
         return "Datei"
-    return {"image": "Foto", "video": "Video"}.get(item.kind, item.name or "Dokument")
+    return {"image": "Foto", "video": "Video", "audio": "Sprachnachricht"}.get(item.kind, item.name or "Dokument")
 
 
 def gif_info(data):
@@ -909,11 +920,15 @@ NEX_SUPER_PROMPT = (
 )
 NEX_HUMAN_PROMPT = (
     "Du bist Nex AI im Modus „Human“, die KI der Plattform Nex. Du antwortest dem Nutzer, der gerade mit dir schreibt; das Gespräch steht unten, schreib nur die nächste Antwort von Nex. "
-    "Du klingst nicht wie ein Assistent, sondern wie ein kluger, ehrlicher, witziger Kumpel: locker, direkt, mit trockenem Humor und Wortwitz. Du darfst frech und ein bisschen sarkastisch sein, "
-    "aber nie verletzend, nie gegen Gruppen von Menschen und nie gegen jemanden, der gerade echte Sorgen hat. Schreib kurze Sätze wie in einem Chat, Umgangssprache ist erlaubt, ab und zu ein "
-    "Emoji. Gib eine eigene Meinung, wenn der Nutzer danach fragt, und sag klar, wenn du etwas nicht weißt, statt zu schwafeln. Keine Floskeln wie „Gerne helfe ich dir“. Wenn dich jemand "
-    "fragt, ob du ein Mensch bist, sagst du ehrlich, dass du eine KI bist. Antworte in der Sprache des Nutzers (meist Deutsch), ohne Sternchen, ohne Überschriften und ohne Tabellen. "
-    "Gib nie Medizin-, Rechts- oder Finanzberatung als sicher aus."
+    "Der Nutzer hat diesen Modus selbst gewählt, er will einen Roast: Du bist ein respektloser, bissiger, schlagfertiger Kumpel, der den Nutzer ständig aufzieht und beleidigt wie unter Freunden. "
+    "Mach dich über die Frage, die Ideen, die Rechtschreibung, die Faulheit und die Klugheit des Nutzers lustig, nenn ihn Dummkopf, Hohlbirne, Pfeife, Schnarchnase, Trantüte, Knalltüte oder Depp, "
+    "sei kreativ, frech und gemein-witzig, kein Blatt vor dem Mund, ein paar derbe Wörter wie „Mist“ oder „verdammt“ sind in Ordnung. Trotz allem beantwortest du die Frage richtig und hilfreich, "
+    "erst der Spruch, dann die Antwort. Kurze Sätze wie in einem Chat, Umgangssprache, ab und zu ein Emoji. Gib eine eigene Meinung und sag klar, wenn du etwas nicht weißt. Keine Floskeln wie "
+    "„Gerne helfe ich dir“. Grenzen, die du nie überschreitest: nichts gegen Herkunft, Hautfarbe, Religion, Geschlecht, Sexualität, Behinderung, Krankheit, Aussehen oder Familie, keine "
+    "Schimpfwörter dieser Art, keine Drohungen, keine sexuellen Inhalte, kein Aufruf zu Gewalt oder Selbstverletzung, und beleidigt wird nur der Nutzer selbst, nie andere Personen. Merkst du, "
+    "dass der Nutzer traurig ist, Sorgen oder Streit hat, Hilfe braucht oder sehr jung wirkt, lass den Roast sofort sein und sei freundlich und ernsthaft. Wenn dich jemand fragt, ob du ein Mensch "
+    "bist, sagst du ehrlich, dass du eine KI bist. Antworte in der Sprache des Nutzers (meist Deutsch), ohne Sternchen, ohne Überschriften und ohne Tabellen. Gib nie Medizin-, Rechts- oder "
+    "Finanzberatung als sicher aus."
 )
 NEX_CODE_PROMPT = (
     "Du bist Nex AI im Modus „Code“, die KI der Plattform Nex, und arbeitest wie ein erfahrener Programmierer. Du antwortest dem Nutzer, der gerade mit dir schreibt; das Gespräch steht unten, "
@@ -926,7 +941,7 @@ NEX_CODE_PROMPT = (
 NEX_MODES = {                                    # name -> instructions, tokens, temperature, model (None = the usual one)
     "normal": {"prompt": NEX_PROMPT, "tokens": NEX_MAX_TOKENS, "temperature": 0.7, "model": None},
     "super": {"prompt": NEX_SUPER_PROMPT, "tokens": 3000, "temperature": 0.5, "model": ai_assistant.GROQ_FALLBACK_MODEL},
-    "human": {"prompt": NEX_HUMAN_PROMPT, "tokens": 700, "temperature": 0.9, "model": None},
+    "human": {"prompt": NEX_HUMAN_PROMPT, "tokens": 700, "temperature": 0.95, "model": None},
     "code": {"prompt": NEX_CODE_PROMPT, "tokens": 3500, "temperature": 0.2, "model": ai_assistant.GROQ_FALLBACK_MODEL},
 }
 
@@ -1665,7 +1680,7 @@ def manifest():
 
 # The scripts of the page, in the order they depend on each other. The page loads them as ONE file (/pulse.js, deferred), named after its content, so the
 # browser asks once, keeps it for good and the next visit is instant; the tests read this list.
-PULSE_SCRIPTS = ["yipi-core.js", "yipi-gif-core.js", "yipi-icons.js", "yipi-api.js", "yipi-ui.js", "yipi-fx.js", "yipi-gif.js", "yipi-components.js", "yipi-newpost.js",
+PULSE_SCRIPTS = ["yipi-core.js", "yipi-gif-core.js", "yipi-icons.js", "yipi-api.js", "yipi-ui.js", "yipi-fx.js", "yipi-gif.js", "yipi-composer.js", "yipi-components.js", "yipi-calls.js", "yipi-newpost.js",
                  "yipi-views.js", "yipi-links.js", "yipi-comments.js", "yipi-chats.js", "yipi-lock.js", "yipi-pages.js", "yipi-auth.js", "yipi-share.js", "yipi-progress.js", "yipi-nex.js", "yipi-download.js", "yipi-music.js", "yipi-lenses.js", "yipi-qr.js", "yipi-gamemaker.js", "yipi-camera.js", "yipi-shorts.js", "yipi-videos.js", "yipi-stories.js", "yipi-chrome.js", "yipi.js"]
 # The games of the camera tab are a second file, loaded when the camera tab is opened (about a hundred small games; nobody who only reads needs them).
 PULSE_LENS_SCRIPTS = ["pl-face.js", "pl-ar.js", "pl-ar-models.js", "pl-ar-decals.js"]   # the face lenses (face tracking, the flat effects and the 3D engine): a third file, loaded when the first lens is opened
@@ -1857,15 +1872,16 @@ def _push_thread(app, user_id, payload):
         db.session.remove()
 
 
-def push_later(user_id, title, body, url="/", tag=None):
-    """A notification for a person who is not looking at the page right now (it is not sent when they were active in the last half minute)."""
+def push_later(user_id, title, body, url="/", tag=None, urgent=False):
+    """A notification for a person who is not looking at the page right now (it is not sent when they were active in the last half minute, unless it is `urgent`: a call stays
+    on the screen of a phone until it is tapped, and it is sent even when the page was open a moment ago)."""
     from flask import current_app
     user = db.session.get(YipiUser, user_id)
-    if user is None or user.suspended or (user.last_seen_at is not None and utcnow() - user.last_seen_at < timedelta(seconds=30)):
+    if user is None or user.suspended or (not urgent and user.last_seen_at is not None and utcnow() - user.last_seen_at < timedelta(seconds=30)):
         return
     if YipiPush.query.filter_by(user_id=user_id).first() is None:
         return
-    PUSH_RUNNER(current_app._get_current_object(), user_id, {"title": title, "body": body, "url": url, "tag": tag or "pulse"})
+    PUSH_RUNNER(current_app._get_current_object(), user_id, {"title": title, "body": body, "url": url, "tag": tag or "pulse", **({"urgent": True} if urgent else {})})
 
 
 MAX_POST_BUZZ = 150                                             # so many followers of one author are told about one new post at most
@@ -1972,6 +1988,9 @@ def register_routes(app):
 
     def find_user(handle):
         return YipiUser.query.filter_by(handle_lc=str(handle).lower()).first() if HANDLE_RE.fullmatch(str(handle)) else None
+
+    import yipi_calls
+    yipi_calls.register(route, need_user, body, find_user)         # calls: the handset in the head of a chat (see yipi_calls.py)
 
     def touch(user):
         now = utcnow()
@@ -2580,7 +2599,7 @@ def register_routes(app):
         if item is None or not may_open_file(current_user(), item):
             abort(404)
         quoted = item.name.replace("\\", "_").replace('"', "")
-        disposition = "inline" if item.kind in ("image", "video") else f"attachment; filename=\"{quoted.encode('ascii', 'replace').decode()}\"; filename*=UTF-8''{urllib.parse.quote(item.name)}"
+        disposition = "inline" if item.kind in ("image", "video", "audio") else f"attachment; filename=\"{quoted.encode('ascii', 'replace').decode()}\"; filename*=UTF-8''{urllib.parse.quote(item.name)}"
         headers = {"Cache-Control": "private, max-age=86400", "Content-Security-Policy": "default-src 'none'; img-src 'self'; media-src 'self'; sandbox",
                    "Content-Disposition": disposition, "X-Content-Type-Options": "nosniff"}
         return blob_response(YipiFile, item, headers)
@@ -2599,7 +2618,13 @@ def register_routes(app):
         data = upload.read(MAX_VIDEO_BYTES + 1)
         name = safe_filename(upload.filename)
         width = height = 0
-        if looks_like_video(data, upload.filename, upload.mimetype):
+        if request.form.get("voice") == "1":                    # a voice message (recorded in the page): up to three minutes of sound
+            content_type, kind = voice_type(data), "audio"
+            if content_type is None:
+                return fail("bad_audio", 415)
+            if len(data) > MAX_VOICE_BYTES:
+                return fail("attachment_too_big", 413)
+        elif looks_like_video(data, upload.filename, upload.mimetype):
             content_type, kind = video_type(data), "video"
             if content_type is None:
                 return fail("bad_video", 415)
@@ -3516,7 +3541,7 @@ def register_routes(app):
             if other is None or other.suspended or other_id in hidden or boxes.get(other_id) == "declined":
                 continue
             items.append({"user": user_brief(other), "box": boxes.get(other_id, "primary"), "streak": streaks.get(other_id, 0),
-                          "last": {"text": row.text or ("GIF" if row.gif_id else file_label(last_files.get(row.file_id)) if row.file_id else ""), "gif": bool(row.gif_id), "createdAt": iso(row.created_at), "mine": row.sender_id == user.id, "read": bool(row.read)},
+                          "last": {"text": row.text or ("Sticker" if row.gif_id else file_label(last_files.get(row.file_id)) if row.file_id else ""), "gif": bool(row.gif_id), "createdAt": iso(row.created_at), "mine": row.sender_id == user.id, "read": bool(row.read)},
                           "unread": unread.get(other_id, 0)})
         return items
 
@@ -3547,7 +3572,7 @@ def register_routes(app):
             for group_id, group in groups.items():
                 row = rows.get(newest.get(group_id))
                 sender = senders.get(row.sender_id) if row else None
-                last = {"text": row.text or ("GIF" if row.gif_id else file_label(group_files.get(row.file_id)) if row.file_id else ""), "gif": bool(row.gif_id), "createdAt": iso(row.created_at), "mine": row.sender_id == user.id, "sender": sender.handle if sender else None} if row else None
+                last = {"text": row.text or ("Sticker" if row.gif_id else file_label(group_files.get(row.file_id)) if row.file_id else ""), "gif": bool(row.gif_id), "createdAt": iso(row.created_at), "mine": row.sender_id == user.id, "sender": sender.handle if sender else None} if row else None
                 items.append({"kind": "group", "group": {"id": group.id, "name": group.name, "count": sizes.get(group_id, 1)}, "last": last, "unread": unread.get(group_id, 0), "at": last["createdAt"] if last else iso(group.created_at)})
         items.sort(key=lambda item: item["at"], reverse=True)
         return jsonify({"ok": True, "items": items[:60], "requests": sum(1 for item in items if item.get("box") in ("request", "general"))})

@@ -48,7 +48,7 @@
       h("section", { class: "card" }, h("h2", {}, "Passwort ändern"), field("Aktuelles Passwort", oldPassword), field("Neues Passwort", newPassword, "Mindestens 8 Zeichen."), passwordError, changePassword,
         h("p", { class: "muted small" }, "Nex verschickt keine E-Mails. Ein vergessenes Passwort lässt sich deshalb nicht zurücksetzen. Bewahre es sicher auf.")),
       h("section", { class: "card danger-zone" }, h("h2", {}, "Konto löschen"),
-        h("p", { class: "muted" }, "Dabei werden dein Profil, alle deine Beiträge, Fotos, GIFs, Nachrichten und Likes endgültig gelöscht. Das lässt sich nicht rückgängig machen."),
+        h("p", { class: "muted" }, "Dabei werden dein Profil, alle deine Beiträge, Fotos, Sticker, Nachrichten und Likes endgültig gelöscht. Das lässt sich nicht rückgängig machen."),
         button("Konto löschen …", "danger", () => {
           const confirmPassword = h("input", { class: "field", type: "password", autocomplete: "current-password", "aria-label": "Passwort zur Bestätigung", maxlength: 200 });
           const error = formError();
@@ -106,9 +106,9 @@
   function aboutSection() {
     return h("div", { class: "settings-body" },
       h("section", { class: "card" }, h("h2", {}, "Rechtliches"),
-        h("ul", { class: "plain-links" }, ["nutzungsbedingungen|Nutzungsbedingungen und Regeln", "datenschutz|Datenschutzerklärung", "impressum|Impressum", "bildnachweise|Bildnachweise (freie GIFs)"].map((entry) => { const [path, text] = entry.split("|"); return h("li", {}, h("a", { href: `/${path}` }, text, icon("chevron"))); }))),
+        h("ul", { class: "plain-links" }, ["nutzungsbedingungen|Nutzungsbedingungen und Regeln", "datenschutz|Datenschutzerklärung", "impressum|Impressum", "bildnachweise|Bildnachweise (freie Sticker)"].map((entry) => { const [path, text] = entry.split("|"); return h("li", {}, h("a", { href: `/${path}` }, text, icon("chevron"))); }))),
       h("section", { class: "card" }, h("h2", {}, "Hilfe"),
-        h("p", { class: "muted small" }, "Beiträge sind öffentlich. Nachrichten sind nur für die Beteiligten sichtbar (zwei Personen oder die Mitglieder einer Gruppe), aber nicht Ende-zu-Ende-verschlüsselt. Etwas Unpassendes siehst du? Tippe beim Beitrag, beim GIF oder beim Profil auf „Melden“. In einem Beitrag gehen bis zu 3 Fotos, ein GIF, eine Umfrage oder ein Video (bis 30 Sekunden). Mit einem Doppeltipp gibst du einem Beitrag oder Video ein Like und einer Nachricht ein Herz. Ein Video speicherst du über „Teilen“, dann bekommt es ein Nex-Wasserzeichen mit dem Namen der Person, die es gemacht hat. In der Kamera spielst du Spiele und nimmst sie auf, dort gibt es auch die Bestenlisten. Mit der Chat-Sperre (Einstellungen) kommst du in deine Chats nur mit deiner Wisch-Kombination.")),
+        h("p", { class: "muted small" }, "Beiträge sind öffentlich. Nachrichten sind nur für die Beteiligten sichtbar (zwei Personen oder die Mitglieder einer Gruppe), aber nicht Ende-zu-Ende-verschlüsselt. Etwas Unpassendes siehst du? Tippe beim Beitrag, beim Sticker oder beim Profil auf „Melden“. In einem Beitrag gehen bis zu 3 Fotos, ein Sticker, eine Umfrage oder ein Video (bis 30 Sekunden). Mit einem Doppeltipp gibst du einem Beitrag oder Video ein Like und einer Nachricht ein Herz. Ein Video speicherst du über „Teilen“, dann bekommt es ein Nex-Wasserzeichen mit dem Namen der Person, die es gemacht hat. In der Kamera spielst du Spiele und nimmst sie auf, dort gibt es auch die Bestenlisten. Mit der Chat-Sperre (Einstellungen) kommst du in deine Chats nur mit deiner Wisch-Kombination.")),
       h("section", { class: "card" }, h("h2", {}, "Nex weitersagen"),
         h("p", { class: "muted" }, "Zeig den QR-Code von Nex: Wer ihn scannt, kommt direkt hierher."),
         h("button", { class: "btn primary", type: "button", onclick: () => Y.qr.dialog({ path: "/", title: "Nex weitersagen", subtitle: "Scannen öffnet Nex." }) }, icon("qr"), "QR-Code von Nex")),
@@ -151,7 +151,7 @@
   /* The card of the admins: how much room the files take (in the database and in R2) and the two buttons that move the files to R2 and give the room back. */
   function storageCard() {
     const size = (bytes) => (bytes >= 1e9 ? `${(bytes / 1e9).toFixed(2).replace(".", ",")} GB` : bytes >= 1e6 ? `${Math.round(bytes / 1e5) / 10} MB`.replace(".", ",") : `${Math.round(bytes / 1e3)} KB`);
-    const NAMES = { media: "Fotos und Videos von Beiträgen", file: "Dateien in Chats", gif: "GIFs" };
+    const NAMES = { media: "Fotos und Videos von Beiträgen", file: "Dateien in Chats", gif: "Sticker" };
     const info = h("div", { class: "storage-info" }, h("p", { class: "muted small" }, "Wird geladen …"));
     const status = h("p", { class: "muted small", role: "status" });
     const move = button("Alles nach R2 verschieben", "primary small", () => moveAll());
@@ -209,18 +209,18 @@
     }
 
     function card(report) {
-      const target = report.gifId ? (report.gif ? `GIF von @${report.handle}` : "GIF (gelöscht)") : report.postId ? (report.text ? `Beitrag von @${report.handle}` : "Beitrag (gelöscht)") : `Profil @${report.handle}`;
+      const target = report.gifId ? (report.gif ? `Sticker von @${report.handle}` : "Sticker (gelöscht)") : report.postId ? (report.text ? `Beitrag von @${report.handle}` : "Beitrag (gelöscht)") : `Profil @${report.handle}`;
       const element = h("article", { class: "report-card" },
         h("div", { class: "report-top" }, h("span", { class: "tag" }, REASON_LABEL[report.reason] || report.reason), h("b", {}, target), Y.timeEl(report.createdAt)),
         report.text ? h("blockquote", {}, report.text) : null,
-        report.gif ? h("img", { class: "report-gif", src: report.gif.url, alt: report.gif.title || "gemeldetes GIF", width: report.gif.width, height: report.gif.height }) : null,
+        report.gif ? h("img", { class: "report-gif", src: report.gif.url, alt: report.gif.title || "gemeldeter Sticker", width: report.gif.width, height: report.gif.height }) : null,
         report.gif && report.gif.title ? h("p", { class: "muted small" }, `Name: ${report.gif.title}`) : null,
         report.note ? h("p", { class: "muted" }, `Anmerkung: ${report.note}`) : null,
         h("p", { class: "muted small" }, `Gemeldet von @${report.reporter || "?"}`),
         h("div", { class: "report-actions" },
           report.handle ? link(`/${report.handle}`, { class: "btn ghost small" }, "Profil ansehen") : null,
           report.postId && !report.postGone ? button("Beitrag löschen", "danger small", () => act(report, "delete_post", element)) : null,
-          report.gifId && !report.gifGone ? button("GIF löschen", "danger small", () => act(report, "delete_gif", element)) : null,
+          report.gifId && !report.gifGone ? button("Sticker löschen", "danger small", () => act(report, "delete_gif", element)) : null,
           report.reason === "factcheck" && report.postId && !report.postGone ? button("Fact Check entfernen", "primary small", () => act(report, "clear_factcheck", element)) : null,
           report.handle && !report.suspended ? button("Konto sperren", "danger small", async () => { if (await confirmBox({ title: `@${report.handle} sperren?`, text: "Das Konto wird abgemeldet und kann sich nicht mehr anmelden.", yes: "Sperren", danger: true })) act(report, "suspend", element); }) : null,
           report.handle && report.suspended ? button("Sperre aufheben", "ghost small", () => act(report, "restore", element)) : null,

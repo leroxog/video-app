@@ -364,9 +364,9 @@
       g.save();
       g.lineCap = "round"; g.lineJoin = "round";
       g.strokeStyle = "rgba(24,16,14,0.96)";
-      g.lineWidth = 30;
+      g.lineWidth = 26;
       g.beginPath();
-      pts.forEach((p, n) => { const x = p.x, y = p.y + (side < 0 ? (4 - n) : n) * 6 + 4; if (n) g.lineTo(x, y); else g.moveTo(x, y); });
+      pts.forEach((p, n) => { const x = p.x, y = p.y + 9 + n * 7; if (n) g.lineTo(x, y); else g.moveTo(x, y); });          // (both brows slope down to the nose: angry)
       g.stroke();
       g.restore();
     }

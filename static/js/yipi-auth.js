@@ -43,7 +43,7 @@
 
   // ------------------------------------------------------------------------------------------------ the terms in short (and the page behind)
   const TERMS = [
-    ["Willkommen bei Nex", "Nex ist ein soziales Netzwerk für kurze Beiträge, Fotos, GIFs und Videos, für Chats und Gruppen, für Spiele und Linsen mit der Kamera und für Nex AI, eine KI, die dir weiterhilft. Nex ist kostenlos, zeigt keine Werbung anderer Firmen und folgt dir nicht durchs Internet."],
+    ["Willkommen bei Nex", "Nex ist ein soziales Netzwerk für kurze Beiträge, Fotos, Sticker und Videos, für Chats und Gruppen, für Spiele und Linsen mit der Kamera und für Nex AI, eine KI, die dir weiterhilft. Nex ist kostenlos, zeigt keine Werbung anderer Firmen und folgt dir nicht durchs Internet."],
     ["Wer Nex benutzen darf", "Du musst mindestens 13 Jahre alt sein; bis 15 brauchst du die Erlaubnis deiner Eltern. Du hast ein Konto für dich allein und bist für dein Passwort verantwortlich. Ein vergessenes Passwort kann nicht zurückgesetzt werden, weil Nex keine E-Mails verschickt."],
     ["Was du schreibst und zeigst", "Beiträge, Antworten, Likes, Videos und dein Profil sind öffentlich. Nachrichten sehen nur die Leute im Chat, sie sind aber nicht Ende-zu-Ende verschlüsselt. Deine Inhalte gehören dir; du erlaubst Nex, sie zu speichern und anderen zu zeigen. Poste nur, was du selbst gemacht hast oder verwenden darfst."],
     ["Die Regeln", "Kein Hass, keine Drohungen, keine Gewalt, nichts Sexuelles mit oder über Kinder, kein Spam, keine Fälschungen und nichts Rechtswidriges. Du kannst Beiträge und Konten melden, Leute blockieren oder stummschalten. Wer die Regeln bricht, kann gesperrt werden."],

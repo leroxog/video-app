@@ -478,7 +478,7 @@
       feed.style.filter = filterCss(item);
       lens = new window.PulseFace.FaceLens({ video: feed, canvas, mirror: facing === "user", recipe: item, onStatus(status) {
         if (mine !== previewId) return;
-        lensNote(status === "ready" ? "" : status === "noface" ? "Schau in die Kamera" : status === "error" ? "Diese Linse läuft auf deinem Gerät nicht." : "Gesichtserkennung wird geladen …");
+        lensNote(status === "ready" ? "" : status === "flat" ? "Dein Gerät kann die 3D-Teile der Linse nicht zeigen. Du siehst die einfache Version." : status === "noface" ? "Schau in die Kamera" : status === "error" ? "Diese Linse läuft auf deinem Gerät nicht." : "Gesichtserkennung wird geladen …");
       } });
       lens.start();
     }

@@ -23,7 +23,7 @@
     self: "Das geht bei dir selbst nicht.",
     bad_request: "Das hat nicht geklappt.",
     too_long: "Das ist zu lang.",
-    empty: "Schreib etwas oder füge ein Foto oder GIF hinzu.",
+    empty: "Schreib etwas oder füge ein Foto oder einen Sticker hinzu.",
     bad_text: "Das ist kein gültiger Text.",
     duplicate: "Das hast du gerade schon gepostet.",
     bad_media: "Mit den Bildern stimmt etwas nicht.",
@@ -31,7 +31,7 @@
     bad_image: "Das ist kein Foto, das Nex kennt (JPEG, PNG, GIF oder WebP).",
     too_big: "Das Foto ist zu groß (höchstens 5 MB).",
     no_file: "Es wurde keine Datei gesendet.",
-    no_video: "In ein GIF der Bibliothek gehört kein Video.",
+    no_video: "In einen Sticker der Bibliothek gehört kein Video.",
     bad_video: "Dieses Video kann nicht abgespielt werden. Nex nimmt MP4-, MOV- und WebM-Videos.",
     video_too_big: "Das Video ist zu groß (höchstens 25 MB).",
     video_too_long: "Das Video ist zu lang (höchstens 30 Sekunden).",
@@ -44,13 +44,13 @@
     doc_encrypted: "Das PDF ist geschützt, Nex kann es nicht öffnen.",
     doc_no_pdf_reader: "PDFs kann Nex gerade nicht lesen.",
     doc_bad: "Dieses Dokument kann Nex nicht lesen (PDF, Text, Word, Excel, PowerPoint oder OpenDocument).",
-    video_alone: "Ein Video steht allein: ohne Fotos oder GIFs im selben Beitrag.",
+    video_alone: "Ein Video steht allein: ohne Fotos oder Sticker im selben Beitrag.",
     video_top: "Ein Video gehört in einen eigenen Beitrag, nicht in eine Antwort oder ein Zitat.",
-    gif_alone: "Ein GIF steht allein: entweder ein GIF, ein Video oder bis zu 3 Fotos.",
-    bad_gif: "Das ist kein gültiges GIF (oder es hat zu viele Bilder oder Pixel).",
-    gif_too_big: "Das GIF ist zu groß (höchstens 3 MB).",
-    gif_title_long: "Der Name eines GIFs darf höchstens 40 Zeichen haben.",
-    gif_gone: "Dieses GIF gibt es nicht mehr.",
+    gif_alone: "Ein Sticker steht allein: entweder ein Sticker, ein Video oder bis zu 3 Fotos.",
+    bad_gif: "Das ist kein gültiger Sticker (oder er hat zu viele Bilder oder Pixel).",
+    gif_too_big: "Der Sticker ist zu groß (höchstens 3 MB).",
+    gif_title_long: "Der Name eines Stickers darf höchstens 40 Zeichen haben.",
+    gif_gone: "Diesen Sticker gibt es nicht mehr.",
     r2_off: "R2 ist noch nicht eingerichtet: die vier R2-Variablen fehlen bei Railway.",
     not_postgres: "Aufräumen geht nur mit der PostgreSQL-Datenbank von Railway.",
     reply_gone: "Der Beitrag, auf den du antworten willst, ist nicht mehr da.",
@@ -87,6 +87,15 @@
     not_friends: "Das geht nur mit Freunden: ihr müsst euch gegenseitig folgen.",
     bad_group_name: "Der Name der Gruppe darf 1 bis 40 Zeichen haben.",
     group_full: "Die Gruppe ist voll (höchstens 20 Personen).",
+    in_call: "Du bist schon in einem Anruf.",
+    busy: "Die Person spricht gerade mit jemand anderem.",
+    call_over: "Dieser Anruf ist schon vorbei.",
+    call_full: "Der Anruf ist voll (höchstens 8 Personen).",
+    call_nobody: "In der Gruppe ist niemand, den du anrufen kannst.",
+    call_not_allowed: "Du kannst die Person erst anrufen, wenn sie dir folgt oder deine Nachricht angenommen hat.",
+    ai_account: "Eine KI kann man nicht anrufen.",
+    official_account: "Dieses Konto gehört Nex und nimmt keine Anrufe an.",
+    not_joined: "Du bist in diesem Anruf nicht mehr dabei.",
   };
 
   async function call(method, path, body, form) {
@@ -151,9 +160,10 @@
       return call("POST", "/music/upload", undefined, form);
     },
     /* Any other private file (a document, a photo or video in a chat): same as upload, answers {ok, data: {media}}. */
-    attach(file, onProgress = null) {
+    attach(file, onProgress = null, fields = {}) {
       const form = new FormData();
       form.append("file", file, file.name || "datei");
+      for (const [key, value] of Object.entries(fields)) form.append(key, value);
       if (!onProgress || typeof XMLHttpRequest === "undefined") return call("POST", "/attachments", undefined, form);
       return sendWithProgress("/attachments", form, onProgress);
     },
@@ -164,6 +174,8 @@
       for (const [key, value] of Object.entries(fields)) form.append(key, value);
       return call("POST", "/gifs", undefined, form);
     },
+    /* The sound of a call: `bytes` (or nothing) go out as the body, the pieces of the others come back. */
+    sync: (path, bytes) => call("POST", path, undefined, bytes || new Uint8Array(0)),
     message: (reply) => MESSAGES[reply && reply.data && reply.data.error] || "Das hat nicht geklappt. Bitte versuche es noch einmal.",
     MESSAGES,
   };

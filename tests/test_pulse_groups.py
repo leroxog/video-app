@@ -193,7 +193,7 @@ def test_a_message_of_a_group_has_text_or_a_gif_and_nothing_else(client):
     assert sent["text"] == "" and sent["gif"]["id"] == yipi_gif["id"]
     assert api(tom, "get", f"/groups/{group['id']}", status=200)["messages"][-1]["gif"]["id"] == yipi_gif["id"]
     row = [i for i in api(tom, "get", "/chats", status=200)["items"] if i["kind"] == "group"][0]
-    assert row["last"]["text"] == "GIF" and row["last"]["gif"] is True and row["last"]["sender"] == "mia"
+    assert row["last"]["text"] == "Sticker" and row["last"]["gif"] is True and row["last"]["sender"] == "mia"
 
 
 def test_a_group_conversation_pages_back_to_older_messages(client):

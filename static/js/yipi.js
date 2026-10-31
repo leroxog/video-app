@@ -79,18 +79,18 @@
     if (bare) { app.append(main, announcer); return; }
     const me = Y.me;
     appbar = Y.appBar();
-    const extras = h("div", { class: "tab-extras" }, extraItem("/notifications", "bell", "Mitteilungen", "notifications", "notifications"), extraItem("/bookmarks", "bookmark", "Lesezeichen", "", "bookmarks"), extraItem("/settings", "settings", "Einstellungen", "", "settings"),
+    const extras = h("div", { class: "tab-extras" }, extraItem("/notifications", "bell", "Mitteilungen", "notifications", "notifications"),
       extraItem("/explore", "search", "Suche", "", "explore"), extraItem(`/${me.handle}`, "user", "Profil", "", "profile"), me.isAdmin ? extraItem("/moderation", "shield", "Moderation", "", "moderation") : null);
     const more = h("button", { class: "rail-more", type: "button", "aria-label": "Mehr zu deinem Konto", "aria-haspopup": "menu", onclick: (event) => {
       event.preventDefault();
       event.stopPropagation();
-      Y.menu(event.currentTarget, [{ label: "Dein Profil", icon: "user", run: () => Y.navigate(`/${me.handle}`) }, { label: "Einstellungen", icon: "settings", run: () => Y.navigate("/settings") }, { label: `@${me.handle} abmelden`, icon: "logout", danger: true, run: () => Y.logout() }]);
+      Y.menu(event.currentTarget, [{ label: "Dein Profil", icon: "user", run: () => Y.navigate(`/${me.handle}`) }, { label: `@${me.handle} abmelden`, icon: "logout", danger: true, run: () => Y.logout() }]);
     } }, icon("more"));
     const legal = h("div", { class: "rail-links" }, h("a", { href: "/datenschutz" }, "Datenschutz"), h("a", { href: "/nutzungsbedingungen" }, "Nutzungsbedingungen"), h("a", { href: "/bildnachweise" }, "Bildnachweise"), h("a", { href: "/impressum" }, "Impressum"), h("small", {}, "© 2026 Nex"));
     const foot = h("div", { class: "side-foot" }, Y.sponsored("slot"),
       h("button", { class: "rail-post", type: "button", "aria-label": "Neu: Beitrag, Video oder Story", "aria-haspopup": "menu", onclick: (event) => Y.newPost({ anchor: event.currentTarget }) }, icon("plus"), h("span", {}, "Neu")),
       h("div", { class: "rail-me" }, link(`/${me.handle}`, { class: "side-me", "aria-label": `Dein Profil, @${me.handle}` }, avatar(me, "md"), h("span", { class: "side-me-text" }, h("b", {}, me.name), h("small", {}, `@${me.handle}`))), more), legal);
-    const top = h("div", { class: "rail-top" }, link(Y.HOME, { class: "rail-brand", "aria-label": "Nex, zur Startseite" }, Icons.logo(), Icons.wordmark()), h("div", { class: "rail-search" }, Y.searchForm("")));
+    const top = h("div", { class: "rail-top" }, link(Y.HOME, { class: "rail-brand", "aria-label": "Nex, zur Startseite" }, Icons.logo(), Icons.wordmark()));
     const tabbar = h("nav", { class: "tabbar", "aria-label": "Hauptmenü" }, top, TABS.map(tabItem), extras, foot);       // (on a phone held upright only the five tabs show, at the bottom)
     Y.put(app, appbar.element, main, tabbar, announcer);
   }
@@ -105,7 +105,8 @@
   /* The entry of the wide side bar that stands for the open page (besides the four tabs: search, notifications, your profile, bookmarks, settings, moderation). */
   function extraActive(route) {
     if (["explore", "search"].includes(route.name)) return "explore";
-    if (["notifications", "bookmarks", "settings", "moderation"].includes(route.name)) return route.name;
+    if (["notifications", "moderation"].includes(route.name)) return route.name;
+    if (["bookmarks", "settings"].includes(route.name)) return "profile";            // (the bookmarks and the settings are reached from the profile)
     if (route.name === "profile" && Y.me && String(route.handle || "").toLowerCase() === Y.me.handle.toLowerCase()) return "profile";
     return "";
   }
@@ -331,7 +332,7 @@
   Y.openDrawer = () => Y.sidePanel("Menü", (panel, close) => {
     const me = Y.me;
     const entry = (path, name, label, badge) => link(path, { class: "drawer-item" }, icon(name), h("span", {}, label), badge ? Y.badge(badge) : null);
-    const common = [entry("/explore", "search", "Entdecken"), entry("/settings/display", "sun", "Darstellung und Farbe"), entry("/settings/about", "help", "Hilfe und Rechtliches")];
+    const common = [entry("/explore", "search", "Entdecken"), entry("/settings/about", "help", "Hilfe und Rechtliches")];
     panel.append(h("div", { class: "drawer-head" },
       me ? link(`/${me.handle}`, { class: "dr-av", "aria-label": "Zum Profil" }, avatar(me, "lg")) : h("span", { class: "hero-logo" }, Icons.logo()),
       h("button", { class: "icon-btn", type: "button", "aria-label": "Menü schließen", onclick: close }, icon("close"))));
@@ -340,8 +341,8 @@
         link(`/${me.handle}`, { class: "dr-name" }, h("b", {}, me.name), h("span", { class: "handle" }, `@${me.handle}`)),
         h("div", { class: "dr-counts" }, link(`/${me.handle}/following`, {}, h("b", {}, Core.formatCount(me.following)), " Folge ich"), link(`/${me.handle}/followers`, {}, h("b", {}, Core.formatCount(me.followers)), " Follower")),
         h("nav", { class: "drawer-nav", "aria-label": "Menü" },
-          entry(`/${me.handle}`, "user", "Profil"), entry("/notifications", "bell", "Benachrichtigungen", "notifications"), entry("/bookmarks", "bookmark", "Lesezeichen"), ...common,
-          entry("/settings", "settings", "Einstellungen"), me.isAdmin ? entry("/moderation", "shield", "Moderation") : null),
+          entry(`/${me.handle}`, "user", "Profil"), entry("/notifications", "bell", "Benachrichtigungen", "notifications"), ...common,
+          me.isAdmin ? entry("/moderation", "shield", "Moderation") : null),
         h("button", { class: "drawer-item logout", type: "button", onclick: () => { close(); Y.logout(); } }, icon("logout"), h("span", {}, `@${me.handle} abmelden`)));
     } else {
       panel.append(

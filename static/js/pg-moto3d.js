@@ -290,7 +290,7 @@
     }
 
     // ---- the pictures
-    const TRACK_SEGS = 130, TRACK_STEP = 0.4, TRACK_HALF = 1.7;
+    const TRACK_SEGS = 130, TRACK_STEP = 0.4, TRACK_HALF = 0.95;
     function build({ T, RoomEnvironment }) {
       const dpr = Math.min(1.5, window.devicePixelRatio || 1);
       const canvas = document.createElement("canvas");
@@ -326,12 +326,12 @@
       const frontGeo = makeStrip(2, (idx, a, c) => idx.push(a, a + 1, c, c, a + 1, c + 1));
       const edgeGeo = makeStrip(2, (idx, a, c) => idx.push(a, a + 1, c, c, a + 1, c + 1));
       const asphalt = paintTexture(T, 256, 128, (c, w, h) => {
-        c.fillStyle = "#5a606e"; c.fillRect(0, 0, w, h);
+        c.fillStyle = "#636a7a"; c.fillRect(0, 0, w, h);
         let s = 7; const rnd = () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; };
         for (let n = 0; n < 900; n += 1) { c.fillStyle = rnd() > 0.5 ? `rgba(255,255,255,${0.04 + rnd() * 0.06})` : `rgba(0,0,0,${0.08 + rnd() * 0.12})`; c.fillRect(rnd() * w, rnd() * h, 1 + rnd() * 2, 1 + rnd() * 2); }
         c.fillStyle = "rgba(255,255,255,0.55)"; c.fillRect(0, h / 2 - 3, w * 0.45, 6);
       });
-      const top = new T.Mesh(topGeo, new T.MeshStandardMaterial({ map: asphalt, roughness: 0.9, side: T.DoubleSide }));
+      const top = new T.Mesh(topGeo, new T.MeshBasicMaterial({ map: asphalt, color: 0xd5dae6, side: T.DoubleSide }));
       const shade = frontGeo.attributes.color.array;
       for (let i = 0; i <= TRACK_SEGS; i += 1) shade.set([0.2, 0.23, 0.3, 0.05, 0.06, 0.08], i * 6);             // the side of the track gets darker towards the bottom
       const front = new T.Mesh(frontGeo, new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, side: T.DoubleSide }));
@@ -339,6 +339,10 @@
       for (const m of [top, front, edge]) { m.frustumCulled = false; scene.add(m); }
       const bike = buildBike(T, envMap);
       scene.add(bike.group);
+      const shadow = new T.Mesh(new T.PlaneGeometry(3.4, 1.3), new T.MeshBasicMaterial({ map: paintTexture(T, 64, 64, (c) => { const k = c.createRadialGradient(32, 32, 2, 32, 32, 31); k.addColorStop(0, "rgba(0,0,0,0.7)"); k.addColorStop(1, "rgba(0,0,0,0)"); c.fillStyle = k; c.fillRect(0, 0, 64, 64); }), transparent: true, depthWrite: false }));
+      shadow.rotation.order = "ZXY";                      // (first lie flat, then follow the slope of the ground)
+      shadow.rotation.x = -Math.PI / 2;
+      scene.add(shadow);
       const riderBody = new T.Group();
       riderBody.add(new T.Mesh(new T.CapsuleGeometry(0.17, 0.5, 4, 10), new T.MeshStandardMaterial({ color: 0x2f4fc4, roughness: 0.7 })));
       const head = new T.Mesh(new T.SphereGeometry(0.2, 20, 14), new T.MeshPhysicalMaterial({ color: 0xf4f5f8, roughness: 0.25, clearcoat: 1 }));
@@ -348,7 +352,7 @@
       scene.add(riderBody);
       const coinGeo = new T.CylinderGeometry(0.34, 0.34, 0.09, 24).rotateX(Math.PI / 2);
       const coinMat = new T.MeshStandardMaterial({ color: 0xffc820, metalness: 0.9, roughness: 0.25, emissive: 0xffa800, emissiveIntensity: 0.55 });
-      three = { T, renderer, scene, camera, top, front, edge, topGeo, frontGeo, edgeGeo, bike, riderBody, coinGeo, coinMat, canvas, dpr, camX: b.x + 3, camY: b.y, asphalt };
+      three = { T, renderer, scene, camera, top, front, edge, topGeo, frontGeo, edgeGeo, bike, shadow, riderBody, coinGeo, coinMat, canvas, dpr, camX: b.x + 3, camY: b.y, asphalt };
     }
 
     function updateTrack(t3, x0) {
@@ -383,9 +387,13 @@
       camera.position.set(t3.camX + 2.6 + (Math.random() - 0.5) * shake, t3.camY + 1.5 + (Math.random() - 0.5) * shake, 10.5 + speed * 3);
       camera.lookAt(t3.camX + 0.2, t3.camY - 0.2, 0);
       updateTrack(t3, t3.camX - 12);
-      // the bike
-      bike.group.position.set(b.x, b.y, 0);
+      // the bike stands on the front half of the track, and a soft shadow lies on the ground under it
+      bike.group.position.set(b.x, b.y, 0.25);
       bike.group.rotation.z = b.th;
+      const under = heightAt(b.x), slope = (heightAt(b.x + 0.5) - heightAt(b.x - 0.5)) / 1;
+      t3.shadow.position.set(b.x, under + 0.04, 0.25);
+      t3.shadow.rotation.set(-Math.PI / 2, 0, Math.atan(slope));
+      t3.shadow.material.opacity = clamp(1 - (b.y - under - 0.6) / 4, 0, 1);
       hubs.forEach((hub, k) => {
         const w = bike.wheels[k];
         const compress = hub.ct ? Math.min(0.08, hub.ct.pen) : 0;

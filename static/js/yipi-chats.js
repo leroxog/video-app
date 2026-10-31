@@ -229,6 +229,7 @@
       Y.plainVideo?.(video, box);
       return box;
     }
+    if (file.kind === "audio") return h("div", { class: "bubble-voice" }, h("audio", { src: file.url, controls: true, preload: "metadata", "aria-label": "Sprachnachricht" }));
     return h("a", { class: "bubble-doc", href: file.url, download: file.name, target: "_blank", rel: "noopener", "aria-label": `Dokument herunterladen: ${file.name}` },
       h("span", { class: "bubble-doc-ic" }, icon("file")), h("span", { class: "bubble-doc-main" }, h("b", {}, file.name), h("small", {}, `${(file.name.split(".").pop() || "").toUpperCase()} · ${formatSize(file.size)}`)), h("span", { class: "bubble-doc-dl" }, icon("download")));
   }
@@ -245,16 +246,22 @@
     const headText = h("div", { class: "chat-head-text" }, h("b", {}, group ? "Gruppe" : `@${route.handle}`), h("small", {}));
     const headMain = h("div", { class: "chat-head-main" }, headText);
     const more = h("button", { class: "icon-btn round", type: "button", "aria-label": "Mehr", "aria-haspopup": "menu", hidden: true }, icon("more"));
-    const head = h("div", { class: "chat-head" }, h("button", { class: "icon-btn round chat-back", type: "button", "aria-label": "Zurück", onclick: () => Y.back("/messages") }, icon("back")), headMain, more);
+    const callButton = h("button", { class: "icon-btn round chat-call", type: "button", "aria-label": "Anrufen", hidden: true }, icon("call"));
+    const head = h("div", { class: "chat-head" }, h("button", { class: "icon-btn round chat-back", type: "button", "aria-label": "Zurück", onclick: () => Y.back("/messages") }, icon("back")), headMain, callButton, more);
     const older = h("button", { class: "btn ghost small older", type: "button", hidden: true }, "Frühere Nachrichten laden");
     const bubbles = h("div", { class: "bubbles", role: "log", "aria-live": "polite", "aria-label": "Nachrichten" });
     const input = h("textarea", { class: "dm-input", rows: 1, maxlength: 1000, placeholder: "Nachricht …", "aria-label": "Nachricht" });
-    const sendButton = h("button", { class: "icon-btn send-btn", type: "button", "aria-label": "Senden", disabled: true }, icon("arrowUp"));
-    const plusButton = h("button", { class: "icon-btn tool dm-plus", type: "button", "aria-label": "Anhang hinzufügen", "aria-haspopup": "menu" }, icon("plus"));
+    const sendButton = h("button", { class: "icon-btn send-btn", type: "button", "aria-label": "Senden", disabled: true, hidden: true }, icon("arrowUp"));
+    const plusButton = h("button", { class: "icon-btn tool dm-plus", type: "button", "aria-label": "Anhang hinzufügen", "aria-expanded": "false" }, icon("plus"));
+    const stickerButton = h("button", { class: "cb-in-btn", type: "button", "aria-label": "Sticker" }, icon("sticker"));
+    const photoButton = h("button", { class: "icon-btn tool cb-photo", type: "button", "aria-label": "Foto machen" }, icon("camera"));
+    const micButton = h("button", { class: "icon-btn tool cb-mic", type: "button", "aria-label": "Sprachnachricht aufnehmen" }, icon("mic"));
+    const attachPanel = Y.composerPanel(["photo", "camera", "location", "contact", "document", "sticker"], (id) => attachEntry(id));
     const picker = h("input", { type: "file", hidden: true, "aria-hidden": "true", tabindex: "-1" });
     const staged = h("div", { class: "dm-staged", hidden: true });
     const note = h("p", { class: "notice", hidden: true });
-    const composeBar = h("div", { class: "dm-compose", hidden: true }, staged, h("div", { class: "dm-box" }, plusButton, input, sendButton, picker));
+    const box = h("div", { class: "dm-box" }, plusButton, h("div", { class: "cb-field" }, input, stickerButton), photoButton, micButton, sendButton, picker);
+    const composeBar = h("div", { class: "dm-compose", hidden: true }, staged, box, attachPanel.element);
     const requestBar = h("div", { class: "request-bar", hidden: true });
     const body = h("div", { class: "thread" }, h("div", { class: "thread-intro" }), older, bubbles);
     const threadEl = h("div", { class: "view thread-view" }, head, body, note, requestBar, composeBar);
@@ -283,9 +290,9 @@
         nodes.push(h("div", { class: `bubble ${message.mine ? "mine" : "theirs"}${message.hearts ? " loved" : ""}`, "data-id": String(message.id) },
           showName ? h("span", { class: "bubble-name" }, message.mine ? "Ich" : message.sender ? message.sender.name : (state.other && state.other.name) || (group ? "Gelöschtes Konto" : `@${route.handle}`)) : null,
           gif ? h("div", { class: "bubble-gif-wrap" },
-            h("button", { class: "bubble-gif", type: "button", "aria-label": `GIF vergrößern${gif.title ? `: ${gif.title}` : ""}`, onclick: () => Y.viewer([{ url: gif.url, alt: gif.title || "GIF" }], 0) }, h("img", { src: gif.url, alt: gif.title || "GIF", width: gif.width, height: gif.height, loading: "lazy" })),
+            h("button", { class: "bubble-gif", type: "button", "aria-label": `Sticker vergrößern${gif.title ? `: ${gif.title}` : ""}`, onclick: () => Y.viewer([{ url: gif.url, alt: gif.title || "Sticker" }], 0) }, h("img", { src: gif.url, alt: gif.title || "Sticker", width: gif.width, height: gif.height, loading: "lazy" })),
             Y.gifStar(gif)) : null,
-          message.gif && message.gif.gone ? h("div", { class: "bubble-text gone" }, "Dieses GIF gibt es nicht mehr.") : null,
+          message.gif && message.gif.gone ? h("div", { class: "bubble-text gone" }, "Diesen Sticker gibt es nicht mehr.") : null,
           file ? fileBubble(file) : null,
           message.file && message.file.gone ? h("div", { class: "bubble-text gone" }, "Diese Datei gibt es nicht mehr.") : null,
           message.text ? h("div", { class: "bubble-text" }, richText(message.text)) : null,
@@ -332,6 +339,22 @@
         ctx.setTitle(`Nachrichten mit ${u.name}`);
       }
       more.hidden = false;
+      drawCall();
+    }
+
+    // ---- the handset: a call with this person, or with the group (a green dot says that the group is talking right now)
+    async function drawCall() {
+      const target = group ? { groupId: route.id, name: state.group.name } : { handle: state.other.handle, name: state.other.name };
+      const offered = Y.me && Y.calls && (group || !(state.other.ai || state.other.company));
+      callButton.hidden = !offered;
+      if (!offered) return;
+      callButton.setAttribute("aria-label", group ? `In der Gruppe ${state.group.name} anrufen` : `${state.other.name} anrufen`);
+      callButton.onclick = () => Y.calls.start(target);
+      if (group && !state.dead) {
+        const running = await Y.calls.groupCall(route.id);
+        callButton.classList.toggle("live", !!running);
+        callButton.setAttribute("aria-label", running ? `Dem Anruf der Gruppe ${state.group.name} beitreten` : `In der Gruppe ${state.group.name} anrufen`);
+      }
     }
 
     function intro(user) {
@@ -459,13 +482,17 @@
 
     function update() {
       const ready = state.staged && state.staged.id;
+      const has = !!Core.cleanText(input.value) || !!state.staged;               // something to send: the arrow, else the microphone and the camera
       sendButton.disabled = state.sending || (state.staged && !state.staged.id) || (!Core.cleanText(input.value) && !ready);
+      sendButton.hidden = !has;
+      micButton.hidden = has;
+      photoButton.hidden = has;
       plusButton.disabled = state.sending;
       input.style.height = "auto";
       input.style.height = `${Math.min(input.scrollHeight, 140)}px`;
     }
 
-    /* ---- the "+" : a photo, a video, a document or a GIF. A file is checked here, sent to the server (private) with a bar that shows how far it has come,
+    /* ---- the "+" : a photo, a video, a document or a sticker. A file is checked here, sent to the server (private) with a bar that shows how far it has come,
        and waits above the box until "Senden" puts it into a message. */
     function drawStaged() {
       const item = state.staged;
@@ -503,12 +530,27 @@
     }
     const pick = (accept, kind) => { picker.accept = accept; picker.dataset.kind = kind; picker.click(); };
     picker.addEventListener("change", () => { const file = picker.files[0]; const kind = picker.dataset.kind; picker.value = ""; if (file) stage(file, kind); });
-    plusButton.addEventListener("click", () => menu(plusButton, [
-      { label: "Foto", icon: "image", run: () => pick("image/jpeg,image/png,image/gif,image/webp", "image") },
-      { label: "Video", icon: "film", run: () => pick("video/mp4,video/quicktime,video/webm,.mp4,.m4v,.mov,.webm", "video") },
-      { label: "Dokument", icon: "file", run: () => pick(".pdf,.txt,.md,.csv,.rtf,.docx,.xlsx,.pptx,.odt,.ods,.odp", "document") },
-      { label: "GIF", icon: "gif", run: () => Y.gifPicker({ onPick: (gif) => deliver({ gifId: gif.id }, false) }) },
-    ]));
+    const PHOTO_OR_VIDEO = "image/jpeg,image/png,image/gif,image/webp,video/mp4,video/quicktime,video/webm,.mp4,.m4v,.mov,.webm";
+    const kindOf = (file) => (file.type.startsWith("video/") || /\.(mp4|m4v|mov|webm)$/i.test(file.name) ? "video" : "image");
+    async function attachEntry(id) {
+      const T = Y.composerTools;
+      if (id === "photo") { const [file] = await T.pickFiles(PHOTO_OR_VIDEO); if (file) stage(file, kindOf(file)); }
+      else if (id === "camera") { const [file] = await T.pickFiles("image/*", { capture: "environment" }); if (file) stage(file, "image"); }
+      else if (id === "document") { const [file] = await T.pickFiles(".pdf,.txt,.md,.csv,.rtf,.docx,.xlsx,.pptx,.odt,.ods,.odp"); if (file) stage(file, "document"); }
+      else if (id === "location") { const text = await T.place(); if (text) deliver({ text }, false); }
+      else if (id === "contact") { const handle = await T.contact(); if (handle) deliver({ text: `👤 Kontakt: @${handle}` }, false); }
+      else if (id === "sticker") Y.gifPicker({ onPick: (gif) => deliver({ gifId: gif.id }, false) });
+    }
+    plusButton.addEventListener("click", () => { attachPanel.toggle(); plusButton.setAttribute("aria-expanded", String(attachPanel.isOpen)); plusButton.classList.toggle("open", attachPanel.isOpen); });
+    input.addEventListener("focus", () => { attachPanel.close(); plusButton.classList.remove("open"); plusButton.setAttribute("aria-expanded", "false"); });
+    stickerButton.addEventListener("click", () => Y.gifPicker({ onPick: (gif) => deliver({ gifId: gif.id }, false) }));
+    photoButton.addEventListener("click", () => attachEntry("camera"));
+    micButton.addEventListener("click", () => Y.composerTools.record({ host: box, onSend: async (blob) => {
+      const file = new File([blob], Y.composerTools.voiceName(blob), { type: blob.type });
+      const up = await Api.attach(file, null, { voice: "1" });
+      if (!up.ok) { toast(Api.message(up)); return; }
+      deliver({ fileId: up.data.file.id }, false);
+    } }));
 
     async function deliver(payload, clearInput) {
       if (state.sending) return;

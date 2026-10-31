@@ -909,7 +909,7 @@
         c.globalAlpha = 1; c.globalCompositeOperation = "source-over"; noShade(c);
       }
       c.restore();
-      this.setStatus("ready");
+      this.setStatus(this.layer && this.layer.failed ? "flat" : "ready");
     }
   }
 

@@ -127,20 +127,25 @@
       this.needsVideo = false;
       this.W = 0;
       this.H = 0;
-      this.init().catch((error) => { this.failed = true; this.error = error; });
+      this.init().catch((error) => { this.failed = true; this.error = error; try { console.warn("Nex: the 3D lenses do not run on this device", error); } catch (problem) { /* no console */ } });
     }
 
     async init() {
       const { T, RoomEnvironment, mesh } = await load();
       this.T = T;
       this.data = mesh;
-      const r = this.renderer = new T.WebGLRenderer({ canvas: this.canvas, alpha: true, antialias: true, premultipliedAlpha: true, preserveDrawingBuffer: true, powerPreference: "high-performance" });
+      let r;
+      try { r = new T.WebGLRenderer({ canvas: this.canvas, alpha: true, antialias: true, premultipliedAlpha: true, preserveDrawingBuffer: true, powerPreference: "high-performance" }); }
+      catch (error) { r = new T.WebGLRenderer({ canvas: this.canvas, alpha: true, preserveDrawingBuffer: true }); }      // (a device that does not like the first wishes gets the plain ones)
+      this.renderer = r;
       r.autoClear = false;
       r.outputColorSpace = T.LinearSRGBColorSpace;
       r.setClearColor(0x000000, 0);
-      const pmrem = new T.PMREMGenerator(r);
-      this.env = pmrem.fromScene(new RoomEnvironment(), 0.03).texture;
-      pmrem.dispose();
+      try {
+        const pmrem = new T.PMREMGenerator(r);
+        this.env = pmrem.fromScene(new RoomEnvironment(), 0.03).texture;
+        pmrem.dispose();
+      } catch (error) { this.env = null; }                         // (without the reflections the things are still lit)
 
       // pass 1: the picture of the camera, through the shader (warps and colours)
       this.bgScene = new T.Scene();
@@ -364,7 +369,7 @@
       this.renderer.dispose();
       this.videoTexture.dispose();
       this.decalTexture.dispose();
-      this.env.dispose();
+      if (this.env) this.env.dispose();
       const lose = this.renderer.getContext().getExtension("WEBGL_lose_context");
       if (lose) lose.loseContext();
     }

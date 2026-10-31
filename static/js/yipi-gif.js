@@ -68,22 +68,22 @@
 
     function moreMenu(item, anchor) {
       menu(anchor, [
-        item.mine || (Y.me && Y.me.isAdmin && !item.starter) ? { label: "GIF löschen", icon: "trash", danger: true, run: async () => {
-          if (!(await confirmBox({ title: "GIF löschen?", text: "Es verschwindet aus der Bibliothek. Beiträge, in denen es schon steht, bleiben unverändert.", yes: "Löschen", danger: true }))) return;
+        item.mine || (Y.me && Y.me.isAdmin && !item.starter) ? { label: "Sticker löschen", icon: "trash", danger: true, run: async () => {
+          if (!(await confirmBox({ title: "Sticker löschen?", text: "Es verschwindet aus der Bibliothek. Beiträge, in denen es schon steht, bleiben unverändert.", yes: "Löschen", danger: true }))) return;
           const reply = await Api.del(`/gifs/${item.id}`);
           if (!reply.ok) { toast(Api.message(reply)); return; }
           remove(item);
-          toast("Das GIF wurde gelöscht.");
+          toast("Der Sticker wurde gelöscht.");
         } } : null,
-        !item.mine && !item.starter ? { label: "GIF melden", icon: "flag", danger: true, run: () => Y.reportDialog({ gifId: item.id }) } : null,
+        !item.mine && !item.starter ? { label: "Sticker melden", icon: "flag", danger: true, run: () => Y.reportDialog({ gifId: item.id }) } : null,
       ]);
     }
 
     function makeTile(item) {
       const ratio = Math.max(0.4, Math.min(2.5, item.width / item.height));
       const tile = h("div", { class: "gif-tile" },
-        h("button", { class: "gif-pick", type: "button", "aria-label": `GIF verwenden${item.title ? `: ${item.title}` : ""}`, onclick: () => onPick(item) },
-          h("img", { src: item.url, alt: item.title || "GIF", loading: "lazy", decoding: "async", width: item.width, height: item.height, style: `aspect-ratio: ${ratio.toFixed(3)}` })),
+        h("button", { class: "gif-pick", type: "button", "aria-label": `Sticker verwenden${item.title ? `: ${item.title}` : ""}`, onclick: () => onPick(item) },
+          h("img", { src: item.url, alt: item.title || "Sticker", loading: "lazy", decoding: "async", width: item.width, height: item.height, style: `aspect-ratio: ${ratio.toFixed(3)}` })),
         h("button", { class: "gif-fav", type: "button", onclick: (event) => { event.stopPropagation(); toggleFavorite(item, tile); } }),
         item.mine || !item.starter ? h("button", { class: "gif-more", type: "button", "aria-label": "Mehr", "aria-haspopup": "menu", onclick: (event) => { event.stopPropagation(); moreMenu(item, event.currentTarget); } }, icon("more")) : null);
       drawStar(tile, item);
@@ -92,10 +92,10 @@
 
     function showEmpty() {
       const nothing = {
-        favorites: ["Noch keine Favoriten", "Tippe bei einem GIF auf den Stern, dann findest du es hier wieder."],
-        mine: ["Du hast noch kein GIF gemacht", "Aus Fotos, aus einem Text oder aus einer GIF-Datei."],
-      }[tab] || (query ? [`Kein GIF für „${query}“`, "Probier ein anderes Wort – oder mach selbst eins."] : ["Hier ist noch nichts", "Mach das erste GIF."]);
-      fill(foot, Y.emptyState(nothing[0], nothing[1], h("button", { class: "btn primary", type: "button", onclick: onMake }, "Eigenes GIF machen")));
+        favorites: ["Noch keine Favoriten", "Tippe bei einem Sticker auf den Stern, dann findest du ihn hier wieder."],
+        mine: ["Du hast noch keinen Sticker gemacht", "Aus Fotos, aus einem Text oder aus einer GIF-Datei."],
+      }[tab] || (query ? [`Kein Sticker für „${query}“`, "Probier ein anderes Wort – oder mach selbst einen."] : ["Hier ist noch nichts", "Mach den ersten Sticker."]);
+      fill(foot, Y.emptyState(nothing[0], nothing[1], h("button", { class: "btn primary", type: "button", onclick: onMake }, "Eigenen Sticker machen")));
     }
 
     function watch() {
@@ -148,19 +148,19 @@
     const draw = () => {
       button.classList.toggle("on", !!entry.favorite);
       button.setAttribute("aria-pressed", String(!!entry.favorite));
-      button.setAttribute("aria-label", entry.favorite ? "GIF aus den Favoriten entfernen" : "GIF zu den Favoriten hinzufügen");
+      button.setAttribute("aria-label", entry.favorite ? "Sticker aus den Favoriten entfernen" : "Sticker zu den Favoriten hinzufügen");
       fill(button, icon(entry.favorite ? "starFill" : "star"));
     };
     button.addEventListener("click", async (event) => {
       event.stopPropagation();
       event.preventDefault();
-      if (!Y.requireLogin("Melde dich an, um GIFs zu merken.")) return;
+      if (!Y.requireLogin("Melde dich an, um Sticker zu merken.")) return;
       const wanted = !entry.favorite;
       entry.favorite = wanted;
       draw();
       const reply = wanted ? await Api.post(`/gifs/${entry.id}/favorite`) : await Api.del(`/gifs/${entry.id}/favorite`);
       if (!reply.ok) { entry.favorite = !wanted; draw(); toast(Api.message(reply)); return; }
-      toast(wanted ? "GIF zu deinen Favoriten hinzugefügt" : "GIF aus den Favoriten entfernt");
+      toast(wanted ? "Sticker zu deinen Favoriten hinzugefügt" : "Sticker aus den Favoriten entfernt");
     });
     draw();
     return button;
@@ -170,18 +170,18 @@
   /* The picker. `onPick(gif)` is called with the library entry the person chose (and the picker closes); `onChoose` of a made GIF
      is the same. Returns the dialog. */
   Y.gifPicker = function gifPicker({ onPick }) {
-    if (!Y.requireLogin("Melde dich an, um GIFs zu verwenden.")) return null;
+    if (!Y.requireLogin("Melde dich an, um Sticker zu verwenden.")) return null;
     let entry = null;
     let tab = "trending";
     let query = "";
     let grid = null;
     let timer = null;
 
-    const search = h("input", { class: "gif-search-input", type: "search", placeholder: "GIFs suchen", "aria-label": "GIFs suchen", maxlength: 40, autocomplete: "off", enterkeyhint: "search" });
+    const search = h("input", { class: "gif-search-input", type: "search", placeholder: "Sticker suchen", "aria-label": "Sticker suchen", maxlength: 40, autocomplete: "off", enterkeyhint: "search" });
     const chips = h("div", { class: "gif-chips", role: "list" }, QUICK.map((word) => h("button", { class: "gif-chip", type: "button", role: "listitem", onclick: () => { search.value = word; setQuery(word); } }, word)));
     const tabBox = h("div", { class: "gif-tabs" });
     const body = h("div", { class: "gif-body" });
-    const plus = h("button", { class: "gif-plus", type: "button", "aria-label": "Eigenes GIF machen", onclick: () => make() }, icon("plus"), h("span", { class: "gif-plus-label" }, "Eigenes GIF"));
+    const plus = h("button", { class: "gif-plus", type: "button", "aria-label": "Eigenen Sticker machen", onclick: () => make() }, icon("plus"), h("span", { class: "gif-plus-label" }, "Eigener Sticker"));
     const closeButton = h("button", { class: "icon-btn", type: "button", "aria-label": "Schließen", onclick: () => entry.close() }, icon("close"));
     const head = h("div", { class: "gif-head" }, closeButton, h("label", { class: "gif-search" }, icon("search"), search));
     const sheet = h("div", { class: "gif-sheet" }, head, chips, tabBox, body, plus);
@@ -226,7 +226,7 @@
 
     drawTabs();
     mount();
-    entry = dialog({ bare: true, label: "GIF auswählen", body: sheet, initialFocus: matchMedia("(pointer: fine)").matches ? search : closeButton, onClose: () => { grid?.destroy(); clearTimeout(timer); window.removeEventListener("resize", onResize); } });
+    entry = dialog({ bare: true, label: "Sticker auswählen", body: sheet, initialFocus: matchMedia("(pointer: fine)").matches ? search : closeButton, onClose: () => { grid?.destroy(); clearTimeout(timer); window.removeEventListener("resize", onResize); } });
     entry.box.classList.add("gif-dialog");
     return entry;
   };

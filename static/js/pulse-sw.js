@@ -13,6 +13,8 @@ self.addEventListener("push", (event) => {
     badge: "/static/img/pulse-192.png",
     tag: typeof data.tag === "string" ? data.tag : "pulse",
     renotify: true,
+    requireInteraction: data.urgent === true,                      // a call stays on the screen until it is tapped
+    vibrate: data.urgent === true ? [300, 150, 300, 150, 300, 150, 300] : undefined,
     data: { url: typeof data.url === "string" && data.url.startsWith("/") ? data.url : "/" },
   }));
 });

@@ -74,7 +74,7 @@
     const note = h("textarea", { class: "field-area", rows: 3, maxlength: 300, placeholder: "Möchtest du etwas dazu sagen? (freiwillig)", "aria-label": "Anmerkung" });
     const choices = REASONS.filter(([value]) => factcheck || value !== "factcheck").map(([value, text]) => h("label", { class: "choice" }, h("input", { type: "radio", name: "reason", value, onchange: () => { reason = value; entry.box.querySelector(".dialog-actions .btn").disabled = false; } }), h("span", {}, text)));
     const entry = dialog({
-      title: gifId ? "GIF melden" : postId ? "Beitrag melden" : `@${handle} melden`,
+      title: gifId ? "Sticker melden" : postId ? "Beitrag melden" : `@${handle} melden`,
       body: h("div", { class: "report" }, h("p", { class: "dialog-text" }, "Warum meldest du das?"), h("div", { class: "choices" }, choices), note),
       actions: [{ label: "Melden", kind: "primary", run: async () => {
         if (!reason) return false;
@@ -196,8 +196,8 @@
     if (media.length === 1 && media[0].gif && media[0].gifId) put(grid, Y.gifStar({ id: media[0].gifId, favorite: !!media[0].gifFavorite }));
     media.slice(0, 3).forEach((item, index) => {
       const ratio = media.length === 1 ? `aspect-ratio: ${Math.max(0.8, Math.min(1.78, item.width / item.height)).toFixed(3)}` : "";
-      put(grid, h("button", { class: `media-item${item.gif ? " is-gif" : ""}`, type: "button", style: ratio, "aria-label": item.alt ? `${item.gif ? "GIF" : "Bild"} vergrößern: ${item.alt}` : item.gif ? "GIF vergrößern" : "Bild vergrößern", onclick: (event) => { event.stopPropagation(); Y.viewer(media, index); } },
-        h("img", { src: item.url, alt: item.alt || (item.gif ? "GIF" : ""), loading: "lazy", decoding: "async" }), item.gif ? h("span", { class: "gif-badge", "aria-hidden": "true" }, "GIF") : null));
+      put(grid, h("button", { class: `media-item${item.gif ? " is-gif" : ""}`, type: "button", style: ratio, "aria-label": item.alt ? `${item.gif ? "Sticker" : "Bild"} vergrößern: ${item.alt}` : item.gif ? "Sticker vergrößern" : "Bild vergrößern", onclick: (event) => { event.stopPropagation(); Y.viewer(media, index); } },
+        h("img", { src: item.url, alt: item.alt || (item.gif ? "Sticker" : ""), loading: "lazy", decoding: "async" }), item.gif ? h("span", { class: "gif-badge", "aria-hidden": "true" }, "Sticker") : null));
     });
     return grid;
   }
@@ -542,9 +542,21 @@
     const left = h("span", { class: "ring-left" });
     const submit = h("button", { class: "btn primary post-btn", type: "button", disabled: true }, options.label || (replyTo ? "Antworten" : "Posten"));
     const photoButton = h("button", { class: "icon-btn tool", type: "button", "aria-label": "Foto hinzufügen" }, icon("image"));
-    const gifButton = h("button", { class: "icon-btn tool", type: "button", "aria-label": "GIF hinzufügen", "aria-haspopup": "dialog" }, icon("gif"));
+    const gifButton = h("button", { class: "icon-btn tool", type: "button", "aria-label": "Sticker hinzufügen", "aria-haspopup": "dialog" }, icon("sticker"));
+    const plusButton = h("button", { class: "icon-btn tool dm-plus", type: "button", "aria-label": "Mehr hinzufügen", "aria-expanded": "false" }, icon("plus"));
+    const micButton = h("button", { class: "icon-btn tool cb-dict", type: "button", "aria-label": "Diktieren", "aria-pressed": "false" }, icon("mic"));
     const emojiButton = h("button", { class: "icon-btn tool", type: "button", "aria-label": "Emoji einfügen", "aria-haspopup": "dialog" }, icon("emoji"));
-    const pollButton = h("button", { class: "icon-btn tool", type: "button", "aria-label": "Umfrage hinzufügen", hidden: !!(replyTo || quoteOf) }, icon("poll"));
+    const pollButton = h("button", { class: "icon-btn tool", type: "button", "aria-label": "Umfrage hinzufügen", hidden: true }, icon("poll"));     // (the poll is in the panel of the "+")
+    const attachPanel = Y.composerPanel(["photo", "camera", "location", "contact"].concat(replyTo || quoteOf ? [] : ["poll"], ["sticker"]), async (id) => {
+      const T = Y.composerTools;
+      const put = (text) => { textarea.focus(); textarea.setRangeText(text, textarea.selectionStart, textarea.selectionEnd, "end"); update(); };
+      if (id === "photo") picker.click();
+      else if (id === "camera") { const files = await T.pickFiles("image/*", { capture: "environment" }); if (files.length) addFiles(files); }
+      else if (id === "location") { const text = await T.place(); if (text) put(text); }
+      else if (id === "contact") { const handle = await T.contact(); if (handle) put(`@${handle} `); }
+      else if (id === "poll") pollButton.click();
+      else if (id === "sticker") Y.gifPicker({ onPick: addGif });
+    });
     const pollBox = h("div", { class: "poll-editor", hidden: true });
     const tagBox = template ? Y.hashtagEditor({ onChange: () => update(), room: () => Core.MAX_POST - Core.charCount(textarea.value) - 1 }) : null;
     const fullText = () => {
@@ -596,8 +608,8 @@
       previews.className = `compose-media m${Math.min(picked.length, 3)}`;
       fill(previews, ...picked.map((entry, index) => h("div", { class: "pv" },
         h("img", { src: entry.url, alt: entry.alt || "Vorschau" }),
-        h("button", { class: "pv-x", type: "button", "aria-label": entry.gif ? "GIF entfernen" : "Foto entfernen", onclick: () => { URL.revokeObjectURL(entry.url); picked.splice(index, 1); drawPreviews(); update(); } }, icon("close")),
-        entry.gif ? h("span", { class: "pv-alt gif-badge", "aria-hidden": "true" }, "GIF")
+        h("button", { class: "pv-x", type: "button", "aria-label": entry.gif ? "Sticker entfernen" : "Foto entfernen", onclick: () => { URL.revokeObjectURL(entry.url); picked.splice(index, 1); drawPreviews(); update(); } }, icon("close")),
+        entry.gif ? h("span", { class: "pv-alt gif-badge", "aria-hidden": "true" }, "Sticker")
                   : h("button", { class: `pv-alt${entry.alt ? " set" : ""}`, type: "button", onclick: () => altDialog(entry) }, entry.alt ? "ALT ✓" : "+ ALT"))));
     }
 
@@ -614,7 +626,7 @@
         if (picked.some((entry) => entry.gif)) picked.splice(0, picked.length);          // photos take the place of a GIF
         if (picked.length >= Core.MAX_MEDIA) { toast("Mehr als 3 Fotos gehen nicht."); break; }
         if (!/^image\/(jpeg|png|gif|webp)$/.test(file.type)) { toast(Api.MESSAGES.bad_image); continue; }
-        if (file.type === "image/gif" && file.size > 5 * 1024 * 1024) { toast("Das GIF ist zu groß (höchstens 5 MB)."); continue; }
+        if (file.type === "image/gif" && file.size > 5 * 1024 * 1024) { toast("Der Sticker ist zu groß (höchstens 5 MB)."); continue; }
         if (file.type === "image/gif" && picked.length) { toast(Api.MESSAGES.gif_alone); continue; }
         try {
           const blob = await prepareImage(file);
@@ -630,11 +642,11 @@
 
     /* A GIF of the library: its bytes are copied into a picture of the sender (on the server), and that picture goes into the post. */
     async function addGif(gif) {
-      if (poll) { toast("Zu einer Umfrage gehört kein GIF."); return; }
+      if (poll) { toast("Zu einer Umfrage gehört kein Sticker."); return; }
       const reply = await Api.post(`/gifs/${gif.id}/use`);
       if (!reply.ok) { toast(Api.message(reply)); return; }
       picked.forEach((entry) => URL.revokeObjectURL(entry.url));
-      picked.splice(0, picked.length, { blob: null, url: reply.data.media.url, alt: gif.title || "GIF", uploaded: reply.data.media.id, name: "", gif: true });
+      picked.splice(0, picked.length, { blob: null, url: reply.data.media.url, alt: gif.title || "Sticker", uploaded: reply.data.media.id, name: "", gif: true });
       drawPreviews();
       update();
       textarea.focus();
@@ -709,13 +721,16 @@
       Y.floating(emojiButton, pop, { arrows: false });
     });
 
-    const bar = h("div", { class: "compose-bar" }, h("div", { class: "tools" }, photoButton, gifButton, pollButton, emojiButton, picker),
+    plusButton.addEventListener("click", () => { attachPanel.toggle(); plusButton.setAttribute("aria-expanded", String(attachPanel.isOpen)); plusButton.classList.toggle("open", attachPanel.isOpen); });
+    textarea.addEventListener("focus", () => { attachPanel.close(); plusButton.classList.remove("open"); plusButton.setAttribute("aria-expanded", "false"); });
+    Y.composerTools.dictation(textarea, micButton, update);
+    const bar = h("div", { class: "compose-bar" }, h("div", { class: "tools" }, plusButton, gifButton, photoButton, micButton, emojiButton, pollButton, picker),
       h("div", { class: "send" }, left, gauge.svg, submit));
     const root = template
       ? h("div", { class: "composer template" },
         h("div", { class: "field-head" }, h("label", { class: "field-title", for: "post-text" }, "Text"), h("span", { class: "hint" }, "bis zu 280 Zeichen")),
-        textarea, previews, pollBox, tagBox.element, bar)
-      : h("div", { class: `composer${compact ? " compact" : ""}` }, avatar(Y.me, "md"), h("div", { class: "compose-main" }, textarea, previews, pollBox, bar));
+        textarea, previews, pollBox, tagBox.element, bar, attachPanel.element)
+      : h("div", { class: `composer${compact ? " compact" : ""}` }, avatar(Y.me, "md"), h("div", { class: "compose-main" }, textarea, previews, pollBox, bar, attachPanel.element));
     if (template) textarea.id = "post-text";
     root.addEventListener("dragover", (event) => { if ([...(event.dataTransfer ? event.dataTransfer.types : [])].includes("Files")) { event.preventDefault(); root.classList.add("drop"); } });
     root.addEventListener("dragleave", () => root.classList.remove("drop"));

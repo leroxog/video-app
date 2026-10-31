@@ -80,14 +80,14 @@
     if (!first) return null;
     return link(Y.postPath(item), { class: "tile", "aria-label": `Beitrag von ${item.user.name}${first.alt ? `: ${first.alt}` : ""}` },
       first.video ? h("video", { src: `${first.url}#t=0.001`, muted: true, playsinline: true, preload: "metadata", "aria-hidden": "true" }) : h("img", { src: first.url, alt: first.alt || "", loading: "lazy", decoding: "async" }),
-      first.gif ? h("span", { class: "gif-badge", "aria-hidden": "true" }, "GIF") : null,
+      first.gif ? h("span", { class: "gif-badge", "aria-hidden": "true" }, "Sticker") : null,
       first.video ? h("span", { class: "gif-badge", "aria-hidden": "true" }, "VIDEO") : null,
       item.media.length > 1 ? h("span", { class: "tile-count", "aria-hidden": "true" }, icon("image"), String(item.media.length)) : null);
   }
 
   /* A list that loads like `pager` but is shown as a grid of pictures. */
   function tilesPager(build, empty) {
-    const list = pager({ load: listLoader(build), render: tile, empty: empty || emptyState("Noch keine Medien", "Beiträge mit Fotos oder GIFs erscheinen hier.") });
+    const list = pager({ load: listLoader(build), render: tile, empty: empty || emptyState("Noch keine Medien", "Beiträge mit Fotos oder Stickern erscheinen hier.") });
     list.element.classList.add("tiles");
     return list;
   }
@@ -106,7 +106,7 @@
     return h("section", { class: "hero" },
       h("span", { class: "hero-logo" }, window.YipiIcons.logo()),
       h("h2", {}, "Was gerade passiert."),
-      h("p", {}, "Auf Nex teilst du kurze Beiträge, Fotos und GIFs, antwortest, reposts und folgst Leuten, die dich interessieren. Und Nex AI, die KI, hilft dir weiter. Ohne Werbung und ohne Tracking."),
+      h("p", {}, "Auf Nex teilst du kurze Beiträge, Fotos und Sticker, antwortest, reposts und folgst Leuten, die dich interessieren. Und Nex AI, die KI, hilft dir weiter. Ohne Werbung und ohne Tracking."),
       h("div", { class: "hero-actions" },
         link("/i/signup", { class: "btn primary" }, "Konto erstellen"),
         link("/i/login", { class: "btn ghost" }, "Anmelden")));
@@ -228,7 +228,7 @@
     const body = h("div", { class: "explore-body" });
     const switcher = tabs([["foryou", "Für dich"], ["trends", "Trends"], ["media", "Medien"], ["people", "Personen"]], tab, (id) => Y.navigate(Core.buildPath({ name: "explore", tab: id === "foryou" ? "" : id }), { replace: true }), "Entdecken");
     const el = h("div", { class: "view" },
-      topbar({ back: true, title: "Entdecken", className: "search-bar", extra: h("div", {}, h("div", { class: "topbar-search" }, searchForm("")), switcher) }), body);
+      topbar({ back: true, title: "Entdecken", className: "search-bar", extra: h("div", {}, h("div", { class: "topbar-search" }, searchForm("", { autofocus: window.matchMedia && matchMedia("(min-width: 1200px)").matches })), switcher) }), body);
     let listPager = null;
     let dead = false;
     const result = { element: el, title: "Entdecken", keep: true, refresh() { listPager?.reload(); }, destroy() { dead = true; listPager?.destroy(); } };
@@ -299,7 +299,7 @@
     if (type === "people") {
       listPager = pager({ load: listLoader(() => qs("/search", { q: query, type: "people" }), "users"), render: (user) => Y.userRow(user), empty: emptyState(`Keine Personen für „${query}“`, "Probier einen anderen Namen.") });
     } else if (type === "media") {
-      listPager = tilesPager((cursor) => qs("/search", { q: query, type: "media", sort, cursor }), emptyState(`Keine Fotos oder GIFs für „${query}“`, "Probier andere Wörter oder einen #Hashtag."));
+      listPager = tilesPager((cursor) => qs("/search", { q: query, type: "media", sort, cursor }), emptyState(`Keine Fotos oder Sticker für „${query}“`, "Probier andere Wörter oder einen #Hashtag."));
     } else {
       listPager = pager({ load: listLoader((cursor) => qs("/search", { q: query, type: "posts", sort, cursor })), render: (item) => Y.postCard(item), empty: emptyState(`Keine Beiträge für „${query}“`, "Probier andere Wörter oder einen #Hashtag.") });
     }
@@ -327,7 +327,7 @@
         follow: group.actors.length === 1 ? " folgt dir jetzt" : " folgen dir jetzt",
       }[group.kind] || "";
       put(main, faces, h("p", { class: "note-text" }, peopleLine(group.actors), text, h("span", { class: "dot" }, " · "), Y.timeEl(group.createdAt)));
-      if (group.post) put(main, link(Y.postPath(group.post), { class: "note-snippet" }, group.post.text ? snippet(group.post.text) : group.post.media && group.post.media[0] && group.post.media[0].video ? "Video" : group.post.media && group.post.media[0] && group.post.media[0].gif ? "GIF" : "Beitrag mit Bild"));
+      if (group.post) put(main, link(Y.postPath(group.post), { class: "note-snippet" }, group.post.text ? snippet(group.post.text) : group.post.media && group.post.media[0] && group.post.media[0].video ? "Video" : group.post.media && group.post.media[0] && group.post.media[0].gif ? "Sticker" : "Beitrag mit Bild"));
       if (group.kind === "follow" && group.actors.length === 1 && group.actors[0].bio) put(main, h("p", { class: "note-snippet plain" }, snippet(group.actors[0].bio, 100)));
     }
     put(row, side, main);
@@ -498,7 +498,7 @@
       listPager?.destroy();
       if (user.blockedByMe || user.blockedMe) { fill(listBox); return; }
       const labels = { posts: ["Noch keine Beiträge", user.isMe ? "Wenn du etwas postest, erscheint es hier." : `@${user.handle} hat noch nichts gepostet.`],
-        replies: ["Noch keine Antworten", "Antworten erscheinen hier."], media: ["Noch keine Fotos oder GIFs", "Beiträge mit Fotos oder GIFs erscheinen hier."], likes: ["Noch nichts gemocht", "Beiträge, die dir gefallen, erscheinen hier. Nur du siehst diese Liste."] };
+        replies: ["Noch keine Antworten", "Antworten erscheinen hier."], media: ["Noch keine Fotos oder Sticker", "Beiträge mit Fotos oder Stickern erscheinen hier."], likes: ["Noch nichts gemocht", "Beiträge, die dir gefallen, erscheinen hier. Nur du siehst diese Liste."] };
       listPager = tab === "media"
         ? tilesPager((cursor) => qs(`/users/${handle}/posts`, { tab, cursor }), emptyState(...labels[tab]))
         : pager({ load: listLoader((cursor) => qs(`/users/${handle}/posts`, { tab, cursor })), render: (item) => Y.postCard(item), empty: emptyState(...labels[tab]) });
@@ -556,6 +556,7 @@
           h("div", { class: "ph-counts" },
             link(`/${user.handle}/following`, {}, h("b", {}, Core.formatCount(user.following)), " Folge ich"),
             link(`/${user.handle}/followers`, {}, h("b", {}, Core.formatCount(user.followers)), user.followers === 1 ? " Follower" : " Follower")),
+          user.isMe ? h("div", { class: "ph-own" }, link("/bookmarks", { class: "chip" }, icon("bookmark"), "Lesezeichen"), link("/settings", { class: "chip" }, icon("settings"), "Einstellungen")) : null,
           user.blockedMe ? h("p", { class: "notice" }, `@${user.handle} hat dich blockiert. Du kannst die Beiträge nicht sehen und @${user.handle} nicht folgen.`) : null,
           user.blockedByMe ? h("p", { class: "notice" }, `Du hast @${user.handle} blockiert. Du siehst die Beiträge nicht.`) : null));
     }
@@ -602,7 +603,7 @@
       detail = Y.postCard(item, { detail: true, onDelete: () => Y.back(Y.HOME), onReply: (post) => { replies.prepend(post); } });
       fill(main, detail);
       if (item.user) {
-        result.title = `${item.user.name} auf Nex: „${snippet(item.text || (item.media && item.media[0] && item.media[0].gif ? "GIF" : "Beitrag mit Bild"), 60)}“`;
+        result.title = `${item.user.name} auf Nex: „${snippet(item.text || (item.media && item.media[0] && item.media[0].gif ? "Sticker" : "Beitrag mit Bild"), 60)}“`;
         ctx.setTitle(result.title);
       }
       if (!item.deleted) {
