@@ -76,7 +76,8 @@
     const ctlMic = h("button", { class: "cam-tool small", type: "button", "aria-pressed": "false" });
     const ctlSound = h("button", { class: "cam-tool small", type: "button", "aria-haspopup": "true", "aria-expanded": "false" });
     const volume = h("input", { class: "cam-vol", type: "range", min: 0, max: 100, step: 1, "aria-label": "Lautstärke des Tons der Linse", hidden: true });
-    const ctl = h("div", { class: "cam-ctl", role: "group", "aria-label": "Kamera, Mikrofon und Ton" }, ctlCam, ctlMic, h("div", { class: "cam-ctl-sound" }, volume, ctlSound));
+    const ctlQr = h("button", { class: "cam-tool small", type: "button", "aria-label": "QR-Code und Teilen: dieses Spiel oder diese Linse", "aria-haspopup": "dialog" }, icon("qr"));
+    const ctl = h("div", { class: "cam-ctl", role: "group", "aria-label": "Kamera, Mikrofon, Ton und QR-Code" }, ctlCam, ctlMic, h("div", { class: "cam-ctl-sound" }, volume, ctlSound), ctlQr);
     const songText = h("span", {}, "Sound hinzufügen");
     const songBtn = h("button", { class: "cam-song", type: "button", "aria-label": "Sound hinzufügen" }, h("span", { class: "cam-song-note", "aria-hidden": "true" }, "♪"), songText);
     const songClear = h("button", { class: "cam-song-x", type: "button", "aria-label": "Sound entfernen", hidden: true }, icon("close"));
@@ -106,6 +107,7 @@
     let clip = null;                                           // {blob, url, name, score, game}
     let finalScore = 0;
     let lens = null;                                           // the running face lens (a FaceLens of pl-face.js)
+    let lensToken = 0;                                         // counts the lenses that were stopped: a lens that is still being made (the model is loading) is dropped only when it was stopped, NOT when the round starts (a touch at once used to cancel it)
     const musicPlayer = Y.music ? Y.music.player() : null;      // plays the song of the clip and mixes it with the microphone
     let song = null;                                           // the song for the clip: chosen at the top, or the one a lens brings
     let songFromLens = false;
@@ -347,6 +349,12 @@
       entry = dialog({ title: `Alle Spiele (${list.length})`, wide: true, body: h("div", { class: "cam-gallery" }, h("label", { class: "search-box" }, icon("search"), search), chips, grid), initialFocus: search });
     }
     all.addEventListener("click", galleryDialog);
+    /* The symbol with the QR code: the code (and the link) of the game or lens that is open; the other person scans it or gets the link and plays exactly this one. */
+    ctlQr.addEventListener("click", () => {
+      const item = list[active];
+      if (!item || !item.id || !Y.qr) return;
+      Y.qr.dialog({ path: `/camera/${item.id}`, title: item.name || "Spiel", subtitle: item.kind === "lens" ? "Wer den Code scannt, bekommt genau diese Linse." : "Wer den Code scannt, spielt genau dieses Spiel." });
+    });
 
     // ---------------------------------------------------------------------------------------------- a game and its recording
     let previewTimer = 0;
@@ -374,6 +382,7 @@
       runner = null;
       host.replaceChildren();
       el.dataset.kind = game.kind || "game";
+      ctlQr.hidden = game.kind === "create" || game.kind === "qr";            // (every game and every lens has a code that leads to exactly it)
       if (game.kind === "game" || game.kind === "lens") lastItem = game;
       if (game.kind && game.kind !== "game") { showSpecial(game, mine); return; }
       if (game.community && !window.PulseGames.get(game.id)) { ensureCommunity(game, mine); return; }
@@ -417,21 +426,23 @@
 
     /* A game with `face: true` (the ranking games: the reel hangs on the forehead of the player) gets the place of the face: the lens engine finds it, without drawing anything. */
     async function trackFace(mine, hooks) {
+      const token = lensToken;
       try { await loadScript(assets.lens); } catch (error) { return; }
-      for (let waited = 0; !stream && waited < 12000; waited += 250) await new Promise((resolve) => setTimeout(resolve, 250));          // (the camera may still be opening)
-      if (mine !== previewId || dead || !stream || !window.PulseFace) return;
+      for (let waited = 0; !stream && waited < 12000 && token === lensToken; waited += 250) await new Promise((resolve) => setTimeout(resolve, 250));          // (the camera may still be opening)
+      if (token !== lensToken || dead || !stream || !window.PulseFace) return;                                // (a touch that starts the round does not cancel this: only another game or lens does)
       const canvas = h("canvas", { class: "lens-canvas", "aria-hidden": "true" });
       host.append(canvas);
-      lens = new window.PulseFace.FaceLens({ video: feed, canvas, mirror: facing === "user", recipe: { fx: [], filter: "none" }, onStatus() {} });
+      lens = new window.PulseFace.FaceLens({ video: feed, canvas, mirror: facing === "user", recipe: { fx: [], filter: "none" }, onStatus(status) { if (token === lensToken) lensNote(status === "noface" ? "Schau in die Kamera: die Rolle hängt dann an deiner Stirn" : status === "error" ? "Die Gesichtserkennung läuft auf deinem Gerät nicht." : ""); } });
       lens.start();
       hooks.face = () => {
         if (!lens || !lens.have || !lens.arPoints || !feed.videoWidth) return null;
         const vw = feed.videoWidth, vh = feed.videoHeight, k = Math.max(360 / vw, 640 / vh), ox = (360 - vw * k) / 2, oy = (640 - vh * k) / 2;
         const mirror = facing === "user";
         const pt = (i) => { const x = lens.arPoints[i].x * vw * k + ox; return { x: mirror ? 360 - x : x, y: lens.arPoints[i].y * vh * k + oy }; };
-        const top = pt(10), a = pt(234), b = pt(454), e1 = pt(33), e2 = pt(263);
+        const top = pt(10), brow = pt(9), a = pt(234), b = pt(454), e1 = pt(33), e2 = pt(263);
         const left = e1.x < e2.x ? e1 : e2, right = e1.x < e2.x ? e2 : e1;
-        return { have: true, x: top.x, y: top.y, w: Math.hypot(a.x - b.x, a.y - b.y), roll: Math.atan2(right.y - left.y, right.x - left.x) };
+        // the forehead: x, y is its middle (halfway between the top of the forehead and the place between the eyebrows), h how high it is
+        return { have: true, x: (top.x + brow.x) / 2, y: (top.y + brow.y) / 2, h: Math.hypot(top.x - brow.x, top.y - brow.y), top: top.y, w: Math.hypot(a.x - b.x, a.y - b.y), roll: Math.atan2(right.y - left.y, right.x - left.x) };
       };
     }
 
@@ -449,6 +460,7 @@
     // ---------------------------------------------------------------------------------------------- face lenses, "create" and the QR code
     const lensNote = (text) => { note.textContent = text || ""; note.hidden = !text; };
     function stopLens() {
+      lensToken += 1;
       if (lens) { lens.stop(); lens = null; }
       feed.style.filter = "";
       lensNote("");
@@ -469,15 +481,16 @@
     }
 
     async function openLens(item, mine) {
+      const token = lensToken;                                                 // (a touch that starts the clip does not cancel a lens that is still loading: only another lens or game does)
       const canvas = h("canvas", { class: "lens-canvas", "aria-hidden": "true" });
       host.append(canvas);
       lensNote("Gesichtserkennung wird geladen …");
       try { await loadScript(assets.lens); } catch (error) { lensNote("Die Linsen konnten nicht geladen werden."); return; }
-      if (mine !== previewId || dead) return;
+      if (token !== lensToken || dead) return;
       if (!stream) { lensNote(camOn ? "Für Linsen braucht Satürn die Kamera." : "Die Kamera ist aus. Schalte sie oben rechts wieder an."); return; }
       feed.style.filter = filterCss(item);
       lens = new window.PulseFace.FaceLens({ video: feed, canvas, mirror: facing === "user", recipe: item, onStatus(status) {
-        if (mine !== previewId) return;
+        if (token !== lensToken) return;
         lensNote(status === "ready" ? "" : status === "flat" ? "Dein Gerät kann die 3D-Teile der Linse nicht zeigen. Du siehst die einfache Version." : status === "noface" ? "Schau in die Kamera" : status === "error" ? "Diese Linse läuft auf deinem Gerät nicht." : "Gesichtserkennung wird geladen …");
       } });
       lens.start();

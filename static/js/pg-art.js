@@ -119,6 +119,49 @@
       g.restore();
     },
 
+    /* A helicopter drawn here (the emoji faces a different way on every device): the nose points to the right, the tail to the left. `t` is the time (the rotors turn), `angle` tilts it,
+       `size` is its length. It is shaded like a solid body: light on top, dark below, a shining window, a rotor that is a blur of blades. */
+    heli(g, x, y, size = 60, { angle = 0, t = 0, color = "#e8484f" } = {}) {
+      const s = size;
+      g.save();
+      g.translate(x, y);
+      g.rotate(angle);
+      // the shadow of the body on the air below it is left out: the cave is dark anyway
+      // tail boom with a fin and the small rotor
+      g.fillStyle = "#b53a42";
+      g.beginPath(); g.moveTo(-s * 0.18, -s * 0.07); g.lineTo(-s * 0.78, -s * 0.13); g.lineTo(-s * 0.78, -s * 0.03); g.lineTo(-s * 0.18, s * 0.1); g.closePath(); g.fill();
+      g.fillStyle = color;
+      g.beginPath(); g.moveTo(-s * 0.66, -s * 0.1); g.lineTo(-s * 0.84, -s * 0.34); g.lineTo(-s * 0.74, -s * 0.34); g.lineTo(-s * 0.56, -s * 0.1); g.closePath(); g.fill();
+      g.save();
+      g.translate(-s * 0.8, -s * 0.09);
+      g.rotate(t * 38);
+      g.fillStyle = "rgba(230,235,255,0.85)";
+      g.fillRect(-s * 0.012, -s * 0.13, s * 0.024, s * 0.26);
+      g.restore();
+      // landing skids
+      g.strokeStyle = "#3a3d4d"; g.lineWidth = Math.max(2, s * 0.045); g.lineCap = "round";
+      g.beginPath(); g.moveTo(-s * 0.3, s * 0.4); g.lineTo(s * 0.34, s * 0.4); g.moveTo(-s * 0.18, s * 0.24); g.lineTo(-s * 0.2, s * 0.4); g.moveTo(s * 0.2, s * 0.24); g.lineTo(s * 0.22, s * 0.4); g.stroke();
+      // the body: an egg, lit from above
+      const body = g.createLinearGradient(0, -s * 0.3, 0, s * 0.3);
+      body.addColorStop(0, "#ff7a80"); body.addColorStop(0.45, color); body.addColorStop(1, "#9c2e37");
+      g.fillStyle = body;
+      g.beginPath(); g.ellipse(0, 0, s * 0.42, s * 0.27, 0, 0, TAU); g.fill();
+      g.fillStyle = "rgba(0,0,0,0.18)"; g.beginPath(); g.ellipse(0, s * 0.19, s * 0.34, s * 0.07, 0, 0, TAU); g.fill();
+      // the window in front
+      const glass = g.createLinearGradient(s * 0.1, -s * 0.2, s * 0.3, s * 0.12);
+      glass.addColorStop(0, "#e6f6ff"); glass.addColorStop(1, "#4a8fd8");
+      g.fillStyle = glass;
+      g.beginPath(); g.moveTo(s * 0.04, -s * 0.2); g.quadraticCurveTo(s * 0.34, -s * 0.2, s * 0.4, s * 0.02); g.lineTo(s * 0.04, s * 0.02); g.closePath(); g.fill();
+      g.fillStyle = "rgba(255,255,255,0.7)"; g.beginPath(); g.ellipse(s * 0.16, -s * 0.12, s * 0.07, s * 0.025, -0.4, 0, TAU); g.fill();
+      // the mast and the big rotor (a blur of blades: it grows and shrinks quickly, so it seems to turn)
+      g.fillStyle = "#3a3d4d"; g.fillRect(-s * 0.025, -s * 0.36, s * 0.05, s * 0.12);
+      const turn = Math.abs(Math.cos(t * 30));
+      g.fillStyle = "rgba(200,208,235,0.28)"; g.beginPath(); g.ellipse(0, -s * 0.38, s * 0.62, s * 0.045, 0, 0, TAU); g.fill();
+      g.fillStyle = "#2f3243";
+      g.beginPath(); g.ellipse(0, -s * 0.38, s * (0.2 + 0.42 * turn), s * 0.022, 0, 0, TAU); g.fill();
+      g.restore();
+    },
+
     /* a rounded block with a light top edge and a dark bottom edge (looks a little like a toy) */
     block(g, x, y, w, h, color, { radius = 8, light = "rgba(255,255,255,0.35)", dark = "rgba(0,0,0,0.22)" } = {}) {
       g.fillStyle = color;

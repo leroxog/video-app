@@ -71,6 +71,12 @@
     return link(path, { class: "tab-extra", "data-nav": nav || name, "aria-label": label }, box, h("span", { class: "tab-label" }, label));
   }
 
+  /* "Suche" of the side bar: upright it opens "Entdecken", in landscape it turns into a line to write in (see Y.searchEntry). */
+  function searchItem() {
+    return Y.searchEntry({ class: "tab-extra", "data-nav": "explore", "aria-label": "Suche" }, { class: "tab-extra search-row", "data-nav": "explore" },
+      h("span", { class: "tab-ic" }, icon("search")), h("span", { class: "tab-label" }, "Suche"));
+  }
+
   function buildShell(bare) {
     app.replaceChildren();
     app.classList.toggle("bare", bare);
@@ -80,7 +86,7 @@
     const me = Y.me;
     appbar = Y.appBar();
     const extras = h("div", { class: "tab-extras" }, extraItem("/notifications", "bell", "Mitteilungen", "notifications", "notifications"),
-      extraItem("/explore", "search", "Suche", "", "explore"), me.isAdmin ? extraItem("/moderation", "shield", "Moderation", "", "moderation") : null);
+      searchItem(), me.isAdmin ? extraItem("/moderation", "shield", "Moderation", "", "moderation") : null);
     const more = h("button", { class: "rail-more", type: "button", "aria-label": "Mehr zu deinem Konto", "aria-haspopup": "menu", onclick: (event) => {
       event.preventDefault();
       event.stopPropagation();

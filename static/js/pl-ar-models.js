@@ -386,5 +386,57 @@
   } });
   add("bunnyNose", { model: (k) => k.mesh(new k.T.SphereGeometry(0.95, 20, 14), k.mat(0xff8aa8, { rough: 0.3, clear: 0.8 }), 0, 0.1, 8.0) });
 
+  // ------------------------------------------------------------------------------------------------------------------ things in the air around the head (in space: they pass in front of the face and behind it)
+  /* `count` small things that fall (or rise) through a box around the head and turn while they do: `make(i, rnd)` makes the mesh of the thing number i, `fall` is the speed in cm per second
+     (negative: they rise), `sway` how far they drift sideways. The same ids as the flat effects of pl-face.js (those are drawn when the 3D layer cannot run). */
+  function airborne(k, { count, make, fall, sway = 1.2, spin = 1.5, box = { x: 15, yTop: 17, yBottom: -13, zFront: 13, zBack: -5 } }) {
+    const { T } = k;
+    const g = new T.Group();
+    let seed = 7;
+    const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+    g.userData.items = [];
+    for (let i = 0; i < count; i += 1) {
+      const m = make(i, rnd);
+      const item = { m, x: (rnd() * 2 - 1) * box.x, y0: rnd() * (box.yTop - box.yBottom), z: box.zBack + rnd() * (box.zFront - box.zBack), speed: fall * (0.7 + rnd() * 0.6), phase: rnd() * 6.28, sx: (rnd() - 0.5) * spin * 2, sy: (rnd() - 0.5) * spin * 2, sz: (rnd() - 0.5) * spin * 2 };
+      m.position.set(item.x, 0, item.z);
+      g.add(m);
+      g.userData.items.push(item);
+    }
+    g.userData.box = box;
+    g.userData.sway = sway;
+    return g;
+  }
+  function moveAirborne(o, f) {
+    const { items, box, sway } = o.userData;
+    const range = box.yTop - box.yBottom;
+    for (const it of items) {
+      const travelled = it.y0 - it.speed * f.t;
+      const y = ((travelled - box.yBottom) % range + range) % range + box.yBottom;
+      it.m.position.set(it.x + Math.sin(f.t * 1.3 + it.phase) * sway, y, it.z);
+      it.m.rotation.set(it.sx * f.t + it.phase, it.sy * f.t, it.sz * f.t);
+    }
+  }
+
+  add("snow", { model: (k) => {
+    const { T, mesh, mat } = k;
+    const flake = new T.IcosahedronGeometry(0.34, 1);
+    const white = mat(0xffffff, { rough: 0.55, emissive: 0x9fb8e8, emissiveIntensity: 0.5 });
+    return airborne(k, { count: 90, fall: 3.2, sway: 1.6, spin: 0.6, make: (i, rnd) => { const m = mesh(flake, white); const s = 0.4 + rnd() * 0.8; m.scale.set(s, s, s); return m; } });
+  }, update: moveAirborne });
+
+  add("confetti", { model: (k) => {
+    const { T, mesh, mat } = k;
+    const piece = new T.BoxGeometry(0.9, 0.55, 0.06);
+    const colours = [0xff3b6b, 0xffd23a, 0x2f7dff, 0x2fd05a, 0xb15cff, 0xff8a2a].map((c) => mat(c, { rough: 0.35, clear: 0.4, emissive: c, emissiveIntensity: 0.25, side: T.DoubleSide }));
+    return airborne(k, { count: 85, fall: 4.6, sway: 1.1, spin: 4, make: (i) => mesh(piece, colours[i % colours.length]) });
+  }, update: moveAirborne });
+
+  add("hearts", { model: (k) => {
+    const { T, mesh, mat, extrude, heartShape } = k;
+    const heart = extrude(heartShape(2.1), 0.45, 0.12);
+    const reds = [0xff3b6b, 0xff6b9a, 0xe8284f, 0xff8fb0].map((c) => mat(c, { rough: 0.3, clear: 0.7, emissive: c, emissiveIntensity: 0.3 }));
+    return airborne(k, { count: 22, fall: -2.8, sway: 1.8, spin: 0.5, box: { x: 12, yTop: 18, yBottom: -8, zFront: 12, zBack: -3 }, make: (i, rnd) => { const m = mesh(heart, reds[i % reds.length]); const s = 0.5 + rnd() * 0.65; m.scale.set(s, s, s); return m; } });
+  }, update: (o, f) => { moveAirborne(o, f); for (const it of o.userData.items) { it.m.rotation.x = 0; it.m.rotation.z = Math.sin(f.t * 2 + it.phase) * 0.35; it.m.rotation.y = Math.sin(f.t * 1.1 + it.phase) * 0.6; } } });
+
   window.PulseAR.glasses = glasses;
 })();

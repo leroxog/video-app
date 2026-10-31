@@ -90,7 +90,7 @@
     let strip = [];
     let phase = "wait";
     let t = 0, flyT = 0, flyTo = -1, doneT = 0, hover = -1, pulse = 0, shown = 0;
-    const reelAt = { x: W / 2, y: 150, roll: 0, size: 112 };
+    const reelAt = { x: W / 2, y: 150, roll: 0, size: 112, on: false };
     const SPIN = 1.5, PICK_MAX = 7, FLY = 0.5;
 
     function reset() {
@@ -120,13 +120,14 @@
       flyTo = i; flyT = 0; phase = "fly";
       e.score(slots.filter(Boolean).length * 10);
     }
-    /* where the reel hangs: on the forehead of the player (when the camera has found it), tilted with the head */
+    /* where the reel hangs: ON the forehead of the player (when the camera has found it), as big as the forehead is high and tilted with the head; until a face is found it floats at the top */
     function follow() {
       const f = e.hooks && e.hooks.face ? e.hooks.face() : null;
       let tx = W / 2, ty = 150, roll = 0, sz = 112;
-      if (f && f.have) { sz = clampn(f.w * 0.95, 96, 134); tx = clampn(f.x, sz / 2 + 8, W - sz / 2 - 8); ty = f.y - sz * 0.6 - 10; roll = clampn(f.roll, -0.6, 0.6); }
-      ty = Math.max(ty, 112 + sz / 2);
-      const k = f && f.have ? 0.35 : 0.1;
+      reelAt.on = !!(f && f.have);
+      if (reelAt.on) { sz = clampn((f.h || f.w * 0.3) * 1.55, 72, 118); tx = clampn(f.x, sz / 2 + 8, W - sz / 2 - 8); ty = f.y - sz * 0.05; roll = clampn(f.roll, -0.6, 0.6); }
+      ty = Math.max(ty, (reelAt.on ? 78 : 112) + sz / 2);
+      const k = reelAt.on ? 0.4 : 0.1;
       reelAt.x += (tx - reelAt.x) * k; reelAt.y += (ty - reelAt.y) * k; reelAt.roll += (roll - reelAt.roll) * k; reelAt.size += (sz - reelAt.size) * k;
     }
 
@@ -195,8 +196,10 @@
         const glow = g.createRadialGradient(0, 0, rs * 0.3, 0, 0, rs * 0.95);
         glow.addColorStop(0, "rgba(255,255,255,0.22)"); glow.addColorStop(1, "rgba(255,255,255,0)");
         g.fillStyle = glow; g.fillRect(-rs, -rs, rs * 2, rs * 2);
-        g.fillStyle = "rgba(255,255,255,0.95)";                              // the little tail that points to the head
-        g.beginPath(); g.moveTo(-10, rs / 2 + 4); g.lineTo(10, rs / 2 + 4); g.lineTo(0, rs / 2 + 16); g.closePath(); g.fill();
+        if (!reelAt.on) {                                                    // the little tail that points down to the head (not when the reel sits on the forehead)
+          g.fillStyle = "rgba(255,255,255,0.95)";
+          g.beginPath(); g.moveTo(-10, rs / 2 + 4); g.lineTo(10, rs / 2 + 4); g.lineTo(0, rs / 2 + 16); g.closePath(); g.fill();
+        }
         g.fillStyle = meta.color; rr(g, -rs / 2 - 5, -rs / 2 - 5, rs + 10, rs + 10, 24); g.fill();
         g.lineWidth = 3; g.strokeStyle = "rgba(255,255,255,0.95)"; rr(g, -rs / 2 - 5, -rs / 2 - 5, rs + 10, rs + 10, 24); g.stroke();
         g.save();

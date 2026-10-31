@@ -1665,11 +1665,9 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .cam-ext small { color: rgba(255, 255, 255, 0.8); font-size: 14px; }
 @media (prefers-reduced-motion: reduce) { .cam-tap span { animation: none; } }
 
-/* ----- before the first touch the game is shown a bit smaller, above the lenses, so that its buttons are not hidden by them; it grows when the round starts */
+/* ----- before the first touch the game fills the whole picture, exactly as it does in the round (it used to be shown smaller and pushed up, above the lenses) */
 .cam-host .game-layer, .cam-host .game-frame, .cam-host .cam-ext { transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); }
-.cam-view[data-state="idle"] .game-layer, .cam-view[data-state="idle"] .game-frame, .cam-view[data-state="idle"] .cam-ext { transform: scale(0.72); transform-origin: 50% 0; }
-.cam-view[data-state="idle"] .cam-host { align-items: start; padding-top: calc(76px + env(safe-area-inset-top)); }
-.cam-view[data-state="idle"] .cam-tap { top: calc(76px + env(safe-area-inset-top) + var(--gh) * 0.36 - 18px); }
+.cam-view[data-state="idle"] .cam-tap { top: 44%; }
 .lens { width: 74px; height: 74px; }
 .lens-emoji { font-size: 32px; }
 .cam-lenses { gap: 12px; padding-left: calc(50% - 37px); padding-right: calc(50% - 37px); }
@@ -2334,3 +2332,11 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .post-actions .act-btn.like.on { background: none; box-shadow: none; color: #7a2cf0; }
 .post-actions .act-btn.repost.on { background: none; box-shadow: none; color: var(--text); }
 
+/* ----- "Suche" in landscape: the entry turns into a line to write in, in the same place */
+.search-row { display: flex; align-items: center; gap: 10px; margin: 0; }
+.search-row .search-input { flex: 1; min-width: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; font-size: 15px; outline: none; }
+.search-row .search-input::placeholder { color: var(--muted); }
+.search-row svg { flex: none; width: 22px; height: 22px; }
+.tab-extra.search-row { background: var(--bg-3); color: var(--text); cursor: text; }
+.appbar-find-row { flex: none; width: 190px; height: 40px; padding: 0 12px; border-radius: 20px; background: var(--bg-3); color: var(--text); }
+.appbar-find-row svg { width: 20px; height: 20px; }

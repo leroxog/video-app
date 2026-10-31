@@ -192,7 +192,7 @@
         const speed = 170 + Math.min(150, dist * 0.02);
         dist += speed * dt; e.score(dist / 10);
         smoke -= dt;
-        if (smoke <= 0) { smoke = 0.05; fx.trail(78, y + 4, "rgba(220,225,255,0.55)", 5 + Math.random() * 3, 0.5); }
+        if (smoke <= 0) { smoke = 0.05; fx.trail(56, y + 4, "rgba(220,225,255,0.55)", 5 + Math.random() * 3, 0.5); }
         spawn -= dt;
         if (spawn <= 0) { const h = e.rand(70, 160); blocks.push({ x: W + 20, y: e.rand(90, H - 90 - h), w: 36, h, tint: e.randInt(0, 2) }); spawn = e.rand(0.9, 1.5); }
         for (const b of blocks) { b.x -= speed * dt; if (e.hit({ x: 80, y: y - 12, w: 40, h: 24 }, { x: b.x, y: b.y, w: b.w, h: b.h })) { fx.burst(100, y, "#ffb347", 14, 220, 0.6, 400); e.over(); } }
@@ -223,7 +223,7 @@
         }
         g.fillStyle = "rgba(180,150,255,0.35)"; g.fillRect(0, 25, W, 2); g.fillRect(0, H - 27, W, 2);
         fx.draw(g);
-        Art.sprite(g, "🚁", 100, y, 46, { angle: vy / 900 });
+        Art.heli(g, 100, y, 62, { angle: vy / 1000, t: clock });                   // (the nose points the way it flies: to the right)
       },
     };
   } });

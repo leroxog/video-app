@@ -187,7 +187,7 @@
         for (const s of stars) e.rect(s.x, s.y, 2, 2, "rgba(255,255,255,0.7)");
         for (const s of shots) e.rect(s.x - 2, s.y - 8, 4, 14, "#ffe66d", 2);
         for (const f of foes) e.emoji(f.kind === "up" ? "⭐" : f.hp > 1 ? "👾" : "👽", f.x, f.y, 40);
-        if (inv <= 0 || Math.floor(t * 12) % 2 === 0) e.emoji("🚀", x, 548, 44, 0);
+        if (inv <= 0 || Math.floor(t * 12) % 2 === 0) e.emoji("🚀", x, 548, 44, -Math.PI / 4);                      // (the rocket of the emoji points up and to the right: turned so that it points up, the way it shoots)
         e.text("♥".repeat(Math.max(0, lives)), 20, 100, { size: 20, align: "left", color: "#ff5d73" });
       },
     };
@@ -223,7 +223,7 @@
         for (const s of shots) e.rect(s.x - 2, s.y - 8, 4, 14, "#ffe66d", 2);
         for (const b of bombs) e.rect(b.x - 3, b.y - 7, 6, 14, "#ff6b6b", 3);
         e.line(0, 520, W, 520, "rgba(255,90,90,0.5)", 2);
-        if (inv <= 0 || Math.floor(inv * 10) % 2 === 0) e.emoji("🚀", x, 548, 40);
+        if (inv <= 0 || Math.floor(inv * 10) % 2 === 0) e.emoji("🚀", x, 548, 40, -Math.PI / 4);
         e.text("♥".repeat(Math.max(0, lives)), 20, 60, { size: 20, align: "left", color: "#ff5d73" });
       },
     };

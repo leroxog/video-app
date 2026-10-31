@@ -24,7 +24,7 @@
     const brand = link(Y.HOME, { class: "appbar-brand", "aria-label": "Satürn, zur Startseite" }, Icons.logo(), Icons.wordmark());
     const pulse = h("span", { class: "appbar-pulse", "aria-hidden": "true" });
     const search = h("div", { class: "appbar-search" }, Y.searchForm(""));
-    const find = link("/explore", { class: "appbar-btn appbar-find", "aria-label": "Suchen" }, icon("search"));
+    const find = Y.searchEntry({ class: "appbar-btn appbar-find", "aria-label": "Suchen" }, { class: "appbar-find-row search-row" }, icon("search"));
     const bell = link("/notifications", { class: "appbar-btn appbar-bell", "aria-label": "Benachrichtigungen" }, icon("bell"), Y.badge("notifications"));
     const plus = h("button", { class: "appbar-plus", type: "button", "aria-label": "Neu: Beitrag, Video oder Story", "aria-haspopup": "menu", onclick: (event) => Y.newPost({ anchor: event.currentTarget }) }, icon("plus"));
     const right = h("div", { class: "appbar-right" }, Y.streakChip ? Y.streakChip() : null, find, bell, plus);

@@ -62,6 +62,33 @@
     return form;
   };
 
+  /* "Suche" in the bars. Upright it is a link to the page "Entdecken". In landscape it does not leave the page: the entry turns into a line to write in, where it stood, and the page of the
+     results opens only when the search is sent (Enter); a click next to it with nothing written, or Escape, puts the entry back. `attrs` are the attributes of the entry, `rowAttrs` those of the line. */
+  const searchEntry = (attrs, rowAttrs, ...children) => {
+    const anchor = h("a", { href: "/explore", ...attrs, onclick: (event) => {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      event.preventDefault();
+      if (window.matchMedia && matchMedia("(orientation: landscape)").matches) openLine(); else Y.navigate("/explore");
+    } }, ...children);
+    function openLine() {
+      const input = h("input", { class: "search-input", type: "search", name: "q", placeholder: "Suchen", "aria-label": "Suchen", autocomplete: "off", maxlength: 100, enterkeyhint: "search" });
+      const row = h("form", { ...rowAttrs, role: "search" }, icon("search"), input);
+      const close = () => { if (row.isConnected) row.replaceWith(anchor); };
+      row.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const text = Core.cleanText(input.value);
+        if (!text) return;
+        close();
+        Y.navigate(Core.buildPath({ name: "search", q: text }));
+      });
+      input.addEventListener("keydown", (event) => { if (event.key === "Escape") { event.stopPropagation(); close(); anchor.focus(); } });
+      input.addEventListener("blur", () => setTimeout(() => { if (!input.value) close(); }, 150));
+      anchor.replaceWith(row);
+      input.focus();
+    }
+    return anchor;
+  };
+
   const peopleLine = (actors) => {
     const link1 = (actor) => link(`/${actor.handle}`, { class: "who" }, actor.name, Y.aiTag(actor));
     if (actors.length === 1) return [link1(actors[0])];
@@ -99,7 +126,7 @@
       h("span", { class: "t-count" }, `${Core.formatCount(trend.posts)} ${trend.posts === 1 ? "Beitrag" : "Beiträge"}`)))));
   }
 
-  Object.assign(Y, { qs, listLoader, emptyState, errorState, topbar, searchForm, peopleLine, snippet, readJson, writeJson, tile, tilesPager, trendRows });
+  Object.assign(Y, { qs, listLoader, emptyState, errorState, topbar, searchForm, searchEntry, peopleLine, snippet, readJson, writeJson, tile, tilesPager, trendRows });
 
   // ------------------------------------------------------------------------------------------- guest card
   function welcomeCard() {
