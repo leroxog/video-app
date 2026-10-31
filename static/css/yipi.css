@@ -1148,7 +1148,7 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .nex-attached svg { width: 15px; height: 15px; flex: none; }
 
 /* ---------------------------------------------------------------------------------------------- the camera tab (like the camera of Snapchat) */
-.app[data-cam="starting"] .tabbar, .app[data-cam="playing"] .tabbar, .app[data-cam="over"] .tabbar, .app[data-cam="review"] .tabbar { display: none; }
+.app[data-cam="starting"] .tabbar, .app[data-cam="over"] .tabbar, .app[data-cam="review"] .tabbar { display: none; }
 .cam-view { position: relative; margin: 0 calc(var(--pad) * -1); height: 100vh; height: 100dvh; background: #000; color: #fff; overflow: hidden; user-select: none; -webkit-user-select: none; }
 .cam-stage { --gw: 360px; --gh: 640px; position: absolute; top: 0; bottom: 0; left: 50%; width: 100%; max-width: calc(100dvh * 9 / 16); transform: translateX(-50%); overflow: hidden; background: #0b0b10; }
 .cam-feed { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #0b0b10; }
@@ -2342,3 +2342,40 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .appbar-find-row svg { width: 20px; height: 20px; }
 .cc-fix { display: flex; flex-direction: column; gap: 4px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
 .cc-fix .cc-row { margin-top: 6px; }
+
+/* ----- the camera: a game starts at once, the strip stays while it is played, a lens has a shutter (tap = photo, hold = clip), the window of the camera over other pages */
+.cam-view[data-state="over"] .cam-bottom, .cam-view[data-state="review"] .cam-bottom { display: none; }
+.cam-view[data-state="idle"] .cam-tap { top: auto; bottom: calc(var(--tabbar) + 214px + env(safe-area-inset-bottom)); }
+.cam-stop { left: auto; right: 14px; margin-left: 0; width: 50px; height: 50px; bottom: calc(var(--tabbar) + 148px + env(safe-area-inset-bottom)); }
+.cam-stop span { width: 20px; height: 20px; }
+.cam-view[data-kind="lens"] .cam-stop, .cam-view[data-kind="randomsong"] .cam-stop { display: none; }
+.lens.on.holding { transform: scale(1.32); }
+.lens.holding .lens-ic { border-color: #ff3b4e; box-shadow: 0 0 0 9px rgba(255, 59, 78, 0.38), 0 6px 22px rgba(0, 0, 0, 0.55); }
+.cam-overlay { --pad: 0px; --tabbar: 0px; position: fixed; inset: 0; z-index: 3400; background: #000; }
+.cam-overlay .cam-view { margin: 0; height: 100%; }
+.cam-overlay-x { position: absolute; top: calc(12px + env(safe-area-inset-top)); left: 12px; z-index: 12; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: rgba(0, 0, 0, 0.45); color: #fff; }
+.cam-overlay-x svg { width: 22px; height: 22px; }
+.cam-review-bar { gap: 6px; }
+.cam-act { min-width: 56px; }
+
+/* ----- videos on a small or low phone: the column of buttons gets smaller so that the picture of the person, the plus and all buttons are seen (the bar of the tabs and the strip at the top take room) */
+@media screen and (max-height: 780px) {
+  .reel-actions { gap: 8px; bottom: calc(var(--tabbar) + 18px + env(safe-area-inset-bottom)); }
+  .reel-person { width: 56px; height: 56px; margin-bottom: 12px; }
+  .reel-av { width: 56px; height: 56px; padding: 2.5px; }
+  .reel-follow { width: 24px; height: 24px; margin-left: -12px; bottom: -11px; }
+  .reel-follow svg { width: 15px; height: 15px; }
+  .reel-btn-ic { width: 44px; height: 44px; }
+  .reel-btn-ic svg { width: 24px; height: 24px; }
+  .reel-btn { gap: 1px; }
+  .reel-count { font-size: 11.5px; }
+}
+@media screen and (max-height: 620px) {
+  .reel-person { width: 48px; height: 48px; margin-bottom: 10px; }
+  .reel-av { width: 48px; height: 48px; }
+  .reel-actions { gap: 5px; }
+  .reel-btn-ic { width: 40px; height: 40px; }
+  .reel-btn-ic svg { width: 22px; height: 22px; }
+  .reel-count { display: none; }
+}
+

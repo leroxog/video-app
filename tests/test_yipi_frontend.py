@@ -518,7 +518,7 @@ def test_the_camera_tab_runs_games_in_front_of_the_selfie_camera_and_records_the
     for part in ("window.FruitMerge", "kind: \"watermelon\"", "destroy()", "onOver", "onPower"):
         assert part in fruit, part
     assert 'data-frame' in read("static", "js", "pg-fruit.js") and "dataset.frame" in camera, "the box of Fruit Merge is part of the recording"
-    assert ".cam-stage {" in CSS and ".lens.on {" in CSS and ".app[data-cam=\"playing\"] .tabbar" in CSS
+    assert ".cam-stage {" in CSS and ".lens.on {" in CSS and ".app[data-cam=\"over\"] .tabbar" in CSS and ".app[data-cam=\"playing\"] .tabbar" not in CSS
 
 
 def test_the_videos_tab_is_a_feed_like_tiktok():

@@ -24,10 +24,10 @@
 
   // ------------------------------------------------------------------------------------------------------------ what the person chose
   const CODES = new Set(LANGUAGES.map((entry) => entry[0]));
-  let prefs = { sub: "orig", audio: "orig" };                      // subtitles: "off", "orig" or a language; the voice: "orig" (the original sound) or a language
+  let prefs = { sub: "off", audio: "orig" };                       // subtitles: "off" (until somebody switches them on), "orig" or a language; the voice: "orig" (the original sound) or a language
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) || "null");
-    if (saved && typeof saved === "object") prefs = { sub: saved.sub === "off" || saved.sub === "orig" || CODES.has(saved.sub) ? saved.sub : "orig", audio: saved.audio === "orig" || CODES.has(saved.audio) ? saved.audio : "orig" };
+    if (saved && typeof saved === "object") prefs = { sub: saved.sub === "off" || saved.sub === "orig" || CODES.has(saved.sub) ? saved.sub : "off", audio: saved.audio === "orig" || CODES.has(saved.audio) ? saved.audio : "orig" };
   } catch (error) { /* storage blocked */ }
   const controllers = new Set();                                   // the videos that are shown right now (the choice of the person reaches them at once)
   function choose(next) {

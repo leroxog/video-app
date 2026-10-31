@@ -138,7 +138,7 @@
     const attachPanel = Y.composerPanel(["photo", "camera", "document", "location"], async (id) => {
       const T = Y.composerTools;
       if (id === "photo") pick("image/jpeg,image/png,image/webp", "image");
-      else if (id === "camera") { const [file] = await T.pickFiles("image/*", { capture: "environment" }); if (file) attach(file, "image"); }
+      else if (id === "camera") { const file = Y.cameraCapture ? await Y.cameraCapture({ photoOnly: true }) : (await T.pickFiles("image/*", { capture: "environment" }))[0]; if (file) attach(file, "image"); }
       else if (id === "document") pick(".pdf,.txt,.md,.csv,.rtf,.docx,.xlsx,.pptx,.odt,.ods,.odp", "document");
       else if (id === "location") { const place = await T.place(); if (place) { input.value = `${input.value}${input.value && !/\s$/.test(input.value) ? " " : ""}${place}`; update(); input.focus(); } }
     });
@@ -417,7 +417,7 @@
     plus.addEventListener("click", () => { attachPanel.toggle(); plus.setAttribute("aria-expanded", String(attachPanel.isOpen)); plus.classList.toggle("open", attachPanel.isOpen); });
     input.addEventListener("focus", () => { attachPanel.close(); plus.classList.remove("open"); plus.setAttribute("aria-expanded", "false"); });
     Y.composerTools.dictation(input, micButton, update);
-    photoButton.addEventListener("click", async () => { const [file] = await Y.composerTools.pickFiles("image/*", { capture: "environment" }); if (file) attach(file, "image"); });
+    photoButton.addEventListener("click", async () => { const file = Y.cameraCapture ? await Y.cameraCapture({ photoOnly: true }) : (await Y.composerTools.pickFiles("image/*", { capture: "environment" }))[0]; if (file) attach(file, "image"); });
     moreButton.addEventListener("click", () => menu(moreButton, [
       { label: "Neues Gespräch", icon: "pencil", run: newChat },
       { label: "Gespräche anzeigen", icon: "list", run: openHistory },

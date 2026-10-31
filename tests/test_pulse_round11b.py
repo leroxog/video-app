@@ -45,7 +45,7 @@ def test_a_touch_that_starts_the_round_does_not_cancel_the_face_tracking_and_the
     assert "let lensToken = 0" in camera and "lensToken += 1" in camera
     track = camera[camera.index("async function trackFace"):camera.index("async function ensureCommunity")]
     assert "token !== lensToken" in track and "mine !== previewId" not in track.replace("// ", ""), "the round start must not cancel it"
-    lens = camera[camera.index("async function openLens"):camera.index("stage.addEventListener")]
+    lens = camera[camera.index("async function openLens"):camera.index("/* A lens is recorded like a game")]
     assert "token !== lensToken" in lens and "mine !== previewId" not in lens
     assert "brow = pt(9)" in track and "h: Math.hypot(top.x - brow.x" in track
     assert "reelAt.on" in rank and "f.h" in rank and "ty = f.y - sz * 0.05" in rank, "the middle of the reel is the middle of the forehead"
@@ -71,3 +71,42 @@ def test_suche_turns_into_a_line_in_landscape_and_the_side_bar_has_no_profile_bl
     assert 'extraItem(`/${me.handle}`, "user", "Profil"' not in shell, "the account at the bottom leads to the profile"
     css = open(CSS, encoding="utf-8").read()
     assert ".search-row" in css and ".appbar-find-row" in css
+
+
+# ================================================================================================ the camera flow of the third part of the day
+def test_a_game_starts_and_is_filmed_at_once_and_leaving_it_throws_the_recording_away():
+    camera = read("yipi-camera.js")
+    assert "runner.isArmed() && runner.go()" not in camera and "runner.go(); }, 250)" in camera, "the game is started by the page, not by a touch"
+    assert 'tapHint.hidden = true;                                  // (a game starts at once: nothing to tap)' in camera
+    assert "function abortRound()" in camera and "if (state === \"playing\") abortRound();" in camera, "another lens or game, or the gallery, drops the round"
+    assert "const lensBarHide = (on) => { top.hidden = on; lensName.hidden = on; lensHint.hidden = on; }" in camera, "the strip stays while a round is played"
+    css = open(CSS, encoding="utf-8").read()
+    assert 'data-cam="playing"] .tabbar' not in css, "the bar of the tabs stays: one can leave the camera"
+
+
+def test_a_lens_has_a_shutter_a_tap_is_a_photo_and_a_finger_that_stays_is_a_clip():
+    camera = read("yipi-camera.js")
+    for word in ("lensBar.addEventListener(\"pointerdown\"", "async function snapshot()", "canvas.toBlob(resolve, \"image/jpeg\"", "held.holding", "Tippen: Foto · Halten: Video"):
+        assert word in camera, word
+    assert "startLensRound();" in camera and "startSongRound();" in camera
+    assert "chosen.kind === \"lens\" && !event.target.closest(\"button\")) startLensRound()" not in camera, "no more 'tap the screen to start' for a lens"
+    review = camera[camera.index("function showReview"):camera.index("function discard()")]
+    assert 'h("img", { class: "cam-clip"' in review and 'action("share", "Teilen", shareOut)' in review
+    assert "navigator.share({ files: [file]" in camera and "navigator.canShare({ files: [file] })" in camera, "to every other app, not only to the friends in Satürn"
+
+
+def test_the_places_to_write_open_the_camera_of_satuern_and_not_the_one_of_the_device():
+    camera = read("yipi-camera.js")
+    assert "Y.cameraCapture = (options = {}) =>" in camera and "capture.resolve(fileOf())" in camera and "list = [NORMAL, ...(Y.lenses ? Y.lenses.PRESETS : [])]" in camera
+    assert "const NORMAL = { id: \"l-normal\"" in camera and "[create, NORMAL, ...flagship" in camera
+    for name, call in (("yipi-chats.js", "Y.cameraCapture ? await Y.cameraCapture()"), ("yipi-components.js", "Y.cameraCapture ? await Y.cameraCapture({ photoOnly: true })"), ("yipi-nex.js", "Y.cameraCapture ? await Y.cameraCapture({ photoOnly: true })")):
+        assert call in read(name), name
+    assert "files }" in read("yipi-components.js") and "options.files" in read("yipi-components.js"), "Y.compose({files}) puts a photo into the box of a post"
+
+
+def test_subtitles_and_the_voice_are_off_until_somebody_switches_them_on_and_videos_fit_a_small_phone():
+    captions = read("yipi-captions.js")
+    assert 'let prefs = { sub: "off", audio: "orig" }' in captions and ': "off" };' in captions.replace('saved.audio === "orig" || CODES.has(saved.audio) ? saved.audio : "orig" }', ': "off" };') or 'CODES.has(saved.sub) ? saved.sub : "off"' in captions
+    css = open(CSS, encoding="utf-8").read()
+    assert "@media screen and (max-height: 780px)" in css and "@media screen and (max-height: 620px)" in css
+

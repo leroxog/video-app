@@ -535,7 +535,7 @@
     async function attachEntry(id) {
       const T = Y.composerTools;
       if (id === "photo") { const [file] = await T.pickFiles(PHOTO_OR_VIDEO); if (file) stage(file, kindOf(file)); }
-      else if (id === "camera") { const [file] = await T.pickFiles("image/*", { capture: "environment" }); if (file) stage(file, "image"); }
+      else if (id === "camera") { const file = Y.cameraCapture ? await Y.cameraCapture() : (await T.pickFiles("image/*", { capture: "environment" }))[0]; if (file) stage(file, /^video\//.test(file.type) ? "video" : "image"); }
       else if (id === "document") { const [file] = await T.pickFiles(".pdf,.txt,.md,.csv,.rtf,.docx,.xlsx,.pptx,.odt,.ods,.odp"); if (file) stage(file, "document"); }
       else if (id === "location") { const text = await T.place(); if (text) deliver({ text }, false); }
       else if (id === "contact") { const handle = await T.contact(); if (handle) deliver({ text: `👤 Kontakt: @${handle}` }, false); }

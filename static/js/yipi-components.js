@@ -551,7 +551,7 @@
       const T = Y.composerTools;
       const put = (text) => { textarea.focus(); textarea.setRangeText(text, textarea.selectionStart, textarea.selectionEnd, "end"); update(); };
       if (id === "photo") picker.click();
-      else if (id === "camera") { const files = await T.pickFiles("image/*", { capture: "environment" }); if (files.length) addFiles(files); }
+      else if (id === "camera") { const file = Y.cameraCapture ? await Y.cameraCapture({ photoOnly: true }) : (await T.pickFiles("image/*", { capture: "environment" }))[0]; if (file) addFiles([file]); }
       else if (id === "location") { const text = await T.place(); if (text) put(text); }
       else if (id === "contact") { const handle = await T.contact(); if (handle) put(`@${handle} `); }
       else if (id === "poll") pollButton.click();
@@ -735,6 +735,7 @@
     root.addEventListener("dragover", (event) => { if ([...(event.dataTransfer ? event.dataTransfer.types : [])].includes("Files")) { event.preventDefault(); root.classList.add("drop"); } });
     root.addEventListener("dragleave", () => root.classList.remove("drop"));
     root.addEventListener("drop", (event) => { root.classList.remove("drop"); if (event.dataTransfer && event.dataTransfer.files.length) { event.preventDefault(); addFiles([...event.dataTransfer.files]); } });
+    if (options.files && options.files.length) setTimeout(() => addFiles(options.files), 0);          // (a photo that was taken in the camera of Satürn)
     if (options.text) textarea.value = options.text;
     else { try { const draft = sessionStorage.getItem(draftKey); if (draft) textarea.value = draft; } catch (error) { /* storage blocked */ } }
     update();
@@ -745,12 +746,12 @@
   }
 
   /* The dialog to write a post, a reply or a quote. */
-  Y.compose = function compose({ replyTo, quoteOf, onPosted, text } = {}) {
+  Y.compose = function compose({ replyTo, quoteOf, onPosted, text, files } = {}) {
     if (!Y.requireLogin("Melde dich an, um zu posten.")) return null;
     const target = replyTo || quoteOf;
     let entry;
     const box = composer({
-      replyTo, quoteOf, autofocus: true, text, template: !target,
+      replyTo, quoteOf, autofocus: true, text, files, template: !target,
       onPosted: (post) => {
         entry.close();
         onPosted?.(post);

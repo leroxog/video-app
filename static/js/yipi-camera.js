@@ -50,7 +50,11 @@
 
   const pickType = () => Y.pickRecorderType();
 
+  /* A plain camera: a photo or a video without any effect (the first of the strip in the capture window and next to "Erstellen" in the tab). */
+  const NORMAL = { id: "l-normal", kind: "lens", name: "Normal", emoji: "📷", cat: "Kamera", hint: "Foto und Video ohne Effekt", color: "#4a4a55", fx: [], filter: "none" };
+
   Y.views.camera = function camera(route, ctx) {
+    const capture = route && route.capture ? route.capture : null;            // {photoOnly, resolve(file)}: the camera was opened by a place to write that wants a photo or a clip (Y.cameraCapture)
     const app = document.getElementById("app");
     const feed = h("video", { class: "cam-feed", playsinline: true, muted: true, autoplay: true, "aria-label": "Deine Kamera" });
     feed.muted = true;
@@ -261,8 +265,10 @@
       });
       const button = h("button", { class: `lens${game.kind === "create" ? " create" : ""}${game.kind === "lens" ? " face" : ""}`, type: "button", role: "option", "aria-selected": "false", "aria-label": `${game.name}: ${game.hint}`, "data-id": game.id }, circle);
       button.addEventListener("click", () => {
-        if (state !== "idle") return;
-        if (index === active) { if (runner && runner.go) runner.go(); else startRound(); } else go(index, true);
+        if (state !== "idle" && state !== "playing") return;
+        if (index !== active) { go(index, true); return; }
+        if (lensLike(game)) return;                                          // (a lens: the shutter below, with the finger)
+        if (state === "playing") { abortRound(); schedulePreview(); }         // a game: a touch on its own circle starts it again
       });
       return button;
     }
@@ -297,6 +303,7 @@
       }
     }
     function go(index, smooth) {
+      if (state === "playing") abortRound();
       active = Math.max(0, Math.min(list.length - 1, index));
       const button = lensBar.children[active];
       if (button) lensBar.scrollTo({ left: button.offsetLeft - (lensBar.clientWidth - button.offsetWidth) / 2, behavior: smooth ? "smooth" : "auto" });
@@ -308,7 +315,7 @@
       scrollFrame = requestAnimationFrame(() => {
         scrollFrame = 0;
         const first = lensBar.children[0];
-        if (!first || state !== "idle") return;
+        if (!first || (state !== "idle" && state !== "playing") || (shutter && shutter.holding)) return;
         const middle = lensBar.scrollLeft + lensBar.clientWidth / 2;
         let index = 0;
         let nearest = Infinity;
@@ -318,16 +325,17 @@
           if (away < nearest) { nearest = away; index = i; }
         }
         sizeLenses();
-        if (index !== active) { active = index; paintActive(); }
+        if (index !== active) { if (state === "playing") abortRound(); active = index; paintActive(); }
       });
     }, { passive: true });
     lensBar.addEventListener("keydown", (event) => {
       if (event.key === "ArrowRight") { event.preventDefault(); go(active + 1, true); }
       else if (event.key === "ArrowLeft") { event.preventDefault(); go(active - 1, true); }
-      else if (event.key === "Enter" && state === "idle" && list[active]) { event.preventDefault(); if (runner && runner.go) runner.go(); else startRound(); }
+      else if (event.key === "Enter" && list[active]) { event.preventDefault(); const item = list[active]; if (item.kind === "lens" && state === "idle") snapshot(); else if (item.kind === "randomsong" && state === "idle") startSongRound(); else if (item.kind === "game" && state === "playing") { abortRound(); schedulePreview(); } }
     });
 
     function galleryDialog() {
+      if (state === "playing") abortRound();
       if (state !== "idle") return;
       let topic = "Alle";
       let term = "";
@@ -356,10 +364,78 @@
       Y.qr.dialog({ path: `/camera/${item.id}`, title: item.name || "Spiel", subtitle: item.kind === "lens" ? "Wer den Code scannt, bekommt genau diese Linse." : "Wer den Code scannt, spielt genau dieses Spiel." });
     });
 
+    // ---------------------------------------------------------------------------------------------- the shutter of a lens: a tap is a photo, a finger that stays is a clip
+    const lensLike = (item) => !!item && (item.kind === "lens" || item.kind === "randomsong");
+    let shutter = null;
+    lensBar.addEventListener("pointerdown", (event) => {
+      const button = event.target.closest(".lens");
+      const item = list[active];
+      if (!button || state !== "idle" || !lensLike(item) || lensBar.children[active] !== button) return;
+      shutter = { x: event.clientX, y: event.clientY, id: event.pointerId, holding: false, button, timer: 0 };
+      shutter.timer = setTimeout(() => {
+        if (!shutter || item.kind !== "lens" || (capture && capture.photoOnly)) return;
+        shutter.holding = true;
+        button.classList.add("holding");
+        navigator.vibrate?.(12);
+        startLensRound();
+      }, 320);
+    });
+    lensBar.addEventListener("pointermove", (event) => {
+      if (shutter && !shutter.holding && Math.hypot(event.clientX - shutter.x, event.clientY - shutter.y) > 12) { clearTimeout(shutter.timer); shutter = null; }      // (a swipe along the strip, no shutter)
+    });
+    function letGoOfShutter(event, cancelled) {
+      if (!shutter || (event && event.pointerId !== shutter.id)) return;
+      const held = shutter;
+      shutter = null;
+      clearTimeout(held.timer);
+      held.button.classList.remove("holding");
+      if (held.holding) { if (state === "playing") finish(finalScore); return; }
+      if (cancelled || state !== "idle") return;
+      const item = list[active];
+      if (item && item.kind === "lens") snapshot(); else if (item && item.kind === "randomsong") startSongRound();
+    }
+    const shutterUp = (event) => letGoOfShutter(event, false);
+    const shutterCancel = (event) => letGoOfShutter(event, !(shutter && shutter.holding));
+    window.addEventListener("pointerup", shutterUp);
+    window.addEventListener("pointercancel", shutterCancel);
+
+    /* A round that is thrown away: the clip that was being recorded is dropped (a game or lens was left before the end). */
+    function abortRound() {
+      if (state !== "playing") return;
+      clearInterval(timer);
+      stopRecording();
+      recorder = null;
+      chunks = [];
+      endGame();
+      lensBarHide(false);
+      setState("idle");
+    }
+
+    /* One photo: the picture of this moment, made like a frame of the clip (the camera, the effects of the lens, the mark of Satürn). */
+    async function snapshot() {
+      if (state !== "idle" || !chosen || chosen.kind !== "lens") return;
+      if (!stream) { toast(camOn ? "Dafür braucht Satürn die Kamera." : "Die Kamera ist aus. Schalte sie oben rechts wieder an."); return; }
+      const shape = stage.getBoundingClientRect();
+      REC_H = Math.max(540, Math.min(1200, Math.round(((REC_W * shape.height) / Math.max(1, shape.width)) / 2) * 2));
+      const canvas = document.createElement("canvas");
+      canvas.width = REC_W;
+      canvas.height = REC_H;
+      compose(canvas.getContext("2d"));
+      host.classList.add("flash");
+      setTimeout(() => host.classList.remove("flash"), 300);
+      navigator.vibrate?.(15);
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92));
+      if (dead) return;
+      clearTimeout(previewTimer);
+      previewId += 1;
+      setState("over");
+      showReview(blob);
+    }
+
     // ---------------------------------------------------------------------------------------------- a game and its recording
     let previewTimer = 0;
     let previewId = 0;
-    const tapHint = h("div", { class: "cam-tap", "aria-live": "polite" }, h("span", {}, "Tippe auf den Bildschirm, um zu starten"));
+    const tapHint = h("div", { class: "cam-tap", "aria-live": "polite" }, h("span", {}, "Tippen: Foto · Halten: Video"));
     stage.append(tapHint);
 
     /* A moment after a lens is chosen the game is shown on the camera picture, not running yet: the scenery, the figure and the buttons to steer it are there. */
@@ -374,7 +450,7 @@
       const mine = ++previewId;
       if (game.song) setSong(game.song, true);                  // a lens that brings its song: the song is on, and can be changed at the top
       else if (songFromLens) setSong(null);
-      tapHint.firstChild.textContent = game.kind === "randomsong" ? "Tippe, um ein Foto zu machen" : "Tippe auf den Bildschirm, um zu starten";
+      tapHint.firstChild.textContent = game.kind === "randomsong" ? "Tippe auf den Kreis: Foto mit Zufalls-Song" : capture && capture.photoOnly ? "Tippe auf den Kreis: Foto" : "Tippen: Foto · Halten: Video";
       stopLens();
       panelCleanup?.();
       panelCleanup = null;
@@ -389,7 +465,7 @@
       chosen = game;
       finalScore = 0;
       score.textContent = "0";
-      tapHint.hidden = false;
+      tapHint.hidden = true;                                  // (a game starts at once: nothing to tap)
       const def = window.PulseGames.get(game.id);
       wantFace = false;                                       // the camera is the background of every game: no small round picture of the player
       const before = best()[game.id] || 0;                    // the best score before this round: beating it is announced once
@@ -413,6 +489,7 @@
         const card = h("button", { class: "cam-ext", type: "button", onclick: () => startRound() },
           h("span", { class: "cam-ext-ic" }, game.emoji), h("b", {}, game.name), h("small", {}, game.hint));
         host.append(card);
+        setTimeout(() => { if (mine === previewId && state === "idle" && chosen === game) startRound(); }, 250);
         return;
       }
       const canvas = h("canvas", { class: "game-canvas", "aria-label": `${game.name}: Spielfeld`, tabindex: "0" });
@@ -421,6 +498,7 @@
       if (mine !== previewId) return;
       runner = window.PulseGames.run(def, canvas, current.hooks, { armed: true });
       canvas.focus({ preventScroll: true });
+      setTimeout(() => { if (mine === previewId && state === "idle" && chosen === game && runner && runner.isArmed && runner.isArmed()) runner.go(); }, 250);       // the game begins and is filmed at once
       if (def.face) trackFace(mine, current.hooks);
     }
 
@@ -484,21 +562,19 @@
       const token = lensToken;                                                 // (a touch that starts the clip does not cancel a lens that is still loading: only another lens or game does)
       const canvas = h("canvas", { class: "lens-canvas", "aria-hidden": "true" });
       host.append(canvas);
+      if (!(item.fx || []).length) { lensNote(stream ? "" : camOn ? "Für Linsen braucht Satürn die Kamera." : "Die Kamera ist aus. Schalte sie oben rechts wieder an."); feed.style.filter = ""; return; }
       lensNote("Gesichtserkennung wird geladen …");
       try { await loadScript(assets.lens); } catch (error) { lensNote("Die Linsen konnten nicht geladen werden."); return; }
       if (token !== lensToken || dead) return;
       if (!stream) { lensNote(camOn ? "Für Linsen braucht Satürn die Kamera." : "Die Kamera ist aus. Schalte sie oben rechts wieder an."); return; }
       feed.style.filter = filterCss(item);
+      if (!(item.fx || []).length) { lensNote(""); return; }                    // (no effect: the plain camera)
       lens = new window.PulseFace.FaceLens({ video: feed, canvas, mirror: facing === "user", recipe: item, onStatus(status) {
         if (token !== lensToken) return;
         lensNote(status === "ready" ? "" : status === "flat" ? "Dein Gerät kann die 3D-Teile der Linse nicht zeigen. Du siehst die einfache Version." : status === "noface" ? "Schau in die Kamera" : status === "error" ? "Diese Linse läuft auf deinem Gerät nicht." : "Gesichtserkennung wird geladen …");
       } });
       lens.start();
     }
-    stage.addEventListener("click", (event) => {
-      if (state === "idle" && chosen && chosen.kind === "lens" && !event.target.closest("button")) startLensRound();
-      else if (state === "idle" && chosen && chosen.kind === "randomsong" && !event.target.closest("button")) startSongRound();
-    });
 
     /* A lens is recorded like a game, only without points: the first touch starts the clip (up to 30 seconds), the red button ends it. */
     function startLensRound() {
@@ -619,7 +695,7 @@
       timer = setInterval(tick, 100);
     }
     let current = null;
-    const lensBarHide = (on) => { bottom.hidden = on; top.hidden = on; };
+    const lensBarHide = (on) => { top.hidden = on; lensName.hidden = on; lensHint.hidden = on; };       // (the strip itself stays, always)
 
     function tick() {
       if (state !== "playing") return;
@@ -800,19 +876,22 @@
         backToLenses();
         return;
       }
-      const extension = /mp4/.test(blob.type) ? "mp4" : "webm";
-      clip = { blob, url: URL.createObjectURL(blob), name: `nex-${chosen.id}.${extension}`, score: finalScore, game: chosen };
-      const video = h("video", { class: "cam-clip", src: clip.url, loop: true, playsinline: true, autoplay: true, "aria-label": "Dein Clip" });
-      const bar = h("div", { class: "cam-review-bar" },
-        action("close", "Verwerfen", () => { discard(); backToLenses(); }),
-        action("download", "Speichern", save),
-        action("refresh", "Nochmal", () => { discard(); backToLenses(); }),
-        h("button", { class: "cam-send", type: "button", onclick: sendDialog }, icon("send"), h("span", {}, "Senden")),
-        h("button", { class: "cam-post", type: "button", onclick: post }, icon("plus"), h("span", {}, "Posten")));
+      const photo = /^image\//.test(blob.type);
+      const extension = photo ? "jpg" : /mp4/.test(blob.type) ? "mp4" : "webm";
+      clip = { blob, url: URL.createObjectURL(blob), name: `satuern-${chosen.id}.${extension}`, score: finalScore, game: chosen, photo };
+      const video = photo ? h("img", { class: "cam-clip", src: clip.url, alt: "Dein Foto" }) : h("video", { class: "cam-clip", src: clip.url, loop: true, playsinline: true, autoplay: true, "aria-label": "Dein Clip" });
+      const bar = capture
+        ? h("div", { class: "cam-review-bar" }, action("close", "Nochmal", () => { discard(); backToLenses(); }), h("button", { class: "cam-post", type: "button", onclick: () => capture.resolve(fileOf()) }, icon("check"), h("span", {}, "Verwenden")))
+        : h("div", { class: "cam-review-bar" },
+          action("close", "Verwerfen", () => { discard(); backToLenses(); }),
+          action("download", "Speichern", save),
+          action("share", "Teilen", shareOut),
+          h("button", { class: "cam-send", type: "button", onclick: sendDialog }, icon("send"), h("span", {}, "Senden")),
+          h("button", { class: "cam-post", type: "button", onclick: post }, icon("plus"), h("span", {}, "Posten")));
       fill(review, video, h("div", { class: "cam-review-top" }, h("b", {}, clip.game.kind === "lens" || clip.game.kind === "randomsong" ? `${clip.game.emoji} ${clip.game.name}` : clip.game.name), clip.game.kind === "lens" || clip.game.kind === "randomsong" ? null : h("span", {}, points(clip.score))), bar);
       review.hidden = false;
       setState("review");
-      video.play().catch(() => {});
+      if (!photo) video.play().catch(() => {});
     }
     const action = (symbol, label, run) => h("button", { class: "cam-act", type: "button", "aria-label": label, onclick: run }, icon(symbol), h("span", {}, label));
     function discard() {
@@ -835,10 +914,22 @@
       anchor.remove();
       toast("Der Clip wurde gespeichert.");
     }
-    function fileOf() { return new File([clip.blob], clip.name, { type: clip.blob.type || "video/webm" }); }
+    function fileOf() { return new File([clip.blob], clip.name, { type: clip.blob.type || (clip.photo ? "image/jpeg" : "video/webm") }); }
     function post() {
       const file = fileOf();
+      if (clip.photo) { Y.compose({ files: [file] }); return; }       // a photo goes into the box for a new post
       Y.composeVideo({ file, camId: clip.game.id });                  // the post remembers the lens or game: "Ausprobieren" / "Mitspielen" under the video
+    }
+    /* "Teilen": the sheet of the device, so that the photo or the clip goes to any other app (WhatsApp, Instagram, mail ...), not only to the friends in Satürn. */
+    async function shareOut() {
+      const file = fileOf();
+      try {
+        if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: "Satürn", text: clip.photo ? "Mein Foto aus Satürn" : "Mein Clip aus Satürn" }); return; }
+      } catch (error) {
+        if (error && error.name === "AbortError") return;                // (closed without sending)
+      }
+      save();
+      toast("Dein Gerät kann nicht direkt teilen. Das Bild wurde gespeichert: schick es von dort aus weiter.");
     }
 
     /* "Senden": pick friends; the clip goes to each of them as a message with the video (a private file). */
@@ -858,7 +949,7 @@
           if (!up.ok) { toast(Api.message(up)); return false; }
           let sent = 0;
           for (const handle of chosenFriends) {
-            const message = await Api.post(`/messages/${handle}`, { fileId: up.data.file.id, text: clip.game.kind === "lens" ? `Mein Clip mit der Linse ${clip.game.name}` : `Mein Clip aus ${clip.game.name}: ${points(clip.score)}` });
+            const message = await Api.post(`/messages/${handle}`, { fileId: up.data.file.id, text: clip.photo ? `Mein Foto${clip.game.kind === "lens" && clip.game.id !== "l-normal" ? ` mit der Linse ${clip.game.name}` : ""}` : clip.game.kind === "lens" ? `Mein Clip mit der Linse ${clip.game.name}` : `Mein Clip aus ${clip.game.name}: ${points(clip.score)}` });
             if (message.ok) sent += 1; else toast(`@${handle}: ${Api.message(message)}`);
           }
           if (sent) toast(`An ${sent} ${sent === 1 ? "Person" : "Personen"} gesendet.`);
@@ -868,6 +959,15 @@
 
     // ---------------------------------------------------------------------------------------------- start
     async function loadGames() {
+      if (capture) {                                           // the window of a place to write: the plain camera and the lenses, no games
+        list = [NORMAL, ...(Y.lenses ? Y.lenses.PRESETS : [])];
+        active = 0;
+        loadingBox.hidden = true;
+        all.hidden = true;
+        board.hidden = true;
+        drawLenses();
+        return;
+      }
       try {
         await loadScript(assets.games);
       } catch (error) {
@@ -881,7 +981,7 @@
       const qr = { id: "qr", kind: "qr", name: "QR-Code", emoji: "🔳", cat: "Teilen", hint: "Dein QR-Code zum Teilen und Scannen", color: "#1a1a1f" };
       const flagship = games.filter((game) => game.featured);
       const randomSong = { id: "l-zufallssong", kind: "randomsong", name: "Zufalls-Song", emoji: "🎲", cat: "Musik", color: "#7a2cf0", hint: "Mach ein Foto von dir, dann kommt ein zufälliger Song" };
-      list = [create, ...flagship, randomSong, ...(Y.lenses ? Y.lenses.PRESETS : []), qr, ...games.filter((game) => !game.featured)];
+      list = [create, NORMAL, ...flagship, randomSong, ...(Y.lenses ? Y.lenses.PRESETS : []), qr, ...games.filter((game) => !game.featured)];
       let wanted = route.game ? list.findIndex((game) => game.id === route.game) : list.findIndex((game) => game.id === lastGame);
       if (wanted < 0 && route.game) wanted = await addShared(route.game);          // a lens or game of somebody else that was linked
       active = wanted >= 0 ? wanted : Math.max(1, list.indexOf(flagship[0]));       // the first lens: the car race (the small "create" lens is on its left)
@@ -891,6 +991,7 @@
     }
     /* The lenses and games that other people published come after the ready-made lenses (a moment later, when the list has arrived). */
     async function addCommunity() {
+      if (capture) return;
       const [lenses, games] = await Promise.all([Y.lenses ? Y.lenses.community() : [], Y.communityGames ? Y.communityGames.list() : []]);
       if (dead || (!lenses.length && !games.length)) return;
       const keep = list[active] && list[active].id;
@@ -934,6 +1035,8 @@
         endGame();
         recorder = null;
         window.removeEventListener("resize", fit);
+        window.removeEventListener("pointerup", shutterUp);
+        window.removeEventListener("pointercancel", shutterCancel);
         closeCamera();
         if (micStream) { micStream.getTracks().forEach((track) => track.stop()); micStream = null; micAllowed = null; }
         if (clip) URL.revokeObjectURL(clip.url);
@@ -941,4 +1044,24 @@
       },
     };
   };
+
+  /* The camera of Satürn as a window over the page that opened it: a place to write (a chat, a post, a comment, Nex AI) gets a photo or a clip in the design of Satürn, with the lenses,
+     instead of the camera of the device. Answers the File, or null when it was closed. `options.photoOnly`: only a photo. */
+  Y.cameraCapture = (options = {}) => new Promise((resolve) => {
+    let view = null;
+    const overlay = h("div", { class: "cam-overlay", role: "dialog", "aria-modal": "true", "aria-label": "Kamera" });
+    const onKey = (event) => { if (event.key === "Escape") done(null); };
+    function done(file) {
+      if (!overlay.isConnected) return;
+      document.removeEventListener("keydown", onKey);
+      try { view && view.destroy && view.destroy(); } catch (error) { /* already gone */ }
+      overlay.remove();
+      resolve(file || null);
+    }
+    const close = h("button", { class: "cam-overlay-x", type: "button", "aria-label": "Kamera schließen", onclick: () => done(null) }, icon("close"));
+    view = Y.views.camera({ name: "camera", capture: { photoOnly: !!options.photoOnly, resolve: done } }, { setTitle() {}, reload() { done(null); } });
+    overlay.append(view.element, close);
+    document.body.append(overlay);
+    document.addEventListener("keydown", onKey);
+  });
 })();
