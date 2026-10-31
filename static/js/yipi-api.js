@@ -35,6 +35,8 @@
     bad_video: "Dieses Video kann nicht abgespielt werden. Nex nimmt MP4-, MOV- und WebM-Videos.",
     video_too_big: "Das Video ist zu groß (höchstens 25 MB).",
     video_too_long: "Das Video ist zu lang (höchstens 30 Sekunden).",
+    bad_audio: "Das ist keine Audio-Datei, die Nex kennt (MP3, Ogg, M4A oder WAV).",
+    bad_song: "Dieser Song darf nicht benutzt werden.",
     bad_attachment: "Diese Datei kann nicht gesendet werden (Foto, Video, PDF, Text oder Office-Dokument).",
     attachment_too_big: "Die Datei ist zu groß (höchstens 15 MB, Fotos 8 MB, Videos 25 MB).",
     doc_empty: "In diesem Dokument steht kein Text, den Nex lesen kann.",
@@ -140,6 +142,13 @@
       const form = new FormData();
       form.append("file", file, file.name || "dokument");
       return call("POST", "/nex/read", undefined, form);
+    },
+    /* A song from the folder of the person (for a lens): answers {ok, data: {media: {id, url, title}}}. */
+    uploadSong(file, title = "") {
+      const form = new FormData();
+      form.append("file", file, file.name || "song");
+      form.append("title", title);
+      return call("POST", "/music/upload", undefined, form);
     },
     /* Any other private file (a document, a photo or video in a chat): same as upload, answers {ok, data: {media}}. */
     attach(file, onProgress = null) {

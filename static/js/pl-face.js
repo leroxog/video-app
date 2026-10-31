@@ -29,7 +29,7 @@
       engine.loading = (async () => {
         const vision = await import(`${BASE}/vision_bundle.js?v=1`);
         const files = await vision.FilesetResolver.forVisionTasks(BASE);
-        const options = (delegate) => ({ baseOptions: { modelAssetPath: `${BASE}/face_landmarker.task`, delegate }, runningMode: "VIDEO", numFaces: 1, outputFaceBlendshapes: true, outputFacialTransformationMatrixes: true,
+        const options = (delegate) => ({ baseOptions: { modelAssetPath: `${BASE}/face_landmarker.task`, delegate }, runningMode: "VIDEO", numFaces: 3, outputFaceBlendshapes: true, outputFacialTransformationMatrixes: true,
           minFaceDetectionConfidence: 0.4, minFacePresenceConfidence: 0.4, minTrackingConfidence: 0.4 });
         try {
           engine.landmarker = await vision.FaceLandmarker.createFromOptions(files, options("GPU"));
@@ -743,6 +743,7 @@
       this.head = { x: 0, y: 0, vx: 0, vy: 0 };
       this.layer = null;                                 // the 3D layer of pl-ar.js (made when the recipe has an effect that belongs to it)
       this.glCanvas = null;
+      this.tracks = [null, null, null];                  // the faces that are seen (up to three), each keeps its place between two pictures
       this.arPoints = Array.from({ length: 478 }, () => ({ x: 0, y: 0, z: 0 }));
       this.matrix = null;
       this.tick = this.tick.bind(this);
@@ -784,24 +785,52 @@
       if (this.canvas.width !== w || this.canvas.height !== h) { this.canvas.width = w; this.canvas.height = h; }
       return { w, h };
     }
+    /* The faces of this picture are matched to the faces of the picture before (the nearest nose), smoothed, and kept in `tracks`. */
+    track(found, result, now) {
+      const taken = new Set();
+      const pairs = [];
+      found.forEach((face, j) => { this.tracks.forEach((tr, i) => { if (tr && face && face.length > 1) pairs.push([Math.hypot(tr.nose.x - face[1].x, tr.nose.y - face[1].y), i, j]); }); });
+      pairs.sort((x, y) => x[0] - y[0]);
+      const assign = new Map();
+      for (const [d, i, j] of pairs) { if (d > 0.3 || taken.has(i) || assign.has(j)) continue; taken.add(i); assign.set(j, i); }
+      found.forEach((face, j) => {
+        if (!face || face.length < 468) return;
+        let i = assign.get(j);
+        if (i === undefined) { i = this.tracks.findIndex((tr, k) => !tr && !taken.has(k)); if (i < 0) return; taken.add(i); }
+        let tr = this.tracks[i];
+        const fresh = !tr;
+        if (fresh) tr = this.tracks[i] = { lm: Array.from({ length: 478 }, () => ({ x: 0, y: 0, z: 0 })), matrix: null, blend: {}, nose: { x: 0, y: 0 }, seen: now, raw: face };
+        const k = fresh ? 1 : 0.6;
+        for (let n = 0; n < Math.min(478, face.length); n += 1) {                          // the points for the 3D layer (in 0..1 of the camera picture)
+          const q = tr.lm[n];
+          q.x = lerp(q.x, face[n].x, k); q.y = lerp(q.y, face[n].y, k); q.z = lerp(q.z, face[n].z, k);
+        }
+        tr.nose = { x: face[1].x, y: face[1].y };
+        tr.raw = face;
+        tr.seen = now;
+        const pose = result.facialTransformationMatrixes && result.facialTransformationMatrixes[j];
+        if (pose) tr.matrix = pose.data;
+        const shapes = result.faceBlendshapes && result.faceBlendshapes[j] && result.faceBlendshapes[j].categories;
+        if (shapes) for (const s of shapes) tr.blend[s.categoryName] = s.score;
+      });
+      for (let i = 0; i < this.tracks.length; i += 1) if (this.tracks[i] && now - this.tracks[i].seen > 400) this.tracks[i] = null;
+    }
     detect(now) {
       const v = this.video;
       if (!this.landmarker || !v || v.readyState < 2 || !v.videoWidth || v.currentTime === this.lastVideoTime) return;
       this.lastVideoTime = v.currentTime;
       let result = null;
       try { result = this.landmarker.detectForVideo(v, now); } catch (error) { result = null; }
-      const face = result && result.faceLandmarks && result.faceLandmarks[0];
-      if (!face) { if (this.have && now - this.lostAt > 400) this.have = false; if (!this.lostAt) this.lostAt = now; return; }
+      this.track((result && result.faceLandmarks) || [], result || {}, now);
+      const lead = this.tracks.find(Boolean);                                            // the first face is the one the flat effects (hearts, confetti, ...) follow
+      if (!lead) { if (this.have && now - this.lostAt > 400) this.have = false; if (!this.lostAt) this.lostAt = now; return; }
       this.lostAt = 0;
+      const face = lead.raw;
       const { w, h } = this.size();
       const vw = v.videoWidth, vh = v.videoHeight;
-      const smoothAr = this.have ? 0.6 : 1;
-      for (let i = 0; i < Math.min(478, face.length); i += 1) {                            // the points for the 3D layer (in 0..1 of the camera picture)
-        const q = this.arPoints[i];
-        q.x = lerp(q.x, face[i].x, smoothAr); q.y = lerp(q.y, face[i].y, smoothAr); q.z = lerp(q.z, face[i].z, smoothAr);
-      }
-      const pose = result.facialTransformationMatrixes && result.facialTransformationMatrixes[0];
-      this.matrix = pose ? pose.data : this.matrix;
+      this.arPoints = lead.lm;
+      this.matrix = lead.matrix;
+      this.blend = lead.blend;
       const k = Math.max(w / vw, h / vh);
       const ox = (w - vw * k) / 2, oy = (h - vh * k) / 2;
       this.map = { W: w, H: h, k, ox, oy };
@@ -814,8 +843,6 @@
         this.ys[i] = this.have ? lerp(this.ys[i], y, smooth) : y;
       }
       this.have = true;
-      const shapes = result.faceBlendshapes && result.faceBlendshapes[0] && result.faceBlendshapes[0].categories;
-      if (shapes) for (const s of shapes) this.blend[s.categoryName] = s.score;
     }
     /* the face of this moment, with everything the effects need */
     frame(dt, t) {
@@ -869,8 +896,7 @@
       c.clearRect(0, 0, w, h);
       const time = (now - this.t0) / 1000;
       if (this.layer) {
-        const ok = this.have && this.map;
-        this.layer.update({ lm: ok ? this.arPoints : null, matrix: ok ? this.matrix : null, blend: this.blend, dt, t: time });
+        this.layer.update({ faces: this.tracks.map((tr) => (tr ? { lm: tr.lm, matrix: tr.matrix, blend: tr.blend } : null)), dt, t: time });
       }
       if (!this.have || !this.map) return;
       const f = this.frame(dt, time);

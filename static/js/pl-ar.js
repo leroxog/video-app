@@ -6,6 +6,7 @@
       painted on that map (knitted wool with holes for the eyes, a beard, blush, freckles, a zombie skin, a clown face) sticks to the face and follows every expression.
    3. MODELS: things made of real 3D shapes with light and reflections (glasses, hats, ears, horns, a crown, a nose, teeth, a tongue) that sit on the head in the position and the turn that
       the model gives as a matrix, and that are hidden by the head where the head is in front of them.
+   Up to three faces get the effects at the same time (the models, the hoods and the paint are made once for every face that can be seen).
    `PulseAR.Layer` is made by FaceLens (pl-face.js) when the recipe of a lens has one of the effects of this file (`PulseAR.has(id)`); the other effects stay 2D. */
 (function () {
   "use strict";
@@ -16,6 +17,8 @@
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const lerp = (a, b, k) => a + (b - a) * k;
   const FOV = 63;                                              // the vertical angle of view that the matrices of MediaPipe are made for
+  const MAX_FACES = 3;                                         // so many faces get the effects at the same time
+  const WARP_MAX = 16;                                         // warps of all faces together (the shader has this many places)
 
   let libs = null;
   /* three.js, its room of lights (for the reflections) and the map of the face, loaded once. */
@@ -51,8 +54,8 @@
     uniform vec2 uVideoSize;
     uniform float uMirror;
     uniform int uWarps;
-    uniform vec4 uWarpA[6];
-    uniform vec4 uWarpB[6];
+    uniform vec4 uWarpA[16];
+    uniform vec4 uWarpB[16];
     uniform vec4 uGrade;
     uniform vec2 uGrade2;
     vec3 hueRotate(vec3 c, float deg) {
@@ -66,7 +69,7 @@
       vec2 uv = 0.5 + (vUv - 0.5) * uScale;
       if (uMirror > 0.5) uv.x = 1.0 - uv.x;
       vec2 p = uv * uVideoSize;
-      for (int i = 0; i < 6; i++) {
+      for (int i = 0; i < 16; i++) {
         if (i >= uWarps) break;
         vec4 A = uWarpA[i];
         vec4 B = uWarpB[i];
@@ -120,8 +123,7 @@
       this.ready = false;
       this.failed = false;
       this.parts = { warps: [], decals: [], models: [], hoods: [] };
-      this.models = [];
-      this.hoods = [];
+      this.slots = [];
       this.needsVideo = false;
       this.W = 0;
       this.H = 0;
@@ -147,14 +149,14 @@
       this.videoTexture.minFilter = T.LinearFilter;
       this.videoTexture.magFilter = T.LinearFilter;
       this.videoTexture.generateMipmaps = false;
-      const warpA = Array.from({ length: 6 }, () => new T.Vector4());
-      const warpB = Array.from({ length: 6 }, () => new T.Vector4());
+      const warpA = Array.from({ length: WARP_MAX }, () => new T.Vector4());
+      const warpB = Array.from({ length: WARP_MAX }, () => new T.Vector4());
       this.uniforms = { uVideo: { value: this.videoTexture }, uScale: { value: new T.Vector2(1, 1) }, uVideoSize: { value: new T.Vector2(1, 1) }, uMirror: { value: 0 }, uWarps: { value: 0 }, uWarpA: { value: warpA },
         uWarpB: { value: warpB }, uGrade: { value: new T.Vector4(1, 1, 1, 0) }, uGrade2: { value: new T.Vector2(0, 0) } };
       this.bgMaterial = new T.ShaderMaterial({ vertexShader: VERTEX, fragmentShader: FRAGMENT, uniforms: this.uniforms, depthTest: false, depthWrite: false });
       this.bgScene.add(new T.Mesh(new T.PlaneGeometry(2, 2), this.bgMaterial));
 
-      // pass 2: paint on the skin (the 468 points as a mesh in pixels of the screen)
+      // pass 2: paint on the skin (the 468 points as a mesh in pixels of the screen), once for every face
       this.skinScene = new T.Scene();
       this.skinCam = new T.OrthographicCamera(0, 1, 1, 0, -1000, 1000);
       const count = mesh.v.length / 3;
@@ -172,11 +174,8 @@
       this.skinMesh.frustumCulled = false;
       this.skinMesh.renderOrder = 2;
       this.skinScene.add(this.skinMesh);
-      this.hoodGroup = new T.Group();
-      this.hoodGroup.renderOrder = 1;
-      this.skinScene.add(this.hoodGroup);
 
-      // pass 3: things in the space of the head
+      // pass 3: things in the space of the heads (one head for every face that can be seen, the head hides what is behind it)
       this.arScene = new T.Scene();
       this.arScene.environment = this.env;
       this.arScene.add(new T.HemisphereLight(0xffffff, 0x8a8f99, 0.9));
@@ -184,21 +183,29 @@
       sun.position.set(-20, 40, 60);
       this.arScene.add(sun);
       this.persp = new T.PerspectiveCamera(FOV, 1, 1, 5000);
-      this.head = new T.Group();
-      this.head.matrixAutoUpdate = false;
-      this.arScene.add(this.head);
-      const hide = new T.MeshBasicMaterial({ colorWrite: false, depthWrite: true });         // the head hides what is behind it
+      const hide = new T.MeshBasicMaterial({ colorWrite: false, depthWrite: true });
       const occluder = new T.BufferGeometry();
       occluder.setAttribute("position", new T.BufferAttribute(new Float32Array(mesh.v), 3));
       occluder.setIndex(new T.BufferAttribute(new Uint16Array(mesh.f), 1));
-      const face = new T.Mesh(occluder, hide);
-      face.renderOrder = -2;
-      const skull = new T.Mesh(new T.SphereGeometry(1, 28, 20), hide);
-      skull.scale.set(7.7, 9.4, 8.2);
-      skull.position.set(0, 1.4, -3.4);
-      skull.renderOrder = -2;
-      this.head.add(face, skull);
-      this.pose = { pos: new T.Vector3(), quat: new T.Quaternion(), scale: new T.Vector3(1, 1, 1), have: false };
+      const skullGeometry = new T.SphereGeometry(1, 28, 20);
+      this.slots = Array.from({ length: MAX_FACES }, () => {
+        const head = new T.Group();
+        head.matrixAutoUpdate = false;
+        head.visible = false;
+        const face = new T.Mesh(occluder, hide);
+        face.renderOrder = -2;
+        const skull = new T.Mesh(skullGeometry, hide);
+        skull.scale.set(7.7, 9.4, 8.2);
+        skull.position.set(0, 1.4, -3.4);
+        skull.renderOrder = -2;
+        head.add(face, skull);
+        this.arScene.add(head);
+        const hoodGroup = new T.Group();
+        hoodGroup.renderOrder = 1;
+        hoodGroup.visible = false;
+        this.skinScene.add(hoodGroup);
+        return { head, hoodGroup, models: [], hoods: [], pose: { pos: new T.Vector3(), quat: new T.Quaternion(), scale: new T.Vector3(1, 1, 1), have: false } };
+      });
       this.tmp = { m: new T.Matrix4(), pos: new T.Vector3(), quat: new T.Quaternion(), scale: new T.Vector3() };
       this.kit = makeKit(T, this.env);
       this.ready = true;
@@ -211,22 +218,13 @@
     }
     setMirror(on) { this.mirror = !!on; }
 
-    /* the effects of the recipe that belong to this layer, made ready */
+    /* the effects of the recipe that belong to this layer, made ready (the models and the hoods once for every face that can be seen) */
     build() {
       if (!this.ready) return;
       const ids = (this.recipe.fx || []).filter(has);
       const specs = ids.map((id) => EFFECTS[id]);
       this.parts = { warps: specs.filter((s) => s.warp), decals: specs.filter((s) => s.decal), hoods: specs.filter((s) => s.hood), models: specs.filter((s) => s.model) };
       this.needsVideo = this.parts.warps.length > 0;
-      for (const entry of this.models) { this.head.remove(entry.object); this.kit.dispose(entry.object); }
-      this.models = [];
-      for (const spec of this.parts.models) {
-        let object = null;
-        try { object = spec.model(this.kit); } catch (error) { object = null; }
-        if (!object) continue;
-        this.head.add(object);
-        this.models.push({ spec, object });
-      }
       const g = this.decalCanvas.getContext("2d");
       g.setTransform(1, 0, 0, 1, 0, 0);
       g.clearRect(0, 0, DECAL, DECAL);
@@ -234,8 +232,19 @@
       for (const spec of this.parts.decals) { g.save(); try { spec.decal(g, helpers); } catch (error) { /* one broken decal must not stop the others */ } g.restore(); }
       this.decalTexture.needsUpdate = true;
       this.skinMesh.visible = this.parts.decals.length > 0;
-      for (const child of [...this.hoodGroup.children]) { this.hoodGroup.remove(child); child.geometry?.dispose(); child.material?.dispose(); }
-      this.hoods = this.parts.hoods.map((spec) => spec.hood(this.kit, this.hoodGroup, helpers)).filter(Boolean);
+      for (const slot of this.slots) {
+        for (const entry of slot.models) { slot.head.remove(entry.object); this.kit.dispose(entry.object); }
+        slot.models = [];
+        for (const spec of this.parts.models) {
+          let object = null;
+          try { object = spec.model(this.kit); } catch (error) { object = null; }
+          if (!object) continue;
+          slot.head.add(object);
+          slot.models.push({ spec, object });
+        }
+        for (const child of [...slot.hoodGroup.children]) { slot.hoodGroup.remove(child); child.geometry?.dispose(); child.material?.dispose(); }
+        slot.hoods = this.parts.hoods.map((spec) => spec.hood(this.kit, slot.hoodGroup, helpers)).filter(Boolean);
+      }
     }
 
     resize() {
@@ -265,7 +274,7 @@
       return { vw, vh, W, H, k, ox, oy, lm, px, scr, A: SIDE_A, B: SIDE_B, roll, s, mouth, center: { x: (top.x + chin.x) / 2, y: (top.y + chin.y) / 2 }, blend: frame.blend || {}, dt: frame.dt, t: frame.t };
     }
 
-    /* one picture: frame = {lm (the 478 points, 0..1), matrix (the pose of the head), blend (the blendshapes), dt, t} or without lm when no face is seen */
+    /* one picture: frame = {faces: [{lm (the 478 points, 0..1), matrix (the pose of the head), blend (the blendshapes)} or null, up to three], dt, t}; every face gets every effect */
     update(frame) {
       if (!this.ready || this.failed) return;
       const v = this.video;
@@ -274,7 +283,10 @@
       const r = this.renderer;
       const W = this.W, H = this.H;
       r.clear(true, true, true);
-      const have = !!(frame && frame.lm && frame.lm.length >= 468);
+      const live = [];
+      (frame.faces || []).slice(0, MAX_FACES).forEach((fc, i) => {
+        if (fc && fc.lm && fc.lm.length >= 468) live.push({ i, f: this.face({ lm: fc.lm, blend: fc.blend, dt: frame.dt, t: frame.t }), matrix: fc.matrix, blend: fc.blend || {} });
+      });
       const uni = this.uniforms;
       if (this.needsVideo) {
         this.videoTexture.needsUpdate = true;                    // (the texture would wait for the callback of the video, which some browsers do not call while the page is in the background)
@@ -285,14 +297,11 @@
         const grade = GRADES[this.recipe.filter] || GRADES.none;
         uni.uGrade.value.set(grade.b, grade.c, grade.s, grade.hue);
         uni.uGrade2.value.set(grade.sepia, grade.gray);
-      }
-      const f = have ? this.face(frame) : null;
-      if (this.needsVideo) {
         let n = 0;
-        if (f) {
+        for (const item of live) {
           for (const spec of this.parts.warps) {
-            for (const w of spec.warp(f)) {
-              if (n >= 6) break;
+            for (const w of spec.warp(item.f)) {
+              if (n >= WARP_MAX) break;
               uni.uWarpA.value[n].set(w[0], w[1], Math.max(1, w[2]), Math.max(1, w[3]));
               uni.uWarpB.value[n].set(w[4], w[5], 0, 0);
               n += 1;
@@ -302,34 +311,49 @@
         uni.uWarps.value = n;
         r.render(this.bgScene, this.bgCam);
       }
-      if (!f) return;
-      // the paint on the skin follows the points
-      if (this.skinMesh.visible || this.hoods.length) {
-        const pos = this.skinPositions;
-        for (let i = 0; i < 468; i += 1) { const p = f.scr(i); pos[i * 3] = p.x; pos[i * 3 + 1] = H - p.y; pos[i * 3 + 2] = 0; }
-        this.skinMesh.geometry.attributes.position.needsUpdate = true;
+      if (!live.length) { for (const slot of this.slots) { slot.head.visible = false; slot.pose.have = false; } return; }
+      // the paint on the skin follows the points of each face
+      if (this.skinMesh.visible || this.slots.some((slot) => slot.hoods.length)) {
         this.skinCam.left = 0; this.skinCam.right = W; this.skinCam.top = H; this.skinCam.bottom = 0;
         this.skinCam.updateProjectionMatrix();
-        for (const hood of this.hoods) hood.update?.(f, H);
-        r.render(this.skinScene, this.skinCam);
+        for (const item of live) {
+          const slot = this.slots[item.i];
+          const pos = this.skinPositions;
+          for (let i = 0; i < 468; i += 1) { const p = item.f.scr(i); pos[i * 3] = p.x; pos[i * 3 + 1] = H - p.y; pos[i * 3 + 2] = 0; }
+          this.skinMesh.geometry.attributes.position.needsUpdate = true;
+          for (const other of this.slots) other.hoodGroup.visible = other === slot;
+          for (const hood of slot.hoods) hood.update?.(item.f, H);
+          r.render(this.skinScene, this.skinCam);
+        }
       }
-      // the things in the space of the head
-      if (this.models.length && frame.matrix) {
+      // the things in the space of the heads
+      const seen = new Set();
+      let first = null;
+      for (const item of live) {
+        const slot = this.slots[item.i];
+        if (!slot.models.length || !item.matrix) continue;
         const t = this.tmp;
-        t.m.fromArray(frame.matrix);
+        t.m.fromArray(item.matrix);
         t.m.decompose(t.pos, t.quat, t.scale);
-        const pose = this.pose;
+        const pose = slot.pose;
         const kk = pose.have ? 0.55 : 1;
         pose.pos.lerp(t.pos, kk); pose.quat.slerp(t.quat, kk); pose.scale.lerp(t.scale, kk);
         pose.have = true;
-        this.head.matrix.compose(pose.pos, pose.quat, pose.scale);
-        this.head.matrixWorldNeedsUpdate = true;
+        slot.head.matrix.compose(pose.pos, pose.quat, pose.scale);
+        slot.head.matrixWorldNeedsUpdate = true;
+        slot.head.visible = true;
+        seen.add(slot);
+        first = first || item.f;
+        const own = { ...frame, blend: item.blend };
+        for (const entry of slot.models) entry.spec.update?.(entry.object, item.f, this.kit, own);
+      }
+      for (const slot of this.slots) if (!seen.has(slot)) { slot.head.visible = false; slot.pose.have = false; }
+      if (first) {
         this.arScene.scale.x = this.mirror ? -1 : 1;
-        const fracV = (H / f.k) / f.vh;
+        const fracV = (H / first.k) / first.vh;
         this.persp.fov = (2 * Math.atan(Math.tan((FOV * Math.PI) / 360) * fracV) * 180) / Math.PI;
         this.persp.aspect = W / H;
         this.persp.updateProjectionMatrix();
-        for (const entry of this.models) entry.spec.update?.(entry.object, f, this.kit, frame);
         r.clearDepth();
         r.render(this.arScene, this.persp);
       }

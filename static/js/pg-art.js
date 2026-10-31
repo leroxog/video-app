@@ -7,6 +7,7 @@
   const W = 360;
   const H = 640;
   const TAU = Math.PI * 2;
+  const over = () => !!(window.PulseGames && window.PulseGames.cameraBackground);       // the camera is the background: no sky, no clouds, no hills
 
   const PALETTES = {
     day: { top: "#4fb4ff", bottom: "#d9f3ff", hill1: "#9bd8a5", hill2: "#6cc27c", sun: "#fff3a8", cloud: "rgba(255,255,255,0.95)", ground: "#7a5a3a", cap: "#58cf56", night: false },
@@ -24,6 +25,7 @@
 
     /* the sky of a palette over the whole field (a little see-through, so the camera shines through); with a sun and, at night, stars */
     sky(g, palette, t = 0, { alpha = 0.9, sun = true, sunX = 290, sunY = 120, stars = palette.night } = {}) {
+      if (over()) return;
       const gradient = g.createLinearGradient(0, 0, 0, H);
       gradient.addColorStop(0, palette.top);
       gradient.addColorStop(1, palette.bottom);
@@ -54,6 +56,7 @@
 
     /* one soft cloud with its middle at (x, y) */
     cloud(g, x, y, size = 1, color = "rgba(255,255,255,0.95)") {
+      if (over()) return;
       g.fillStyle = color;
       g.beginPath();
       g.arc(x, y, 18 * size, 0, TAU); g.arc(x + 22 * size, y - 9 * size, 24 * size, 0, TAU); g.arc(x + 50 * size, y, 17 * size, 0, TAU);
@@ -63,6 +66,7 @@
 
     /* soft clouds that drift with `scroll` (in the pixels of the ground) at a slow pace */
     clouds(g, palette, scroll, { y = 60, rows = 3, speed = 0.18, size = 1 } = {}) {
+      if (over()) return;
       for (let i = 0; i < rows * 2; i += 1) {
         const x = ((((i * 211) % 520) - scroll * speed * (0.7 + (i % 3) * 0.25)) % 560 + 560) % 560 - 100;
         Art.cloud(g, x, y + (i * 53) % 190, size, palette.cloud);
@@ -71,6 +75,7 @@
 
     /* a row of hills that moves slower than the ground in front of it */
     hills(g, color, base, scroll, { amp = 38, length = 70, phase = 0, speed = 0.3 } = {}) {
+      if (over()) return;
       g.fillStyle = color;
       g.beginPath();
       g.moveTo(0, H);

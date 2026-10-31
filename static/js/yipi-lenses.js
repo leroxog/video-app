@@ -64,7 +64,7 @@
   /* A lens of the server as a lens of the camera strip. */
   function fromServer(row) {
     return { id: row.id, name: row.title, emoji: row.emoji || "✨", color: row.color || "#7a2cf0", prompt: row.prompt, fx: row.fx || [], filter: row.filter || "none", cat: "Community",
-      kind: "lens", hint: row.prompt, by: row.user, uses: row.uses || 0, mine: !!row.mine, community: true };
+      kind: "lens", hint: row.prompt, by: row.user, uses: row.uses || 0, mine: !!row.mine, community: true, song: row.song || null };
   }
 
   async function community() {
@@ -129,6 +129,11 @@
   function lensMaker(camera, { prompt: start = "", auto = false } = {}) {
     let entry = null;
     let recipe = null;
+    let song = null;                                                  // the song of the lens (from the list of free music, or a file of the person)
+    const songRow = h("div", { class: "lm-song" });
+    const drawSong = () => fill(songRow, h("button", { class: "btn ghost small", type: "button", onclick: () => (Y.music ? Y.music.pick({ upload: true, title: "Song für die Linse", onPick: (next) => { song = next; drawSong(); } }) : toast("Das gibt es gleich.")) },
+      h("span", { "aria-hidden": "true" }, "♪ "), song ? Y.music.label(song) : "Song hinzufügen"), song ? h("button", { class: "icon-btn small", type: "button", "aria-label": "Song entfernen", onclick: () => { song = null; drawSong(); } }, icon("close")) : null);
+    drawSong();
     const prompt = h("textarea", { class: "field", rows: 3, maxlength: 200, placeholder: "Zum Beispiel: Mach die Person dumm aussehend", "aria-label": "Beschreibe deine Linse" });
     const chips = h("div", { class: "lm-chips" }, EXAMPLES.slice().sort(() => Math.random() - 0.5).slice(0, 6).map((text) => h("button", { class: "chip", type: "button", onclick: () => { prompt.value = text; prompt.focus(); } }, text)));
     const status = h("p", { class: "muted small", role: "status" });
@@ -162,9 +167,11 @@
     publish.addEventListener("click", async () => {
       if (!recipe) return;
       publish.disabled = true;
-      const reply = await Api.post("/lenses", { title: title.value.trim() || recipe.title, prompt: prompt.value.trim(), emoji: recipe.emoji, color: recipe.color, fx: recipe.fx, filter: recipe.filter });
+      const body = { title: title.value.trim() || recipe.title, prompt: prompt.value.trim(), emoji: recipe.emoji, color: recipe.color, fx: recipe.fx, filter: recipe.filter };
+      if (song) body.song = song.src === "upload" ? { src: "upload", media: song.media, title: song.title, start: song.start || 0 } : { src: "archive", id: song.id, start: song.start || 0 };
+      const reply = await Api.post("/lenses", body);
       publish.disabled = false;
-      if (!reply.ok) { status.textContent = reply.data && reply.data.error === "not_allowed" ? "Der Name oder die Beschreibung passt nicht." : Api.message(reply); return; }
+      if (!reply.ok) { status.textContent = reply.data && reply.data.error === "not_allowed" ? "Der Name oder die Beschreibung passt nicht." : (reply.data && reply.data.message) || Api.message(reply); return; }
       const lens = fromServer(reply.data.lens);
       known.set(lens.id, lens);
       entry.close();
@@ -177,6 +184,7 @@
       h("div", { class: "lm-actions" }, build),
       status,
       result,
+      songRow,
       h("div", { class: "lm-actions" }, publish)), initialFocus: prompt });
     title.id = "lm-title";
     if (start) { prompt.value = start; if (auto) setTimeout(() => build.click(), 0); }

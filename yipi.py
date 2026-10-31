@@ -53,6 +53,7 @@ import ai_assistant
 import docread
 import siteauth
 import ysound
+import yipi_music
 import yipi_ranking
 from blobstore import STORE
 from models import db
@@ -127,7 +128,7 @@ LIMITS = {
     "password": (8, 900), "delete": (6, 900),
     "post-burst": (12, 60), "post-hour": (150, 3600), "like": (400, 3600), "follow": (120, 3600), "media": (40, 3600), "dm": (120, 3600),
     "link-preview": (120, 600), "link-image": (500, 600),
-    "game-ai": (12, 3600), "rank-ai": (20, 3600), "rank-search": (90, 3600), "rank-pick": (120, 3600), "report": (20, 3600), "lens-recipe": (30, 3600), "lens-make": (10, 86400), "lens-use": (300, 3600), "game-make": (10, 86400), "game-edit": (120, 3600), "game-play": (400, 3600), "profile": (30, 3600), "search": (120, 600), "block": (60, 3600),
+    "game-ai": (12, 3600), "music-search": (120, 3600), "music-pick": (60, 3600), "music-up": (30, 3600), "rank-ai": (20, 3600), "rank-search": (90, 3600), "rank-pick": (120, 3600), "report": (20, 3600), "lens-recipe": (30, 3600), "lens-make": (10, 86400), "lens-use": (300, 3600), "game-make": (10, 86400), "game-edit": (120, 3600), "game-play": (400, 3600), "profile": (30, 3600), "search": (120, 600), "block": (60, 3600),
     "gif-make": (20, 3600), "gif-fav": (400, 3600), "gif-use": (300, 3600), "gif-list": (600, 600),
     "share": (240, 600), "attach": (40, 3600), "storage": (120, 3600), "story": (30, 3600), "story-view": (900, 600), "play": (200, 3600), "heart": (300, 3600), "push": (30, 3600), "nex-read": (30, 600), "google": (30, 600), "nex": (40, 600), "nex-flood": (80, 60), "factcheck": (120, 3600), "views": (90, 600), "vote": (200, 3600), "pin": (60, 3600), "group": (12, 3600),
 }
@@ -228,6 +229,7 @@ class PulseLens(db.Model):
     color = db.Column(db.String(7), nullable=False, default="#7a2cf0")
     fx = db.Column(db.String(200), nullable=False, default="")                 # names of effects, separated by commas
     filter = db.Column(db.String(12), nullable=False, default="none")
+    song = db.Column(db.Text, nullable=True)                                   # the song of the lens as JSON (yipi_music.clean_song), or empty
     uses = db.Column(db.Integer, nullable=False, default=0)
     deleted = db.Column(db.Boolean, nullable=False, default=False)
     created_at = db.Column(db.DateTime, nullable=False, default=utcnow, index=True)
@@ -1594,6 +1596,10 @@ def cleanup_orphans(user):
             keep.append(icon)                                                    # (the photo of the round button of a game)
         if kind == "ranking":
             keep.extend(yipi_ranking.media_ids(data))                            # (the pictures of the entries of a ranking)
+    for (song,) in db.session.query(PulseLens.song).filter(PulseLens.owner_id == user.id, PulseLens.deleted.is_(False), PulseLens.song.isnot(None)):
+        found = re.search(r'"media":\s*"([0-9a-f]{32})"', song or "")
+        if found:
+            keep.append(found.group(1))                                          # (the song a person uploaded for a lens)
     criteria = [YipiMedia.owner_id == user.id, YipiMedia.post_id.is_(None), YipiMedia.created_at < utcnow() - timedelta(days=1), ~YipiMedia.id.in_(select(YipiStory.media_id))]
     if keep:
         criteria.append(~YipiMedia.id.in_(keep))
@@ -1660,10 +1666,10 @@ def manifest():
 # The scripts of the page, in the order they depend on each other. The page loads them as ONE file (/pulse.js, deferred), named after its content, so the
 # browser asks once, keeps it for good and the next visit is instant; the tests read this list.
 PULSE_SCRIPTS = ["yipi-core.js", "yipi-gif-core.js", "yipi-icons.js", "yipi-api.js", "yipi-ui.js", "yipi-fx.js", "yipi-gif.js", "yipi-components.js", "yipi-newpost.js",
-                 "yipi-views.js", "yipi-links.js", "yipi-comments.js", "yipi-chats.js", "yipi-lock.js", "yipi-pages.js", "yipi-auth.js", "yipi-share.js", "yipi-progress.js", "yipi-nex.js", "yipi-download.js", "yipi-lenses.js", "yipi-qr.js", "yipi-gamemaker.js", "yipi-camera.js", "yipi-shorts.js", "yipi-videos.js", "yipi-stories.js", "yipi-chrome.js", "yipi.js"]
+                 "yipi-views.js", "yipi-links.js", "yipi-comments.js", "yipi-chats.js", "yipi-lock.js", "yipi-pages.js", "yipi-auth.js", "yipi-share.js", "yipi-progress.js", "yipi-nex.js", "yipi-download.js", "yipi-music.js", "yipi-lenses.js", "yipi-qr.js", "yipi-gamemaker.js", "yipi-camera.js", "yipi-shorts.js", "yipi-videos.js", "yipi-stories.js", "yipi-chrome.js", "yipi.js"]
 # The games of the camera tab are a second file, loaded when the camera tab is opened (about a hundred small games; nobody who only reads needs them).
 PULSE_LENS_SCRIPTS = ["pl-face.js", "pl-ar.js", "pl-ar-models.js", "pl-ar-decals.js"]   # the face lenses (face tracking, the flat effects and the 3D engine): a third file, loaded when the first lens is opened
-PULSE_GAME_SCRIPTS = ["pg-kit.js", "pg-art.js", "pg-racing.js", "pg-race3d.js", "pg-rank.js", "pg-community.js", "pg-runners.js", "pg-arcade.js", "pg-reflex.js", "pg-puzzle.js", "pg-board.js", "pg-numbers.js", "pg-skill.js", "pg-more.js", "pg-fruit.js"]
+PULSE_GAME_SCRIPTS = ["pg-kit.js", "pg-art.js", "pg-moto3d.js", "pg-race3d.js", "pg-rank.js", "pg-community.js", "pg-runners.js", "pg-arcade.js", "pg-reflex.js", "pg-puzzle.js", "pg-board.js", "pg-numbers.js", "pg-skill.js", "pg-more.js", "pg-fruit.js"]
 _bundles = {}
 
 
@@ -2500,7 +2506,7 @@ def register_routes(app):
         """The bytes of a stored file (a picture, a video, a document): whole, or one piece of it for a video that is being played (Range)."""
         if item.stored == "r2":
             return r2_redirect(model, item, headers, item.content_type)
-        if not item.content_type.startswith("video/"):
+        if not item.content_type.startswith(("video/", "audio/")):
             response = Response(db.session.query(model.data).filter_by(id=item.id).scalar(), mimetype=item.content_type, headers=headers)
             response.set_etag(item.id)
             return response.make_conditional(request)
@@ -4305,10 +4311,24 @@ def register_routes(app):
     # ------------------------------------------------------------------------------------------------ face lenses that people write as prompts
     LENS_ID_RE = re.compile(r"lu-[0-9a-f]{8}")
 
+    def song_json(stored):
+        """The song of a lens for the page: what was stored, with the address to play it from."""
+        try:
+            song = json.loads(stored) if stored else None
+        except ValueError:
+            song = None
+        if not isinstance(song, dict):
+            return None
+        if song.get("src") == "upload" and isinstance(song.get("media"), str):
+            return {**song, "url": f"/yipi-media/{song['media']}"}
+        if song.get("src") == "archive" and isinstance(song.get("id"), str) and isinstance(song.get("file"), str):
+            return {**song, "url": f"/yipi-music/{song['id']}/{urllib.parse.quote(song['file'])}"}
+        return None
+
     def lens_json(row, viewer, owners=None):
         owner = (owners or {}).get(row.owner_id) or db.session.get(YipiUser, row.owner_id)
         return {"id": row.id, "title": row.title, "prompt": row.prompt, "emoji": row.emoji, "color": row.color, "fx": [name for name in row.fx.split(",") if name], "filter": row.filter,
-                "uses": row.uses, "user": user_brief(owner) if owner else None, "mine": bool(viewer and viewer.id == row.owner_id), "createdAt": iso(row.created_at)}
+                "uses": row.uses, "user": user_brief(owner) if owner else None, "mine": bool(viewer and viewer.id == row.owner_id), "createdAt": iso(row.created_at), "song": song_json(row.song)}
 
     @route("/api/yipi/lenses")
     def yipi_lenses_list():
@@ -4380,7 +4400,16 @@ def register_routes(app):
         emoji = data.get("emoji") if isinstance(data.get("emoji"), str) else ""
         emoji = emoji.strip() if 0 < len(emoji.strip()) <= 8 and not re.search(r"[A-Za-z0-9]", emoji) else "✨"
         color = data.get("color") if isinstance(data.get("color"), str) and re.fullmatch(r"#[0-9a-fA-F]{6}", data["color"]) else "#7a2cf0"
-        row = PulseLens(id="lu-" + secrets.token_hex(4), owner_id=user.id, title=title, prompt=prompt, emoji=emoji, color=color.lower(), fx=",".join(fx), filter=filter_name)
+        song = None
+        if data.get("song") is not None:
+            def owns_audio(media_id):
+                item = YipiMedia.query.options(defer(YipiMedia.data)).filter_by(id=media_id, owner_id=user.id).first()
+                return item is not None and item.content_type.startswith("audio/")
+            song, reason = yipi_music.clean_song(data.get("song"), owns_audio)
+            if song is None:
+                return jsonify({"ok": False, "error": "bad_song", "message": reason}), 422
+        row = PulseLens(id="lu-" + secrets.token_hex(4), owner_id=user.id, title=title, prompt=prompt, emoji=emoji, color=color.lower(), fx=",".join(fx), filter=filter_name,
+                        song=json.dumps(song, ensure_ascii=False, separators=(",", ":")) if song else None)
         db.session.add(row)
         db.session.commit()
         return jsonify({"ok": True, "lens": lens_json(row, user)}), 201
@@ -4584,6 +4613,80 @@ def register_routes(app):
         except Exception:  # noqa: BLE001  (no key, no answer, or no game that passes the checks)
             logger.exception("The AI could not write a game")
             return fail("ai_failed", 502)
+
+    # ------------------------------------------------------------------------------------------------ music for the clips
+    @route("/api/yipi/music/search")
+    def yipi_music_search():
+        """Songs for some words (or the best loved ones): ?q=piano&page=1 -> {items: [{id, title, creator, licence}], total}."""
+        user, problem = need_user()
+        if problem:
+            return problem
+        if limiter.too_many("music-search", str(user.id)):
+            return fail("too_many", 429)
+        return jsonify({"ok": True, "items": yipi_music.search(request.args.get("q", ""), request.args.get("page", "1")), "total": yipi_music.count()})
+
+    @route("/api/yipi/music/track/<identifier>")
+    def yipi_music_track(identifier):
+        """The song to play for one item of the list: {track: {id, title, creator, licence, file, length, url}}."""
+        user, problem = need_user()
+        if problem:
+            return problem
+        if limiter.too_many("music-pick", str(user.id)):
+            return fail("too_many", 429)
+        track = yipi_music.resolve(identifier)
+        if track is None:
+            return fail("not_found", 404)
+        return jsonify({"ok": True, "track": {**track, "url": f"/yipi-music/{track['id']}/{urllib.parse.quote(track['file'])}"}})
+
+    @route("/api/yipi/music/random")
+    def yipi_music_random():
+        """A random song (for the lens that plays one after a photo)."""
+        user, problem = need_user()
+        if problem:
+            return problem
+        if limiter.too_many("music-pick", str(user.id)):
+            return fail("too_many", 429)
+        track = yipi_music.random_track()
+        if track is None:
+            return fail("not_found", 404)
+        return jsonify({"ok": True, "track": {**track, "url": f"/yipi-music/{track['id']}/{urllib.parse.quote(track['file'])}"}})
+
+    @route("/yipi-music/<identifier>/<path:name>")
+    def yipi_music_stream(identifier, name):
+        """The audio of an allowed song, passed on from the Internet Archive (with ranges, so the player can start in the middle)."""
+        user, problem = need_user()
+        if problem:
+            return problem
+        opened = yipi_music.open_stream(identifier, name, request.headers.get("Range"))
+        if opened is None:
+            abort(404)
+        status, headers, chunks = opened
+        headers["X-Content-Type-Options"] = "nosniff"
+        return Response(stream_with_context(chunks), status=status, headers=headers)
+
+    @route("/api/yipi/music/upload", methods=["POST"], endpoint="yipi_music_upload")
+    def yipi_music_upload():
+        """A song from the folder of the person (MP3, Ogg, M4A or WAV, up to 8 MB): kept as a file of the person, for a lens."""
+        user, problem = need_user()
+        if problem:
+            return problem
+        if limiter.too_many("music-up", str(user.id)):
+            return fail("too_many", 429)
+        upload = request.files.get("file")
+        if upload is None:
+            return fail("no_file")
+        data = upload.read(yipi_music.MAX_UPLOAD + 1)
+        if len(data) > yipi_music.MAX_UPLOAD:
+            return fail("too_big", 413)
+        kind = yipi_music.audio_type(data)
+        if kind is None:
+            return fail("bad_audio", 415)
+        cleanup_orphans(user)
+        item = YipiMedia(id=uuid.uuid4().hex, owner_id=user.id, content_type=kind, data=b"", size=len(data), width=0, height=0, alt=clean_text(request.form.get("title", ""), 60, keep_newlines=False) or "")
+        keep_bytes("media", item, data)
+        db.session.add(item)
+        db.session.commit()
+        return jsonify({"ok": True, "media": {"id": item.id, "url": media_url(item.id), "title": item.alt, "type": kind}})
 
     @route("/api/yipi/ranking/suggest", methods=["POST"], endpoint="yipi_ranking_suggest")
     def yipi_ranking_suggest():

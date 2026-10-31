@@ -258,7 +258,7 @@ def test_every_theme_defines_the_same_colours():
 
 def test_every_animation_has_its_keyframes():
     keyframes = set(re.findall(r"@keyframes\s+([\w-]+)", CSS))
-    assert keyframes == {"spin", "fade", "pop", "shimmer", "toast-in", "drop", "blink", "sheet", "drawer-in", "bloop", "burst", "bit", "slide-in", "slide-back", "cam-pop", "cam-shake", "cam-nudge", "try-shimmer"}
+    assert keyframes == {"spin", "fade", "pop", "shimmer", "toast-in", "drop", "blink", "sheet", "drawer-in", "bloop", "burst", "bit", "slide-in", "slide-back", "cam-pop", "cam-shake", "cam-nudge", "try-shimmer", "song-flash"}
     for name in keyframes:
         assert re.search(rf"animation:[^;]*\b{name}\b", CSS), f"{name} is defined but never used"
     for declaration in re.findall(r"animation:\s*([a-z][\w-]*)", CSS):

@@ -1160,9 +1160,42 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .cam-face.mirror { transform: scaleX(-1); }
 .cam-top { position: absolute; top: 0; left: 50%; width: 100%; max-width: calc(100dvh * 9 / 16); transform: translateX(-50%); z-index: 5; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: calc(12px + env(safe-area-inset-top)) 14px 12px; pointer-events: none; background: linear-gradient(to bottom, rgba(0, 0, 0, 0.45), transparent); }
 .cam-top > * { pointer-events: auto; }
+.cam-mid { display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0; }
+.cam-song-box { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; }
+.cam-song { display: inline-flex; align-items: center; gap: 5px; max-width: 190px; padding: 4px 11px; border-radius: 999px; background: rgba(40, 40, 40, 0.55); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); color: #fff; font-size: 12px; font-weight: 700; }
+.cam-song span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cam-song.on { background: rgba(255, 255, 255, 0.92); color: #111; }
+.cam-song-note { font-size: 14px; line-height: 1; }
+.cam-song-x { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: rgba(40, 40, 40, 0.55); color: #fff; }
+.cam-song-x svg { width: 14px; height: 14px; }
+.cam-song-x[hidden] { display: none; }
+.song-photo, .song-card { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.cam-host.flash::after { content: ""; position: absolute; inset: 0; background: #fff; animation: song-flash 0.4s ease-out forwards; pointer-events: none; }
+@keyframes song-flash { from { opacity: 0.9; } to { opacity: 0; } }
+.music-picker { display: flex; flex-direction: column; gap: 10px; }
+.mu-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.mu-bar .field { flex: 1; min-width: 160px; }
+.mu-list { display: flex; flex-direction: column; gap: 6px; max-height: 46vh; overflow-y: auto; }
+.mu-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 16px; background: var(--bg-2); }
+.mu-row.playing { background: var(--bg-3); }
+.mu-main { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 2px; }
+.mu-main b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mu-start { width: 100%; }
+.mu-start[hidden] { display: none; }
+.mu-actions { display: flex; gap: 8px; justify-content: space-between; }
+.lm-song { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
 .cam-title { font-size: 17px; font-weight: 800; letter-spacing: -0.02em; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6); }
 .cam-tool { display: grid; place-items: center; width: 46px; height: 46px; border-radius: 50%; background: rgba(40, 40, 40, 0.55); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); color: #fff; }
 .cam-tool svg { width: 23px; height: 23px; }
+.cam-tool.small { width: 38px; height: 38px; }
+.cam-tool.small svg { width: 20px; height: 20px; }
+.cam-tool.off { background: rgba(255, 255, 255, 0.9); color: #111; }
+.cam-ctl { position: absolute; top: calc(66px + env(safe-area-inset-top)); left: 50%; width: 100%; max-width: calc(100dvh * 9 / 16); transform: translateX(-50%); z-index: 6; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; padding: 0 14px; pointer-events: none; }
+.cam-ctl > * { pointer-events: auto; }
+.cam-ctl-sound { display: flex; align-items: center; gap: 8px; }
+.cam-vol { width: 110px; }
+.cam-vol[hidden] { display: none; }
+.cam-view[data-state="over"] .cam-ctl, .cam-view[data-state="review"] .cam-ctl { display: none; }
 .cam-bottom { position: absolute; left: 50%; width: 100%; max-width: calc(100dvh * 9 / 16); transform: translateX(-50%); bottom: calc(var(--tabbar) + 22px + env(safe-area-inset-bottom)); z-index: 5; display: flex; flex-direction: column; align-items: center; gap: 6px; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.75); }
 .cam-lens-name { display: flex; align-items: baseline; gap: 8px; font-size: 18px; }
 .cam-lens-cat { color: rgba(255, 255, 255, 0.75); font-size: 13px; font-weight: 600; }

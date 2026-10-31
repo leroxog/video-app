@@ -36,6 +36,12 @@
   const best = () => Y.readJson("yipi.games", {});
   const remember = (id, value) => { const all = best(); if (value > (all[id] || 0)) { all[id] = value; Y.writeJson("yipi.games", all); } return all[id] || 0; };
 
+  /* The settings at the top right (they stay): camera on or off, microphone on or off, and how loud the sound of a lens (its song) is. `Y.camSound` is read by the songs of the lenses. */
+  const saved = Y.readJson("nex.cam", { cam: true, mic: true, vol: 1 });
+  const sound = Y.camSound = Y.camSound || { volume: Math.max(0, Math.min(1, Number(saved.vol))), listeners: new Set(), set(value) { this.volume = Math.max(0, Math.min(1, value)); this.listeners.forEach((fn) => fn(this.volume)); } };
+  let camOn = saved.cam !== false;
+  let micOn = saved.mic !== false;
+
   let micAllowed = null;                                        // null: not asked yet
   let micStream = null;
   let facing = "user";
@@ -66,7 +72,15 @@
     const flip = h("button", { class: "cam-tool", type: "button", "aria-label": "Kamera wechseln" }, icon("flip"));
     const board = h("button", { class: "cam-tool", type: "button", "aria-label": "Bestenliste", "aria-haspopup": "dialog" }, icon("trophy"));
     const all = h("button", { class: "cam-tool", type: "button", "aria-label": "Alle Spiele", "aria-haspopup": "dialog" }, icon("gamepad"));
-    const top = h("div", { class: "cam-top" }, h("h1", { class: "sr-only" }, "Kamera"), h("div", { class: "cam-tool-group" }, all), h("span", { class: "cam-title" }, "Kamera"), h("div", { class: "cam-tool-group end" }, board, flip));
+    const ctlCam = h("button", { class: "cam-tool small", type: "button", "aria-pressed": "false" });
+    const ctlMic = h("button", { class: "cam-tool small", type: "button", "aria-pressed": "false" });
+    const ctlSound = h("button", { class: "cam-tool small", type: "button", "aria-haspopup": "true", "aria-expanded": "false" });
+    const volume = h("input", { class: "cam-vol", type: "range", min: 0, max: 100, step: 1, "aria-label": "Lautstärke des Tons der Linse", hidden: true });
+    const ctl = h("div", { class: "cam-ctl", role: "group", "aria-label": "Kamera, Mikrofon und Ton" }, ctlCam, ctlMic, h("div", { class: "cam-ctl-sound" }, volume, ctlSound));
+    const songText = h("span", {}, "Sound hinzufügen");
+    const songBtn = h("button", { class: "cam-song", type: "button", "aria-label": "Sound hinzufügen" }, h("span", { class: "cam-song-note", "aria-hidden": "true" }, "♪"), songText);
+    const songClear = h("button", { class: "cam-song-x", type: "button", "aria-label": "Sound entfernen", hidden: true }, icon("close"));
+    const top = h("div", { class: "cam-top" }, h("h1", { class: "sr-only" }, "Kamera"), h("div", { class: "cam-tool-group" }, all), h("div", { class: "cam-mid" }, h("span", { class: "cam-title" }, "Kamera"), h("div", { class: "cam-song-box" }, songBtn, songClear)), h("div", { class: "cam-tool-group end" }, board, flip));
     const lensName = h("div", { class: "cam-lens-name" });
     const lensHint = h("div", { class: "cam-lens-hint" });
     const lensBar = h("div", { class: "cam-lenses", role: "listbox", "aria-label": "Spiele", tabindex: "0" });
@@ -74,7 +88,7 @@
     const review = h("div", { class: "cam-review", hidden: true });
     const loadingBox = h("div", { class: "cam-loading" }, Y.pulseLoader({ compact: true }), h("span", {}, "Die Spiele werden geladen …"));
     const note = h("div", { class: "cam-note", role: "status", hidden: true });                  // "Linse wird geladen ...", "Schau in die Kamera"
-    const el = h("div", { class: "view cam-view" }, stage, top, nocam, note, bottom, review, loadingBox);
+    const el = h("div", { class: "view cam-view" }, stage, top, ctl, nocam, note, bottom, review, loadingBox);
 
     let state = "idle";                                        // idle, starting, playing, over, review
     let dead = false;
@@ -92,16 +106,62 @@
     let clip = null;                                           // {blob, url, name, score, game}
     let finalScore = 0;
     let lens = null;                                           // the running face lens (a FaceLens of pl-face.js)
+    const musicPlayer = Y.music ? Y.music.player() : null;      // plays the song of the clip and mixes it with the microphone
+    let song = null;                                           // the song for the clip: chosen at the top, or the one a lens brings
+    let songFromLens = false;
+    let frozen = null;                                         // the photo of the lens "Zufalls-Song" (and its card) while the clip is made
     let lastItem = null;                                       // the lens or game that was open before the QR code (the code can point to it)
     let panelCleanup = null;                                   // what the panel of "QR-Code" has to stop (the scanner)
     const setState = (next) => { state = next; app.dataset.cam = next; el.dataset.state = next; };
     setState("idle");
 
     // ---------------------------------------------------------------------------------------------- the camera
+    function paintSong() {
+      songText.textContent = song ? Y.music.label(song) : "Sound hinzufügen";
+      songBtn.classList.toggle("on", !!song);
+      songClear.hidden = !song;
+    }
+    function setSong(next, fromLens = false) {
+      song = next || null;
+      songFromLens = !!next && fromLens;
+      paintSong();
+      if (musicPlayer) musicPlayer.prepare(song, micStream);
+    }
+    songBtn.addEventListener("click", () => { if (state === "idle" && Y.music) Y.music.pick({ onPick: (next) => setSong(next, false) }); });
+    songClear.addEventListener("click", () => { if (state === "idle") setSong(null); });
+    /* The games get the camera as their background when there is a picture (and their own background when there is none). */
+    const setBackground = (on) => { window.PulseGames?.setCamera?.(on); };
+    function saveSettings() { Y.writeJson("nex.cam", { cam: camOn, mic: micOn, vol: sound.volume }); }
+    function applyMic() { if (micStream) for (const track of micStream.getAudioTracks()) track.enabled = micOn; }
+    function paintControls() {
+      const live = camOn && !!stream;
+      fill(ctlCam, icon(camOn ? "camera" : "cameraOff"));
+      ctlCam.classList.toggle("off", !camOn);
+      ctlCam.setAttribute("aria-pressed", String(!camOn));
+      ctlCam.setAttribute("aria-label", camOn ? "Kamera ausschalten" : "Kamera einschalten");
+      fill(ctlMic, icon(micOn ? "mic" : "micOff"));
+      ctlMic.classList.toggle("off", !micOn);
+      ctlMic.setAttribute("aria-pressed", String(!micOn));
+      ctlMic.setAttribute("aria-label", micOn ? "Mikrofon ausschalten" : "Mikrofon einschalten");
+      fill(ctlSound, icon(sound.volume === 0 ? "mute" : "volume"));
+      ctlSound.classList.toggle("off", sound.volume === 0);
+      ctlSound.setAttribute("aria-label", `Ton der Linse: ${Math.round(sound.volume * 100)} Prozent`);
+      volume.value = String(Math.round(sound.volume * 100));
+      el.classList.toggle("cam-off", !live);
+    }
     async function openCamera() {
       closeCamera();
       fallback.hidden = true;
       nocam.hidden = true;
+      if (!camOn) {                                                // the camera is switched off: no picture, but the microphone may be on
+        fallback.hidden = false;
+        setBackground(false);
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          try { micStream = await navigator.mediaDevices.getUserMedia({ audio: true }); micAllowed = true; applyMic(); } catch (error) { micStream = null; micAllowed = false; }
+        }
+        paintControls();
+        return;
+      }
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { noCamera("Kamera nicht verfügbar"); return; }
       const video = { facingMode: facing, width: { ideal: 1280 }, height: { ideal: 720 } };
       try {
@@ -117,6 +177,9 @@
         }
       }
       micStream = micAllowed ? stream : null;
+      applyMic();
+      if (song && musicPlayer) musicPlayer.prepare(song, micStream);                       // (the microphone is a new one)
+      setBackground(true);
       if (dead) { stream.getTracks().forEach((track) => track.stop()); return; }
       feed.srcObject = stream;
       feed.classList.toggle("mirror", facing === "user");
@@ -125,14 +188,18 @@
       face.classList.toggle("mirror", facing === "user");
       face.play().catch(() => {});
       syncFace();
+      paintControls();
     }
     function closeCamera() {
       if (stream) { stream.getTracks().forEach((track) => track.stop()); stream = null; }
+      if (micStream) { micStream.getTracks().forEach((track) => track.stop()); micStream = null; }
       feed.srcObject = null;
       face.srcObject = null;
       face.hidden = true;
     }
     function noCamera(text) {
+      setBackground(false);
+      paintControls();
       fallback.replaceChildren();
       fallback.hidden = false;
       nocamText.textContent = `${text} · nochmal versuchen`;
@@ -140,6 +207,40 @@
       nocam.hidden = false;
     }
     nocam.addEventListener("click", () => openCamera());
+    async function switchCamera() {
+      camOn = !camOn;
+      saveSettings();
+      if (!camOn) {                                               // the picture stops, the microphone goes on
+        const audio = stream ? stream.getAudioTracks() : [];
+        if (stream) stream.getVideoTracks().forEach((track) => track.stop());
+        stream = null;
+        micStream = audio.length ? new MediaStream(audio) : micStream;
+        feed.srcObject = null;
+        face.srcObject = null;
+        face.hidden = true;
+        fallback.hidden = false;
+        nocam.hidden = true;
+        setBackground(false);
+        stopLens();
+        applyMic();
+      } else await openCamera();
+      paintControls();
+      if (state === "idle" && list[active]) showPreview();         // the lens or game in the middle is shown again, with or without the camera
+    }
+    ctlCam.addEventListener("click", () => { switchCamera(); });
+    ctlMic.addEventListener("click", () => {
+      micOn = !micOn;
+      saveSettings();
+      applyMic();
+      paintControls();
+      if (micOn && !micStream) toast("Für das Mikrofon fehlt die Erlaubnis.");
+    });
+    ctlSound.addEventListener("click", () => {
+      volume.hidden = !volume.hidden;
+      ctlSound.setAttribute("aria-expanded", String(!volume.hidden));
+    });
+    volume.addEventListener("input", () => { sound.set(Number(volume.value) / 100); saveSettings(); paintControls(); });
+    sound.listeners.add(paintControls);
     board.addEventListener("click", () => { if (state === "idle" && list[active] && list[active].kind === "game" && !list[active].community) Y.leaderboard(list[active]); else if (state === "idle") toast("Eine Bestenliste gibt es nur bei den Spielen von Nex."); });
     const todaysGame = () => { const games = list.filter((entry) => entry.kind === "game" && !entry.community); return games[Core.dailyIndex(new Date().toISOString().slice(0, 10), games.length)]; };
     flip.addEventListener("click", () => { if (state !== "idle") return; facing = facing === "user" ? "environment" : "user"; openCamera().then(() => lens?.setMirror(facing === "user")); });
@@ -263,6 +364,9 @@
       if (dead || state !== "idle" || !list[active]) return;
       const game = list[active];
       const mine = ++previewId;
+      if (game.song) setSong(game.song, true);                  // a lens that brings its song: the song is on, and can be changed at the top
+      else if (songFromLens) setSong(null);
+      tapHint.firstChild.textContent = game.kind === "randomsong" ? "Tippe, um ein Foto zu machen" : "Tippe auf den Bildschirm, um zu starten";
       stopLens();
       panelCleanup?.();
       panelCleanup = null;
@@ -278,7 +382,7 @@
       score.textContent = "0";
       tapHint.hidden = false;
       const def = window.PulseGames.get(game.id);
-      wantFace = !!def.bubble;
+      wantFace = false;                                       // the camera is the background of every game: no small round picture of the player
       const before = best()[game.id] || 0;                    // the best score before this round: beating it is announced once
       let announced = false;
       let lastPop = 0;
@@ -357,8 +461,9 @@
       finalScore = 0;
       wantFace = false;
       syncFace();
-      tapHint.hidden = item.kind !== "lens";
+      tapHint.hidden = item.kind !== "lens" && item.kind !== "randomsong";
       if (item.kind === "lens") await openLens(item, mine);
+      else if (item.kind === "randomsong") { if (!stream) lensNote(camOn ? "Dafür braucht Nex die Kamera." : "Die Kamera ist aus. Schalte sie oben rechts wieder an."); }
       else if (item.kind === "create") Y.cameraCreate?.panel({ host, camera: api });
       else if (item.kind === "qr") panelCleanup = Y.cameraQr?.panel({ host, camera: api }) || null;
     }
@@ -369,7 +474,7 @@
       lensNote("Gesichtserkennung wird geladen …");
       try { await loadScript(assets.lens); } catch (error) { lensNote("Die Linsen konnten nicht geladen werden."); return; }
       if (mine !== previewId || dead) return;
-      if (!stream) { lensNote("Für Linsen braucht Nex die Kamera."); return; }
+      if (!stream) { lensNote(camOn ? "Für Linsen braucht Nex die Kamera." : "Die Kamera ist aus. Schalte sie oben rechts wieder an."); return; }
       feed.style.filter = filterCss(item);
       lens = new window.PulseFace.FaceLens({ video: feed, canvas, mirror: facing === "user", recipe: item, onStatus(status) {
         if (mine !== previewId) return;
@@ -379,6 +484,7 @@
     }
     stage.addEventListener("click", (event) => {
       if (state === "idle" && chosen && chosen.kind === "lens" && !event.target.closest("button")) startLensRound();
+      else if (state === "idle" && chosen && chosen.kind === "randomsong" && !event.target.closest("button")) startSongRound();
     });
 
     /* A lens is recorded like a game, only without points: the first touch starts the clip (up to 30 seconds), the red button ends it. */
@@ -395,6 +501,84 @@
       startedAt = performance.now();
       clearInterval(timer);
       timer = setInterval(tick, 100);
+    }
+
+    /* The lens "Zufalls-Song": a photo of the player is taken, a random song is chosen (and shown on a card over the photo), and the clip (up to 15 seconds) is the photo with the song. */
+    function takePhoto() {
+      const box = stage.getBoundingClientRect();
+      const canvas = h("canvas", { class: "song-photo", "aria-hidden": "true" });
+      canvas.width = REC_W;
+      canvas.height = Math.max(540, Math.min(1200, Math.round((REC_W * box.height) / Math.max(1, box.width))));
+      const g = canvas.getContext("2d");
+      g.fillStyle = "#111";
+      g.fillRect(0, 0, canvas.width, canvas.height);
+      if (feed.videoWidth && feed.readyState >= 2) {
+        const scale = Math.max(canvas.width / feed.videoWidth, canvas.height / feed.videoHeight);
+        g.save();
+        if (facing === "user") { g.translate(canvas.width, 0); g.scale(-1, 1); }
+        g.drawImage(feed, (canvas.width - feed.videoWidth * scale) / 2, (canvas.height - feed.videoHeight * scale) / 2, feed.videoWidth * scale, feed.videoHeight * scale);
+        g.restore();
+      }
+      return canvas;
+    }
+    function paintCard(card, text, sub, small) {
+      const g = card.getContext("2d");
+      g.clearRect(0, 0, card.width, card.height);
+      const w = card.width * 0.86, x = (card.width - w) / 2, y = card.height * 0.66, hgt = 190;
+      g.fillStyle = "rgba(10,10,14,0.62)";
+      g.beginPath();
+      if (g.roundRect) g.roundRect(x, y, w, hgt, 36); else g.rect(x, y, w, hgt);
+      g.fill();
+      g.textAlign = "center";
+      g.textBaseline = "middle";
+      g.fillStyle = "rgba(255,255,255,0.75)";
+      g.font = "700 26px system-ui, -apple-system, Segoe UI, sans-serif";
+      g.fillText(small, card.width / 2, y + 36);
+      g.fillStyle = "#fff";
+      g.font = "800 40px system-ui, -apple-system, Segoe UI, sans-serif";
+      const fit = (value, max) => (value.length > max ? `${value.slice(0, max - 1)}…` : value);
+      g.fillText(fit(text, 24), card.width / 2, y + 92);
+      g.fillStyle = "rgba(255,255,255,0.8)";
+      g.font = "600 28px system-ui, -apple-system, Segoe UI, sans-serif";
+      g.fillText(fit(sub, 34), card.width / 2, y + 144);
+    }
+    async function startSongRound() {
+      if (state !== "idle" || !chosen || chosen.kind !== "randomsong" || !musicPlayer) return;
+      if (!stream) { toast(camOn ? "Dafür braucht Nex die Kamera." : "Die Kamera ist aus. Schalte sie oben rechts wieder an."); return; }
+      const mine = ++previewId;
+      clearTimeout(previewTimer);
+      setState("starting");
+      tapHint.hidden = true;
+      lensBarHide(true);
+      const photo = takePhoto();
+      const card = h("canvas", { class: "song-card", "aria-hidden": "true" });
+      card.width = photo.width;
+      card.height = photo.height;
+      host.append(photo, card);
+      frozen = { photo, card };
+      host.classList.add("flash");
+      setTimeout(() => host.classList.remove("flash"), 400);
+      paintCard(card, "Dein Song wird gewählt …", "", "🎲 Zufalls-Song");
+      const reply = await Api.get("/music/random");
+      if (dead || mine !== previewId) return;
+      if (!reply.ok) {
+        toast("Gerade habe ich keinen Zufalls-Song gefunden. Versuch es gleich noch einmal.");
+        frozen = null;
+        backToLenses();
+        showPreview();
+        return;
+      }
+      const t = reply.data.track;
+      setSong({ src: "archive", id: t.id, file: t.file, title: t.title, creator: t.creator, licence: t.licence, licenceUrl: t.licenceUrl, length: t.length, start: t.length && t.length > 60 ? Math.min(30, Math.floor(t.length / 4)) : 0, url: t.url }, false);
+      paintCard(card, t.title, `${t.creator} · ${t.licence}`, "🎲 Dein Song");
+      setState("playing");
+      hud.hidden = false;
+      timeBar.style.width = "100%";
+      startRecording();
+      startedAt = performance.now();
+      clearInterval(timer);
+      timer = setInterval(tick, 100);
+      navigator.vibrate?.([30, 40, 30]);
     }
 
     /* The first touch on the picture: the round and the recording begin together, at once. */
@@ -426,8 +610,9 @@
 
     function tick() {
       if (state !== "playing") return;
-      const left = LIMIT - (performance.now() - startedAt) / 1000;
-      timeBar.style.width = `${Math.max(0, (left / LIMIT) * 100)}%`;
+      const limit = chosen && chosen.kind === "randomsong" ? 15 : LIMIT;
+      const left = limit - (performance.now() - startedAt) / 1000;
+      timeBar.style.width = `${Math.max(0, (left / limit) * 100)}%`;
       if (left <= 0) finish(finalScore);
     }
     stop.addEventListener("click", () => { if (state === "playing") finish(finalScore); });
@@ -436,7 +621,7 @@
       if (state !== "playing") return;
       setState("over");
       clearInterval(timer);
-      if (chosen.kind === "lens") { navigator.vibrate?.(30); stopRecording().then(showReview); return; }
+      if (chosen.kind === "lens" || chosen.kind === "randomsong") { navigator.vibrate?.(30); stopRecording().then(showReview); return; }
       finalScore = Math.max(finalScore, Number.isFinite(value) ? value : 0);
       const top = remember(chosen.id, finalScore);
       host.classList.add("shake");
@@ -457,6 +642,7 @@
     function startRecording() {
       recorder = null;
       chunks = [];
+      if (song && musicPlayer && musicPlayer.ready) { musicPlayer.rewind(); musicPlayer.play(); }           // the player hears the song, and the clip gets it
       const type = pickType();
       recCanvas = document.createElement("canvas");
       const shape = stage.getBoundingClientRect();
@@ -465,7 +651,9 @@
       recCanvas.height = REC_H;
       if (!type || !recCanvas.captureStream) return;
       const out = recCanvas.captureStream(30);
-      if (micStream) for (const track of micStream.getAudioTracks()) out.addTrack(track);
+      const mixed = song && musicPlayer && musicPlayer.ready ? musicPlayer.track() : null;              // the song and the microphone, mixed
+      if (mixed) out.addTrack(mixed);
+      else if (micStream) for (const track of micStream.getAudioTracks()) out.addTrack(track);
       try {
         recorder = new MediaRecorder(out, { mimeType: type, videoBitsPerSecond: 2000000 });
       } catch (error) {
@@ -558,10 +746,19 @@
       g.textAlign = "right";
       g.strokeText("Nex", REC_W - 24, REC_H - 28);
       g.fillText("Nex", REC_W - 24, REC_H - 28);
+      if (song) {                                                      // the author and the licence of the song (a licence asks for it)
+        const line = Y.music.credit(song);
+        g.font = "700 19px system-ui, sans-serif";
+        g.textAlign = "left";
+        g.lineWidth = 6;
+        g.strokeText(line.length > 52 ? `${line.slice(0, 51)}…` : line, 20, REC_H - 66);
+        g.fillText(line.length > 52 ? `${line.slice(0, 51)}…` : line, 20, REC_H - 66);
+      }
     }
 
     function stopRecording() {
       cancelAnimationFrame(raf);
+      musicPlayer?.pause();
       return new Promise((resolve) => {
         if (!recorder || recorder.state === "inactive") { resolve(null); return; }
         const done = () => resolve(chunks.length ? new Blob(chunks, { type: recorder.mimeType || "video/webm" }) : null);
@@ -599,7 +796,7 @@
         action("refresh", "Nochmal", () => { discard(); backToLenses(); }),
         h("button", { class: "cam-send", type: "button", onclick: sendDialog }, icon("send"), h("span", {}, "Senden")),
         h("button", { class: "cam-post", type: "button", onclick: post }, icon("plus"), h("span", {}, "Posten")));
-      fill(review, video, h("div", { class: "cam-review-top" }, h("b", {}, clip.game.kind === "lens" ? `${clip.game.emoji} ${clip.game.name}` : clip.game.name), clip.game.kind === "lens" ? null : h("span", {}, points(clip.score))), bar);
+      fill(review, video, h("div", { class: "cam-review-top" }, h("b", {}, clip.game.kind === "lens" || clip.game.kind === "randomsong" ? `${clip.game.emoji} ${clip.game.name}` : clip.game.name), clip.game.kind === "lens" || clip.game.kind === "randomsong" ? null : h("span", {}, points(clip.score))), bar);
       review.hidden = false;
       setState("review");
       video.play().catch(() => {});
@@ -665,11 +862,13 @@
         return;
       }
       if (dead) return;
+      window.PulseGames.setCamera(camOn && !!stream);
       const games = window.PulseGames.list().map((game) => ({ ...game, kind: "game", image: game.external ? null : `/static/img/games/${game.id}.jpg` }));
       const create = { id: "create", kind: "create", name: "Erstellen", emoji: "+", cat: "Neu", hint: "Baue mit KI eine eigene Linse oder ein eigenes Spiel und teile es", color: "#7a2cf0" };
       const qr = { id: "qr", kind: "qr", name: "QR-Code", emoji: "🔳", cat: "Teilen", hint: "Dein QR-Code zum Teilen und Scannen", color: "#1a1a1f" };
       const flagship = games.filter((game) => game.featured);
-      list = [create, ...flagship, ...(Y.lenses ? Y.lenses.PRESETS : []), qr, ...games.filter((game) => !game.featured)];
+      const randomSong = { id: "l-zufallssong", kind: "randomsong", name: "Zufalls-Song", emoji: "🎲", cat: "Musik", color: "#7a2cf0", hint: "Mach ein Foto von dir, dann kommt ein zufälliger Song" };
+      list = [create, ...flagship, randomSong, ...(Y.lenses ? Y.lenses.PRESETS : []), qr, ...games.filter((game) => !game.featured)];
       let wanted = route.game ? list.findIndex((game) => game.id === route.game) : list.findIndex((game) => game.id === lastGame);
       if (wanted < 0 && route.game) wanted = await addShared(route.game);          // a lens or game of somebody else that was linked
       active = wanted >= 0 ? wanted : Math.max(1, list.indexOf(flagship[0]));       // the first lens: the car race (the small "create" lens is on its left)
@@ -708,6 +907,7 @@
       add: (item) => { const at = list.findIndex((entry) => entry.id === item.id); if (at < 0) list.splice(1, 0, item); active = Math.max(1, list.findIndex((entry) => entry.id === item.id)); drawLenses(); },
       remove: (id) => { const at = list.findIndex((entry) => entry.id === id); if (at < 0) return; list.splice(at, 1); active = Math.min(Math.max(0, at), list.length - 1); drawLenses(); },
       reload: () => ctx.reload(), reopen: () => openCamera() };
+    paintSong();
     return {
       element: el, title: "Kamera",
       onHide() { runner?.pause?.(true); },
@@ -715,6 +915,7 @@
       destroy() {
         dead = true;
         clearTimeout(previewTimer);
+        musicPlayer?.destroy();
         stopLens();
         panelCleanup?.();
         endGame();

@@ -12,6 +12,7 @@
   const STEP = 1 / 60;
   const games = [];
   const byId = new Map();
+  let cameraBackground = true;                       // the camera of the player is the background of every game (the camera tab says so; without a camera the games bring their own background)
 
   function register(def) {
     if (!def || !/^[a-z0-9-]{2,30}$/.test(def.id) || byId.has(def.id) || (typeof def.create !== "function" && !(def.external && typeof def.run === "function"))) throw new Error(`game ${def && def.id}`);
@@ -131,17 +132,18 @@
   }
   function backdrop(ctx, def, time) {
     const color = def.color || "#6c7bff";
+    const faint = cameraBackground;                  // over the camera only a light tint, so that the player stays seen
     const top = mix(color, [0, 0, 0], 0.4);
     const bottom = mix(color, [0, 0, 0], 0.78);
     const light = mix(color, [255, 255, 255], 0.35);
     const sky = ctx.createLinearGradient(0, 0, 0, H);
-    sky.addColorStop(0, `rgba(${top},0.66)`);
-    sky.addColorStop(1, `rgba(${bottom},0.86)`);
+    sky.addColorStop(0, `rgba(${top},${faint ? 0.16 : 0.66})`);
+    sky.addColorStop(1, `rgba(${bottom},${faint ? 0.3 : 0.86})`);
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, W, H);
     for (const [cx, cy, r, a] of [[W * 0.15, H * 0.2, 260, 0.34], [W * 0.9, H * 0.82, 300, 0.26]]) {
       const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-      glow.addColorStop(0, `rgba(${light},${a})`);
+      glow.addColorStop(0, `rgba(${light},${faint ? a * 0.35 : a})`);
       glow.addColorStop(1, `rgba(${light},0)`);
       ctx.fillStyle = glow;
       ctx.fillRect(0, 0, W, H);
@@ -162,7 +164,7 @@
     ctx.globalAlpha = 1;
     const edge = ctx.createRadialGradient(W / 2, H / 2, H * 0.32, W / 2, H / 2, H * 0.72);
     edge.addColorStop(0, "rgba(0,0,0,0)");
-    edge.addColorStop(1, "rgba(0,0,0,0.38)");
+    edge.addColorStop(1, faint ? "rgba(0,0,0,0.22)" : "rgba(0,0,0,0.38)");
     ctx.fillStyle = edge;
     ctx.fillRect(0, 0, W, H);
   }
@@ -317,6 +319,8 @@
 
   window.PulseGames = {
     W, H, register, define, headless, run, createEnv, mulberry32, backdrop,
+    setCamera(on) { cameraBackground = !!on; },
+    get cameraBackground() { return cameraBackground; },
     list: () => games.map((def, index) => ({ def, index })).sort((a, b) => (b.def.featured ? 1000 - (b.def.order || 0) : 0) - (a.def.featured ? 1000 - (a.def.order || 0) : 0) || a.index - b.index)
       .map(({ def: { id, name, emoji, cat, hint, color, external, featured } }) => ({ id, name, emoji, cat, hint, color: color || "", external: !!external, featured: !!featured })),
     get: (id) => byId.get(id) || null,

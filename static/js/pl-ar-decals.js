@@ -200,15 +200,15 @@
       for (const ids of [F.EYE_A, F.EYE_B]) {
         const c0 = center(d, ids), b = bounds(d, ids);
         const w = b.x1 - b.x0;
-        holes.push({ x: c0.x, y: c0.y - w * 0.12, rx: w * 0.95, ry: w * 0.62 });
+        holes.push({ x: c0.x, y: c0.y - w * 0.08, rx: w * 0.86, ry: w * 0.5 });
       }
       for (const e of holes) { h.beginPath(); h.ellipse(e.x, e.y, e.rx * 1.1, e.ry * 1.18, 0, 0, PI * 2); h.fill(); }
-      trace(h, d, F.LIPS_OUTER, 1.42); h.fill();
+      trace(h, d, F.LIPS_OUTER, 1.55); h.fill();
       h.restore();
       h.globalCompositeOperation = "destination-out";
       h.fillStyle = "#000";
       for (const e of holes) { h.beginPath(); h.ellipse(e.x, e.y, e.rx, e.ry, 0, 0, PI * 2); h.fill(); }
-      trace(h, d, F.LIPS_OUTER, 1.3); h.fill();
+      trace(h, d, F.LIPS_OUTER, 1.42); h.fill();
       g.drawImage(c, 0, 0);
     },
     hood: (k, group, d) => {
@@ -254,8 +254,8 @@
             const dx = p.x - c.x, dy = p.y - c.y;
             const len = Math.hypot(dx, dy) || 1;
             const along = (dx * ux + dy * uy) / len;                   // 1 at the top of the head, -1 at the chin
-            const grow = 1.27 + Math.max(0, along) * 0.5;
-            const down = Math.max(0, -along) * size * 0.5;             // under the chin the cloth goes on like a neck
+            const grow = 1.07 + Math.max(0, along) * 0.2;
+            const down = Math.max(0, -along) * size * 0.28;            // under the chin the cloth goes on a little, like a neck
             const o = { x: c.x + dx * grow - ux * down, y: c.y + dy * grow - uy * down };
             const e = { x: c.x + dx * 0.965, y: c.y + dy * 0.965 };
             const rim = 0.95 - Math.min(1, Math.hypot(o.x - e.x, o.y - e.y) / (size * 0.9)) * 0.45;
