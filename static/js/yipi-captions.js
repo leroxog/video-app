@@ -61,7 +61,7 @@
   // ------------------------------------------------------------------------------------------------------------ one video
   /* `{video, mediaId, volume() -> 0..1, onChange()}`: the controller of one video. `element` is the subtitle line (put it into the picture), `start()` and `stop()` are called when the
      video becomes the one that is shown or leaves, `state` says what is going on for the window of the choice. */
-  function bind({ video, mediaId, volume = () => 1, onChange = () => {} }) {
+  function bind({ video, mediaId, mine = false, volume = () => 1, onChange = () => {} }) {
     const line = h("span", { class: "reel-subs-line" });
     const element = h("div", { class: "reel-subs", hidden: true, "aria-hidden": "true" }, line);
     const cache = new Map();                                        // language -> {status, segments, original, lang}
@@ -72,7 +72,16 @@
     let lastSex = "";
     const spoken = new Set();
     const controller = {
-      element, state: { original: null, sub: null, audio: null }, ducking: false, listeners: new Set(),
+      element, mediaId, mine, state: { original: null, sub: null, audio: null }, ducking: false, listeners: new Set(),
+      /* The maker of the video says which language is spoken: everything is heard again in that language. */
+      async redo(lang) {
+        const reply = await Api.post(`/videos/${mediaId}/captions/redo`, { lang });
+        if (!reply.ok) { toast(Api.message(reply)); return false; }
+        cache.clear();
+        controller.state.original = null;
+        controller.refresh();
+        return true;
+      },
       start() { running = true; controllers.add(controller); clearInterval(timer); timer = setInterval(tick, 120); controller.refresh(); },
       stop() { running = false; controllers.delete(controller); clearInterval(timer); cancelSpeech(); element.hidden = true; controller.ducking = false; onChange(); },
       refresh,
@@ -193,9 +202,20 @@
     controller.listeners.add(notes);
     subSelect.addEventListener("change", () => choose({ sub: subSelect.value }));
     audioSelect.addEventListener("change", () => choose({ audio: audioSelect.value }));
+    // for the maker of the video: the spoken language, in case the recogniser got it wrong
+    const spoken = h("select", { class: "field", "aria-label": "Gesprochene Sprache im Video" }, h("option", { value: "" }, "Bitte wählen"), LANGUAGES.map(([code, name]) => h("option", { value: code }, name)));
+    const again = h("button", { class: "btn small", type: "button", disabled: true }, "Neu erkennen");
+    spoken.addEventListener("change", () => { again.disabled = !spoken.value; });
+    again.addEventListener("click", async () => {
+      again.disabled = true;
+      if (await controller.redo(spoken.value)) toast("Das Video wird noch einmal angehört. Das dauert einen Moment.");
+      again.disabled = !spoken.value;
+    });
     const body = h("div", { class: "cc-sheet" },
       h("label", { class: "cc-row" }, h("span", {}, "Untertitel"), subSelect), subNote,
       h("label", { class: "cc-row" }, h("span", {}, "Sprache des Tons"), audioSelect), audioNote,
+      controller.mine ? h("div", { class: "cc-fix" }, h("b", {}, "Falsch verstanden?"), h("small", { class: "muted" }, "Sag, welche Sprache in deinem Video gesprochen wird, dann hört Satürn es noch einmal an."),
+        h("div", { class: "cc-row" }, spoken, again)) : null,
       h("p", { class: "muted cc-help" }, synth ? "Die Untertitel und die Übersetzung erstellt eine KI. Die Stimme kommt von deinem Gerät: bei einer Frau spricht eine weibliche, bei einem Mann eine männliche Stimme." : "Dein Browser kann nichts vorlesen. Untertitel gehen trotzdem."));
     dialog({ title: "Untertitel und Sprache", body, onClose: () => controller.listeners.delete(notes) });
   }

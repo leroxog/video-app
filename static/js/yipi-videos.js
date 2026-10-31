@@ -155,7 +155,7 @@
       const save = h("button", { class: "reel-btn", type: "button", "aria-label": "Lesezeichen" }, h("span", { class: "reel-btn-ic" }), h("span", { class: "reel-count" }, "Merken"));
       const share = h("button", { class: "reel-btn", type: "button", "aria-label": "Teilen", "aria-haspopup": "menu" }, h("span", { class: "reel-btn-ic" }, icon("send")), h("span", { class: "reel-count" }, "Teilen"));
       const more = h("button", { class: "reel-btn", type: "button", "aria-label": "Mehr", "aria-haspopup": "menu" }, h("span", { class: "reel-btn-ic" }, icon("more")));
-      const cc = Y.captions ? Y.captions.bind({ video, mediaId: media.id, volume: () => (blocked ? 0 : volume / 10) || 0.0001, onChange: () => { const made = reels.find((entry) => entry.video === video); if (made) applySound(made); } }) : null;
+      const cc = Y.captions ? Y.captions.bind({ video, mediaId: media.id, mine: !!(Y.me && Y.me.handle === item.user.handle), volume: () => (blocked ? 0 : volume / 10) || 0.0001, onChange: () => { const made = reels.find((entry) => entry.video === video); if (made) applySound(made); } }) : null;
       const language = cc ? h("button", { class: "reel-btn", type: "button", "aria-label": "Untertitel und Sprache" }, h("span", { class: "reel-btn-ic" }, icon("captions")), h("span", { class: "reel-count" }, "Sprache")) : null;
       if (language) language.addEventListener("click", () => Y.captions.sheet(cc));
       const mine = !!(Y.me && Y.me.handle === item.user.handle);

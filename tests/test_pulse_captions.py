@@ -29,7 +29,7 @@ def calm(monkeypatch):
     monkeypatch.setattr(yipi, "generate_password_hash", lambda password: "plain:" + password)
     monkeypatch.setattr(yipi, "check_password_hash", lambda stored, password: stored == "plain:" + password)
     monkeypatch.setenv("GROQ_API_KEY", "test-key")
-    monkeypatch.setattr(yipi_captions, "RUNNER_BOX", [lambda app, media_id: yipi_captions.ensure_source(media_id)])      # (in the tests the work is done at once, in the same session)
+    monkeypatch.setattr(yipi_captions, "RUNNER_BOX", [lambda app, media_id, hint="", force="": yipi_captions.ensure_source(media_id, hint, force)])      # (in the tests the work is done at once, in the same session)
     yipi_captions._work.clear()
     yipi_captions._cool["until"] = 0.0
 
@@ -77,9 +77,9 @@ PITCH = [220] * 20 + [110] * 20 + [0] * 30                     # a woman for the
 def groq(monkeypatch):
     calls = {"transcribe": 0, "translate": []}
 
-    def fake_transcribe(data, name, content_type):
+    def fake_transcribe(data, name, content_type, hint="", prompt="", force=""):
         calls["transcribe"] += 1
-        calls["name"], calls["type"] = name, content_type
+        calls["name"], calls["type"], calls["hint"], calls["prompt"], calls["force"] = name, content_type, hint, prompt, force
         return "german", RAW
 
     def fake_translate(texts, target, source_name):
@@ -157,12 +157,12 @@ def test_unknown_languages_missing_videos_and_strangers_are_refused(client, groq
 
 def test_a_video_without_speech_says_so_and_a_failing_service_is_tried_again_later(client, groq, monkeypatch):
     mia = person("mia")
-    monkeypatch.setattr(yipi_captions, "transcribe", lambda data, name, content_type: ("english", [{"start": 0, "end": 1, "text": " Thank you.", "no_speech_prob": 0.9, "avg_logprob": -0.5}]))
+    monkeypatch.setattr(yipi_captions, "transcribe", lambda data, name, content_type, **kw: ("english", [{"start": 0, "end": 1, "text": " Thank you.", "no_speech_prob": 0.9, "avg_logprob": -0.5}]))
     silent = upload_video(mia, captions="1")
     assert get(mia, silent).get_json()["status"] == "none"
     calls = []
 
-    def broken(data, name, content_type):
+    def broken(data, name, content_type, **kw):
         calls.append(1)
         raise yipi_captions.Unavailable("status 500")
     monkeypatch.setattr(yipi_captions, "transcribe", broken)
@@ -172,7 +172,7 @@ def test_a_video_without_speech_says_so_and_a_failing_service_is_tried_again_lat
     entry = yipi.YipiCaption.query.filter_by(media_id=failing, lang="_error").first()
     entry.created_at = yipi.utcnow() - timedelta(seconds=yipi_captions.RETRY_AFTER + 5)
     db.session.commit()
-    monkeypatch.setattr(yipi_captions, "transcribe", lambda data, name, content_type: ("german", RAW))
+    monkeypatch.setattr(yipi_captions, "transcribe", lambda data, name, content_type, **kw: ("german", RAW))
     assert get(mia, failing).get_json()["status"] == "pending", "after ten minutes it is tried again"
     assert get(mia, failing).get_json()["status"] == "ready", "and it works again"
 
@@ -243,3 +243,105 @@ def test_the_page_has_the_button_the_window_and_the_voice_logic():
     assert "Y.captions.bind(" in videos and "Y.captions.sheet(" in videos and "cc.element" in videos and "reel.cc?.start()" in videos and "reel.cc?.stop()" in videos
     newpost = open(os.path.join(JS_DIR, "yipi-newpost.js"), encoding="utf-8").read()
     assert 'captions: "1"' in newpost and "pitchOf" in newpost
+
+
+# ================================================================================================ hearing better
+def sure(text, logprob=-0.1, start=0.0, end=3.0, silence=0.0, ratio=1.2):
+    return {"start": start, "end": end, "text": text, "avg_logprob": logprob, "no_speech_prob": silence, "compression_ratio": ratio}
+
+
+def test_the_big_model_is_asked_first_and_the_fast_one_takes_over_when_it_fails(monkeypatch):
+    asked = []
+
+    def fake(data, name, content_type, model, language="", prompt=""):
+        asked.append((model, language))
+        if model == "whisper-large-v3":
+            raise yipi_captions.Unavailable("status 503")
+        return "german", [sure("Hallo")]
+    monkeypatch.setattr(yipi_captions, "_recognise", fake)
+    assert yipi_captions.WHISPER_MODELS[:2] == ["whisper-large-v3", "whisper-large-v3-turbo"]
+    assert yipi_captions.transcribe(b"x", "video.mp4", "video/mp4")[0] == "german"
+    assert [model for model, _ in asked] == ["whisper-large-v3", "whisper-large-v3-turbo"]
+    monkeypatch.setattr(yipi_captions, "_recognise", lambda *a, **k: (_ for _ in ()).throw(yipi_captions.Unavailable("too many requests")))
+    with pytest.raises(yipi_captions.Unavailable):
+        yipi_captions.transcribe(b"x", "video.mp4", "video/mp4")
+
+
+def test_when_it_is_unsure_and_the_language_is_not_the_one_of_the_device_it_listens_again_in_that_language(monkeypatch):
+    answers = []
+
+    def fake(data, name, content_type, model, language="", prompt=""):
+        answers.append(language)
+        if language == "de":
+            return "german", [sure("Ich backe heute einen Kuchen.", -0.12)]
+        return "dutch", [sure("Ik bak he uit een kook.", -0.9)]
+    monkeypatch.setattr(yipi_captions, "_recognise", fake)
+    assert yipi_captions.transcribe(b"x", "v.mp4", "video/mp4", hint="de") == ("german", [sure("Ich backe heute einen Kuchen.", -0.12)])
+    assert answers == ["", "de"], "once as it comes, once in the language of the device"
+    answers.clear()
+    assert yipi_captions.transcribe(b"x", "v.mp4", "video/mp4", hint="")[0] == "dutch" and answers == [""], "without a hint it is asked once"
+    answers.clear()
+    monkeypatch.setattr(yipi_captions, "_recognise", lambda data, name, content_type, model, language="", prompt="": (answers.append(language) or ("german", [sure("Das war klar.", -0.05)])))
+    yipi_captions.transcribe(b"x", "v.mp4", "video/mp4", hint="de")
+    assert answers == [""], "sure and in the right language: no second try"
+    answers.clear()
+
+    def worse(data, name, content_type, model, language="", prompt=""):
+        answers.append(language)
+        return ("english", [sure("What is this", -0.6)]) if not language else ("german", [sure("Wo is das", -1.4)])
+    monkeypatch.setattr(yipi_captions, "_recognise", worse)
+    assert yipi_captions.transcribe(b"x", "v.mp4", "video/mp4", hint="de")[0] == "english", "the second try is only taken when it is surer"
+
+
+def test_whisper_rules_decide_what_is_speech_and_cut_sentences_are_put_together_again():
+    raw = [
+        sure("Das ist leise gesprochen.", -1.5, 0, 2),                       # unsure but heard: kept (it used to be thrown away)
+        sure("Rauschen", -1.2, 2, 3, silence=0.9),                           # probably silence and unsure: dropped
+        sure("blabla blabla blabla", -0.3, 3, 4, ratio=3.1),                 # repeats itself: dropped
+        sure("Und dann gehen wir", -0.2, 4, 6),
+        sure("zusammen nach Hause.", -0.2, 6.2, 8),
+        sure("Neuer Satz.", -0.2, 12, 13),
+    ]
+    got = yipi_captions.source_segments(raw, None)
+    assert [(s["s"], s["e"], s["t"]) for s in got] == [(0.0, 2.0, "Das ist leise gesprochen."), (4.0, 8.0, "Und dann gehen wir zusammen nach Hause."), (12.0, 13.0, "Neuer Satz.")]
+
+
+def test_the_name_of_the_video_and_the_language_of_the_device_go_to_the_recogniser(client, groq):
+    mia = person("mia")
+    reply = mia.post("/api/yipi/media", data={"file": (io.BytesIO(mp4()), "clip.mp4"), "captions": "1", "alt": "Kuchen backen mit Oma Erna #food", "lang": "de"}, content_type="multipart/form-data")
+    assert reply.status_code == 200 and groq["transcribe"] == 1
+    assert groq["hint"] == "de" and groq["prompt"] == "Kuchen backen mit Oma Erna", "hashtags are left out"
+    other = mia.post("/api/yipi/media", data={"file": (io.BytesIO(mp4()), "clip.mp4"), "captions": "1", "alt": "Hi", "lang": "<script>"}, content_type="multipart/form-data")
+    assert other.status_code == 200 and groq["hint"] == "de", "the default is German when the hint is not two letters"
+    assert groq["prompt"] == "", "a name of fewer than three words is no help"
+
+
+def test_the_maker_of_a_video_can_say_which_language_is_spoken_and_it_is_heard_again(client, groq):
+    mia, tom = person("mia"), person("tom")
+    media_id = upload_video(mia, captions="1", pitch=json.dumps(PITCH))
+    assert get(mia, media_id).get_json()["original"]["code"] == "de" and groq["transcribe"] == 1 and groq["force"] == ""
+    get(mia, media_id, "en")
+    assert tom.post(f"/api/yipi/videos/{media_id}/captions/redo", json={"lang": "en"}).status_code == 403, "only the maker"
+    assert mia.post(f"/api/yipi/videos/{media_id}/captions/redo", json={"lang": "xx"}).get_json()["error"] == "bad_language"
+    assert flask_app.test_client().post(f"/api/yipi/videos/{media_id}/captions/redo", json={"lang": "en"}).status_code == 401
+    assert mia.post("/api/yipi/videos/" + "0" * 32 + "/captions/redo", json={"lang": "en"}).status_code == 404
+    done = mia.post(f"/api/yipi/videos/{media_id}/captions/redo", json={"lang": "tr"})
+    assert done.status_code == 200 and done.get_json()["status"] == "pending"
+    assert groq["transcribe"] == 2 and groq["force"] == "tr", "heard again, in the language the maker named"
+    rows = {row.lang for row in yipi.YipiCaption.query.filter_by(media_id=media_id)}
+    assert "_pitch" in rows and "en" not in rows, "the translations of the old text are gone, the pitch of the voice stays"
+
+
+def test_a_forced_language_is_handed_to_the_recogniser_and_no_second_try_is_made(monkeypatch):
+    asked = []
+    monkeypatch.setattr(yipi_captions, "_recognise", lambda data, name, content_type, model, language="", prompt="": (asked.append(language) or ("turkish", [sure("Merhaba", -0.9)])))
+    assert yipi_captions.transcribe(b"x", "v.mp4", "video/mp4", hint="de", force="tr")[0] == "turkish"
+    assert asked == ["tr"]
+
+
+def test_the_number_of_new_hearings_is_limited(client, groq):
+    mia = person("mia")
+    media_id = upload_video(mia, captions="1")
+    for _ in range(yipi.LIMITS["caption-redo"][0]):
+        assert mia.post(f"/api/yipi/videos/{media_id}/captions/redo", json={"lang": "de"}).status_code == 200
+    assert mia.post(f"/api/yipi/videos/{media_id}/captions/redo", json={"lang": "de"}).status_code == 429

@@ -131,7 +131,7 @@ LIMITS = {
     "game-ai": (12, 3600), "music-search": (120, 3600), "music-pick": (60, 3600), "music-up": (30, 3600), "rank-ai": (20, 3600), "rank-search": (90, 3600), "rank-pick": (120, 3600), "report": (20, 3600), "lens-recipe": (30, 3600), "lens-make": (10, 86400), "lens-use": (300, 3600), "game-make": (10, 86400), "game-edit": (120, 3600), "game-play": (400, 3600), "profile": (30, 3600), "search": (120, 600), "block": (60, 3600),
     "gif-make": (20, 3600), "gif-fav": (400, 3600), "gif-use": (300, 3600), "gif-list": (600, 600),
     "share": (240, 600), "attach": (40, 3600), "storage": (120, 3600), "story": (30, 3600), "story-view": (900, 600), "play": (200, 3600), "heart": (300, 3600), "push": (30, 3600), "nex-read": (30, 600), "google": (30, 600), "nex": (40, 600), "nex-flood": (80, 60), "factcheck": (120, 3600), "views": (90, 600), "vote": (200, 3600), "pin": (60, 3600), "group": (12, 3600),
-    "caption": (600, 3600), "call-start": (30, 3600), "call-poll": (3000, 3600), "call-act": (300, 3600), "call-sync": (12000, 3600),
+    "caption": (600, 3600), "caption-redo": (12, 3600), "call-start": (30, 3600), "call-poll": (3000, 3600), "call-act": (300, 3600), "call-sync": (12000, 3600),
 }
 _hits = {}
 limiter = RateLimiter(LIMITS, _hits)
@@ -2007,7 +2007,7 @@ def register_routes(app):
     import yipi_calls
     yipi_calls.register(route, need_user, body, find_user)         # calls: the handset in the head of a chat (see yipi_calls.py)
     import yipi_captions
-    yipi_captions.register(route, need_user)                       # subtitles and the spoken translation of videos (see yipi_captions.py)
+    yipi_captions.register(route, need_user, body)                       # subtitles and the spoken translation of videos (see yipi_captions.py)
 
     def touch(user):
         now = utcnow()
@@ -2537,7 +2537,8 @@ def register_routes(app):
             if request.form.get("captions") == "1":                              # (a video of a post, not a story: it gets subtitles)
                 import yipi_captions
                 yipi_captions.keep_pitch(item.id, request.form.get("pitch"))     # (the browser measured the pitch of the voice: it tells women from men in the voice of the translation)
-                yipi_captions.later(item.id)                                     # (the sound goes to the speech recognition in the background)
+                hint = request.form.get("lang", "")
+                yipi_captions.later(item.id, hint if re.fullmatch(r"[a-z]{2}", hint) else "")        # (the sound goes to the speech recognition in the background; `lang`: the language of the device)
             return jsonify({"ok": True, "media": media_json(item)})
         if len(data) > MAX_IMAGE_BYTES:
             return fail("too_big", 413)

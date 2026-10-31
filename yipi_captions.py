@@ -27,11 +27,12 @@ import yipi
 log = logging.getLogger("nex.captions")
 
 WHISPER_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
-WHISPER_MODEL = os.environ.get("GROQ_WHISPER_MODEL", "whisper-large-v3-turbo")
+WHISPER_MODELS = list(dict.fromkeys([os.environ.get("GROQ_WHISPER_MODEL", "whisper-large-v3"), "whisper-large-v3-turbo"]))       # the big model hears best; the fast one takes over when the big one does not answer
 MAX_AUDIO_BYTES = 25 * 1024 * 1024
 MAX_SEGMENTS = 150
 MAX_PITCH_POINTS = 420                  # one number per tenth of a second: 42 seconds
 RETRY_AFTER = 600                       # seconds: a failed transcription is tried again after this
+UNSURE = -0.45                          # average log probability of what was heard: below this the recogniser is unsure, and a second try in the language of the uploader's device is made
 FEMALE_ABOVE = 165                      # Hz: a median pitch above this is a woman's voice
 
 # (code, name in German, language tag for the voice of the device)
@@ -58,30 +59,31 @@ _cool = {"until": 0.0}                  # Groq said "too many requests": no new 
 clock = time.time                       # the tests replace it
 
 
-def runner(app, media_id):
+def runner(app, media_id, hint="", force=""):
     """Starts the transcription of a video in the background (the tests run it at once)."""
-    threading.Thread(target=_thread, args=(app, media_id), daemon=True).start()
+    threading.Thread(target=_thread, args=(app, media_id, hint, force), daemon=True).start()
 
 
-def _thread(app, media_id):
+def _thread(app, media_id, hint="", force=""):
     with app.app_context():
         try:
-            ensure_source(media_id)
+            ensure_source(media_id, hint, force)
         except Exception:  # noqa: BLE001
             log.exception("captions: the transcription of a video failed")
         finally:
             yipi.db.session.remove()
 
 
-def later(media_id):
-    """Asks for the transcription of a video without waiting for it (nothing happens without a key for Groq)."""
+def later(media_id, hint="", force=""):
+    """Asks for the transcription of a video without waiting for it (nothing happens without a key for Groq). `hint` is the language of the device of the uploader (two letters, or ""); `force`
+    is the language the uploader says is spoken in the video (then nobody guesses)."""
     if not os.environ.get("GROQ_API_KEY"):
         return
     with _work_lock:
         if media_id in _work:
             return
         _work[media_id] = True
-    RUNNER_BOX[0](current_app._get_current_object(), media_id)
+    RUNNER_BOX[0](current_app._get_current_object(), media_id, hint, force)
 
 
 RUNNER_BOX = [runner]                   # (a list so that a test can swap the function)
@@ -138,16 +140,16 @@ class Unavailable(Exception):
     """Groq did not answer (no key, too many requests, an error)."""
 
 
-def transcribe(data, name, content_type):
-    """(language as Whisper names it, [{"start", "end", "text", "no_speech_prob", "avg_logprob"}]) for the sound of a video. Raises Unavailable."""
+def _recognise(data, name, content_type, model, language="", prompt=""):
+    """One request to the speech recognition: (language as Whisper names it, segments). Raises Unavailable."""
     key = os.environ.get("GROQ_API_KEY")
-    if not key:
-        raise Unavailable("no key")
-    if clock() < _cool["until"]:
-        raise Unavailable("cooling down")
+    fields = {"model": model, "response_format": "verbose_json", "temperature": "0"}
+    if language:
+        fields["language"] = language
+    if prompt:
+        fields["prompt"] = prompt[:400]
     try:
-        reply = requests.post(WHISPER_URL, headers={"Authorization": f"Bearer {key}"}, files={"file": (name, data, content_type)},
-                              data={"model": WHISPER_MODEL, "response_format": "verbose_json", "temperature": "0"}, timeout=180)
+        reply = requests.post(WHISPER_URL, headers={"Authorization": f"Bearer {key}"}, files={"file": (name, data, content_type)}, data=fields, timeout=180)
     except requests.RequestException as error:
         raise Unavailable(str(error)) from error
     if reply.status_code == 429:
@@ -157,6 +159,45 @@ def transcribe(data, name, content_type):
         raise Unavailable(f"status {reply.status_code}: {reply.text[:200]}")
     body = reply.json()
     return str(body.get("language") or "").lower(), list(body.get("segments") or [])
+
+
+def quality(segments):
+    """How sure the recogniser was: the average log probability of the sentences that are speech, weighted by how long they are (0 is certain, -1 is a guess); -3 when nothing was heard."""
+    total = weight = 0.0
+    for segment in segments:
+        if float(segment.get("no_speech_prob") or 0) > 0.6:
+            continue
+        length = max(0.2, float(segment.get("end") or 0) - float(segment.get("start") or 0))
+        total += float(segment.get("avg_logprob") or -1) * length
+        weight += length
+    return total / weight if weight else -3.0
+
+
+def transcribe(data, name, content_type, hint="", prompt="", force=""):
+    """(language as Whisper names it, [{"start", "end", "text", "no_speech_prob", "avg_logprob"}]) for the sound of a video. The big model is asked first (the fast one when the big one fails);
+    when it is unsure and the language it found is not `hint` (the language of the device of the uploader), it listens a second time in that language and the surer answer is kept. Raises Unavailable."""
+    if not os.environ.get("GROQ_API_KEY"):
+        raise Unavailable("no key")
+    if clock() < _cool["until"]:
+        raise Unavailable("cooling down")
+    failure = None
+    for model in WHISPER_MODELS:
+        try:
+            language, segments = _recognise(data, name, content_type, model, language=force, prompt=prompt)
+        except Unavailable as error:
+            failure = error
+            if "too many" in str(error):
+                raise
+            continue
+        if hint and not force and WHISPER_CODES.get(language) != hint and quality(segments) < UNSURE:
+            try:
+                second_language, second = _recognise(data, name, content_type, model, language=hint, prompt=prompt)
+                if quality(second) > quality(segments) + 0.1:
+                    return second_language or language, second
+            except Unavailable:
+                pass
+        return language, segments
+    raise failure or Unavailable("no model")
 
 
 def translate(texts, target, source_name):
@@ -197,17 +238,27 @@ def _json_list(text):
 
 
 def source_segments(raw_segments, pitch):
-    """The sentences worth showing: not silence, not what Whisper makes up for noise; each with its start, end, text and "f"/"m"/""."""
-    out = []
-    for segment in raw_segments[:MAX_SEGMENTS * 2]:
-        text = re.sub(r"\s+", " ", str(segment.get("text") or "")).strip()
+    """The sentences worth showing: not silence, not what Whisper makes up for noise (the rules of Whisper itself: no speech and unsure, or a text that repeats itself); sentences that were
+    cut in the middle are put together again; each with its start, end, text and "f"/"m"/""."""
+    kept = []
+    for segment in raw_segments[:MAX_SEGMENTS * 3]:
+        words = re.sub(r"\s+", " ", str(segment.get("text") or "")).strip()
         start, end = float(segment.get("start") or 0), float(segment.get("end") or 0)
-        if not text or end <= start or HALLUCINATIONS.match(text):
+        if not words or end <= start or HALLUCINATIONS.match(words):
             continue
-        if float(segment.get("no_speech_prob") or 0) > 0.6 or float(segment.get("avg_logprob") or 0) < -1.3:
+        logprob, silence = float(segment.get("avg_logprob") or 0), float(segment.get("no_speech_prob") or 0)
+        if silence > 0.85 or (silence > 0.6 and logprob < -1.0) or logprob < -1.9 or float(segment.get("compression_ratio") or 0) > 2.4:
             continue
-        out.append({"s": round(start, 2), "e": round(end, 2), "t": text[:300], "g": gender_of(pitch, start, end)})
-    return out[:MAX_SEGMENTS]
+        kept.append({"s": start, "e": end, "t": words})
+    merged = []
+    for piece in kept:
+        last = merged[-1] if merged else None
+        if last and not re.search(r"[.!?\u2026\u3002\uff01\uff1f]$", last["t"]) and piece["s"] - last["e"] < 0.7 and len(last["t"]) + len(piece["t"]) < 170 and piece["e"] - last["s"] < 10:
+            last["t"] = last["t"] + " " + piece["t"]
+            last["e"] = piece["e"]
+        else:
+            merged.append(dict(piece))
+    return [{"s": round(p["s"], 2), "e": round(p["e"], 2), "t": p["t"][:300], "g": gender_of(pitch, p["s"], p["e"])} for p in merged[:MAX_SEGMENTS]]
 
 
 # ------------------------------------------------------------------------------------------------------------------ the rows
@@ -230,7 +281,13 @@ def put(media_id, lang, status, data, is_original=False):
     return entry
 
 
-def ensure_source(media_id):
+def title_prompt(item):
+    """The name the uploader gave the video, as a hint for the recogniser (names and special words are heard better), or ""."""
+    words = re.sub(r"#\w+", " ", item.alt or "").split()
+    return " ".join(words)[:200] if len(words) >= 3 else ""
+
+
+def ensure_source(media_id, hint="", force=""):
     """Makes the row of the original language of a video (text and time of every sentence), or a row that says why not. Called in the background."""
     try:
         if original(media_id) is not None:
@@ -247,7 +304,7 @@ def ensure_source(media_id):
         data = yipi.load_bytes(yipi.YipiMedia, item)
         extension = {"video/mp4": "mp4", "video/quicktime": "mp4", "video/webm": "webm"}.get(item.content_type, "mp4")
         try:
-            language, raw = transcribe(data, f"video.{extension}", "video/webm" if extension == "webm" else "video/mp4")
+            language, raw = transcribe(data, f"video.{extension}", "video/webm" if extension == "webm" else "video/mp4", hint=hint or "de", prompt=title_prompt(item), force=force)
         except Unavailable as error:
             log.warning("captions: no transcription (%s)", error)
             if old is not None:
@@ -308,9 +365,37 @@ def purge_orphans():
 
 
 # ------------------------------------------------------------------------------------------------------------------ the route
-def register(route, need_user):
+def register(route, need_user, body):
     fail = yipi.fail
     limiter = yipi.limiter
+
+    @route("/api/yipi/videos/<media_id>/captions/redo", methods=["POST"], endpoint="yipi_captions_redo")
+    def yipi_captions_redo(media_id):
+        """The one who made the video says which language is spoken in it: what was written down is dropped and the sound is heard again in that language."""
+        user, problem = need_user()
+        if problem:
+            return problem
+        data, problem = body()
+        if problem:
+            return problem
+        lang = data.get("lang")
+        if lang not in NAMES:
+            return fail("bad_language", 400)
+        if not re.fullmatch(r"[0-9a-f]{32}", media_id):
+            return fail("not_found", 404)
+        item = yipi.db.session.get(yipi.YipiMedia, media_id)
+        if item is None or not item.content_type.startswith("video/"):
+            return fail("not_found", 404)
+        if item.owner_id != user.id:
+            return fail("forbidden", 403)
+        if limiter.too_many("caption-redo", str(user.id)):
+            return fail("too_many", 429)
+        if not os.environ.get("GROQ_API_KEY"):
+            return jsonify({"ok": True, "status": "unavailable"})
+        yipi.YipiCaption.query.filter(yipi.YipiCaption.media_id == media_id, yipi.YipiCaption.kind == "text").delete(synchronize_session=False)
+        yipi.db.session.commit()
+        later(media_id, lang, lang)
+        return jsonify({"ok": True, "status": "pending"})
 
     @route("/api/yipi/videos/<media_id>/captions")
     def yipi_captions(media_id):

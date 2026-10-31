@@ -122,7 +122,7 @@
       submit.classList.add("busy");
       submit.textContent = "Lädt hoch …";
       update();
-      const fields = { alt: title, width: String(picked.width), height: String(picked.height), captions: "1" };
+      const fields = { alt: title, width: String(picked.width), height: String(picked.height), captions: "1", lang: String(navigator.language || "de").slice(0, 2).toLowerCase() };
       const pitch = Y.captions && Y.captions.pitchOf ? await Y.captions.pitchOf(picked.file) : "";          // (the pitch of the voice: women and men get their own voice in the translation)
       if (pitch) fields.pitch = pitch;
       const up = await Api.upload(picked.file, fields, (fraction) => {

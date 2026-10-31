@@ -2340,3 +2340,5 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .tab-extra.search-row { background: var(--bg-3); color: var(--text); cursor: text; }
 .appbar-find-row { flex: none; width: 190px; height: 40px; padding: 0 12px; border-radius: 20px; background: var(--bg-3); color: var(--text); }
 .appbar-find-row svg { width: 20px; height: 20px; }
+.cc-fix { display: flex; flex-direction: column; gap: 4px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.cc-fix .cc-row { margin-top: 6px; }
