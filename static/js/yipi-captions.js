@@ -18,6 +18,7 @@
     ["no", "Norwegisch", "nb-NO"], ["fi", "Finnisch", "fi-FI"], ["el", "Griechisch", "el-GR"], ["cs", "Tschechisch", "cs-CZ"],
   ];
   const KEY = "saturn.cc";
+  const VERSION = 2;                                               // the spoken translation is off for everybody once (2026-11-02): a choice that was saved before this number is not taken for the voice
   const DUCK = 0.12;                                               // how loud the original sound stays while a voice speaks the translation
   const POLL_MS = 3000;
   const POLL_TRIES = 25;
@@ -27,12 +28,12 @@
   let prefs = { sub: "off", audio: "orig" };                       // subtitles: "off" (until somebody switches them on), "orig" or a language; the voice: "orig" (the original sound) or a language
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) || "null");
-    if (saved && typeof saved === "object") prefs = { sub: saved.sub === "off" || saved.sub === "orig" || CODES.has(saved.sub) ? saved.sub : "off", audio: saved.audio === "orig" || CODES.has(saved.audio) ? saved.audio : "orig" };
+    if (saved && typeof saved === "object") prefs = { sub: saved.sub === "off" || saved.sub === "orig" || CODES.has(saved.sub) ? saved.sub : "off", audio: saved.v === VERSION && (saved.audio === "orig" || CODES.has(saved.audio)) ? saved.audio : "orig" };
   } catch (error) { /* storage blocked */ }
   const controllers = new Set();                                   // the videos that are shown right now (the choice of the person reaches them at once)
   function choose(next) {
     prefs = { ...prefs, ...next };
-    try { localStorage.setItem(KEY, JSON.stringify(prefs)); } catch (error) { /* storage blocked */ }
+    try { localStorage.setItem(KEY, JSON.stringify({ ...prefs, v: VERSION })); } catch (error) { /* storage blocked */ }
     for (const controller of controllers) controller.refresh();
   }
 

@@ -112,3 +112,12 @@ def test_the_sounds_of_the_page_are_not_played_late_by_a_sleeping_sound_context(
     fx = read("yipi-fx.js")
     assert 'const WAKE = ["pointerup", "touchend", "click", "keydown"];' in fx and "if (ctx && ctx.state === \"running\") WAKE.forEach" in fx
     assert '!parts || ctx.state !== "running") return;' in fx, "a sound that is asked for while the context sleeps is left out"
+
+
+def test_the_spoken_translation_is_off_for_everybody_once_and_stays_on_when_somebody_switches_it_on_later():
+    captions = read("yipi-captions.js")
+    assert "const VERSION = 2;" in captions
+    assert 'audio: saved.v === VERSION && (saved.audio === "orig" || CODES.has(saved.audio)) ? saved.audio : "orig"' in captions, "an old choice is not taken for the voice"
+    assert "JSON.stringify({ ...prefs, v: VERSION })" in captions, "a new choice is saved with the number, so that it stays"
+    lines = {line[0]: line for line in yipi_company.ANNOUNCEMENTS}
+    assert "2026-11-02-voiceoff" in lines and len(lines["2026-11-02-voiceoff"][2]) <= 280 and lines["2026-11-02-voiceoff"][2].count("#") <= 2
