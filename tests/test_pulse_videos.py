@@ -106,8 +106,10 @@ def test_only_videos_a_browser_can_play_are_taken(client):
         assert r.status_code == 415 and r.get_json()["error"] == "bad_video", name
 
 
-def test_a_video_over_the_limit_is_refused(client):
+def test_a_video_over_the_limit_is_refused(client, monkeypatch):
+    monkeypatch.setattr(yipi, "MAX_VIDEO_BYTES", 3 * 1024 * 1024)                     # (the real limit is 250 MB: no test builds a file that big)
     mia = person("mia")
+    assert yipi.MAX_VIDEO_BYTES < 250 * 1024 * 1024
     big = mp4(yipi.MAX_VIDEO_BYTES)
     r = upload(mia, big, "big.mp4")
     assert r.status_code == 413 and r.get_json()["error"] == "video_too_big"

@@ -18,7 +18,7 @@ ARCHIVE = "https://archive.org"
 HEADERS = {"User-Agent": "NexBot/1.0 (https://nexai.up.railway.app; music for clips) python-requests"}
 LICENCE_URL = re.compile(r"^https?://(?:www\.)?creativecommons\.org/(publicdomain/zero|licenses/by|licenses/by-sa)/(\d\.\d)/?")
 MAX_FILE = 18_000_000
-MAX_UPLOAD = 8_000_000
+MAX_UPLOAD = 50_000_000
 MAX_CACHED = 26
 CACHE_DIR = os.path.join(tempfile.gettempdir(), "saturn-music")
 

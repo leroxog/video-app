@@ -212,7 +212,8 @@ def test_a_lens_brings_a_song_and_a_person_uploads_a_song_from_the_folder(client
     mia, tom = person("mia"), person("tom")
     bad = mia.post("/api/yipi/music/upload", data={"file": (io.BytesIO(b"MZ" + b"\x00" * 40), "x.mp3")}, content_type="multipart/form-data")
     assert bad.status_code == 415
-    big = mia.post("/api/yipi/music/upload", data={"file": (io.BytesIO(MP3 + b"\x00" * 8_100_000), "big.mp3")}, content_type="multipart/form-data")
+    monkeypatch.setattr(yipi_music, "MAX_UPLOAD", 1_000_000)                          # (the real limit is 50 MB)
+    big = mia.post("/api/yipi/music/upload", data={"file": (io.BytesIO(MP3 + b"\x00" * 1_100_000), "big.mp3")}, content_type="multipart/form-data")
     assert big.status_code == 413
     up = mia.post("/api/yipi/music/upload", data={"file": (io.BytesIO(MP3), "mein lied.mp3"), "title": "Mein Lied"}, content_type="multipart/form-data")
     assert up.status_code == 200, up.get_json()

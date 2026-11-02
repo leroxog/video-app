@@ -71,12 +71,12 @@ MAX_DM = 1000
 MAX_MEDIA = 3                                    # photos per post (or one GIF, or a poll)
 MAX_GROUP_NAME = 40
 MAX_GROUP_MEMBERS = 20
-MAX_IMAGE_BYTES = 5 * 1024 * 1024
-MAX_VIDEO_BYTES = 25 * 1024 * 1024               # a video is kept in the database like a picture: not bigger than this
+MAX_IMAGE_BYTES = 25 * 1024 * 1024
+MAX_VIDEO_BYTES = 250 * 1024 * 1024              # a video is kept in the database (or in R2) like a picture; the whole file is read into memory once, so this is the highest that one web process carries
 MAX_VIDEO_SIDE = 4096
-MAX_VIDEO_SECONDS = 30                         # a video is at most this long (the milliseconds do not count)
-MAX_DOCUMENT_BYTES = 15 * 1024 * 1024          # a document in a chat (the "+" of a message); photos and videos follow their own limits
-MAX_FILE_IMAGE_BYTES = 8 * 1024 * 1024
+MAX_VIDEO_SECONDS = 120                        # a video is at most this long (the milliseconds do not count); a story is held to 30 by the page (MAX_STORY_SECONDS in yipi-core.js)
+MAX_DOCUMENT_BYTES = 100 * 1024 * 1024         # a document in a chat (the "+" of a message); photos and videos follow their own limits
+MAX_FILE_IMAGE_BYTES = 25 * 1024 * 1024
 OFFICE_TYPES = {"docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation", "odt": "application/vnd.oasis.opendocument.text",
                 "ods": "application/vnd.oasis.opendocument.spreadsheet", "odp": "application/vnd.oasis.opendocument.presentation"}

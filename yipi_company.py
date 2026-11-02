@@ -48,6 +48,8 @@ ANNOUNCEMENTS = [
     ("2026-10-31-notify", "web", "Neu: Mitteilungen sind jetzt von Anfang an an. Beim ersten Tippen fragt dein Browser einmal, danach meldet sich Satürn bei Likes, Antworten, Nachrichten und neuen Followern. Ausschalten geht unter Einstellungen > Mitteilungen. #neu #mitteilungen"),
     ("2026-10-31-songs", "web", "Neu: Weniger Songs, dafür die richtigen. Satürn hat jetzt eine ausgewählte Liste mit Funk, Dance, Hip-Hop, Lo-Fi und den Songs aus den Memes. Sie starten sofort und genau am Anfang, auch im Clip. Dazu: alles Rot ist jetzt TikTok-Rot. #neu #songs"),
     ("2026-10-31-lock", "web", "Neu in der Kamera: Halte den Kreis zum Filmen und zieh ihn nach oben, dann filmt Satürn von allein weiter. Der Kreis gleitet zurück und hüpft leicht. Tippen beendet die Aufnahme. Der Kreis der normalen Kamera ist weiß, beim Filmen rot. #neu #kamera"),
+    ("2026-11-02-longvideos", "web", "Neu: Videos dürfen jetzt bis zu 120 Sekunden lang sein, nicht mehr nur 30. Stories bleiben bei 30 Sekunden. #neu #videos"),
+    ("2026-11-02-bigfiles", "web", "Neu: Viel größere Dateien. Videos bis 250 MB, Dokumente im Chat bis 100 MB, Fotos bis 25 MB und eigene Songs bis 50 MB. Vorher waren es 25, 15, 5 und 8 MB. #neu #uploads"),
 ]
 
 _state = {"started": False}

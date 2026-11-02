@@ -124,13 +124,14 @@ def test_a_shuffle_key_scrambles_neighbours():
     assert close / (39 * 198) < 0.03, "videos that were posted one after the other are not shown one after the other"
 
 
-# --------------------------------------------------------------------------------------- 30 seconds
-def test_a_video_may_be_30_seconds_and_the_milliseconds_do_not_count(client):
+# --------------------------------------------------------------------------------------- 120 seconds
+def test_a_video_may_be_120_seconds_and_the_milliseconds_do_not_count(client):
     mia = person("mia")
     assert upload(mia, mp4(seconds=12.0), "a.mp4").status_code == 200
     assert upload(mia, mp4(seconds=30.0), "b.mp4").status_code == 200
-    assert upload(mia, mp4(seconds=30.9), "c.mp4").status_code == 200, "30 seconds and 900 milliseconds is still 30 seconds"
-    long = upload(mia, mp4(seconds=31.0), "d.mp4")
+    assert upload(mia, mp4(seconds=78), "b2.mp4").status_code == 200, "a video of 78 seconds (1 minute 18) is fine"
+    assert upload(mia, mp4(seconds=120.9), "c.mp4").status_code == 200, "120 seconds and 900 milliseconds is still 120 seconds"
+    long = upload(mia, mp4(seconds=121.0), "d.mp4")
     assert long.status_code == 413 and long.get_json()["error"] == "video_too_long"
     assert upload(mia, mp4(seconds=600), "e.mp4").status_code == 413
     assert upload(mia, mp4(), "f.mp4").status_code == 200, "a file that does not say how long it is (a recording) is judged by the page"
@@ -229,7 +230,7 @@ def make_zip(files):
     return buffer.getvalue()
 
 
-def test_a_chat_takes_photos_videos_and_documents_and_nothing_else(client):
+def test_a_chat_takes_photos_videos_and_documents_and_nothing_else(client, monkeypatch):
     mia = person("mia")
     photo = attach(mia, png(), "bild.png")
     assert photo.status_code == 201 and photo.get_json()["file"]["kind"] == "image" and photo.get_json()["file"]["width"] == 4
@@ -243,6 +244,7 @@ def test_a_chat_takes_photos_videos_and_documents_and_nothing_else(client):
                        (b"just a file", "nichts"), (make_zip({"a": "b"}), "archiv.zip"), (b"PK\x03\x04", "x.exe")):
         reply = attach(mia, data, name)
         assert reply.status_code == 415 and reply.get_json()["error"] == "bad_attachment", name
+    monkeypatch.setattr(yipi, "MAX_DOCUMENT_BYTES", 2 * 1024 * 1024)                  # (the real limit is 100 MB)
     assert attach(mia, b"%PDF-1.4" + b"0" * (yipi.MAX_DOCUMENT_BYTES + 10), "gross.pdf").status_code == 413
     assert flask_app.test_client().post("/api/yipi/attachments", data={"file": (io.BytesIO(b"x"), "a.txt")}, content_type="multipart/form-data").status_code == 401
 

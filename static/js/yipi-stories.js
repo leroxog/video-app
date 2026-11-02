@@ -34,7 +34,7 @@
         url = read.url;
         facts = read.facts;
         if (!facts || !facts.width || !facts.height) { URL.revokeObjectURL(url); toast("Dieses Video kann dein Browser nicht lesen."); return; }
-        if (Core.videoTooLong(facts.seconds)) { URL.revokeObjectURL(url); toast(Api.MESSAGES.video_too_long); return; }
+        if (Core.videoTooLong(facts.seconds, Core.MAX_STORY_SECONDS)) { URL.revokeObjectURL(url); toast(Api.MESSAGES.story_too_long); return; }
       } else {
         if (!/^image\/(jpeg|png|webp|gif)$/.test(file.type)) { toast(Api.MESSAGES.bad_image); return; }
         try { prepared = await Y.prepareImage(file, { max: 1440 }); } catch (error) { toast("Dieses Foto konnte nicht gelesen werden."); return; }

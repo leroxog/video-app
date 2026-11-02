@@ -1,7 +1,7 @@
 /* Satürn new post (yipi-newpost.js): what happens when somebody taps the "+" or "Posten": a page of its own (white, in the round font of the sign-up) asks "Was willst du hochladen?"
    with "Ein Video" on the left and "Ein Beitrag" on the right (/new). "Ein Beitrag" is a whole page for a post, like the one of X (/new/post: the field "Text" at the top, photos, a sticker or a poll
    below it, and hashtags that are added one by one and shown in light pink); "Ein Video" is a whole page for a video, like the one of TikTok (/new/video: the video in a tall frame, the name,
-   which is required, the video itself, at most 30 seconds, then hashtags; the upload shows how far it has come). A reply or a quote is still a window (yipi-components.js). */
+   which is required, the video itself, at most 120 seconds, then hashtags; the upload shows how far it has come). A reply or a quote is still a window (yipi-components.js). */
 (function () {
   "use strict";
 
@@ -66,7 +66,7 @@
     }).then((result) => { probe.removeAttribute("src"); return result; });
   }
 
-  /* The template for a video: name (required), the video (at most 30 seconds, the milliseconds do not count), hashtags. Returns {body, focus, destroy}; `done()` is called when the video is online. */
+  /* The template for a video: name (required), the video (at most 120 seconds, the milliseconds do not count), hashtags. Returns {body, focus, destroy}; `done()` is called when the video is online. */
   function videoTemplate({ file: given, camId = "", done = () => {} } = {}) {
     let picked = null;                                            // {file, url, width, height}
     let busy = false;
@@ -88,7 +88,7 @@
     }
     function drawSlot() {
       if (!picked) {
-        fill(slot, h("button", { class: "vt-drop", type: "button", onclick: () => picker.click() }, h("span", { class: "vt-drop-ic" }, icon("film")), h("b", {}, "Video auswählen"), h("span", { class: "hint" }, "MP4, MOV oder WebM · höchstens 30 Sekunden · bis 25 MB")));
+        fill(slot, h("button", { class: "vt-drop", type: "button", onclick: () => picker.click() }, h("span", { class: "vt-drop-ic" }, icon("film")), h("b", {}, "Video auswählen"), h("span", { class: "hint" }, "MP4, MOV oder WebM · höchstens 120 Sekunden · bis 250 MB")));
         return;
       }
       fill(slot, h("div", { class: "vt-preview" },
@@ -147,7 +147,7 @@
     drawSlot();
     const nameHead = h("div", { class: "field-head" }, h("label", { class: "field-title", for: "vt-name" }, "Name"), h("span", { class: "hint req" }, "Pflichtfeld"));
     const body = h("div", { class: "template video-template vt-page" },                       // the video in a tall frame on the left, the name and the hashtags on the right (one under the other on a phone)
-      h("div", { class: "vt-left" }, slot, picker, h("p", { class: "hint vt-limit" }, "höchstens 30 Sekunden")),
+      h("div", { class: "vt-left" }, slot, picker, h("p", { class: "hint vt-limit" }, "höchstens 120 Sekunden")),
       h("div", { class: "vt-right" }, nameHead, name, nameCount, problem, progress, tags.element, h("div", { class: "template-foot" }, submit)));
     name.id = "vt-name";
     if (given) take(given);
@@ -174,7 +174,7 @@
     const body = h("div", { class: "nu-choose" },
       h("h1", { class: "au-title nu-title" }, "Was willst du hochladen?"),
       h("div", { class: "nu-choices" },
-        chooseCard("video", "Ein Video", "Hochkant, bis 30 Sekunden", "film", () => Y.navigate("/new/video")),
+        chooseCard("video", "Ein Video", "Hochkant, bis 120 Sekunden", "film", () => Y.navigate("/new/video")),
         chooseCard("post", "Ein Beitrag", "Text, Fotos, Sticker, Umfrage", "feather", () => Y.navigate("/new/post"))),
       h("button", { class: "nu-story", type: "button", onclick: () => Y.newStory(() => { Y.refreshStories?.(); Y.back(); }) }, icon("image"), "Oder eine Story für 24 Stunden"));
     return { element: whitePage({ back: "/", closeIcon: "close", label: "Schließen", body, modifier: "nu-choosing" }), title: "Hochladen" };
@@ -204,7 +204,7 @@
     const pending = Y.pendingVideo || {};
     Y.pendingVideo = null;
     const template = videoTemplate({ file: pending.file, camId: pending.camId || "", done: () => Y.navigate("/videos", { replace: true }) });
-    const body = h("div", { class: "nu-video" }, h("h1", { class: "au-title nu-title left" }, "Ein Video"), h("p", { class: "au-sub nu-sub left" }, "Zeig es allen, hochkant und bis zu 30 Sekunden lang."), template.body);
+    const body = h("div", { class: "nu-video" }, h("h1", { class: "au-title nu-title left" }, "Ein Video"), h("p", { class: "au-sub nu-sub left" }, "Zeig es allen, hochkant und bis zu 120 Sekunden lang."), template.body);
     return { element: whitePage({ back: "/new", label: "Zurück", wide: true, body, modifier: "nu-videoing" }), title: "Neues Video", onShow() { if (!pending.file) template.focus(); }, destroy() { template.destroy(); } };
   };
 

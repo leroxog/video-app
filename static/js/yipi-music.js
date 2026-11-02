@@ -97,7 +97,7 @@
       const file = fileInput.files[0];
       fileInput.value = "";
       if (!file) return;
-      if (file.size > 8_000_000) { status.textContent = "Die Datei ist zu groß (höchstens 8 MB)."; return; }
+      if (file.size > 50_000_000) { status.textContent = "Die Datei ist zu groß (höchstens 50 MB)."; return; }
       status.textContent = "Der Song wird hochgeladen …";
       const up = await Api.uploadSong(file, file.name.replace(/\.[^.]+$/, ""));
       if (!up.ok) { status.textContent = up.data && up.data.error === "bad_audio" ? "Das ist keine Audio-Datei, die Satürn kennt (MP3, Ogg, M4A, WAV)." : Api.message(up); return; }

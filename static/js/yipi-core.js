@@ -11,17 +11,18 @@
   const MAX_POST = 280;
   const HOME = "/";                                      // the home page of Satürn is the home page of the site
   const MAX_MEDIA = 3;                                  // photos per post (yipi.py: MAX_MEDIA)
-  const MAX_VIDEO_BYTES = 25 * 1024 * 1024;             // a video (yipi.py: MAX_VIDEO_BYTES)
-  const MAX_VIDEO_SECONDS = 30;                         // and how long it may be (only the browser can measure that; the milliseconds do not count)
+  const MAX_VIDEO_BYTES = 250 * 1024 * 1024;            // a video (yipi.py: MAX_VIDEO_BYTES)
+  const MAX_VIDEO_SECONDS = 120;                        // and how long it may be (only the browser can measure that; the milliseconds do not count)
+  const MAX_STORY_SECONDS = 30;                         // a story is shorter than a video
   const MONTHS = ["Jan.", "Feb.", "März", "Apr.", "Mai", "Juni", "Juli", "Aug.", "Sept.", "Okt.", "Nov.", "Dez."];
   const MONTHS_LONG = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
   const HANDLE = /^[A-Za-z0-9_]{3,15}$/;
   // the same characters the server throws away (control and direction-changing characters; the joiner of emoji stays)
   const CONTROL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f​‎‏‪-‮⁠-⁤﻿]/g;
 
-  /* A video is too long when it has more than 30 whole seconds (30.9 is fine); a length the browser cannot tell (a recording, Infinity) passes. */
-  function videoTooLong(seconds) {
-    return Number.isFinite(seconds) && Math.floor(seconds) > MAX_VIDEO_SECONDS;
+  /* A video is too long when it has more than 120 whole seconds (120.9 is fine; a story: more than 30); a length the browser cannot tell (a recording, Infinity) passes. */
+  function videoTooLong(seconds, limit = MAX_VIDEO_SECONDS) {
+    return Number.isFinite(seconds) && Math.floor(seconds) > limit;
   }
 
   /* The watermark of a saved video, like on TikTok: the logo with "@name" sits in the top left corner for the first half, then it slides over to the
@@ -530,7 +531,7 @@
   }
 
   return {
-    HOME, MAX_POST, MAX_MEDIA, MAX_VIDEO_BYTES, MAX_VIDEO_SECONDS, videoTooLong, watermarkPlan, videoFileName, base64UrlBytes, dailyIndex, gestureTemplate, gestureScore, GESTURE_PASS, GESTURE_POINTS, lockMinutes, lockAfterWrong, NEX_CHATS, nexTitle, newChatId, nexStore, nexUpsert, nexRemove, MAX_POLL_OPTION, POLL_OPTIONS, POLL_LENGTHS, pollTimeLeft, pollPercent, pollVotes, pollAnswers, NEX_TURNS, NEX_KEEP, nexMessages, nexBlocks, gifQuery, gifColumns, cleanText, charCount, counterState, tokenize, shortUrl, formatCount, relativeTime, fullTime, joinedLabel,
+    HOME, MAX_POST, MAX_MEDIA, MAX_VIDEO_BYTES, MAX_VIDEO_SECONDS, MAX_STORY_SECONDS, videoTooLong, watermarkPlan, videoFileName, base64UrlBytes, dailyIndex, gestureTemplate, gestureScore, GESTURE_PASS, GESTURE_POINTS, lockMinutes, lockAfterWrong, NEX_CHATS, nexTitle, newChatId, nexStore, nexUpsert, nexRemove, MAX_POLL_OPTION, POLL_OPTIONS, POLL_LENGTHS, pollTimeLeft, pollPercent, pollVotes, pollAnswers, NEX_TURNS, NEX_KEEP, nexMessages, nexBlocks, gifQuery, gifColumns, cleanText, charCount, counterState, tokenize, shortUrl, formatCount, relativeTime, fullTime, joinedLabel,
     isHandle, parsePath, buildPath, groupNotifications, fitSize, coverCrop, avatarHue, defaultColors, initials,
   };
 });

@@ -174,7 +174,7 @@
     if (bitmap.close) bitmap.close();
     for (const quality of [0.86, 0.7, 0.55, 0.4]) {
       const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
-      if (blob && blob.size <= 4.5 * 1024 * 1024) return blob;
+      if (blob && blob.size <= 25 * 1024 * 1024) return blob;
     }
     throw new Error("too big");
   }

@@ -542,7 +542,8 @@ def test_things_that_are_not_pictures_are_refused(client, data):
     assert yipi.YipiMedia.query.count() == 0
 
 
-def test_pictures_have_a_size_limit_and_a_pixel_limit(client):
+def test_pictures_have_a_size_limit_and_a_pixel_limit(client, monkeypatch):
+    monkeypatch.setattr(yipi, "MAX_IMAGE_BYTES", 1024 * 1024)                          # (the real limit is 25 MB)
     mia = person("mia")
     assert upload(mia, png() + b"\x00" * (yipi.MAX_IMAGE_BYTES + 10), status=413)["error"] == "too_big"
     assert upload(mia, png(10000, 10000), status=415)["error"] == "bad_image"
