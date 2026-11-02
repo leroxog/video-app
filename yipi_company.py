@@ -51,6 +51,7 @@ ANNOUNCEMENTS = [
     ("2026-11-02-longvideos", "web", "Neu: Videos dürfen jetzt bis zu 120 Sekunden lang sein, nicht mehr nur 30. Stories bleiben bei 30 Sekunden. #neu #videos"),
     ("2026-11-02-bigfiles", "web", "Neu: Viel größere Dateien. Videos bis 250 MB, Dokumente im Chat bis 100 MB, Fotos bis 25 MB und eigene Songs bis 50 MB. Vorher waren es 25, 15, 5 und 8 MB. #neu #uploads"),
     ("2026-11-02-voiceoff", "web", "Geändert: Die gesprochene Übersetzung (die Sprachspur) ist jetzt bei allen aus und es läuft der Originalton. Wer sie hören möchte, schaltet sie bei einem Video unter „Sprache“ wieder ein, dann bleibt sie an. #neu #sprachspur"),
+    ("2026-11-02-camera2", "web", "Neu: Die Kamera startet bei „Normal“, mit Umdrehen, Filter und Timer an der Seite. Das Sound-Fenster sieht jetzt aus wie bei TikTok: Suche, Stile, Favoriten und Videos mit Sound. In Videos öffnet das Noten-Quadrat „Sound benutzen“. #neu #kamera"),
 ]
 
 _state = {"started": False}

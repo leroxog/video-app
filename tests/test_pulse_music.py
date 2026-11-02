@@ -266,6 +266,6 @@ def test_the_song_starts_at_once_and_in_the_right_place_and_the_clip_begins_when
     for word in ("const lead = song && musicPlayer && musicPlayer.ready ? musicPlayer.start() : null;", "recordingPending", "lead.then(begin, begin)", "mineRecorder.start(500)"):
         assert word in camera, word
     assert "musicPlayer.rewind(); musicPlayer.play();" not in camera, "the clip no longer begins before the song"
-    for chip in ('["Beliebt", "Beliebt"]', '["Hip-Hop", "Hip-Hop"]', '["Lo-Fi", "Lo-Fi"]', '["Funk", "Funk"]'):
-        assert chip in music, chip
-    assert "Pop" not in music.split("const genres")[1].split("const more")[0], "the old styles of the archive are gone"
+    for style in ('["Beliebt", "#7a2cf0"', '["Funk", "#f59e0b"', '["Dance", "#06b6d4"', '["Hip-Hop", "#334155"', '["Lo-Fi", "#14b8a6"', '["Chill", "#22c55e"', '["Retro", "#f97316"'):
+        assert style in music, style
+    assert '"Pop"' not in music and '"Klassik"' not in music, "the old styles of the archive are gone"

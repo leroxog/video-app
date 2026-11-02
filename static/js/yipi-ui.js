@@ -239,7 +239,7 @@
   /* A little menu next to a button. Items: [{label, icon, danger, run}] (null entries are skipped). */
   function menu(anchor, items) {
     let entry;
-    const el = h("div", { class: "menu", role: "menu" }, items.filter(Boolean).map((item) => h("button", { class: `menu-item${item.danger ? " danger" : ""}`, type: "button", role: "menuitem", onclick: () => { entry.close(); item.run(); } }, item.icon ? icon(item.icon) : null, h("span", {}, item.label))));
+    const el = h("div", { class: "menu", role: "menu" }, items.filter(Boolean).map((item) => h("button", { class: `menu-item${item.danger ? " danger" : ""}${item.strong ? " strong" : ""}`, type: "button", role: "menuitem", onclick: () => { entry.close(); item.run(); } }, item.icon ? icon(item.icon) : null, h("span", {}, item.label))));
     entry = floating(anchor, el);
     return entry;
   }

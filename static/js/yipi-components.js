@@ -12,7 +12,7 @@
 
   const REASONS = [
     ["spam", "Spam"], ["abuse", "Belästigung oder Beleidigung"], ["hate", "Hass oder Hetze"], ["violence", "Gewalt oder Drohungen"],
-    ["illegal", "Illegale Inhalte"], ["self_harm", "Selbstverletzung"], ["factcheck", "Der Fact Check ist falsch"], ["other", "Etwas anderes"],
+    ["illegal", "Illegale Inhalte"], ["self_harm", "Selbstverletzung"], ["factcheck", "Der Fact Check ist falsch"], ["copyright", "Copyright-Problem"], ["sound", "Problem mit dem Sound"], ["other", "Etwas anderes"],
   ];
   const EMOJIS = ["😀", "😂", "🤣", "😊", "😍", "🥰", "😘", "😎", "🤩", "🥳", "😅", "😇", "🙂", "😉", "😋", "🤔", "🤗", "😴", "😭", "😢", "😡", "🤯", "😱", "🥺",
     "👍", "👎", "👏", "🙌", "🙏", "💪", "👀", "🤝", "✌️", "👋", "🤞", "🫶", "❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "💔", "🔥", "✨", "🎉", "🎂",
@@ -68,14 +68,16 @@
     }
   }
 
-  function reportDialog({ postId, handle, gifId, factcheck = false }) {
+  /* `preset` is one reason that is already chosen ("copyright" or "sound": from the button of the sound of a video): the list of reasons is not shown then. */
+  function reportDialog({ postId, handle, gifId, factcheck = false, preset = "" }) {
     if (!Y.requireLogin("Melde dich an, um etwas zu melden.")) return;
-    let reason = "";
+    let reason = preset;
     const note = h("textarea", { class: "field-area", rows: 3, maxlength: 300, placeholder: "Möchtest du etwas dazu sagen? (freiwillig)", "aria-label": "Anmerkung" });
-    const choices = REASONS.filter(([value]) => factcheck || value !== "factcheck").map(([value, text]) => h("label", { class: "choice" }, h("input", { type: "radio", name: "reason", value, onchange: () => { reason = value; entry.box.querySelector(".dialog-actions .btn").disabled = false; } }), h("span", {}, text)));
+    const choices = REASONS.filter(([value]) => (factcheck || value !== "factcheck") && (preset || (value !== "copyright" && value !== "sound"))).map(([value, text]) => h("label", { class: "choice" }, h("input", { type: "radio", name: "reason", value, onchange: () => { reason = value; entry.box.querySelector(".dialog-actions .btn").disabled = false; } }), h("span", {}, text)));
     const entry = dialog({
-      title: gifId ? "Sticker melden" : postId ? "Beitrag melden" : `@${handle} melden`,
-      body: h("div", { class: "report" }, h("p", { class: "dialog-text" }, "Warum meldest du das?"), h("div", { class: "choices" }, choices), note),
+      title: preset === "copyright" ? "Copyright-Problem melden" : preset === "sound" ? "Sound melden" : gifId ? "Sticker melden" : postId ? "Beitrag melden" : `@${handle} melden`,
+      body: h("div", { class: "report" }, preset ? h("p", { class: "dialog-text" }, preset === "copyright" ? "Gehört der Sound oder das Video jemand anderem? Beschreibe kurz, worum es geht." : "Was stimmt mit dem Sound nicht?") : h("p", { class: "dialog-text" }, "Warum meldest du das?"),
+        preset ? null : h("div", { class: "choices" }, choices), note),
       actions: [{ label: "Melden", kind: "primary", run: async () => {
         if (!reason) return false;
         const reply = await Api.post("/reports", { postId, gifId, handle: postId || gifId ? undefined : handle, reason, note: note.value });
@@ -83,7 +85,7 @@
         return reply.ok;
       } }],
     });
-    entry.box.querySelector(".dialog-actions .btn").disabled = true;
+    entry.box.querySelector(".dialog-actions .btn").disabled = !preset;
   }
 
   // ------------------------------------------------------------------------------------------ people

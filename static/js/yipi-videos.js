@@ -156,10 +156,18 @@
       const share = h("button", { class: "reel-btn", type: "button", "aria-label": "Teilen", "aria-haspopup": "menu" }, h("span", { class: "reel-btn-ic" }, icon("send")), h("span", { class: "reel-count" }, "Teilen"));
       const more = h("button", { class: "reel-btn", type: "button", "aria-label": "Mehr", "aria-haspopup": "menu" }, h("span", { class: "reel-btn-ic" }, icon("more")));
       const cc = Y.captions ? Y.captions.bind({ video, mediaId: media.id, mine: !!(Y.me && Y.me.handle === item.user.handle), volume: () => (blocked ? 0 : volume / 10) || 0.0001, onChange: () => { const made = reels.find((entry) => entry.video === video); if (made) applySound(made); } }) : null;
-      const language = cc ? h("button", { class: "reel-btn", type: "button", "aria-label": "Untertitel und Sprache" }, h("span", { class: "reel-btn-ic" }, icon("captions")), h("span", { class: "reel-count" }, "Sprache")) : null;
-      if (language) language.addEventListener("click", () => Y.captions.sheet(cc));
       const mine = !!(Y.me && Y.me.handle === item.user.handle);
-      const follow = !mine && !item.user.followedByMe ? h("button", { class: "reel-follow", type: "button", "aria-label": `@${item.user.handle} folgen` }, icon("plus")) : null;
+      const following = !mine && !!item.user.followedByMe;
+      // a plus for the people one does not follow, a check for the people one follows (it stays: it is remembered)
+      const follow = mine ? null : following ? h("span", { class: "reel-follow done kept", role: "img", "aria-label": `Du folgst @${item.user.handle}` }, icon("check"))
+        : h("button", { class: "reel-follow", type: "button", "aria-label": `@${item.user.handle} folgen` }, icon("plus"));
+      // the small rounded square at the bottom right with the note: the sound of the video
+      const soundButton = Y.music ? h("button", { class: "reel-sound", type: "button", "aria-label": "Sound dieses Videos", "aria-haspopup": "menu" }, icon("music")) : null;
+      if (soundButton) soundButton.addEventListener("click", () => menu(soundButton, [
+        { label: "Sound benutzen", icon: "camera", strong: true, run: () => { Y.pendingSong = Y.music.extractedSong(item, media); Y.navigate("/camera"); } },
+        !mine ? { label: "Sound melden", icon: "flag", run: () => Y.reportDialog({ postId: item.id, preset: "sound" }) } : null,
+        !mine ? { label: "Copyright-Problem melden", icon: "flag", run: () => Y.reportDialog({ postId: item.id, preset: "copyright" }) } : null,
+      ]));
 
       function draw() {
         fill(like.firstChild, icon(state.liked ? "heartFill" : "heart"));
@@ -206,6 +214,7 @@
       share.addEventListener("click", () => menu(share, Y.shareItems(item)));
       more.addEventListener("click", () => menu(more, [
         { label: "Beitrag öffnen", icon: "reply", run: () => Y.navigate(Y.postPath(item)) },
+        cc ? { label: "Untertitel und Sprache", icon: "captions", run: () => Y.captions.sheet(cc) } : null,
         !mine ? { label: "Beitrag melden", icon: "flag", danger: true, run: () => Y.reportDialog({ postId: item.id }) } : null,
         mine ? { label: "Beitrag löschen", icon: "trash", danger: true, run: async () => {
           if (!(await confirmBox({ title: "Beitrag löschen?", text: "Das Video und alles dazu wird gelöscht. Das lässt sich nicht rückgängig machen.", yes: "Löschen", danger: true }))) return;
@@ -217,7 +226,7 @@
           if (!reels.length) showEmpty();
         } } : null,
       ]));
-      if (follow) follow.addEventListener("click", async () => {
+      if (follow && follow.tagName === "BUTTON") follow.addEventListener("click", async () => {
         if (!Y.requireLogin("Melde dich an, um zu folgen.")) return;
         const reply = await Api.post(`/users/${item.user.handle}/follow`);
         if (!reply.ok) { toast(Api.message(reply)); return; }
@@ -225,12 +234,13 @@
           if (other.item.user.handle !== item.user.handle) continue;
           const plus = other.element.querySelector(".reel-follow"), ring = other.element.querySelector(".reel-av");
           if (!plus) continue;
-          plus.replaceChildren(icon("check"));                      // the plus turns into a check, the ring of the picture swells, then the badge goes
-          plus.classList.add("done");
+          plus.replaceChildren(icon("check"));                      // the plus turns into a check and stays one: the ring of the picture swells for a moment
+          plus.classList.add("done", "kept");
+          plus.setAttribute("aria-label", `Du folgst @${item.user.handle}`);
           ring?.classList.add("pulse");
-          setTimeout(() => plus.classList.add("gone"), 900);
-          setTimeout(() => { plus.remove(); ring?.classList.remove("pulse"); }, 1300);
+          setTimeout(() => ring?.classList.remove("pulse"), 700);
         }
+        item.user.followedByMe = true;
         toast(`Du folgst jetzt @${item.user.handle}.`);
       });
 
@@ -254,9 +264,9 @@
         item.camId && Y.tryButton ? Y.tryButton(item.camId) : null);
       const actions = h("div", { class: "reel-actions" },
         h("span", { class: "reel-person" }, link(`/${item.user.handle}`, { class: "reel-av", "aria-label": `Profil von ${item.user.name}` }, avatar(item.user, "lg")), follow),
-        like, comment, language, save, share, more);
+        like, comment, save, share, more);
       put(stage, video, cc ? cc.element : null, volumeRow, resume, bar, info);
-      const element = h("section", { class: "reel", "data-id": String(item.id), "aria-label": `Video von ${item.user.name}` }, stage, actions);
+      const element = h("section", { class: "reel", "data-id": String(item.id), "aria-label": `Video von ${item.user.name}` }, stage, actions, soundButton);
       draw();
       return { element, video, stage, item, url: media.url, draw, position, volumeIcon, volumeButton, range, cc };
     }

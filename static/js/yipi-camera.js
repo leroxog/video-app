@@ -73,7 +73,12 @@
     const hud = h("div", { class: "cam-hud", hidden: true }, h("div", { class: "cam-time" }, timeBar), score, bestLine, stop);
     const over = h("div", { class: "cam-over", hidden: true });
     const stage = h("div", { class: "cam-stage" }, feed, fallback, host, hud, over);
-    const flip = h("button", { class: "cam-tool", type: "button", "aria-label": "Kamera wechseln" }, icon("flip"));
+    const labelled = (label, symbol, name) => h("button", { class: "cam-tool labelled", type: "button", "aria-label": name || label }, h("span", { class: "cam-tool-label" }, label), h("span", { class: "cam-tool-ic" }, icon(symbol)));
+    const flip = labelled("Umdrehen", "flip", "Kamera umdrehen");
+    const filterTool = labelled("Filter", "filter", "Filter wählen");
+    const timerTool = labelled("Timer", "timer", "Timer: Zeit, bis die Aufnahme startet");
+    const foldTool = h("button", { class: "cam-tool-fold", type: "button", "aria-label": "Werkzeuge einklappen", "aria-expanded": "true" }, icon("chevron"));
+    const countBox = h("div", { class: "cam-count", role: "status", "aria-live": "assertive", hidden: true });
     const board = h("button", { class: "cam-tool", type: "button", "aria-label": "Bestenliste", "aria-haspopup": "dialog" }, icon("trophy"));
     const all = h("button", { class: "cam-tool", type: "button", "aria-label": "Alle Spiele", "aria-haspopup": "dialog" }, icon("gamepad"));
     const ctlCam = h("button", { class: "cam-tool small", type: "button", "aria-pressed": "false" });
@@ -81,11 +86,12 @@
     const ctlSound = h("button", { class: "cam-tool small", type: "button", "aria-haspopup": "true", "aria-expanded": "false" });
     const volume = h("input", { class: "cam-vol", type: "range", min: 0, max: 100, step: 1, "aria-label": "Lautstärke des Tons der Linse", hidden: true });
     const ctlQr = h("button", { class: "cam-tool small", type: "button", "aria-label": "QR-Code und Teilen: dieses Spiel oder diese Linse", "aria-haspopup": "dialog" }, icon("qr"));
-    const ctl = h("div", { class: "cam-ctl", role: "group", "aria-label": "Kamera, Mikrofon, Ton und QR-Code" }, ctlCam, ctlMic, h("div", { class: "cam-ctl-sound" }, volume, ctlSound), ctlQr);
+    const extras = h("div", { class: "cam-ctl-extras" }, filterTool, timerTool, ctlCam, ctlMic, h("div", { class: "cam-ctl-sound" }, volume, ctlSound), ctlQr);
+    const ctl = h("div", { class: "cam-ctl", role: "group", "aria-label": "Umdrehen, Filter, Timer, Kamera, Mikrofon, Ton und QR-Code" }, flip, extras, foldTool);
     const songText = h("span", {}, "Sound hinzufügen");
     const songBtn = h("button", { class: "cam-song", type: "button", "aria-label": "Sound hinzufügen" }, h("span", { class: "cam-song-note", "aria-hidden": "true" }, icon("music")), songText);
     const songClear = h("button", { class: "cam-song-x", type: "button", "aria-label": "Sound entfernen", hidden: true }, icon("close"));
-    const top = h("div", { class: "cam-top" }, h("h1", { class: "sr-only" }, "Kamera"), h("div", { class: "cam-tool-group" }, all), h("div", { class: "cam-mid" }, h("span", { class: "cam-title" }, "Kamera"), h("div", { class: "cam-song-box" }, songBtn, songClear)), h("div", { class: "cam-tool-group end" }, board, flip));
+    const top = h("div", { class: "cam-top" }, h("h1", { class: "sr-only" }, "Kamera"), h("div", { class: "cam-tool-group" }, all), h("div", { class: "cam-mid" }, h("span", { class: "cam-title" }, "Kamera"), h("div", { class: "cam-song-box" }, songBtn, songClear)), h("div", { class: "cam-tool-group end" }, board));
     const lensName = h("div", { class: "cam-lens-name" });
     const lensHint = h("div", { class: "cam-lens-hint" });
     const lensBar = h("div", { class: "cam-lenses", role: "listbox", "aria-label": "Spiele", tabindex: "0" });
@@ -93,7 +99,7 @@
     const review = h("div", { class: "cam-review", hidden: true });
     const loadingBox = h("div", { class: "cam-loading" }, Y.pulseLoader({ compact: true }), h("span", {}, "Die Spiele werden geladen …"));
     const note = h("div", { class: "cam-note", role: "status", hidden: true });                  // "Linse wird geladen ...", "Schau in die Kamera"
-    const el = h("div", { class: "view cam-view" }, stage, top, ctl, nocam, note, bottom, review, loadingBox);
+    const el = h("div", { class: "view cam-view" }, stage, top, ctl, nocam, note, countBox, bottom, review, loadingBox);
 
     let state = "idle";                                        // idle, starting, playing, over, review
     let dead = false;
@@ -134,7 +140,7 @@
       paintSong();
       if (musicPlayer) musicPlayer.prepare(song, micStream);
     }
-    songBtn.addEventListener("click", () => { if (state === "idle" && Y.music) Y.music.pick({ onPick: (next) => setSong(next, false) }); });
+    songBtn.addEventListener("click", () => { if (state === "idle" && Y.music) Y.music.pick({ upload: true, onPick: (next) => setSong(next, false) }); });
     songClear.addEventListener("click", () => { if (state === "idle") setSong(null); });
     /* The games get the camera as their background when there is a picture (and their own background when there is none). */
     const setBackground = (on) => { window.PulseGames?.setCamera?.(on); };
@@ -423,7 +429,8 @@
       if (held.holding) { if (state === "playing") finish(finalScore); return; }
       if (cancelled || state !== "idle") return;
       const item = list[active];
-      if (item && item.kind === "lens") snapshot(); else if (item && item.kind === "randomsong") startSongRound();
+      if (item && item.kind === "lens" && timerSeconds > 0 && !(capture && capture.photoOnly)) timedClip(held.button);
+      else if (item && item.kind === "lens") snapshot(); else if (item && item.kind === "randomsong") startSongRound();
     }
     const shutterUp = (event) => letGoOfShutter(event, false);
     const shutterCancel = (event) => letGoOfShutter(event, !(shutter && shutter.holding));
@@ -571,10 +578,56 @@
     function stopLens() {
       lensToken += 1;
       if (lens) { lens.stop(); lens = null; }
-      feed.style.filter = "";
+      setFeedFilter("");
       lensNote("");
     }
     const filterCss = (item) => (window.PulseFace && window.PulseFace.filters[item.filter] ? window.PulseFace.filters[item.filter].css : "");
+    /* The filters of the person: they lie over the picture of the camera (and are in the clip, which takes the filter of the picture); a lens with a filter of its own takes the place of it. */
+    const USER_FILTERS = [["none", "Normal", ""], ["warm", "Warm", "sepia(0.25) saturate(1.2) hue-rotate(-10deg)"], ["cool", "Kühl", "saturate(1.1) hue-rotate(15deg) brightness(1.03)"],
+      ["noir", "Schwarz-Weiß", "grayscale(1) contrast(1.1)"], ["vivid", "Lebhaft", "saturate(1.5) contrast(1.08)"], ["dream", "Traum", "brightness(1.08) contrast(0.92) saturate(1.15)"]];
+    let userFilter = "none";
+    let lensCss = "";
+    const setFeedFilter = (css) => { lensCss = css || ""; feed.style.filter = lensCss || (USER_FILTERS.find((entry) => entry[0] === userFilter) || USER_FILTERS[0])[2]; };
+    filterTool.addEventListener("click", () => {
+      if (state !== "idle") return;
+      let entry = null;
+      const row = h("div", { class: "cam-filters" }, USER_FILTERS.map(([id, name, css]) => h("button", { class: `cam-filter${id === userFilter ? " on" : ""}`, type: "button", "aria-pressed": String(id === userFilter),
+        onclick: () => { userFilter = id; setFeedFilter(lensCss); entry.close(); } }, h("span", { class: "cam-filter-sw", style: css ? `filter:${css}` : "" }), h("small", {}, name))));
+      entry = Y.dialog({ title: "Filter", body: row });
+    });
+    let timerSeconds = 0;
+    timerTool.addEventListener("click", () => {
+      if (state !== "idle") return;
+      timerSeconds = timerSeconds === 0 ? 3 : timerSeconds === 3 ? 10 : 0;
+      timerTool.classList.toggle("on", timerSeconds > 0);
+      timerTool.querySelector(".cam-tool-label").textContent = timerSeconds ? `Timer ${timerSeconds} s` : "Timer";
+      toast(timerSeconds ? `Die Aufnahme startet ${timerSeconds} Sekunden nach dem Tippen.` : "Timer aus.");
+    });
+    foldTool.addEventListener("click", () => {
+      const folded = ctl.classList.toggle("folded");
+      foldTool.setAttribute("aria-expanded", String(!folded));
+      foldTool.setAttribute("aria-label", folded ? "Werkzeuge ausklappen" : "Werkzeuge einklappen");
+    });
+    let counting = false;
+    /* After a tap with the timer on: the numbers run down, then the clip starts by itself and goes on until the circle is tapped (like a locked clip). */
+    async function timedClip(button) {
+      if (counting || state !== "idle") return;
+      counting = true;
+      for (let n = timerSeconds; n > 0; n -= 1) {
+        countBox.textContent = String(n);
+        countBox.hidden = false;
+        navigator.vibrate?.(10);
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        if (dead || state !== "idle") { countBox.hidden = true; counting = false; return; }
+      }
+      countBox.hidden = true;
+      counting = false;
+      startLensRound();
+      lockedRound = true;
+      button.classList.add("holding", "locked");
+      button.style.setProperty("--lift", "0px");
+      tapHint.firstChild.textContent = "Tippe auf den Kreis, um die Aufnahme zu beenden";
+    }
 
     async function showSpecial(item, mine) {
       chosen = item;
@@ -593,12 +646,12 @@
       const token = lensToken;                                                 // (a touch that starts the clip does not cancel a lens that is still loading: only another lens or game does)
       const canvas = h("canvas", { class: "lens-canvas", "aria-hidden": "true" });
       host.append(canvas);
-      if (!(item.fx || []).length) { lensNote(stream ? "" : camOn ? "Für Linsen braucht Satürn die Kamera." : "Die Kamera ist aus. Schalte sie oben rechts wieder an."); feed.style.filter = ""; return; }
+      if (!(item.fx || []).length) { lensNote(stream ? "" : camOn ? "Für Linsen braucht Satürn die Kamera." : "Die Kamera ist aus. Schalte sie oben rechts wieder an."); setFeedFilter(""); return; }
       lensNote("Gesichtserkennung wird geladen …");
       try { await loadScript(assets.lens); } catch (error) { lensNote("Die Linsen konnten nicht geladen werden."); return; }
       if (token !== lensToken || dead) return;
       if (!stream) { lensNote(camOn ? "Für Linsen braucht Satürn die Kamera." : "Die Kamera ist aus. Schalte sie oben rechts wieder an."); return; }
-      feed.style.filter = filterCss(item);
+      setFeedFilter(filterCss(item));
       if (!(item.fx || []).length) { lensNote(""); return; }                    // (no effect: the plain camera)
       lens = new window.PulseFace.FaceLens({ video: feed, canvas, mirror: facing === "user", recipe: item, onStatus(status) {
         if (token !== lensToken) return;
@@ -1021,10 +1074,11 @@
       const qr = { id: "qr", kind: "qr", name: "QR-Code", emoji: "", cat: "Teilen", hint: "Dein QR-Code zum Teilen und Scannen", color: "#1a1a1f" };
       const flagship = games.filter((game) => game.featured);
       const randomSong = { id: "l-zufallssong", kind: "randomsong", name: "Zufalls-Song", emoji: "", cat: "Musik", color: "#7a2cf0", hint: "Mach ein Foto von dir, dann kommt ein zufälliger Song" };
-      list = [create, NORMAL, ...flagship, randomSong, ...(Y.lenses ? Y.lenses.PRESETS : []), qr, ...games.filter((game) => !game.featured)];
-      let wanted = route.game ? list.findIndex((game) => game.id === route.game) : list.findIndex((game) => game.id === lastGame);
+      list = [NORMAL, create, ...flagship, randomSong, ...(Y.lenses ? Y.lenses.PRESETS : []), qr, ...games.filter((game) => !game.featured)];       // the plain camera is the first one: the others come from its right
+      let wanted = route.game ? list.findIndex((game) => game.id === route.game) : 0;
       if (wanted < 0 && route.game) wanted = await addShared(route.game);          // a lens or game of somebody else that was linked
-      active = wanted >= 0 ? wanted : Math.max(1, list.indexOf(flagship[0]));       // the first lens: the car race (the small "create" lens is on its left)
+      active = wanted >= 0 ? wanted : 0;                                           // the camera opens on the plain camera
+      if (Y.pendingSong) { setSong(Y.pendingSong, false); Y.pendingSong = null; } // the sound of a video ("Sound benutzen")
       loadingBox.hidden = true;
       drawLenses();
       addCommunity();

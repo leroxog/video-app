@@ -2472,3 +2472,91 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .lens.holding.locked .lens-ic { border-color: var(--tt-red); box-shadow: 0 0 0 7px rgba(254, 44, 85, 0.3), 0 6px 22px rgba(0, 0, 0, 0.55); }
 @keyframes lock-hop { 0%, 14%, 100% { translate: 0 0; } 6% { translate: 0 -6px; } }
 @media (prefers-reduced-motion: reduce) { .lens.holding.locked { animation: none; } }
+
+/* ----- videos: the column of buttons is smaller and sits lower (the profile about in the middle of the height, like TikTok), a check stays at the people one follows, the sound button is a small rounded square at the bottom right */
+.reel-actions { gap: 6px; bottom: calc(var(--tabbar) + 92px + env(safe-area-inset-bottom)); }
+.reel-person { width: 52px; height: 52px; margin-bottom: 12px; }
+.reel-av { width: 52px; height: 52px; padding: 2.5px; }
+.reel-follow { width: 22px; height: 22px; margin-left: -11px; bottom: -10px; }
+.reel-follow svg { width: 14px; height: 14px; }
+.reel-follow.done.kept { background: #fff; color: #7a2cf0; transform: none; opacity: 1; box-shadow: 0 0 0 2px #000; }
+.reel-btn-ic svg { width: 30px; height: 30px; }
+.reel-sound { position: absolute; right: 12px; bottom: calc(var(--tabbar) + 38px + env(safe-area-inset-bottom)); z-index: 3; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: rgba(20, 20, 24, 0.62); color: #fff; border: 1.5px solid rgba(255, 255, 255, 0.35); backdrop-filter: blur(6px); }
+.reel-sound svg { width: 20px; height: 20px; }
+.reel-sound:active { transform: scale(0.92); }
+.menu-item.strong { background: rgba(122, 44, 240, 0.16); font-weight: 800; }
+@media (min-width: 900px) { .reel-sound { right: calc(50% - min(50%, calc(100dvh * 9 / 32)) - 60px); bottom: 56px; } }
+
+/* ----- the tools of the camera on the right (text on the left of the round button, from the top: turn around, filter, timer, then the small ones, and the arrow that folds them) */
+.cam-ctl { gap: 10px; align-items: flex-end; }
+.cam-ctl-extras { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+.cam-ctl.folded .cam-ctl-extras { display: none; }
+.cam-tool.labelled { display: flex; align-items: center; gap: 10px; width: auto; height: auto; border-radius: 0; background: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.cam-tool-label { font-size: 13px; font-weight: 800; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.75); }
+.cam-tool-ic { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; background: rgba(40, 40, 40, 0.55); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+.cam-tool-ic svg { width: 22px; height: 22px; }
+.cam-tool.labelled.on .cam-tool-ic { background: #7a2cf0; }
+.cam-tool-fold { display: grid; place-items: center; width: 42px; height: 28px; color: #fff; filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.7)); }
+.cam-tool-fold svg { width: 22px; height: 22px; transform: rotate(-90deg); transition: transform 0.25s; }
+.cam-ctl.folded .cam-tool-fold svg { transform: rotate(90deg); }
+.cam-count { position: absolute; top: 50%; left: 50%; z-index: 9; transform: translate(-50%, -50%); font-size: 120px; font-weight: 900; color: #fff; text-shadow: 0 4px 30px rgba(0, 0, 0, 0.6); pointer-events: none; }
+.cam-filters { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.cam-filter { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 4px; border-radius: 14px; border: 2px solid transparent; color: var(--text); }
+.cam-filter.on { border-color: #7a2cf0; }
+.cam-filter-sw { width: 56px; height: 56px; border-radius: 50%; background: conic-gradient(#e74c3c, #f1c40f, #2ecc71, #3498db, #9b59b6, #e74c3c); }
+
+/* ----- the sound window: dark, with a search line, tiles of the styles, four tabs, the videos with sound and the songs (bookmark and a purple plus) */
+.dialog.mu-box { background: #161618; color: #fff; --text: #fff; --bg-2: #26262a; --line: rgba(255, 255, 255, 0.12); --line-strong: rgba(255, 255, 255, 0.2); --hover: rgba(255, 255, 255, 0.08); }
+.dialog.mu-box .dialog-top h2 { color: #fff; }
+.mu-dark { display: flex; flex-direction: column; gap: 14px; min-width: min(440px, 88vw); color: #fff; }
+.mu-bar { display: flex; align-items: center; gap: 10px; }
+.mu-search-wrap { flex: 1; display: flex; align-items: center; gap: 8px; padding: 0 14px; height: 44px; border-radius: 14px; background: #26262a; color: rgba(255, 255, 255, 0.55); }
+.mu-search-wrap svg { width: 20px; height: 20px; flex: none; }
+.mu-search { flex: 1; min-width: 0; height: 100%; border: 0; background: none; color: #fff; font: inherit; font-size: 16px; outline: none; }
+.mu-random { display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 14px; border-radius: 14px; background: #26262a; color: #fff; font-weight: 700; font-size: 14px; white-space: nowrap; }
+.mu-random svg { width: 18px; height: 18px; }
+.mu-styles { display: flex; gap: 10px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.mu-styles::-webkit-scrollbar { display: none; }
+.mu-style { flex: none; display: grid; place-items: center; width: 96px; height: 66px; border-radius: 12px; color: #fff; font-weight: 800; font-size: 15px; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.45); border: 2px solid transparent; }
+.mu-style.on { border-color: #fff; }
+.mu-tabs { display: flex; border-bottom: 1px solid rgba(255, 255, 255, 0.14); }
+.mu-tab { flex: 1; display: grid; place-items: center; height: 46px; color: rgba(255, 255, 255, 0.55); border-bottom: 3px solid transparent; margin-bottom: -1px; }
+.mu-tab svg { width: 24px; height: 24px; }
+.mu-tab.on { color: #fff; border-bottom-color: #7a2cf0; }
+.mu-heading { margin: 4px 0 0; font-size: 20px; font-weight: 800; }
+.mu-videos { display: flex; gap: 10px; overflow-x: auto; scrollbar-width: none; }
+.mu-videos::-webkit-scrollbar { display: none; }
+.mu-video { position: relative; flex: none; width: 128px; height: 190px; border-radius: 12px; overflow: hidden; background: #26262a; color: #fff; text-align: left; }
+.mu-clip { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+.mu-video::after { content: ""; position: absolute; inset: 0; background: linear-gradient(transparent 45%, rgba(0, 0, 0, 0.75)); }
+.mu-video-name, .mu-video-by { position: absolute; left: 8px; right: 8px; z-index: 1; font-weight: 800; font-size: 13px; text-shadow: 0 1px 5px rgba(0, 0, 0, 0.8); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mu-video-name { bottom: 24px; }
+.mu-video-by { bottom: 8px; font-size: 12px; font-weight: 600; opacity: 0.85; }
+.mu-list { display: flex; flex-direction: column; gap: 4px; max-height: 44vh; overflow-y: auto; }
+.mu-row { border-radius: 14px; padding: 6px 4px; }
+.mu-row.playing { background: #1f1f24; }
+.mu-rowtop { display: flex; align-items: center; gap: 12px; }
+.mu-cover { flex: none; display: grid; place-items: center; width: 56px; height: 56px; border-radius: 10px; color: #fff; }
+.mu-cover svg { width: 22px; height: 22px; }
+.mu-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.mu-main b { font-size: 16px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mu-main small { color: rgba(255, 255, 255, 0.55); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mu-star { display: grid; place-items: center; width: 40px; height: 40px; color: #fff; }
+.mu-star svg { width: 24px; height: 24px; }
+.mu-star.on { color: #fbbf24; }
+.mu-add { display: grid; place-items: center; flex: none; width: 44px; height: 38px; border-radius: 10px; background: #7a2cf0; color: #fff; }
+.mu-add svg { width: 22px; height: 22px; stroke-width: 2.6; }
+.mu-more { display: none; flex-direction: column; gap: 6px; padding: 8px 4px 4px; }
+.mu-row.playing .mu-more { display: flex; }
+.mu-wave { display: flex; align-items: center; gap: 3px; height: 34px; }
+.mu-wave i { flex: 1; min-width: 2px; background: #fff; border-radius: 2px; opacity: 0.9; }
+.mu-start { width: 100%; accent-color: #7a2cf0; }
+.mu-startline { color: rgba(255, 255, 255, 0.55); }
+.mu-files { display: flex; flex-direction: column; gap: 12px; padding: 8px 2px; color: rgba(255, 255, 255, 0.7); font-size: 14px; }
+.mu-files p { margin: 0; }
+.mu-pick { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 46px; border-radius: 14px; background: #7a2cf0; color: #fff; font-weight: 800; }
+.mu-pick svg { width: 20px; height: 20px; }
+.mu-status { margin: 0; color: rgba(255, 255, 255, 0.5); font-size: 13px; }
+
+.mu-list { padding-right: 8px; }
+.mu-dark { box-sizing: border-box; max-width: 100%; }

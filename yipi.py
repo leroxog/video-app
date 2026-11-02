@@ -109,7 +109,7 @@ EMAIL_RE = re.compile(r"[^@\s]{1,64}@[^@\s]{1,190}\.[^@\s.]{2,24}")
 MENTION_RE = re.compile(r"(?<![\w@])@([A-Za-z0-9_]{3,15})(?![\w@])")
 HASHTAG_RE = re.compile(r"(?<![\w#&/])#(\w{2,50})")
 CONTROL_RE = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\x7f​‎‏‪-‮⁠-⁤﻿]")
-REPORT_REASONS = ("spam", "abuse", "hate", "violence", "illegal", "self_harm", "factcheck", "other")
+REPORT_REASONS = ("spam", "abuse", "hate", "violence", "illegal", "self_harm", "factcheck", "copyright", "sound", "other")
 NOTIFICATION_KINDS = ("like", "repost", "reply", "quote", "mention", "follow")
 
 # Names that must not be a handle: the page's own addresses, and names that would pretend to be the site.
@@ -4700,7 +4700,9 @@ def register_routes(app):
         if limiter.too_many("music-search", str(user.id)):
             return fail("too_many", 429)
         yipi_music.warm_top()                                                     # (the first time: the best known songs are fetched in the background)
-        return jsonify({"ok": True, "items": yipi_music.search(request.args.get("q", ""), request.args.get("page", "1")), "total": yipi_music.count()})
+        rows = request.args.get("rows", "20")
+        rows = max(1, min(100, int(rows))) if rows.isdigit() else 20
+        return jsonify({"ok": True, "items": yipi_music.search(request.args.get("q", ""), request.args.get("page", "1"), rows), "total": yipi_music.count()})
 
     @route("/api/yipi/music/track/<identifier>")
     def yipi_music_track(identifier):
