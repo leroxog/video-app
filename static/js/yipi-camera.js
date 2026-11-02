@@ -51,6 +51,8 @@
   const pickType = () => Y.pickRecorderType();
 
   /* A plain camera: a photo or a video without any effect (the first of the strip in the capture window and next to "Erstellen" in the tab). */
+  const SHIFT = new Set(["car-race", "moto"]);                 // the games with a road: the lower half is road, so the picture of the camera moves up and the face stays above it
+
   const NORMAL = { id: "l-normal", kind: "lens", name: "Normal", emoji: "", cat: "Kamera", hint: "Foto und Video ohne Effekt", color: "#4a4a55", fx: [], filter: "none" };
 
   Y.views.camera = function camera(route, ctx) {
@@ -77,6 +79,7 @@
     const flip = labelled("Umdrehen", "flip", "Kamera umdrehen");
     const filterTool = labelled("Filter", "filter", "Filter wählen");
     const timerTool = labelled("Timer", "timer", "Timer: Zeit, bis die Aufnahme startet");
+    const speedTool = labelled("Geschw. 1x", "speed", "Geschwindigkeit des Videos");
     const foldTool = h("button", { class: "cam-tool-fold", type: "button", "aria-label": "Werkzeuge einklappen", "aria-expanded": "true" }, icon("chevron"));
     const countBox = h("div", { class: "cam-count", role: "status", "aria-live": "assertive", hidden: true });
     const board = h("button", { class: "cam-tool", type: "button", "aria-label": "Bestenliste", "aria-haspopup": "dialog" }, icon("trophy"));
@@ -86,7 +89,7 @@
     const ctlSound = h("button", { class: "cam-tool small", type: "button", "aria-haspopup": "true", "aria-expanded": "false" });
     const volume = h("input", { class: "cam-vol", type: "range", min: 0, max: 100, step: 1, "aria-label": "Lautstärke des Tons der Linse", hidden: true });
     const ctlQr = h("button", { class: "cam-tool small", type: "button", "aria-label": "QR-Code und Teilen: dieses Spiel oder diese Linse", "aria-haspopup": "dialog" }, icon("qr"));
-    const extras = h("div", { class: "cam-ctl-extras" }, filterTool, timerTool, ctlCam, ctlMic, h("div", { class: "cam-ctl-sound" }, volume, ctlSound), ctlQr);
+    const extras = h("div", { class: "cam-ctl-extras" }, speedTool, filterTool, timerTool, ctlCam, ctlMic, h("div", { class: "cam-ctl-sound" }, volume, ctlSound), ctlQr);
     const ctl = h("div", { class: "cam-ctl", role: "group", "aria-label": "Umdrehen, Filter, Timer, Kamera, Mikrofon, Ton und QR-Code" }, flip, extras, foldTool);
     const songText = h("span", {}, "Sound hinzufügen");
     const songBtn = h("button", { class: "cam-song", type: "button", "aria-label": "Sound hinzufügen" }, h("span", { class: "cam-song-note", "aria-hidden": "true" }, icon("music")), songText);
@@ -501,6 +504,7 @@
       if (game.kind && game.kind !== "game") { showSpecial(game, mine); return; }
       if (game.community && !window.PulseGames.get(game.id)) { ensureCommunity(game, mine); return; }
       chosen = game;
+      feed.classList.toggle("shifted", SHIFT.has(game.id));
       finalScore = 0;
       score.textContent = "0";
       tapHint.hidden = true;                                  // (a game starts at once: nothing to tap)
@@ -595,6 +599,62 @@
         onclick: () => { userFilter = id; setFeedFilter(lensCss); entry.close(); } }, h("span", { class: "cam-filter-sw", style: css ? `filter:${css}` : "" }), h("small", {}, name))));
       entry = Y.dialog({ title: "Filter", body: row });
     });
+    /* The speed of the clip (0.5x, 1x, 2x, 3x): the clip is recorded as it happens and, when it is over, played at that speed into a new recording (that takes as long as the new clip). */
+    let speedFactor = 1;
+    speedTool.addEventListener("click", () => {
+      if (state !== "idle") return;
+      speedFactor = speedFactor === 1 ? 2 : speedFactor === 2 ? 3 : speedFactor === 3 ? 0.5 : 1;
+      speedTool.classList.toggle("on", speedFactor !== 1);
+      speedTool.querySelector(".cam-tool-label").textContent = `Geschw. ${speedFactor}x`;
+      toast(speedFactor === 1 ? "Normale Geschwindigkeit." : `Das Video wird ${speedFactor > 1 ? `${speedFactor}-mal schneller` : "halb so schnell"}.`);
+    });
+    function retime(blob, factor) {
+      return new Promise((resolve) => {
+        const video = document.createElement("video");
+        if (!video.captureStream) { toast("Auf diesem Gerät geht die Geschwindigkeit nicht."); resolve(blob); return; }
+        const url = URL.createObjectURL(blob);
+        let done = false;
+        let recorder2 = null;
+        let context = null;
+        const finish = (out) => { if (done) return; done = true; try { video.pause(); } catch (error) { /* gone */ } URL.revokeObjectURL(url); if (context) context.close().catch(() => {}); resolve(out || blob); };
+        video.src = url;
+        video.playsInline = true;
+        video.preload = "auto";
+        video.addEventListener("error", () => finish(null), { once: true });
+        video.addEventListener("loadeddata", () => {
+          try {
+            video.playbackRate = factor;
+            video.preservesPitch = true;
+            const stream = video.captureStream();
+            const tracks = stream.getVideoTracks();
+            const parts = [];
+            try {
+              const Context = window.AudioContext || window.webkitAudioContext;
+              context = new Context();
+              const sink = context.createMediaStreamDestination();
+              context.createMediaElementSource(video).connect(sink);                    // (the sound goes into the new clip and not to the speaker)
+              tracks.push(...sink.stream.getAudioTracks());
+            } catch (error) { tracks.push(...stream.getAudioTracks()); }
+            const type = pickType();
+            recorder2 = new MediaRecorder(new MediaStream(tracks), type ? { mimeType: type, videoBitsPerSecond: 2000000 } : undefined);
+            recorder2.ondataavailable = (event) => { if (event.data && event.data.size) parts.push(event.data); };
+            recorder2.onstop = () => finish(parts.length ? new Blob(parts, { type: recorder2.mimeType || blob.type }) : null);
+            recorder2.start(500);
+            video.addEventListener("ended", () => { if (recorder2.state !== "inactive") recorder2.stop(); }, { once: true });
+            video.play().catch(() => { if (recorder2.state !== "inactive") recorder2.stop(); else finish(null); });
+            const limit = (Number.isFinite(video.duration) ? video.duration / factor : 40) + 6;
+            setTimeout(() => { if (recorder2 && recorder2.state !== "inactive") recorder2.stop(); }, limit * 1000);
+          } catch (error) { finish(null); }
+        }, { once: true });
+      });
+    }
+    const retimed = async (blob) => {
+      if (speedFactor === 1 || !blob || !/^video\//.test(blob.type || "video/webm")) return blob;
+      lensNote("Das Video wird bearbeitet …");
+      const out = await retime(blob, speedFactor);
+      lensNote("");
+      return out;
+    };
     let timerSeconds = 0;
     timerTool.addEventListener("click", () => {
       if (state !== "idle") return;
@@ -631,6 +691,7 @@
 
     async function showSpecial(item, mine) {
       chosen = item;
+      feed.classList.remove("shifted");
       current = null;
       finalScore = 0;
       wantFace = false;
@@ -795,7 +856,7 @@
       if (state !== "playing") return;
       setState("over");
       clearInterval(timer);
-      if (chosen.kind === "lens" || chosen.kind === "randomsong") { navigator.vibrate?.(30); stopRecording().then(showReview); return; }
+      if (chosen.kind === "lens" || chosen.kind === "randomsong") { navigator.vibrate?.(30); stopRecording().then(retimed).then(showReview); return; }
       finalScore = Math.max(finalScore, Number.isFinite(value) ? value : 0);
       const top = remember(chosen.id, finalScore);
       host.classList.add("shake");
@@ -810,7 +871,7 @@
         if (!info || !rank.isConnected) return;
         rank.textContent = `${info.record ? "Neuer Rekord! " : ""}Platz ${info.rank} der Bestenliste${daily ? " · Spiel des Tages geschafft" : ""}`;
       });
-      setTimeout(() => { if (state === "over") stopRecording().then(showReview); }, 1500);
+      setTimeout(() => { if (state === "over") stopRecording().then(retimed).then(showReview); }, 1500);
     }
 
     function startRecording() {
@@ -862,6 +923,7 @@
         const hh = feed.videoHeight * scale;
         g.save();
         if (feed.style.filter) g.filter = feed.style.filter;
+        if (feed.classList.contains("shifted")) { g.translate(0, -0.22 * REC_H); g.translate(REC_W / 2, 0); g.scale(1.3, 1.3); g.translate(-REC_W / 2, 0); }       // (like the page: up by a fifth, a third bigger)
         if (facing === "user") { g.translate(REC_W, 0); g.scale(-1, 1); }
         g.drawImage(feed, (REC_W - w) / 2, (REC_H - hh) / 2, w, hh);
         g.restore();

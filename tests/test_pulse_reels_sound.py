@@ -109,7 +109,7 @@ def test_the_music_search_can_give_all_songs_at_once(client):
 def test_the_tools_of_the_camera_are_flip_filter_timer_and_a_fold_with_the_filters_and_the_timer_at_work():
     camera = read("yipi-camera.js")
     for word in ('labelled("Umdrehen", "flip", "Kamera umdrehen")', 'labelled("Filter", "filter"', 'labelled("Timer", "timer"', 'class: "cam-tool-fold"', "const USER_FILTERS = [", "const setFeedFilter = (css) =>",
-                 "async function timedClip(button)", "timedClip(held.button)", 'class: "cam-count"', 'h("div", { class: "cam-ctl-extras" }, filterTool, timerTool, ctlCam, ctlMic'):
+                 "async function timedClip(button)", "timedClip(held.button)", 'class: "cam-count"', 'h("div", { class: "cam-ctl-extras" }, speedTool, filterTool, timerTool, ctlCam, ctlMic'):
         assert word in camera, word
     assert "feed.style.filter = filterCss(item)" not in camera and 'feed.style.filter = "";' not in camera, "every filter goes through the filter of the person"
     for rule in (".cam-tool.labelled {", ".cam-ctl.folded .cam-ctl-extras { display: none; }", ".cam-count {", ".cam-filters {"):
@@ -121,4 +121,38 @@ def test_the_site_announces_the_new_camera_and_sound_window():
     import yipi_company
     lines = {line[0]: line for line in yipi_company.ANNOUNCEMENTS}
     assert "2026-11-02-camera2" in lines and len(lines["2026-11-02-camera2"][2]) <= 280 and lines["2026-11-02-camera2"][2].count("#") <= 2
+    assert len(lines) == len(yipi_company.ANNOUNCEMENTS)
+
+
+def test_in_the_road_games_the_picture_of_the_camera_moves_up_so_that_the_face_stays_above_the_road_and_the_clip_has_the_same_picture():
+    camera = read("yipi-camera.js")
+    assert 'const SHIFT = new Set(["car-race", "moto"]);' in camera and 'feed.classList.toggle("shifted", SHIFT.has(game.id));' in camera and 'feed.classList.remove("shifted");' in camera
+    assert 'if (feed.classList.contains("shifted")) { g.translate(0, -0.22 * REC_H); g.translate(REC_W / 2, 0); g.scale(1.3, 1.3); g.translate(-REC_W / 2, 0); }' in camera, "the recording is moved like the page"
+    assert camera.index('g.translate(0, -0.22 * REC_H)') < camera.index('g.translate(REC_W, 0); g.scale(-1, 1);'), "first the move, then the mirror"
+    for rule in (".cam-feed.shifted { transform-origin: 50% 0; transform: translateY(-22%) scale(1.3); }", ".cam-feed.mirror.shifted { transform: translateY(-22%) scale(1.3) scaleX(-1); }"):
+        assert rule in CSS, rule
+
+
+def test_the_speed_of_a_clip_can_be_chosen_and_is_made_by_playing_the_clip_into_a_new_recording():
+    camera = read("yipi-camera.js")
+    for word in ('labelled("Geschw. 1x", "speed"', "speedFactor === 1 ? 2 : speedFactor === 2 ? 3 : speedFactor === 3 ? 0.5 : 1", "function retime(blob, factor)", "video.playbackRate = factor;", "video.captureStream()",
+                 "createMediaElementSource(video).connect(sink)", "stopRecording().then(retimed).then(showReview)", 'toast("Auf diesem Gerät geht die Geschwindigkeit nicht.")'):
+        assert word in camera, word
+    assert camera.count("stopRecording().then(retimed).then(showReview)") == 2 and "stopRecording().then(showReview)" not in camera, "every clip goes through the speed"
+    assert "speed: S(" in read("yipi-icons.js")
+
+
+def test_the_coins_of_the_car_race_are_a_round_pill_with_a_gold_coin_and_the_style_tiles_have_pictures():
+    race, music = read("pg-race3d.js"), read("yipi-music.js")
+    for word in ("e.panel(W - 118, 68, 108, 50, 25, 0.55);", 'gold.addColorStop(0, "#fff7b8")', 'g.fillText("S", cx, cy + 1);', 'color: "#ffe27a"'):
+        assert word in race, word
+    assert 'url(/static/img/games/${picture}.jpg) center/cover' in music
+    for picture in ("car-race", "basketball", "cube-dash", "darts", "copter", "mini-golf", "asteroids"):
+        assert os.path.exists(os.path.join(ROOT, "static", "img", "games", f"{picture}.jpg")), picture
+
+
+def test_the_site_announces_the_speed_and_the_moved_picture():
+    import yipi_company
+    lines = {line[0]: line for line in yipi_company.ANNOUNCEMENTS}
+    assert "2026-11-02-speed" in lines and len(lines["2026-11-02-speed"][2]) <= 280 and lines["2026-11-02-speed"][2].count("#") <= 2
     assert len(lines) == len(yipi_company.ANNOUNCEMENTS)

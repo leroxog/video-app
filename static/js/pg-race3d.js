@@ -492,10 +492,17 @@
       e.panel(10, 70, 116, 46, 16, 0.5);
       e.text(String(kmh), 52, 93, { size: 26, stroke: false });
       e.text("km/h", 98, 96, { size: 12, weight: 700, color: "#d8dbe2", stroke: false });
-      e.panel(W - 114, 70, 104, 46, 16, 0.5);
-      g.fillStyle = "#ffcc1f"; g.beginPath(); g.arc(W - 92, 93, 9, 0, TAU); g.fill();
-      g.fillStyle = "#ffe98a"; g.beginPath(); g.arc(W - 93, 92, 5, 0, TAU); g.fill();
-      e.text(String(state.coins), W - 58, 93, { size: 24, stroke: false });
+      // the coins: a round pill, a gold coin with a rim, a ring, an S of Satürn and a shine, and the number in warm yellow
+      e.panel(W - 118, 68, 108, 50, 25, 0.55);
+      const cx = W - 92, cy = 93;
+      const gold = g.createRadialGradient(cx - 4, cy - 4, 1, cx, cy, 14);
+      gold.addColorStop(0, "#fff7b8"); gold.addColorStop(0.45, "#ffcc1f"); gold.addColorStop(1, "#c98200");
+      g.fillStyle = gold; g.beginPath(); g.arc(cx, cy, 14, 0, TAU); g.fill();
+      g.strokeStyle = "#fff0a0"; g.lineWidth = 2; g.beginPath(); g.arc(cx, cy, 13, 0, TAU); g.stroke();
+      g.strokeStyle = "#a86a00"; g.lineWidth = 1.5; g.beginPath(); g.arc(cx, cy, 9, 0, TAU); g.stroke();
+      g.fillStyle = "#a86a00"; g.font = "900 13px system-ui, sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("S", cx, cy + 1);
+      g.fillStyle = "rgba(255,255,255,0.75)"; g.beginPath(); g.ellipse(cx - 5, cy - 6, 4, 2, -0.6, 0, TAU); g.fill();
+      e.text(String(state.coins), W - 50, 93, { size: 26, color: "#ffe27a", stroke: false });
       if (state.nitro > 0) { e.panel(W / 2 - 60, 122, 120, 12, 6, 0.45); e.rect(W / 2 - 58, 124, 116 * Math.min(1, state.nitro / 3.6), 8, "#3aa8ff", 4); }
       pops.forEach((o, n) => { g.globalAlpha = Math.max(0, 1 - o.age / 1.1); e.text(o.text, W / 2, 168 + n * 26 - o.age * 26, { size: 22, color: o.color }); });
       g.globalAlpha = 1;

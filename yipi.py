@@ -54,6 +54,7 @@ import docread
 import siteauth
 import ysound
 import yipi_music
+import yipi_nex_tools
 import yipi_ranking
 from blobstore import STORE
 from models import db
@@ -4184,15 +4185,30 @@ def register_routes(app):
         if re.search(r"spiel|game|jump|runner|flappy|arcade", turns[-1][1], re.I):
             mode = {**mode, "prompt": mode["prompt"] + " " + yipi_games.NEX_GAME_FORMAT}      # (somebody who talks about a game: the AI knows the format of the games of Satürn)
 
+        question = turns[-1][1]
+        tools_allowed = "PYTEST_CURRENT_TEST" not in os.environ or os.environ.get("NEX_TOOLS_IN_TESTS") == "1"        # (the tests never ask the Internet)
+
         def generate():
+            nonlocal transcript
+            sent = False
             try:
+                services = yipi_nex_tools.run(question) if tools_allowed else ""      # (the free services that fit the question: weather, Wikipedia, rates, jokes, dice ...)
+                if services:
+                    transcript = f"{services}\n\n{transcript}"
                 if pictures:
-                    yield from ai_assistant.generate_vision_stream(mode["prompt"], transcript, pictures, max_tokens=mode["tokens"], temperature=min(0.7, mode["temperature"]))
+                    chunks = ai_assistant.generate_vision_stream(mode["prompt"], transcript, pictures, max_tokens=mode["tokens"], temperature=min(0.7, mode["temperature"]))
                 else:
                     extra = {"model": mode["model"]} if mode["model"] else {}
-                    yield from ai_assistant.generate_custom_stream(mode["prompt"], transcript, max_tokens=mode["tokens"], temperature=mode["temperature"], **extra)
+                    chunks = ai_assistant.generate_custom_stream(mode["prompt"], transcript, max_tokens=mode["tokens"], temperature=mode["temperature"], **extra)
+                for chunk in chunks:
+                    sent = True
+                    yield chunk
             except Exception:
                 logger.exception("Satürn konnte nicht antworten")
+            if not sent and not pictures and tools_allowed:                                   # the main AI said nothing: the free AI of Pollinations tries once
+                spare = yipi_nex_tools.fallback_text(mode["prompt"], transcript, mode["tokens"])
+                if spare:
+                    yield spare
 
         return Response(stream_with_context(generate()), mimetype="text/plain")
 

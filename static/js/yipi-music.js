@@ -25,7 +25,8 @@
   const FAVS = "saturn.favsongs";
   const favourites = () => { try { const list = JSON.parse(localStorage.getItem(FAVS) || "[]"); return Array.isArray(list) ? list.filter((id) => typeof id === "string").slice(0, 200) : []; } catch (error) { return []; } };
   const keepFavourites = (list) => { try { localStorage.setItem(FAVS, JSON.stringify(list)); } catch (error) { /* storage blocked */ } };
-  const STYLES = [["Beliebt", "#7a2cf0", "#ec4899"], ["Funk", "#f59e0b", "#ef4444"], ["Dance", "#06b6d4", "#6366f1"], ["Hip-Hop", "#334155", "#a855f7"], ["Lo-Fi", "#14b8a6", "#3b82f6"], ["Chill", "#22c55e", "#0ea5e9"], ["Retro", "#f97316", "#db2777"]];
+  const STYLES = [["Beliebt", "#7a2cf0", "#ec4899", "car-race"], ["Funk", "#f59e0b", "#ef4444", "basketball"], ["Dance", "#06b6d4", "#6366f1", "cube-dash"], ["Hip-Hop", "#334155", "#a855f7", "darts"],
+    ["Lo-Fi", "#14b8a6", "#3b82f6", "copter"], ["Chill", "#22c55e", "#0ea5e9", "mini-golf"], ["Retro", "#f97316", "#db2777", "asteroids"]];                 // (a picture of the site under a colour)
 
   function pick({ upload = false, onPick, title = "Sounds hinzufügen" } = {}) {
     let entry = null;
@@ -35,7 +36,7 @@
     let style = "";
     let favs = favourites();
     const input = h("input", { class: "mu-search", type: "search", placeholder: "Songs oder Künstler suchen", maxlength: 60, "aria-label": "Song suchen" });
-    const styles = h("div", { class: "mu-styles", role: "list" }, STYLES.map(([name, a, b]) => h("button", { class: "mu-style", type: "button", role: "listitem", style: `background:linear-gradient(135deg,${a},${b})`,
+    const styles = h("div", { class: "mu-styles", role: "list" }, STYLES.map(([name, a, b, picture]) => h("button", { class: "mu-style", type: "button", role: "listitem", style: `background:linear-gradient(135deg,${a}cc,${b}cc),url(/static/img/games/${picture}.jpg) center/cover`,
       onclick: (event) => { style = style === name ? "" : name; for (const tile of styles.children) tile.classList.toggle("on", tile.textContent === style); show(); } }, name)));
     const tabs = h("div", { class: "mu-tabs", role: "tablist" }, [["foryou", "flame", "Für dich"], ["files", "file", "Eigene Dateien"], ["favourites", "bookmark", "Favoriten"]].map(([id, symbol, name]) => h("button", { class: `mu-tab${id === tab ? " on" : ""}`, type: "button", role: "tab",
       "aria-selected": String(id === tab), "aria-label": name, onclick: () => { tab = id; for (const t of tabs.children) { const on = t.dataset.id === id; t.classList.toggle("on", on); t.setAttribute("aria-selected", String(on)); } show(); } }, icon(symbol))));

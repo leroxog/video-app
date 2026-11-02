@@ -52,6 +52,8 @@ ANNOUNCEMENTS = [
     ("2026-11-02-bigfiles", "web", "Neu: Viel größere Dateien. Videos bis 250 MB, Dokumente im Chat bis 100 MB, Fotos bis 25 MB und eigene Songs bis 50 MB. Vorher waren es 25, 15, 5 und 8 MB. #neu #uploads"),
     ("2026-11-02-voiceoff", "web", "Geändert: Die gesprochene Übersetzung (die Sprachspur) ist jetzt bei allen aus und es läuft der Originalton. Wer sie hören möchte, schaltet sie bei einem Video unter „Sprache“ wieder ein, dann bleibt sie an. #neu #sprachspur"),
     ("2026-11-02-camera2", "web", "Neu: Die Kamera startet bei „Normal“, mit Umdrehen, Filter und Timer an der Seite. Das Sound-Fenster sieht jetzt aus wie bei TikTok: Suche, Stile, Favoriten und Videos mit Sound. In Videos öffnet das Noten-Quadrat „Sound benutzen“. #neu #kamera"),
+    ("2026-11-02-nextools", "ai", "Neu: Nex AI kann jetzt viel mehr. Sie holt sich Wetter, Wikipedia, Wechselkurse, Bitcoin-Preise, Rechnungen, Länder, die Raumstation, Erdbeben, Pokémon, Witze, nutzloses Wissen und wirft Würfel. Frag einfach. #nexai #neu"),
+    ("2026-11-02-speed", "web", "Neu in der Kamera: „Geschw.“ macht dein Video 2- oder 3-mal schneller oder halb so schnell. Im Auto-Rennen und beim Motorrad rutscht das Kamerabild nach oben, damit man dein Gesicht sieht, und die Münzen sehen besser aus. #neu #kamera"),
 ]
 
 _state = {"started": False}
