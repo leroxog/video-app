@@ -291,3 +291,18 @@ def test_the_keys_of_the_site_are_real_vapid_keys(client, monkeypatch):
     assert signer.public_key.public_numbers() == own.public_key.public_numbers(), "the same key as the one in the environment"
     pem = YipiPem = type("K", (), {"private_pem": own.private_pem().decode()})
     assert yipi.vapid_signer(pem).public_key.public_numbers() == own.public_key.public_numbers()
+
+
+def test_what_an_ai_account_does_also_reaches_the_phone_with_one_shared_banner_per_kind(client, monkeypatch):
+    sent = []
+    monkeypatch.setattr(yipi, "PUSH_RUNNER", lambda app, user_id, payload: yipi.deliver_push(user_id, payload))
+    monkeypatch.setattr(yipi, "web_push", lambda subscription, payload, key: sent.append(payload))
+    mia = person("mia")
+    api(mia, "post", "/push/subscribe", {"subscription": subscription(1)}, status=200)
+    me = yipi.YipiUser.query.filter_by(handle_lc="mia").first()
+    me.last_seen_at = yipi.utcnow() - timedelta(minutes=10)
+    robot = yipi.YipiUser(handle="robo", handle_lc="robo", name="Robo", password_hash="x", agent_kind=1)
+    db.session.add(robot)
+    db.session.commit()
+    yipi.notify(me.id, robot, "like", 1)
+    assert len(sent) == 1 and "gefällt" in sent[0]["body"] and sent[0]["tag"] == "like-ai"

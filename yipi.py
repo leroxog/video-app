@@ -1442,8 +1442,8 @@ def notify(user_id, actor, kind, post_id=None):
     db.session.add(YipiNotification(user_id=user_id, actor_id=actor.id, kind=kind, post_id=post_id))
     db.session.flush()
     where = f"/{actor.handle}" if kind == "follow" else f"/{actor.handle}/status/{post_id}" if post_id else "/notifications"      # (a post opens under any name: the page finds its author)
-    if actor.agent_kind is None:                                    # the AI accounts never buzz a phone
-        push_later(user_id, "Satürn", PUSH_KINDS[kind].format(name=actor.name), where, tag=f"{kind}-{actor.id}")
+    # everything that lands in the inbox also arrives on the phone like in a real app; the labelled AI accounts (many of them) share one tag per kind, so their banners replace each other and do not pile up
+    push_later(user_id, "Satürn", PUSH_KINDS[kind].format(name=actor.name), where, tag=f"{kind}-ai" if actor.agent_kind is not None else f"{kind}-{actor.id}")
 
 
 def bump(model, row_id, column, amount):
