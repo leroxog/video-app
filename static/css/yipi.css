@@ -2562,5 +2562,12 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .mu-dark { box-sizing: border-box; max-width: 100%; }
 
 /* ----- the games with a road: the picture of the camera moves up (a fifth of the height, a third bigger), so that the face stays above the road */
-.cam-feed.shifted { transform-origin: 50% 0; transform: translateY(-22%) scale(1.3); }
-.cam-feed.mirror.shifted { transform: translateY(-22%) scale(1.3) scaleX(-1); }
+.cam-feed.shifted { transform-origin: 50% 0; transform: translateY(-32%) scale(1.45); }
+.cam-feed.mirror.shifted { transform: translateY(-32%) scale(1.45) scaleX(-1); }
+
+/* ----- the reels: the buttons are plain white symbols without a glass circle, and the picture of the person is bigger than they are */
+.reel-btn-ic, .reel-btn-ic:hover { background: transparent; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.6)); }
+.reel-btn.on .reel-btn-ic { background: transparent; box-shadow: none; color: #fe2c55; }
+.reel-btn.on .reel-btn-ic svg { fill: currentColor; }
+.reel-person { width: 68px; height: 68px; margin-bottom: 16px; }
+.reel-follow { width: 26px; height: 26px; margin-left: -13px; bottom: -12px; }

@@ -16,10 +16,10 @@
 
   let busy = false;
 
-  /* The best format the browser's recorder makes (webm where it can, mp4 on Safari), "" when it cannot record at all. */
+  /* The best format the browser's recorder makes: a real MP4 first (WhatsApp and the gallery take it as a video), webm where mp4 is not possible, "" when it cannot record at all. */
   function pickRecorderType() {
     if (!window.MediaRecorder || !MediaRecorder.isTypeSupported) return "";
-    return ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm", "video/mp4"].find((type) => MediaRecorder.isTypeSupported(type)) || "";
+    return ["video/mp4;codecs=avc1.42E01E,mp4a.40.2", "video/mp4;codecs=avc1,mp4a.40.2", "video/mp4", "video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"].find((type) => MediaRecorder.isTypeSupported(type)) || "";
   }
 
   function roundedRect(ctx, x, y, w, hh, r) {

@@ -98,7 +98,7 @@ def test_a_lens_has_a_shutter_a_tap_is_a_photo_and_a_finger_that_stays_is_a_clip
 def test_the_places_to_write_open_the_camera_of_satuern_and_not_the_one_of_the_device():
     camera = read("yipi-camera.js")
     assert "Y.cameraCapture = (options = {}) =>" in camera and "capture.resolve(fileOf())" in camera and "list = [NORMAL, ...(Y.lenses ? Y.lenses.PRESETS : [])]" in camera
-    assert "const NORMAL = { id: \"l-normal\"" in camera and "[NORMAL, create, ...flagship" in camera
+    assert "const NORMAL = { id: \"l-normal\"" in camera and "[create, NORMAL, ...flagship" in camera
     for name, call in (("yipi-chats.js", "Y.cameraCapture ? await Y.cameraCapture()"), ("yipi-components.js", "Y.cameraCapture ? await Y.cameraCapture({ photoOnly: true })"), ("yipi-nex.js", "Y.cameraCapture ? await Y.cameraCapture({ photoOnly: true })")):
         assert call in read(name), name
     assert "files }" in read("yipi-components.js") and "options.files" in read("yipi-components.js"), "Y.compose({files}) puts a photo into the box of a post"

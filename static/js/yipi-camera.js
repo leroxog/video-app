@@ -72,7 +72,7 @@
     const timeBar = h("span", { class: "cam-time-fill" });
     const stop = h("button", { class: "cam-stop", type: "button", "aria-label": "Aufnahme beenden" }, h("span", {}));
     const bestLine = h("div", { class: "cam-best" });
-    const hud = h("div", { class: "cam-hud", hidden: true }, h("div", { class: "cam-time" }, timeBar), score, bestLine, stop);
+    const hud = h("div", { class: "cam-hud", hidden: true }, h("div", { class: "cam-time" }, timeBar), score, bestLine);                  // (no red stop button: a long touch on the circle below ends the clip)
     const over = h("div", { class: "cam-over", hidden: true });
     const stage = h("div", { class: "cam-stage" }, feed, fallback, host, hud, over);
     const labelled = (label, symbol, name) => h("button", { class: "cam-tool labelled", type: "button", "aria-label": name || label }, h("span", { class: "cam-tool-label" }, label), h("span", { class: "cam-tool-ic" }, icon(symbol)));
@@ -83,7 +83,7 @@
     const foldTool = h("button", { class: "cam-tool-fold", type: "button", "aria-label": "Werkzeuge einklappen", "aria-expanded": "true" }, icon("chevron"));
     const countBox = h("div", { class: "cam-count", role: "status", "aria-live": "assertive", hidden: true });
     const board = h("button", { class: "cam-tool", type: "button", "aria-label": "Bestenliste", "aria-haspopup": "dialog" }, icon("trophy"));
-    const all = h("button", { class: "cam-tool", type: "button", "aria-label": "Alle Spiele", "aria-haspopup": "dialog" }, icon("gamepad"));
+    const all = h("button", { class: "cam-tool", type: "button", "aria-label": "Linsen und Spiele suchen", "aria-haspopup": "dialog" }, icon("search"));
     const ctlCam = h("button", { class: "cam-tool small", type: "button", "aria-pressed": "false" });
     const ctlMic = h("button", { class: "cam-tool small", type: "button", "aria-pressed": "false" });
     const ctlSound = h("button", { class: "cam-tool small", type: "button", "aria-haspopup": "true", "aria-expanded": "false" });
@@ -281,6 +281,7 @@
       });
       const button = h("button", { class: `lens${game.kind === "create" ? " create" : ""}${game.kind === "lens" ? " face" : ""}`, type: "button", role: "option", "aria-selected": "false", "aria-label": `${game.name}: ${game.hint}`, "data-id": game.id }, circle);
       button.addEventListener("click", () => {
+        if (stoppedByHold) { stoppedByHold = false; return; }                 // (the click that ends a long touch is no tap)
         if (state !== "idle" && state !== "playing") return;
         if (lockedRound && state === "playing") { finish(finalScore); return; }       // a tap on the red circle ends a locked clip
         if (index !== active) { go(index, true); return; }
@@ -311,6 +312,7 @@
     function paintActive() {
       [...lensBar.children].forEach((button, index) => { button.classList.toggle("on", index === active); button.setAttribute("aria-selected", String(index === active)); });
       const game = list[active];
+      board.hidden = !(game && game.kind === "game" && !game.community);          // the cup only where a game has a list of the best
       if (game) {
         lastGame = game.id;
         fill(lensName, h("b", {}, game.name), h("span", { class: "cam-lens-cat" }, game.cat), todaysGame() === game ? h("span", { class: "cam-daily" }, "Spiel des Tages") : null,
@@ -359,7 +361,7 @@
       const topics = ["Alle", ...new Set(list.map((game) => game.cat))];
       const grid = h("div", { class: "cam-grid" });
       const chips = h("div", { class: "games-chips", role: "tablist", "aria-label": "Themen" });
-      const search = h("input", { class: "search-input", type: "search", placeholder: "Spiele suchen", "aria-label": "Spiele suchen", autocomplete: "off", maxlength: 40 });
+      const search = h("input", { class: "search-input", type: "search", placeholder: "Linsen und Spiele suchen", "aria-label": "Linsen und Spiele suchen", autocomplete: "off", maxlength: 40 });
       let entry = null;
       function draw() {
         fill(chips, ...topics.map((name) => h("button", { class: `chip${name === topic ? " on" : ""}`, type: "button", role: "tab", "aria-selected": String(name === topic), onclick: () => { topic = name; draw(); } }, name)));
@@ -371,7 +373,7 @@
       }
       search.addEventListener("input", () => { term = search.value.trim().toLowerCase(); draw(); });
       draw();
-      entry = dialog({ title: `Alle Spiele (${list.length})`, wide: true, body: h("div", { class: "cam-gallery" }, h("label", { class: "search-box" }, icon("search"), search), chips, grid), initialFocus: search });
+      entry = dialog({ title: `Linsen und Spiele (${list.length})`, wide: true, body: h("div", { class: "cam-gallery" }, h("label", { class: "search-box" }, icon("search"), search), chips, grid), initialFocus: search });
     }
     all.addEventListener("click", galleryDialog);
     /* The symbol with the QR code: the code (and the link) of the game or lens that is open; the other person scans it or gets the link and plays exactly this one. */
@@ -418,6 +420,19 @@
         startLensRound();
       }, 320);
     });
+    /* While a game or a locked clip runs, a long touch on the circle in the middle ends the recording (there is no red stop button). */
+    let stopHold = 0;
+    let stoppedByHold = false;
+    const cancelStopHold = () => { clearTimeout(stopHold); stopHold = 0; };
+    lensBar.addEventListener("pointerdown", (event) => {
+      const button = event.target.closest(".lens");
+      if (!button || state !== "playing" || lensBar.children[active] !== button || (shutter && shutter.holding && !shutter.locked)) return;
+      cancelStopHold();
+      stopHold = setTimeout(() => { stopHold = 0; if (state !== "playing") return; stoppedByHold = true; navigator.vibrate?.(20); finish(finalScore); }, 600);
+    });
+    lensBar.addEventListener("pointermove", (event) => { if (stopHold && event.buttons && Math.abs(event.movementX) + Math.abs(event.movementY) > 6) cancelStopHold(); });
+    window.addEventListener("pointerup", cancelStopHold);
+    window.addEventListener("pointercancel", cancelStopHold);
     lensBar.addEventListener("pointermove", (event) => {
       if (shutter && !shutter.holding && Math.hypot(event.clientX - shutter.x, event.clientY - shutter.y) > 12) { clearTimeout(shutter.timer); shutter = null; }      // (a swipe along the strip, no shutter)
     });
@@ -923,7 +938,7 @@
         const hh = feed.videoHeight * scale;
         g.save();
         if (feed.style.filter) g.filter = feed.style.filter;
-        if (feed.classList.contains("shifted")) { g.translate(0, -0.22 * REC_H); g.translate(REC_W / 2, 0); g.scale(1.3, 1.3); g.translate(-REC_W / 2, 0); }       // (like the page: up by a fifth, a third bigger)
+        if (feed.classList.contains("shifted")) { g.translate(0, -0.32 * REC_H); g.translate(REC_W / 2, 0); g.scale(1.45, 1.45); g.translate(-REC_W / 2, 0); }       // (like the page: up by a third, almost half again as big)
         if (facing === "user") { g.translate(REC_W, 0); g.scale(-1, 1); }
         g.drawImage(feed, (REC_W - w) / 2, (REC_H - hh) / 2, w, hh);
         g.restore();
@@ -1069,7 +1084,7 @@
       anchor.remove();
       toast("Der Clip wurde gespeichert.");
     }
-    function fileOf() { return new File([clip.blob], clip.name, { type: clip.blob.type || (clip.photo ? "image/jpeg" : "video/webm") }); }
+    function fileOf() { return new File([clip.blob], clip.name, { type: (clip.blob.type || (clip.photo ? "image/jpeg" : "video/webm")).split(";")[0] }); }
     function post() {
       const file = fileOf();
       if (clip.photo) { Y.compose({ files: [file] }); return; }       // a photo goes into the box for a new post
@@ -1136,10 +1151,10 @@
       const qr = { id: "qr", kind: "qr", name: "QR-Code", emoji: "", cat: "Teilen", hint: "Dein QR-Code zum Teilen und Scannen", color: "#1a1a1f" };
       const flagship = games.filter((game) => game.featured);
       const randomSong = { id: "l-zufallssong", kind: "randomsong", name: "Zufalls-Song", emoji: "", cat: "Musik", color: "#7a2cf0", hint: "Mach ein Foto von dir, dann kommt ein zufälliger Song" };
-      list = [NORMAL, create, ...flagship, randomSong, ...(Y.lenses ? Y.lenses.PRESETS : []), qr, ...games.filter((game) => !game.featured)];       // the plain camera is the first one: the others come from its right
-      let wanted = route.game ? list.findIndex((game) => game.id === route.game) : 0;
+      list = [create, NORMAL, ...flagship, randomSong, ...(Y.lenses ? Y.lenses.PRESETS : []), qr, ...games.filter((game) => !game.featured)];       // the small plus is the first one, the plain camera the second: the camera opens on it
+      let wanted = route.game ? list.findIndex((game) => game.id === route.game) : 1;
       if (wanted < 0 && route.game) wanted = await addShared(route.game);          // a lens or game of somebody else that was linked
-      active = wanted >= 0 ? wanted : 0;                                           // the camera opens on the plain camera
+      active = wanted >= 0 ? wanted : 1;                                           // the camera opens on the plain camera
       if (Y.pendingSong) { setSong(Y.pendingSong, false); Y.pendingSong = null; } // the sound of a video ("Sound benutzen")
       loadingBox.hidden = true;
       drawLenses();
@@ -1158,7 +1173,7 @@
     async function addShared(id) {
       const found = (Y.lenses && /^lu-/.test(id) && await Y.lenses.find(id)) || (Y.communityGames && /^gu-/.test(id) && await Y.communityGames.find(id));
       if (!found) return -1;
-      list.splice(Math.max(1, list.findIndex((entry) => entry.kind === "qr")), 0, found);
+      list.splice(Math.max(2, list.findIndex((entry) => entry.kind === "qr")), 0, found);
       return list.indexOf(found);
     }
     function fit() {                                           // the play field is 9:16 and as big as the screen allows; the camera behind it fills the whole stage
@@ -1174,7 +1189,7 @@
     loadGames();
 
     const api = { feed, stage, host, toast, get before() { return lastItem; }, get stream() { return stream; }, get facing() { return facing; }, go: (id) => { const at = list.findIndex((entry) => entry.id === id); if (at >= 0) go(at, true); },
-      add: (item) => { const at = list.findIndex((entry) => entry.id === item.id); if (at < 0) list.splice(1, 0, item); active = Math.max(1, list.findIndex((entry) => entry.id === item.id)); drawLenses(); },
+      add: (item) => { const at = list.findIndex((entry) => entry.id === item.id); if (at < 0) list.splice(2, 0, item); active = Math.max(2, list.findIndex((entry) => entry.id === item.id)); drawLenses(); },
       remove: (id) => { const at = list.findIndex((entry) => entry.id === id); if (at < 0) return; list.splice(at, 1); active = Math.min(Math.max(0, at), list.length - 1); drawLenses(); },
       reload: () => ctx.reload(), reopen: () => openCamera() };
     paintSong();

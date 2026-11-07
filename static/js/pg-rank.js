@@ -101,8 +101,8 @@
       shown = 0;
     }
     reset();
-    /* the places stand at the edge of the screen: 1 to 5 on the right, 6 to 10 on the left (smaller) */
-    const slotRect = (i) => (size === 5 ? { x: W - 82, y: 128 + i * 76, w: 70, h: 66 } : i < 5 ? { x: W - 70, y: 112 + i * 64, w: 58, h: 56 } : { x: 12, y: 112 + (i - 5) * 64, w: 58, h: 56 });
+    /* the places stand at the edge of the screen: 1 to 5 on the left, 6 to 10 on the right (smaller) */
+    const slotRect = (i) => (size === 5 ? { x: 12, y: 128 + i * 76, w: 70, h: 66 } : i < 5 ? { x: 12, y: 112 + i * 64, w: 58, h: 56 } : { x: W - 70, y: 112 + (i - 5) * 64, w: 58, h: 56 });
     const seen = (item) => !item.pic || item.pic.ok;                         // its picture has arrived (or it has none)
     function nextSpin() {
       if (!pool.length) pool = e.shuffle(items);
@@ -206,9 +206,11 @@
         rr(g, -rs / 2, -rs / 2, rs, rs, 19); g.clip();
         g.fillStyle = "#14161c"; g.fillRect(-rs / 2, -rs / 2, rs, rs);
         if (phase === "spin" && strip.length) {
+          // the reel flips from one picture to the next (one picture at a time, never a smear of many), slower and slower, and stops on the last one
           const eased = 1 - Math.pow(1 - shown, 3);
-          const pos = eased * (strip.length - 1) * rs;
-          for (let k = Math.max(0, Math.floor(pos / rs) - 1); k <= Math.min(strip.length - 1, Math.floor(pos / rs) + 1); k++) drawPicture(g, strip[k], -rs / 2, -rs / 2 + k * rs - pos, rs, rs, 0, meta.fit);
+          const at = Math.min(strip.length - 1, Math.round(eased * (strip.length - 1)));
+          const frac = eased * (strip.length - 1) - at;
+          drawPicture(g, strip[at], -rs / 2, -rs / 2 + Math.max(-0.5, Math.min(0.5, frac)) * rs * 0.08, rs, rs, 0, meta.fit);
           g.fillStyle = `rgba(0,0,0,${0.35 * (1 - shown)})`; g.fillRect(-rs / 2, -rs / 2, rs, rs);
         } else if (current && phase === "pick") {
           drawPicture(g, current, -rs / 2, -rs / 2, rs, rs, 0, meta.fit);

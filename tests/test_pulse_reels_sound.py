@@ -81,10 +81,10 @@ def test_the_videos_have_the_sound_button_with_its_menu_and_a_check_that_stays()
 
 def test_the_camera_opens_on_the_plain_camera_and_takes_the_sound_of_a_video_as_its_song():
     camera, music = read("yipi-camera.js"), read("yipi-music.js")
-    assert "list = [NORMAL, create, ...flagship, randomSong" in camera
-    assert "active = wanted >= 0 ? wanted : 0;" in camera and "if (Y.pendingSong) { setSong(Y.pendingSong, false); Y.pendingSong = null; }" in camera
-    assert 'next.src === "video" ? Promise.resolve("") : loadWhole(urlOf(next))' in music, "the sound of a video plays from the video, it is not loaded as a whole"
-    assert "song.src === \"video\" ? `Musik: ${song.title} · ${song.creator}`" in music
+    assert "list = [create, NORMAL, ...flagship, randomSong" in camera
+    assert "active = wanted >= 0 ? wanted : 1;" in camera and "if (Y.pendingSong) { setSong(Y.pendingSong, false); Y.pendingSong = null; }" in camera
+    assert 'loadWhole(sameOriginUrl(next))' in music and '/yipi-media/${song.media}?same=1' in music, "the sound of a video is loaded from the site itself (not from R2)"
+    assert "song.src === \"video\" || song.src === \"device\" ? `Musik: ${song.title} · ${song.creator}`" in music
 
 
 def test_the_sound_window_is_dark_with_search_styles_tabs_videos_favourites_and_a_purple_plus():
@@ -127,9 +127,9 @@ def test_the_site_announces_the_new_camera_and_sound_window():
 def test_in_the_road_games_the_picture_of_the_camera_moves_up_so_that_the_face_stays_above_the_road_and_the_clip_has_the_same_picture():
     camera = read("yipi-camera.js")
     assert 'const SHIFT = new Set(["car-race", "moto"]);' in camera and 'feed.classList.toggle("shifted", SHIFT.has(game.id));' in camera and 'feed.classList.remove("shifted");' in camera
-    assert 'if (feed.classList.contains("shifted")) { g.translate(0, -0.22 * REC_H); g.translate(REC_W / 2, 0); g.scale(1.3, 1.3); g.translate(-REC_W / 2, 0); }' in camera, "the recording is moved like the page"
-    assert camera.index('g.translate(0, -0.22 * REC_H)') < camera.index('g.translate(REC_W, 0); g.scale(-1, 1);'), "first the move, then the mirror"
-    for rule in (".cam-feed.shifted { transform-origin: 50% 0; transform: translateY(-22%) scale(1.3); }", ".cam-feed.mirror.shifted { transform: translateY(-22%) scale(1.3) scaleX(-1); }"):
+    assert 'if (feed.classList.contains("shifted")) { g.translate(0, -0.32 * REC_H); g.translate(REC_W / 2, 0); g.scale(1.45, 1.45); g.translate(-REC_W / 2, 0); }' in camera, "the recording is moved like the page"
+    assert camera.index('g.translate(0, -0.32 * REC_H)') < camera.index('g.translate(REC_W, 0); g.scale(-1, 1);'), "first the move, then the mirror"
+    for rule in (".cam-feed.shifted { transform-origin: 50% 0; transform: translateY(-32%) scale(1.45); }", ".cam-feed.mirror.shifted { transform: translateY(-32%) scale(1.45) scaleX(-1); }"):
         assert rule in CSS, rule
 
 
@@ -155,4 +155,50 @@ def test_the_site_announces_the_speed_and_the_moved_picture():
     import yipi_company
     lines = {line[0]: line for line in yipi_company.ANNOUNCEMENTS}
     assert "2026-11-02-speed" in lines and len(lines["2026-11-02-speed"][2]) <= 280 and lines["2026-11-02-speed"][2].count("#") <= 2
+    assert len(lines) == len(yipi_company.ANNOUNCEMENTS)
+
+
+def test_the_camera_opens_on_normal_with_the_plus_before_it_and_a_search_a_long_touch_stop_and_no_red_button():
+    camera = read("yipi-camera.js")
+    assert "list = [create, NORMAL, ...flagship" in camera and "wanted : 1" in camera and "list.splice(2, 0, item)" in camera
+    assert 'icon("search"));' in camera and "Linsen und Spiele suchen" in camera and "score, bestLine);" in camera
+    for word in ("stopHold = setTimeout(", "stoppedByHold = true; navigator.vibrate?.(20); finish(finalScore);", "if (stoppedByHold) { stoppedByHold = false; return; }",
+                 'board.hidden = !(game && game.kind === "game" && !game.community);'):
+        assert word in camera, word
+
+
+def test_clips_are_real_mp4_when_the_browser_can_and_the_sound_of_a_device_video_can_be_taken():
+    download, music = read("yipi-download.js"), read("yipi-music.js")
+    assert download.index('"video/mp4;codecs=avc1.42E01E,mp4a.40.2"') < download.index('"video/webm;codecs=vp9,opus"')
+    for word in ('src: "device"', "Extrahierter Song ${deviceNumber()}", "URL.createObjectURL(file)", "Video aus der Galerie wählen", 'next.src === "device" ? Promise.resolve(next.url)', "(BigInt(count) + BigInt(offset)) * 2654435761n % (1n << 30n)"):
+        assert word in music, word
+    number = lambda n, start: ((n + start) * 2654435761) % (1 << 30)
+    assert len({number(i, 12345) for i in range(1, 100_001)}) == 100_000, "one-to-one on a device"
+
+
+def test_the_sound_of_a_video_comes_from_the_site_itself_not_from_r2(client, monkeypatch):
+    mia = flask_app.test_client()
+    assert mia.post("/api/yipi/signup", json={"handle": "mia", "password": PASSWORD, "adult": True}).status_code == 200
+    item = yipi.YipiMedia(id="a" * 32, owner_id=1, content_type="video/mp4", size=7, width=1, height=1, stored="r2", data=b"")
+    monkeypatch.setattr(yipi.STORE, "url", lambda *args, **kwargs: "https://r2.example/x")
+    monkeypatch.setattr(yipi, "load_bytes", lambda model, row: b"abcdefg")
+    db.session.add(item)
+    db.session.commit()
+    plain = mia.get("/yipi-media/" + "a" * 32)
+    assert plain.status_code == 302, "a player goes to R2"
+    same = mia.get("/yipi-media/" + "a" * 32 + "?same=1")
+    assert same.status_code == 200 and same.data == b"abcdefg" and same.mimetype == "video/mp4"
+
+
+def test_the_reels_have_plain_white_symbols_a_bigger_person_and_the_ranks_stand_on_the_left():
+    for rule in (".reel-btn-ic, .reel-btn-ic:hover { background: transparent;", ".reel-person { width: 68px; height: 68px; margin-bottom: 16px; }"):
+        assert rule in CSS, rule
+    rank = read("pg-rank.js")
+    assert "size === 5 ? { x: 12, y: 128 + i * 76" in rank and "{ x: W - 70, y: 112 + (i - 5) * 64" in rank and "one picture at a time" in rank
+
+
+def test_the_site_announces_the_new_camera():
+    import yipi_company
+    lines = {line[0]: line for line in yipi_company.ANNOUNCEMENTS}
+    assert "2026-11-07-camera3" in lines and len(lines["2026-11-07-camera3"][2]) <= 280 and lines["2026-11-07-camera3"][2].count("#") <= 2
     assert len(lines) == len(yipi_company.ANNOUNCEMENTS)

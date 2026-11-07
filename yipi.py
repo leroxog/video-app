@@ -2604,6 +2604,11 @@ def register_routes(app):
         if item is None:
             abort(404)
         headers = {"Cache-Control": "public, max-age=31536000, immutable", "Content-Security-Policy": "default-src 'none'; img-src 'self'; media-src 'self'; sandbox", "Content-Disposition": "inline"}
+        if request.args.get("same") and item.stored == "r2" and item.content_type.startswith(("video/", "audio/")) and item.size <= MAX_VIDEO_BYTES:
+            # The music player of the camera needs the bytes from this very address: a file of another origin (R2) is silent in the sound mixer.
+            response = Response(load_bytes(YipiMedia, item), mimetype=item.content_type, headers=headers)
+            response.headers["X-Content-Type-Options"] = "nosniff"
+            return response
         return blob_response(YipiMedia, item, headers)
 
     # -------------------------------------------------------------------------------- files in chats (private)
@@ -3119,6 +3124,8 @@ def register_routes(app):
                 query = query.filter(or_(YipiPost.repost_of_id.is_(None), ~YipiPost.repost_of_id.in_(originals)))
         else:
             query = visible_posts(viewer).filter(YipiPost.reply_to_id.is_(None), YipiPost.repost_of_id.is_(None))
+            # the official accounts (Satürn-Web, Nex-AI) never fill "Für dich" or the videos: one finds them on their profile or by following them
+            query = query.filter(YipiPost.user_id.notin_(select(YipiUser.id).where(YipiUser.company.is_(True))))
             if feed == "media":                                   # Explore, "Medien": posts with photos, a GIF or a video
                 query = query.filter(YipiPost.id.in_(select(YipiMedia.post_id).where(YipiMedia.post_id.isnot(None))))
             elif feed == "videos":                                # the Videos tab: posts with a video

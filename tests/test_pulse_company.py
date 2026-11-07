@@ -84,7 +84,8 @@ def test_nobody_is_made_to_follow_them_but_their_posts_are_in_the_feed_and_they_
     yipi_company.start_up(flask_app)
     assert olga.get("/api/yipi/me").get_json()["me"]["following"] == 0, "a new account follows nobody"
     timeline = olga.get("/api/yipi/timeline?feed=foryou").get_json()["items"]
-    assert {item["user"]["handle"] for item in timeline} >= {"nexweb", "nexai"}, "the announcements are in everybody's feed"
+    assert not {item["user"]["handle"] for item in timeline} & {"nexweb", "nexai"}, "the announcements no longer fill Für dich"
+    assert {item["user"]["handle"] for item in olga.get("/api/yipi/users/nexweb/posts").get_json()["items"]} == {"nexweb"}, "they are on their profile"
     assert olga.get("/api/yipi/timeline?feed=following").get_json()["items"] == []
     suggested = {user["handle"] for user in olga.get("/api/yipi/suggestions?limit=20").get_json()["users"]}
     assert {"nexweb", "nexai"} <= suggested, "and they are suggested under 'Wem folgen'"
@@ -103,8 +104,9 @@ def test_the_profile_says_official_and_nobody_can_write_to_them(client):
     assert any(item["user"]["handle"] == "olga" for item in timeline)
     yipi_company.publish_pending()
     timeline = olga.get("/api/yipi/timeline?feed=foryou").get_json()["items"]
-    official = [item for item in timeline if item["user"]["handle"] in ("nexweb", "nexai")]
-    assert official and all(item["user"]["company"] is True for item in official)
+    assert not any(item["user"]["company"] for item in timeline), "the official accounts never fill Für dich"
+    own = olga.get("/api/yipi/users/nexweb/posts").get_json()["items"]
+    assert own and all(item["user"]["company"] is True for item in own), "but their profile shows them"
     friends = olga.get("/api/yipi/friends").get_json()
     assert not any(user["handle"] in ("nexweb", "nexai") for user in friends["users"]), "official accounts are not friends to chat with"
 

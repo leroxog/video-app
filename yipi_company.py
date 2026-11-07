@@ -54,6 +54,7 @@ ANNOUNCEMENTS = [
     ("2026-11-02-camera2", "web", "Neu: Die Kamera startet bei „Normal“, mit Umdrehen, Filter und Timer an der Seite. Das Sound-Fenster sieht jetzt aus wie bei TikTok: Suche, Stile, Favoriten und Videos mit Sound. In Videos öffnet das Noten-Quadrat „Sound benutzen“. #neu #kamera"),
     ("2026-11-02-nextools", "ai", "Neu: Nex AI kann jetzt viel mehr. Sie holt sich Wetter, Wikipedia, Wechselkurse, Bitcoin-Preise, Rechnungen, Länder, die Raumstation, Erdbeben, Pokémon, Witze, nutzloses Wissen und wirft Würfel. Frag einfach. #nexai #neu"),
     ("2026-11-02-speed", "web", "Neu in der Kamera: „Geschw.“ macht dein Video 2- oder 3-mal schneller oder halb so schnell. Im Auto-Rennen und beim Motorrad rutscht das Kamerabild nach oben, damit man dein Gesicht sieht, und die Münzen sehen besser aus. #neu #kamera"),
+    ("2026-11-07-camera3", "web", "Kamera neu sortiert: erst das kleine Plus, dann die normale Kamera, auf der du startest. Oben links suchst du Linsen, lang auf den Kreis drücken beendet die Aufnahme. Clips sind echte MP4-Videos, und den Ton eines Videos von deinem Gerät kannst du nehmen. #kamera #neu"),
 ]
 
 _state = {"started": False}

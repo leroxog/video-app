@@ -14,9 +14,23 @@
   /* "Extrahierter Song 123456789": the sound of a video of somebody else. The number comes from the number of the post by a one-to-one mixing (an odd factor modulo 2^30), so that it looks random and two
      videos never get the same one; the same video always has the same number. */
   const extractedNumber = (postId) => { try { return String(Number((BigInt(postId) * 2654435761n) % (1n << 30n))); } catch (error) { return String(postId); } };
+  /* The address the mixer may use: a video or an uploaded song is asked from the site itself (the server hands the bytes over), not from the storage of another origin, which would be silent. */
+  const sameOriginUrl = (song) => ((song.src === "video" || song.src === "upload") && song.media ? `/yipi-media/${song.media}?same=1` : urlOf(song));
+  /* The number of a sound from a video of the device: a counter of this device, mixed with the same one-to-one formula (and a start that is different on every device), so the numbers look random and never come twice. */
+  function deviceNumber() {
+    let count = 0;
+    let offset = 0;
+    try {
+      count = Number(localStorage.getItem("saturn.extracted") || 0) + 1;
+      offset = Number(localStorage.getItem("saturn.extractedStart"));
+      if (!offset) { offset = 1 + Math.floor(Math.random() * 1_000_000_000); localStorage.setItem("saturn.extractedStart", String(offset)); }
+      localStorage.setItem("saturn.extracted", String(count));
+    } catch (error) { count = Date.now(); offset = Math.floor(Math.random() * 1_000_000); }
+    return String((BigInt(count) + BigInt(offset)) * 2654435761n % (1n << 30n));
+  }
   const extractedSong = (post, media) => ({ src: "video", media: media.id, url: media.url, title: `Extrahierter Song ${extractedNumber(post.id)}`, creator: `@${post.user.handle}`, post: post.id, start: 0 });
   const label = (song) => (song ? `${song.title}${song.creator ? ` · ${song.creator}` : ""}` : "");
-  const credit = (song) => (song ? (song.src === "archive" ? `Musik: ${song.title} · ${song.creator} · ${song.licence}` : song.src === "video" ? `Musik: ${song.title} · ${song.creator}` : `Musik: ${song.title}`) : "");
+  const credit = (song) => (song ? (song.src === "archive" ? `Musik: ${song.title} · ${song.creator} · ${song.licence}` : song.src === "video" || song.src === "device" ? `Musik: ${song.title} · ${song.creator}` : `Musik: ${song.title}`) : "");
   const minutes = (seconds) => (seconds ? `${Math.floor(seconds / 60)}:${String(Math.round(seconds % 60)).padStart(2, "0")}` : "");
 
   /* ------------------------------------------------------------------------------------------------ the window to choose a song */
@@ -109,8 +123,9 @@
       videos.hidden = tab !== "foryou" || !!style || !!words.length || !videos.children.length;
       fill(list);
       if (tab === "files") {
-        fill(list, h("div", { class: "mu-files" }, h("p", {}, "Nimm einen Song von deinem Gerät. Nimm nur Musik, die du benutzen darfst. Du bist dafür verantwortlich."),
-          h("button", { class: "mu-pick", type: "button", onclick: () => fileInput.click() }, icon("file"), "Song aus dem Ordner wählen")));
+        fill(list, h("div", { class: "mu-files" }, h("p", {}, "Nimm den Ton eines Videos von deinem Gerät. Nur der Ton wird benutzt, das Video bleibt bei dir. Nimm nur Ton, den du benutzen darfst. Du bist dafür verantwortlich."),
+          h("button", { class: "mu-pick", type: "button", onclick: () => { fileInput.accept = "video/*,.mp4,.m4v,.mov,.webm"; fileInput.click(); } }, icon("camera"), "Video aus der Galerie wählen"),
+          h("button", { class: "mu-pick", type: "button", onclick: () => { fileInput.accept = "audio/mpeg,audio/ogg,audio/mp4,audio/wav,.mp3,.ogg,.m4a,.wav"; fileInput.click(); } }, icon("file"), "Songdatei wählen")));
         status.textContent = "";
         return;
       }
@@ -132,6 +147,12 @@
       const file = fileInput.files[0];
       fileInput.value = "";
       if (!file) return;
+      if (file.type.startsWith("video/") || /\.(mp4|m4v|mov|webm)$/i.test(file.name || "")) {      // the sound of a video of the device: nothing is uploaded, the file is played from the device
+        stopPreview();
+        entry.close();
+        onPick({ src: "device", title: `Extrahierter Song ${deviceNumber()}`, creator: "dein Gerät", start: 0, url: URL.createObjectURL(file) });
+        return;
+      }
       if (file.size > 50_000_000) { status.textContent = "Die Datei ist zu groß (höchstens 50 MB)."; return; }
       status.textContent = "Der Song wird hochgeladen …";
       const up = await Api.uploadSong(file, file.name.replace(/\.[^.]+$/, ""));
@@ -203,7 +224,7 @@
       audio.loop = true;
       const mine = generation;
       const element = audio;
-      loaded = (next.src === "video" ? Promise.resolve("") : loadWhole(urlOf(next))).then((blobUrl) => new Promise((resolve) => {
+      loaded = (next.src === "device" ? Promise.resolve(next.url) : loadWhole(sameOriginUrl(next))).then((blobUrl) => new Promise((resolve) => {
         if (mine !== generation) { resolve(); return; }
         element.addEventListener("loadedmetadata", () => { try { if (next.start && element.duration > next.start + 5) element.currentTime = next.start; } catch (error) { /* no ranges */ } resolve(); }, { once: true });
         element.addEventListener("error", () => resolve(), { once: true });
