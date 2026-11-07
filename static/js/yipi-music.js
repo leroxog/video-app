@@ -227,7 +227,8 @@
       loaded = (next.src === "device" ? Promise.resolve(next.url) : loadWhole(sameOriginUrl(next))).then((blobUrl) => new Promise((resolve) => {
         if (mine !== generation) { resolve(); return; }
         element.addEventListener("loadedmetadata", () => { try { if (next.start && element.duration > next.start + 5) element.currentTime = next.start; } catch (error) { /* no ranges */ } resolve(); }, { once: true });
-        element.addEventListener("error", () => resolve(), { once: true });
+        element.addEventListener("error", () => { if (mine === generation && Y.toast) Y.toast("Der Ton dieses Songs lässt sich nicht abspielen. Nimm einen anderen."); resolve(); }, { once: true });
+        if (!blobUrl && (next.src === "video" || next.src === "upload") && Y.toast) Y.toast("Der Ton dieses Videos konnte nicht geladen werden.");
         element.src = blobUrl || urlOf(next);                       // (no whole file: it plays from the server)
         element.load();
       }));
