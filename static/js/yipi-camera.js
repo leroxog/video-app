@@ -44,6 +44,19 @@
 
   let micAllowed = null;                                        // null: not asked yet
   let micStream = null;
+  /* The stream of the camera that was allowed is kept for a while when the camera view is left (its tracks are switched off, so no light burns): coming back uses it again and the browser has nothing to ask. */
+  let kept = null;
+  let keptTimer = 0;
+  function dropKept() { clearTimeout(keptTimer); if (kept) kept.stream.getTracks().forEach((track) => track.stop()); kept = null; }
+  function takeKept(facingNow) {
+    clearTimeout(keptTimer);
+    const have = kept;
+    kept = null;
+    if (!have) return null;
+    if (have.facing !== facingNow || !have.stream.getTracks().length || !have.stream.getTracks().every((track) => track.readyState === "live")) { have.stream.getTracks().forEach((track) => track.stop()); return null; }
+    have.stream.getVideoTracks().forEach((track) => { track.enabled = true; });
+    return have;
+  }
   let facing = "user";
   let lastGame = "";
   let REC_H = 960;                                              // as high as the stage is (the width is always 540)
@@ -180,7 +193,9 @@
       }
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { noCamera("Kamera nicht verfügbar"); return; }
       const video = { facingMode: facing, width: { ideal: 1280 }, height: { ideal: 720 } };
-      try {
+      const again = takeKept(facing);                                // allowed before and still running: no new question
+      if (again) { stream = again.stream; micAllowed = again.mic; }
+      else try {
         stream = await navigator.mediaDevices.getUserMedia({ video, audio: true });         // one question for the camera and the microphone
         micAllowed = true;
       } catch (first) {
@@ -188,7 +203,7 @@
           stream = await navigator.mediaDevices.getUserMedia({ video, audio: false });
           micAllowed = false;
         } catch (error) {
-          noCamera(error && error.name === "NotAllowedError" ? "Kamera nicht erlaubt" : "Keine Kamera gefunden");
+          noCamera(error && error.name === "NotAllowedError" ? "Kamera nicht erlaubt" : "Keine Kamera gefunden");   // (a "no" is asked again the next time)
           return;
         }
       }
@@ -1209,7 +1224,16 @@
         window.removeEventListener("pointerup", shutterUp);
         window.removeEventListener("pointercancel", shutterCancel);
         window.removeEventListener("pointermove", shutterMove);
-        closeCamera();
+        if (stream && stream.getTracks().length && stream.getTracks().every((track) => track.readyState === "live")) {      // keep what was allowed, switched off, for ten minutes
+          stream.getTracks().forEach((track) => { track.enabled = false; });
+          dropKept();
+          kept = { stream, facing, mic: micAllowed };
+          keptTimer = setTimeout(dropKept, 600000);
+          stream = null;
+          micStream = null;
+          feed.srcObject = null;
+          face.srcObject = null;
+        } else closeCamera();
         if (micStream) { micStream.getTracks().forEach((track) => track.stop()); micStream = null; micAllowed = null; }
         if (clip) URL.revokeObjectURL(clip.url);
         delete app.dataset.cam;

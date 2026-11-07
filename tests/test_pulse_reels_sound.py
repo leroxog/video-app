@@ -202,3 +202,10 @@ def test_the_site_announces_the_new_camera():
     lines = {line[0]: line for line in yipi_company.ANNOUNCEMENTS}
     assert "2026-11-07-camera3" in lines and len(lines["2026-11-07-camera3"][2]) <= 280 and lines["2026-11-07-camera3"][2].count("#") <= 2
     assert len(lines) == len(yipi_company.ANNOUNCEMENTS)
+
+
+def test_an_allowed_camera_is_kept_for_a_while_so_the_browser_does_not_ask_again_and_a_no_is_asked_again():
+    camera = read("yipi-camera.js")
+    for word in ("function takeKept(facingNow)", "const again = takeKept(facing);", "kept = { stream, facing, mic: micAllowed };", "keptTimer = setTimeout(dropKept, 600000);", "track.enabled = false"):
+        assert word in camera, word
+    assert 'error.name === "NotAllowedError" ? "Kamera nicht erlaubt"' in camera, "a no shows the chip with 'nochmal versuchen' every time"
