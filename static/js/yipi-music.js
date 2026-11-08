@@ -36,6 +36,7 @@
   /* ------------------------------------------------------------------------------------------------ the window to choose a song */
   /* Dark, like the sound window of TikTok: a search line, tiles of the styles, four tabs (for you, own files, favourites), the videos whose sound one can take ("Extrahierter Song ..."), and the songs with a
      bookmark (favourite) and a purple plus. All songs are fetched once; searching, the styles and the favourites are filtered here. Favourites are kept in this browser. */
+  const VIDEO_FAVS = "saturn.favvideos";
   const FAVS = "saturn.favsongs";
   const favourites = () => { try { const list = JSON.parse(localStorage.getItem(FAVS) || "[]"); return Array.isArray(list) ? list.filter((id) => typeof id === "string").slice(0, 200) : []; } catch (error) { return []; } };
   const keepFavourites = (list) => { try { localStorage.setItem(FAVS, JSON.stringify(list)); } catch (error) { /* storage blocked */ } };
@@ -52,8 +53,8 @@
     const input = h("input", { class: "mu-search", type: "search", placeholder: "Songs oder Künstler suchen", maxlength: 60, "aria-label": "Song suchen" });
     const styles = h("div", { class: "mu-styles", role: "list" }, STYLES.map(([name, a, b, picture]) => h("button", { class: "mu-style", type: "button", role: "listitem", style: `background:linear-gradient(135deg,${a}cc,${b}cc),url(/static/img/games/${picture}.jpg) center/cover`,
       onclick: (event) => { style = style === name ? "" : name; for (const tile of styles.children) tile.classList.toggle("on", tile.textContent === style); show(); } }, name)));
-    const tabs = h("div", { class: "mu-tabs", role: "tablist" }, [["foryou", "flame", "Für dich"], ["files", "file", "Eigene Dateien"], ["favourites", "bookmark", "Favoriten"]].map(([id, symbol, name]) => h("button", { class: `mu-tab${id === tab ? " on" : ""}`, type: "button", role: "tab",
-      "aria-selected": String(id === tab), "aria-label": name, onclick: () => { tab = id; for (const t of tabs.children) { const on = t.dataset.id === id; t.classList.toggle("on", on); t.setAttribute("aria-selected", String(on)); } show(); } }, icon(symbol))));
+    const tabs = h("div", { class: "mu-tabs", role: "tablist" }, [["foryou", "flame", "Für dich"], ["files", "camera", "Eigene"], ["favourites", "bookmark", "Gemerkt"]].map(([id, symbol, name]) => h("button", { class: `mu-tab${id === tab ? " on" : ""}`, type: "button", role: "tab",
+      "aria-selected": String(id === tab), "aria-label": name, onclick: () => { tab = id; for (const t of tabs.children) { const on = t.dataset.id === id; t.classList.toggle("on", on); t.setAttribute("aria-selected", String(on)); } show(); } }, icon(symbol), h("span", {}, name))));
     [...tabs.children].forEach((t, i) => { t.dataset.id = ["foryou", "files", "favourites"][i]; });
     const heading = h("h3", { class: "mu-heading" }, "Empfohlen");
     const videos = h("div", { class: "mu-videos", role: "list", hidden: true });
@@ -134,15 +135,6 @@
     }
     let typing = 0;
     input.addEventListener("input", () => { clearTimeout(typing); typing = setTimeout(show, 200); });
-    const random = h("button", { class: "mu-random", type: "button", onclick: async () => {
-      status.textContent = "Ein Zufalls-Song wird gesucht …";
-      const reply = await Api.get("/music/random");
-      if (!reply.ok) { status.textContent = "Gerade habe ich keinen Zufalls-Song gefunden. Versuch es noch einmal."; return; }
-      const got = reply.data.track;
-      stopPreview();
-      entry.close();
-      onPick({ src: "archive", id: got.id, file: got.file, title: got.title, creator: got.creator, licence: got.licence, licenceUrl: got.licenceUrl, length: got.length, start: 0, url: got.url });
-    } }, icon("sparkle"), "Zufälliger Song");
     fileInput.addEventListener("change", async () => {
       const file = fileInput.files[0];
       fileInput.value = "";
@@ -160,7 +152,7 @@
       entry.close();
       onPick({ src: "upload", media: up.data.media.id, title: up.data.media.title || file.name.replace(/\.[^.]+$/, ""), start: 0, url: up.data.media.url });
     });
-    entry = dialog({ title, wide: true, body: h("div", { class: "music-picker mu-dark" }, h("div", { class: "mu-bar" }, h("span", { class: "mu-search-wrap" }, icon("search"), input), random), styles, tabs, heading, videos, list, fileInput, status), initialFocus: input, onClose: stopPreview });
+    entry = dialog({ title, wide: true, body: h("div", { class: "music-picker mu-dark" }, h("div", { class: "mu-bar" }, h("span", { class: "mu-search-wrap" }, icon("search"), input)), styles, tabs, heading, videos, list, fileInput, status), initialFocus: window.matchMedia && matchMedia("(pointer: coarse)").matches ? tabs.firstChild : input, onClose: stopPreview });
     entry.box.classList.add("mu-box");
     // the songs, and the videos whose sound one can take
     Api.get("/music/search?q=&rows=100").then((reply) => {
@@ -168,19 +160,60 @@
       all = reply.data.items;
       show();
     });
-    Api.get("/timeline?feed=videos&order=random&limit=8").then((reply) => {
+    // videos whose sound one can take: eight at first, more when the row is scrolled to its end (the same shuffle goes on); every card has a bookmark and a plus
+    let videoSeed = 1 + Math.floor(Math.random() * 99999);
+    let videoNext = 0;
+    let loadingVideos = false;
+    const seenVideos = new Set();
+    const savedVideos = () => { try { const got = JSON.parse(localStorage.getItem(VIDEO_FAVS) || "[]"); return Array.isArray(got) ? got : []; } catch (error) { return []; } };
+    const keepVideos = (list) => { try { localStorage.setItem(VIDEO_FAVS, JSON.stringify(list.slice(0, 60))); } catch (error) { /* no storage */ } };
+    function videoCard(song, url) {
+      const clip = h("video", { class: "mu-clip", src: `${url}#t=0.5`, muted: true, playsinline: true, preload: "metadata", "aria-hidden": "true" });
+      let saved = savedVideos().some((v) => v.song.post === song.post);
+      const star = h("button", { class: `mu-vstar${saved ? " on" : ""}`, type: "button", "aria-label": `${song.title} merken`, "aria-pressed": String(saved) }, icon(saved ? "bookmarkFill" : "bookmark"));
+      const plus = h("button", { class: "mu-vadd", type: "button", "aria-label": `${song.title} nehmen` }, icon("plus"));
+      star.addEventListener("click", (event) => {
+        event.stopPropagation();
+        saved = !saved;
+        const rest = savedVideos().filter((v) => v.song.post !== song.post);
+        keepVideos(saved ? [{ song, url }, ...rest] : rest);
+        star.classList.toggle("on", saved);
+        star.setAttribute("aria-pressed", String(saved));
+        fill(star, icon(saved ? "bookmarkFill" : "bookmark"));
+        if (tab === "favourites") show();
+      });
+      plus.addEventListener("click", (event) => { event.stopPropagation(); stopPreview(); entry.close(); onPick(song); });
+      return h("div", { class: "mu-video", role: "listitem", tabindex: "0", "aria-label": song.title, onclick: () => { stopPreview(); entry.close(); onPick(song); } },
+        clip, h("span", { class: "mu-video-name" }, song.title.replace("Extrahierter Song ", "Song ")), h("span", { class: "mu-video-by" }, song.creator), star, plus);
+    }
+    function paintVideos() {
+      const list = tab === "favourites" ? savedVideos() : null;
+      if (list) fill(videos, ...list.map((v) => videoCard(v.song, v.url)));
+      else if (videos.dataset.mode === "saved") fill(videos, ...shownVideos);
+      videos.dataset.mode = list ? "saved" : "feed";
+    }
+    const shownVideos = [];
+    async function moreVideos() {
+      if (loadingVideos || videoNext === null) return;
+      loadingVideos = true;
+      const reply = await Api.get(`/timeline?feed=videos&order=random&limit=8&seed=${videoSeed}&offset=${videoNext}`);
+      loadingVideos = false;
       if (!reply.ok || !reply.data.items) return;
-      const posts = reply.data.items.filter((post) => post.media && post.media.some((m) => m.video) && !(Y.me && post.user.handle === Y.me.handle)).slice(0, 8);
-      if (!posts.length) return;
-      for (const post of posts) {
-        const media = post.media.find((m) => m.video);
-        const song = extractedSong(post, media);
-        const clip = h("video", { class: "mu-clip", src: `${media.url}#t=0.5`, muted: true, playsinline: true, preload: "metadata", "aria-hidden": "true" });
-        const card = h("button", { class: "mu-video", type: "button", role: "listitem", "aria-label": `${song.title} nehmen`, onclick: () => { stopPreview(); entry.close(); onPick(song); } }, clip, h("span", { class: "mu-video-name" }, song.title.replace("Extrahierter Song ", "Song ")), h("span", { class: "mu-video-by" }, song.creator));
-        videos.append(card);
+      videoNext = reply.data.next === null || reply.data.next === undefined ? null : reply.data.next;
+      for (const post of reply.data.items) {
+        const media = post.media && post.media.find((m) => m.video);
+        if (!media || seenVideos.has(post.id) || (Y.me && post.user.handle === Y.me.handle)) continue;
+        seenVideos.add(post.id);
+        const card = videoCard(extractedSong(post, media), media.url);
+        shownVideos.push(card);
+        if (videos.dataset.mode !== "saved") videos.append(card);
       }
       show();
-    });
+    }
+    videos.addEventListener("scroll", () => { if (videos.scrollLeft + videos.clientWidth > videos.scrollWidth - 240) moreVideos(); }, { passive: true });
+    moreVideos().then(() => { if (videos.scrollWidth <= videos.clientWidth + 40) moreVideos(); });
+    const showOld = show;
+    show = function showWithVideos() { showOld(); paintVideos(); videos.hidden = !(tab === "foryou" && !style && !input.value.trim() ? videos.children.length : tab === "favourites" && savedVideos().length); };
   }
 
   /* ------------------------------------------------------------------------------------------------ the player of a clip */
@@ -273,5 +306,5 @@
     };
   }
 
-  Y.music = { pick, player, credit, label, urlOf, extractedNumber, extractedSong };
+  Y.music = { pick, player, credit, label, urlOf, extractedNumber, extractedSong, loadWhole };
 })();

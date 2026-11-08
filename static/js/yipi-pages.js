@@ -116,6 +116,30 @@
         h("p", { class: "muted" }, "Satürn ist ein unabhängiges, kostenloses Projekt, ohne Werbung und ohne Tracking. Es speichert nur ein Anmelde-Cookie, wenn du dich anmeldest, und deine Einstellungen im Browser. Nex AI, die KI, antwortet mit Hilfe eines KI-Dienstes (Groq): was du Nex AI schreibst, wird dafür an den Server und von dort an den Dienst geschickt, aber nicht gespeichert.")));
   }
 
+  /* The history: what the camera finished in the last three days, kept on this device only (yipi-history.js). */
+  function historySection() {
+    const urls = [];
+    const list = h("div", { class: "history-list" }, h("p", { class: "muted small" }, "Wird geladen …"));
+    const when = (value) => new Date(value).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" });
+    async function load() {
+      let items = [];
+      try { items = Y.history ? await Y.history.list() : []; } catch (error) { fill(list, h("p", { class: "muted small" }, "Auf diesem Gerät kann der Verlauf nicht gespeichert werden.")); return; }
+      if (!items.length) { fill(list, h("p", { class: "muted small" }, "Noch nichts da. Jeder Clip und jedes Foto aus der Kamera landet hier und bleibt drei Tage.")); return; }
+      fill(list, ...items.map((item) => {
+        const url = URL.createObjectURL(item.blob);
+        urls.push(url);
+        const media = item.photo ? h("img", { class: "history-clip", src: url, alt: "Foto" }) : h("video", { class: "history-clip", src: url, controls: true, playsinline: true, preload: "metadata" });
+        const card = h("article", { class: "report-card" }, media, h("p", { class: "muted small" }, `${item.title || "Kamera"} · ${when(item.createdAt)}`),
+          h("div", { class: "report-actions" },
+            button("Speichern", "primary small", () => { const anchor = h("a", { href: url, download: item.name }); document.body.append(anchor); anchor.click(); anchor.remove(); }),
+            button("Löschen", "danger small", async () => { await Y.history.remove(item.id); card.remove(); if (!list.children.length) load(); })));
+        return card;
+      }));
+    }
+    load();
+    return { element: h("section", { class: "card" }, h("p", { class: "muted small" }, "Nur für dich: Die Clips und Fotos liegen nur auf diesem Gerät, niemand sonst sieht sie. Nach drei Tagen verschwinden sie von selbst."), list), destroy() { urls.forEach((url) => URL.revokeObjectURL(url)); } };
+  }
+
   /* A message to the team (the admins read it on the moderation page). */
   function teamSection() {
     const kind = h("select", { class: "field", "aria-label": "Art der Nachricht" }, [["request", "Anfrage"], ["idea", "Idee"], ["survey", "Antwort auf eine Umfrage"], ["problem", "Problem"]].map(([value, name]) => h("option", { value }, name)));
@@ -142,6 +166,7 @@
       ["chatlock", "Chat-Sperre", "Chats nur mit deiner Wisch-Kombination öffnen", "lock", true],
       ["muted", "Stummgeschaltet", "Konten, die du nicht sehen willst", "mute", true],
       ["blocked", "Blockiert", "Konten, die dir nicht schreiben dürfen", "block", true],
+      ["history", "Verlauf", "Deine Clips und Fotos der letzten 3 Tage, nur für dich", "camera", true],
       ["team", "Nachricht ans Team", "Anfrage, Idee oder Problem schicken", "reply", true],
       ["about", "Hilfe und Rechtliches", "Regeln, Datenschutz, Impressum", "shield", false],
     ];
@@ -160,6 +185,7 @@
     else if (section === "push") put(el, Y.pushSettings());
     else if (section === "about") put(el, aboutSection());
     else if (section === "team") put(el, teamSection());
+    else if (section === "history") { const sheet = historySection(); put(el, sheet.element); destroy = sheet.destroy; }
     else { const listPager = relationSection(section); put(el, listPager.element); destroy = () => listPager.destroy(); }
     return { element: el, title: entry[1], destroy };
   };

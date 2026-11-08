@@ -76,13 +76,57 @@ STOPWORDS = {"mach", "mache", "machen", "mich", "mir", "die", "der", "das", "den
 COLORS = ["#7a2cf0", "#ec4899", "#f59e0b", "#2a8cff", "#22c55e", "#ef4444", "#06b6d4", "#a855f7", "#f97316", "#14b8a6"]
 
 
+# Brand-new effects that the AI service invents: a sticker (one emoji or a few joined) at a place of the face, as data: "x.<place>.<hex code points>.<size 1-6>". Nothing that runs: pl-face.js draws the emoji.
+PLACES = ("top", "forehead", "eyeL", "eyeR", "nose", "mouth", "chin", "cheekL", "cheekR")
+MAX_STICKERS = 3
+STICKER_RE = re.compile(r"x\.(" + "|".join(PLACES) + r")\.([0-9a-f]{4,5}(?:-[0-9a-f]{4,5}){0,3})\.([1-6])")
+MAX_FX_CHARS = 190                                                                  # (the column of the database holds 200 characters, with the commas)
+WHERE = {"top": "über dem Kopf", "forehead": "auf der Stirn", "eyeL": "am linken Auge", "eyeR": "am rechten Auge", "nose": "auf der Nase", "mouth": "am Mund", "chin": "am Kinn",
+         "cheekL": "auf der linken Wange", "cheekR": "auf der rechten Wange"}
+
+
+def emoji_ok(code):
+    return 0x1F000 <= code <= 0x1FAFF or 0x2600 <= code <= 0x27BF or 0x2B00 <= code <= 0x2BFF or code in (0x200D, 0xFE0F)
+
+
+def sticker_token(place, emoji, size):
+    """The token of a sticker, or None when the place or the emoji is no good (an emoji only: letters, digits and anything else is refused)."""
+    codes = [ord(ch) for ch in str(emoji or "").strip()]
+    if place not in PLACES or not codes or not all(emoji_ok(code) for code in codes) or codes[0] in (0x200D, 0xFE0F):
+        return None
+    codes = [code for code in codes if code != 0xFE0F][:4]
+    try:
+        size = max(1, min(6, int(round(float(size)))))
+    except (TypeError, ValueError):
+        size = 3
+    return f"x.{place}." + "-".join(f"{code:x}" for code in codes) + f".{size}"
+
+
+def describe(name):
+    if name in EFFECTS:
+        return EFFECTS[name]
+    found = STICKER_RE.fullmatch(name)
+    if found:
+        return "Neu erfunden: " + "".join(chr(int(part, 16)) for part in found.group(2).split("-")) + " " + WHERE[found.group(1)]
+    return name
+
+
 def clean_recipe(fx, filter_name):
-    """The effects that exist (in order, none twice, at most six) and a filter that exists."""
+    """The effects that exist (in order, none twice, at most six; at most three invented stickers) and a filter that exists."""
     names = []
+    stickers = 0
     for name in fx if isinstance(fx, list) else []:
-        if isinstance(name, str) and name in EFFECTS and name not in RETIRED and name not in names:
+        if not isinstance(name, str) or name in names:
+            continue
+        if name in EFFECTS and name not in RETIRED:
             names.append(name)
-    return names[:MAX_FX], filter_name if filter_name in FILTERS else "none"
+        elif STICKER_RE.fullmatch(name) and stickers < MAX_STICKERS and all(emoji_ok(int(part, 16)) for part in name.split(".")[2].split("-")):
+            names.append(name)
+            stickers += 1
+    names = names[:MAX_FX]
+    while names and len(",".join(names)) > MAX_FX_CHARS:
+        names.pop()
+    return names, filter_name if filter_name in FILTERS else "none"
 
 
 def recipe_from_words(prompt):
@@ -122,8 +166,9 @@ def ask_ai(prompt):
         raw = ai_assistant.generate_text(
             "Du baust Gesichts-Linsen für eine Kamera-App (wie bei Snapchat). Aus der Beschreibung einer Person wählst du EINE bis SECHS passende Effekte aus dieser Liste (nur die Namen) und einen Farbfilter, "
             "dazu einen kurzen Titel (höchstens 24 Zeichen), ein einzelnes passendes Emoji und eine Farbe (#rrggbb).\nEffekte:\n" + listing + "\nFilter: " + ", ".join(FILTERS)
-            + "\nWähle Effekte, die zusammen gut aussehen und wirklich zur Beschreibung passen; mehrere Effekte dürfen kombiniert werden. Antworte NUR mit JSON der Form "
-            '{"title": "...", "emoji": "...", "color": "#7a2cf0", "fx": ["name", "name"], "filter": "none"}.',
+            + "\nWähle Effekte, die zusammen gut aussehen und wirklich zur Beschreibung passen; mehrere Effekte dürfen kombiniert werden. Erfinde ZUSÄTZLICH ein bis drei GANZ NEUE Aufkleber, die es in der Liste nicht gibt: "
+            "je ein Emoji (oder wenige verbundene) an einem Ort des Gesichts (" + ", ".join(PLACES) + ") mit einer Größe von 1 bis 6, die zur Beschreibung passen. Antworte NUR mit JSON der Form "
+            '{"title": "...", "emoji": "...", "color": "#7a2cf0", "fx": ["name", "name"], "stickers": [{"emoji": "🦄", "at": "top", "size": 3}], "filter": "none"}.',
             prompt[:200], max_tokens=300, temperature=0.6)
     except Exception:  # noqa: BLE001  (not reachable, no key: the keywords do it)
         return None
@@ -136,7 +181,13 @@ def ask_ai(prompt):
         return None
     if not isinstance(data, dict):
         return None
-    fx, filter_name = clean_recipe(data.get("fx"), data.get("filter"))
+    made = []
+    for sticker in (data.get("stickers") if isinstance(data.get("stickers"), list) else [])[:MAX_STICKERS]:
+        token = sticker_token(sticker.get("at"), sticker.get("emoji"), sticker.get("size")) if isinstance(sticker, dict) else None
+        if token:
+            made.append(token)
+    chosen = [n for n in data.get("fx") if isinstance(n, str)] if isinstance(data.get("fx"), list) else []
+    fx, filter_name = clean_recipe(chosen[:MAX_FX - len(made)] + made, data.get("filter"))
     if not fx:
         return None
     title = re.sub(r"\s+", " ", str(data.get("title") or "")).strip()[:24]
@@ -152,6 +203,6 @@ def make_recipe(prompt):
     got = ask_ai(prompt)
     if got is None:
         title, emoji, color, fx, filter_name = words
-        return {"title": title, "emoji": emoji, "color": color, "fx": fx, "filter": filter_name, "about": [EFFECTS[name] for name in fx], "source": "words"}
+        return {"title": title, "emoji": emoji, "color": color, "fx": fx, "filter": filter_name, "about": [describe(name) for name in fx], "source": "words"}
     title, emoji, color, fx, filter_name = got
-    return {"title": title or words[0], "emoji": emoji or words[1], "color": color or words[2], "fx": fx, "filter": filter_name, "about": [EFFECTS[name] for name in fx], "source": "ai"}
+    return {"title": title or words[0], "emoji": emoji or words[1], "color": color or words[2], "fx": fx, "filter": filter_name, "about": [describe(name) for name in fx], "source": "ai"}

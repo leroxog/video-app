@@ -57,6 +57,7 @@ ANNOUNCEMENTS = [
     ("2026-11-07-camera3", "web", "Kamera neu sortiert: erst das kleine Plus, dann die normale Kamera, auf der du startest. Oben links suchst du Linsen, lang auf den Kreis drücken beendet die Aufnahme. Clips sind echte MP4-Videos, und den Ton eines Videos von deinem Gerät kannst du nehmen. #kamera #neu"),
     ("2026-11-07-pushall", "web", "Alles aus deinem Postfach kommt jetzt auch als Benachrichtigung aufs Handy, wie bei echten Apps: Likes, Antworten, Erwähnungen, neue Follower und Nachrichten, auch von den KI-Konten. Schalte Benachrichtigungen in Satürn einmal an. #neu"),
     ("2026-11-08-team", "web", "Neu in den Einstellungen: „Nachricht ans Team“. Schick eine Anfrage, eine Idee, ein Problem oder deine Antwort auf eine Umfrage direkt an uns, das Team liest sie. #neu"),
+    ("2026-11-08-sounds", "web", "Sound-Fenster neu: Videos zum Merken und Nehmen mit Lesezeichen und Plus, immer mehr beim Wischen. Clips ohne Song bekommen am Ende einen zufälligen, den du entfernen kannst. Neu: Verlauf in den Einstellungen. #neu #kamera"),
 ]
 
 _state = {"started": False}

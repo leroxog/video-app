@@ -106,6 +106,34 @@
   const FX = {};
   const add = (id, label, emoji, draw, about = "") => { FX[id] = { id, label, emoji, draw, about }; };
 
+  /* A brand-new effect that the AI invented: "x.<place>.<hex code points>.<size>", an emoji sticker at a place of the face (data only, checked on the server too; see yipi_lenses.py). */
+  const CUSTOM = {};
+  const SPOTS = {
+    top: (f) => ({ x: f.top.x, y: f.top.y - f.s * 0.2 }), forehead: (f) => ({ x: f.mid.x, y: f.top.y + f.s * 0.28 }), eyeL: (f) => f.eyeA, eyeR: (f) => f.eyeB, nose: (f) => f.nose,
+    mouth: (f) => ({ x: f.mouth.x, y: f.mouth.y }), chin: (f) => f.chin, cheekL: (f) => f.cheekA, cheekR: (f) => f.cheekB,
+  };
+  function customFx(id) {
+    if (CUSTOM[id] !== undefined) return CUSTOM[id];
+    const found = /^x\.(top|forehead|eyeL|eyeR|nose|mouth|chin|cheekL|cheekR)\.([0-9a-f]{4,5}(?:-[0-9a-f]{4,5}){0,3})\.([1-6])$/.exec(id);
+    if (!found) { CUSTOM[id] = null; return null; }
+    const glyph = found[2].split("-").map((hex) => String.fromCodePoint(parseInt(hex, 16))).join("");
+    const size = 18 * Number(found[3]);
+    const at = SPOTS[found[1]];
+    CUSTOM[id] = { id, label: glyph, emoji: glyph, about: "", draw: (c, f) => {
+      const spot = at(f);
+      if (!spot) return;
+      local(c, f, spot.x, spot.y, () => {
+        const bob = Math.sin(f.t * 2.4 + size) * 2.5;
+        c.font = `${size}px system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+        c.textAlign = "center"; c.textBaseline = "middle";
+        shade(c, 6);
+        c.fillText(glyph, 0, bob);
+        noShade(c);
+      });
+    } };
+    return CUSTOM[id];
+  }
+
   const glassesBase = (c, f, style) => {
     const e = f.eyeDist / f.u;
     local(c, f, f.mid.x, f.mid.y, () => {
@@ -903,7 +931,7 @@
       if (this.map.W !== w || this.map.H !== h) return;
       c.save();
       for (const id of this.recipe.fx || []) {
-        const fx = FX[id];
+        const fx = FX[id] || customFx(id);
         if (!fx || (this.layer && !this.layer.failed && window.PulseAR && window.PulseAR.has(id))) continue;           // (what the 3D layer draws is not drawn here too; without WebGL the flat versions stay)
         try { fx.draw(c, f); } catch (error) { /* a broken effect must not stop the others */ }
         c.globalAlpha = 1; c.globalCompositeOperation = "source-over"; noShade(c);

@@ -89,8 +89,8 @@ def test_the_camera_opens_on_the_plain_camera_and_takes_the_sound_of_a_video_as_
 
 def test_the_sound_window_is_dark_with_search_styles_tabs_videos_favourites_and_a_purple_plus():
     music, camera = read("yipi-music.js"), read("yipi-camera.js")
-    for word in ('class: "mu-search"', 'class: "mu-styles"', 'class: "mu-tabs"', '"flame", "Für dich"', '"file", "Eigene Dateien"', '"bookmark", "Favoriten"', 'class: "mu-videos"', 'class: "mu-add"', 'class: `mu-star',
-                 'const FAVS = "saturn.favsongs";', "Api.get(\"/music/search?q=&rows=100\")", "Api.get(\"/timeline?feed=videos&order=random&limit=8\")", "onPick(song)", "extractedSong(post, media)"):
+    for word in ('class: "mu-search"', 'class: "mu-styles"', 'class: "mu-tabs"', '"flame", "Für dich"', '"camera", "Eigene"', '"bookmark", "Gemerkt"', 'class: "mu-videos"', 'class: "mu-add"', 'class: `mu-star',
+                 'const FAVS = "saturn.favsongs";', "Api.get(\"/music/search?q=&rows=100\")", "order=random&limit=8&seed=${videoSeed}&offset=${videoNext}", "onPick(song)", "extractedSong(post, media)", 'class: `mu-vstar', 'class: "mu-vadd', "moreVideos()"):
         assert word in music, word
     assert "Y.music.pick({ upload: true, onPick: (next) => setSong(next, false) })" in camera
     for rule in (".dialog.mu-box {", ".mu-add { display: grid;", "background: #7a2cf0", ".mu-video {", ".mu-star.on {"):
@@ -135,7 +135,7 @@ def test_in_the_road_games_the_picture_of_the_camera_moves_up_so_that_the_face_s
 
 def test_the_speed_of_a_clip_can_be_chosen_and_is_made_by_playing_the_clip_into_a_new_recording():
     camera = read("yipi-camera.js")
-    for word in ('labelled("Geschw. 1x", "speed"', "speedFactor === 1 ? 2 : speedFactor === 2 ? 3 : speedFactor === 3 ? 0.5 : 1", "function retime(blob, factor)", "video.playbackRate = factor;", "video.captureStream()",
+    for word in ('labelled("Geschw. 1x", "speed"', "speedFactor === 1 ? 2 : speedFactor === 2 ? 3 : speedFactor === 3 ? 0.5 : 1", "function retime(blob, factor, songUrl)", "video.playbackRate = factor;", "video.captureStream()",
                  "createMediaElementSource(video).connect(sink)", "stopRecording().then(retimed).then(showReview)", 'toast("Auf diesem Gerät geht die Geschwindigkeit nicht.")'):
         assert word in camera, word
     assert camera.count("stopRecording().then(retimed).then(showReview)") == 2 and "stopRecording().then(showReview)" not in camera, "every clip goes through the speed"
@@ -213,3 +213,32 @@ def test_an_allowed_camera_is_kept_for_a_while_so_the_browser_does_not_ask_again
 
 def test_the_ring_of_the_person_in_the_reels_is_as_wide_as_its_box_so_the_plus_sits_in_the_middle():
     assert ".reel-av { width: 100%; height: 100%; }" in CSS and CSS.rindex(".reel-av { width: 100%; height: 100%; }") > CSS.rindex(".reel-av { display: grid; place-items: center; width: 72px;")
+
+
+def test_the_sound_window_has_no_random_button_and_the_lens_is_the_only_random_song():
+    music, camera = read("yipi-music.js"), read("yipi-camera.js")
+    assert "Zufälliger Song" not in music and "mu-random" not in music and "id: \"l-zufallssong\"" in camera
+    assert 'matchMedia("(pointer: coarse)").matches ? tabs.firstChild : input' in music, "no keyboard jumping up on a phone"
+    assert ".mu-row { flex-direction: column; align-items: stretch; }" in CSS and ".mu-vadd {" in CSS
+
+
+def test_a_clip_without_a_song_gets_a_random_one_that_can_be_taken_away_and_the_history_keeps_clips_for_three_days_on_the_device():
+    camera, history, pages = read("yipi-camera.js"), read("yipi-history.js"), read("yipi-pages.js")
+    for word in ("async function autoSong(mine, video, chip)", 'Api.get("/music/random")', "retime(original, 1, whole)", "if (songUrl) { songEl = new Audio(songUrl);", 'class: "cam-autosong"', "autoSong(clip, video, songChip)",
+                 "Y.history.add(blob, { name: clip.name, photo, title: chosen.name })"):
+        assert word in camera, word
+    assert "const DAYS = 3;" in history and "indexedDB.open(DB, 1)" in history and "fetch" not in history, "nothing goes to the server"
+    assert 'function historySection()' in pages and '["history", "Verlauf"' in pages and '"yipi-history.js"' in open(os.path.join(ROOT, "yipi.py"), encoding="utf-8").read()
+    assert ".cam-autosong {" in CSS and ".history-clip {" in CSS
+
+
+def test_a_lens_can_get_brand_new_stickers_that_the_ai_invented_but_only_as_checked_data():
+    import yipi_lenses as lenses
+    token = lenses.sticker_token("top", "🦄", 3)
+    assert token == "x.top.1f984.3" and lenses.describe(token).startswith("Neu erfunden:")
+    assert lenses.clean_recipe(["catEars", token, "x.top.41.3", "x.top.1f984.9", "x.nowhere.1f984.2", "alert(1)"], "warm") == (["catEars", token], "warm")
+    assert lenses.sticker_token("top", "abc", 3) is None and lenses.sticker_token("nose", "", 3) is None and lenses.sticker_token("moon", "🦄", 3) is None
+    many = [lenses.sticker_token("top", chr(0x1F980 + i), 2) for i in range(6)]
+    assert len([n for n in lenses.clean_recipe(many, "none")[0] if n.startswith("x.")]) == lenses.MAX_STICKERS
+    face = read("pl-face.js")
+    assert "function customFx(id)" in face and "const fx = FX[id] || customFx(id);" in face

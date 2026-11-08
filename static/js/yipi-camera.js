@@ -638,7 +638,7 @@
       speedTool.querySelector(".cam-tool-label").textContent = `Geschw. ${speedFactor}x`;
       toast(speedFactor === 1 ? "Normale Geschwindigkeit." : `Das Video wird ${speedFactor > 1 ? `${speedFactor}-mal schneller` : "halb so schnell"}.`);
     });
-    function retime(blob, factor) {
+    function retime(blob, factor, songUrl) {
       return new Promise((resolve) => {
         const video = document.createElement("video");
         if (!video.captureStream) { toast("Auf diesem Gerät geht die Geschwindigkeit nicht."); resolve(blob); return; }
@@ -646,7 +646,8 @@
         let done = false;
         let recorder2 = null;
         let context = null;
-        const finish = (out) => { if (done) return; done = true; try { video.pause(); } catch (error) { /* gone */ } URL.revokeObjectURL(url); if (context) context.close().catch(() => {}); resolve(out || blob); };
+        let songEl = null;
+        const finish = (out) => { if (done) return; done = true; try { video.pause(); } catch (error) { /* gone */ } if (songEl) { try { songEl.pause(); } catch (error) { /* gone */ } } URL.revokeObjectURL(url); if (context) context.close().catch(() => {}); resolve(out || blob); };
         video.src = url;
         video.playsInline = true;
         video.preload = "auto";
@@ -663,6 +664,7 @@
               context = new Context();
               const sink = context.createMediaStreamDestination();
               context.createMediaElementSource(video).connect(sink);                    // (the sound goes into the new clip and not to the speaker)
+              if (songUrl) { songEl = new Audio(songUrl); songEl.loop = true; context.createMediaElementSource(songEl).connect(sink); }       // (a song under the clip)
               tracks.push(...sink.stream.getAudioTracks());
             } catch (error) { tracks.push(...stream.getAudioTracks()); }
             const type = pickType();
@@ -672,6 +674,7 @@
             recorder2.start(500);
             video.addEventListener("ended", () => { if (recorder2.state !== "inactive") recorder2.stop(); }, { once: true });
             video.play().catch(() => { if (recorder2.state !== "inactive") recorder2.stop(); else finish(null); });
+            if (songEl) songEl.play().catch(() => {});
             const limit = (Number.isFinite(video.duration) ? video.duration / factor : 40) + 6;
             setTimeout(() => { if (recorder2 && recorder2.state !== "inactive") recorder2.stop(); }, limit * 1000);
           } catch (error) { finish(null); }
@@ -1073,10 +1076,49 @@
           action("share", "Teilen", shareOut),
           h("button", { class: "cam-send", type: "button", onclick: sendDialog }, icon("send"), h("span", {}, "Senden")),
           h("button", { class: "cam-post", type: "button", onclick: post }, icon("plus"), h("span", {}, "Posten")));
-      fill(review, video, h("div", { class: "cam-review-top" }, h("b", {}, clip.game.name), clip.game.kind === "lens" || clip.game.kind === "randomsong" ? null : h("span", {}, points(clip.score))), bar);
+      if (!capture && Y.history) Y.history.add(blob, { name: clip.name, photo, title: chosen.name }).catch(() => {});       // (kept on this device for three days: Settings > Verlauf)
+      const songChip = h("button", { class: "cam-autosong", type: "button", hidden: true });
+      fill(review, video, h("div", { class: "cam-review-top" }, h("b", {}, clip.game.name), clip.game.kind === "lens" || clip.game.kind === "randomsong" ? null : h("span", {}, points(clip.score)), songChip), bar);
       review.hidden = false;
       setState("review");
       if (!photo) video.play().catch(() => {});
+      if (!photo && !capture && !song && blob.size < 20_000_000) autoSong(clip, video, songChip);
+    }
+    /* A clip without a song gets a random one when it is finished (the clip is played once more into a new recording with the song underneath); the chip says which, and one tap takes it away again. */
+    async function autoSong(mine, video, chip) {
+      chip.hidden = false;
+      chip.textContent = "Song wird gesucht …";
+      chip.disabled = true;
+      const gone = () => { chip.hidden = true; };
+      try {
+        const reply = await Api.get("/music/random");
+        if (!reply.ok || dead || clip !== mine) { gone(); return; }
+        const track = reply.data.track;
+        const whole = await Y.music.loadWhole(Y.music.urlOf(track));
+        if (!whole || dead || clip !== mine) { gone(); return; }
+        chip.textContent = "Song wird eingebaut …";
+        const original = mine.blob;
+        const mixed = await retime(original, 1, whole);
+        if (dead || clip !== mine || !mixed || mixed === original) { gone(); return; }
+        const originalUrl = mine.url;
+        mine.blob = mixed;
+        mine.url = URL.createObjectURL(mixed);
+        video.src = mine.url;
+        video.play().catch(() => {});
+        let on = true;
+        const paint = () => { chip.textContent = on ? `Song: ${track.title} ✕` : "Song wieder hinzufügen"; chip.setAttribute("aria-label", on ? "Song entfernen" : "Song wieder hinzufügen"); };
+        chip.disabled = false;
+        paint();
+        const mixedUrl = mine.url;
+        chip.addEventListener("click", () => {
+          on = !on;
+          mine.blob = on ? mixed : original;
+          mine.url = on ? mixedUrl : originalUrl;
+          video.src = mine.url;
+          video.play().catch(() => {});
+          paint();
+        });
+      } catch (error) { gone(); }
     }
     const action = (symbol, label, run) => h("button", { class: "cam-act", type: "button", "aria-label": label, onclick: run }, icon(symbol), h("span", {}, label));
     function discard() {

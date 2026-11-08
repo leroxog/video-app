@@ -253,7 +253,7 @@ def test_the_camera_has_the_controls_the_song_and_the_random_song_lens():
     camera, music, lenses = read("yipi-camera.js"), read("yipi-music.js"), read("yipi-lenses.js")
     assert "Kamera ausschalten" in camera and "Mikrofon ausschalten" in camera and "camSound" in camera and "setCamera" in camera
     assert "musicPlayer.track()" in camera and "randomsong" in camera and "/music/random" in camera and "Y.music.credit" in camera
-    assert "createMediaStreamDestination" in music and "/music/search" in music and "/music/track/" in music and "Zufälliger Song" in music
+    assert "createMediaStreamDestination" in music and "/music/search" in music and "/music/track/" in music and "Zufälliger Song" not in music
     assert "Y.music.pick" in lenses and "song" in lenses
     assert "yipi-music.js" in open(os.path.join(os.path.dirname(__file__), "..", "yipi.py"), encoding="utf-8").read()
 
