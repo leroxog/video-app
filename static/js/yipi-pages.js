@@ -116,6 +116,23 @@
         h("p", { class: "muted" }, "Satürn ist ein unabhängiges, kostenloses Projekt, ohne Werbung und ohne Tracking. Es speichert nur ein Anmelde-Cookie, wenn du dich anmeldest, und deine Einstellungen im Browser. Nex AI, die KI, antwortet mit Hilfe eines KI-Dienstes (Groq): was du Nex AI schreibst, wird dafür an den Server und von dort an den Dienst geschickt, aber nicht gespeichert.")));
   }
 
+  /* A message to the team (the admins read it on the moderation page). */
+  function teamSection() {
+    const kind = h("select", { class: "field", "aria-label": "Art der Nachricht" }, [["request", "Anfrage"], ["idea", "Idee"], ["survey", "Antwort auf eine Umfrage"], ["problem", "Problem"]].map(([value, name]) => h("option", { value }, name)));
+    const text = h("textarea", { class: "field", rows: 6, maxlength: 1500, "aria-label": "Deine Nachricht", placeholder: "Schreib hier …" });
+    const status = h("p", { class: "muted small", role: "status" });
+    const send = button("Senden", "primary", async () => {
+      if (!text.value.trim()) { status.textContent = "Schreib erst etwas."; return; }
+      send.disabled = true;
+      const reply = await Api.post("/requests", { kind: kind.value, text: text.value });
+      send.disabled = false;
+      if (!reply.ok) { status.textContent = Api.message(reply); return; }
+      text.value = "";
+      status.textContent = "Danke, das Team hat deine Nachricht bekommen.";
+    });
+    return h("section", { class: "card" }, h("label", { class: "field-label" }, h("span", {}, "Art"), kind), h("label", { class: "field-label" }, h("span", {}, "Nachricht"), text), send, status);
+  }
+
   views.settings = function settings(route, ctx) {
     const section = route.section;
     const SECTIONS = [
@@ -125,6 +142,7 @@
       ["chatlock", "Chat-Sperre", "Chats nur mit deiner Wisch-Kombination öffnen", "lock", true],
       ["muted", "Stummgeschaltet", "Konten, die du nicht sehen willst", "mute", true],
       ["blocked", "Blockiert", "Konten, die dir nicht schreiben dürfen", "block", true],
+      ["team", "Nachricht ans Team", "Anfrage, Idee oder Problem schicken", "reply", true],
       ["about", "Hilfe und Rechtliches", "Regeln, Datenschutz, Impressum", "shield", false],
     ];
     if (!section) {
@@ -141,6 +159,7 @@
     else if (section === "chatlock") put(el, Y.chatLockSettings());
     else if (section === "push") put(el, Y.pushSettings());
     else if (section === "about") put(el, aboutSection());
+    else if (section === "team") put(el, teamSection());
     else { const listPager = relationSection(section); put(el, listPager.element); destroy = () => listPager.destroy(); }
     return { element: el, title: entry[1], destroy };
   };
@@ -195,10 +214,41 @@
     return card;
   }
 
+  /* The card of the admins: who is online and everybody who is registered (name, e-mail, phone, dates; passwords are never stored in a readable form, nobody can see them). */
+  function peopleCard() {
+    const info = h("div", {}, h("p", { class: "muted small" }, "Wird geladen …"));
+    const when = (value) => (value ? new Date(value).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" }) : "nie");
+    (async () => {
+      const reply = await Api.get("/admin/overview");
+      if (!reply.ok) { fill(info, h("p", { class: "muted small" }, Api.message(reply))); return; }
+      const rows = reply.data.people.map((p) => h("li", {}, h("b", {}, `${p.online ? "● " : ""}@${p.handle}`), ` (${p.name})`, h("br"),
+        h("span", { class: "muted small" }, `${p.email || "keine E-Mail"} · ${p.phone || "kein Telefon"} · ${p.posts} Beiträge · angemeldet ${when(p.createdAt)} · zuletzt ${when(p.lastSeenAt)}${p.suspended ? " · gesperrt" : ""}`)));
+      fill(info, h("p", {}, `Jetzt online: ${reply.data.online} · Konten insgesamt: ${reply.data.total}`), h("ul", { class: "plain-list" }, rows));
+    })();
+    return h("section", { class: "card storage-card" }, h("h2", {}, "Leute"), info);
+  }
+
+  /* The card of the admins: what people sent to the team (requests, ideas, answers); "Erledigt" removes one. */
+  function requestsCard() {
+    const list = h("div", {}, h("p", { class: "muted small" }, "Wird geladen …"));
+    const KIND = { request: "Anfrage", idea: "Idee", survey: "Umfrage", problem: "Problem" };
+    (async () => {
+      const reply = await Api.get("/admin/requests");
+      if (!reply.ok) { fill(list, h("p", { class: "muted small" }, Api.message(reply))); return; }
+      if (!reply.data.items.length) { fill(list, h("p", { class: "muted small" }, "Keine offenen Anfragen.")); return; }
+      fill(list, ...reply.data.items.map((r) => {
+        const element = h("article", { class: "report-card" }, h("div", { class: "report-top" }, h("span", { class: "tag" }, KIND[r.kind] || r.kind), h("b", {}, r.handle ? `@${r.handle}` : "?"), Y.timeEl(r.createdAt)), h("blockquote", {}, r.text),
+          h("div", { class: "report-actions" }, button("Erledigt", "primary small", async () => { const done = await Api.post(`/admin/requests/${r.id}`); if (done.ok) element.remove(); else toast(Api.message(done)); })));
+        return element;
+      }));
+    })();
+    return h("section", { class: "card storage-card" }, h("h2", {}, "Anfragen"), list);
+  }
+
   views.moderation = function moderation() {
     if (!Y.me || !Y.me.isAdmin) return views.notfound();
     const box = h("div", { class: "reports" });
-    const el = h("div", { class: "view" }, topbar({ title: "Moderation", sub: "Offene Meldungen" }), storageCard(), box);
+    const el = h("div", { class: "view" }, topbar({ title: "Moderation", sub: "Admin" }), peopleCard(), requestsCard(), storageCard(), box);
     let dead = false;
 
     async function act(report, action, card) {

@@ -446,11 +446,11 @@
         mine && !item.replyTo ? (Y.me.pinnedPostId === item.id
           ? { label: "Von deinem Profil lösen", icon: "pushpin", run: async () => { const reply = await Api.del(`/posts/${item.id}/pin`); if (reply.ok) { Y.me.pinnedPostId = reply.data.pinnedPostId; toast("Der Beitrag ist nicht mehr angeheftet."); Y.refreshView?.(); } else toast(Api.message(reply)); } }
           : { label: "An dein Profil anheften", icon: "pushpin", run: async () => { const reply = await Api.post(`/posts/${item.id}/pin`); if (reply.ok) { Y.me.pinnedPostId = reply.data.pinnedPostId; toast("Der Beitrag ist an dein Profil angeheftet.", { label: "Ansehen", run: () => Y.navigate(`/${Y.me.handle}`) }); Y.refreshView?.(); } else toast(Api.message(reply)); } }) : null,
-        mine ? { label: "Beitrag löschen", icon: "trash", danger: true, run: async () => {
+        mine || (Y.me && Y.me.isAdmin) ? { label: "Beitrag löschen", icon: "trash", danger: true, run: async () => {
           if (!(await confirmBox({ title: "Beitrag löschen?", text: "Das lässt sich nicht rückgängig machen.", yes: "Löschen", danger: true }))) return;
           const reply = await Api.del(`/posts/${item.id}`);
           if (!reply.ok) { toast(Api.message(reply)); return; }
-          toast("Dein Beitrag wurde gelöscht.");
+          toast(mine ? "Dein Beitrag wurde gelöscht." : "Der Beitrag wurde gelöscht (Admin).");
           if (options.onDelete) options.onDelete(card); else card.remove();
         } } : null,
         Y.me && !mine ? { label: `@${other} stummschalten`, icon: "mute", run: async () => { const reply = await Api.post(`/users/${other}/mute`); toast(reply.ok ? `@${other} ist stummgeschaltet.` : Api.message(reply)); if (reply.ok) card.remove(); } } : null,

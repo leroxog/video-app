@@ -129,7 +129,7 @@ LIMITS = {
     "password": (8, 900), "delete": (6, 900),
     "post-burst": (12, 60), "post-hour": (150, 3600), "like": (400, 3600), "follow": (120, 3600), "media": (40, 3600), "dm": (120, 3600),
     "link-preview": (120, 600), "link-image": (500, 600),
-    "game-ai": (12, 3600), "music-search": (120, 3600), "music-pick": (60, 3600), "music-up": (30, 3600), "rank-ai": (20, 3600), "rank-search": (90, 3600), "rank-pick": (120, 3600), "report": (20, 3600), "lens-recipe": (30, 3600), "lens-make": (10, 86400), "lens-use": (300, 3600), "game-make": (10, 86400), "game-edit": (120, 3600), "game-play": (400, 3600), "profile": (30, 3600), "search": (120, 600), "block": (60, 3600),
+    "game-ai": (12, 3600), "music-search": (120, 3600), "music-pick": (60, 3600), "music-up": (30, 3600), "rank-ai": (20, 3600), "rank-search": (90, 3600), "rank-pick": (120, 3600), "report": (20, 3600), "request": (10, 3600), "lens-recipe": (30, 3600), "lens-make": (10, 86400), "lens-use": (300, 3600), "game-make": (10, 86400), "game-edit": (120, 3600), "game-play": (400, 3600), "profile": (30, 3600), "search": (120, 600), "block": (60, 3600),
     "gif-make": (20, 3600), "gif-fav": (400, 3600), "gif-use": (300, 3600), "gif-list": (600, 600),
     "share": (240, 600), "attach": (40, 3600), "storage": (120, 3600), "story": (30, 3600), "story-view": (900, 600), "play": (200, 3600), "heart": (300, 3600), "push": (30, 3600), "nex-read": (30, 600), "google": (30, 600), "nex": (40, 600), "nex-flood": (80, 60), "factcheck": (120, 3600), "views": (90, 600), "vote": (200, 3600), "pin": (60, 3600), "group": (12, 3600),
     "ai-image": (20, 3600), "caption": (600, 3600), "caption-redo": (12, 3600), "call-start": (30, 3600), "call-poll": (3000, 3600), "call-act": (300, 3600), "call-sync": (12000, 3600),
@@ -518,6 +518,17 @@ class YipiReport(db.Model):
     user_id = db.Column(db.Integer, nullable=True)
     reason = db.Column(db.String(20), nullable=False)
     note = db.Column(db.String(300), nullable=False, default="")
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+    handled = db.Column(db.Boolean, nullable=False, default=False)
+
+
+class YipiRequest(db.Model):
+    """A request, an idea or an answer to a survey that a person sends to the team ("Anfragen"): the admins read them on the moderation page."""
+    __tablename__ = "yipi_request"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, nullable=True, index=True)
+    kind = db.Column(db.String(20), nullable=False, default="request")
+    text = db.Column(db.String(1500), nullable=False, default="")
     created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
     handled = db.Column(db.Boolean, nullable=False, default=False)
 
@@ -4933,6 +4944,59 @@ def register_routes(app):
             for table in STORAGE_TABLES[:3]:
                 connection.execute(text(f"VACUUM FULL {table}"))
         return jsonify({"ok": True, "databaseBytes": int(db.session.execute(text("SELECT pg_database_size(current_database())")).scalar() or 0)})
+
+    # ---------------------------------------------------------------------------- requests to the team and the overview of the admins
+    @route("/api/yipi/requests", methods=["POST"])
+    def yipi_request_send():
+        user, problem = need_user()
+        if problem:
+            return problem
+        data, problem = body()
+        if problem:
+            return problem
+        text = clean_text(data.get("text", ""), 1500)
+        kind = data.get("kind") if data.get("kind") in ("request", "idea", "survey", "problem") else "request"
+        if not text or not text.strip():
+            return fail("empty")
+        if limiter.too_many("request", str(user.id)):
+            return fail("too_many", 429)
+        db.session.add(YipiRequest(user_id=user.id, kind=kind, text=text.strip()))
+        db.session.commit()
+        return jsonify({"ok": True}), 201
+
+    @route("/api/yipi/admin/overview")
+    def yipi_admin_overview():
+        """Who is online and who is registered (name, handle, e-mail, phone, dates). Passwords are never stored in a readable form, so nobody can see them, not even the admins."""
+        admin, problem = need_admin()
+        if problem:
+            return problem
+        now = utcnow()
+        rows = YipiUser.query.filter(YipiUser.agent_kind.is_(None), YipiUser.company.is_(False)).order_by(YipiUser.last_seen_at.desc().nullslast(), YipiUser.id.desc()).limit(300).all()
+        people = [{"handle": u.handle, "name": u.name, "email": u.email or "", "phone": u.phone or "", "createdAt": iso(u.created_at), "lastSeenAt": iso(u.last_seen_at) if u.last_seen_at else None,
+                   "online": bool(u.last_seen_at and now - u.last_seen_at < timedelta(minutes=6)), "posts": u.posts_count or 0, "suspended": bool(u.suspended)} for u in rows]
+        total = YipiUser.query.filter(YipiUser.agent_kind.is_(None), YipiUser.company.is_(False)).count()
+        return jsonify({"ok": True, "total": total, "online": sum(1 for p in people if p["online"]), "people": people})
+
+    @route("/api/yipi/admin/requests")
+    def yipi_admin_requests():
+        admin, problem = need_admin()
+        if problem:
+            return problem
+        rows = YipiRequest.query.filter_by(handled=False).order_by(YipiRequest.id.desc()).limit(100).all()
+        names = {u.id: u.handle for u in YipiUser.query.filter(YipiUser.id.in_({r.user_id for r in rows if r.user_id}))}
+        return jsonify({"ok": True, "items": [{"id": r.id, "kind": r.kind, "text": r.text, "createdAt": iso(r.created_at), "handle": names.get(r.user_id)} for r in rows]})
+
+    @route("/api/yipi/admin/requests/<int(min=1, max=4611686018427387904):request_id>", methods=["POST"])
+    def yipi_admin_request_done(request_id):
+        admin, problem = need_admin()
+        if problem:
+            return problem
+        row = db.session.get(YipiRequest, request_id)
+        if row is None:
+            return fail("not_found", 404)
+        row.handled = True
+        db.session.commit()
+        return jsonify({"ok": True})
 
     @route("/api/yipi/moderation/reports")
     def yipi_admin_reports():

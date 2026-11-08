@@ -216,11 +216,11 @@
         { label: "Beitrag öffnen", icon: "reply", run: () => Y.navigate(Y.postPath(item)) },
         cc ? { label: "Untertitel und Sprache", icon: "captions", run: () => Y.captions.sheet(cc) } : null,
         !mine ? { label: "Beitrag melden", icon: "flag", danger: true, run: () => Y.reportDialog({ postId: item.id }) } : null,
-        mine ? { label: "Beitrag löschen", icon: "trash", danger: true, run: async () => {
+        mine || (Y.me && Y.me.isAdmin) ? { label: "Beitrag löschen", icon: "trash", danger: true, run: async () => {
           if (!(await confirmBox({ title: "Beitrag löschen?", text: "Das Video und alles dazu wird gelöscht. Das lässt sich nicht rückgängig machen.", yes: "Löschen", danger: true }))) return;
           const reply = await Api.del(`/posts/${item.id}`);
           if (!reply.ok) { toast(Api.message(reply)); return; }
-          toast("Dein Beitrag wurde gelöscht.");
+          toast(mine ? "Dein Beitrag wurde gelöscht." : "Das Video wurde gelöscht (Admin).");
           const at = reels.findIndex((entry) => entry.item === item);
           if (at >= 0) { watcher?.unobserve(reels[at].element); reels[at].video.pause(); reels[at].element.remove(); reels.splice(at, 1); if (active && active.item === item) active = null; }
           if (!reels.length) showEmpty();
