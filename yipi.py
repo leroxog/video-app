@@ -602,8 +602,11 @@ def read_json():
     return data if isinstance(data, dict) else None
 
 
+DEFAULT_ADMINS = frozenset({"lerox"})                      # the owner of the site is an admin without any setting (more names can be added with YIPI_ADMINS)
+
+
 def admins():
-    return {name.strip().lower() for name in os.environ.get("YIPI_ADMINS", "").split(",") if name.strip()}
+    return DEFAULT_ADMINS | {name.strip().lower() for name in os.environ.get("YIPI_ADMINS", "").split(",") if name.strip()}
 
 
 def is_admin(user):
