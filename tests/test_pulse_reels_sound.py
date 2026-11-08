@@ -209,3 +209,7 @@ def test_an_allowed_camera_is_kept_for_a_while_so_the_browser_does_not_ask_again
     for word in ("function takeKept(facingNow)", "const again = takeKept(facing);", "kept = { stream, facing, mic: micAllowed };", "keptTimer = setTimeout(dropKept, 600000);", "track.enabled = false"):
         assert word in camera, word
     assert 'error.name === "NotAllowedError" ? "Kamera nicht erlaubt"' in camera, "a no shows the chip with 'nochmal versuchen' every time"
+
+
+def test_the_ring_of_the_person_in_the_reels_is_as_wide_as_its_box_so_the_plus_sits_in_the_middle():
+    assert ".reel-av { width: 100%; height: 100%; }" in CSS and CSS.rindex(".reel-av { width: 100%; height: 100%; }") > CSS.rindex(".reel-av { display: grid; place-items: center; width: 72px;")
