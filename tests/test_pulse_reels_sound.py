@@ -242,3 +242,8 @@ def test_a_lens_can_get_brand_new_stickers_that_the_ai_invented_but_only_as_chec
     assert len([n for n in lenses.clean_recipe(many, "none")[0] if n.startswith("x.")]) == lenses.MAX_STICKERS
     face = read("pl-face.js")
     assert "function customFx(id)" in face and "const fx = FX[id] || customFx(id);" in face
+
+
+def test_a_swipe_to_the_right_on_a_video_opens_the_profile_of_its_author():
+    videos = read("yipi-videos.js")
+    assert 'scroller.addEventListener("touchend"' in videos and "dx > 80 && Math.abs(dy) < 45" in videos and "Y.navigate(`/${active.item.user.handle}`)" in videos

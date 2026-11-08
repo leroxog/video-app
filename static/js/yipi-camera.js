@@ -1106,7 +1106,7 @@
         video.src = mine.url;
         video.play().catch(() => {});
         let on = true;
-        const paint = () => { chip.textContent = on ? `Song: ${track.title} ✕` : "Song wieder hinzufügen"; chip.setAttribute("aria-label", on ? "Song entfernen" : "Song wieder hinzufügen"); };
+        const paint = () => { chip.textContent = on ? `Song: ${track.title} (tippen: entfernen)` : "Song wieder hinzufügen"; chip.setAttribute("aria-label", on ? "Song entfernen" : "Song wieder hinzufügen"); };
         chip.disabled = false;
         paint();
         const mixedUrl = mine.url;

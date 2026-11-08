@@ -42,6 +42,18 @@
     let ended = false;                                          // the shuffle has been read to its end (the next page shuffles again)
     let dead = false;
     let active = null;
+    /* A swipe to the right (mostly sideways, not up or down) opens the profile of the person whose video is on the screen. */
+    let swipe = null;
+    scroller.addEventListener("touchstart", (event) => { const touch = event.touches[0]; swipe = event.touches.length === 1 ? { x: touch.clientX, y: touch.clientY } : null; }, { passive: true });
+    scroller.addEventListener("touchend", (event) => {
+      const start = swipe;
+      swipe = null;
+      const touch = event.changedTouches[0];
+      if (!start || !touch || !active || !active.item) return;
+      const dx = touch.clientX - start.x;
+      const dy = touch.clientY - start.y;
+      if (dx > 80 && Math.abs(dy) < 45 && dx > Math.abs(dy) * 2.2) Y.navigate(`/${active.item.user.handle}`);
+    }, { passive: true });
     let watching = null;
     let blocked = false;                                        // the browser does not allow sound before the person touches the page
 
