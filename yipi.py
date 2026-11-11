@@ -73,7 +73,7 @@ MAX_MEDIA = 3                                    # photos per post (or one GIF, 
 MAX_GROUP_NAME = 40
 MAX_GROUP_MEMBERS = 20
 MAX_IMAGE_BYTES = 25 * 1024 * 1024
-MAX_VIDEO_BYTES = 250 * 1024 * 1024              # a video is kept in the database (or in R2) like a picture; the whole file is read into memory once, so this is the highest that one web process carries
+MAX_VIDEO_BYTES = 100 * 1024 * 1024              # a video is kept in the database (or in R2) like a picture; the whole file is read into memory once, so this is the highest that one web process carries
 MAX_VIDEO_SIDE = 4096
 MAX_VIDEO_SECONDS = 120                        # a video is at most this long (the milliseconds do not count); a story is held to 30 by the page (MAX_STORY_SECONDS in yipi-core.js)
 MAX_DOCUMENT_BYTES = 100 * 1024 * 1024         # a document in a chat (the "+" of a message); photos and videos follow their own limits
@@ -2620,7 +2620,16 @@ def register_routes(app):
         headers = {"Cache-Control": "public, max-age=31536000, immutable", "Content-Security-Policy": "default-src 'none'; img-src 'self'; media-src 'self'; sandbox", "Content-Disposition": "inline"}
         if request.args.get("same") and item.stored == "r2" and item.content_type.startswith(("video/", "audio/")) and item.size <= MAX_VIDEO_BYTES:
             # The music player of the camera needs the bytes from this very address: a file of another origin (R2) is silent in the sound mixer.
-            response = Response(load_bytes(YipiMedia, item), mimetype=item.content_type, headers=headers)
+            # (streamed in pieces from the signed address: the whole video is never held in the memory of the server)
+            try:
+                address = STORE.url(BLOB_KIND[YipiMedia], item.id, item.content_type, None, expires=300)
+                upstream = requests.get(address, stream=True, timeout=20)
+                upstream.raise_for_status()
+            except Exception:  # noqa: BLE001
+                logger.exception("Could not read a file of R2")
+                abort(503)
+            response = Response(upstream.iter_content(chunk_size=256 * 1024), mimetype=item.content_type, headers=headers)
+            response.headers["Content-Length"] = str(item.size)
             response.headers["X-Content-Type-Options"] = "nosniff"
             return response
         return blob_response(YipiMedia, item, headers)

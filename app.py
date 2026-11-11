@@ -94,7 +94,7 @@ else:
 app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-change-in-production")
-app.config["MAX_CONTENT_LENGTH"] = 300 * 1024 * 1024  # 300 MB pro Anfrage (ein Video darf 250 MB haben, siehe yipi.MAX_VIDEO_BYTES)
+app.config["MAX_CONTENT_LENGTH"] = 300 * 1024 * 1024  # 300 MB pro Anfrage (ein Video darf 100 MB haben, siehe yipi.MAX_VIDEO_BYTES)
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"          # the sign-in cookie is not sent along with requests from other sites
 app.config["SESSION_COOKIE_SECURE"] = bool(os.environ.get("RAILWAY_ENVIRONMENT_NAME") or os.environ.get("RAILWAY_ENVIRONMENT"))   # https only in production

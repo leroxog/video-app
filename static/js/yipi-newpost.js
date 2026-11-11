@@ -88,7 +88,7 @@
     }
     function drawSlot() {
       if (!picked) {
-        fill(slot, h("button", { class: "vt-drop", type: "button", onclick: () => picker.click() }, h("span", { class: "vt-drop-ic" }, icon("film")), h("b", {}, "Video auswählen"), h("span", { class: "hint" }, "MP4, MOV oder WebM · höchstens 120 Sekunden · bis 250 MB")));
+        fill(slot, h("button", { class: "vt-drop", type: "button", onclick: () => picker.click() }, h("span", { class: "vt-drop-ic" }, icon("film")), h("b", {}, "Video auswählen"), h("span", { class: "hint" }, "MP4, MOV oder WebM · höchstens 120 Sekunden · bis 100 MB")));
         return;
       }
       fill(slot, h("div", { class: "vt-preview" },

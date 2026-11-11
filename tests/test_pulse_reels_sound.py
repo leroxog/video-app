@@ -181,7 +181,14 @@ def test_the_sound_of_a_video_comes_from_the_site_itself_not_from_r2(client, mon
     assert mia.post("/api/yipi/signup", json={"handle": "mia", "password": PASSWORD, "adult": True}).status_code == 200
     item = yipi.YipiMedia(id="a" * 32, owner_id=1, content_type="video/mp4", size=7, width=1, height=1, stored="r2", data=b"")
     monkeypatch.setattr(yipi.STORE, "url", lambda *args, **kwargs: "https://r2.example/x")
-    monkeypatch.setattr(yipi, "load_bytes", lambda model, row: b"abcdefg")
+    class Upstream:
+        def raise_for_status(self):
+            pass
+
+        def iter_content(self, chunk_size=0):
+            yield b"abc"
+            yield b"defg"
+    monkeypatch.setattr(yipi.requests, "get", lambda *args, **kwargs: Upstream())
     db.session.add(item)
     db.session.commit()
     plain = mia.get("/yipi-media/" + "a" * 32)

@@ -54,7 +54,7 @@ def mp4(extra, seconds=60):
 
 
 def test_the_limits_are_much_higher_than_before():
-    assert yipi.MAX_VIDEO_BYTES == 250 * MB and yipi.MAX_DOCUMENT_BYTES == 100 * MB and yipi.MAX_IMAGE_BYTES == 25 * MB and yipi.MAX_FILE_IMAGE_BYTES == 25 * MB
+    assert yipi.MAX_VIDEO_BYTES == 100 * MB and yipi.MAX_DOCUMENT_BYTES == 100 * MB and yipi.MAX_IMAGE_BYTES == 25 * MB and yipi.MAX_FILE_IMAGE_BYTES == 25 * MB
     assert yipi_music.MAX_UPLOAD == 50_000_000
     assert flask_app.config["MAX_CONTENT_LENGTH"] >= yipi.MAX_VIDEO_BYTES + 20 * MB, "a request may carry the biggest video and the form around it"
 
@@ -73,9 +73,9 @@ def test_a_video_bigger_than_the_old_limit_is_taken_and_one_over_the_new_limit_i
 
 def test_the_page_says_the_same_numbers_as_the_server():
     core, api, newpost, music, components = read("yipi-core.js"), read("yipi-api.js"), read("yipi-newpost.js"), read("yipi-music.js"), read("yipi-components.js")
-    assert "const MAX_VIDEO_BYTES = 250 * 1024 * 1024;" in core
-    assert "(höchstens 250 MB)" in api and "Die Datei ist zu groß (höchstens 100 MB, Fotos 25 MB, Videos 250 MB)." in api and "Das Foto ist zu groß (höchstens 25 MB)." in api
-    assert "bis 250 MB" in newpost and "file.size > 50_000_000" in music and "höchstens 50 MB" in music
+    assert "const MAX_VIDEO_BYTES = 100 * 1024 * 1024;" in core
+    assert "(höchstens 100 MB)" in api and "Die Datei ist zu groß (höchstens 100 MB, Fotos 25 MB, Videos 100 MB)." in api and "Das Foto ist zu groß (höchstens 25 MB)." in api
+    assert "bis 100 MB" in newpost and "file.size > 50_000_000" in music and "höchstens 50 MB" in music
     assert "blob.size <= 25 * 1024 * 1024" in components
     for old in ("Foto ist zu groß (höchstens 5 MB)", "Videos 25 MB", "höchstens 15 MB", "Fotos 8 MB", "bis 25 MB\""):
         assert old not in api + newpost, old

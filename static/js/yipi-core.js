@@ -11,7 +11,7 @@
   const MAX_POST = 280;
   const HOME = "/";                                      // the home page of Satürn is the home page of the site
   const MAX_MEDIA = 3;                                  // photos per post (yipi.py: MAX_MEDIA)
-  const MAX_VIDEO_BYTES = 250 * 1024 * 1024;            // a video (yipi.py: MAX_VIDEO_BYTES)
+  const MAX_VIDEO_BYTES = 100 * 1024 * 1024;            // a video (yipi.py: MAX_VIDEO_BYTES)
   const MAX_VIDEO_SECONDS = 120;                        // and how long it may be (only the browser can measure that; the milliseconds do not count)
   const MAX_STORY_SECONDS = 30;                         // a story is shorter than a video
   const MONTHS = ["Jan.", "Feb.", "März", "Apr.", "Mai", "Juni", "Juli", "Aug.", "Sept.", "Okt.", "Nov.", "Dez."];
