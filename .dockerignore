@@ -1,0 +1,11 @@
+.git
+__pycache__
+*.pyc
+tests
+instance
+videos.db
+host_agent
+ysound_worker
+node_modules
+.env
+deploy/.env

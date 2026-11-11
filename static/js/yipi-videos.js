@@ -94,7 +94,14 @@
     }
 
     /* ------------------------------------------------------------------ loading */
-    const fetchFile = (reel) => { if (!reel.video.getAttribute("src")) { reel.video.preload = "auto"; reel.video.src = reel.url; } };
+    /* Videos are warmed up in steps, nearest first: the one on the screen loads normally; the next one is ready to play (preload "auto"); the two after it load only their first moments (preload
+       "metadata" and a first picture); the next ones after that only get their still picture; everything far away is let go. So the phone never loads whole videos that nobody watches. */
+    const warm = (reel, mode) => {
+      if (!reel.video.getAttribute("src")) { reel.video.preload = mode; reel.video.src = mode === "metadata" ? `${reel.url}#t=0.1` : reel.url; }
+      else if (mode === "auto" && reel.video.preload !== "auto") reel.video.preload = "auto";
+    };
+    const fetchFile = (reel) => warm(reel, "auto");
+    const dress = (reel) => { if (!reel.dressed && /^\/yipi-media\/[0-9a-f]{32}$/.test(reel.url || "")) { reel.dressed = true; reel.video.poster = `${reel.url}/poster`; } };       // (the still picture comes from Bunny when the video is there)
     function letGo(reel) {                                      // far from the screen: no file, no memory
       reel.cc?.stop();
       if (!reel.video.getAttribute("src")) return;
@@ -106,8 +113,13 @@
       const at = reels.indexOf(active);
       if (at < 0) return;
       reels.forEach((reel, index) => {
-        if (index >= at - 1 && index <= at + KEEP) fetchFile(reel);
-        else if (Math.abs(index - at) > KEEP + 1) letGo(reel);
+        const away = index - at;
+        if (away === 0) warm(reel, "auto");
+        else if (away === 1) { dress(reel); warm(reel, "auto"); }
+        else if (away === 2 || away === 3) { dress(reel); warm(reel, "metadata"); }
+        else if (away === 4 || away === 5) dress(reel);
+        else if (away === -1) warm(reel, "metadata");
+        else if (Math.abs(away) > KEEP + 2) letGo(reel);
       });
     }
 
@@ -126,7 +138,7 @@
       reel.cc?.start();                                         // subtitles and the spoken translation of this video
       manage();
       watching = setTimeout(() => Y.queueView?.(reel.item.id), 1500);
-      if (index >= reels.length - 3) more();
+      if (index >= reels.length - 6) more();
       if (reels.length > MAX_REELS && index > MAX_REELS / 2) trim();
     }
 

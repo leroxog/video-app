@@ -1,0 +1,13 @@
+# The address comes from SITE_ADDRESS in .env (for example saturn.duckdns.org). Caddy gets and renews the HTTPS certificate by itself.
+{$SITE_ADDRESS} {
+	encode zstd gzip
+	request_body {
+		max_size 120MB
+	}
+	reverse_proxy app:8000 {
+		flush_interval -1
+		transport http {
+			response_header_timeout 300s
+		}
+	}
+}

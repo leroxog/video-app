@@ -1,0 +1,50 @@
+# Satürn on an own server: the site, the database and Caddy (which fetches the HTTPS certificate by itself).
+# Start:   docker compose up -d --build        Update:   git pull && docker compose up -d --build
+# The settings are in the file ".env" next to this one (copy deploy/.env.example and fill it).
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: satuern
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: satuern
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U satuern -d satuern"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://satuern:${DB_PASSWORD}@db:5432/satuern
+    depends_on:
+      db:
+        condition: service_healthy
+    expose:
+      - "8000"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

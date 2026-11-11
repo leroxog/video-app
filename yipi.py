@@ -53,6 +53,7 @@ import ai_assistant
 import docread
 import siteauth
 import ysound
+import yipi_bunny
 import yipi_music
 import yipi_nex_tools
 import yipi_ranking
@@ -147,11 +148,16 @@ CONTENT_SECURITY_POLICY = (
 
 
 def content_security_policy():
-    """The policy of the pages. When the files live in R2 the browser may also load pictures and videos from the address of the bucket."""
-    if not STORE.enabled:
+    """The policy of the pages. When the files live in R2 the browser may also load pictures and videos from the address of the bucket, and when the videos are on Bunny from the address of the Bunny CDN."""
+    hosts = []
+    if STORE.enabled:
+        hosts.append(f"https://{STORE.host}")
+    if yipi_bunny.enabled():
+        hosts.append(f"https://{yipi_bunny.host()}")
+    if not hosts:
         return CONTENT_SECURITY_POLICY
-    host = f"https://{STORE.host}"
-    return CONTENT_SECURITY_POLICY.replace("img-src 'self' data: blob:", f"img-src 'self' data: blob: {host}").replace("media-src 'self' blob:", f"media-src 'self' blob: {host}")
+    more = " ".join(hosts)
+    return CONTENT_SECURITY_POLICY.replace("img-src 'self' data: blob:", f"img-src 'self' data: blob: {more}").replace("media-src 'self' blob:", f"media-src 'self' blob: {more}")
 
 
 SITE_NAME = "Satürn"
@@ -281,6 +287,16 @@ class YipiPost(db.Model):
     fact_status = db.Column(db.String(12), nullable=False, default="")        # "" not checked yet, "ok", "false" or "misleading" (the last two come with a note)
     fact_note = db.Column(db.String(300), nullable=False, default="")
     deleted = db.Column(db.Boolean, nullable=False, default=False)
+
+
+class YipiBunny(db.Model):
+    """A video that was also sent to Bunny Stream (yipi_bunny.py): its guid there, and `ready` once the small versions can be played."""
+    __tablename__ = "yipi_bunny"
+    media_id = db.Column(db.String(32), primary_key=True)
+    guid = db.Column(db.String(64), nullable=False)
+    ready = db.Column(db.Boolean, nullable=False, default=False)
+    failed = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
 
 
 class YipiMedia(db.Model):
@@ -1583,6 +1599,71 @@ def keep_bytes(kind, item, data):
     item.data, item.stored = data, "db"
 
 
+def bunny_record(media_id):
+    """What the upload to Bunny does when it has a guid: write it down (the thread has its own application context)."""
+    def record(guid):
+        if db.session.get(YipiBunny, media_id) is None:
+            db.session.add(YipiBunny(media_id=media_id, guid=guid))
+            db.session.commit()
+    return record
+
+
+def bunny_loader(media_id):
+    def load():
+        row = db.session.get(YipiMedia, media_id)
+        return load_bytes(YipiMedia, row) if row is not None else b""
+    return load
+
+
+def bunny_target(media_id):
+    """The address of the small MP4 on Bunny when the video is there and ready (it asks Bunny now and then while it is not), otherwise None: the file of the site is served."""
+    if not yipi_bunny.enabled():
+        return None
+    row = db.session.get(YipiBunny, media_id)
+    if row is None or row.failed:
+        return None
+    if not row.ready:
+        if not yipi_bunny.due(media_id):
+            return None
+        state = yipi_bunny.status(row.guid)
+        if state in yipi_bunny.FINISHED:
+            row.ready = True
+        elif state in yipi_bunny.FAILED:
+            row.failed = True
+        else:
+            return None
+        db.session.commit()
+        if row.failed:
+            return None
+    return yipi_bunny.mp4_url(row.guid)
+
+
+def bunny_migrate(limit=None, pause=0.5):
+    """Sends every video that is not on Bunny yet (run from scripts/migrate_to_bunny.py): returns (sent, failed)."""
+    import time as _time
+    sent = failed = 0
+    done = {row[0] for row in db.session.query(YipiBunny.media_id)}
+    rows = YipiMedia.query.options(defer(YipiMedia.data)).filter(YipiMedia.content_type.like("video/%")).order_by(YipiMedia.created_at.desc()).all()
+    for item in rows:
+        if item.id in done:
+            continue
+        if limit is not None and sent + failed >= limit:
+            break
+        try:
+            data = load_bytes(YipiMedia, item)
+            if not data:
+                failed += 1
+                continue
+            guid = yipi_bunny.upload(item.id, data)
+            bunny_record(item.id)(guid)
+            sent += 1
+        except Exception:  # noqa: BLE001
+            logger.exception("Could not send %s to Bunny", item.id)
+            failed += 1
+        _time.sleep(pause)
+    return sent, failed
+
+
 def load_bytes(model, item):
     """All bytes of a stored file, wherever they are."""
     if item.stored == "r2":
@@ -2551,6 +2632,7 @@ def register_routes(app):
             keep_bytes("media", item, data)
             db.session.add(item)
             db.session.commit()
+            yipi_bunny.push_later(app, item.id, bunny_loader(item.id), bunny_record(item.id), item.id)      # (when Bunny is set up: the small versions are made there)
             if request.form.get("captions") == "1":                              # (a video of a post, not a story: it gets subtitles)
                 import yipi_captions
                 yipi_captions.keep_pitch(item.id, request.form.get("pitch"))     # (the browser measured the pitch of the voice: it tells women from men in the voice of the translation)
@@ -2618,6 +2700,12 @@ def register_routes(app):
         if item is None:
             abort(404)
         headers = {"Cache-Control": "public, max-age=31536000, immutable", "Content-Security-Policy": "default-src 'none'; img-src 'self'; media-src 'self'; sandbox", "Content-Disposition": "inline"}
+        if not request.args.get("same") and item.content_type.startswith("video/"):
+            target = bunny_target(media_id)
+            if target:
+                response = redirect(target, code=302)
+                response.headers["Cache-Control"] = "private, max-age=300"
+                return response
         if request.args.get("same") and item.stored == "r2" and item.content_type.startswith(("video/", "audio/")) and item.size <= MAX_VIDEO_BYTES:
             # The music player of the camera needs the bytes from this very address: a file of another origin (R2) is silent in the sound mixer.
             # (streamed in pieces from the signed address: the whole video is never held in the memory of the server)
@@ -2633,6 +2721,16 @@ def register_routes(app):
             response.headers["X-Content-Type-Options"] = "nosniff"
             return response
         return blob_response(YipiMedia, item, headers)
+
+    @route("/yipi-media/<media_id>/poster")
+    def yipi_media_poster(media_id):
+        """The still picture of a video from Bunny (for the videos that are about to come up); 404 when it is not there."""
+        row = db.session.get(YipiBunny, media_id) if re.fullmatch(r"[0-9a-f]{32}", media_id) and yipi_bunny.enabled() else None
+        if row is None or row.failed:
+            abort(404)
+        response = redirect(yipi_bunny.thumbnail_url(row.guid), code=302)
+        response.headers["Cache-Control"] = "private, max-age=600"
+        return response
 
     # -------------------------------------------------------------------------------- files in chats (private)
     def may_open_file(user, item):
