@@ -60,9 +60,10 @@ def test_the_router_knows_the_pages_and_every_way_to_upload_leads_to_them():
     assert '"/new": "new", "/new/post": "newpost", "/new/video": "newvideo"' in core
     assert 'case "new": return "/new"' in core and 'case "newpost": return "/new/post"' in core and 'case "newvideo": return "/new/video"' in core
     page = read("yipi-newpost.js")
-    for word in ("Was willst du hochladen?", 'chooseCard("video", "Ein Video"', 'chooseCard("post", "Ein Beitrag"', "pages.new = ", "pages.newpost = ", "pages.newvideo = ", "uploadPages: pages"):
+    for word in ("Was willst du hochladen?", 'chooseCard("video", "Ein Video"', 'chooseCard("story", "Eine Story"', "pages.new = ", "pages.newpost = ", "pages.newvideo = ", "uploadPages: pages"):
         assert word in page, word
-    assert page.index('chooseCard("video", "Ein Video"') < page.index('chooseCard("post", "Ein Beitrag"'), "the video is on the left, the post on the right"
+    assert page.index('chooseCard("video", "Ein Video"') < page.index('chooseCard("story", "Eine Story"'), "the video is on the left, the story on the right (no text posts any more)"
+    assert 'chooseCard("post"' not in page, "there is no choice for a text post any more"
     assert 'Y.navigate(only === "video" ? "/new/video" : only === "post" ? "/new/post" : "/new")' in page, "the + leads to the page"
     assert "floating(anchor" not in page and "pc-tile" not in page, "the pop-up is gone"
     assert "{ ...(Y.uploadPages || {}) }" in read("yipi-views.js")

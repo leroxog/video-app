@@ -30,7 +30,14 @@
     const scroller = h("div", { class: "reels", tabindex: "0", "aria-label": "Videos" });
     let scope = "foryou";                                       // "foryou" or "following"
     const scopes = h("div", { class: "reels-scope", role: "tablist", "aria-label": "Videos" });
-    const top = h("div", { class: "reels-top" }, h("h1", { class: "sr-only" }, "Videos"), scopes);
+    const searchButton = link("/explore", { class: "reels-side reels-search", "aria-label": "Suchen" }, icon("search"));
+    const moreButton = h("button", { class: "reels-side reels-more", type: "button", "aria-label": "Mehr", "aria-haspopup": "menu" }, icon("more"));
+    moreButton.addEventListener("click", () => menu(moreButton, [
+      { label: "Video hochladen", icon: "film", run: () => Y.newPost({ only: "video" }) },
+      { label: "Kamera und Spiele", icon: "camera", run: () => Y.navigate("/camera") },
+      { label: "Suchen", icon: "search", run: () => Y.navigate("/explore") },
+    ]));
+    const top = h("div", { class: "reels-top" }, h("h1", { class: "sr-only" }, "Videos"), searchButton, scopes, moreButton);       // (like the sketch: the magnifier, "Folge ich / Für dich", the round button)
     const status = h("div", { class: "reels-status" });
     const el = h("div", { class: "view reels-view" }, Y.sponsored("bar"), top, scroller, status);      // (the strip at the top shows on a phone held upright, where the bar with the lettering is not)
     let shown = 0;                                              // how many videos were put on the page (every fifth page is a box "Gesponsert")
@@ -260,6 +267,8 @@
           if (!plus) continue;
           plus.replaceChildren(icon("check"));                      // the plus turns into a check and stays one: the ring of the picture swells for a moment
           plus.classList.add("done", "kept");
+          const pillEl = other.element.querySelector(".reel-pill");
+          if (pillEl && pillEl.tagName === "BUTTON") { const done = h("span", { class: "reel-pill done" }, "Folge ich"); pillEl.replaceWith(done); }
           plus.setAttribute("aria-label", `Du folgst @${item.user.handle}`);
           ring?.classList.add("pulse");
           setTimeout(() => ring?.classList.remove("pulse"), 700);
@@ -280,8 +289,14 @@
       video.addEventListener("timeupdate", () => { if (video.duration) bar.firstChild.style.width = `${(video.currentTime / video.duration) * 100}%`; });
       const [title, ...rest] = String(item.text || "").split("\n");
       const caption = rest.join("\n").trim();
+      const pill = mine ? null : following ? h("span", { class: "reel-pill done" }, "Folge ich") : h("button", { class: "reel-pill", type: "button", "aria-label": `@${item.user.handle} folgen` }, "Folgen");
+      pill?.addEventListener?.("click", () => follow && follow.tagName === "BUTTON" && follow.click());
       const info = h("div", { class: "reel-info" },
-        link(`/${item.user.handle}`, { class: "reel-user" }, h("b", {}, `@${item.user.handle}`), h("span", { class: "dot" }, "·"), timeEl(item.createdAt)),
+        h("div", { class: "reel-author" },
+          link(`/${item.user.handle}`, { class: "reel-av2", "aria-label": `Profil von ${item.user.name}` }, avatar(item.user, "md")),
+          h("div", { class: "reel-author-text" },
+            link(`/${item.user.handle}`, { class: "reel-user" }, h("b", {}, item.user.name)),
+            h("span", { class: "reel-handle-row" }, link(`/${item.user.handle}`, { class: "reel-handle" }, `@${item.user.handle}`), pill))),
         title ? h("p", { class: "reel-title" }, richText(title)) : null,
         caption ? h("p", { class: "reel-text" }, richText(caption)) : null,
         Y.linkCardFor ? Y.linkCardFor(item.text, { compact: true }) : null,
@@ -354,7 +369,7 @@
       more();
     }
     function drawScopes() {
-      fill(scopes, ...[["foryou", "Für dich"], ["following", "Folge ich"]].map(([id, label]) => h("button", { class: `reels-scope-btn${id === scope ? " on" : ""}`, type: "button", role: "tab", "aria-selected": String(id === scope), onclick: () => { if (id === scope) return; scope = id; drawScopes(); reset(); } }, label)));
+      fill(scopes, ...[["following", "Folge ich"], ["foryou", "Für dich"]].map(([id, label]) => h("button", { class: `reels-scope-btn${id === scope ? " on" : ""}`, type: "button", role: "tab", "aria-selected": String(id === scope), onclick: () => { if (id === scope) return; scope = id; drawScopes(); reset(); } }, label)));
     }
     drawScopes();
     put(status, h("div", { class: "reels-wait" }, Y.pulseLoader()));

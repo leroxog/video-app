@@ -93,7 +93,8 @@
       }
       fill(slot, h("div", { class: "vt-preview" },
         h("video", { src: picked.url, controls: true, muted: true, playsinline: true, preload: "metadata", "aria-label": "Vorschau deines Videos" }),
-        h("button", { class: "pv-x", type: "button", "aria-label": "Video entfernen", disabled: busy, onclick: () => { URL.revokeObjectURL(picked.url); picked = null; drawSlot(); update(); } }, icon("close"))));
+        h("button", { class: "pv-x", type: "button", "aria-label": "Video entfernen", disabled: busy, onclick: () => { URL.revokeObjectURL(picked.url); picked = null; drawSlot(); update(); } }, icon("close")),
+        h("button", { class: "pv-edit", type: "button", disabled: busy, onclick: edit }, icon("scissors"), "Bearbeiten")));
     }
     async function take(file) {
       fail("");
@@ -103,9 +104,22 @@
       if (!facts || !facts.width || !facts.height) { URL.revokeObjectURL(url); fail("Dieses Video kann dein Browser nicht lesen. Probier ein MP4 mit dem üblichen Format (H.264)."); return; }
       if (Core.videoTooLong(facts.seconds)) { URL.revokeObjectURL(url); fail(Api.MESSAGES.video_too_long); return; }
       if (picked) URL.revokeObjectURL(picked.url);
-      picked = { file, url, width: facts.width, height: facts.height };
+      picked = { file, original: file, url, width: facts.width, height: facts.height, captions: true };
       drawSlot();
       update();
+      edit();                                                  // a picked video opens in the editor first (cut, text, music ...); "Hochladen" there comes back to this page
+    }
+    /* The editor (yipi-editor.js): the clip is cut and dressed there; what comes out replaces the picked clip (the original stays, so the editor can be opened again). */
+    function edit() {
+      if (!Y.videoEditor || !picked || busy) return;
+      Y.videoEditor.open({ file: picked.original, onDone: (made) => {
+        if (!picked) return;
+        URL.revokeObjectURL(picked.url);
+        picked = { file: made.file, original: picked.original, url: URL.createObjectURL(made.file), width: made.width, height: made.height, captions: made.captions };
+        drawSlot();
+        update();
+        name.focus();
+      } });
     }
 
     async function send() {
@@ -120,7 +134,7 @@
       submit.classList.add("busy");
       submit.textContent = "Lädt hoch …";
       update();
-      const fields = { alt: title, width: String(picked.width), height: String(picked.height), captions: "1", lang: String(navigator.language || "de").slice(0, 2).toLowerCase() };
+      const fields = { alt: title, width: String(picked.width), height: String(picked.height), ...(picked.captions === false ? {} : { captions: "1" }), lang: String(navigator.language || "de").slice(0, 2).toLowerCase() };
       const pitch = Y.captions && Y.captions.pitchOf ? await Y.captions.pitchOf(picked.file) : "";          // (the pitch of the voice: women and men get their own voice in the translation)
       if (pitch) fields.pitch = pitch;
       const up = await Api.upload(picked.file, fields, (fraction) => {
@@ -174,9 +188,8 @@
     const body = h("div", { class: "nu-choose" },
       h("h1", { class: "au-title nu-title" }, "Was willst du hochladen?"),
       h("div", { class: "nu-choices" },
-        chooseCard("video", "Ein Video", "Hochkant, bis 120 Sekunden", "film", () => Y.navigate("/new/video")),
-        chooseCard("post", "Ein Beitrag", "Text, Fotos, Sticker, Umfrage", "feather", () => Y.navigate("/new/post"))),
-      h("button", { class: "nu-story", type: "button", onclick: () => Y.newStory(() => { Y.refreshStories?.(); Y.back(); }) }, icon("image"), "Oder eine Story für 24 Stunden"));
+        chooseCard("video", "Ein Video", "Hochkant, bis 120 Sekunden, mit Editor", "film", () => Y.navigate("/new/video")),
+        chooseCard("story", "Eine Story", "24 Stunden sichtbar", "image", () => Y.newStory(() => { Y.refreshStories?.(); Y.back(); }))));       // (no text posts any more: only videos and stories)
     return { element: whitePage({ back: "/", closeIcon: "close", label: "Schließen", body, modifier: "nu-choosing" }), title: "Hochladen" };
   };
 

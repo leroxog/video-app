@@ -104,24 +104,24 @@
       { label: "Neue Gruppe", icon: "users", run: newGroup },
       Y.chatLock && Y.chatLock.enabled() ? { label: "Chats sperren", icon: "lock", run: () => { Y.chatLock.lockNow(); Y.rerender(); } } : null,
     ]));
-    const search = h("input", { class: "search-input", type: "search", placeholder: "Suchen", "aria-label": "Chats durchsuchen", autocomplete: "off", maxlength: 60 });
+    const search = h("input", { class: "search-input", type: "search", placeholder: "Nex AI fragen oder suchen", "aria-label": "Nex AI fragen oder in den Chats suchen", autocomplete: "off", maxlength: 200, enterkeyhint: "search" });
     const tabBox = h("div", { class: "chat-tabs" });
     const body = h("div", { class: "chats-body" });
     const element = h("div", { class: "chat-pane" }, topbar({ title: "Chats", className: "big", right: plus }), h("label", { class: "search-box chat-search" }, icon("search"), search), tabBox, body);
 
     const keyOf = (item) => (item.kind === "group" ? `g${item.group.id}` : `d${item.user.handle.toLowerCase()}`);
 
+    /* One line of the list, like in the sketch: the picture, the name and under it the last message, and at the right when it was. */
     function row(item) {
       const group = item.kind === "group";
       const last = item.last;
       const who = last ? (last.mine ? "Du: " : last.sender ? `${last.sender}: ` : "") : "";
-      const status = !last ? ["new", "Neuer Chat", "reply"] : item.unread ? ["unread", "Neue Nachricht", "reply"] : last.mine ? ["sent", "Gesendet", "planeFill"] : ["got", "Empfangen", "reply"];
-      const preview = last ? `${who}${snippet((last.text || "").replace(/\s+/g, " "), 80)}` : "Noch keine Nachrichten";
+      const preview = last ? `${who}${snippet((last.text || "").replace(/\s+/g, " ") || "Anhang", 80)}` : "Noch keine Nachrichten";
       return link(group ? `/g/${item.group.id}` : `/messages/${item.user.handle}`, { class: `convo${item.unread ? " unread" : ""}${keyOf(item) === active ? " active" : ""}` },
         group ? groupFace() : avatar(item.user, "md"),
         h("div", { class: "convo-main" },
-          h("div", { class: "convo-top" }, h("b", { class: "convo-name" }, group ? item.group.name : item.user.name), group ? null : Y.aiTag(item.user)),
-          h("p", { class: `convo-last convo-status ${status[0]}`, title: preview }, h("span", { class: "convo-ic" }, icon(status[2])), h("span", {}, status[1]), h("span", { class: "dot" }, "·"), Y.timeEl(item.at))),
+          h("div", { class: "convo-top" }, h("b", { class: "convo-name" }, group ? item.group.name : item.user.name), group ? null : Y.aiTag(item.user), h("span", { class: "convo-time" }, Y.timeEl(item.at))),
+          h("p", { class: "convo-last", title: preview }, preview)),
         item.streak >= 2 ? h("span", { class: "convo-streak", title: `${item.streak} Tage in Folge`, "aria-label": `${item.streak} Tage in Folge geschrieben` }, String(item.streak), icon("flame")) : null,
         item.unread ? h("span", { class: "unread-dot", "aria-label": `${item.unread} ungelesen` }, item.unread > 99 ? "99+" : String(item.unread)) : null);
     }
@@ -184,6 +184,7 @@
     }
 
     search.addEventListener("input", () => { term = Core.cleanText(search.value).toLowerCase(); draw(); });
+    search.addEventListener("keydown", (event) => { if (event.key === "Enter" && Core.cleanText(search.value)) { event.preventDefault(); Y.navigate(Core.buildPath({ name: "nex", q: Core.cleanText(search.value) })); } });       // (Enter asks Nex AI; typing only searches the chats)
     drawTabs();
     put(body, Y.skeleton(3));
     load(true);
@@ -616,6 +617,8 @@
 
   Y.chatSplit = split;                                                    // Nex AI is a chat too: it takes the same panes, the same list at the side and the same times
   Y.chatListPane = chatListPane;
+  Y.newMessage = newMessage;
+  Y.newGroup = newGroup;
   Y.chatTime = { dayLabel, clock };
   views.thread = (route, ctx) => conversation(route, ctx, "dm");
   views.group = (route, ctx) => conversation(route, ctx, "group");

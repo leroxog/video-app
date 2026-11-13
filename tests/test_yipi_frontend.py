@@ -243,7 +243,7 @@ def defined_variables():
 def test_every_style_variable_that_is_used_is_defined():
     used = set(re.findall(r"var\((--[\w-]+)", CSS))
     set_by_script = {variable for source in JS.values() for variable in re.findall(r"setProperty\(\"(--[\w-]+)\"", source)}
-    assert set_by_script == {"--banner", "--fill", "--gw", "--gh", "--grow", "--lift"}
+    assert set_by_script == {"--banner", "--fill", "--gw", "--gh", "--grow", "--lift", "--ed-a", "--ed-b", "--ed-h"}
     in_style_text = {"--dx", "--dy"}                          # the little pieces of the like burst get their way in a style attribute (yipi-fx.js)
     assert used - defined_variables() - set_by_script - in_style_text == set(), sorted(used - defined_variables() - set_by_script - in_style_text)
 
@@ -352,15 +352,15 @@ def test_the_look_is_black_and_white_with_no_colour_at_all():
     assert "(167, 139, 250)" not in read("scripts/make_pulse_icons.py")
 
 
-def test_the_five_tabs_are_home_chats_plus_camera_videos_and_nex_is_a_contact():
+def test_the_five_tabs_are_home_chats_plus_profile_videos_and_nex_is_a_contact():
     shell = JS["yipi.js"]
     block = shell.split("const TABS = [")[1].split("];")[0]
     entries = re.findall(r'\{ id: "(\w+)", label: "([^"]+)"', block)
-    assert [(name, label) for name, label in entries] == [("home", "Home"), ("messages", "Chats"), ("plus", "Neu"), ("camera", "Kamera"), ("videos", "Videos")]
-    assert re.findall(r'path: \(\) => ([^,]+),', block) == ["Y.HOME", '"/messages"', '"/camera"', '"/videos"'], "four pages and one button in the middle"
-    assert block.index('id: "plus"') > block.index('id: "messages"') and block.index('id: "plus"') < block.index('id: "camera"'), "the plus is in the middle"
+    assert [(name, label) for name, label in entries] == [("home", "Home"), ("messages", "Chats"), ("plus", "Neu"), ("profile", "Profil"), ("videos", "Videos")]
+    assert re.findall(r'path: \(\) => ([^,]+),', block) == ["Y.HOME", '"/messages"', "`/${Y.me.handle}`", '"/videos"'], "four pages and one button in the middle (the camera is in the plus sheet and the menu)"
+    assert block.index('id: "plus"') > block.index('id: "messages"') and block.index('id: "plus"') < block.index('id: "profile"'), "the plus is in the middle"
     assert "Y.newPost({ anchor: event.currentTarget })" in block and "center: true" in block
-    for name in ('icon: "plane", on: "planeFill"', 'icon: "camera", on: "cameraFill"', 'icon: "playCircle", on: "videoFill"', 'icon: "home", on: "homeFill"'):
+    for name in ('icon: "plane", on: "planeFill"', 'icon: "user", on: "userFill"', 'icon: "playCircle", on: "videoFill"', 'icon: "home", on: "homeFill"'):
         assert name in block, "a grey outline, filled and dark when the page is open: " + name
     assert '"/i/nex"' not in block, "Satürn is no tab any more"
     assert 'if (route.name === "nex") return "messages";' in shell, "the page of Satürn belongs to the chats"
@@ -396,7 +396,7 @@ def test_hashtags_are_light_pink_and_the_text_of_a_new_post_has_a_template():
     assert 'h("label", { class: "field-title", for: "post-text" }, "Text")' in components and "Y.hashtagEditor" in components
     assert "function hashtagEditor" in newpost and ".tag-chip {" in CSS and "var(--tag)" in CSS.split(".tag-chip {")[1].split("}")[0]
     assert "template: !target" in components, "a new post uses the template, a reply or a quote does not"
-    assert 'chooseCard("video", "Ein Video"' in newpost and 'chooseCard("post", "Ein Beitrag"' in newpost and "Was willst du hochladen?" in newpost, "the + leads to the page of the choice"
+    assert 'chooseCard("video", "Ein Video"' in newpost and 'chooseCard("story", "Eine Story"' in newpost and 'chooseCard("post"' not in newpost and "Was willst du hochladen?" in newpost, "the + leads to the page of the choice"
     for place in ("yipi.js", "yipi-chrome.js"):
         assert "Y.newPost({ anchor: event.currentTarget })" in JS[place], place
     assert "Core.videoTooLong(facts.seconds)" in newpost and "aria-required" in newpost and "Pflichtfeld" in newpost, "the name is required"
@@ -436,7 +436,7 @@ def test_the_look_is_white_by_default_and_the_symbols_are_round():
         assert f"{symbol}: S(" in JS["yipi-icons.js"], symbol
     assert ".cut { stroke: var(--bg); }" in CSS and ".tab-item.active { color: var(--text); }" in CSS
     plus = CSS.split(".plus-tab .tab-ic {")[1].split("}")[0]
-    assert "background: none" in plus and 'icon: "plusCircle"' in JS["yipi.js"], "the plus is a circle with a plus like the other four symbols of the bar (thick grey outlines)"
+    assert "background: none" in plus and 'icon: "plus", on: "plus"' in JS["yipi.js"], "the plus is a plain bold plus like in the sketch"
     assert "stroke-width: 2.4px" in CSS and "--tab-off: #d2d2d2" in CSS, "the same thick line and light grey on black"
 
 

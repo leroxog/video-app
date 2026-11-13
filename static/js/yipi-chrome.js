@@ -20,16 +20,23 @@
   function appBar() {
     const me = Y.me;
     const menu = h("button", { class: "appbar-btn appbar-menu", type: "button", "aria-label": "Seitenleiste ein- oder ausklappen", "aria-expanded": "false", onclick: () => Y.toggleRail() }, icon("menuLines"));
-    const mine = link(`/${me.handle}`, { class: "appbar-me", "aria-label": "Dein Profil" }, avatar(me, "md"));
+    // your picture: on a phone it opens the menu (the profile is a tab at the bottom), on a computer it opens your profile
+    const mine = h("a", { class: "appbar-me", href: `/${me.handle}`, "aria-label": "Dein Profil und Menü", onclick: (event) => {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      event.preventDefault();
+      if (window.matchMedia && matchMedia("(max-width: 819px)").matches) Y.openDrawer(); else Y.navigate(`/${me.handle}`);
+    } }, avatar(me, "md"));
     const brand = link(Y.HOME, { class: "appbar-brand", "aria-label": "Satürn, zur Startseite" }, Icons.logo(), Icons.wordmark());
     const pulse = h("span", { class: "appbar-pulse", "aria-hidden": "true" });
     const search = h("div", { class: "appbar-search" }, Y.searchForm(""));
     const find = Y.searchEntry({ class: "appbar-btn appbar-find", "aria-label": "Suchen" }, { class: "appbar-find-row search-row" }, icon("search"));
+    const pill = Y.searchEntry({ class: "appbar-pill", "aria-label": "Suchen" }, { class: "appbar-pill-row search-row" }, icon("search"), h("span", {}, "Suchen"));       // (the round search line of the sketch: Home and Entdecken)
+    const group = h("button", { class: "appbar-btn appbar-group", type: "button", "aria-label": "Kontakt hinzufügen oder Gruppe erstellen", onclick: () => Y.plusSheet?.() }, icon("usersFill"));       // (Chats: the second round button next to your picture)
     const bell = link("/notifications", { class: "appbar-btn appbar-bell", "aria-label": "Benachrichtigungen" }, icon("bell"), Y.badge("notifications"));
     const plus = h("button", { class: "appbar-plus", type: "button", "aria-label": "Neu: Beitrag, Video oder Story", "aria-haspopup": "menu", onclick: (event) => Y.newPost({ anchor: event.currentTarget }) }, icon("plus"));
     const right = h("div", { class: "appbar-right" }, Y.streakChip ? Y.streakChip() : null, find, bell, plus);
-    const element = h("header", { class: "appbar" }, menu, mine, brand, pulse, search, right);
-    return { element, route() { /* the bar is the same on every page */ } };
+    const element = h("header", { class: "appbar" }, menu, mine, group, brand, pulse, search, pill, right);
+    return { element, route(name) { element.dataset.page = name; } };
   }
 
   /* The side bar is folded in (only symbols) until the three lines are pressed; it folds in again with Escape, a click next to it or when a page is opened. */

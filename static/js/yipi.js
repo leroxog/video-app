@@ -1,5 +1,5 @@
 /* Satürn (the file keeps the name yipi.js): the frame around everything -- the router (the address bar changes without reloading the page),
-   the floating bar at the bottom with five tabs (Home, Chats, Satürn in the middle, Games, Videos), the menu from the left, the badges for new
+   the bar at the bottom with five tabs (Home, Chats, "+" in the middle, Profile, Videos), the menu from the left, the badges for new
    messages and the themes. The pages themselves are in yipi-views.js, yipi-chats.js, yipi-pages.js and yipi-nex.js. The app is made for a phone
    held upright. */
 (function () {
@@ -40,8 +40,8 @@
   const TABS = [
     { id: "home", label: "Home", path: () => Y.HOME, icon: "home", on: "homeFill" },
     { id: "messages", label: "Chats", path: () => "/messages", icon: "plane", on: "planeFill", badge: "messages" },
-    { id: "plus", label: "Neu", icon: "plusCircle", on: "plusCircle", center: true, action: (event) => Y.newPost({ anchor: event.currentTarget }) },
-    { id: "camera", label: "Kamera", path: () => "/camera", icon: "camera", on: "cameraFill" },
+    { id: "plus", label: "Neu", icon: "plus", on: "plus", center: true, action: (event) => Y.newPost({ anchor: event.currentTarget }) },
+    { id: "profile", label: "Profil", path: () => `/${Y.me.handle}`, icon: "user", on: "userFill" },
     { id: "videos", label: "Videos", path: () => "/videos", icon: "playCircle", on: "videoFill" },
   ];
 
@@ -86,7 +86,7 @@
     const me = Y.me;
     appbar = Y.appBar();
     const extras = h("div", { class: "tab-extras" }, extraItem("/notifications", "bell", "Mitteilungen", "notifications", "notifications"),
-      searchItem(), me.isAdmin ? extraItem("/moderation", "shield", "Moderation", "", "moderation") : null);
+      searchItem(), extraItem("/camera", "camera", "Kamera und Spiele", "", "camera"), me.isAdmin ? extraItem("/moderation", "shield", "Moderation", "", "moderation") : null);
     const more = h("button", { class: "rail-more", type: "button", "aria-label": "Mehr zu deinem Konto", "aria-haspopup": "menu", onclick: (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -104,14 +104,16 @@
   function activeTab(route) {
     if (route.name === "messages" || route.name === "thread" || route.name === "group") return "messages";
     if (route.name === "nex") return "messages";                  // Satürn is a contact in the chats now
-    if (route.name === "camera" || route.name === "videos") return route.name;
+    if (route.name === "videos") return route.name;
+    if (route.name === "camera") return "";                       // (the camera has no tab any more: it is in the plus window and in the menu)
+    if (["bookmarks", "settings"].includes(route.name) || (route.name === "profile" && Y.me && String(route.handle || "").toLowerCase() === Y.me.handle.toLowerCase())) return "profile";
     return "home";
   }
 
   /* The entry of the wide side bar that stands for the open page (besides the four tabs: search, notifications, your profile, bookmarks, settings, moderation). */
   function extraActive(route) {
     if (["explore", "search"].includes(route.name)) return "explore";
-    if (["notifications", "moderation"].includes(route.name)) return route.name;
+    if (["notifications", "moderation", "camera"].includes(route.name)) return route.name;
     if (["bookmarks", "settings"].includes(route.name)) return "profile";            // (the bookmarks and the settings are reached from the profile)
     if (route.name === "profile" && Y.me && String(route.handle || "").toLowerCase() === Y.me.handle.toLowerCase()) return "profile";
     return "";
@@ -127,7 +129,7 @@
     }
     for (const el of app.querySelectorAll(".tab-item")) {
       const entry = TABS.find((item) => item.id === el.dataset.nav);
-      const on = el.dataset.nav === active && entry.id !== "plus" && !extra;
+      const on = el.dataset.nav === active && entry.id !== "plus" && (!extra || (entry.id === "profile" && extra === "profile"));
       el.classList.toggle("active", on);
       if (on) el.setAttribute("aria-current", "page"); else el.removeAttribute("aria-current");
       const old = el._icon.querySelector("svg");
@@ -338,7 +340,7 @@
   Y.openDrawer = () => Y.sidePanel("Menü", (panel, close) => {
     const me = Y.me;
     const entry = (path, name, label, badge) => link(path, { class: "drawer-item" }, icon(name), h("span", {}, label), badge ? Y.badge(badge) : null);
-    const common = [entry("/explore", "search", "Entdecken"), entry("/settings/about", "help", "Hilfe und Rechtliches")];
+    const common = [entry("/explore", "search", "Entdecken"), me ? entry("/camera", "camera", "Kamera und Spiele") : null, entry("/settings/about", "help", "Hilfe und Rechtliches")];
     panel.append(h("div", { class: "drawer-head" },
       me ? link(`/${me.handle}`, { class: "dr-av", "aria-label": "Zum Profil" }, avatar(me, "lg")) : h("span", { class: "hero-logo" }, Icons.logo()),
       h("button", { class: "icon-btn", type: "button", "aria-label": "Menü schließen", onclick: close }, icon("close"))));

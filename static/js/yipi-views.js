@@ -525,17 +525,20 @@
       listPager?.destroy();
       if (user.blockedByMe || user.blockedMe) { fill(listBox); return; }
       const labels = { posts: ["Noch keine Beiträge", user.isMe ? "Wenn du etwas postest, erscheint es hier." : `@${user.handle} hat noch nichts gepostet.`],
-        replies: ["Noch keine Antworten", "Antworten erscheinen hier."], media: ["Noch keine Fotos oder Sticker", "Beiträge mit Fotos oder Stickern erscheinen hier."], likes: ["Noch nichts gemocht", "Beiträge, die dir gefallen, erscheinen hier. Nur du siehst diese Liste."] };
-      listPager = tab === "media"
-        ? tilesPager((cursor) => qs(`/users/${handle}/posts`, { tab, cursor }), emptyState(...labels[tab]))
-        : pager({ load: listLoader((cursor) => qs(`/users/${handle}/posts`, { tab, cursor })), render: (item) => Y.postCard(item), empty: emptyState(...labels[tab]) });
+        replies: ["Noch keine Antworten", "Antworten erscheinen hier."], media: ["Noch keine Fotos oder Sticker", "Beiträge mit Fotos oder Stickern erscheinen hier."], likes: ["Noch nichts gemocht", "Beiträge, die dir gefallen, erscheinen hier. Nur du siehst diese Liste."],
+        bookmarks: ["Noch keine Lesezeichen", "Beiträge, die du dir merkst, erscheinen hier. Nur du siehst diese Liste."] };
+      const path = (cursor) => (tab === "bookmarks" ? qs("/bookmarks", { cursor }) : qs(`/users/${handle}/posts`, { tab, cursor }));
+      if (tab === "media") listPager = tilesPager(path, emptyState(...labels[tab]));
+      else if (tab !== "replies" && Y.skizze && Y.skizze.grid()) {                // held upright: the pictures of the posts in three columns (like the sketch); a post without a picture shows its words
+        listPager = pager({ load: listLoader(path), render: (item) => Y.skizze.cell(item), empty: emptyState(...labels[tab]) });
+        listPager.element.classList.add("skz-cells");
+      } else listPager = pager({ load: listLoader(path), render: (item) => Y.postCard(item), empty: emptyState(...labels[tab]) });
       fill(listBox, listPager.element);
     }
 
     function drawTabs() {
       if (user.blockedByMe || user.blockedMe) { fill(tabBox); return; }
-      const entries = [["posts", "Beiträge"], ["replies", "Antworten"], ["media", "Medien"]];
-      if (user.isMe) entries.push(["likes", "Gefällt mir"]);
+      const entries = user.isMe ? [["posts", "Beiträge"], ["likes", "Gefällt mir"], ["bookmarks", "Lesezeichen"]] : [["posts", "Beiträge"], ["replies", "Antworten"]];       // (like the sketch: Beiträge | Gefällt mir | Lesezeichen)
       fill(tabBox, tabs(entries, tab, (id) => { tab = id; drawTabs(); mountList(); }, "Profil"));
     }
 
