@@ -2919,3 +2919,11 @@ button, input, textarea, select { font-family: inherit; }
 .wb-declined p { color: #555; font-size: 16px; font-weight: 600; }
 .reels-search-close { place-items: center; }
 @media (max-width: 819px) { .appbar-look-close { display: grid; } }
+
+/* the clip from the camera like in Snapchat: tools in a column at the right, "Senden an" as a big purple button with black letters */
+.cam-tools { position: absolute; top: calc(70px + env(safe-area-inset-top)); right: 10px; z-index: 3; display: flex; flex-direction: column; gap: 10px; padding: 10px 8px; border-radius: 28px; background: rgba(0, 0, 0, 0.35); }
+.cam-tool { display: grid; place-items: center; gap: 2px; width: 54px; color: #fff; font-size: 11px; font-weight: 800; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7); }
+.cam-tool svg { width: 28px; height: 28px; }
+.cam-review-bar .cam-send { background: var(--snap, #8e44f2); color: #000; min-height: 54px; padding: 0 26px; font-size: 18px; font-weight: 900; }
+.cam-review-bar .cam-send svg { width: 22px; height: 22px; }
+.ed.snap .ed-upload { background: var(--snap, #8e44f2); color: #000; }

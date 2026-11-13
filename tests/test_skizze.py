@@ -112,3 +112,12 @@ def test_the_look_of_snapchat_the_tour_and_the_page_to_turn_the_device():
     assert "Nicht akzeptieren" in auth and "Doch akzeptieren" in auth
     assert "border-left: 3px solid var(--who" in css and "--who: ${whoColor(" in chats
     assert "devicemotion" in videos and "active.shakeLike()" in videos and "reels-searchline" in videos
+
+
+def test_the_clip_of_the_camera_has_the_tools_at_the_side_and_a_purple_senden_an():
+    camera, editor, css = read("static", "js", "yipi-camera.js"), read("static", "js", "yipi-editor.js"), read("static", "css", "yipi.css")
+    assert 'h("span", {}, "Senden an"), icon("send")' in camera and 'class: "cam-tools"' in camera and "Y.videoEditor.open({ file: fileOf(), snap: true, tool" in camera
+    for tool in ('"Text"', '"Musik"', '"Schneiden"', '"Effekte"', '"Sticker"'):
+        assert tool in camera, tool
+    assert "snap = false" in editor and 'upload.textContent = "Fertig"' in editor
+    assert ".cam-review-bar .cam-send { background: var(--snap" in css and "color: #000" in css.split(".cam-review-bar .cam-send {")[1].split("}")[0]

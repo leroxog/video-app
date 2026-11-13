@@ -49,12 +49,12 @@
     }
   }
 
-  function open({ file, onDone, onClose } = {}) {
+  function open({ file, onDone, onClose, snap = false, tool: firstTool = "" } = {}) {
     const url = URL.createObjectURL(file);
     const video = h("video", { class: "ed-video", src: url, playsinline: true, preload: "auto", "aria-label": "Vorschau deines Videos" });
     const state = { start: 0, end: 0, speed: 1, clipAudio: true, volume: 1, filter: 0, texts: [], stickers: [], music: null, musicVolume: 0.7, captions: true };
     let duration = 0;
-    let tool = "";
+    let tool = firstTool;
     let busy = false;
     let selected = null;                                         // the text or sticker that is chosen
     let song = null;                                             // {song, buffer} the music, decoded
@@ -79,6 +79,7 @@
     const panel = h("div", { class: "ed-panel", hidden: true });
     const progress = h("div", { class: "ed-progress", hidden: true }, h("b", {}, "Dein Video wird gebaut …"), h("span", { class: "ed-bar" }, h("i", {})), h("small", {}, "Bleib bitte auf dieser Seite."));
     const upload = h("button", { class: "ed-upload", type: "button" }, "Hochladen");
+    if (snap) upload.textContent = "Fertig";                       // (opened from the camera: it only finishes the clip, the clip is sent from the camera afterwards)
     const close = h("button", { class: "ed-x", type: "button", "aria-label": "Schließen" }, icon("close"));
 
     // ----------------------------------------------------------------------------------------------- the picture
@@ -384,7 +385,7 @@
       h("button", { class: "ed-quick", type: "button", onclick: () => { tool = "edit"; drawAll(); } }, icon("scissors"), h("span", {}, "Tempo")));
     const controls = h("div", { class: "ed-controls" }, timeText, playButton);
     stage.append(video, layer);
-    const root = h("div", { class: "ed", role: "dialog", "aria-modal": "true", "aria-label": "Video bearbeiten" },
+    const root = h("div", { class: `ed${snap ? " snap" : ""}`, role: "dialog", "aria-modal": "true", "aria-label": "Video bearbeiten" },
       h("div", { class: "ed-top" }, close, h("span", { class: "ed-spacer" }), upload), stage, controls,
       h("div", { class: "ed-low" }, side, timeline), panel, toolbar, progress);
     document.body.append(root);

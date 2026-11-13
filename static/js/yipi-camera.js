@@ -1074,11 +1074,22 @@
           action("close", "Verwerfen", () => { discard(); backToLenses(); }),
           action("download", "Speichern", save),
           action("share", "Teilen", shareOut),
-          h("button", { class: "cam-send", type: "button", onclick: sendDialog }, icon("send"), h("span", {}, "Senden")),
+          h("button", { class: "cam-send", type: "button", onclick: sendDialog }, h("span", {}, "Senden an"), icon("send")),
           h("button", { class: "cam-post", type: "button", onclick: post }, icon("plus"), h("span", {}, "Posten")));
       if (!capture && Y.history) Y.history.add(blob, { name: clip.name, photo, title: chosen.name }).catch(() => {});       // (kept on this device for three days: Settings > Verlauf)
       const songChip = h("button", { class: "cam-autosong", type: "button", hidden: true });
-      fill(review, video, h("div", { class: "cam-review-top" }, h("b", {}, clip.game.name), clip.game.kind === "lens" || clip.game.kind === "randomsong" ? null : h("span", {}, points(clip.score)), songChip), bar);
+      /* Like Snapchat: a column at the side with Text, Musik, Schneiden, Effekte and Sticker; each opens the editor (yipi-editor.js) on that tool, and what comes out replaces the clip. */
+      const edit = (tool) => Y.videoEditor && Y.videoEditor.open({ file: fileOf(), snap: true, tool, onDone: (made) => {
+        URL.revokeObjectURL(clip.url);
+        clip.blob = made.file;
+        clip.url = URL.createObjectURL(made.file);
+        clip.name = `satuern-${chosen.id}.${/mp4/.test(made.file.type) ? "mp4" : "webm"}`;
+        video.src = clip.url;
+        video.play().catch(() => {});
+      } });
+      const tools = !photo && !capture && Y.videoEditor ? h("div", { class: "cam-tools" }, [["text", "text", "Text"], ["audio", "music", "Musik"], ["edit", "scissors", "Schneiden"], ["effects", "sparkle", "Effekte"], ["overlay", "image", "Sticker"]]
+        .map(([tool, symbol, label]) => h("button", { class: "cam-tool", type: "button", "aria-label": label, onclick: () => edit(tool) }, icon(symbol), h("span", {}, label)))) : null;
+      fill(review, video, tools, h("div", { class: "cam-review-top" }, h("b", {}, clip.game.name), clip.game.kind === "lens" || clip.game.kind === "randomsong" ? null : h("span", {}, points(clip.score)), songChip), bar);
       review.hidden = false;
       setState("review");
       if (!photo) video.play().catch(() => {});
