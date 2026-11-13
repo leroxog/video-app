@@ -7,9 +7,10 @@ import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from sqlalchemy import MetaData, create_engine, text  # noqa: E402
+from sqlalchemy import LargeBinary, MetaData, create_engine, text  # noqa: E402
 
 BATCH = 500
+BATCH_BINARY = 4                 # tables that hold files (binary columns) are copied a few rows at a time, so the memory stays small
 
 
 def fix(url):
@@ -38,8 +39,9 @@ def copy(source_url, target_url, out=print):
         count = 0
         with source.connect() as read, target.begin() as write:
             result = read.execution_options(stream_results=True).execute(table.select())
+            size = BATCH_BINARY if any(isinstance(c.type, LargeBinary) for c in table.columns) else BATCH
             while True:
-                rows = result.fetchmany(BATCH)
+                rows = result.fetchmany(size)
                 if not rows:
                     break
                 write.execute(goal.insert(), [{c: row._mapping[c] for c in columns} for row in rows])
