@@ -30,14 +30,24 @@
     const scroller = h("div", { class: "reels", tabindex: "0", "aria-label": "Videos" });
     let scope = "foryou";                                       // "foryou" or "following"
     const scopes = h("div", { class: "reels-scope", role: "tablist", "aria-label": "Videos" });
-    const searchButton = link("/explore", { class: "reels-side reels-search", "aria-label": "Suchen" }, icon("search"));
+    const searchButton = h("button", { class: "reels-side reels-search", type: "button", "aria-label": "Suchen" }, icon("search"));
     const moreButton = h("button", { class: "reels-side reels-more", type: "button", "aria-label": "Mehr", "aria-haspopup": "menu" }, icon("more"));
     moreButton.addEventListener("click", () => active && active.moreMenu ? active.moreMenu(moreButton) : menu(moreButton, [
       { label: "Video hochladen", icon: "film", run: () => Y.newPost({ only: "video" }) },
       { label: "Kamera und Spiele", icon: "camera", run: () => Y.navigate("/camera") },
       { label: "Suchen", icon: "search", run: () => Y.navigate("/explore") },
     ]));
-    const top = h("div", { class: "reels-top" }, h("h1", { class: "sr-only" }, "Videos"), searchButton, scopes, moreButton);       // (like the sketch: the magnifier, "Folge ich / Für dich", the round button)
+    const top = h("div", { class: "reels-top" }, h("h1", { class: "sr-only" }, "Videos"), searchButton, scopes, moreButton);
+    searchButton.addEventListener("click", () => {                  // the magnifier unfolds into a line to write in (the same bar), a cross folds it back
+      if (top.classList.contains("searching")) return;
+      const form = Y.searchForm("");
+      const closeLine = h("button", { class: "reels-side reels-search-close", type: "button", "aria-label": "Suche schließen" }, icon("close"));
+      const line = h("div", { class: "reels-searchline" }, form, closeLine);
+      closeLine.addEventListener("click", () => { line.remove(); top.classList.remove("searching"); });
+      top.classList.add("searching");
+      top.append(line);
+      form.input.focus();
+    });       // (like the sketch: the magnifier, "Folge ich / Für dich", the round button)
     const status = h("div", { class: "reels-status" });
     const el = h("div", { class: "view reels-view" }, Y.sponsored("bar"), top, scroller, status);      // (the strip at the top shows on a phone held upright, where the bar with the lettering is not)
     let shown = 0;                                              // how many videos were put on the page (every fifth page is a box "Gesponsert")
@@ -61,6 +71,24 @@
       const dy = touch.clientY - start.y;
       if (dx > 80 && Math.abs(dy) < 45 && dx > Math.abs(dy) * 2.2) Y.navigate(`/${active.item.user.handle}`);
     }, { passive: true });
+    /* Shake the phone and the video on the screen gets a like (the sensor of the phone; on iPhones the browser asks once, at the first touch). */
+    let lastReading = null;
+    let lastShake = 0;
+    const onMotion = (event) => {
+      const a = event.accelerationIncludingGravity;
+      if (!a) return;
+      const reading = [a.x || 0, a.y || 0, a.z || 0];
+      const jolt = lastReading ? Math.abs(reading[0] - lastReading[0]) + Math.abs(reading[1] - lastReading[1]) + Math.abs(reading[2] - lastReading[2]) : 0;
+      lastReading = reading;
+      const now = performance.now();
+      if (jolt > 30 && now - lastShake > 1500 && active && active.shakeLike) { lastShake = now; active.shakeLike(); }
+    };
+    if (typeof DeviceMotionEvent !== "undefined") {
+      if (typeof DeviceMotionEvent.requestPermission === "function") {
+        const ask = () => { scroller.removeEventListener("touchend", ask); DeviceMotionEvent.requestPermission().then((answer) => { if (answer === "granted") addEventListener("devicemotion", onMotion); }).catch(() => {}); };
+        scroller.addEventListener("touchend", ask, { once: true });
+      } else addEventListener("devicemotion", onMotion);
+    }
     let watching = null;
     let blocked = false;                                        // the browser does not allow sound before the person touches the page
 
@@ -220,6 +248,7 @@
         else if (reply.data.counts) { state.likes = reply.data.counts.likes; draw(); }
       }
       like.addEventListener("click", () => toggleLike());
+      const shakeLike = () => { if (state.liked) return; const box = stage.getBoundingClientRect(); toggleLike(box.left + box.width / 2, box.top + box.height / 2); };
       let tapTimer = 0;
       let doubledAt = 0;
       Y.onDoubleTap(stage, (x, y) => { clearTimeout(tapTimer); doubledAt = performance.now(); if (state.liked) { Y.likeBurst(x, y, { size: 120 }); Y.sound.play("like"); } else toggleLike(x, y); }, { ignore: "button, a, input, .reel-volume, .menu" });
@@ -285,7 +314,7 @@
       range.addEventListener("input", () => { blocked = false; setVolume(Number(range.value)); });
       const volumeRow = h("div", { class: "reel-volume" }, volumeButton, range);
 
-      const resume = h("button", { class: "reel-resume", type: "button", "aria-label": "Video abspielen", onclick: () => { const made = reels.find((entry) => entry.video === video); if (made) play(made); } }, icon("playCircle"));
+      const resume = h("button", { class: "reel-resume", type: "button", "aria-label": "Video abspielen", onclick: () => { const made = reels.find((entry) => entry.video === video); if (made) play(made); } }, icon("play"));
       const bar = h("span", { class: "reel-bar" }, h("span", { class: "reel-bar-fill" }));
       video.addEventListener("timeupdate", () => { if (video.duration) bar.firstChild.style.width = `${(video.currentTime / video.duration) * 100}%`; });
       const [title, ...rest] = String(item.text || "").split("\n");
@@ -304,11 +333,11 @@
         item.camId && Y.tryButton ? Y.tryButton(item.camId) : null);
       const actions = h("div", { class: "reel-actions" },
         h("span", { class: "reel-person" }, link(`/${item.user.handle}`, { class: "reel-av", "aria-label": `Profil von ${item.user.name}` }, avatar(item.user, "lg")), follow),
-        like, comment, save, share);       // (the three dots at the top open the menu of the video that is on the screen: download, report, link ...)
+        like, comment, save, share, soundButton);       // (the sound button is the last one in the column: always exactly under the others) (the three dots at the top open the menu of the video that is on the screen: download, report, link ...)
       put(stage, video, cc ? cc.element : null, volumeRow, resume, bar, info);
-      const element = h("section", { class: "reel", "data-id": String(item.id), "aria-label": `Video von ${item.user.name}` }, stage, actions, soundButton);
+      const element = h("section", { class: "reel", "data-id": String(item.id), "aria-label": `Video von ${item.user.name}` }, stage, actions);
       draw();
-      return { element, video, stage, item, url: media.url, draw, position, volumeIcon, volumeButton, range, cc, moreMenu };
+      return { element, video, stage, item, url: media.url, draw, position, volumeIcon, volumeButton, range, cc, moreMenu, shakeLike };
     }
 
     function showEmpty() {
@@ -393,6 +422,7 @@
       refresh() { reset(); },
       destroy() {
         dead = true;
+        removeEventListener("devicemotion", onMotion);
         clearTimeout(watching);
         watcher?.disconnect();
         for (const type of ["pointerdown", "keydown", "touchstart"]) document.removeEventListener(type, unlock);

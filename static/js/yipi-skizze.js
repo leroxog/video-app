@@ -81,9 +81,13 @@
       stage.style.setProperty("--banner", Core.defaultColors(item.user.handle).banner);
       stage.append(h("span", { class: "skz-words" }, Y.snippet(String(item.text || "").replace(/\s+/g, " "), kind === "big" ? 120 : 70)));
     }
-    const who = h("span", { class: "skz-who" }, avatar(item.user, "sm"), h("b", {}, item.user.name));
+    const title = String(item.text || "").split("\n")[0].trim();
+    const ago = Core.relativeTime(item.createdAt);
+    const who = kind === "tall"
+      ? h("span", { class: "skz-meta" }, h("b", {}, item.user.name), h("small", {}, /^\d+ (Sek|Min|Std|Tg)\./.test(ago) ? `Vor ${ago}` : ago))        // (like Snapchat: the name and "Vor 17 Std." in the corner)
+      : h("span", { class: "skz-who" }, avatar(item.user, "sm"), h("b", {}, item.user.name));
     const badge = media && media.video ? h("span", { class: "skz-badge", "aria-hidden": "true" }, icon("playCircle")) : null;
-    return h("button", { class: `skz-card ${kind}`, type: "button", "aria-label": `Beitrag von ${item.user.name}${item.text ? `: ${Y.snippet(item.text, 60)}` : ""}`, onclick: () => open(item) }, stage, badge, who);
+    return h("button", { class: `skz-card ${kind}`, type: "button", "aria-label": `Beitrag von ${item.user.name}${item.text ? `: ${Y.snippet(item.text, 60)}` : ""}`, onclick: () => open(item) }, stage, badge, kind === "big" && media && title ? h("span", { class: "skz-title" }, Y.snippet(title, 50)) : null, who);
   }
 
   /* One square of the profile grid (three in a row): the picture or a still of the video, the words of a post on the colour of its author, a small badge for a video or for more pictures. */
@@ -149,7 +153,8 @@
     const people = peopleRow();
     Y.refreshStories = () => people.reload();
     const forBox = h("div", { class: "skz-for", role: "list" });
-    const forSection = h("section", { class: "skz-sec", hidden: true }, h("h2", {}, "Für dich!"), forBox);
+    const forHead = h("button", { class: "skz-h2", type: "button", onclick: () => Y.navigate("/videos") }, h("span", {}, "Abos"), icon("chevron"));
+    const forSection = h("section", { class: "skz-sec", hidden: true }, forHead, forBox);
     const grid = pager({
       load: listLoader((cursor) => qs("/timeline", { feed: "media", cursor })),
       render: (item) => card(item, "big"),
@@ -157,13 +162,16 @@
     });
     grid.element.classList.add("skz-grid");
     const el = h("div", { class: "view home-view skz-home" },
-      h("section", { class: "skz-sec" }, h("h2", {}, "Personen"), people.element),
+      h("section", { class: "skz-sec" }, h("h2", {}, "Freunde"), people.element),
       forSection,
       h("section", { class: "skz-sec" }, h("h2", {}, "Entdecke"), grid.element));
 
     async function loadFor() {
-      const reply = await Api.get(qs("/timeline", { feed: "foryou" }));
+      let reply = await Api.get(qs("/timeline", { feed: "following" }));       // "Abos": what the people you follow made; when you follow nobody yet, what is for you
+      let label = "Abos";
+      if (!reply.ok || !reply.data.items.length) { reply = await Api.get(qs("/timeline", { feed: "foryou" })); label = "Für dich"; }
       if (dead || !reply.ok || !reply.data.items.length) return;
+      forHead.firstChild.textContent = label;
       forSection.hidden = false;
       fill(forBox, ...reply.data.items.slice(0, 14).map((item) => { const made = card(item, "tall"); made.setAttribute("role", "listitem"); return made; }));
     }
@@ -179,6 +187,9 @@
       destroy() { dead = true; people.destroy(); grid.destroy(); query?.removeEventListener?.("change", change); if (Y.refreshStories) Y.refreshStories = null; },
     };
   };
+
+  /* A tablet or a phone held sideways: a black page says to turn it upright (the page is made for the upright phone; a computer is not asked). It only shows on touch screens held sideways (the style sheet). */
+  document.body.append(h("div", { class: "turn-note", role: "alert" }, h("span", { class: "turn-phone", "aria-hidden": "true" }), h("b", {}, "Bitte dreh dein Gerät hochkant"), h("small", {}, "Satürn funktioniert nur im Hochformat.")));
 
   Y.skizze = { card, cell, peopleRow, open, grid: narrow };
 })();

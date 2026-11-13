@@ -31,11 +31,32 @@
     const search = h("div", { class: "appbar-search" }, Y.searchForm(""));
     const find = Y.searchEntry({ class: "appbar-btn appbar-find", "aria-label": "Suchen" }, { class: "appbar-find-row search-row" }, icon("search"));
     const pill = Y.searchEntry({ class: "appbar-pill", "aria-label": "Suchen" }, { class: "appbar-pill-row search-row" }, icon("search"), h("span", {}, "Suchen"));       // (the round search line of the sketch: Home and Entdecken)
+    // the header of Home like Snapchat's "Storys": your picture, a round magnifier (it unfolds into a line), the title, a round "add a friend" and a round "more"
+    const title = h("span", { class: "appbar-title" }, "Storys");
+    const round = (name, label, symbol, onclick) => h("button", { class: `appbar-round ${name}`, type: "button", "aria-label": label, ...(name === "appbar-more-round" ? { "aria-haspopup": "menu" } : {}), onclick }, icon(symbol));
+    const looking = round("appbar-look", "Suchen", "search", () => {
+      if (element.classList.contains("searching")) return;
+      const form = Y.searchForm("");
+      const stop = h("button", { class: "appbar-round appbar-look-close", type: "button", "aria-label": "Suche schließen" }, icon("close"));
+      const lineBox = h("div", { class: "appbar-line" }, form, stop);
+      stop.addEventListener("click", () => { lineBox.remove(); element.classList.remove("searching"); });
+      element.classList.add("searching");
+      element.append(lineBox);
+      form.input.focus();
+    });
+    const adding = round("appbar-add", "Kontakt hinzufügen", "userPlus", () => Y.plusSheet?.({ contactOnly: true }));
+    const moreRound = round("appbar-more-round", "Mehr", "more", () => Y.menu(moreRound, [
+      { label: "Mitteilungen", icon: "bell", run: () => Y.navigate("/notifications") },
+      { label: "Entdecken", icon: "search", run: () => Y.navigate("/explore") },
+      { label: "Kamera und Spiele", icon: "camera", run: () => Y.navigate("/camera") },
+      { label: "Einstellungen", icon: "settings", run: () => Y.navigate("/settings") },
+    ]));
+    moreRound.append(Y.badge("notifications"));
     const group = h("button", { class: "appbar-btn appbar-group", type: "button", "aria-label": "Kontakt hinzufügen oder Gruppe erstellen", onclick: () => Y.plusSheet?.({ contactOnly: true }) }, icon("usersFill"));       // (Chats: the second round button next to your picture)
     const bell = link("/notifications", { class: "appbar-btn appbar-bell", "aria-label": "Benachrichtigungen" }, icon("bell"), Y.badge("notifications"));
     const plus = h("button", { class: "appbar-plus", type: "button", "aria-label": "Neu: Beitrag, Video oder Story", "aria-haspopup": "menu", onclick: (event) => Y.newPost({ anchor: event.currentTarget }) }, icon("plus"));
     const right = h("div", { class: "appbar-right" }, Y.streakChip ? Y.streakChip() : null, find, bell, plus);
-    const element = h("header", { class: "appbar" }, menu, mine, group, brand, pulse, search, pill, right);
+    const element = h("header", { class: "appbar" }, menu, mine, looking, title, adding, moreRound, group, brand, pulse, search, pill, right);
     return { element, route(name) { element.dataset.page = name; } };
   }
 

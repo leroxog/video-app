@@ -246,12 +246,12 @@
 
     const headText = h("div", { class: "chat-head-text" }, h("b", {}, group ? "Gruppe" : `@${route.handle}`), h("small", {}));
     const headMain = h("div", { class: "chat-head-main" }, headText);
-    const more = h("button", { class: "icon-btn round", type: "button", "aria-label": "Mehr", "aria-haspopup": "menu", hidden: true }, icon("more"));
+    const more = h("button", { class: "icon-btn round chat-more", type: "button", "aria-label": "Mehr", "aria-haspopup": "menu", hidden: true }, icon("chevron"));
     const callButton = h("button", { class: "icon-btn round chat-call", type: "button", "aria-label": "Anrufen", hidden: true }, icon("call"));
     const head = h("div", { class: "chat-head" }, h("button", { class: "icon-btn round chat-back", type: "button", "aria-label": "Zurück", onclick: () => Y.back("/messages") }, icon("back")), headMain, callButton, more);
     const older = h("button", { class: "btn ghost small older", type: "button", hidden: true }, "Frühere Nachrichten laden");
     const bubbles = h("div", { class: "bubbles", role: "log", "aria-live": "polite", "aria-label": "Nachrichten" });
-    const input = h("textarea", { class: "dm-input", rows: 1, maxlength: 1000, placeholder: "Nachricht …", "aria-label": "Nachricht" });
+    const input = h("textarea", { class: "dm-input", rows: 1, maxlength: 1000, placeholder: "Nachricht senden", "aria-label": "Nachricht" });
     const sendButton = h("button", { class: "icon-btn send-btn", type: "button", "aria-label": "Senden", disabled: true, hidden: true }, icon("arrowUp"));
     const plusButton = h("button", { class: "icon-btn tool dm-plus", type: "button", "aria-label": "Anhang hinzufügen", "aria-expanded": "false" }, icon("plus"));
     const stickerButton = h("button", { class: "cb-in-btn", type: "button", "aria-label": "Sticker" }, icon("sticker"));
@@ -272,6 +272,14 @@
     const nearBottom = () => (side ? body.scrollHeight - body.scrollTop - body.clientHeight < 160 : document.documentElement.scrollHeight - window.scrollY - window.innerHeight < 160);
     const toBottom = () => { if (side) body.scrollTop = body.scrollHeight; else window.scrollTo(0, document.documentElement.scrollHeight); };
 
+    /* Like Snapchat: no bubbles, a coloured line at the left of what one person wrote and their name above it in capitals, in a colour of their own (yours is blue). */
+    const WHO_COLORS = ["#2ba48a", "#e8864a", "#b45cf0", "#d9487d", "#3aa0d8", "#c79a1c"];
+    function whoColor(key, mine) {
+      if (mine) return "#4a9df8";
+      let hash = 0;
+      for (const ch of String(key).toLowerCase()) hash = (hash * 31 + ch.charCodeAt(0)) % 997;
+      return WHO_COLORS[hash % WHO_COLORS.length];
+    }
     function draw() {
       const nodes = [];
       let day = "";
@@ -288,7 +296,8 @@
         const gif = message.gif && !message.gif.gone ? message.gif : null;
         const file = message.file && !message.file.gone ? message.file : null;
         const showName = !previous || !sameSender(previous, message);
-        nodes.push(h("div", { class: `bubble ${message.mine ? "mine" : "theirs"}${message.hearts ? " loved" : ""}`, "data-id": String(message.id) },
+        const whoKey = message.mine ? "ich" : message.sender ? message.sender.handle : (state.other && state.other.handle) || "x";
+        nodes.push(h("div", { class: `bubble ${message.mine ? "mine" : "theirs"}${message.hearts ? " loved" : ""}${showName ? "" : " cont"}`, "data-id": String(message.id), style: `--who: ${whoColor(whoKey, message.mine)}` },
           showName ? h("span", { class: "bubble-name" }, message.mine ? "Ich" : message.sender ? message.sender.name : (state.other && state.other.name) || (group ? "Gelöschtes Konto" : `@${route.handle}`)) : null,
           gif ? h("div", { class: "bubble-gif-wrap" },
             h("button", { class: "bubble-gif", type: "button", "aria-label": `Sticker vergrößern${gif.title ? `: ${gif.title}` : ""}`, onclick: () => Y.viewer([{ url: gif.url, alt: gif.title || "Sticker" }], 0) }, h("img", { src: gif.url, alt: gif.title || "Sticker", width: gif.width, height: gif.height, loading: "lazy" })),

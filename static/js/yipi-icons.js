@@ -56,6 +56,8 @@
     volume: S('<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.500 8.500a5 5 0 010 7M19 6a8.500 8.500 0 010 12"/>'),
     mute: S('<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 9l5 6M21 9l-5 6"/>'),
     plus: S('<path d="M12 5v14M5 12h14"/>'),
+    userPlus: S('<circle cx="9.500" cy="8" r="3.500"/><path d="M2.500 20c.8-3.700 3.300-5.500 7-5.500s6.200 1.800 7 5.500"/><path d="M19 8v6M16 11h6"/>', BOLD),
+    hand: S('<path d="M9 11.500V5.500a1.700 1.700 0 013.400 0v5.200h.600a1.700 1.700 0 011.700 1.700v.300h.400a1.700 1.700 0 011.700 1.700v2.400a5.500 5.500 0 01-5.500 5.500h-1.400a5 5 0 01-4-2l-2.800-3.800a1.600 1.600 0 012.500-2z"/>', `${FILL} stroke="#000" stroke-width="1.200" stroke-linejoin="round"`),
     play: S('<path d="M8 5.2v13.6L19 12z"/>', `${FILL} stroke="currentColor" stroke-width="2" stroke-linejoin="round"`),
     pause: S('<path d="M8 5v14M16 5v14"/>', BOLD),
     scissors: S('<circle cx="6" cy="6.5" r="2.7"/><circle cx="6" cy="17.5" r="2.7"/><path d="M8.2 8.2L20 19M8.2 15.8L20 5"/>', BOLD),

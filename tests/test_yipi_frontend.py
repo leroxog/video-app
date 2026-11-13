@@ -244,7 +244,7 @@ def test_every_style_variable_that_is_used_is_defined():
     used = set(re.findall(r"var\((--[\w-]+)", CSS))
     set_by_script = {variable for source in JS.values() for variable in re.findall(r"setProperty\(\"(--[\w-]+)\"", source)}
     assert set_by_script == {"--banner", "--fill", "--gw", "--gh", "--grow", "--lift", "--ed-a", "--ed-b", "--ed-h"}
-    in_style_text = {"--dx", "--dy"}                          # the little pieces of the like burst get their way in a style attribute (yipi-fx.js)
+    in_style_text = {"--dx", "--dy", "--who"}                          # the little pieces of the like burst get their way in a style attribute (yipi-fx.js)
     assert used - defined_variables() - set_by_script - in_style_text == set(), sorted(used - defined_variables() - set_by_script - in_style_text)
 
 
@@ -259,7 +259,7 @@ def test_every_theme_defines_the_same_colours():
 
 def test_every_animation_has_its_keyframes():
     keyframes = set(re.findall(r"@keyframes\s+([\w-]+)", CSS))
-    assert keyframes == {"spin", "fade", "pop", "shimmer", "toast-in", "drop", "blink", "sheet", "drawer-in", "bloop", "burst", "bit", "slide-in", "slide-back", "cam-pop", "cam-shake", "cam-nudge", "try-shimmer", "song-flash", "call-in", "call-pulse", "lock-hop"}
+    assert keyframes == {"spin", "fade", "pop", "shimmer", "toast-in", "drop", "blink", "sheet", "drawer-in", "bloop", "burst", "bit", "slide-in", "slide-back", "cam-pop", "cam-shake", "cam-nudge", "try-shimmer", "song-flash", "call-in", "call-pulse", "lock-hop", "tour-up", "tour-tap", "tour-right", "tour-ring"}
     for name in keyframes:
         assert re.search(rf"animation:[^;]*\b{name}\b", CSS), f"{name} is defined but never used"
     for declaration in re.findall(r"animation:\s*([a-z][\w-]*)", CSS):

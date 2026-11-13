@@ -77,8 +77,16 @@
       h("span", { class: "wb-logo" }, window.YipiIcons.wordmark ? window.YipiIcons.wordmark() : "Satürn"),
       h("h1", { id: "wb-title" }, "Bevor du zu Satürn weitergehst"),
       scroll,
-      h("div", { class: "wb-actions" }, button("Anmelden", { kind: "plain", onclick: onLogin }), button("Akzeptieren", { kind: "solid", onclick: onAccept })));
-    return h("div", { class: "welcome auth-white" }, backdrop(), h("div", { class: "wb-scrim" }), dialog);
+      h("div", { class: "wb-actions" }, button("Anmelden", { kind: "plain", onclick: onLogin }), button("Akzeptieren", { kind: "solid", onclick: onAccept })),
+      h("button", { class: "wb-no", type: "button", onclick: () => declined() }, "Nicht akzeptieren"));
+    /* "Nicht akzeptieren": a friendly page says that Satürn cannot be used without the terms, with a way back. */
+    function declined() {
+      dialog.replaceChildren(h("span", { class: "wb-logo" }, window.YipiIcons.wordmark ? window.YipiIcons.wordmark() : "Satürn"),
+        h("div", { class: "wb-declined" }, h("h1", {}, "Schade!"), h("p", {}, "Ohne deine Zustimmung kannst du Satürn nicht benutzen. Du kannst es dir jederzeit anders überlegen."),
+          h("div", { class: "wb-actions" }, button("Zurück", { kind: "plain", onclick: () => holder.replaceWith(consent({ onAccept, onLogin })) }), button("Doch akzeptieren", { kind: "solid", onclick: onAccept }))));
+    }
+    const holder = h("div", { class: "welcome auth-white" }, backdrop(), h("div", { class: "wb-scrim" }), dialog);
+    return holder;
   }
 
   // ------------------------------------------------------------------------------------------------ sign in

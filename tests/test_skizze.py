@@ -27,7 +27,7 @@ def test_the_new_scripts_are_in_the_bundle_before_the_frame():
 
 def test_home_has_the_three_rows_of_the_sketch_and_the_plus_is_a_sheet():
     skizze = read("static", "js", "yipi-skizze.js")
-    for word in ('h("h2", {}, "Personen")', 'h("h2", {}, "Für dich!")', 'h("h2", {}, "Entdecke")', '"Kontakt hinzufügen"', '"oder Gruppe erstellen"', '"Datei hochladen"', "Y.newPost = function newPost",
+    for word in ('h("h2", {}, "Freunde")', '"Abos"', 'h("h2", {}, "Entdecke")', '"Kontakt hinzufügen"', '"oder Gruppe erstellen"', '"Datei hochladen"', "Y.newPost = function newPost",
                  'feed: "media"', "Y.views.home = function home", "(max-width: 819px)"):
         assert word in skizze, word
     assert 'if (options.only || !narrow()) return oldNewPost(options);' in skizze, "a wide screen and the places that know what they want keep the old way"
@@ -97,4 +97,18 @@ def test_the_three_dots_of_the_videos_open_the_menu_of_the_video_on_the_screen()
     assert "active && active.moreMenu ? active.moreMenu(moreButton)" in videos
     for word in ('"Video herunterladen"', '"Link kopieren"', '"Beitrag melden"', "Y.downloadVideo(item)"):
         assert word in videos, word
-    assert "like, comment, save, share);" in videos, "the dots are not in the row at the side any more"
+    assert "like, comment, save, share, soundButton);" in videos, "the dots are not in the row at the side any more, the sound button is the last one of the column"
+
+
+def test_the_look_of_snapchat_the_tour_and_the_page_to_turn_the_device():
+    css = read("static", "css", "yipi.css")
+    tour, skizze, chats, videos, auth = (read("static", "js", name) for name in ("yipi-tour.js", "yipi-skizze.js", "yipi-chats.js", "yipi-videos.js", "yipi-auth.js"))
+    assert "yipi-tour.js" in yipi.PULSE_SCRIPTS
+    assert '--snap: #8e44f2' in css and ':root { --font: "Nunito"' in css, "one purple (where Snapchat is yellow) and a round font"
+    assert ".tour { position: fixed;" in css and "pointer-events: none" in css.split(".tour { position: fixed;")[1].split("}")[0], "the dark layer lets every touch through"
+    for word in ("six quick taps", "api.reelsScrolled()", "api.doubleTapped()", "api.swiped()", "saturn.tour."):
+        assert word in tour, word
+    assert 'class: "turn-note"' in skizze and "(pointer: coarse) and (orientation: landscape)" in css
+    assert "Nicht akzeptieren" in auth and "Doch akzeptieren" in auth
+    assert "border-left: 3px solid var(--who" in css and "--who: ${whoColor(" in chats
+    assert "devicemotion" in videos and "active.shakeLike()" in videos and "reels-searchline" in videos
