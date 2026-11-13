@@ -2481,11 +2481,11 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .reel-follow svg { width: 14px; height: 14px; }
 .reel-follow.done.kept { background: #fff; color: #7a2cf0; transform: none; opacity: 1; box-shadow: 0 0 0 2px #000; }
 .reel-btn-ic svg { width: 30px; height: 30px; }
-.reel-sound { position: absolute; right: 12px; bottom: calc(var(--tabbar) + 38px + env(safe-area-inset-bottom)); z-index: 3; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: rgba(20, 20, 24, 0.62); color: #fff; border: 1.5px solid rgba(255, 255, 255, 0.35); backdrop-filter: blur(6px); }
+.reel-sound { position: absolute; right: 15px; bottom: calc(var(--tabbar) + 38px + env(safe-area-inset-bottom)); z-index: 3; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: rgba(20, 20, 24, 0.62); color: #fff; border: 1.5px solid rgba(255, 255, 255, 0.35); backdrop-filter: blur(6px); }
 .reel-sound svg { width: 20px; height: 20px; }
 .reel-sound:active { transform: scale(0.92); }
 .menu-item.strong { background: rgba(122, 44, 240, 0.16); font-weight: 800; }
-@media (min-width: 900px) { .reel-sound { right: calc(50% - min(50%, calc(100dvh * 9 / 32)) - 60px); bottom: 56px; } }
+@media (min-width: 900px) { .reel-sound { right: calc(50% - min(50%, calc(100dvh * 9 / 32)) - 79px); bottom: 56px; } }
 
 /* ----- the tools of the camera on the right (text on the left of the round button, from the top: turn around, filter, timer, then the small ones, and the arrow that folds them) */
 .cam-ctl { gap: 10px; align-items: flex-end; }
