@@ -8,7 +8,7 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 COPY . .
-RUN useradd --create-home --uid 1000 satuern && mkdir -p /app/instance && chown -R satuern /app/instance
+RUN useradd --create-home --uid 1000 satuern && mkdir -p /app/instance /app/static/uploads && chown -R satuern /app
 USER satuern
 
 EXPOSE 8000
