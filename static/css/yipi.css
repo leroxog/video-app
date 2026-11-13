@@ -2618,7 +2618,7 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .skz-contact-text { display: grid; justify-items: start; gap: 2px; min-width: 0; }
 .skz-contact-main { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; text-align: left; }
 .skz-contact-sub { color: var(--muted); font-size: 15px; font-weight: 600; text-align: left; }
-.skz-rule { width: 46%; margin: 24px 0; border: 0; border-top: 3px solid var(--text); }
+.skz-rule { width: 46%; margin: 24px auto; border: 0; border-top: 3px solid var(--text); }
 .skz-upload { display: grid; justify-items: center; gap: 14px; padding: 4px 0 8px; }
 .skz-upload-label { font-size: 18px; font-weight: 700; }
 .skz-upload-btn { display: grid; place-items: center; width: 176px; height: 176px; border: 3px solid var(--text); border-radius: 50%; color: var(--text); transition: transform 0.12s; }
@@ -2627,6 +2627,9 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .skz-sheet-more { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 20px; }
 .skz-chip { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 999px; background: var(--bg-3); font-size: 14px; font-weight: 700; }
 .skz-chip svg { width: 18px; height: 18px; }
+.skz-people-sheet { display: grid; gap: 12px; padding-bottom: 6px; }
+.skz-big-row { display: flex; align-items: center; gap: 16px; padding: 20px 22px; border-radius: 999px; background: var(--bg-3); font-size: 19px; font-weight: 800; text-align: left; }
+.skz-big-row svg { width: 28px; height: 28px; flex: none; }
 .reel-author { display: flex; align-items: center; gap: 10px; pointer-events: auto; }
 .reel-av2 { flex: none; border-radius: 50%; box-shadow: 0 0 0 2px #fff; }
 .reel-av2 .avatar.md { display: grid; width: 46px; height: 46px; }
@@ -2798,7 +2801,7 @@ textarea.field, .dm-input, .dm-compose .cb-field { border-radius: 26px; }
   .reels-view .reel-info, .reels-view .reel-actions { bottom: calc(var(--tabbar) + 40px + env(safe-area-inset-bottom)); }
   .skz-sec > h2 { font-size: 17px; margin-bottom: 10px; }
   .story-ring { box-shadow: 0 0 0 2px var(--bg-3); }
-  .view.profile .banner { border-radius: 0 0 40px 40px; }
+  .view.profile .banner { border-radius: 0; }       /* (the banner is straight at the bottom: a picture across the whole width) */
   .skz-cells .list { gap: 6px; padding: 8px var(--pad) 0; margin: 0 calc(var(--pad) * -1); }
   .profile-tabs .tabs { border-bottom: 0; }
   .profile-tabs .tab { border-radius: 999px; border-bottom: 0; }

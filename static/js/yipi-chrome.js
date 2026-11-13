@@ -31,7 +31,7 @@
     const search = h("div", { class: "appbar-search" }, Y.searchForm(""));
     const find = Y.searchEntry({ class: "appbar-btn appbar-find", "aria-label": "Suchen" }, { class: "appbar-find-row search-row" }, icon("search"));
     const pill = Y.searchEntry({ class: "appbar-pill", "aria-label": "Suchen" }, { class: "appbar-pill-row search-row" }, icon("search"), h("span", {}, "Suchen"));       // (the round search line of the sketch: Home and Entdecken)
-    const group = h("button", { class: "appbar-btn appbar-group", type: "button", "aria-label": "Kontakt hinzufügen oder Gruppe erstellen", onclick: () => Y.plusSheet?.() }, icon("usersFill"));       // (Chats: the second round button next to your picture)
+    const group = h("button", { class: "appbar-btn appbar-group", type: "button", "aria-label": "Kontakt hinzufügen oder Gruppe erstellen", onclick: () => Y.plusSheet?.({ contactOnly: true }) }, icon("usersFill"));       // (Chats: the second round button next to your picture)
     const bell = link("/notifications", { class: "appbar-btn appbar-bell", "aria-label": "Benachrichtigungen" }, icon("bell"), Y.badge("notifications"));
     const plus = h("button", { class: "appbar-plus", type: "button", "aria-label": "Neu: Beitrag, Video oder Story", "aria-haspopup": "menu", onclick: (event) => Y.newPost({ anchor: event.currentTarget }) }, icon("plus"));
     const right = h("div", { class: "appbar-right" }, Y.streakChip ? Y.streakChip() : null, find, bell, plus);

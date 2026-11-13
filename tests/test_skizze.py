@@ -84,3 +84,9 @@ def test_the_big_round_button_uploads_videos_and_photos():
     newpost, skizze = read("static", "js", "yipi-newpost.js"), read("static", "js", "yipi-skizze.js")
     assert "function uploadFile(" in newpost and "Y.pendingPost = { files: photos }" in newpost and "composeVideo({ file: video })" in newpost
     assert 'chooseCard("photo", "Ein Foto"' in newpost and "Y.uploadFile()" in skizze
+
+
+def test_the_round_button_of_the_chats_only_adds_contacts_and_groups():
+    skizze, chrome = read("static", "js", "yipi-skizze.js"), read("static", "js", "yipi-chrome.js")
+    assert "Y.plusSheet?.({ contactOnly: true })" in chrome and "...(contactOnly ? [people] : [contact," in skizze
+    assert '"Kontakt hinzufügen"' in skizze and '"Gruppe erstellen"' in skizze

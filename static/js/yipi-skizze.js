@@ -14,7 +14,7 @@
 
   // ------------------------------------------------------------------------------------------------ the "+" sheet
   /* A sheet from the bottom: the first line adds a contact or makes a group, the big round button below uploads (a video, a post or a story). The camera and the games are one tap away, too. */
-  function plusSheet() {
+  function plusSheet({ contactOnly = false } = {}) {
     if (!Y.requireLogin("Melde dich an, um etwas hochzuladen.")) return null;
     if (document.querySelector(".skz-sheet-back")) return null;
     const back = h("div", { class: "skz-sheet-back" });
@@ -37,7 +37,10 @@
     const more = h("div", { class: "skz-sheet-more" },
       h("button", { class: "skz-chip", type: "button", onclick: go(() => Y.navigate("/camera")) }, icon("camera"), "Kamera und Spiele"),
       h("button", { class: "skz-chip", type: "button", onclick: go(() => Y.newStory?.(() => Y.refreshStories?.())) }, icon("image"), "Story"));
-    const panel = h("div", { class: "skz-sheet", role: "dialog", "aria-modal": "true", "aria-label": "Neu" }, h("span", { class: "skz-grip", "aria-hidden": "true" }), contact, h("hr", { class: "skz-rule" }), upload, more);
+    const people = h("div", { class: "skz-people-sheet" },
+      h("button", { class: "skz-big-row", type: "button", onclick: go(() => Y.newMessage?.()) }, icon("user"), h("span", {}, "Kontakt hinzufügen")),
+      h("button", { class: "skz-big-row", type: "button", onclick: go(() => Y.newGroup?.()) }, icon("usersFill"), h("span", {}, "Gruppe erstellen")));       // (the round button of the Chats: only contacts and groups)
+    const panel = h("div", { class: "skz-sheet", role: "dialog", "aria-modal": "true", "aria-label": contactOnly ? "Kontakt oder Gruppe" : "Neu" }, h("span", { class: "skz-grip", "aria-hidden": "true" }), ...(contactOnly ? [people] : [contact, h("hr", { class: "skz-rule" }), upload, more]));
     back.addEventListener("click", (event) => { if (event.target === back) close(); });
     back.append(panel);
     document.body.append(back);

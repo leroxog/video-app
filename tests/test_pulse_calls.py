@@ -132,7 +132,7 @@ def test_a_call_rings_the_other_person_and_a_push_goes_out_even_when_the_page_wa
 def test_the_service_worker_keeps_a_call_on_the_screen_and_the_script_is_part_of_the_page():
     worker = open(os.path.join(JS_DIR, "pulse-sw.js"), encoding="utf-8").read()
     assert "requireInteraction: data.urgent === true" in worker and "vibrate" in worker
-    assert "yipi-calls.js" in yipi.PULSE_SCRIPTS and yipi.PULSE_SCRIPTS.index("yipi-composer.js") < yipi.PULSE_SCRIPTS.index("yipi-calls.js")
+    assert "yipi-calls.js" not in yipi.PULSE_SCRIPTS, "calls are switched off on the page (2026-11-13): no handset in the chats, no ringing"
     source = open(os.path.join(JS_DIR, "yipi-calls.js"), encoding="utf-8").read()
     assert 'Api.post("/calls"' in source and "/calls/incoming" in source and "/sync?after=" in source and "navigator.sendBeacon" in source
 
