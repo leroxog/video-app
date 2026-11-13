@@ -52,7 +52,11 @@ def copy(source_url, target_url, out=print):
                 rows = result.fetchmany(size)
                 if not rows:
                     break
-                write.execute(goal.insert(), [{c: row._mapping[c] for c in columns} for row in rows])
+                statement = goal.insert()
+                if target.dialect.name == "postgresql":                    # (a row that the site made by itself in the meantime stays, the copied one is skipped)
+                    from sqlalchemy.dialects.postgresql import insert as pg_insert
+                    statement = pg_insert(goal).on_conflict_do_nothing()
+                write.execute(statement, [{c: row._mapping[c] for c in columns} for row in rows])
                 count += len(rows)
         total += count
         out(f"{name}: {count} rows")
