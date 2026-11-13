@@ -32,7 +32,7 @@
     const scopes = h("div", { class: "reels-scope", role: "tablist", "aria-label": "Videos" });
     const searchButton = link("/explore", { class: "reels-side reels-search", "aria-label": "Suchen" }, icon("search"));
     const moreButton = h("button", { class: "reels-side reels-more", type: "button", "aria-label": "Mehr", "aria-haspopup": "menu" }, icon("more"));
-    moreButton.addEventListener("click", () => menu(moreButton, [
+    moreButton.addEventListener("click", () => active && active.moreMenu ? active.moreMenu(moreButton) : menu(moreButton, [
       { label: "Video hochladen", icon: "film", run: () => Y.newPost({ only: "video" }) },
       { label: "Kamera und Spiele", icon: "camera", run: () => Y.navigate("/camera") },
       { label: "Suchen", icon: "search", run: () => Y.navigate("/explore") },
@@ -185,7 +185,6 @@
       const comment = h("button", { class: "reel-btn", type: "button", "aria-label": "Kommentare" }, h("span", { class: "reel-btn-ic" }, icon("reply")), commentCount);
       const save = h("button", { class: "reel-btn", type: "button", "aria-label": "Lesezeichen" }, h("span", { class: "reel-btn-ic" }), h("span", { class: "reel-count" }, "Merken"));
       const share = h("button", { class: "reel-btn", type: "button", "aria-label": "Teilen", "aria-haspopup": "menu" }, h("span", { class: "reel-btn-ic" }, icon("send")), h("span", { class: "reel-count" }, "Teilen"));
-      const more = h("button", { class: "reel-btn", type: "button", "aria-label": "Mehr", "aria-haspopup": "menu" }, h("span", { class: "reel-btn-ic" }, icon("more")));
       const cc = Y.captions ? Y.captions.bind({ video, mediaId: media.id, mine: !!(Y.me && Y.me.handle === item.user.handle), volume: () => (blocked ? 0 : volume / 10) || 0.0001, onChange: () => { const made = reels.find((entry) => entry.video === video); if (made) applySound(made); } }) : null;
       const mine = !!(Y.me && Y.me.handle === item.user.handle);
       const following = !mine && !!item.user.followedByMe;
@@ -243,7 +242,9 @@
         if (!reply.ok) { state.bookmarked = !wanted; draw(); toast(Api.message(reply)); } else toast(wanted ? "Zu deinen Lesezeichen hinzugefügt" : "Aus den Lesezeichen entfernt");
       });
       share.addEventListener("click", () => menu(share, Y.shareItems(item)));
-      more.addEventListener("click", () => menu(more, [
+      const moreMenu = (anchor) => menu(anchor, [
+        Y.downloadVideo ? { label: "Video herunterladen", icon: "download", run: () => Y.downloadVideo(item) } : null,
+        { label: "Link kopieren", icon: "link", run: () => Y.copyLink(Y.postPath(item)) },
         { label: "Beitrag öffnen", icon: "reply", run: () => Y.navigate(Y.postPath(item)) },
         cc ? { label: "Untertitel und Sprache", icon: "captions", run: () => Y.captions.sheet(cc) } : null,
         !mine ? { label: "Beitrag melden", icon: "flag", danger: true, run: () => Y.reportDialog({ postId: item.id }) } : null,
@@ -256,7 +257,7 @@
           if (at >= 0) { watcher?.unobserve(reels[at].element); reels[at].video.pause(); reels[at].element.remove(); reels.splice(at, 1); if (active && active.item === item) active = null; }
           if (!reels.length) showEmpty();
         } } : null,
-      ]));
+      ]);
       if (follow && follow.tagName === "BUTTON") follow.addEventListener("click", async () => {
         if (!Y.requireLogin("Melde dich an, um zu folgen.")) return;
         const reply = await Api.post(`/users/${item.user.handle}/follow`);
@@ -303,11 +304,11 @@
         item.camId && Y.tryButton ? Y.tryButton(item.camId) : null);
       const actions = h("div", { class: "reel-actions" },
         h("span", { class: "reel-person" }, link(`/${item.user.handle}`, { class: "reel-av", "aria-label": `Profil von ${item.user.name}` }, avatar(item.user, "lg")), follow),
-        like, comment, save, share, more);
+        like, comment, save, share);       // (the three dots at the top open the menu of the video that is on the screen: download, report, link ...)
       put(stage, video, cc ? cc.element : null, volumeRow, resume, bar, info);
       const element = h("section", { class: "reel", "data-id": String(item.id), "aria-label": `Video von ${item.user.name}` }, stage, actions, soundButton);
       draw();
-      return { element, video, stage, item, url: media.url, draw, position, volumeIcon, volumeButton, range, cc };
+      return { element, video, stage, item, url: media.url, draw, position, volumeIcon, volumeButton, range, cc, moreMenu };
     }
 
     function showEmpty() {
