@@ -2062,5 +2062,9 @@ def api_team_send(team_id):
     return jsonify({"ok": True, "messages": new_messages})
 
 
+if os.environ.get("RAILWAY_ENVIRONMENT"):
+    # The site has moved to its own server: on Railway (it sets this variable itself) every address only shows the notice with the new link.
+    from moved import app  # noqa: E402,F811
+
 if __name__ == "__main__":
     app.run(debug=True)
