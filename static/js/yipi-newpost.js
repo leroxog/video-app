@@ -189,6 +189,7 @@
       h("h1", { class: "au-title nu-title" }, "Was willst du hochladen?"),
       h("div", { class: "nu-choices" },
         chooseCard("video", "Ein Video", "Hochkant, bis 120 Sekunden, mit Editor", "film", () => Y.navigate("/new/video")),
+        chooseCard("photo", "Ein Foto", "Aus deiner Galerie", "image", () => uploadFile({ only: "image" })),
         chooseCard("story", "Eine Story", "24 Stunden sichtbar", "image", () => Y.newStory(() => { Y.refreshStories?.(); Y.back(); }))));       // (no text posts any more: only videos and stories)
     return { element: whitePage({ back: "/", closeIcon: "close", label: "Schließen", body, modifier: "nu-choosing" }), title: "Hochladen" };
   };
@@ -229,6 +230,27 @@
     return null;
   }
 
+  /* "Datei hochladen": one picker for videos and photos (`only: "image"` for photos alone). A video goes to the page of the video (and its editor), photos go to the page of the post. */
+  function uploadFile({ only } = {}) {
+    if (!Y.requireLogin("Melde dich an, um etwas hochzuladen.")) return;
+    const images = "image/jpeg,image/png,image/webp,image/gif";
+    const picker = h("input", { type: "file", accept: only === "image" ? images : `video/mp4,video/quicktime,video/webm,.mp4,.m4v,.mov,.webm,${images}`, multiple: true, hidden: true, "aria-hidden": "true", tabindex: "-1" });
+    document.body.append(picker);
+    picker.addEventListener("cancel", () => picker.remove());
+    picker.addEventListener("change", () => {
+      const files = [...picker.files];
+      picker.remove();
+      if (!files.length) return;
+      const video = only === "image" ? null : files.find((entry) => entry.type.startsWith("video/") || /\.(mp4|m4v|mov|webm)$/i.test(entry.name || ""));
+      if (video) { composeVideo({ file: video }); return; }
+      const photos = files.filter((entry) => /^image\/(jpeg|png|webp|gif)$/.test(entry.type)).slice(0, Core.MAX_MEDIA);
+      if (!photos.length) { toast(Api.MESSAGES.bad_image); return; }
+      Y.pendingPost = { files: photos };
+      Y.navigate("/new/post");
+    });
+    picker.click();
+  }
+
   /* ----------------------------------------------------------------------------------------------- the "+" */
   /* "+" and "Posten": the page "Was willst du hochladen?" (or, when the place already knows what it is, the page of the video or of the post). */
   function newPost({ only } = {}) {
@@ -237,5 +259,5 @@
     return null;
   }
 
-  Object.assign(Y, { newPost, composeVideo, hashtagEditor, readVideo, uploadPages: pages });
+  Object.assign(Y, { newPost, uploadFile, composeVideo, hashtagEditor, readVideo, uploadPages: pages });
 })();

@@ -2754,3 +2754,54 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .ed-progress { position: absolute; inset: 0; z-index: 5; display: grid; place-content: center; justify-items: center; gap: 14px; background: rgba(0, 0, 0, 0.84); text-align: center; }
 .ed-bar { display: block; width: 220px; height: 6px; overflow: hidden; border-radius: 3px; background: #333; }
 .ed-bar i { display: block; width: 0; height: 100%; background: #fff; }
+
+/* ---------------------------------------------------------------------------------------------- simpler and much rounder (2026-11-13)
+   Everything that was a rectangle with a thin line is a soft, big round shape now: no frames, no shadows that shout, no strips of "Gesponsert". Later rules win, so this block comes last. */
+:root { --radius: 32px; --radius-lg: 40px; }
+.btn, .chip, .tabs, .tab, .search-box, .field, .search-input, input.field, select.field { border-radius: 999px; }
+textarea.field, .dm-input, .dm-compose .cb-field { border-radius: 26px; }
+.icon-btn, .icon-btn.round, .icon-btn.outlined { border-radius: 50%; }
+.dialog, .wb-dialog, .wb-card { border-radius: 38px; }
+.menu { border-radius: 28px; }
+.card, .rail-card, .hero, .post, .reply-box, .notice, .recent, .empty { border-radius: 32px; }
+.post, .card, .rail-card { border-color: transparent; box-shadow: none; }
+.banner, .tile, .bubble-img img, .bubble-video-box, .story-preview, .vt-preview, .vt-drop, .nu-card { border-radius: 30px; }
+.tiles .list { gap: 6px; }
+.convo, .chat-requests, .chat-folder, .pick { border-radius: 26px; }
+.convo + .convo { border-top: 0; }
+.avatar.group { border-radius: 50%; }
+.sponsored, .sp-slot, .sp-bar, .sponsored-reel { display: none; }
+.skz-card.tall, .skz-card.big { border: 0; box-shadow: 0 8px 22px rgba(0, 0, 0, 0.14); }
+.skz-card.tall { border-radius: 28px; }
+.skz-card.big { border-radius: 34px; }
+.skz-cell { border-radius: 18px; }
+.skz-sheet { border-radius: 46px 46px 0 0; }
+.skz-chip, .skz-upload-btn { border-radius: 999px; }
+.skz-upload-btn { border-radius: 50%; }
+.ed-stage { border-radius: 30px; }
+.ed-quick { border-radius: 20px; }
+.ed-line, .ed-strip, .ed-shade, .ed-track { border-radius: 16px; }
+.ed-panel { border-radius: 30px 30px 0 0; }
+.ed-field { border-radius: 999px; }
+.ed-upload { border-radius: 999px; }
+.reel-stage { border-radius: 34px; }
+@media (max-width: 819px) {
+  .appbar { border-radius: 0 0 34px 34px; }
+  .appbar-me .avatar { box-shadow: none; }
+  .appbar-pill { border: 0; background: var(--bg-3); color: var(--muted); }
+  .appbar-bell { border: 0; background: var(--bg-3); }
+  .appbar[data-page="messages"] .appbar-group { border: 0; background: var(--bg-3); }
+  .chat-pane .chat-search { border: 0; background: var(--bg-3); }
+  /* the bar at the bottom floats as one round pill */
+  .tabbar { left: 12px; right: 12px; bottom: calc(10px + env(safe-area-inset-bottom)); width: auto; height: 62px; padding: 0 10px; border: 0; border-radius: 999px; background: var(--bg); box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2); }
+  .main { padding-bottom: calc(var(--tabbar) + 34px + env(safe-area-inset-bottom)); }
+  .reels-view .reel-info, .reels-view .reel-actions { bottom: calc(var(--tabbar) + 40px + env(safe-area-inset-bottom)); }
+  .skz-sec > h2 { font-size: 17px; margin-bottom: 10px; }
+  .story-ring { box-shadow: 0 0 0 2px var(--bg-3); }
+  .view.profile .banner { border-radius: 0 0 40px 40px; }
+  .skz-cells .list { gap: 6px; padding: 8px var(--pad) 0; margin: 0 calc(var(--pad) * -1); }
+  .profile-tabs .tabs { border-bottom: 0; }
+  .profile-tabs .tab { border-radius: 999px; border-bottom: 0; }
+  .profile-tabs .tab.on { background: var(--ink); color: var(--on-ink); }
+  .skz-card.tall { width: 118px; }
+}

@@ -33,7 +33,7 @@
         h("button", { class: "skz-contact-sub", type: "button", onclick: go(() => Y.newGroup?.()) }, "oder Gruppe erstellen")));
     const upload = h("div", { class: "skz-upload" },
       h("span", { class: "skz-upload-label" }, "Datei hochladen"),
-      h("button", { class: "skz-upload-btn", type: "button", "aria-label": "Datei hochladen: Video, Beitrag oder Story", onclick: go(() => Y.navigate("/new")) }, icon("arrowUp")));
+      h("button", { class: "skz-upload-btn", type: "button", "aria-label": "Datei hochladen: Video oder Foto", onclick: go(() => Y.uploadFile()) }, icon("arrowUp")));       // (one picker: a video opens the editor, photos open the post page)
     const more = h("div", { class: "skz-sheet-more" },
       h("button", { class: "skz-chip", type: "button", onclick: go(() => Y.navigate("/camera")) }, icon("camera"), "Kamera und Spiele"),
       h("button", { class: "skz-chip", type: "button", onclick: go(() => Y.newStory?.(() => Y.refreshStories?.())) }, icon("image"), "Story"));

@@ -55,3 +55,32 @@ def test_there_are_no_text_posts_to_make_and_the_editor_has_the_tools_of_capcut(
         assert word in editor, word
     assert 'h("button", { class: "ed-upload", type: "button" }, "Hochladen")' in editor and '"Exportieren")' not in editor, "the button says Hochladen, not Exportieren"
     assert "if (!changed())" in editor, "a clip that was not changed is handed on as it is"
+
+
+def test_a_post_tells_whether_the_viewer_follows_its_author():
+    """The videos and the cards must remember a follow after a reload: the author of every post carries followedByMe."""
+    import yipi as module
+    from app import app as flask_app, db
+    flask_app.config["TESTING"] = True
+    flask_app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
+    module._hits.clear()
+    with flask_app.app_context():
+        db.create_all()
+        mia, bob = flask_app.test_client(), flask_app.test_client()
+        for who, handle in ((mia, "mia_f"), (bob, "bob_f")):
+            assert who.post("/api/yipi/signup", json={"handle": handle, "password": "correct horse battery", "adult": True}).status_code == 200
+        post = bob.post("/api/yipi/posts", json={"text": "hallo"}).get_json()["post"]
+        first = mia.get("/api/yipi/timeline?feed=foryou").get_json()["items"][0]
+        assert first["id"] == post["id"] and first["user"]["followedByMe"] is False
+        assert mia.post("/api/yipi/users/bob_f/follow").status_code == 200
+        again = mia.get("/api/yipi/timeline?feed=foryou").get_json()["items"][0]
+        assert again["user"]["followedByMe"] is True
+        own = bob.get("/api/yipi/timeline?feed=foryou").get_json()["items"][0]
+        assert "followedByMe" not in own["user"], "nobody follows himself"
+        db.drop_all()
+
+
+def test_the_big_round_button_uploads_videos_and_photos():
+    newpost, skizze = read("static", "js", "yipi-newpost.js"), read("static", "js", "yipi-skizze.js")
+    assert "function uploadFile(" in newpost and "Y.pendingPost = { files: photos }" in newpost and "composeVideo({ file: video })" in newpost
+    assert 'chooseCard("photo", "Ein Foto"' in newpost and "Y.uploadFile()" in skizze

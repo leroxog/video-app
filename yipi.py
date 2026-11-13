@@ -1328,9 +1328,10 @@ def feed_items(rows, viewer):
         entry["gifFavorite"] = item.gif_id in starred
         media.setdefault(item.post_id, []).append(entry)
     polls = poll_states([p for p in posts.values() if not p.deleted], viewer)
-    liked = bookmarked = reposted = set()
+    liked = bookmarked = reposted = following = set()
     hidden = hidden_user_ids(viewer)
     if viewer:
+        following = {r.followee_id for r in YipiFollow.query.filter(YipiFollow.follower_id == viewer.id, YipiFollow.followee_id.in_(list(user_ids)))}          # (whom the viewer follows: the videos and the cards show it)
         ids = list(original_ids)
         liked = {r.post_id for r in YipiLike.query.filter(YipiLike.user_id == viewer.id, YipiLike.post_id.in_(ids))}
         bookmarked = {r.post_id for r in YipiBookmark.query.filter(YipiBookmark.user_id == viewer.id, YipiBookmark.post_id.in_(ids))}
@@ -1358,7 +1359,7 @@ def feed_items(rows, viewer):
             parent = everything.get(post.reply_to_id) if post.reply_to_id else None
             parent_owner = users.get(parent.user_id) if parent else None
             item = {
-                "id": post.id, "user": user_brief(owner), "text": post.text, "createdAt": iso(post.created_at), "media": media.get(post.id, []),
+                "id": post.id, "user": {**user_brief(owner), **({"followedByMe": owner.id in following} if viewer and owner.id != viewer.id else {})}, "text": post.text, "createdAt": iso(post.created_at), "media": media.get(post.id, []),
                 "replyTo": {"id": post.reply_to_id, "handle": parent_owner.handle if parent_owner else None} if post.reply_to_id else None,
                 "quote": brief(everything.get(post.quote_of_id)) if post.quote_of_id else None,
                 "counts": {"replies": post.reply_count, "reposts": post.repost_count + post.quote_count, "likes": post.like_count},
