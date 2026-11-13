@@ -28,6 +28,14 @@ def copy(source_url, target_url, out=print):
     source_meta.reflect(bind=source)
     target_meta = MetaData()
     target_meta.reflect(bind=target)
+    # the site puts some starting rows into a new database by itself: the new tables are emptied first, so that the copy is exactly the old database
+    with target.begin() as write:
+        names = [t.name for t in target_meta.sorted_tables]
+        if target.dialect.name == "postgresql" and names:
+            write.execute(text("TRUNCATE " + ", ".join(f'"{n}"' for n in names) + " RESTART IDENTITY CASCADE"))
+        else:
+            for t in reversed(target_meta.sorted_tables):
+                write.execute(t.delete())
     total = 0
     for table in source_meta.sorted_tables:
         name = table.name

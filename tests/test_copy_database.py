@@ -29,6 +29,9 @@ def test_the_copy_script_copies_every_row_and_keeps_binary_data(tmp_path):
     with source.begin() as connection:
         connection.execute(yipi.YipiUser.__table__.insert(), [{"handle": "mia", "handle_lc": "mia", "name": "Mia", "password_hash": "x"}, {"handle": "tom", "handle_lc": "tom", "name": "Tom", "password_hash": "y"}])
         connection.execute(yipi.YipiMedia.__table__.insert(), [{"id": "a" * 32, "owner_id": 1, "content_type": "image/png", "data": b"\x89PNG\x00\x01", "size": 6, "width": 1, "height": 1}])
+    with create_engine(f"sqlite:///{new}").begin() as connection:             # (the new database is not empty: the site has put a starting row into it)
+        db.metadata.create_all(bind=connection)
+        connection.execute(yipi.YipiUser.__table__.insert(), [{"handle": "start", "handle_lc": "start", "name": "Start", "password_hash": "z"}])
     lines = []
     total = load().copy(f"sqlite:///{old}", f"sqlite:///{new}", out=lines.append)
     assert total == 3 and "yipi_user: 2 rows" in lines and "yipi_media: 1 rows" in lines
