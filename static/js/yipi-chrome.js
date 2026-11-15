@@ -24,7 +24,7 @@
     const mine = h("a", { class: "appbar-me", href: `/${me.handle}`, "aria-label": "Dein Profil und Menü", onclick: (event) => {
       if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       event.preventDefault();
-      if (window.matchMedia && matchMedia("(max-width: 819px)").matches) Y.openDrawer(); else Y.navigate(`/${me.handle}`);
+      if (window.matchMedia && matchMedia("(max-width: 819px), (pointer: coarse)").matches) Y.openDrawer(); else Y.navigate(`/${me.handle}`);
     } }, avatar(me, "md"));
     const brand = link(Y.HOME, { class: "appbar-brand", "aria-label": "Satürn, zur Startseite" }, Icons.logo(), Icons.wordmark());
     const pulse = h("span", { class: "appbar-pulse", "aria-hidden": "true" });

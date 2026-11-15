@@ -1438,7 +1438,7 @@ def random_video_page(query, viewer):
     `offset` always continues the same shuffle, and a new seed shuffles again. `next` is None after the last video (the page starts over)."""
     seed = min(max(0, clamp_cursor(request.args.get("seed")) or 0), 1_000_000)
     offset = min(max(0, clamp_cursor(request.args.get("offset")) or 0), 100_000)
-    limit = min(max(1, clamp_cursor(request.args.get("limit")) or VIDEO_PAGE), 10)
+    limit = min(max(1, clamp_cursor(request.args.get("limit")) or VIDEO_PAGE), 20)
     rows = query.order_by(video_shuffle_key(seed), YipiPost.id).offset(offset).limit(limit + 1).all()
     more = len(rows) > limit
     return {"ok": True, "items": feed_items(rows[:limit], viewer), "next": offset + limit if more else None, "seed": seed}
@@ -1499,6 +1499,11 @@ def remove_post(post, by_admin=False):
     YipiBookmark.query.filter_by(post_id=post.id).delete()
     YipiTag.query.filter_by(post_id=post.id).delete()
     forget_stored(YipiMedia, YipiMedia.post_id == post.id)
+    for media_id, in db.session.query(YipiMedia.id).filter(YipiMedia.post_id == post.id):          # (the copy of a video at Bunny goes, too)
+        record = db.session.get(YipiBunny, media_id)
+        if record is not None:
+            yipi_bunny.remove(record.guid)
+            db.session.delete(record)
     YipiMedia.query.filter_by(post_id=post.id).delete()
     YipiNotification.query.filter_by(post_id=post.id).delete()
     poll = YipiPoll.query.filter_by(post_id=post.id).first()
@@ -1931,7 +1936,9 @@ PUSH_KINDS = {"like": "{name} gefällt dein Beitrag", "reply": "{name} hat dir g
 def web_push(subscription, payload, key):
     """Sends one notification (replaced in the tests)."""
     from pywebpush import webpush
-    contact = os.environ.get("VAPID_SUBJECT") or os.environ.get("VAPID_CONTACT_EMAIL") or "mailto:kontakt@pulse.invalid"
+    # (the sender line must be a real address: Apple, Google and Microsoft refuse a made-up one such as ".invalid" with 403/400; the address of the site itself is always real)
+    site = os.environ.get("SITE_ADDRESS", "").strip()
+    contact = os.environ.get("VAPID_SUBJECT") or os.environ.get("VAPID_CONTACT_EMAIL") or (f"https://{site}" if site and not site.startswith(("http", ":")) and "." in site else "https://thesaturnweb.duckdns.org")
     if not contact.startswith(("mailto:", "https://")):
         contact = "mailto:" + contact
     return webpush(subscription_info=subscription, data=json.dumps(payload), vapid_private_key=vapid_signer(key), vapid_claims={"sub": contact}, timeout=10)
@@ -1964,6 +1971,14 @@ def vapid_key():
     return key
 
 
+def urlsplit_host(endpoint):
+    try:
+        from urllib.parse import urlsplit
+        return urlsplit(endpoint).netloc
+    except Exception:  # noqa: BLE001
+        return "?"
+
+
 def deliver_push(user_id, payload):
     """Sends `payload` to every browser of this person (and forgets the ones that are gone). Runs in the background."""
     for row in YipiPush.query.filter_by(user_id=user_id).all():
@@ -1975,7 +1990,7 @@ def deliver_push(user_id, payload):
                 db.session.delete(row)
                 db.session.commit()
             else:
-                logger.warning("Push to a browser failed: %s", error)
+                logger.warning("Push to a browser (%s) failed: %s", urlsplit_host(row.endpoint), error)
 
 
 def _push_thread(app, user_id, payload):
@@ -3254,7 +3269,7 @@ def register_routes(app):
                 query = query.filter(YipiPost.id.in_(select(YipiMedia.post_id).where(YipiMedia.post_id.isnot(None), YipiMedia.content_type.like("video/%"))))
                 if request.args.get("scope") == "following" and viewer:        # "Folge ich": only people the viewer follows
                     query = query.filter(YipiPost.user_id.in_([r.followee_id for r in YipiFollow.query.filter_by(follower_id=viewer.id)]))
-        if feed == "videos" and request.args.get("order") == "random":
+        if feed in ("videos", "media") and request.args.get("order") == "random":       # (the Videos tab and "Entdecke" on Home are shuffled, not newest first)
             return jsonify(random_video_page(query, viewer))
         if request.args.get("novideo") == "1" and feed in ("foryou", "following"):
             query = without_videos(query)                         # Home on a phone held upright: no videos in the feed (they are in the Videos tab)

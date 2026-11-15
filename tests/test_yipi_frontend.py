@@ -325,7 +325,7 @@ def test_the_app_works_on_every_screen_and_fills_it():
     assert not os.path.exists(os.path.join(JS_DIR, "yipi-notice.js"))
     assert ".app { position: relative;" in CSS and "margin: 0 auto; padding: 0 14px" not in CSS and "max-width: 640px; min-height" not in CSS, "the page is not a narrow column in the middle"
     assert "@media (min-width: 820px)" in CSS and "@media (min-width: 1200px)" in CSS and "@media (min-width: 1000px)" in CSS
-    wide = CSS.split("@media (min-width: 820px) {")[1]
+    wide = CSS.split("@media (min-width: 820px) and (pointer: fine) {")[1]       # (wide layouts are for screens with a mouse; touch screens get the layout of the phone)
     for rule in (".dialog-back { align-items: center;",):
         assert rule in wide, f"wide screens: {rule}"
     assert ".tabbar { top: var(--top); bottom: 0; left: 0; right: auto; width: var(--side);" in CSS.split("@media (min-width: 820px) {")[-1], "wide screens: the side bar sits below the bar at the top"

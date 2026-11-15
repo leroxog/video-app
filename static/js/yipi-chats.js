@@ -16,7 +16,7 @@
 
   const GROUP_NAME_MAX = 40;
   const GROUP_MEMBERS_MAX = 20;
-  const split = () => matchMedia("(min-width: 1000px)").matches;          // list and conversation side by side (the style sheet switches at the same width)
+  const split = () => matchMedia("(min-width: 1000px) and (pointer: fine)").matches;          // list and conversation side by side (the style sheet switches at the same width)
 
   const groupFace = (size = "md") => h("span", { class: `avatar ${size} group`, "aria-hidden": "true" }, icon("usersFill"));
   const formError = () => h("p", { class: "form-error", role: "alert", hidden: true });

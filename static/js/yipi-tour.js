@@ -8,7 +8,7 @@
   const Y = window.Yipi;
   const { h, icon } = Y;
 
-  const narrow = () => !window.matchMedia || matchMedia("(max-width: 819px)").matches;
+  const narrow = () => !window.matchMedia || matchMedia("(max-width: 819px), (pointer: coarse)").matches;
   const key = () => `saturn.tour.${Y.me ? Y.me.handle : ""}`;
   const seen = () => { try { return localStorage.getItem(key()) === "done"; } catch (error) { return true; } };         // (no storage: no tour, it would come back every time)
   let running = false;

@@ -130,7 +130,7 @@ main:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-vi
 .nex-tab .tab-ic svg { width: 26px; height: 26px; }
 .nex-tab.active .tab-ic { box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--ink), 0 6px 16px rgba(0, 0, 0, 0.35); }
 .badge { position: absolute; top: -4px; right: -8px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--ink); color: var(--on-ink); font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; box-shadow: 0 0 0 2px var(--bg); }
-@media (max-width: 819px) {
+@media (max-width: 819px), (pointer: coarse) {
   .app[data-route="thread"] .main, .app[data-route="group"] .main, .app[data-route="nex"] .main, .app[data-route="videos"] .main { padding-bottom: 0; }
   .app[data-route="thread"] .tabbar, .app[data-route="group"] .tabbar, .app[data-route="nex"] .tabbar { display: none; }
 }
@@ -964,7 +964,7 @@ main:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-vi
 @keyframes toast-in { from { opacity: 0; transform: translate(-50%, 10px); } }
 
 /* ---------------------------------------------------------------------------------------------- wide screens (from 820 px on) */
-@media (min-width: 820px) {
+@media (min-width: 820px) and (pointer: fine) {
   :root { --pad: 28px; --side: 96px; }
   .main { padding-bottom: 56px; }
   .app[data-route="thread"] .main, .app[data-route="group"] .main, .app[data-route="messages"] .main, .app[data-route="nex"] .main, .app[data-route="videos"] .main { padding-bottom: 0; }
@@ -1015,7 +1015,7 @@ main:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-vi
   .auth-points { flex-direction: column; gap: 14px; }
   .auth-points li { display: flex; align-items: center; gap: 14px; font-size: 18px; }
 }
-@media (min-width: 1200px) {
+@media (min-width: 1200px) and (pointer: fine) {
   :root { --pad: 40px; --side: 264px; }
   .side-brand { justify-content: flex-start; padding: 0 12px; }
   .side-name { display: inline; }
@@ -1028,7 +1028,7 @@ main:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-vi
   .side-me .badge { position: static; margin-left: auto; box-shadow: none; }
 }
 /* panes side by side (from 1000 px on): the chats and Nex fill the screen to the edges */
-@media (min-width: 1000px) {
+@media (min-width: 1000px) and (pointer: fine) {
   .chats-split { display: grid; grid-template-columns: minmax(340px, 400px) minmax(0, 1fr); height: 100vh; height: 100dvh; }
   .chat-pane { min-height: 0; overflow-y: auto; padding: 0 16px 24px; border-right: 1px solid var(--line); }
   .chat-pane .topbar { margin: 0 -16px; padding-left: 16px; padding-right: 16px; }
@@ -1047,7 +1047,7 @@ main:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-vi
   .bubble { max-width: 66%; }
   .app[data-route="thread"], .app[data-route="group"], .app[data-route="messages"], .app[data-route="nex"], .app[data-route="videos"] { --pad: 0px; padding-right: 0; padding-left: var(--side); }
 }
-@media (min-width: 820px) {
+@media (min-width: 820px) and (pointer: fine) {
   .reel-stage { width: min(100%, calc(100dvh * 9 / 16)); height: calc(100dvh - 32px); border-radius: 26px; }
   .reel-info { right: 16px; bottom: 56px; }
   .reel-actions { right: calc(50% - min(50%, calc(100dvh * 9 / 32)) - 84px); bottom: 56px; }
@@ -1059,7 +1059,7 @@ main:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-vi
 }
 @media (min-width: 700px) {
 }
-@media (min-width: 1000px) {
+@media (min-width: 1000px) and (pointer: fine) {
   .post-view { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 36px; align-items: start; }
   .post-view > .topbar { grid-column: 1 / -1; }
   .post-view > .thread-above, .post-view > .thread-main, .post-view > .reply-box { grid-column: 1; }
@@ -1250,7 +1250,7 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .fm-power.on { background: #fff; color: #000; }
 .fm-power-ic { font-size: 16px; }
 .fm-count { min-width: 14px; text-align: center; }
-@media (min-width: 820px) {
+@media (min-width: 820px) and (pointer: fine) {
   .cam-bottom { bottom: 22px; }
   .cam-loading { bottom: 60px; }
 }
@@ -1304,7 +1304,7 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .method-text small { color: var(--muted); }
 .method > svg { width: 18px; height: 18px; color: var(--muted); flex: none; }
 .back-link { display: block; margin: 14px auto 0; color: var(--muted); font-weight: 700; }
-@media (min-width: 820px) {
+@media (min-width: 820px) and (pointer: fine) {
   .auth-page { grid-template-columns: minmax(0, 520px) minmax(0, 430px); }
   .auth-hero { text-align: left; width: auto; }
   .auth-hero-logo svg { width: 96px; height: 96px; margin: 0; }
@@ -1569,7 +1569,7 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .story-tool svg { width: 20px; height: 20px; }
 
 /* ----- videos on a phone held upright: the strip "Gesponsert" at the top replaces the bar with the lettering */
-@media (max-width: 819px) {
+@media (max-width: 819px), (pointer: coarse) {
   .reels-view .sp-bar { position: absolute; top: 0; left: 0; right: 0; z-index: 7; display: flex; align-items: center; gap: 10px; height: calc(38px + env(safe-area-inset-top)); padding: env(safe-area-inset-top) 14px 0; border: 0; border-radius: 0; background: rgba(255, 255, 255, 0.94); color: #444; }
   .reels-view .sp-bar .sp-mark { width: 26px; height: 26px; border-radius: 9px; background: #efefef; color: #000; box-shadow: none; }
   .reels-view .sp-bar .sp-mark svg { width: 17px; height: 17px; }
@@ -1581,7 +1581,7 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 }
 
 /* ----- sideways or on a computer: the bar at the top and the side bar below it, folded in */
-@media (min-width: 820px) {
+@media (min-width: 820px) and (pointer: fine) {
   :root { --bar-h: 60px; --side: 76px; --pad: 28px; }
   .app:not(.bare) { --top: calc(var(--bar-h) + env(safe-area-inset-top)); }
   .app:not(.bare) .appbar { display: flex; padding: env(safe-area-inset-top) 18px 0 12px; gap: 12px; }
@@ -1627,7 +1627,7 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
   .stories { padding: 2px 4px 10px; }
   .cam-view { height: calc(100vh - var(--top)); height: calc(100dvh - var(--top)); }
 }
-@media (min-width: 1200px) {
+@media (min-width: 1200px) and (pointer: fine) {
   :root { --side: 76px; --pad: 40px; }
   .tab-item, .tab-extra { justify-content: center; padding: 0; }
   .tab-label { display: none; }
@@ -1638,7 +1638,7 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
   .app.rail-open .side-me { justify-content: flex-start; }
   .app.rail-open .side-me-text { display: flex; }
 }
-@media (min-width: 1000px) {
+@media (min-width: 1000px) and (pointer: fine) {
   .chats-split { height: calc(100vh - var(--top)); height: calc(100dvh - var(--top)); }
   .chat-pane .topbar { top: 0; }                          /* the list of chats scrolls inside its own box: its top bar sticks to the top of that box */
   .chats-split .thread-view { height: calc(100vh - var(--top)); height: calc(100dvh - var(--top)); }
@@ -1701,7 +1701,7 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .bubble.ai .nex-actions { margin: 1px 0 0 -4px; }
 .dm-compose .nex-chips { margin: 0 0 4px; padding: 2px 0 6px; }
 .nex-post-box .nex-post { margin: 8px 0; }
-@media (min-width: 1000px) {
+@media (min-width: 1000px) and (pointer: fine) {
   .thread-view .nex-chips { flex-wrap: wrap; overflow: visible; }
   .nex-intro { padding-top: 10vh; }
 }
@@ -1714,7 +1714,7 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .post-name .ai-badge, .cm-name .ai-badge, .ur-name .ai-badge, .who .ai-badge { vertical-align: 1px; }
 
 /* the box "Gesponsert" in the side bar: not there while the bar is folded, and a tall banner that fills the free room when it is open */
-@media screen and (min-width: 820px) {
+@media screen and (min-width: 820px) and (pointer: fine) {
   .sp-slot { display: none; }
   .app.rail-open .side-foot { flex: 1 1 auto; min-height: 0; }
   .app.rail-open .sp-slot { display: flex; flex: 1 1 auto; flex-direction: column; justify-content: center; align-items: center; gap: 12px; min-height: 190px; max-height: 480px; padding: 22px 16px; text-align: center; border-radius: 22px; }
@@ -1854,7 +1854,7 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 
 /* ---------------------------------------------------------------------------------------------- home on a wide screen: the feed in the middle, trends and people on the right */
 .home-rail { display: none; }
-@media screen and (min-width: 1100px) {
+@media screen and (min-width: 1100px) and (pointer: fine) {
   .home-view { display: grid; grid-template-columns: minmax(0, 640px) 330px; justify-content: center; column-gap: 36px; align-items: start; }
   .home-main { min-width: 0; }
   .home-main .pager > .list { grid-template-columns: minmax(0, 1fr); }
@@ -1884,7 +1884,7 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .short-info { position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; gap: 2px; padding: 28px 10px 10px; background: linear-gradient(transparent, rgba(0, 0, 0, 0.72)); }
 .short-info b { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-size: 13px; line-height: 1.25; }
 .short-info small { font-size: 11.5px; opacity: 0.85; }
-@media screen and (min-width: 820px) {
+@media screen and (min-width: 820px) and (pointer: fine) {
   .short-slot { width: 164px; }
 }
 
@@ -2038,7 +2038,7 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .wb-end a { text-decoration: underline; }
 .wb-actions { display: flex; flex: none; gap: 10px; }
 .wb-actions .au-btn { flex: 1; }
-@media (max-width: 819px) {
+@media (max-width: 819px), (pointer: coarse) {
   .wb-body { grid-template-columns: minmax(0, 1fr); padding: 14px; }
   .wb-side { display: none; }
   .wb-dialog { padding: 20px 16px 14px; border-radius: 24px; }
@@ -2070,13 +2070,13 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .sp-bar, .reels-view .sp-bar { border-radius: 0 0 18px 18px; }
 .cam-stage { border-radius: 28px; }
 .reel-stage { border-radius: 26px; }
-@media screen and (max-width: 819px) {
+@media screen and (max-width: 819px), screen and (pointer: coarse) {
   .tabbar { border-radius: 26px 26px 0 0; }
 }
-@media screen and (max-width: 999px) {
+@media screen and (max-width: 999px), screen and (pointer: coarse) {
   .chat-head { border-radius: 0 0 22px 22px; }
 }
-@media screen and (min-width: 820px) {
+@media screen and (min-width: 820px) and (pointer: fine) {
   .tabbar { border-radius: 0 28px 28px 0; }
   ::-webkit-scrollbar { width: 12px; height: 12px; }
   ::-webkit-scrollbar-thumb { border: 3px solid transparent; border-radius: 999px; background: var(--line); background-clip: padding-box; }
@@ -2150,7 +2150,7 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .cam-view[data-kind="create"] .cam-lens-name, .cam-view[data-kind="create"] .cam-lens-hint { display: none; }
 
 /* ----- on a big screen the side bar is always open, like the one of a big app: the name, the search, the pages, "Neu", your account and the small links (the bar at the top is gone) */
-@media screen and (min-width: 1200px) {
+@media screen and (min-width: 1200px) and (pointer: fine) {
   :root { --side: 268px; }
   .rail-top { display: flex; flex-direction: column; gap: 16px; order: 0; margin: 4px 0 14px; padding: 0 4px; }
   .rail-brand { display: flex; align-items: center; gap: 12px; color: var(--text); }
@@ -2196,7 +2196,7 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
   .rail-links small { width: 100%; font-size: 12px; }
   .home-main { margin-top: 0; }
 }
-@media screen and (max-width: 1199px) {
+@media screen and (max-width: 1199px), screen and (pointer: coarse) {
   .rail-top, .rail-post, .rail-more, .rail-links { display: none; }
   .tab-extra[data-nav="explore"], .tab-extra[data-nav="profile"], .tab-extra[data-nav="moderation"] { display: none !important; }
 }
@@ -2225,7 +2225,7 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .reel-count { font-size: 13px; font-weight: 800; }
 
 /* ----- Home on a big screen uses the whole width: the feed gets all the room that the side bar and the right column leave */
-@media screen and (min-width: 1100px) {
+@media screen and (min-width: 1100px) and (pointer: fine) {
   .home-view { grid-template-columns: minmax(0, 1fr) clamp(330px, 24vw, 430px); justify-content: stretch; column-gap: 36px; padding-right: 8px; }
 }
 
@@ -2430,7 +2430,7 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
   .nu-card { min-height: 220px; }
 }
 .nu-choosing .nu-column { width: min(100%, 820px); }
-@media (min-width: 900px) {
+@media (min-width: 900px) and (pointer: fine) {
   .nu-card { min-height: min(46vh, 380px); gap: 16px; }
   .nu-card small { font-size: 16px; }
 }
@@ -2485,7 +2485,7 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .reel-sound svg { width: 20px; height: 20px; }
 .reel-sound:active { transform: scale(0.92); }
 .menu-item.strong { background: rgba(122, 44, 240, 0.16); font-weight: 800; }
-@media (min-width: 900px) { .reel-sound { right: calc(50% - min(50%, calc(100dvh * 9 / 32)) - 79px); bottom: 56px; } }
+@media (min-width: 900px) and (pointer: fine) { .reel-sound { right: calc(50% - min(50%, calc(100dvh * 9 / 32)) - 79px); bottom: 56px; } }
 
 /* ----- the tools of the camera on the right (text on the left of the round button, from the top: turn around, filter, timer, then the small ones, and the arrow that folds them) */
 .cam-ctl { gap: 10px; align-items: flex-end; }
@@ -2641,7 +2641,7 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .reel-info .reel-title { margin-top: 10px; }
 .reels-search, .reels-more { place-items: center; }
 
-@media (max-width: 819px) {
+@media (max-width: 819px), (pointer: coarse) {
   /* the bar at the top: your picture, the round search line and the round button at the right (Chats: your picture and the round button to add contacts or a group) */
   .appbar { gap: 10px; border-bottom: 0; background: var(--bg); }
   .appbar-brand, .appbar-pulse, .appbar-plus, .appbar-find, .appbar-find-row { display: none; }
@@ -2788,7 +2788,7 @@ textarea.field, .dm-input, .dm-compose .cb-field { border-radius: 26px; }
 .ed-field { border-radius: 999px; }
 .ed-upload { border-radius: 999px; }
 .reel-stage { border-radius: 34px; }
-@media (max-width: 819px) {
+@media (max-width: 819px), (pointer: coarse) {
   .appbar { border-radius: 0 0 34px 34px; }
   .appbar-me .avatar { box-shadow: none; }
   .appbar-pill { border: 0; background: var(--bg-3); color: var(--muted); }
@@ -2825,7 +2825,7 @@ button, input, textarea, select { font-family: inherit; }
 .skz-meta small { font-size: 12px; font-weight: 700; opacity: 0.92; }
 .skz-title { position: absolute; left: 10px; right: 10px; bottom: 40px; z-index: 1; color: #fff; font-size: 21px; font-weight: 900; line-height: 1.1; text-shadow: 0 2px 6px rgba(0, 0, 0, 0.65); overflow-wrap: anywhere; }
 
-@media (max-width: 819px) {
+@media (max-width: 819px), (pointer: coarse) {
   /* the header of Home: picture, round magnifier, "Storys", round add-a-friend, round more */
   .appbar { height: calc(var(--bar-h) + env(safe-area-inset-top)); border-radius: 0; border-bottom: 1px solid var(--line); background: var(--bg); }
   .appbar-me .avatar { width: 42px; height: 42px; }
@@ -2903,12 +2903,6 @@ button, input, textarea, select { font-family: inherit; }
 @keyframes tour-ring { 0% { transform: translate(-50%, -50%) scale(0.4); opacity: 0.9; } 100% { transform: translate(-50%, -50%) scale(1.6); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .tour .tour-hand, .tour .tour-ring { animation: none; } }
 .turn-note { display: none; }
-@media (pointer: coarse) and (orientation: landscape) {
-  .turn-note { position: fixed; inset: 0; z-index: 5000; display: grid; place-content: center; justify-items: center; gap: 14px; background: #000; color: #fff; text-align: center; }
-  .turn-phone { display: block; width: 54px; height: 92px; border: 5px solid #fff; border-radius: 14px; }
-  .turn-note b { font-size: 26px; font-weight: 900; }
-  .turn-note small { color: #aaa; font-size: 16px; font-weight: 700; }
-}
 .wb-scroll { counter-reset: term; }
 .wb-scroll section { margin: 10px 0; padding: 14px 16px; border-radius: 22px; background: #f6f2fd; }
 .wb-scroll section h2 { display: flex; align-items: center; gap: 10px; }
@@ -2918,7 +2912,7 @@ button, input, textarea, select { font-family: inherit; }
 .wb-declined h1 { font-size: 30px; }
 .wb-declined p { color: #555; font-size: 16px; font-weight: 600; }
 .reels-search-close { place-items: center; }
-@media (max-width: 819px) { .appbar-look-close { display: grid; } }
+@media (max-width: 819px), (pointer: coarse) { .appbar-look-close { display: grid; } }
 
 /* the clip from the camera like in Snapchat: tools in a column at the right, "Senden an" as a big purple button with black letters */
 .cam-tools { position: absolute; top: calc(70px + env(safe-area-inset-top)); right: 10px; z-index: 3; display: flex; flex-direction: column; gap: 10px; padding: 10px 8px; border-radius: 28px; background: rgba(0, 0, 0, 0.35); }
@@ -2927,3 +2921,16 @@ button, input, textarea, select { font-family: inherit; }
 .cam-review-bar .cam-send { background: var(--snap, #8e44f2); color: #000; min-height: 54px; padding: 0 26px; font-size: 18px; font-weight: 900; }
 .cam-review-bar .cam-send svg { width: 22px; height: 22px; }
 .ed.snap .ed-upload { background: var(--snap, #8e44f2); color: #000; }
+html.turned .turn-note { position: fixed; inset: 0; z-index: 5000; display: grid; place-content: center; justify-items: center; gap: 14px; background: #000; color: #fff; text-align: center; }
+html.turned .turn-phone { display: block; width: 54px; height: 92px; border: 5px solid #fff; border-radius: 14px; }
+html.turned .turn-note b { font-size: 26px; font-weight: 900; }
+html.turned .turn-note small { color: #aaa; font-size: 16px; font-weight: 700; }
+/* while somebody types: no bar at the bottom (it would jump above the keyboard and cover the field) */
+html.typing .tabbar { display: none; }
+html.typing .main { padding-bottom: 16px; }
+/* a tablet (touch, wide) gets exactly the layout of the phone, in a column in the middle */
+@media (pointer: coarse) and (min-width: 600px) {
+  html { background: #000; }
+  .app { max-width: 560px; margin: 0 auto; background: var(--bg); }
+  .appbar, .tabbar { left: 50%; right: auto; width: min(100%, 560px); transform: translateX(-50%); }
+}

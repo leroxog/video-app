@@ -10,7 +10,7 @@
   const { fill, put, h, icon, link, avatar, pager } = Y;
   const { qs, listLoader } = Y;
 
-  const narrow = () => !window.matchMedia || matchMedia("(max-width: 819px)").matches;
+  const narrow = () => !window.matchMedia || matchMedia("(max-width: 819px), (pointer: coarse)").matches;
 
   // ------------------------------------------------------------------------------------------------ the "+" sheet
   /* A sheet from the bottom: the first line adds a contact or makes a group, the big round button below uploads (a video, a post or a story). The camera and the games are one tap away, too. */
@@ -155,8 +155,9 @@
     const forBox = h("div", { class: "skz-for", role: "list" });
     const forHead = h("button", { class: "skz-h2", type: "button", onclick: () => Y.navigate("/videos") }, h("span", {}, "Abos"), icon("chevron"));
     const forSection = h("section", { class: "skz-sec", hidden: true }, forHead, forBox);
+    const seed = 1 + Math.floor(Math.random() * 999999);                      // "Entdecke" is a shuffle (a new one every time Home is opened), not the newest first
     const grid = pager({
-      load: listLoader((cursor) => qs("/timeline", { feed: "media", cursor })),
+      load: listLoader((offset) => qs("/timeline", { feed: "media", order: "random", seed, offset: offset || 0, limit: 10 })),
       render: (item) => card(item, "big"),
       empty: Y.emptyState("Noch nichts zu entdecken", "Beiträge mit Fotos und Videos erscheinen hier."),
     });
@@ -177,7 +178,7 @@
     }
     loadFor();
     const change = () => { if (el.isConnected) Y.rerender?.(); };           // the phone was turned to the side: the feed comes back
-    const query = window.matchMedia ? matchMedia("(max-width: 819px)") : null;
+    const query = window.matchMedia ? matchMedia("(max-width: 819px), (pointer: coarse)") : null;
     query?.addEventListener?.("change", change);
 
     return {
@@ -188,8 +189,22 @@
     };
   };
 
-  /* A tablet or a phone held sideways: a black page says to turn it upright (the page is made for the upright phone; a computer is not asked). It only shows on touch screens held sideways (the style sheet). */
+  /* A phone or tablet held sideways: a black page says to turn it upright. It looks at how the DEVICE is held (not at the size of the page: with the keyboard open the page is wider than tall,
+     and that is not a turned device), and only on touch screens; a computer is never asked. While somebody types the bar at the bottom goes away (the keyboard needs the room). */
   document.body.append(h("div", { class: "turn-note", role: "alert" }, h("span", { class: "turn-phone", "aria-hidden": "true" }), h("b", {}, "Bitte dreh dein Gerät hochkant"), h("small", {}, "Satürn funktioniert nur im Hochformat.")));
+  const heldSideways = () => {
+    if (!window.matchMedia || !matchMedia("(pointer: coarse)").matches) return false;
+    const type = window.screen && screen.orientation && screen.orientation.type;
+    if (type) return type.startsWith("landscape");
+    return typeof window.orientation === "number" ? Math.abs(window.orientation) === 90 : false;
+  };
+  const checkTurn = () => document.documentElement.classList.toggle("turned", heldSideways());
+  checkTurn();
+  addEventListener("orientationchange", () => setTimeout(checkTurn, 250));
+  if (window.screen && screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener("change", checkTurn);
+  const typing = (event) => { if (event.target && event.target.matches && event.target.matches("input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]), textarea")) document.documentElement.classList.toggle("typing", event.type === "focusin"); };
+  document.addEventListener("focusin", typing);
+  document.addEventListener("focusout", typing);
 
   Y.skizze = { card, cell, peopleRow, open, grid: narrow };
 })();

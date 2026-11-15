@@ -108,7 +108,7 @@ def test_the_look_of_snapchat_the_tour_and_the_page_to_turn_the_device():
     assert ".tour { position: fixed;" in css and "pointer-events: none" in css.split(".tour { position: fixed;")[1].split("}")[0], "the dark layer lets every touch through"
     for word in ("six quick taps", "api.reelsScrolled()", "api.doubleTapped()", "api.swiped()", "saturn.tour."):
         assert word in tour, word
-    assert 'class: "turn-note"' in skizze and "(pointer: coarse) and (orientation: landscape)" in css
+    assert 'class: "turn-note"' in skizze and "html.turned .turn-note" in css and "screen.orientation" in skizze, "the page to turn the device looks at the device, not at the size of the page (the keyboard makes it wider than tall)"
     assert "Nicht akzeptieren" in auth and "Doch akzeptieren" in auth
     assert "border-left: 3px solid var(--who" in css and "--who: ${whoColor(" in chats
     assert "devicemotion" in videos and "active.shakeLike()" in videos and "reels-searchline" in videos
@@ -121,3 +121,33 @@ def test_the_clip_of_the_camera_has_the_tools_at_the_side_and_a_purple_senden_an
         assert tool in camera, tool
     assert "snap = false" in editor and 'upload.textContent = "Fertig"' in editor
     assert ".cam-review-bar .cam-send { background: var(--snap" in css and "color: #000" in css.split(".cam-review-bar .cam-send {")[1].split("}")[0]
+
+
+def test_a_tablet_gets_the_layout_of_the_phone_and_entdecke_is_a_shuffle_and_the_push_has_a_real_sender():
+    css, skizze = read("static", "css", "yipi.css"), read("static", "js", "yipi-skizze.js")
+    assert "@media (min-width: 820px) and (pointer: fine)" in css and "@media (max-width: 819px), (pointer: coarse)" in css, "touch screens take the narrow rules, screens with a mouse the wide ones"
+    assert "(pointer: coarse) and (min-width: 600px)" in css and "html.typing .tabbar { display: none; }" in css
+    assert 'order: "random", seed, offset: offset || 0' in skizze
+    server = read("yipi.py")
+    assert 'feed in ("videos", "media") and request.args.get("order") == "random"' in server
+    assert "pulse.invalid" not in server, "Apple, Google and Microsoft refuse a made-up sender address for the notifications"
+
+
+def test_the_entdecke_feed_can_be_shuffled():
+    import yipi as module
+    from app import app as flask_app, db
+    flask_app.config["TESTING"] = True
+    flask_app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
+    module._hits.clear()
+    with flask_app.app_context():
+        db.create_all()
+        mia = flask_app.test_client()
+        assert mia.post("/api/yipi/signup", json={"handle": "mia_r", "password": "correct horse battery", "adult": True}).status_code == 200
+        reply = mia.get("/api/yipi/timeline?feed=media&order=random&seed=7&offset=0&limit=10")
+        assert reply.status_code == 200 and reply.get_json()["ok"] is True and reply.get_json()["seed"] == 7
+        db.drop_all()
+
+
+def test_deleting_a_post_also_deletes_its_copy_at_bunny():
+    server, bunny = read("yipi.py"), read("yipi_bunny.py")
+    assert "yipi_bunny.remove(record.guid)" in server and "def remove(guid):" in bunny and "log.warning(\"Bunny: could not delete" in bunny

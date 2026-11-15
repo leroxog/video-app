@@ -155,7 +155,7 @@
     const peopleBox = h("section", { class: "rail-card" }, h("h2", {}, "Wem folgen"));
     const rail = h("aside", { class: "home-rail", "aria-label": "Trends und Vorschläge" }, trendBox, peopleBox,
       h("nav", { class: "rail-foot", "aria-label": "Rechtliches" }, h("a", { href: "/nutzungsbedingungen" }, "Nutzungsbedingungen"), h("a", { href: "/datenschutz" }, "Datenschutz"), h("a", { href: "/impressum" }, "Impressum"), h("a", { href: "/bildnachweise" }, "Bildnachweise"), h("span", {}, "© Satürn")));
-    const wide = window.matchMedia ? window.matchMedia("(min-width: 1100px)") : null;
+    const wide = window.matchMedia ? window.matchMedia("(min-width: 1100px) and (pointer: fine)") : null;
     let loaded = false;
     async function load() {
       if (loaded || (wide && !wide.matches)) return;

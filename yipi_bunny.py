@@ -64,6 +64,18 @@ def upload(title, data):
     return guid
 
 
+def remove(guid):
+    """Deletes a video at Bunny (so that a deleted post does not keep costing storage there). Never raises."""
+    if not (enabled() and guid):
+        return False
+    try:
+        requests.delete(f"{API}/library/{library()}/videos/{guid}", headers=headers(), timeout=20)
+        return True
+    except Exception as error:  # noqa: BLE001
+        log.warning("Bunny: could not delete %s: %s", guid, error)
+        return False
+
+
 def status(guid):
     """The state of a video at Bunny (a number, see FINISHED and FAILED), None when Bunny cannot be asked."""
     try:
