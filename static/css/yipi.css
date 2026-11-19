@@ -2932,3 +2932,17 @@ html.typing .main { padding-bottom: 16px; }
 .samoji-back { z-index: 1100; }
 .sm-who { align-items: center; }
 .sm-for { flex: none; color: var(--muted); font-size: 13px; font-weight: 800; }
+
+/* 3D Samojis and the Satürn Chest */
+.sm-live { display: grid; place-items: center; flex: none; width: 96px; height: 96px; }
+.sm-live canvas { width: 96px; height: 96px; }
+.sm-tile .samoji-svg { width: 62px; height: 62px; object-fit: contain; }
+.bubble-samoji .samoji-svg { width: 130px; height: 130px; object-fit: contain; }
+.chest { position: absolute; left: 6px; top: 34%; z-index: 9; display: grid; justify-items: center; gap: 2px; padding: 0; color: #fff; text-align: center; transition: transform 0.2s; }
+.chest.nudge { transform: translateX(-5px); }
+.chest-view { display: grid; place-items: center; width: 140px; height: 140px; }
+.chest-view canvas { width: 140px; height: 140px; }
+.chest-view.flat::before { content: ""; width: 90px; height: 64px; border-radius: 12px; background: linear-gradient(#b0662a, #7a3e14); box-shadow: inset 0 0 0 5px #ffc83d; }
+.chest-time { min-width: 92px; padding: 5px 14px; border-radius: 999px; background: rgba(0, 0, 0, 0.55); color: #fff; font-size: 20px; font-weight: 900; font-variant-numeric: tabular-nums; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+.chest-time.go { background: var(--snap, #8e44f2); color: #000; }
+.chest-time.won { background: #ffd54a; color: #000; font-size: 22px; }

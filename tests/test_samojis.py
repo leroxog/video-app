@@ -90,7 +90,7 @@ def test_the_page_has_the_sheet_the_drawings_and_the_buttons():
     read = lambda *parts: open(os.path.join(ROOT, *parts), encoding="utf-8").read()  # noqa: E731
     page, chats, videos, components = read("static", "js", "yipi-samoji.js"), read("static", "js", "yipi-chats.js"), read("static", "js", "yipi-videos.js"), read("static", "js", "yipi-components.js")
     assert "yipi-samoji.js" in yipi.PULSE_SCRIPTS and "innerHTML" not in page and "Senden für" in page and "Der Empfänger bekommt genauso viele Tokens." in page
-    assert "Y.samoji.open({ to: route.handle, chat: \"dm\"" in chats and "Y.samoji.bubble(" in chats and "Y.samoji.open({ to: item.user.handle, post: item.id })" in videos and "Samoji schenken" in components
+    assert "Y.samoji.open({ to: route.handle, chat: \"dm\"" in chats and "Y.samoji.bubble(" in chats and "Y.samoji.open({ to: item.user.handle, post: item.id, giftFrom: giftSpot()" in videos and "Samoji schenken" in components
 
 
 def test_a_present_in_a_group_goes_to_one_member_and_the_daily_present_comes_once_a_day(client):
@@ -124,3 +124,50 @@ def test_the_shown_likes_grow_with_the_age_of_a_post_and_can_be_switched_off(cli
     assert 0 < month[1] < month[0], "there are far fewer likes than views"
     monkeypatch.setenv("FAKE_VIEWS", "0")
     assert yipi.view_boost(row) == 0 and yipi.like_boost(row) == 0
+
+
+def test_the_satuern_chest_opens_after_its_timer_and_pays_more_for_a_quick_tap(client, monkeypatch):
+    from datetime import timedelta
+    mia, tom = person("mia"), person("tom")
+    first = mia.post("/api/yipi/chests/maybe", json={}).get_json()["chest"]
+    assert first and 10 <= first["opensIn"] <= 301 and first["closesIn"] > first["opensIn"], "a timer from 10 seconds to 5 minutes"
+    again = mia.post("/api/yipi/chests/maybe", json={}).get_json()["chest"]
+    assert again["id"] == first["id"], "only one chest at a time"
+    assert tom.post(f"/api/yipi/chests/{first['id']}/open").status_code == 404, "somebody else's chest"
+    early = mia.post(f"/api/yipi/chests/{first['id']}/open")
+    assert early.status_code == 400 and early.get_json()["error"] == "chest_early", "the timer is not over"
+    row = db.session.get(yipi.YipiChest, first["id"])
+    row.opens_at = yipi.utcnow() - timedelta(seconds=0.3)
+    row.expires_at = yipi.utcnow() + timedelta(seconds=40)
+    db.session.commit()
+    quick = mia.post(f"/api/yipi/chests/{first['id']}/open")
+    assert quick.status_code == 200 and 11 <= quick.get_json()["reward"] <= 13 and quick.get_json()["tokens"] == 5 + quick.get_json()["reward"]
+    assert mia.post(f"/api/yipi/chests/{first['id']}/open").status_code == 409, "once"
+    assert mia.post("/api/yipi/chests/maybe", json={}).get_json()["chest"] is None, "the next chest comes later (three minutes)"
+    # a slow tap: ten seconds after it opened gives one Token
+    row2 = yipi.YipiChest(user_id=db.session.get(yipi.YipiUser, row.user_id).id, created_at=yipi.utcnow() - timedelta(minutes=20), opens_at=yipi.utcnow() - timedelta(seconds=12), expires_at=yipi.utcnow() + timedelta(seconds=30))
+    db.session.add(row2)
+    db.session.commit()
+    slow = mia.post(f"/api/yipi/chests/{row2.id}/open").get_json()
+    assert slow["reward"] == 1
+    assert yipi.chest_reward if hasattr(yipi, "chest_reward") else True
+
+
+def test_the_page_builds_the_samojis_in_3d_and_has_the_chest():
+    read = lambda *parts: open(os.path.join(ROOT, *parts), encoding="utf-8").read()  # noqa: E731
+    module, page, videos, css = read("static", "js", "gift3d.mjs"), read("static", "js", "yipi-samoji.js"), read("static", "js", "yipi-videos.js"), read("static", "css", "yipi.css")
+    assert "import * as THREE" in module and "export function fly(" in module and "export function chest(" in module and "export function thumb(" in module and "CatmullRomCurve3" in module
+    assert module.count("/* ") >= 16 and "FIGURES = [" in module and "/* 15 Wal */" in module and "/* 13 Rose */" in module
+    assert 'import("/static/js/gift3d.mjs' in page and "innerHTML" not in module and "innerHTML" not in page
+    assert "Y.samoji.replay(reel.item.gifts.last" in videos and "/chests/maybe" in videos and "Tippe!" in videos and ".chest-time" in css
+    assert len(samojis.SHAPES) == 16 and len(samojis.LOOKS) == 15 and len(samojis.BADGES) == 5 and "Wal" in samojis.SHAPES and "Rose" in samojis.SHAPES
+
+
+def test_a_post_tells_which_presents_it_has_got(client):
+    mia, tom = person("mia"), person("tom")
+    post = tom.post("/api/yipi/posts", json={"text": "hallo"}).get_json()["post"]
+    assert "gifts" not in mia.get(f"/api/yipi/posts/{post['id']}").get_json()["post"]
+    mia.post("/api/yipi/samojis/send", json={"id": 1, "to": "tom", "post": post["id"]})
+    mia.post("/api/yipi/samojis/send", json={"id": 2, "to": "tom", "post": post["id"]})
+    gifts = mia.get(f"/api/yipi/posts/{post['id']}").get_json()["post"]["gifts"]
+    assert gifts["count"] == 2 and gifts["last"] == [2, 1], "the last ones, newest first: they are played when the video is opened"

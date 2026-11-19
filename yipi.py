@@ -424,6 +424,18 @@ class YipiDaily(db.Model):
     day = db.Column(db.String(10), nullable=False)
 
 
+class YipiChest(db.Model):
+    """A Satürn Chest that was shown to a person: it opens by itself after a timer (10 seconds to 5 minutes), and then has to be tapped quickly: the sooner, the more Tokens (1 to 13)."""
+    __tablename__ = "yipi_chest"
+    id = db.Column(BigId, primary_key=True, autoincrement=True)
+    user_id = db.Column(db.Integer, nullable=False, index=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+    opens_at = db.Column(db.DateTime, nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    opened_at = db.Column(db.DateTime, nullable=True)
+    reward = db.Column(db.Integer, nullable=True)
+
+
 class YipiGift(db.Model):
     """A Samoji that was given as a present: who gave it to whom, what it was, how many Tokens it cost (and went to the receiver), and for which post, if any."""
     __tablename__ = "yipi_gift"
@@ -1377,6 +1389,14 @@ def feed_items(rows, viewer):
         entry["gifFavorite"] = item.gif_id in starred
         media.setdefault(item.post_id, []).append(entry)
     polls = poll_states([p for p in posts.values() if not p.deleted], viewer)
+    gift_counts, gift_last = {}, {}
+    if original_ids:                                                # the presents a post has got (how many, and the last ones: a video plays them when it is opened)
+        for post_id, count in db.session.query(YipiGift.post_id, func.count(YipiGift.id)).filter(YipiGift.post_id.in_(list(original_ids))).group_by(YipiGift.post_id):
+            gift_counts[post_id] = count
+        if gift_counts:
+            for row in YipiGift.query.filter(YipiGift.post_id.in_(list(gift_counts))).order_by(YipiGift.id.desc()).limit(80):
+                if len(gift_last.setdefault(row.post_id, [])) < 3:
+                    gift_last[row.post_id].append(row.samoji_id)
     liked = bookmarked = reposted = following = set()
     hidden = hidden_user_ids(viewer)
     if viewer:
@@ -1415,6 +1435,8 @@ def feed_items(rows, viewer):
                 "viewer": {"liked": post.id in liked, "reposted": post.id in reposted, "bookmarked": post.id in bookmarked},
                 "views": post.view_count + view_boost(post),
             }
+            if gift_counts.get(post.id):
+                item["gifts"] = {"count": gift_counts[post.id], "last": gift_last.get(post.id, [])}
             if post.cam_id:
                 item["camId"] = post.cam_id
             if post.fact_status in ("false", "misleading") and post.fact_note:
@@ -4170,6 +4192,78 @@ def register_routes(app):
         db.session.commit()
         person_push(other.id, user.name, f"hat dir {samojis.name(entry)} geschickt (+{price} {'Token' if price == 1 else 'Tokens'})", f"/{user.handle}", tag="gift")
         return jsonify({"ok": True, "tokens": tokens_of(user.id), "samoji": entry[0], "price": price})
+
+    CHEST_MIN_WAIT, CHEST_MAX_WAIT = 10, 300             # seconds until a chest opens
+    CHEST_WINDOW = 45                                    # how long it can be opened after that
+    CHEST_GAP = 180                                      # at least so many seconds between two chests of one person
+    CHEST_PER_DAY = 24
+
+    def chest_json(row, now):
+        return {"id": row.id, "opensIn": max(0.0, (row.opens_at - now).total_seconds()), "closesIn": max(0.0, (row.expires_at - now).total_seconds())}
+
+    def chest_reward(reaction):
+        """1 to 13 Tokens: whoever taps in the first moments after the chest opened gets the most, whoever waits ten seconds or more gets one."""
+        if reaction <= 0.9:
+            return random.randint(11, 13)
+        if reaction <= 1.8:
+            return random.randint(8, 11)
+        if reaction <= 3.5:
+            return random.randint(5, 8)
+        if reaction <= 6:
+            return random.randint(3, 5)
+        if reaction <= 9:
+            return random.randint(2, 3)
+        return 2 if reaction <= 10 else 1
+
+    @route("/api/yipi/chests/maybe", methods=["POST"], endpoint="yipi_chest_maybe")
+    def yipi_chest_maybe():
+        """The page asks for a Satürn Chest about every tenth video: a person has at most one at a time, one every three minutes, and 24 a day. Answers {chest: {...}} or {chest: null}."""
+        user, problem = need_user()
+        if problem:
+            return problem
+        data = request.get_json(silent=True) or {}
+        now = utcnow()
+        live = YipiChest.query.filter(YipiChest.user_id == user.id, YipiChest.opened_at.is_(None), YipiChest.expires_at > now).order_by(YipiChest.id.desc()).first()
+        if live is not None:
+            return jsonify({"ok": True, "chest": chest_json(live, now)})
+        if data.get("live") is True:                                         # the page only wants to know whether a chest is waiting (it was opened again): never make a new one
+            return jsonify({"ok": True, "chest": None})
+        last = YipiChest.query.filter_by(user_id=user.id).order_by(YipiChest.id.desc()).first()
+        if last is not None and (now - last.created_at).total_seconds() < CHEST_GAP:
+            return jsonify({"ok": True, "chest": None})
+        if YipiChest.query.filter(YipiChest.user_id == user.id, YipiChest.created_at > now - timedelta(days=1)).count() >= CHEST_PER_DAY:
+            return jsonify({"ok": True, "chest": None})
+        wait = CHEST_MIN_WAIT * (CHEST_MAX_WAIT / CHEST_MIN_WAIT) ** random.random()          # 10 seconds to 5 minutes, short waits are more likely
+        row = YipiChest(user_id=user.id, created_at=now, opens_at=now + timedelta(seconds=wait), expires_at=now + timedelta(seconds=wait + CHEST_WINDOW))
+        db.session.add(row)
+        db.session.commit()
+        return jsonify({"ok": True, "chest": chest_json(row, now)})
+
+    @route("/api/yipi/chests/<int(min=1, max=4611686018427387904):chest_id>/open", methods=["POST"], endpoint="yipi_chest_open")
+    def yipi_chest_open(chest_id):
+        user, problem = need_user()
+        if problem:
+            return problem
+        row = db.session.get(YipiChest, chest_id)
+        if row is None or row.user_id != user.id:
+            return fail("not_found", 404)
+        now = utcnow()
+        if row.opened_at is not None:
+            return fail("chest_taken", 409)
+        if now < row.opens_at - timedelta(seconds=0.2):
+            return fail("chest_early", 400)                                 # tapped before the timer was over
+        if now > row.expires_at:
+            return fail("chest_gone", 410)
+        reaction = max(0.0, (now - row.opens_at).total_seconds())
+        reward = chest_reward(reaction)
+        wallet(user.id)
+        taken = YipiChest.query.filter(YipiChest.id == row.id, YipiChest.opened_at.is_(None)).update({YipiChest.opened_at: now, YipiChest.reward: reward}, synchronize_session=False)
+        if not taken:
+            db.session.rollback()
+            return fail("chest_taken", 409)
+        YipiWallet.query.filter(YipiWallet.user_id == user.id).update({YipiWallet.tokens: YipiWallet.tokens + reward}, synchronize_session=False)
+        db.session.commit()
+        return jsonify({"ok": True, "reward": reward, "tokens": tokens_of(user.id), "reaction": round(reaction, 2)})
 
     DAILY_TOKENS = 2
 

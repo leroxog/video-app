@@ -88,6 +88,62 @@
         scroller.addEventListener("touchend", ask, { once: true });
       } else addEventListener("devicemotion", onMotion);
     }
+    /* The Satürn Chest: about every tenth video one may show up (the server decides, with a timer from 10 seconds to 5 minutes); when the timer is over it can be tapped, the faster the more Tokens. */
+    let sinceChest = 0;
+    let nextChest = 8 + Math.floor(Math.random() * 5);
+    let chestBox = null;
+    async function showChest(info) {
+      if (chestBox || dead) return;
+      const now = performance.now();
+      const opensAt = now + info.opensIn * 1000;
+      const closesAt = now + info.closesIn * 1000;
+      const label = h("b", { class: "chest-time" }, "");
+      const host = h("div", { class: "chest-view" });
+      const box = h("button", { class: "chest", type: "button", "aria-label": "Satürn Truhe" }, label, host);
+      chestBox = { box };
+      let controller = null;
+      let phase = "closed";
+      let busy = false;
+      const clock = (ms) => { const total = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`; };
+      const stop = () => { clearInterval(timer); controller?.stop(); box.remove(); chestBox = null; };
+      const timer = setInterval(() => {
+        const t = performance.now();
+        if (t < opensAt) label.textContent = clock(opensAt - t);
+        else if (t < closesAt) { if (phase === "closed") { phase = "ready"; controller?.state("ready"); label.textContent = "Tippe!"; label.classList.add("go"); Y.sound?.play("receive"); } }
+        else if (!busy) { stop(); toast("Die Satürn Truhe ist weg."); }
+      }, 200);
+      label.textContent = clock(opensAt - now);
+      box.addEventListener("click", async () => {
+        if (busy) return;
+        if (phase !== "ready") { box.classList.add("nudge"); setTimeout(() => box.classList.remove("nudge"), 400); return; }
+        busy = true;
+        const reply = await Api.post(`/chests/${info.id}/open`);
+        if (!reply.ok) { toast(Api.message(reply)); stop(); return; }
+        controller?.open();
+        label.textContent = `+${reply.data.reward} ${reply.data.reward === 1 ? "Token" : "Tokens"}`;
+        label.classList.add("won");
+        Y.sound?.play("success");
+        if (Y.me) Y.me.tokens = reply.data.tokens;
+        Y.samoji?.setTokens(reply.data.tokens);
+        toast(`Satürn Truhe: +${reply.data.reward} ${reply.data.reward === 1 ? "Token" : "Tokens"}. Du hast jetzt ${reply.data.tokens}.`);
+        setTimeout(stop, 2600);
+      });
+      el.append(box);
+      try { const module = await import("/static/js/gift3d.mjs?v=1"); if (chestBox && chestBox.box === box) { controller = module.chest(host, 140); controller.state(phase); } } catch (error) { host.classList.add("flat"); }
+    }
+    async function askChest(liveOnly) {
+      if (!Y.me || chestBox || dead) return;
+      const reply = await Api.post("/chests/maybe", liveOnly ? { live: true } : {});
+      if (reply.ok && reply.data.chest) showChest(reply.data.chest);
+    }
+    let lastCounted = null;
+    function onReelChange() {
+      if (lastCounted === active) return;
+      lastCounted = active;
+      sinceChest += 1;
+      if (sinceChest >= nextChest && !chestBox) { sinceChest = 0; nextChest = 8 + Math.floor(Math.random() * 5); askChest(false); }
+    }
+    setTimeout(() => askChest(true), 1500);                     // a chest that is already waiting (the page was opened again) comes back
     let watching = null;
     let blocked = false;                                        // the browser does not allow sound before the person touches the page
 
@@ -186,6 +242,11 @@
       reel.video.currentTime = 0;
       play(reel);
       reel.cc?.start();                                         // subtitles and the spoken translation of this video
+      if (reel.item.gifts && reel.item.gifts.last.length && Y.samoji && !reel.giftsShown) {       // a video that has got presents plays them: they come out of the present button like smoke
+        reel.giftsShown = true;
+        setTimeout(() => { if (active === reel) Y.samoji.replay(reel.item.gifts.last, reel.giftSpot && reel.giftSpot()); }, 700);
+      }
+      onReelChange();
       manage();
       watching = setTimeout(() => Y.queueView?.(reel.item.id), 1500);
       if (index >= reels.length - 6) more();
@@ -228,8 +289,10 @@
       const like = h("button", { class: "reel-btn", type: "button", "aria-label": "Gefällt mir" }, h("span", { class: "reel-btn-ic" }), likeCount);
       const comment = h("button", { class: "reel-btn", type: "button", "aria-label": "Kommentare" }, h("span", { class: "reel-btn-ic" }, icon("reply")), commentCount);
       const save = h("button", { class: "reel-btn", type: "button", "aria-label": "Lesezeichen" }, h("span", { class: "reel-btn-ic" }), h("span", { class: "reel-count" }, "Merken"));
-      const gift = Y.samoji && !(Y.me && Y.me.handle === item.user.handle) && !item.user.ai && !item.user.company ? h("button", { class: "reel-btn", type: "button", "aria-label": "Samoji schenken" }, h("span", { class: "reel-btn-ic" }, icon("gift")), h("span", { class: "reel-count" }, "Samoji")) : null;
-      if (gift) gift.addEventListener("click", () => Y.samoji.open({ to: item.user.handle, post: item.id }));
+      const giftCount = h("span", { class: "reel-count" }, item.gifts ? Core.formatCount(item.gifts.count) : "Samoji");
+      const gift = Y.samoji && !(Y.me && Y.me.handle === item.user.handle) && !item.user.ai && !item.user.company ? h("button", { class: "reel-btn", type: "button", "aria-label": "Samoji schenken" }, h("span", { class: "reel-btn-ic" }, icon("gift")), giftCount) : null;
+      const giftSpot = () => { const box = gift && gift.getBoundingClientRect(); return box && box.width ? { x: box.left + box.width / 2, y: box.top + box.height / 2 } : undefined; };
+      if (gift) gift.addEventListener("click", () => Y.samoji.open({ to: item.user.handle, post: item.id, giftFrom: giftSpot(), onSent: () => { const now = item.gifts ? item.gifts.count + 1 : 1; item.gifts = { count: now, last: item.gifts ? item.gifts.last : [] }; giftCount.textContent = Core.formatCount(now); } }));
       const share = h("button", { class: "reel-btn", type: "button", "aria-label": "Teilen", "aria-haspopup": "menu" }, h("span", { class: "reel-btn-ic" }, icon("send")), h("span", { class: "reel-count" }, "Teilen"));
       const cc = !photos && Y.captions ? Y.captions.bind({ video, mediaId: media.id, mine: !!(Y.me && Y.me.handle === item.user.handle), volume: () => (blocked ? 0 : volume / 10) || 0.0001, onChange: () => { const made = reels.find((entry) => entry.video === video); if (made) applySound(made); } }) : null;
       const mine = !!(Y.me && Y.me.handle === item.user.handle);
@@ -370,7 +433,7 @@
       } else put(stage, video, cc ? cc.element : null, volumeRow, resume, bar, info);
       const element = h("section", { class: "reel", "data-id": String(item.id), "aria-label": `Video von ${item.user.name}` }, stage, actions);
       draw();
-      return { element, video, stage, item, url: media.url, draw, position, volumeIcon, volumeButton, range, cc, moreMenu, shakeLike, photos, startPhotos, stopPhotos };
+      return { element, video, stage, item, url: media.url, draw, position, volumeIcon, volumeButton, range, cc, moreMenu, shakeLike, giftSpot, photos, startPhotos, stopPhotos };
     }
 
     function showEmpty() {
@@ -453,6 +516,7 @@
       refresh() { reset(); },
       destroy() {
         dead = true;
+        if (chestBox) chestBox.box.remove();
         removeEventListener("devicemotion", onMotion);
         clearTimeout(watching);
         watcher?.disconnect();

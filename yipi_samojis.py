@@ -1,27 +1,31 @@
-"""Satürn Samojis (yipi_samojis.py): the stickers that can be given as a present, for Tokens. All of them are drawn by Satürn (the page draws them as small pictures from the numbers: a shape,
-a pair of colours and a badge), there are 24 shapes x 10 colour pairs x 5 badges = 1200 of them, and each one costs a different number of Tokens (1 to 220): the plain ones are cheap, the
-rare shapes, the shiny colours and the badges cost more. Whoever gets a Samoji gets as many Tokens as the giver paid. Everybody starts with 5 Tokens."""
+"""Satürn Samojis (yipi_samojis.py): the 3D presents that can be given for Tokens, like the gifts of the big live apps. All of them are built by Satürn in 3D in the page (static/js/gift3d.mjs, three.js)
+from the numbers kept here: 16 figures (a whale, a rose, a rocket ...) x 15 looks (colours, gold, silver, neon, glass, a rainbow shimmer) x 5 extras (sparkles, a halo, wings, an aura) = 1200 of
+them, and each one costs a different number of Tokens (1 to 220): small plain figures are cheap, the rose, the butterfly and above all the whale are dear, and so are gold, glass and the extras.
+Whoever gets a Samoji gets as many Tokens as the giver paid. Everybody starts with 5 Tokens (and gets 2 more every day)."""
 
 START_TOKENS = 5
 
-SHAPES = ["Herz", "Stern", "Planet", "Krone", "Flamme", "Blitz", "Mond", "Sonne", "Diamant", "Rakete", "Katze", "Geist", "Wolke", "Blume", "Kleeblatt", "Donut", "Pizza", "Eis", "Pokal", "Note", "Würfel", "Auge", "Fisch", "Kristall"]
-SHAPE_PRICE = [1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 10, 12, 15, 20, 25, 30, 40]
-# name, the main colour, the colour of the line
-PALETTES = [("Rosa", "#ff6fa5", "#c2185b"), ("Rot", "#ff4d4f", "#a8071a"), ("Orange", "#ffa940", "#ad4e00"), ("Gold", "#ffd60a", "#b38600"), ("Grün", "#52c41a", "#237804"),
-            ("Türkis", "#13c2c2", "#006d75"), ("Blau", "#40a9ff", "#0050b3"), ("Lila", "#9254de", "#391085"), ("Schwarz", "#434343", "#000000"), ("Weiß", "#ffffff", "#8c8c8c")]
-PALETTE_FACTOR = [1, 1, 1, 2, 2, 2, 3, 3, 4, 5]
-BADGES = ["", "Funkeln", "Ring", "Flügel", "Krone"]
+SHAPES = ["Herz", "Stern", "Blitz", "Eis", "Donut", "Planet", "Katze", "Geist", "Kleeblatt", "Rakete", "Krone", "Pokal", "Diamant", "Rose", "Schmetterling", "Wal"]
+SHAPE_PRICE = [1, 1, 2, 2, 2, 3, 3, 4, 4, 5, 8, 10, 15, 20, 30, 50]
+# name, the main colour, the second colour, the finish (gloss, gold, silver, neon, glass, holo)
+LOOKS = [("Rosa", "#ff6fa5", "#c2185b", "gloss"), ("Rot", "#ff3b4e", "#a8071a", "gloss"), ("Orange", "#ff9f3a", "#ad4e00", "gloss"), ("Sonnengelb", "#ffd60a", "#b38600", "gloss"),
+         ("Grün", "#43d17a", "#1d7a3f", "gloss"), ("Türkis", "#16c7c7", "#00717a", "gloss"), ("Blau", "#3d8bff", "#0b3fa8", "gloss"), ("Lila", "#9b5cf0", "#4a1d9a", "gloss"),
+         ("Schwarz", "#2b2b30", "#000000", "gloss"), ("Weiß", "#fafafa", "#bdbdc8", "gloss"),
+         ("Gold", "#ffc83d", "#b8860b", "gold"), ("Silber", "#e8e8f0", "#9aa0b0", "silver"), ("Neon", "#ff4fd8", "#7a1fa2", "neon"), ("Glas", "#6fd0ff", "#2a7fb0", "glass"), ("Regenbogen", "#ffffff", "#ff9bd5", "holo")]
+LOOK_FACTOR = [1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 3, 2, 2, 3, 4]
+BADGES = ["", "Funkeln", "Heiligenschein", "Flügel", "Aura"]
 BADGE_PRICE = [0, 1, 3, 8, 20]
+PALETTES = LOOKS                                                # (the old name, the page and the tests still use it)
 
 
 def _build():
     items = []
     number = 0
     for shape, base in enumerate(SHAPE_PRICE):
-        for palette, factor in enumerate(PALETTE_FACTOR):
+        for look, factor in enumerate(LOOK_FACTOR):
             for badge, extra in enumerate(BADGE_PRICE):
                 number += 1
-                items.append((number, shape, palette, badge, max(1, base * factor) + extra))
+                items.append((number, shape, look, badge, max(1, base * factor) + extra))
     return items
 
 
@@ -30,7 +34,7 @@ BY_ID = {item[0]: item for item in CATALOGUE}
 
 
 def find(samoji_id):
-    """The entry (id, shape, palette, badge, price) of a Samoji, or None."""
+    """The entry (id, shape, look, badge, price) of a Samoji, or None."""
     try:
         return BY_ID.get(int(samoji_id))
     except (TypeError, ValueError):
@@ -38,13 +42,13 @@ def find(samoji_id):
 
 
 def name(entry):
-    _, shape, palette, badge, _ = entry
-    return f"{SHAPES[shape]} {PALETTES[palette][0]}{(' ' + BADGES[badge]) if BADGES[badge] else ''}"
+    _, shape, look, badge, _ = entry
+    return f"{SHAPES[shape]} {LOOKS[look][0]}{(' ' + BADGES[badge]) if BADGES[badge] else ''}"
 
 
 def public():
-    """What the page needs to draw and list every Samoji: the names of the shapes, colours and badges, and one short row per Samoji."""
-    return {"shapes": SHAPES, "palettes": [[n, a, b] for n, a, b in PALETTES], "badges": BADGES, "items": [list(item) for item in CATALOGUE]}
+    """What the page needs to build and list every Samoji: the names of the figures, looks and extras, and one short row per Samoji."""
+    return {"shapes": SHAPES, "palettes": [list(look) for look in LOOKS], "badges": BADGES, "items": [list(item) for item in CATALOGUE]}
 
 
 MARKER = "⁣samoji:"                                      # a message that carries a Samoji: an invisible sign, "samoji:" and the number (only the server writes these)
