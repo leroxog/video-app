@@ -365,7 +365,7 @@ def test_the_five_tabs_are_home_chats_plus_profile_videos_and_nex_is_a_contact()
     assert '"/i/nex"' not in block, "Satürn is no tab any more"
     assert 'if (route.name === "nex") return "messages";' in shell, "the page of Satürn belongs to the chats"
     chats = JS["yipi-chats.js"]
-    assert 'link("/i/nex", { class: `convo convo-nex' in chats and "Satürn" in chats and 'Y.sponsored("row")' in chats, "Satürn is in the list of chats like a contact, with a box at the end"
+    assert 'link("/i/nex", { class: `convo convo-nex' in chats and "Satürn" in chats, "Satürn is in the list of chats like a contact"
     assert ".tabbar {" in CSS and ".plus-tab .tab-ic" in CSS
     for route in ("thread", "group", "nex"):
         assert f'.app[data-route="{route}"] .tabbar' in CSS, f"{route}: the bar is out of the way in a conversation"
@@ -406,7 +406,6 @@ def test_the_home_page_has_stories_on_top_then_the_posts_with_a_box_after_every_
     views = JS["yipi-views.js"]
     home = views.split("views.home = ")[1].split("views.explore = ")[0]
     assert "Y.storiesBar()" in home and 'class: "topbar home"' in home and "stories ? stories.element : null" in home
-    assert 'signedIn && n % 6 === 0 ? Y.sponsored("card") : null' in home, "every seventh item is a box Gesponsert"
     assert "sideways() && n === 3 && Y.shortsShelf ? Y.shortsShelf(" in home, "after three posts comes the row of five videos, held sideways only"
     assert 'novideo: sideways() ? "" : "1"' in home and "(orientation: landscape)" in views, "held upright Home has no videos"
     assert "Y.composer" not in home, "writing happens in a sheet, not in the feed"
@@ -432,7 +431,7 @@ def test_the_bar_at_the_top_has_the_picture_the_lettering_nex_and_in_landscape_t
 def test_the_look_is_white_by_default_and_the_symbols_are_round():
     assert 'var choice = "light";' in read("static/js/yipi-theme.js") and 'let choice = "light";' in JS["yipi.js"]
     assert 'localStorage.getItem("yipi.theme") || "light"' in JS["yipi-pages.js"]
-    for symbol in ("plane", "planeFill", "cameraFill", "videoFill", "plusCircle", "sponsor"):
+    for symbol in ("plane", "planeFill", "cameraFill", "videoFill", "plusCircle"):
         assert f"{symbol}: S(" in JS["yipi-icons.js"], symbol
     assert ".cut { stroke: var(--bg); }" in CSS and ".tab-item.active { color: var(--text); }" in CSS
     plus = CSS.split(".plus-tab .tab-ic {")[1].split("}")[0]
@@ -440,14 +439,11 @@ def test_the_look_is_white_by_default_and_the_symbols_are_round():
     assert "stroke-width: 2.4px" in CSS and "--tab-off: #d2d2d2" in CSS, "the same thick line and light grey on black"
 
 
-def test_the_boxes_gesponsert_are_where_the_advertisements_will_go():
-    chrome, videos = JS["yipi-chrome.js"], JS["yipi-videos.js"]
-    assert 'function sponsored(kind = "card")' in chrome and '"Gesponsert"' in chrome and 'icon("sponsor")' in chrome
-    assert 'Y.sponsored("slot")' in JS["yipi.js"], "at the foot of the side bar"
-    assert 'Y.sponsored("bar")' in videos and "shown % 4 === 0" in videos and 'Y.sponsored("reel")' in videos, "every fifth page of the videos, a strip at the top on a phone"
-    assert 'Y.sponsored("card")' in JS["yipi-views.js"] and 'Y.sponsored("row")' in JS["yipi-chats.js"]
-    for kind in ("sp-slot", "sp-bar", "sp-card", "sp-row", "sp-reel"):
-        assert f".{kind} " in CSS or f".{kind}," in CSS, kind
+def test_there_is_nothing_gesponsert_any_more():
+    """The boxes "Gesponsert" are gone, everywhere, as if they had never been there (2026-11-15)."""
+    for name, source in JS.items():
+        assert "sponsored" not in source and "Gesponsert" not in source, name
+    assert ".sp-" not in CSS and ".sponsored" not in CSS and "sponsor:" not in JS["yipi-icons.js"]
 
 
 def test_the_chats_page_lists_people_and_groups_and_a_group_can_be_made_with_friends():
@@ -478,11 +474,11 @@ def test_nex_ai_is_a_contact_like_any_other_with_a_small_ki_under_the_time():
     assert "Core.nexMessages(chat.messages), mode, ...extra" in nex, "the server gets the turns without the times, and the mode"
 
 
-def test_the_composer_offers_polls_and_up_to_three_photos():
+def test_the_composer_offers_polls_and_up_to_ten_photos():
     components = JS["yipi-components.js"]
-    assert yipi.MAX_MEDIA == 3 and "Mehr als 3 Fotos gehen nicht." in components
+    assert yipi.MAX_MEDIA == 10 and "Mehr als 10 Fotos gehen nicht." in components
     assert "Math.min(picked.length, 3)" in components and "media.slice(0, 3)" in components
-    assert "4 Fotos" not in "".join(JS.values()) and "3 Fotos" in JS["yipi-api.js"]
+    assert "4 Fotos" not in "".join(JS.values()) and "10 Fotos" in JS["yipi-api.js"]
     assert 'icon("poll")' in components and "Umfrage hinzufügen" in components
     assert ".compose-media.m3 { grid-template-columns: 1fr 1fr 1fr; }" in CSS and ".media.m3 {" in CSS and ".m4" not in CSS
 

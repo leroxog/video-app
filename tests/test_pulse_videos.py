@@ -160,7 +160,7 @@ def test_pictures_are_still_handed_out_whole_and_cached(client):
     assert flask_app.test_client().get(media["url"], headers={"If-None-Match": first.headers["ETag"]}).status_code == 304
 
 
-def test_the_videos_feed_holds_only_posts_with_a_video_newest_first(client):
+def test_the_videos_feed_holds_the_posts_with_a_video_or_photos_newest_first(client):
     mia, tom = person("mia"), person("tom")
     api(mia, "post", "/posts", {"text": "nur Text"}, status=201)
     api(mia, "post", "/posts", {"text": "Foto", "media": [upload(mia, png(), "p.png").get_json()["media"]["id"]]}, status=201)
@@ -168,14 +168,14 @@ def test_the_videos_feed_holds_only_posts_with_a_video_newest_first(client):
     second, _ = post_video(tom, "zweites", name="b.mp4")
     reply = api(tom, "post", "/posts", {"text": "Antwort", "replyTo": first["id"]}, status=201)["post"]
     feed = api(tom, "get", "/timeline?feed=videos", status=200)
-    assert [item["text"] for item in feed["items"]] == ["zweites", "erstes"] and all(item["media"][0]["video"] for item in feed["items"])
+    assert [item["text"] for item in feed["items"]] == ["zweites", "erstes", "Foto"], "photo posts are in the videos, too (a slide show); text alone is not"
     assert reply["id"] not in [item["id"] for item in feed["items"]]
     assert [item["text"] for item in api(tom, "get", "/timeline?feed=media")["items"]] == ["zweites", "erstes", "Foto"], "videos are media too"
     assert "zweites" in [item["text"] for item in api(tom, "get", "/timeline?feed=foryou")["items"]], "and they are in the normal feed"
     page = api(tom, "get", f"/timeline?feed=videos&cursor={second['id']}")
-    assert [item["text"] for item in page["items"]] == ["erstes"]
+    assert [item["text"] for item in page["items"]] == ["erstes", "Foto"]
     api(mia, "post", "/users/tom/block", status=200)
-    assert [item["text"] for item in api(mia, "get", "/timeline?feed=videos")["items"]] == ["erstes"], "blocked people are not in the feed"
+    assert [item["text"] for item in api(mia, "get", "/timeline?feed=videos")["items"]] == ["erstes", "Foto"], "blocked people are not in the feed"
 
 
 def test_likes_replies_and_deleting_work_for_a_video_like_for_any_post(client):

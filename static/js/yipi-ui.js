@@ -301,7 +301,7 @@
         if (node) {
           list.append(node);
           count += 1;
-          const extra = between && between(count);                  // a box after every so many items (the "Gesponsert" box on Home)
+          const extra = between && between(count);                  // a box after every so many items (the row of videos on Home)
           if (extra) list.append(extra);
         }
       }

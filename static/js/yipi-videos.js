@@ -49,9 +49,8 @@
       form.input.focus();
     });       // (like the sketch: the magnifier, "Folge ich / Für dich", the round button)
     const status = h("div", { class: "reels-status" });
-    const el = h("div", { class: "view reels-view" }, Y.sponsored("bar"), top, scroller, status);      // (the strip at the top shows on a phone held upright, where the bar with the lettering is not)
-    let shown = 0;                                              // how many videos were put on the page (every fifth page is a box "Gesponsert")
-    const sponsorPage = () => h("section", { class: "reel sponsored-reel", "aria-label": "Gesponsert" }, h("div", { class: "reel-stage" }, Y.sponsored("reel")));
+    const el = h("div", { class: "view reels-view" }, top, scroller, status);      // (the strip at the top shows on a phone held upright, where the bar with the lettering is not)
+    let shown = 0;                                              // how many videos were put on the page
     const reels = [];
     let offset = shuffle.at;                                    // where the next page starts in the shuffle
     let seed = shuffle.seed;
@@ -61,7 +60,7 @@
     let active = null;
     /* A swipe to the right (mostly sideways, not up or down) opens the profile of the person whose video is on the screen. */
     let swipe = null;
-    scroller.addEventListener("touchstart", (event) => { const touch = event.touches[0]; swipe = event.touches.length === 1 ? { x: touch.clientX, y: touch.clientY } : null; }, { passive: true });
+    scroller.addEventListener("touchstart", (event) => { const touch = event.touches[0]; swipe = event.touches.length === 1 && !event.target.closest(".reel-photos") ? { x: touch.clientX, y: touch.clientY } : null; }, { passive: true });
     scroller.addEventListener("touchend", (event) => {
       const start = swipe;
       swipe = null;
@@ -110,18 +109,31 @@
       if (volume > 0) lastLoud = volume;
       applyAll();
     }
+    let touched = false;                                        // the person has touched the page once: from then on the browser lets the videos play with sound
     const unlock = () => {
+      touched = true;
       if (!blocked) return;
       blocked = false;
       applyAll();
     };
     for (const type of ["pointerdown", "keydown", "touchstart"]) document.addEventListener(type, unlock, { passive: true });
 
-    function play(reel) {
+    /* Only a real "the browser does not allow sound yet" (NotAllowedError) turns the sound off for everything; any other failure (the file was swapped while scrolling, it is not loaded yet) just tries again. */
+    function play(reel, again = 0) {
+      if (reel.photos) { reel.startPhotos(); return; }          // a photo post: the slide show runs, there is no sound
       applySound(reel);
       reel.stage.classList.remove("stuck");
       const attempt = reel.video.play();
-      if (attempt && attempt.catch) attempt.catch(() => {
+      if (attempt && attempt.catch) attempt.catch((error) => {
+        if (!error || error.name !== "NotAllowedError") {
+          if (again < 3 && active === reel) setTimeout(() => { if (active === reel) play(reel, again + 1); }, 200);
+          else if (active === reel) reel.stage.classList.add("stuck");
+          return;
+        }
+        if (touched) {                                          // the person has touched the page already: the sound is allowed, try again without turning anything off
+          if (again < 2 && active === reel) setTimeout(() => { if (active === reel) play(reel, again + 1); }, 200);
+          return;
+        }
         blocked = true;                                         // no sound yet: it starts muted and gets its sound with the first touch
         applyAll();
         reel.video.play().catch(() => reel.stage.classList.add("stuck"));
@@ -132,6 +144,7 @@
     /* Videos are warmed up in steps, nearest first: the one on the screen loads normally; the next one is ready to play (preload "auto"); the two after it load only their first moments (preload
        "metadata" and a first picture); the next ones after that only get their still picture; everything far away is let go. So the phone never loads whole videos that nobody watches. */
     const warm = (reel, mode) => {
+      if (reel.photos) return;                                  // (a photo post has no file to warm up: its pictures load by themselves)
       if (!reel.video.getAttribute("src")) { reel.video.preload = mode; reel.video.src = mode === "metadata" ? `${reel.url}#t=0.1` : reel.url; }
       else if (mode === "auto" && reel.video.preload !== "auto") reel.video.preload = "auto";
     };
@@ -139,6 +152,7 @@
     const dress = (reel) => { if (!reel.dressed && /^\/yipi-media\/[0-9a-f]{32}$/.test(reel.url || "")) { reel.dressed = true; reel.video.poster = `${reel.url}/poster`; } };       // (the still picture comes from Bunny when the video is there)
     function letGo(reel) {                                      // far from the screen: no file, no memory
       reel.cc?.stop();
+      if (reel.photos) { reel.stopPhotos(); return; }
       if (!reel.video.getAttribute("src")) return;
       reel.video.pause();
       reel.video.removeAttribute("src");
@@ -161,6 +175,7 @@
     function setActive(reel) {
       if (active === reel) return;
       active?.video.pause();
+      active?.stopPhotos?.();
       active?.cc?.stop();
       active = reel;
       clearTimeout(watching);
@@ -196,13 +211,14 @@
         const reel = reels.find((candidate) => candidate.element === entry.target);
         if (!reel) continue;
         if (entry.isIntersecting && entry.intersectionRatio >= 0.6) setActive(reel);
-        else if (active === reel && !entry.isIntersecting) { reel.video.pause(); reel.cc?.stop(); active = null; }
+        else if (active === reel && !entry.isIntersecting) { reel.video.pause(); reel.stopPhotos?.(); reel.cc?.stop(); active = null; }
       }
     }, { root: scroller, threshold: [0, 0.6, 1] }) : null;
 
     /* ------------------------------------------------------------------ one video */
     function reel(item, position) {
       const media = item.media.find((entry) => entry.video) || item.media[0];
+      const photos = item.media.some((entry) => entry.video) ? null : item.media.filter((entry) => !entry.gif);       // a post without a video: its photos are a slide show (swipe to the side, it also goes on by itself)
       const state = { liked: !!item.viewer.liked, bookmarked: !!item.viewer.bookmarked, likes: item.counts.likes, replies: item.counts.replies };
       const video = h("video", { class: "reel-video", loop: true, muted: true, playsinline: true, preload: "none", "aria-label": item.text || `Video von ${item.user.name}` });
       if (media.width > media.height) video.classList.add("wide");
@@ -212,15 +228,17 @@
       const like = h("button", { class: "reel-btn", type: "button", "aria-label": "Gefällt mir" }, h("span", { class: "reel-btn-ic" }), likeCount);
       const comment = h("button", { class: "reel-btn", type: "button", "aria-label": "Kommentare" }, h("span", { class: "reel-btn-ic" }, icon("reply")), commentCount);
       const save = h("button", { class: "reel-btn", type: "button", "aria-label": "Lesezeichen" }, h("span", { class: "reel-btn-ic" }), h("span", { class: "reel-count" }, "Merken"));
+      const gift = Y.samoji && !(Y.me && Y.me.handle === item.user.handle) && !item.user.ai && !item.user.company ? h("button", { class: "reel-btn", type: "button", "aria-label": "Samoji schenken" }, h("span", { class: "reel-btn-ic" }, icon("gift")), h("span", { class: "reel-count" }, "Samoji")) : null;
+      if (gift) gift.addEventListener("click", () => Y.samoji.open({ to: item.user.handle, post: item.id }));
       const share = h("button", { class: "reel-btn", type: "button", "aria-label": "Teilen", "aria-haspopup": "menu" }, h("span", { class: "reel-btn-ic" }, icon("send")), h("span", { class: "reel-count" }, "Teilen"));
-      const cc = Y.captions ? Y.captions.bind({ video, mediaId: media.id, mine: !!(Y.me && Y.me.handle === item.user.handle), volume: () => (blocked ? 0 : volume / 10) || 0.0001, onChange: () => { const made = reels.find((entry) => entry.video === video); if (made) applySound(made); } }) : null;
+      const cc = !photos && Y.captions ? Y.captions.bind({ video, mediaId: media.id, mine: !!(Y.me && Y.me.handle === item.user.handle), volume: () => (blocked ? 0 : volume / 10) || 0.0001, onChange: () => { const made = reels.find((entry) => entry.video === video); if (made) applySound(made); } }) : null;
       const mine = !!(Y.me && Y.me.handle === item.user.handle);
       const following = !mine && !!item.user.followedByMe;
       // a plus for the people one does not follow, a check for the people one follows (it stays: it is remembered)
       const follow = mine ? null : following ? h("span", { class: "reel-follow done kept", role: "img", "aria-label": `Du folgst @${item.user.handle}` }, icon("check"))
         : h("button", { class: "reel-follow", type: "button", "aria-label": `@${item.user.handle} folgen` }, icon("plus"));
       // the small rounded square at the bottom right with the note: the sound of the video
-      const soundButton = Y.music ? h("button", { class: "reel-sound", type: "button", "aria-label": "Sound dieses Videos", "aria-haspopup": "menu" }, icon("music")) : null;
+      const soundButton = Y.music && !photos ? h("button", { class: "reel-sound", type: "button", "aria-label": "Sound dieses Videos", "aria-haspopup": "menu" }, icon("music")) : null;
       if (soundButton) soundButton.addEventListener("click", () => menu(soundButton, [
         { label: "Sound benutzen", icon: "camera", strong: true, run: () => { Y.pendingSong = Y.music.extractedSong(item, media); Y.navigate("/camera"); } },
         !mine ? { label: "Sound melden", icon: "flag", run: () => Y.reportDialog({ postId: item.id, preset: "sound" }) } : null,
@@ -329,15 +347,30 @@
             h("span", { class: "reel-handle-row" }, link(`/${item.user.handle}`, { class: "reel-handle" }, `@${item.user.handle}`), pill))),
         title ? h("p", { class: "reel-title" }, richText(title)) : null,
         caption ? h("p", { class: "reel-text" }, richText(caption)) : null,
+        h("p", { class: "reel-views" }, `${Core.formatCount(item.views || 0)} Aufrufe`),
         Y.linkCardFor ? Y.linkCardFor(item.text, { compact: true }) : null,
         item.camId && Y.tryButton ? Y.tryButton(item.camId) : null);
       const actions = h("div", { class: "reel-actions" },
         h("span", { class: "reel-person" }, link(`/${item.user.handle}`, { class: "reel-av", "aria-label": `Profil von ${item.user.name}` }, avatar(item.user, "lg")), follow),
-        like, comment, save, share, soundButton);       // (the sound button is the last one in the column: always exactly under the others) (the three dots at the top open the menu of the video that is on the screen: download, report, link ...)
-      put(stage, video, cc ? cc.element : null, volumeRow, resume, bar, info);
+        like, comment, save, gift, share, soundButton);       // (the sound button is the last one in the column: always exactly under the others) (the three dots at the top open the menu of the video that is on the screen: download, report, link ...)
+      let slides = null;
+      let photoTimer = 0;
+      const stopPhotos = () => { clearInterval(photoTimer); photoTimer = 0; };
+      const startPhotos = () => {
+        stopPhotos();
+        if (!slides || photos.length < 2) return;
+        photoTimer = setInterval(() => { const next = (Math.round(slides.scrollLeft / Math.max(1, slides.clientWidth)) + 1) % photos.length; slides.scrollTo({ left: next * slides.clientWidth, behavior: "smooth" }); }, 3500);
+      };
+      if (photos) {
+        slides = h("div", { class: "reel-photos" }, photos.map((entry) => h("img", { class: "reel-photo", src: entry.url, alt: entry.alt || "", loading: "lazy", decoding: "async" })));
+        const dots = h("div", { class: "reel-dots", hidden: photos.length < 2 }, photos.map((entry, index) => h("i", { class: index === 0 ? "on" : "" })));
+        slides.addEventListener("scroll", () => { const at = Math.round(slides.scrollLeft / Math.max(1, slides.clientWidth)); [...dots.children].forEach((dot, index) => dot.classList.toggle("on", index === at)); }, { passive: true });
+        stage.classList.add("photos");
+        put(stage, slides, dots, info);
+      } else put(stage, video, cc ? cc.element : null, volumeRow, resume, bar, info);
       const element = h("section", { class: "reel", "data-id": String(item.id), "aria-label": `Video von ${item.user.name}` }, stage, actions);
       draw();
-      return { element, video, stage, item, url: media.url, draw, position, volumeIcon, volumeButton, range, cc, moreMenu, shakeLike };
+      return { element, video, stage, item, url: media.url, draw, position, volumeIcon, volumeButton, range, cc, moreMenu, shakeLike, photos, startPhotos, stopPhotos };
     }
 
     function showEmpty() {
@@ -361,12 +394,11 @@
       fill(status);
       const first = offset;
       reply.data.items.forEach((item, index) => {
-        if (!item.media || !item.media.some((entry) => entry.video)) return;
+        if (!item.media || !item.media.some((entry) => entry.video || !entry.gif)) return;       // videos and photo posts
         if (!wrapped && reels.some((other) => other.item.id === item.id)) return;          // (the video that was chosen on Home is already the first one; when the whole list has been seen the videos come round again)
         const made = reel(item, first + index);
         applySound(made);
         reels.push(made);
-        if (shown > 0 && shown % 4 === 0) scroller.append(sponsorPage());       // after four videos comes the fifth page: a box "Gesponsert" (before the next video, never at the very end: there is always a page to scroll to)
         scroller.append(made.element);
         watcher?.observe(made.element);
         shown += 1;
@@ -387,7 +419,6 @@
 
     function reset() {
       for (const made of reels.splice(0)) { watcher?.unobserve(made.element); made.video.pause(); made.video.removeAttribute("src"); made.video.load(); made.element.remove(); }
-      for (const page of scroller.querySelectorAll(".sponsored-reel")) page.remove();
       shown = 0;
       active = null;
       seed = shuffle.seed = 1 + Math.floor(Math.random() * 999999);

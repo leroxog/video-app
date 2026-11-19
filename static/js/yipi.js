@@ -93,7 +93,7 @@
       Y.menu(event.currentTarget, [{ label: "Dein Profil", icon: "user", run: () => Y.navigate(`/${me.handle}`) }, { label: `@${me.handle} abmelden`, icon: "logout", danger: true, run: () => Y.logout() }]);
     } }, icon("more"));
     const legal = h("div", { class: "rail-links" }, h("a", { href: "/datenschutz" }, "Datenschutz"), h("a", { href: "/nutzungsbedingungen" }, "Nutzungsbedingungen"), h("a", { href: "/bildnachweise" }, "Bildnachweise"), h("a", { href: "/impressum" }, "Impressum"), h("small", {}, "© 2026 Satürn"));
-    const foot = h("div", { class: "side-foot" }, Y.sponsored("slot"),
+    const foot = h("div", { class: "side-foot" },
       h("button", { class: "rail-post", type: "button", "aria-label": "Neu: Beitrag, Video oder Story", "aria-haspopup": "menu", onclick: (event) => Y.newPost({ anchor: event.currentTarget }) }, icon("plus"), h("span", {}, "Neu")),
       h("div", { class: "rail-me" }, link(`/${me.handle}`, { class: "side-me", "aria-label": `Dein Profil, @${me.handle}` }, avatar(me, "md"), h("span", { class: "side-me-text" }, h("b", {}, me.name), h("small", {}, `@${me.handle}`))), more), legal);
     const top = h("div", { class: "rail-top" }, link(Y.HOME, { class: "rail-brand", "aria-label": "Satürn, zur Startseite" }, Icons.logo(), Icons.wordmark()));

@@ -116,7 +116,7 @@
       const group = item.kind === "group";
       const last = item.last;
       const who = last ? (last.mine ? "Du: " : last.sender ? `${last.sender}: ` : "") : "";
-      const preview = last ? `${who}${snippet((last.text || "").replace(/\s+/g, " ") || "Anhang", 80)}` : "Noch keine Nachrichten";
+      const preview = last ? `${who}${Y.samoji && Y.samoji.fromText(last.text) ? "Samoji" : snippet((last.text || "").replace(/\s+/g, " ") || "Anhang", 80)}` : "Noch keine Nachrichten";
       return link(group ? `/g/${item.group.id}` : `/messages/${item.user.handle}`, { class: `convo${item.unread ? " unread" : ""}${keyOf(item) === active ? " active" : ""}` },
         group ? groupFace() : avatar(item.user, "md"),
         h("div", { class: "convo-main" },
@@ -169,7 +169,7 @@
       const blank = main.length ? null : term ? (showNex ? null : emptyState("Nichts gefunden", "Probier einen anderen Namen."))
         : emptyState("Noch keine Chats", "Schreib mit deinen Freunden oder gründe eine Gruppe.",
           h("div", { class: "hero-actions" }, h("button", { class: "btn primary", type: "button", onclick: newMessage }, "Nachricht schreiben"), h("button", { class: "btn ghost", type: "button", onclick: newGroup }, "Gruppe gründen")));
-      fill(body, banner, rows.length ? h("div", { class: "chat-list" }, rows) : null, blank ? h("div", { class: "chat-blank" }, blank) : null, term ? null : Y.sponsored("row"));
+      fill(body, banner, rows.length ? h("div", { class: "chat-list" }, rows) : null, blank ? h("div", { class: "chat-blank" }, blank) : null);
     }
 
     async function load(first) {
@@ -261,7 +261,8 @@
     const picker = h("input", { type: "file", hidden: true, "aria-hidden": "true", tabindex: "-1" });
     const staged = h("div", { class: "dm-staged", hidden: true });
     const note = h("p", { class: "notice", hidden: true });
-    const box = h("div", { class: "dm-box" }, plusButton, h("div", { class: "cb-field" }, input, stickerButton), photoButton, micButton, sendButton, picker);
+    const giftButton = !group && Y.samoji ? h("button", { class: "icon-btn tool cb-gift", type: "button", "aria-label": "Samoji schenken" }, icon("gift")) : null;       // (a present for the other person, for Tokens)
+    const box = h("div", { class: "dm-box" }, plusButton, h("div", { class: "cb-field" }, input, stickerButton), giftButton, photoButton, micButton, sendButton, picker);
     const composeBar = h("div", { class: "dm-compose", hidden: true }, staged, box, attachPanel.element);
     const requestBar = h("div", { class: "request-bar", hidden: true });
     const body = h("div", { class: "thread" }, h("div", { class: "thread-intro" }), older, bubbles);
@@ -305,8 +306,9 @@
           message.gif && message.gif.gone ? h("div", { class: "bubble-text gone" }, "Diesen Sticker gibt es nicht mehr.") : null,
           file ? fileBubble(file) : null,
           message.file && message.file.gone ? h("div", { class: "bubble-text gone" }, "Diese Datei gibt es nicht mehr.") : null,
-          message.text ? h("div", { class: "bubble-text" }, richText(message.text)) : null,
-          message.text && !gif && !file && Y.linkCardFor ? Y.linkCardFor(message.text, { compact: true }) : null,
+          message.text && Y.samoji && Y.samoji.fromText(message.text) ? Y.samoji.bubble(Y.samoji.fromText(message.text)) : null,
+          message.text && !(Y.samoji && Y.samoji.fromText(message.text)) ? h("div", { class: "bubble-text" }, richText(message.text)) : null,
+          message.text && !gif && !file && !(Y.samoji && Y.samoji.fromText(message.text)) && Y.linkCardFor ? Y.linkCardFor(message.text, { compact: true }) : null,
           message.hearts ? h("button", { class: `bubble-hearts${message.hearted ? " on" : ""}`, type: "button", "aria-pressed": String(!!message.hearted), "aria-label": `${message.hearts} ${message.hearts === 1 ? "Herz" : "Herzen"}${message.hearted ? ", von dir" : ""}`, onclick: (event) => toggleHeart(message, event.clientX, event.clientY) },
             icon("heartFill"), message.hearts > 1 ? h("span", {}, String(message.hearts)) : null) : null,
           endOfGroup ? h("span", { class: "bubble-time" }, seen ? `${clock(message.createdAt)} · Gelesen` : clock(message.createdAt)) : null));
@@ -556,6 +558,7 @@
     input.addEventListener("focus", () => { attachPanel.close(); plusButton.classList.remove("open"); plusButton.setAttribute("aria-expanded", "false"); });
     stickerButton.addEventListener("click", () => Y.gifPicker({ onPick: (gif) => deliver({ gifId: gif.id }, false) }));
     photoButton.addEventListener("click", () => attachEntry("camera"));
+    if (giftButton) giftButton.addEventListener("click", () => Y.samoji.open({ to: route.handle, chat: "dm", onSent: () => poll() }));
     micButton.addEventListener("click", () => Y.composerTools.record({ host: box, onSend: async (blob) => {
       const file = new File([blob], Y.composerTools.voiceName(blob), { type: blob.type });
       const up = await Api.attach(file, null, { voice: "1" });

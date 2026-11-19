@@ -59,6 +59,7 @@ ANNOUNCEMENTS = [
     ("2026-11-08-team", "web", "Neu in den Einstellungen: „Nachricht ans Team“. Schick eine Anfrage, eine Idee, ein Problem oder deine Antwort auf eine Umfrage direkt an uns, das Team liest sie. #neu"),
     ("2026-11-08-sounds", "web", "Sound-Fenster neu: Videos zum Merken und Nehmen mit Lesezeichen und Plus, immer mehr beim Wischen. Clips ohne Song bekommen am Ende einen zufälligen, den du entfernen kannst. Neu: Verlauf in den Einstellungen. #neu #kamera"),
     ("2026-11-13-sketch", "web", "Neues Aussehen wie auf den Skizzen: Home mit Personen, Für dich und Entdecke, Plus als Fenster, Chats mit Uhrzeit, Profil mit Gitter. Neu: Video-Editor wie CapCut mit Kürzen, Text, Musik, Effekten und Hochladen. #neu"),
+    ("2026-11-19-samojis", "web", "Neu: Tokens und Samojis! Jeder startet mit 5 Tokens. Verschenke eines von über 1000 Samojis im Chat oder bei Videos: Wer es bekommt, bekommt genauso viele Tokens. Dazu: Fotos mit mehreren Bildern laufen jetzt auch bei Videos. #neu #samojis"),
 ]
 
 _state = {"started": False}

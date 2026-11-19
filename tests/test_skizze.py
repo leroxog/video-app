@@ -97,7 +97,7 @@ def test_the_three_dots_of_the_videos_open_the_menu_of_the_video_on_the_screen()
     assert "active && active.moreMenu ? active.moreMenu(moreButton)" in videos
     for word in ('"Video herunterladen"', '"Link kopieren"', '"Beitrag melden"', "Y.downloadVideo(item)"):
         assert word in videos, word
-    assert "like, comment, save, share, soundButton);" in videos, "the dots are not in the row at the side any more, the sound button is the last one of the column"
+    assert "like, comment, save, gift, share, soundButton);" in videos, "the dots are not in the row at the side any more, the sound button is the last one of the column"
 
 
 def test_the_look_of_snapchat_the_tour_and_the_page_to_turn_the_device():

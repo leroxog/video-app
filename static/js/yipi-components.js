@@ -460,6 +460,7 @@
           toast(reply.ok ? `@${other} ist blockiert.` : Api.message(reply));
           if (reply.ok) card.remove();
         } } : null,
+        Y.me && !mine && Y.samoji && !item.user.ai && !item.user.company ? { label: "Samoji schenken", icon: "gift", run: () => Y.samoji.open({ to: other, post: item.id }) } : null,
         !mine ? { label: "Beitrag melden", icon: "flag", danger: true, run: () => reportDialog({ postId: item.id }) } : null,
       ]);
     });
@@ -627,7 +628,7 @@
       for (const file of files) {
         if (file.type.startsWith("video/") || /\.(mp4|m4v|mov|webm|mkv|avi|wmv|3gp|mpe?g)$/i.test(file.name || "")) { toast("Ein Video lädst du über das Plus und „Video“ hoch."); continue; }
         if (picked.some((entry) => entry.gif)) picked.splice(0, picked.length);          // photos take the place of a GIF
-        if (picked.length >= Core.MAX_MEDIA) { toast("Mehr als 3 Fotos gehen nicht."); break; }
+        if (picked.length >= Core.MAX_MEDIA) { toast("Mehr als 10 Fotos gehen nicht."); break; }
         if (!/^image\/(jpeg|png|gif|webp)$/.test(file.type)) { toast(Api.MESSAGES.bad_image); continue; }
         if (file.type === "image/gif" && file.size > 5 * 1024 * 1024) { toast("Der Sticker ist zu groß (höchstens 5 MB)."); continue; }
         if (file.type === "image/gif" && picked.length) { toast(Api.MESSAGES.gif_alone); continue; }

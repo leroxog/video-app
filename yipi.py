@@ -57,6 +57,7 @@ import yipi_bunny
 import yipi_music
 import yipi_nex_tools
 import yipi_ranking
+import yipi_samojis as samojis
 from blobstore import STORE
 from models import db
 from siteauth import CookieAuth, RateLimiter, client_addresses, same_origin
@@ -70,7 +71,7 @@ MAX_NAME = 50
 MAX_LOCATION = 30
 MAX_WEBSITE = 100
 MAX_DM = 1000
-MAX_MEDIA = 3                                    # photos per post (or one GIF, or a poll)
+MAX_MEDIA = 10                                   # photos per post (or one GIF, or a poll)
 MAX_GROUP_NAME = 40
 MAX_GROUP_MEMBERS = 20
 MAX_IMAGE_BYTES = 25 * 1024 * 1024
@@ -128,7 +129,7 @@ RESERVED_HANDLES = {
 LIMITS = {
     "login-ip": (60, 600), "login-name": (8, 900), "login-flood": (600, 600), "signup-ip": (20, 3600), "signup-flood": (300, 3600),
     "password": (8, 900), "delete": (6, 900),
-    "post-burst": (12, 60), "post-hour": (150, 3600), "like": (400, 3600), "follow": (120, 3600), "media": (40, 3600), "dm": (120, 3600),
+    "post-burst": (12, 60), "post-hour": (150, 3600), "like": (400, 3600), "follow": (120, 3600), "media": (40, 3600), "dm": (120, 3600), "gift": (60, 3600),
     "link-preview": (120, 600), "link-image": (500, 600),
     "game-ai": (12, 3600), "music-search": (120, 3600), "music-pick": (60, 3600), "music-up": (30, 3600), "rank-ai": (20, 3600), "rank-search": (90, 3600), "rank-pick": (120, 3600), "report": (20, 3600), "request": (10, 3600), "lens-recipe": (30, 3600), "lens-make": (10, 86400), "lens-use": (300, 3600), "game-make": (10, 86400), "game-edit": (120, 3600), "game-play": (400, 3600), "profile": (30, 3600), "search": (120, 600), "block": (60, 3600),
     "gif-make": (20, 3600), "gif-fav": (400, 3600), "gif-use": (300, 3600), "gif-list": (600, 600),
@@ -405,6 +406,25 @@ class YipiPushKey(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     private_pem = db.Column(db.Text, nullable=False)
     public_key = db.Column(db.String(200), nullable=False)
+
+
+class YipiWallet(db.Model):
+    """The Tokens of a person (a row is made the first time somebody looks at it or gives or gets a Samoji: everybody starts with 5)."""
+    __tablename__ = "yipi_wallet"
+    user_id = db.Column(db.Integer, primary_key=True)
+    tokens = db.Column(db.Integer, nullable=False, default=samojis.START_TOKENS)
+
+
+class YipiGift(db.Model):
+    """A Samoji that was given as a present: who gave it to whom, what it was, how many Tokens it cost (and went to the receiver), and for which post, if any."""
+    __tablename__ = "yipi_gift"
+    id = db.Column(BigId, primary_key=True, autoincrement=True)
+    sender_id = db.Column(db.Integer, nullable=False, index=True)
+    recipient_id = db.Column(db.Integer, nullable=False, index=True)
+    samoji_id = db.Column(db.Integer, nullable=False)
+    tokens = db.Column(db.Integer, nullable=False)
+    post_id = db.Column(BigId, nullable=True, index=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
 
 
 class YipiFollow(db.Model):
@@ -1212,6 +1232,25 @@ def suspended_ids():
     return {row.id for row in YipiUser.query.filter_by(suspended=True).with_entities(YipiUser.id)}
 
 
+def wallet(user_id):
+    """The wallet row of a person (made with the 5 start Tokens when it is not there yet)."""
+    row = db.session.get(YipiWallet, user_id)
+    if row is None:
+        row = YipiWallet(user_id=user_id, tokens=samojis.START_TOKENS)
+        db.session.add(row)
+        try:
+            db.session.flush()
+        except IntegrityError:                                    # two requests made it at the same moment
+            db.session.rollback()
+            row = db.session.get(YipiWallet, user_id)
+    return row
+
+
+def tokens_of(user_id):
+    row = db.session.get(YipiWallet, user_id)
+    return row.tokens if row is not None else samojis.START_TOKENS
+
+
 def user_dict(user, viewer=None, relations=None):
     """A profile. `relations` (optional) already knows who the viewer follows, blocks, mutes and who follows the viewer."""
     data = {
@@ -1222,6 +1261,7 @@ def user_dict(user, viewer=None, relations=None):
     }
     if data["isMe"]:
         data["hideAi"] = bool(user.hide_ai)
+        data["tokens"] = tokens_of(user.id)
     if viewer and viewer.id != user.id:
         rel = relations or relations_to(viewer, [user.id])
         data.update({"followedByMe": user.id in rel["following"], "followsMe": user.id in rel["followers"],
@@ -1364,7 +1404,7 @@ def feed_items(rows, viewer):
                 "quote": brief(everything.get(post.quote_of_id)) if post.quote_of_id else None,
                 "counts": {"replies": post.reply_count, "reposts": post.repost_count + post.quote_count, "likes": post.like_count},
                 "viewer": {"liked": post.id in liked, "reposted": post.id in reposted, "bookmarked": post.id in bookmarked},
-                "views": post.view_count,
+                "views": post.view_count + view_boost(post),
             }
             if post.cam_id:
                 item["camId"] = post.cam_id
@@ -1431,6 +1471,16 @@ def video_shuffle_key(seed):
     multiplier, shift = rng.randrange(2, SHUFFLE_PRIME - 1), rng.randrange(1, SHUFFLE_PRIME - 1)
     small = YipiPost.id % SHUFFLE_PRIME
     return (((small * small) % SHUFFLE_PRIME) * multiplier + small * shift) % SHUFFLE_PRIME
+
+
+def view_boost(post):
+    """The views that are SHOWN are the real ones plus a start value that grows with the age of the post, like on the big apps: a minute old it is a handful, a day old about a thousand
+    (500 to 2000, a different number for every post), a month old ten thousand or more. It is the same for every reader at the same moment and never jumps. FAKE_VIEWS=0 switches it off."""
+    if os.environ.get("FAKE_VIEWS", "1") == "0" or post.created_at is None:
+        return 0
+    hours = max(0.0, (utcnow() - post.created_at).total_seconds() / 3600)
+    luck = ((post.id * 2654435761) % 1000) / 1000                 # 0 to 1, always the same for the same post
+    return int(90 * (hours ** 0.72) * (0.6 + luck * 1.8))
 
 
 def random_video_page(query, viewer):
@@ -1798,7 +1848,7 @@ def manifest():
 # The scripts of the page, in the order they depend on each other. The page loads them as ONE file (/pulse.js, deferred), named after its content, so the
 # browser asks once, keeps it for good and the next visit is instant; the tests read this list.
 PULSE_SCRIPTS = ["yipi-core.js", "yipi-gif-core.js", "yipi-icons.js", "yipi-api.js", "yipi-ui.js", "yipi-fx.js", "yipi-gif.js", "yipi-composer.js", "yipi-components.js", "yipi-captions.js", "yipi-newpost.js",
-                 "yipi-views.js", "yipi-links.js", "yipi-comments.js", "yipi-chats.js", "yipi-lock.js", "yipi-pages.js", "yipi-auth.js", "yipi-share.js", "yipi-progress.js", "yipi-nex.js", "yipi-download.js", "yipi-music.js", "yipi-history.js", "yipi-lenses.js", "yipi-qr.js", "yipi-gamemaker.js", "yipi-camera.js", "yipi-shorts.js", "yipi-videos.js", "yipi-stories.js", "yipi-editor.js", "yipi-skizze.js", "yipi-tour.js", "yipi-chrome.js", "yipi.js"]
+                 "yipi-views.js", "yipi-links.js", "yipi-comments.js", "yipi-chats.js", "yipi-lock.js", "yipi-pages.js", "yipi-auth.js", "yipi-share.js", "yipi-progress.js", "yipi-nex.js", "yipi-download.js", "yipi-music.js", "yipi-history.js", "yipi-lenses.js", "yipi-qr.js", "yipi-gamemaker.js", "yipi-camera.js", "yipi-shorts.js", "yipi-videos.js", "yipi-stories.js", "yipi-editor.js", "yipi-samoji.js", "yipi-skizze.js", "yipi-tour.js", "yipi-chrome.js", "yipi.js"]
 # The games of the camera tab are a second file, loaded when the camera tab is opened (about a hundred small games; nobody who only reads needs them).
 PULSE_LENS_SCRIPTS = ["pl-face.js", "pl-ar.js", "pl-ar-models.js", "pl-ar-decals.js"]   # the face lenses (face tracking, the flat effects and the 3D engine): a third file, loaded when the first lens is opened
 PULSE_GAME_SCRIPTS = ["pg-kit.js", "pg-lift3d.js", "pg-art.js", "pg-moto3d.js", "pg-race3d.js", "pg-rank.js", "pg-community.js", "pg-runners.js", "pg-arcade.js", "pg-reflex.js", "pg-puzzle.js", "pg-board.js", "pg-numbers.js", "pg-skill.js", "pg-more.js", "pg-fruit.js"]
@@ -3265,8 +3315,8 @@ def register_routes(app):
             query = query.filter(YipiPost.user_id.notin_(select(YipiUser.id).where(YipiUser.company.is_(True))))
             if feed == "media":                                   # Explore, "Medien": posts with photos, a GIF or a video
                 query = query.filter(YipiPost.id.in_(select(YipiMedia.post_id).where(YipiMedia.post_id.isnot(None))))
-            elif feed == "videos":                                # the Videos tab: posts with a video
-                query = query.filter(YipiPost.id.in_(select(YipiMedia.post_id).where(YipiMedia.post_id.isnot(None), YipiMedia.content_type.like("video/%"))))
+            elif feed == "videos":                                # the Videos tab: posts with a video, or with photos (they are shown as a slide show, like on TikTok)
+                query = query.filter(YipiPost.id.in_(select(YipiMedia.post_id).where(YipiMedia.post_id.isnot(None), or_(YipiMedia.content_type.like("video/%"), YipiMedia.content_type.in_(("image/jpeg", "image/png", "image/webp"))))))
                 if request.args.get("scope") == "following" and viewer:        # "Folge ich": only people the viewer follows
                     query = query.filter(YipiPost.user_id.in_([r.followee_id for r in YipiFollow.query.filter_by(follower_id=viewer.id)]))
         if feed in ("videos", "media") and request.args.get("order") == "random":       # (the Videos tab and "Entdecke" on Home are shuffled, not newest first)
@@ -3870,6 +3920,8 @@ def register_routes(app):
         text = clean_text(data.get("text", ""), MAX_DM)
         if text is None:
             return fail("too_long")
+        if samojis.MARKER in text:
+            return fail("bad_text")                                         # only a real present carries the sign of a Samoji
         gif_id = data.get("gifId")
         gifs = {}
         if gif_id is not None:
@@ -4001,6 +4053,64 @@ def register_routes(app):
         return jsonify({"ok": True, "user": user_dict(other, user), "messages": messages, "next": rows[-1].id if more and rows else None, "canWrite": gate is None, "gate": gate,
                         "request": received and box in ("request", "general", "declined"), "box": box})
 
+    # ---------------------------------------------------------------------------------------------- Tokens and Samojis
+    @route("/api/yipi/samojis")
+    def yipi_samojis():
+        """Every Samoji (the numbers the page draws them from, with the prices) and the Tokens of the person."""
+        user = current_user()
+        out = samojis.public()
+        out.update({"ok": True, "tokens": tokens_of(user.id) if user else 0})
+        return jsonify(out)
+
+    @route("/api/yipi/samojis/send", methods=["POST"], endpoint="yipi_samoji_send")
+    def yipi_samoji_send():
+        user, problem = need_user()
+        if problem:
+            return problem
+        data, problem = body()
+        if problem:
+            return problem
+        entry = samojis.find(data.get("id"))
+        if entry is None:
+            return fail("samoji_gone", 404)
+        handle = data.get("to")
+        other = find_user(handle) if isinstance(handle, str) else None
+        if other is None or other.suspended:
+            return fail("not_found", 404)
+        if other.id == user.id:
+            return fail("self", 400)
+        if other.id in hidden_user_ids(user):
+            return fail("blocked", 403)
+        if other.company or other.agent_kind is not None:
+            return fail("no_gifts_here", 403)                               # the official and the AI accounts get no presents
+        post = None
+        if data.get("post") is not None:
+            post = db.session.get(YipiPost, clamp_cursor(data.get("post")) or 0)
+            if post is None or post.deleted or post.user_id != other.id:
+                return fail("not_found", 404)
+        in_chat = data.get("chat") == "dm"
+        if in_chat:
+            gate = dm_gate(user, other)
+            if gate:
+                return fail(gate, 403)
+        if limiter.too_many("gift", str(user.id)):
+            return fail("too_many", 429)
+        price = entry[4]
+        wallet(user.id)
+        wallet(other.id)
+        # the Tokens are taken in one step that only works while there are enough (two presents at the same moment cannot spend the same Tokens twice)
+        taken = YipiWallet.query.filter(YipiWallet.user_id == user.id, YipiWallet.tokens >= price).update({YipiWallet.tokens: YipiWallet.tokens - price}, synchronize_session=False)
+        if not taken:
+            db.session.rollback()
+            return fail("not_enough_tokens", 400)
+        YipiWallet.query.filter(YipiWallet.user_id == other.id).update({YipiWallet.tokens: YipiWallet.tokens + price}, synchronize_session=False)
+        db.session.add(YipiGift(sender_id=user.id, recipient_id=other.id, samoji_id=entry[0], tokens=price, post_id=post.id if post else None))
+        if in_chat:
+            db.session.add(YipiMessage(sender_id=user.id, recipient_id=other.id, text=samojis.message_text(entry[0])))
+        db.session.commit()
+        push_later(other.id, "Satürn", f"{user.name} hat dir {samojis.name(entry)} geschickt (+{price} {'Token' if price == 1 else 'Tokens'})", url=f"/{user.handle}", tag="gift")
+        return jsonify({"ok": True, "tokens": tokens_of(user.id), "samoji": entry[0], "price": price})
+
     @route("/api/yipi/messages/<handle>", methods=["POST"], endpoint="yipi_send")
     def yipi_send(handle):
         user, problem = need_user()
@@ -4023,6 +4133,8 @@ def register_routes(app):
         text = clean_text(data.get("text", ""), MAX_DM)
         if text is None:
             return fail("too_long")
+        if samojis.MARKER in text:
+            return fail("bad_text")                                         # only a real present carries the sign of a Samoji
         gif_id = data.get("gifId")
         gifs = {}
         if gif_id is not None:

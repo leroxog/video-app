@@ -211,7 +211,7 @@
       feedPager = pager({
         load: listLoader((cursor) => qs("/timeline", { feed, cursor, novideo: sideways() ? "" : "1" })),
         render: (item) => Y.postCard(item),
-        between: (n) => (signedIn && sideways() && n === 3 && Y.shortsShelf ? Y.shortsShelf({ following: feed === "following" }) : signedIn && n % 6 === 0 ? Y.sponsored("card") : null),      // after three posts a row of five videos (sideways only), and every seventh item is a box "Gesponsert" (advertisements will go there)
+        between: (n) => (signedIn && sideways() && n === 3 && Y.shortsShelf ? Y.shortsShelf({ following: feed === "following" }) : null),      // after three posts a row of five videos (sideways only)
         first: (reply) => { firstCursor = reply.items.length ? Math.max(...reply.items.map((item) => item.cursor || 0)) : 0; },
         empty: feed === "following"
           ? emptyState("Hier ist noch nichts los", "Folge Leuten, um ihre Beiträge hier zu sehen.", link("/explore", { class: "btn primary" }, "Leute entdecken"))
@@ -586,7 +586,8 @@
           h("div", { class: "ph-counts" },
             link(`/${user.handle}/following`, {}, h("b", {}, Core.formatCount(user.following)), " Folge ich"),
             link(`/${user.handle}/followers`, {}, h("b", {}, Core.formatCount(user.followers)), user.followers === 1 ? " Follower" : " Follower")),
-          user.isMe ? h("div", { class: "ph-own" }, link("/bookmarks", { class: "chip" }, icon("bookmark"), "Lesezeichen"), link("/settings", { class: "chip" }, icon("settings"), "Einstellungen")) : null,
+          user.isMe ? h("div", { class: "ph-own" }, link("/bookmarks", { class: "chip" }, icon("bookmark"), "Lesezeichen"), link("/settings", { class: "chip" }, icon("settings"), "Einstellungen"),
+            user.tokens !== undefined ? h("span", { class: "chip tokens" }, icon("gift"), `${user.tokens} ${user.tokens === 1 ? "Token" : "Tokens"}`) : null) : null,
           user.blockedMe ? h("p", { class: "notice" }, `@${user.handle} hat dich blockiert. Du kannst die Beiträge nicht sehen und @${user.handle} nicht folgen.`) : null,
           user.blockedByMe ? h("p", { class: "notice" }, `Du hast @${user.handle} blockiert. Du siehst die Beiträge nicht.`) : null));
     }

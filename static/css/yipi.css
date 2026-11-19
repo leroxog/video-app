@@ -1498,27 +1498,6 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 .side-foot { display: none; }
 
 /* ----- the boxes "Gesponsert" */
-.sponsored { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: 18px; background: var(--bg-2); border: 1px solid var(--line); color: var(--muted); }
-.sp-mark { display: grid; place-items: center; flex: none; width: 32px; height: 32px; border-radius: 11px; background: var(--bg); color: var(--muted); box-shadow: inset 0 0 0 1px var(--line-strong); }
-.sp-mark svg { width: 22px; height: 22px; }
-.sp-text { display: grid; line-height: 1.25; min-width: 0; }
-.sp-text b { color: var(--text); font-weight: 700; font-size: 14px; letter-spacing: -0.01em; }
-.sp-text small { font-size: 12.5px; }
-.sp-card { flex-direction: column; justify-content: center; gap: 8px; min-height: 170px; text-align: center; border-radius: var(--radius); }
-.sp-row { margin: 10px 0 4px; padding: 16px; border-radius: 22px; }
-.sp-bar { display: none; }
-.sp-reel { flex-direction: column; justify-content: center; gap: 12px; width: 100%; height: 100%; padding: 28px; text-align: center; background: #fff; color: #5b5b5b; border: 0; border-radius: inherit; }
-.sp-reel .sp-mark { width: 64px; height: 64px; border-radius: 22px; background: #f3f3f3; color: #000; }
-.sp-reel .sp-mark svg { width: 40px; height: 40px; }
-.sp-reel .sp-text b { color: #000; font-size: 22px; }
-.sp-reel .sp-text small { font-size: 14px; }
-.sp-slot { gap: 10px; padding: 8px; border-radius: 16px; }
-.sp-slot .sp-mark { width: 30px; height: 30px; border-radius: 10px; }
-.sp-slot .sp-mark svg { width: 18px; height: 18px; }
-.sp-slot .sp-text small { display: none; }
-.list > .sponsored { align-self: stretch; }
-.sponsored-reel { background: #fff; }
-.sponsored-reel .reel-stage { background: #fff; overflow: hidden; }
 
 /* ----- Nex in the list of chats */
 
@@ -1570,12 +1549,6 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 
 /* ----- videos on a phone held upright: the strip "Gesponsert" at the top replaces the bar with the lettering */
 @media (max-width: 819px), (pointer: coarse) {
-  .reels-view .sp-bar { position: absolute; top: 0; left: 0; right: 0; z-index: 7; display: flex; align-items: center; gap: 10px; height: calc(38px + env(safe-area-inset-top)); padding: env(safe-area-inset-top) 14px 0; border: 0; border-radius: 0; background: rgba(255, 255, 255, 0.94); color: #444; }
-  .reels-view .sp-bar .sp-mark { width: 26px; height: 26px; border-radius: 9px; background: #efefef; color: #000; box-shadow: none; }
-  .reels-view .sp-bar .sp-mark svg { width: 17px; height: 17px; }
-  .reels-view .sp-bar .sp-text { display: flex; align-items: baseline; gap: 8px; }
-  .reels-view .sp-bar .sp-text b { color: #000; font-size: 14px; }
-  .reels-view .sp-bar .sp-text small { font-size: 12px; }
   .reels-view .reels-top { top: calc(38px + env(safe-area-inset-top)); padding-top: 12px; }
   .reels-view .reel-volume { top: calc(112px + env(safe-area-inset-top)); }
 }
@@ -1607,18 +1580,12 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
   .side-me-text { display: none; flex-direction: column; min-width: 0; line-height: 1.2; }
   .side-me-text b, .side-me-text small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .side-me-text small { color: var(--muted); }
-  .sp-slot .sp-text { display: none; }
-  .sp-slot { justify-content: center; }
   .app.rail-open .tabbar { width: 252px; box-shadow: 8px 0 30px rgba(0, 0, 0, 0.14); }
   .app.rail-open .tab-item, .app.rail-open .tab-extra { justify-content: flex-start; padding: 0 14px; }
   .app.rail-open .tab-label { display: inline; }
   .app.rail-open .tab-extras { display: flex; }
   .app.rail-open .side-me { justify-content: flex-start; }
   .app.rail-open .side-me-text { display: flex; }
-  .app.rail-open .sp-slot { justify-content: flex-start; }
-  .app.rail-open .sp-slot .sp-text { display: grid; }
-  .app.rail-open .sp-slot .sp-text small { display: block; }
-  .reels-view .sp-bar { display: none; }
   .reels-view .reels-top { top: 0; }
   .reels { height: calc(100vh - var(--top)); height: calc(100dvh - var(--top)); }
   .reel { height: calc(100vh - var(--top)); height: calc(100dvh - var(--top)); }
@@ -1715,14 +1682,7 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 
 /* the box "Gesponsert" in the side bar: not there while the bar is folded, and a tall banner that fills the free room when it is open */
 @media screen and (min-width: 820px) and (pointer: fine) {
-  .sp-slot { display: none; }
   .app.rail-open .side-foot { flex: 1 1 auto; min-height: 0; }
-  .app.rail-open .sp-slot { display: flex; flex: 1 1 auto; flex-direction: column; justify-content: center; align-items: center; gap: 12px; min-height: 190px; max-height: 480px; padding: 22px 16px; text-align: center; border-radius: 22px; }
-  .app.rail-open .sp-slot .sp-mark { width: 52px; height: 52px; border-radius: 18px; }
-  .app.rail-open .sp-slot .sp-mark svg { width: 30px; height: 30px; }
-  .app.rail-open .sp-slot .sp-text { display: grid; gap: 4px; justify-items: center; }
-  .app.rail-open .sp-slot .sp-text b { font-size: 16px; }
-  .app.rail-open .sp-slot .sp-text small { display: block; font-size: 13px; }
 }
 
 /* ----- chats like Snapchat: everything stands on the left, a small name above every run of messages, and your own messages are purple like on Instagram */
@@ -2067,7 +2027,6 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
 /* ---------------------------------------------------------------------------------------------- the round look: whatever was still square gets round corners */
 .appbar { border-radius: 0 0 26px 26px; }
 .topbar { border-radius: 0 0 22px 22px; }
-.sp-bar, .reels-view .sp-bar { border-radius: 0 0 18px 18px; }
 .cam-stage { border-radius: 28px; }
 .reel-stage { border-radius: 26px; }
 @media screen and (max-width: 819px), screen and (pointer: coarse) {
@@ -2179,8 +2138,6 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
   .tabbar [data-nav="settings"] { order: 9; }
   .tabbar [data-nav="moderation"] { order: 10; }
   .tabbar .side-foot { order: 20; margin-top: auto; gap: 12px; padding-top: 12px; }
-  .app:not(.bare) .sp-slot { justify-content: flex-start; }
-  .app:not(.bare) .sp-slot .sp-text { display: grid; }
   .rail-post { display: flex; align-items: center; justify-content: center; gap: 10px; height: 48px; border-radius: 24px; background: var(--ink); color: var(--on-ink); font-size: 15px; font-weight: 800; }
   .rail-post svg { width: 22px; height: 22px; stroke-width: 2.6px; }
   .rail-post:hover { opacity: 0.88; }
@@ -2773,7 +2730,6 @@ textarea.field, .dm-input, .dm-compose .cb-field { border-radius: 26px; }
 .convo, .chat-requests, .chat-folder, .pick { border-radius: 26px; }
 .convo + .convo { border-top: 0; }
 .avatar.group { border-radius: 50%; }
-.sponsored, .sp-slot, .sp-bar, .sponsored-reel { display: none; }
 .skz-card.tall, .skz-card.big { border: 0; box-shadow: 0 8px 22px rgba(0, 0, 0, 0.14); }
 .skz-card.tall { border-radius: 28px; }
 .skz-card.big { border-radius: 34px; }
@@ -2934,3 +2890,43 @@ html.typing .main { padding-bottom: 16px; }
   .app { max-width: 560px; margin: 0 auto; background: var(--bg); }
   .appbar, .tabbar { left: 50%; right: auto; width: min(100%, 560px); transform: translateX(-50%); }
 }
+
+/* photo posts in the videos: a slide show (swipe to the side, it goes on by itself), the number of views under the text */
+.reel-photos { position: absolute; inset: 0; display: flex; overflow-x: auto; background: #000; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; }
+.reel-photos::-webkit-scrollbar { display: none; }
+.reel-photo { flex: none; width: 100%; height: 100%; object-fit: contain; scroll-snap-align: center; background: #000; }
+.reel-dots { position: absolute; left: 0; right: 0; bottom: calc(var(--tabbar) + 14px + env(safe-area-inset-bottom)); z-index: 2; display: flex; justify-content: center; gap: 6px; pointer-events: none; }
+.reel-dots[hidden] { display: none; }
+.reel-dots i { display: block; width: 6px; height: 6px; border-radius: 50%; background: rgba(255, 255, 255, 0.4); }
+.reel-dots i.on { background: #fff; }
+.reel-views { margin-top: 6px; font-size: 13px; font-weight: 700; opacity: 0.85; }
+
+/* Tokens and Samojis: the sheet to choose a present, the sticker in a chat, the one that flies up */
+.samoji-sheet { display: grid; gap: 10px; max-height: 88dvh; }
+.sm-head { display: flex; align-items: center; gap: 10px; }
+.sm-head h2 { flex: 1; font-size: 24px; font-weight: 900; }
+.sm-balance { padding: 6px 14px; border-radius: 999px; background: var(--snap, #8e44f2); color: #fff; font-size: 14px; font-weight: 900; }
+.sm-search { height: 46px; padding: 0 18px; border: 0; border-radius: 999px; background: var(--bg-3); color: var(--text); font-size: 16px; }
+.sm-tiers { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
+.sm-chip { flex: none; padding: 8px 14px; border-radius: 999px; background: var(--bg-3); font-size: 14px; font-weight: 800; }
+.sm-chip.on { background: var(--ink); color: var(--on-ink); }
+.sm-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; min-height: 120px; }
+.sm-tile { display: grid; justify-items: center; gap: 2px; padding: 8px 2px 6px; border-radius: 20px; background: var(--bg-2); }
+.sm-tile.on { box-shadow: 0 0 0 3px var(--snap, #8e44f2); }
+.sm-tile small { color: var(--muted); font-size: 11px; font-weight: 800; }
+.sm-none { grid-column: 1 / -1; padding: 24px; color: var(--muted); text-align: center; }
+.sm-more { justify-self: center; padding: 10px 20px; border-radius: 999px; background: var(--bg-3); font-weight: 800; }
+.sm-more[hidden], .sm-confirm[hidden] { display: none; }
+.sm-confirm { position: sticky; bottom: 0; display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 28px; background: var(--bg-3); }
+.sm-confirm-text { display: grid; flex: 1; min-width: 0; line-height: 1.2; }
+.sm-confirm-text small { color: var(--muted); font-size: 12px; font-weight: 700; }
+.sm-send { padding: 14px 18px; border-radius: 999px; background: var(--snap, #8e44f2); color: #000; font-size: 15px; font-weight: 900; }
+.sm-send:disabled { opacity: 0.4; }
+.samoji-svg { display: block; }
+.bubble-samoji { display: grid; justify-items: start; gap: 2px; }
+.bubble-samoji small { color: var(--muted); font-size: 12px; font-weight: 800; }
+.samoji-fly { position: fixed; left: 50%; top: 55%; z-index: 3000; margin-left: -75px; pointer-events: none; opacity: 1; transition: transform 1.5s cubic-bezier(0.2, 0.7, 0.3, 1), opacity 1.5s ease-in; }
+.samoji-fly.go { transform: translateY(-260px) scale(1.35); opacity: 0; }
+.cb-gift svg { width: 24px; height: 24px; }
+.chip.tokens { background: var(--snap, #8e44f2); color: #fff; }
+.samoji-back { z-index: 1100; }
