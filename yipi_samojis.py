@@ -1,12 +1,12 @@
 """Satürn Samojis (yipi_samojis.py): the 3D presents that can be given for Tokens, like the gifts of the big live apps. All of them are built by Satürn in 3D in the page (static/js/gift3d.mjs, three.js)
-from the numbers kept here: 16 figures (a whale, a rose, a rocket ...) x 15 looks (colours, gold, silver, neon, glass, a rainbow shimmer) x 5 extras (sparkles, a halo, wings, an aura) = 1200 of
-them, and each one costs a different number of Tokens (1 to 220): small plain figures are cheap, the rose, the butterfly and above all the whale are dear, and so are gold, glass and the extras.
+from the numbers kept here: 16 figures (a dragon, a UFO, a sports car, a whale, a rose ...) x 15 looks (colours, gold, silver, neon, glass, a rainbow shimmer) x 5 extras (sparkles, a halo, wings, an aura) = 1200 of
+them, and each one costs a different number of Tokens (2 to 340): a comet or a panda is cheap, a rose, a UFO and a lion are dear, the whale and above all the dragon cost the most, and so are gold, glass and the extras.
 Whoever gets a Samoji gets as many Tokens as the giver paid. Everybody starts with 5 Tokens (and gets 2 more every day)."""
 
 START_TOKENS = 5
 
-SHAPES = ["Herz", "Stern", "Blitz", "Eis", "Donut", "Planet", "Katze", "Geist", "Kleeblatt", "Rakete", "Krone", "Pokal", "Diamant", "Rose", "Schmetterling", "Wal"]
-SHAPE_PRICE = [1, 1, 2, 2, 2, 3, 3, 4, 4, 5, 8, 10, 15, 20, 30, 50]
+SHAPES = ["Komet", "Panda", "Roboter", "Gewitter", "Rakete", "Schmetterling", "Rose", "Krone", "Feuerwerk", "Galaxie", "UFO", "Löwe", "Diamantring", "Sportwagen", "Wal", "Drache"]
+SHAPE_PRICE = [2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30, 35, 40, 50, 80]
 # name, the main colour, the second colour, the finish (gloss, gold, silver, neon, glass, holo)
 LOOKS = [("Rosa", "#ff6fa5", "#c2185b", "gloss"), ("Rot", "#ff3b4e", "#a8071a", "gloss"), ("Orange", "#ff9f3a", "#ad4e00", "gloss"), ("Sonnengelb", "#ffd60a", "#b38600", "gloss"),
          ("Grün", "#43d17a", "#1d7a3f", "gloss"), ("Türkis", "#16c7c7", "#00717a", "gloss"), ("Blau", "#3d8bff", "#0b3fa8", "gloss"), ("Lila", "#9b5cf0", "#4a1d9a", "gloss"),

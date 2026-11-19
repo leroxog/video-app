@@ -60,7 +60,7 @@ ANNOUNCEMENTS = [
     ("2026-11-08-sounds", "web", "Sound-Fenster neu: Videos zum Merken und Nehmen mit Lesezeichen und Plus, immer mehr beim Wischen. Clips ohne Song bekommen am Ende einen zufälligen, den du entfernen kannst. Neu: Verlauf in den Einstellungen. #neu #kamera"),
     ("2026-11-13-sketch", "web", "Neues Aussehen wie auf den Skizzen: Home mit Personen, Für dich und Entdecke, Plus als Fenster, Chats mit Uhrzeit, Profil mit Gitter. Neu: Video-Editor wie CapCut mit Kürzen, Text, Musik, Effekten und Hochladen. #neu"),
     ("2026-11-19-samojis", "web", "Neu: Tokens und Samojis! Jeder startet mit 5 Tokens. Verschenke eines von über 1000 Samojis im Chat oder bei Videos: Wer es bekommt, bekommt genauso viele Tokens. Dazu: Fotos mit mehreren Bildern laufen jetzt auch bei Videos. #neu #samojis"),
-    ("2026-11-20-chest", "web", "Samojis sind jetzt in 3D (Wal, Rose, Rakete, Schmetterling ...) und fliegen wie Rauch aus dem Geschenk. Neu: die Satürn Truhe! Etwa jedes zehnte Video bringt eine. Wenn der Timer abläuft, schnell tippen: bis zu 13 Tokens. #neu #samojis"),
+    ("2026-11-20-chest", "web", "Die Samojis sind jetzt echte 3D-Figuren mit eigenen Animationen: Drache, UFO, Sportwagen, Wal, Rose, Löwe und mehr. Beim Verschenken siehst du jetzt oben eine Rechnung mit deinem Guthaben. #neu #samojis"),
 ]
 
 _state = {"started": False}

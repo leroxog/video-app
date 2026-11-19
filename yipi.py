@@ -30,6 +30,7 @@ import base64
 import gzip
 import hashlib
 import json
+import math
 import logging
 import os
 import random
@@ -1389,6 +1390,10 @@ def feed_items(rows, viewer):
         entry["gifFavorite"] = item.gif_id in starred
         media.setdefault(item.post_id, []).append(entry)
     polls = poll_states([p for p in posts.values() if not p.deleted], viewer)
+    bookmark_counts = {}
+    if original_ids:
+        for post_id, count in db.session.query(YipiBookmark.post_id, func.count(YipiBookmark.id)).filter(YipiBookmark.post_id.in_(list(original_ids))).group_by(YipiBookmark.post_id):
+            bookmark_counts[post_id] = count
     gift_counts, gift_last = {}, {}
     if original_ids:                                                # the presents a post has got (how many, and the last ones: a video plays them when it is opened)
         for post_id, count in db.session.query(YipiGift.post_id, func.count(YipiGift.id)).filter(YipiGift.post_id.in_(list(original_ids))).group_by(YipiGift.post_id):
@@ -1431,9 +1436,9 @@ def feed_items(rows, viewer):
                 "id": post.id, "user": {**user_brief(owner), **({"followedByMe": owner.id in following} if viewer and owner.id != viewer.id else {})}, "text": post.text, "createdAt": iso(post.created_at), "media": media.get(post.id, []),
                 "replyTo": {"id": post.reply_to_id, "handle": parent_owner.handle if parent_owner else None} if post.reply_to_id else None,
                 "quote": brief(everything.get(post.quote_of_id)) if post.quote_of_id else None,
-                "counts": {"replies": post.reply_count, "reposts": post.repost_count + post.quote_count, "likes": post.like_count + like_boost(post)},
+                "counts": {"replies": post.reply_count, "reposts": post.repost_count + post.quote_count, "likes": post.like_count + like_boost(post), "bookmarks": bookmark_counts.get(post.id, 0) + bookmark_boost(post)},
                 "viewer": {"liked": post.id in liked, "reposted": post.id in reposted, "bookmarked": post.id in bookmarked},
-                "views": post.view_count + view_boost(post),
+                "views": post.view_count,
             }
             if gift_counts.get(post.id):
                 item["gifts"] = {"count": gift_counts[post.id], "last": gift_last.get(post.id, [])}
@@ -1504,20 +1509,20 @@ def video_shuffle_key(seed):
     return (((small * small) % SHUFFLE_PRIME) * multiplier + small * shift) % SHUFFLE_PRIME
 
 
-def view_boost(post):
-    """The views that are SHOWN are the real ones plus a start value that grows with the age of the post, like on the big apps: a minute old it is a handful, a day old about a thousand
-    (500 to 2000, a different number for every post), a month old ten thousand or more. It is the same for every reader at the same moment and never jumps. FAKE_VIEWS=0 switches it off."""
+def like_boost(post):
+    """Likes that are SHOWN on top of the real ones: only a few, like on a small site where nobody has many. It grows slowly over two days; most posts get 0 to 8, a lucky one up to 30; nothing for a
+    post that is only minutes old. FAKE_VIEWS=0 switches it off (the same switch for the bookmarks)."""
     if os.environ.get("FAKE_VIEWS", "1") == "0" or post.created_at is None:
         return 0
     hours = max(0.0, (utcnow() - post.created_at).total_seconds() / 3600)
-    luck = ((post.id * 2654435761) % 1000) / 1000                 # 0 to 1, always the same for the same post
-    return int(90 * (hours ** 0.72) * (0.6 + luck * 1.8))
+    luck = ((post.id * 40503) % 1000) / 1000                      # 0 to 1, always the same for the same post
+    return int(30 * (1 - math.exp(-hours / 48)) * luck ** 2.4)
 
 
-def like_boost(post):
-    """Likes that are SHOWN, like the views (view_boost): a few percent of the shown views, a different share for every post; nothing for a post that is only minutes old. FAKE_VIEWS=0 switches it off."""
-    luck = ((post.id * 40503) % 1000) / 1000
-    return int(view_boost(post) * (0.02 + luck * 0.06))
+def bookmark_boost(post):
+    """The same for the bookmarks: fewer than the likes (about a quarter, at most about ten)."""
+    luck = ((post.id * 69069) % 1000) / 1000
+    return int(like_boost(post) * 0.3 * (0.5 + luck))
 
 
 def random_video_page(query, viewer):
@@ -4194,7 +4199,7 @@ def register_routes(app):
         return jsonify({"ok": True, "tokens": tokens_of(user.id), "samoji": entry[0], "price": price})
 
     CHEST_MIN_WAIT, CHEST_MAX_WAIT = 10, 300             # seconds until a chest opens
-    CHEST_WINDOW = 45                                    # how long it can be opened after that
+    CHEST_WINDOW = 8                                     # how long it can be opened after that (the pay falls with every moment: 3 seconds later it is nothing)
     CHEST_GAP = 180                                      # at least so many seconds between two chests of one person
     CHEST_PER_DAY = 24
 
@@ -4202,18 +4207,14 @@ def register_routes(app):
         return {"id": row.id, "opensIn": max(0.0, (row.opens_at - now).total_seconds()), "closesIn": max(0.0, (row.expires_at - now).total_seconds())}
 
     def chest_reward(reaction):
-        """1 to 13 Tokens: whoever taps in the first moments after the chest opened gets the most, whoever waits ten seconds or more gets one."""
-        if reaction <= 0.9:
-            return random.randint(11, 13)
-        if reaction <= 1.8:
-            return random.randint(8, 11)
-        if reaction <= 3.5:
-            return random.randint(5, 8)
-        if reaction <= 6:
-            return random.randint(3, 5)
-        if reaction <= 9:
-            return random.randint(2, 3)
-        return 2 if reaction <= 10 else 1
+        """0 to 13 Tokens by how fast the tap came after the chest opened: 0.1 seconds 8 to 13, one second 3 to 8, three seconds 0 to 3, later nothing."""
+        if reaction <= 0.1:
+            return random.randint(8, 13)
+        if reaction <= 1.0:
+            return random.randint(3, 8)
+        if reaction <= 3.0:
+            return random.randint(0, 3)
+        return 0
 
     @route("/api/yipi/chests/maybe", methods=["POST"], endpoint="yipi_chest_maybe")
     def yipi_chest_maybe():
@@ -4222,6 +4223,8 @@ def register_routes(app):
         if problem:
             return problem
         data = request.get_json(silent=True) or {}
+        if os.environ.get("CHESTS") != "1":                                  # (the Satürn Chest is switched off until its design has been approved: CHESTS=1 in the settings of the server turns it on)
+            return jsonify({"ok": True, "chest": None})
         now = utcnow()
         live = YipiChest.query.filter(YipiChest.user_id == user.id, YipiChest.opened_at.is_(None), YipiChest.expires_at > now).order_by(YipiChest.id.desc()).first()
         if live is not None:
@@ -4254,7 +4257,7 @@ def register_routes(app):
             return fail("chest_early", 400)                                 # tapped before the timer was over
         if now > row.expires_at:
             return fail("chest_gone", 410)
-        reaction = max(0.0, (now - row.opens_at).total_seconds())
+        reaction = max(0.0, (now - row.opens_at).total_seconds() - 0.2)       # (about 0.2 seconds of the way to the server and back are not the person's fault)
         reward = chest_reward(reaction)
         wallet(user.id)
         taken = YipiChest.query.filter(YipiChest.id == row.id, YipiChest.opened_at.is_(None)).update({YipiChest.opened_at: now, YipiChest.reward: reward}, synchronize_session=False)

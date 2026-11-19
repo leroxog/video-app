@@ -88,48 +88,83 @@
         scroller.addEventListener("touchend", ask, { once: true });
       } else addEventListener("devicemotion", onMotion);
     }
-    /* The Satürn Chest: about every tenth video one may show up (the server decides, with a timer from 10 seconds to 5 minutes); when the timer is over it can be tapped, the faster the more Tokens. */
+    /* The Satürn Chest: about every tenth video one may show up (the server decides, with a timer from 10 seconds to 5 minutes). It appears in the middle of the screen and flies at once to the side;
+       a tap on it opens a sheet like the one of the "+" with the big chest, a small countdown above it and the button "Öffnen": grey while it is no use to press it, bright when the chest can be
+       opened. Then it is a matter of tenths of a second: 0.1 seconds 8 to 13 Tokens, one second 3 to 8, three seconds 0 to 3. */
     let sinceChest = 0;
     let nextChest = 8 + Math.floor(Math.random() * 5);
     let chestBox = null;
+    const clockText = (ms) => { const total = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`; };
     async function showChest(info) {
       if (chestBox || dead) return;
       const now = performance.now();
       const opensAt = now + info.opensIn * 1000;
       const closesAt = now + info.closesIn * 1000;
-      const label = h("b", { class: "chest-time" }, "");
-      const host = h("div", { class: "chest-view" });
-      const box = h("button", { class: "chest", type: "button", "aria-label": "Satürn Truhe" }, label, host);
-      chestBox = { box };
-      let controller = null;
-      let phase = "closed";
-      let busy = false;
-      const clock = (ms) => { const total = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`; };
-      const stop = () => { clearInterval(timer); controller?.stop(); box.remove(); chestBox = null; };
+      const state = { phase: "closed", busy: false, sheet: null, readyAt: 0, opensAt, closesAt };
+      const pic = h("img", { class: "chest-pic", alt: "", draggable: false });
+      const chipTime = h("b", { class: "chest-chip-time" }, clockText(opensAt - now));
+      const chip = h("button", { class: "chest-chip pop", type: "button", "aria-label": "Satürn Truhe öffnen" }, pic, chipTime);
+      chestBox = { chip, state };
+      el.append(chip);
+      import("/static/js/gift3d.mjs?v=18").then((module) => module.chestThumb()).then((url) => { pic.src = url; }).catch(() => { chip.classList.add("flat"); });
+      setTimeout(() => chip.classList.remove("pop"), 1500);       // first in the middle of the screen, then quickly to the side
+      const stop = () => { clearInterval(timer); state.sheet?.close(); chip.remove(); chestBox = null; };
       const timer = setInterval(() => {
         const t = performance.now();
-        if (t < opensAt) label.textContent = clock(opensAt - t);
-        else if (t < closesAt) { if (phase === "closed") { phase = "ready"; controller?.state("ready"); label.textContent = "Tippe!"; label.classList.add("go"); Y.sound?.play("receive"); } }
-        else if (!busy) { stop(); toast("Die Satürn Truhe ist weg."); }
-      }, 200);
-      label.textContent = clock(opensAt - now);
-      box.addEventListener("click", async () => {
-        if (busy) return;
-        if (phase !== "ready") { box.classList.add("nudge"); setTimeout(() => box.classList.remove("nudge"), 400); return; }
-        busy = true;
+        if (t < opensAt) { chipTime.textContent = clockText(opensAt - t); state.sheet?.tick(clockText(opensAt - t), false); }
+        else if (t < closesAt) {
+          if (state.phase === "closed") { state.phase = "ready"; state.readyAt = t; chip.classList.add("ready"); chipTime.textContent = "Jetzt!"; state.sheet?.ready(); Y.sound?.play("receive"); }
+        } else if (!state.busy) { stop(); toast("Die Satürn Truhe ist weg."); }
+      }, 100);
+      chip.addEventListener("click", () => openChestSheet(info, state, stop));
+    }
+    /* The sheet with the big chest. */
+    async function openChestSheet(info, state, stop) {
+      if (state.sheet || dead) return;
+      const back = h("div", { class: "skz-sheet-back chest-back" });
+      const count = h("small", { class: "chest-count" }, "");
+      const host = h("div", { class: "chest-stage" });
+      const result = h("b", { class: "chest-result", hidden: true });
+      const button = h("button", { class: "chest-open locked", type: "button", "aria-disabled": "true" }, "Öffnen");
+      const note = h("small", { class: "chest-note" }, "Noch nicht offen. Gleich leuchtet der Knopf: dann so schnell du kannst!");
+      const panel = h("div", { class: "skz-sheet chest-sheet", role: "dialog", "aria-modal": "true", "aria-label": "Satürn Truhe" },
+        h("span", { class: "skz-grip", "aria-hidden": "true" }), h("div", { class: "sm-head" }, h("h2", {}, "Satürn Truhe"), h("button", { class: "icon-btn round", type: "button", "aria-label": "Schließen", onclick: () => sheet.close() }, icon("close"))),
+        count, host, result, button, note);
+      let controller = null;
+      const onKey = (event) => { if (event.key === "Escape") { event.stopPropagation(); sheet.close(); } };
+      const sheet = {
+        close() { controller?.stop(); controller = null; document.removeEventListener("keydown", onKey, true); document.body.classList.remove("modal-open"); back.remove(); state.sheet = null; },
+        tick(text) { count.textContent = `Öffnet in ${text}`; },
+        ready() { count.textContent = "Jetzt!"; button.classList.remove("locked"); button.classList.add("ready"); button.removeAttribute("aria-disabled"); button.textContent = "Öffnen"; note.textContent = "Tippe jetzt auf Öffnen!"; controller?.mood("ready"); },
+      };
+      state.sheet = sheet;
+      back.addEventListener("click", (event) => { if (event.target === back) sheet.close(); });
+      back.append(panel);
+      document.body.append(back);
+      document.body.classList.add("modal-open");
+      document.addEventListener("keydown", onKey, true);
+      count.textContent = state.phase === "ready" ? "Jetzt!" : `Öffnet in ${clockText(state.opensAt - performance.now())}`;
+      if (state.phase === "ready") sheet.ready();
+      try { const module = await import("/static/js/gift3d.mjs?v=18"); if (state.sheet === sheet) { controller = module.chest(host, 260); controller.mood(state.phase === "ready" ? "ready" : "locked"); } } catch (error) { host.classList.add("flat"); }
+      button.addEventListener("click", async () => {
+        if (state.busy) return;
+        if (state.phase !== "ready") { panel.classList.add("nudge"); setTimeout(() => panel.classList.remove("nudge"), 350); return; }       // grey: it brings nothing yet
+        state.busy = true;
+        button.classList.add("pressed");
         const reply = await Api.post(`/chests/${info.id}/open`);
-        if (!reply.ok) { toast(Api.message(reply)); stop(); return; }
+        if (!reply.ok) { toast(Api.message(reply)); state.busy = false; stop(); return; }
         controller?.open();
-        label.textContent = `+${reply.data.reward} ${reply.data.reward === 1 ? "Token" : "Tokens"}`;
-        label.classList.add("won");
-        Y.sound?.play("success");
+        const reward = reply.data.reward;
+        result.hidden = false;
+        result.textContent = reward > 0 ? `+${reward} ${reward === 1 ? "Token" : "Tokens"}` : "Zu langsam: leer";
+        result.classList.toggle("won", reward > 0);
+        button.hidden = true;
+        note.textContent = reward > 0 ? `Du hast jetzt ${reply.data.tokens} Tokens.` : "Beim nächsten Mal schneller!";
+        Y.sound?.play(reward > 0 ? "success" : "unlike");
         if (Y.me) Y.me.tokens = reply.data.tokens;
         Y.samoji?.setTokens(reply.data.tokens);
-        toast(`Satürn Truhe: +${reply.data.reward} ${reply.data.reward === 1 ? "Token" : "Tokens"}. Du hast jetzt ${reply.data.tokens}.`);
-        setTimeout(stop, 2600);
+        setTimeout(() => { state.busy = false; stop(); }, 3200);
       });
-      el.append(box);
-      try { const module = await import("/static/js/gift3d.mjs?v=1"); if (chestBox && chestBox.box === box) { controller = module.chest(host, 140); controller.state(phase); } } catch (error) { host.classList.add("flat"); }
     }
     async function askChest(liveOnly) {
       if (!Y.me || chestBox || dead) return;
@@ -280,7 +315,7 @@
     function reel(item, position) {
       const media = item.media.find((entry) => entry.video) || item.media[0];
       const photos = item.media.some((entry) => entry.video) ? null : item.media.filter((entry) => !entry.gif);       // a post without a video: its photos are a slide show (swipe to the side, it also goes on by itself)
-      const state = { liked: !!item.viewer.liked, bookmarked: !!item.viewer.bookmarked, likes: item.counts.likes, replies: item.counts.replies };
+      const state = { liked: !!item.viewer.liked, bookmarked: !!item.viewer.bookmarked, likes: item.counts.likes, replies: item.counts.replies, bookmarks: item.counts.bookmarks || 0 };
       const video = h("video", { class: "reel-video", loop: true, muted: true, playsinline: true, preload: "none", "aria-label": item.text || `Video von ${item.user.name}` });
       if (media.width > media.height) video.classList.add("wide");
       const stage = h("div", { class: "reel-stage" });
@@ -288,7 +323,8 @@
       const commentCount = h("span", { class: "reel-count" });
       const like = h("button", { class: "reel-btn", type: "button", "aria-label": "Gefällt mir" }, h("span", { class: "reel-btn-ic" }), likeCount);
       const comment = h("button", { class: "reel-btn", type: "button", "aria-label": "Kommentare" }, h("span", { class: "reel-btn-ic" }, icon("reply")), commentCount);
-      const save = h("button", { class: "reel-btn", type: "button", "aria-label": "Lesezeichen" }, h("span", { class: "reel-btn-ic" }), h("span", { class: "reel-count" }, "Merken"));
+      const saveCount = h("span", { class: "reel-count" }, "Merken");
+      const save = h("button", { class: "reel-btn", type: "button", "aria-label": "Lesezeichen" }, h("span", { class: "reel-btn-ic" }), saveCount);
       const giftCount = h("span", { class: "reel-count" }, item.gifts ? Core.formatCount(item.gifts.count) : "Samoji");
       const gift = Y.samoji && !(Y.me && Y.me.handle === item.user.handle) && !item.user.ai && !item.user.company ? h("button", { class: "reel-btn", type: "button", "aria-label": "Samoji schenken" }, h("span", { class: "reel-btn-ic" }, icon("gift")), giftCount) : null;
       const giftSpot = () => { const box = gift && gift.getBoundingClientRect(); return box && box.width ? { x: box.left + box.width / 2, y: box.top + box.height / 2 } : undefined; };
@@ -316,6 +352,7 @@
         commentCount.textContent = Core.formatCount(state.replies);
         fill(save.firstChild, icon(state.bookmarked ? "bookmarkFill" : "bookmark"));
         save.classList.toggle("on", state.bookmarked);
+        saveCount.textContent = state.bookmarks > 0 ? Core.formatCount(state.bookmarks) : "Merken";
       }
       async function toggleLike(x, y) {
         if (!Y.requireLogin("Melde dich an, um mitzumachen.")) return;
@@ -347,9 +384,10 @@
         if (!Y.requireLogin("Melde dich an, um Lesezeichen zu setzen.")) return;
         const wanted = !state.bookmarked;
         state.bookmarked = wanted;
+        state.bookmarks = Math.max(0, state.bookmarks + (wanted ? 1 : -1));
         draw();
         const reply = wanted ? await Api.post(`/posts/${item.id}/bookmark`) : await Api.del(`/posts/${item.id}/bookmark`);
-        if (!reply.ok) { state.bookmarked = !wanted; draw(); toast(Api.message(reply)); } else toast(wanted ? "Zu deinen Lesezeichen hinzugefügt" : "Aus den Lesezeichen entfernt");
+        if (!reply.ok) { state.bookmarked = !wanted; state.bookmarks = Math.max(0, state.bookmarks + (wanted ? -1 : 1)); draw(); toast(Api.message(reply)); } else toast(wanted ? "Zu deinen Lesezeichen hinzugefügt" : "Aus den Lesezeichen entfernt");
       });
       share.addEventListener("click", () => menu(share, Y.shareItems(item)));
       const moreMenu = (anchor) => menu(anchor, [
@@ -410,7 +448,6 @@
             h("span", { class: "reel-handle-row" }, link(`/${item.user.handle}`, { class: "reel-handle" }, `@${item.user.handle}`), pill))),
         title ? h("p", { class: "reel-title" }, richText(title)) : null,
         caption ? h("p", { class: "reel-text" }, richText(caption)) : null,
-        h("p", { class: "reel-views" }, `${Core.formatCount(item.views || 0)} Aufrufe`),
         Y.linkCardFor ? Y.linkCardFor(item.text, { compact: true }) : null,
         item.camId && Y.tryButton ? Y.tryButton(item.camId) : null);
       const actions = h("div", { class: "reel-actions" },
@@ -516,7 +553,7 @@
       refresh() { reset(); },
       destroy() {
         dead = true;
-        if (chestBox) chestBox.box.remove();
+        if (chestBox) { chestBox.state.sheet?.close(); chestBox.chip.remove(); }
         removeEventListener("devicemotion", onMotion);
         clearTimeout(watching);
         watcher?.disconnect();

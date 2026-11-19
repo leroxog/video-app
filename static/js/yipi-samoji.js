@@ -33,7 +33,7 @@
   // ------------------------------------------------------------------------------------------------- the 3D pictures
   /* The 3D part (three.js) is loaded when the first Samoji is shown; until then (or without WebGL) a plain coloured disc stands in. */
   const lib = () => {
-    if (!lib.once) lib.once = import("/static/js/gift3d.mjs?v=1").then((module) => { module.setCatalogue(data); return module; });
+    if (!lib.once) lib.once = import("/static/js/gift3d.mjs?v=18").then((module) => { module.setCatalogue(data); return module; });
     return lib.once;
   };
   /* A Samoji as a picture (3D, rendered once and kept); `item` is a row of the catalogue. */
@@ -95,17 +95,23 @@
       if (!list.length) grid.append(h("p", { class: "sm-none" }, "Nichts gefunden."));
       more.hidden = list.length <= shown;
     }
+    /* The bill at the top of the sheet (above the Samojis, where it cannot be overlooked): which Samoji, what it costs, what you have, what is left, and the button to send. */
     function choose(item) {
       chosen = item;
       confirm.hidden = false;
-      const enough = tokens >= item[4];
-      const send = h("button", { class: "sm-send", type: "button", disabled: !enough }, `Senden für ${priceText(item[4])}`);
+      const left = tokens - item[4];
+      const enough = left >= 0;
+      const send = h("button", { class: "sm-send", type: "button", disabled: !enough }, enough ? `Senden für ${priceText(item[4])}` : "Zu wenig Tokens");
       send.addEventListener("click", () => give(item, send));
       stopLive?.();
-      const holder = h("span", { class: "sm-live" });
       stopLive = null;
-      lib().then((module) => { if (chosen !== item) return; const preview = module.live(item, 96); holder.append(preview.canvas); stopLive = preview.stop; });
-      fill(confirm, holder, h("div", { class: "sm-confirm-text" }, h("b", {}, nameOf(item)), h("small", {}, enough ? "Der Empfänger bekommt genauso viele Tokens." : `Dir fehlen ${item[4] - tokens} Tokens.`)), send);
+      const holder = h("span", { class: "sm-live" });
+      lib().then((module) => { if (chosen !== item) return; const preview = module.live(item, 104); holder.append(preview.canvas); stopLive = preview.stop; });
+      const line = (label, value, extra = "") => h("div", { class: `sm-line ${extra}`.trim() }, h("span", {}, label), h("b", {}, value));
+      fill(confirm, h("div", { class: "sm-bill-top" }, holder, h("div", { class: "sm-bill-name" }, h("small", {}, "Dein Geschenk"), h("b", {}, nameOf(item)))),
+        h("div", { class: "sm-lines" }, line("Preis", `− ${priceText(item[4])}`), line("Du hast", priceText(tokens)), h("hr", {}), line("Danach", priceText(Math.max(0, left)), enough ? "total" : "total bad")),
+        h("small", { class: "sm-note" }, enough ? "Wer es bekommt, bekommt genauso viele Tokens." : `Dir fehlen ${-left} Tokens.`), send);
+      panel.scrollTo({ top: 0, behavior: "smooth" });
       drawGrid();
     }
     async function give(item, button) {
@@ -125,7 +131,7 @@
     const panel = h("div", { class: "skz-sheet samoji-sheet", role: "dialog", "aria-modal": "true", "aria-label": "Samojis" },
       h("span", { class: "skz-grip", "aria-hidden": "true" }),
       h("div", { class: "sm-head" }, h("h2", {}, "Samojis"), balance, h("button", { class: "icon-btn round", type: "button", "aria-label": "Schließen", onclick: close }, icon("close"))),
-      search, who, chips, grid, more, confirm);
+      confirm, search, who, chips, grid, more);
     back.addEventListener("click", (event) => { if (event.target === back) close(); });
     back.append(panel);
     document.body.append(back);

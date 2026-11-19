@@ -40,7 +40,7 @@ def person(handle):
 def test_there_are_more_than_a_thousand_different_samojis_with_prices_from_one_up():
     assert len(samojis.CATALOGUE) >= 1000 and len({item[1:4] for item in samojis.CATALOGUE}) == len(samojis.CATALOGUE), "every one is different"
     prices = [item[4] for item in samojis.CATALOGUE]
-    assert min(prices) == 1 and max(prices) > 100 and len(set(prices)) > 30, "different prices"
+    assert min(prices) == 2 and max(prices) > 200 and len(set(prices)) > 30, "different prices"
     assert samojis.find(1) is not None and samojis.find(0) is None and samojis.find("x") is None and samojis.find(len(samojis.CATALOGUE) + 1) is None
     assert len({samojis.name(item) for item in samojis.CATALOGUE}) == len(samojis.CATALOGUE), "and every one has its own name"
 
@@ -89,7 +89,7 @@ def test_a_present_for_a_video_and_in_a_chat(client):
 def test_the_page_has_the_sheet_the_drawings_and_the_buttons():
     read = lambda *parts: open(os.path.join(ROOT, *parts), encoding="utf-8").read()  # noqa: E731
     page, chats, videos, components = read("static", "js", "yipi-samoji.js"), read("static", "js", "yipi-chats.js"), read("static", "js", "yipi-videos.js"), read("static", "js", "yipi-components.js")
-    assert "yipi-samoji.js" in yipi.PULSE_SCRIPTS and "innerHTML" not in page and "Senden für" in page and "Der Empfänger bekommt genauso viele Tokens." in page
+    assert "yipi-samoji.js" in yipi.PULSE_SCRIPTS and "innerHTML" not in page and "Senden für" in page and "bekommt genauso viele Tokens." in page
     assert "Y.samoji.open({ to: route.handle, chat: \"dm\"" in chats and "Y.samoji.bubble(" in chats and "Y.samoji.open({ to: item.user.handle, post: item.id, giftFrom: giftSpot()" in videos and "Samoji schenken" in components
 
 
@@ -110,25 +110,30 @@ def test_a_present_in_a_group_goes_to_one_member_and_the_daily_present_comes_onc
     assert again["given"] == 0 and again["tokens"] == first["tokens"], "once a day"
 
 
-def test_the_shown_likes_grow_with_the_age_of_a_post_and_can_be_switched_off(client, monkeypatch):
+def test_the_shown_likes_and_bookmarks_are_few_and_grow_slowly_and_can_be_switched_off(client, monkeypatch):
     from datetime import timedelta
+    from types import SimpleNamespace
     mia = person("mia")
     post = mia.post("/api/yipi/posts", json={"text": "hallo"}).get_json()["post"]
-    row = db.session.get(yipi.YipiPost, post["id"])
-    assert yipi.like_boost(row) == 0 and yipi.view_boost(row) < 20, "a minute old: a handful at most"
-    row.created_at = yipi.utcnow() - timedelta(days=1)
-    day = (yipi.view_boost(row), yipi.like_boost(row))
-    row.created_at = yipi.utcnow() - timedelta(days=30)
-    month = (yipi.view_boost(row), yipi.like_boost(row))
-    assert 400 <= day[0] <= 2500 and day[1] > 0 and month[0] > day[0] * 5 and month[1] > day[1], (day, month)
-    assert 0 < month[1] < month[0], "there are far fewer likes than views"
+    fresh = SimpleNamespace(id=post["id"], created_at=yipi.utcnow())
+    assert yipi.like_boost(fresh) == 0 and yipi.bookmark_boost(fresh) == 0, "a minute old: nothing"
+    month = [SimpleNamespace(id=n, created_at=yipi.utcnow() - timedelta(days=30)) for n in range(1, 400)]
+    likes = sorted(yipi.like_boost(p) for p in month)
+    assert max(likes) <= 30 and max(likes) > 5, "never more than 30, a lucky one gets some"
+    assert likes[len(likes) // 2] <= 8, "most posts have only a few"
+    assert all(yipi.bookmark_boost(p) <= yipi.like_boost(p) for p in month), "fewer bookmarks than likes"
+    shown = mia.get(f"/api/yipi/posts/{post['id']}").get_json()["post"]
+    assert shown["views"] <= 1 and "bookmarks" in shown["counts"], "the views are the real ones again"
     monkeypatch.setenv("FAKE_VIEWS", "0")
-    assert yipi.view_boost(row) == 0 and yipi.like_boost(row) == 0
+    assert all(yipi.like_boost(p) == 0 and yipi.bookmark_boost(p) == 0 for p in month)
 
 
 def test_the_satuern_chest_opens_after_its_timer_and_pays_more_for_a_quick_tap(client, monkeypatch):
     from datetime import timedelta
     mia, tom = person("mia"), person("tom")
+    monkeypatch.delenv("CHESTS", raising=False)
+    assert mia.post("/api/yipi/chests/maybe", json={}).get_json()["chest"] is None, "switched off unless CHESTS=1"
+    monkeypatch.setenv("CHESTS", "1")
     first = mia.post("/api/yipi/chests/maybe", json={}).get_json()["chest"]
     assert first and 10 <= first["opensIn"] <= 301 and first["closesIn"] > first["opensIn"], "a timer from 10 seconds to 5 minutes"
     again = mia.post("/api/yipi/chests/maybe", json={}).get_json()["chest"]
@@ -137,11 +142,11 @@ def test_the_satuern_chest_opens_after_its_timer_and_pays_more_for_a_quick_tap(c
     early = mia.post(f"/api/yipi/chests/{first['id']}/open")
     assert early.status_code == 400 and early.get_json()["error"] == "chest_early", "the timer is not over"
     row = db.session.get(yipi.YipiChest, first["id"])
-    row.opens_at = yipi.utcnow() - timedelta(seconds=0.3)
+    row.opens_at = yipi.utcnow() - timedelta(seconds=0.22)
     row.expires_at = yipi.utcnow() + timedelta(seconds=40)
     db.session.commit()
     quick = mia.post(f"/api/yipi/chests/{first['id']}/open")
-    assert quick.status_code == 200 and 11 <= quick.get_json()["reward"] <= 13 and quick.get_json()["tokens"] == 5 + quick.get_json()["reward"]
+    assert quick.status_code == 200 and 8 <= quick.get_json()["reward"] <= 13 and quick.get_json()["tokens"] == 5 + quick.get_json()["reward"], "a tap right after it opened: 8 to 13"
     assert mia.post(f"/api/yipi/chests/{first['id']}/open").status_code == 409, "once"
     assert mia.post("/api/yipi/chests/maybe", json={}).get_json()["chest"] is None, "the next chest comes later (three minutes)"
     # a slow tap: ten seconds after it opened gives one Token
@@ -149,18 +154,22 @@ def test_the_satuern_chest_opens_after_its_timer_and_pays_more_for_a_quick_tap(c
     db.session.add(row2)
     db.session.commit()
     slow = mia.post(f"/api/yipi/chests/{row2.id}/open").get_json()
-    assert slow["reward"] == 1
-    assert yipi.chest_reward if hasattr(yipi, "chest_reward") else True
+    assert slow["reward"] == 0, "twelve seconds after it opened there is nothing left in it"
 
 
 def test_the_page_builds_the_samojis_in_3d_and_has_the_chest():
     read = lambda *parts: open(os.path.join(ROOT, *parts), encoding="utf-8").read()  # noqa: E731
-    module, page, videos, css = read("static", "js", "gift3d.mjs"), read("static", "js", "yipi-samoji.js"), read("static", "js", "yipi-videos.js"), read("static", "css", "yipi.css")
-    assert "import * as THREE" in module and "export function fly(" in module and "export function chest(" in module and "export function thumb(" in module and "CatmullRomCurve3" in module
-    assert module.count("/* ") >= 16 and "FIGURES = [" in module and "/* 15 Wal */" in module and "/* 13 Rose */" in module
-    assert 'import("/static/js/gift3d.mjs' in page and "innerHTML" not in module and "innerHTML" not in page
-    assert "Y.samoji.replay(reel.item.gifts.last" in videos and "/chests/maybe" in videos and "Tippe!" in videos and ".chest-time" in css
-    assert len(samojis.SHAPES) == 16 and len(samojis.LOOKS) == 15 and len(samojis.BADGES) == 5 and "Wal" in samojis.SHAPES and "Rose" in samojis.SHAPES
+    core, figures, chest, kit = read("static", "js", "gift3d.mjs"), read("static", "js", "gift3d-figures.mjs"), read("static", "js", "gift3d-chest.mjs"), read("static", "js", "gift3d-kit.mjs")
+    page, videos, css = read("static", "js", "yipi-samoji.js"), read("static", "js", "yipi-videos.js"), read("static", "css", "yipi.css")
+    assert "import { THREE" in figures and "export class Particles" in kit and "export function fly(" in core and "export function chest(" in core and "export function thumb(" in core and "CatmullRomCurve3" in core
+    for figure in ("Komet", "Panda", "Roboter", "Gewitter", "Rakete", "Schmetterling", "Rose", "Krone", "Feuerwerk", "Galaxie", "UFO", "Löwe", "Diamantring", "Sportwagen", "Wal", "Drache"):
+        assert f"{figure} " in figures or f"-- {figure}" in figures, figure
+    assert "export const FIGURES = [komet, panda, roboter, gewitter, rakete, schmetterling, rose, krone, feuerwerk, galaxie, ufo, loewe, ring, sportwagen, wal, drache];" in figures
+    assert "export function buildChest" in chest and "setMood" in chest and "innerHTML" not in core + figures + chest + kit + page
+    assert 'import("/static/js/gift3d.mjs' in page and "Y.samoji.replay(reel.item.gifts.last" in videos and "/chests/maybe" in videos
+    assert 'class: "chest-open locked"' in videos and "Öffnen" in videos and "chest-chip pop" in videos and ".chest-chip.pop" in css and ".chest-open.ready" in css and ".chest-open.locked" in css
+    assert "sm-bill-top" in page and "Danach" in page and "Du hast" in page, "the bill is above the Samojis"
+    assert len(samojis.SHAPES) == 16 and len(samojis.LOOKS) == 15 and len(samojis.BADGES) == 5 and "Wal" in samojis.SHAPES and "Rose" in samojis.SHAPES and "Drache" in samojis.SHAPES
 
 
 def test_a_post_tells_which_presents_it_has_got(client):
