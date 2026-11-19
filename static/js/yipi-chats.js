@@ -261,7 +261,7 @@
     const picker = h("input", { type: "file", hidden: true, "aria-hidden": "true", tabindex: "-1" });
     const staged = h("div", { class: "dm-staged", hidden: true });
     const note = h("p", { class: "notice", hidden: true });
-    const giftButton = !group && Y.samoji ? h("button", { class: "icon-btn tool cb-gift", type: "button", "aria-label": "Samoji schenken" }, icon("gift")) : null;       // (a present for the other person, for Tokens)
+    const giftButton = Y.samoji ? h("button", { class: "icon-btn tool cb-gift", type: "button", "aria-label": "Samoji schenken" }, icon("gift")) : null;       // (a present for the other person, for Tokens)
     const box = h("div", { class: "dm-box" }, plusButton, h("div", { class: "cb-field" }, input, stickerButton), giftButton, photoButton, micButton, sendButton, picker);
     const composeBar = h("div", { class: "dm-compose", hidden: true }, staged, box, attachPanel.element);
     const requestBar = h("div", { class: "request-bar", hidden: true });
@@ -306,7 +306,7 @@
           message.gif && message.gif.gone ? h("div", { class: "bubble-text gone" }, "Diesen Sticker gibt es nicht mehr.") : null,
           file ? fileBubble(file) : null,
           message.file && message.file.gone ? h("div", { class: "bubble-text gone" }, "Diese Datei gibt es nicht mehr.") : null,
-          message.text && Y.samoji && Y.samoji.fromText(message.text) ? Y.samoji.bubble(Y.samoji.fromText(message.text)) : null,
+          message.text && Y.samoji && Y.samoji.fromText(message.text) ? Y.samoji.bubble(Y.samoji.fromText(message.text), message.text) : null,
           message.text && !(Y.samoji && Y.samoji.fromText(message.text)) ? h("div", { class: "bubble-text" }, richText(message.text)) : null,
           message.text && !gif && !file && !(Y.samoji && Y.samoji.fromText(message.text)) && Y.linkCardFor ? Y.linkCardFor(message.text, { compact: true }) : null,
           message.hearts ? h("button", { class: `bubble-hearts${message.hearted ? " on" : ""}`, type: "button", "aria-pressed": String(!!message.hearted), "aria-label": `${message.hearts} ${message.hearts === 1 ? "Herz" : "Herzen"}${message.hearted ? ", von dir" : ""}`, onclick: (event) => toggleHeart(message, event.clientX, event.clientY) },
@@ -558,7 +558,9 @@
     input.addEventListener("focus", () => { attachPanel.close(); plusButton.classList.remove("open"); plusButton.setAttribute("aria-expanded", "false"); });
     stickerButton.addEventListener("click", () => Y.gifPicker({ onPick: (gif) => deliver({ gifId: gif.id }, false) }));
     photoButton.addEventListener("click", () => attachEntry("camera"));
-    if (giftButton) giftButton.addEventListener("click", () => Y.samoji.open({ to: route.handle, chat: "dm", onSent: () => poll() }));
+    if (giftButton) giftButton.addEventListener("click", () => (group
+      ? Y.samoji.open({ chat: "group", group: route.id, members: ((state.group && state.group.members) || []).filter((member) => !Y.me || member.handle !== Y.me.handle), onSent: () => poll() })
+      : Y.samoji.open({ to: route.handle, chat: "dm", onSent: () => poll() })));
     micButton.addEventListener("click", () => Y.composerTools.record({ host: box, onSend: async (blob) => {
       const file = new File([blob], Y.composerTools.voiceName(blob), { type: blob.type });
       const up = await Api.attach(file, null, { voice: "1" });

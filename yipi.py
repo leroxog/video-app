@@ -415,6 +415,15 @@ class YipiWallet(db.Model):
     tokens = db.Column(db.Integer, nullable=False, default=samojis.START_TOKENS)
 
 
+class YipiDaily(db.Model):
+    """The day (UTC, "2026-11-19") on which a person got the daily present of Tokens: one row per person and day."""
+    __tablename__ = "yipi_daily"
+    __table_args__ = (db.UniqueConstraint("user_id", "day"),)
+    id = db.Column(BigId, primary_key=True, autoincrement=True)
+    user_id = db.Column(db.Integer, nullable=False, index=True)
+    day = db.Column(db.String(10), nullable=False)
+
+
 class YipiGift(db.Model):
     """A Samoji that was given as a present: who gave it to whom, what it was, how many Tokens it cost (and went to the receiver), and for which post, if any."""
     __tablename__ = "yipi_gift"
@@ -1402,7 +1411,7 @@ def feed_items(rows, viewer):
                 "id": post.id, "user": {**user_brief(owner), **({"followedByMe": owner.id in following} if viewer and owner.id != viewer.id else {})}, "text": post.text, "createdAt": iso(post.created_at), "media": media.get(post.id, []),
                 "replyTo": {"id": post.reply_to_id, "handle": parent_owner.handle if parent_owner else None} if post.reply_to_id else None,
                 "quote": brief(everything.get(post.quote_of_id)) if post.quote_of_id else None,
-                "counts": {"replies": post.reply_count, "reposts": post.repost_count + post.quote_count, "likes": post.like_count},
+                "counts": {"replies": post.reply_count, "reposts": post.repost_count + post.quote_count, "likes": post.like_count + like_boost(post)},
                 "viewer": {"liked": post.id in liked, "reposted": post.id in reposted, "bookmarked": post.id in bookmarked},
                 "views": post.view_count + view_boost(post),
             }
@@ -1483,6 +1492,12 @@ def view_boost(post):
     return int(90 * (hours ** 0.72) * (0.6 + luck * 1.8))
 
 
+def like_boost(post):
+    """Likes that are SHOWN, like the views (view_boost): a few percent of the shown views, a different share for every post; nothing for a post that is only minutes old. FAKE_VIEWS=0 switches it off."""
+    luck = ((post.id * 40503) % 1000) / 1000
+    return int(view_boost(post) * (0.02 + luck * 0.06))
+
+
 def random_video_page(query, viewer):
     """The Videos tab does not start with the newest video: the order is a shuffle that depends on a seed the page picks, so reading on with
     `offset` always continues the same shuffle, and a new seed shuffles again. `next` is None after the last video (the page starts over)."""
@@ -1524,7 +1539,8 @@ def notify(user_id, actor, kind, post_id=None):
     db.session.flush()
     where = f"/{actor.handle}" if kind == "follow" else f"/{actor.handle}/status/{post_id}" if post_id else "/notifications"      # (a post opens under any name: the page finds its author)
     # everything that lands in the inbox also arrives on the phone like in a real app; the labelled AI accounts (many of them) share one tag per kind, so their banners replace each other and do not pile up
-    push_later(user_id, "Satürn", PUSH_KINDS[kind].format(name=actor.name), where, tag=f"{kind}-ai" if actor.agent_kind is not None else f"{kind}-{actor.id}")
+    target = db.session.get(YipiPost, post_id) if post_id else None
+    person_push(user_id, actor.name, notification_line(kind, target), where, tag=f"{kind}-ai" if actor.agent_kind is not None else f"{kind}-{actor.id}")
 
 
 def bump(model, row_id, column, amount):
@@ -1979,6 +1995,43 @@ def friend_streaks(user, other_ids):
     return out
 
 
+def snippet_of(text, limit=90):
+    text = re.sub(r"\s+", " ", text or "").strip()
+    return text if len(text) <= limit else text[:limit].rstrip() + "…"
+
+
+def person_push(user_id, actor_name, text, url="/", tag=None):
+    """A notification in three lines like in a real app: the name of the person who gets it (the title), under it the name of the person who did something, and what was done (the message,
+    "mag deinen Beitrag" ...). The old one read "Satürn" twice (the title, and the name of the site that the phone adds)."""
+    person = db.session.get(YipiUser, user_id)
+    push_later(user_id, person.name if person is not None and person.name else "Satürn", f"{actor_name}\n{text}", url, tag=tag)
+
+
+def message_line(text, has_gif=False, has_file=False):
+    if samojis.MARKER in (text or ""):
+        return "hat dir ein Samoji geschickt"
+    return snippet_of(text) or ("Sticker" if has_gif else "Anhang" if has_file else "hat dir geschrieben")
+
+
+def notification_line(kind, post):
+    """The second line of the notification of a like, an answer, a mention, a quote, a repost or a new follower."""
+    if kind == "follow":
+        return "folgt dir jetzt"
+    if kind == "like":
+        if post is not None and post.reply_to_id:
+            return "mag deinen Kommentar"
+        videos = post is not None and any(row.content_type.startswith("video/") for row in media_rows(post.id))
+        return "mag dein Video" if videos else "mag deinen Beitrag"
+    if kind == "repost":
+        return "hat deinen Beitrag repostet"
+    said = snippet_of(post.text) if post is not None else ""
+    if kind == "reply":
+        return said or "hat dir geantwortet"
+    if kind == "mention":
+        return f"hat dich erwähnt: {said}" if said else "hat dich erwähnt"
+    return f"hat deinen Beitrag zitiert: {said}" if said else "hat deinen Beitrag zitiert"
+
+
 PUSH_KINDS = {"like": "{name} gefällt dein Beitrag", "reply": "{name} hat dir geantwortet", "mention": "{name} hat dich erwähnt", "quote": "{name} hat deinen Beitrag zitiert",
               "repost": "{name} hat deinen Beitrag repostet", "follow": "{name} folgt dir jetzt"}
 
@@ -2080,7 +2133,7 @@ def notify_followers_of_post(post, author):
     kinds = {row.content_type.split("/")[0] for row in media_rows(post.id)}
     what = "ein neues Video" if "video" in kinds else "ein neues Foto" if "image" in kinds else "etwas Neues"
     for user_id in targets:
-        push_later(user_id, "Satürn", f"{author.name} hat {what} gepostet", f"/{author.handle}/status/{post.id}", tag=f"post-{author.id}")
+        person_push(user_id, author.name, f"hat {what} gepostet", f"/{author.handle}/status/{post.id}", tag=f"post-{author.id}")
     return len(targets)
 
 
@@ -3241,7 +3294,7 @@ def register_routes(app):
         except IntegrityError:
             db.session.rollback()
         db.session.refresh(post)
-        return jsonify({"ok": True, "counts": {"replies": post.reply_count, "reposts": post.repost_count + post.quote_count, "likes": post.like_count}})
+        return jsonify({"ok": True, "counts": {"replies": post.reply_count, "reposts": post.repost_count + post.quote_count, "likes": post.like_count + like_boost(post)}})
 
     @route("/api/yipi/posts/<int(min=1, max=4611686018427387904):post_id>/like", methods=["POST"], endpoint="yipi_like")
     def yipi_like(post_id):
@@ -3278,7 +3331,7 @@ def register_routes(app):
             notify(post.user_id, user, "repost", post_id)
             db.session.commit()
         db.session.refresh(post)
-        return jsonify({"ok": True, "counts": {"replies": post.reply_count, "reposts": post.repost_count + post.quote_count, "likes": post.like_count}})
+        return jsonify({"ok": True, "counts": {"replies": post.reply_count, "reposts": post.repost_count + post.quote_count, "likes": post.like_count + like_boost(post)}})
 
     @route("/api/yipi/posts/<int(min=1, max=4611686018427387904):post_id>/repost", methods=["DELETE"], endpoint="yipi_unrepost")
     def yipi_unrepost(post_id):
@@ -3293,7 +3346,7 @@ def register_routes(app):
             remove_post(mine)
             db.session.commit()
             db.session.refresh(post)
-        return jsonify({"ok": True, "counts": {"replies": post.reply_count, "reposts": post.repost_count + post.quote_count, "likes": post.like_count}})
+        return jsonify({"ok": True, "counts": {"replies": post.reply_count, "reposts": post.repost_count + post.quote_count, "likes": post.like_count + like_boost(post)}})
 
     # ---------------------------------------------------------------------------------------- feeds
     @route("/api/yipi/timeline")
@@ -3943,7 +3996,7 @@ def register_routes(app):
             bump(PulseGif, gif_id, PulseGif.uses, 1)
         db.session.commit()
         for other_member in YipiGroupMember.query.filter(YipiGroupMember.group_id == group.id, YipiGroupMember.user_id != user.id).all():
-            push_later(other_member.user_id, "Satürn", f"{user.name} in „{group.name}“", f"/g/{group.id}", tag=f"group-{group.id}")
+            person_push(other_member.user_id, f"{user.name} in „{group.name}“", message_line(text, bool(gif_id), stored is not None), f"/g/{group.id}", tag=f"group-{group.id}")
         return jsonify({"ok": True, "message": group_message_json(row, {user.id: user}, gifs, user, {stored.id: stored} if stored else None)}), 201
 
     @route("/api/yipi/groups/<int(min=1, max=2147483647):group_id>/poll")
@@ -4089,10 +4142,15 @@ def register_routes(app):
             if post is None or post.deleted or post.user_id != other.id:
                 return fail("not_found", 404)
         in_chat = data.get("chat") == "dm"
+        group = None
         if in_chat:
             gate = dm_gate(user, other)
             if gate:
                 return fail(gate, 403)
+        elif data.get("chat") == "group":                                    # in a group chat: the present goes to one of the other members
+            group, _ = group_of(user, clamp_cursor(data.get("group")) or 0)
+            if group is None or YipiGroupMember.query.filter_by(group_id=group.id, user_id=other.id).first() is None:
+                return fail("not_found", 404)
         if limiter.too_many("gift", str(user.id)):
             return fail("too_many", 429)
         price = entry[4]
@@ -4107,9 +4165,31 @@ def register_routes(app):
         db.session.add(YipiGift(sender_id=user.id, recipient_id=other.id, samoji_id=entry[0], tokens=price, post_id=post.id if post else None))
         if in_chat:
             db.session.add(YipiMessage(sender_id=user.id, recipient_id=other.id, text=samojis.message_text(entry[0])))
+        if group is not None:
+            db.session.add(YipiGroupMessage(group_id=group.id, sender_id=user.id, text=samojis.message_text(entry[0]) + f" @{other.handle}"))
         db.session.commit()
-        push_later(other.id, "Satürn", f"{user.name} hat dir {samojis.name(entry)} geschickt (+{price} {'Token' if price == 1 else 'Tokens'})", url=f"/{user.handle}", tag="gift")
+        person_push(other.id, user.name, f"hat dir {samojis.name(entry)} geschickt (+{price} {'Token' if price == 1 else 'Tokens'})", f"/{user.handle}", tag="gift")
         return jsonify({"ok": True, "tokens": tokens_of(user.id), "samoji": entry[0], "price": price})
+
+    DAILY_TOKENS = 2
+
+    @route("/api/yipi/tokens/daily", methods=["POST"], endpoint="yipi_tokens_daily")
+    def yipi_tokens_daily():
+        """The daily present: 2 Tokens, once per day (the page asks when it is opened). Answers {given: how many (0 when today's present is already taken), tokens}."""
+        user, problem = need_user()
+        if problem:
+            return problem
+        today = utcnow().strftime("%Y-%m-%d")
+        wallet(user.id)
+        db.session.add(YipiDaily(user_id=user.id, day=today))
+        try:
+            db.session.flush()
+        except IntegrityError:
+            db.session.rollback()
+            return jsonify({"ok": True, "given": 0, "tokens": tokens_of(user.id)})
+        YipiWallet.query.filter(YipiWallet.user_id == user.id).update({YipiWallet.tokens: YipiWallet.tokens + DAILY_TOKENS}, synchronize_session=False)
+        db.session.commit()
+        return jsonify({"ok": True, "given": DAILY_TOKENS, "tokens": tokens_of(user.id)})
 
     @route("/api/yipi/messages/<handle>", methods=["POST"], endpoint="yipi_send")
     def yipi_send(handle):
@@ -4156,7 +4236,7 @@ def register_routes(app):
         if gif_id:
             bump(PulseGif, gif_id, PulseGif.uses, 1)
         db.session.commit()
-        push_later(other.id, "Satürn", f"{user.name} hat dir geschrieben", f"/messages/{user.handle}", tag=f"dm-{user.id}")
+        person_push(other.id, user.name, message_line(text, bool(gif_id), stored is not None), f"/messages/{user.handle}", tag=f"dm-{user.id}")
         return jsonify({"ok": True, "message": message_json(message, gifs, True, favorite_ids(user, [gif_id]), {stored.id: stored} if stored else None), "gate": dm_gate(user, other)}), 201
 
     @route("/api/yipi/messages/<handle>/poll")

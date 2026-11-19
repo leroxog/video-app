@@ -2930,3 +2930,5 @@ html.typing .main { padding-bottom: 16px; }
 .cb-gift svg { width: 24px; height: 24px; }
 .chip.tokens { background: var(--snap, #8e44f2); color: #fff; }
 .samoji-back { z-index: 1100; }
+.sm-who { align-items: center; }
+.sm-for { flex: none; color: var(--muted); font-size: 13px; font-weight: 800; }

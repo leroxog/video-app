@@ -91,3 +91,36 @@ def test_the_page_has_the_sheet_the_drawings_and_the_buttons():
     page, chats, videos, components = read("static", "js", "yipi-samoji.js"), read("static", "js", "yipi-chats.js"), read("static", "js", "yipi-videos.js"), read("static", "js", "yipi-components.js")
     assert "yipi-samoji.js" in yipi.PULSE_SCRIPTS and "innerHTML" not in page and "Senden für" in page and "Der Empfänger bekommt genauso viele Tokens." in page
     assert "Y.samoji.open({ to: route.handle, chat: \"dm\"" in chats and "Y.samoji.bubble(" in chats and "Y.samoji.open({ to: item.user.handle, post: item.id })" in videos and "Samoji schenken" in components
+
+
+def test_a_present_in_a_group_goes_to_one_member_and_the_daily_present_comes_once_a_day(client):
+    mia, tom, zoe = person("mia"), person("tom"), person("zoe")
+    for a, b in (("mia", "tom"), ("tom", "mia"), ("mia", "zoe"), ("zoe", "mia")):
+        assert {"mia": mia, "tom": tom, "zoe": zoe}[a].post(f"/api/yipi/users/{b}/follow").status_code == 200
+    group = mia.post("/api/yipi/groups", json={"name": "Team", "members": ["tom"]}).get_json()["group"]
+    cheap = min(samojis.CATALOGUE, key=lambda item: (item[4], item[0]))
+    assert mia.post("/api/yipi/samojis/send", json={"id": cheap[0], "to": "zoe", "chat": "group", "group": group["id"]}).status_code == 404, "zoe is not in the group"
+    sent = mia.post("/api/yipi/samojis/send", json={"id": cheap[0], "to": "tom", "chat": "group", "group": group["id"]})
+    assert sent.status_code == 200
+    texts = [m["text"] for m in tom.get(f"/api/yipi/groups/{group['id']}").get_json()["messages"]]
+    assert samojis.message_text(cheap[0]) + " @tom" in texts
+    first = mia.post("/api/yipi/tokens/daily").get_json()
+    assert first["given"] == 2 and first["tokens"] == 5 - cheap[4] + 2
+    again = mia.post("/api/yipi/tokens/daily").get_json()
+    assert again["given"] == 0 and again["tokens"] == first["tokens"], "once a day"
+
+
+def test_the_shown_likes_grow_with_the_age_of_a_post_and_can_be_switched_off(client, monkeypatch):
+    from datetime import timedelta
+    mia = person("mia")
+    post = mia.post("/api/yipi/posts", json={"text": "hallo"}).get_json()["post"]
+    row = db.session.get(yipi.YipiPost, post["id"])
+    assert yipi.like_boost(row) == 0 and yipi.view_boost(row) < 20, "a minute old: a handful at most"
+    row.created_at = yipi.utcnow() - timedelta(days=1)
+    day = (yipi.view_boost(row), yipi.like_boost(row))
+    row.created_at = yipi.utcnow() - timedelta(days=30)
+    month = (yipi.view_boost(row), yipi.like_boost(row))
+    assert 400 <= day[0] <= 2500 and day[1] > 0 and month[0] > day[0] * 5 and month[1] > day[1], (day, month)
+    assert 0 < month[1] < month[0], "there are far fewer likes than views"
+    monkeypatch.setenv("FAKE_VIEWS", "0")
+    assert yipi.view_boost(row) == 0 and yipi.like_boost(row) == 0

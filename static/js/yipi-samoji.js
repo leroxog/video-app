@@ -97,7 +97,7 @@
   // ------------------------------------------------------------------------------------------------- the sheet
   const TIERS = [["Alle", 0, 1e9], ["1 bis 3", 1, 3], ["4 bis 10", 4, 10], ["11 bis 40", 11, 40], ["ab 41", 41, 1e9]];
 
-  async function open({ to, post, chat, onSent } = {}) {
+  async function open({ to: first, post, chat, group, members, onSent } = {}) {
     if (!Y.requireLogin("Melde dich an, um Samojis zu verschenken.")) return null;
     if (document.querySelector(".samoji-back")) return null;
     const ready = await load();
@@ -106,6 +106,7 @@
     let term = "";
     let shown = 60;
     let chosen = null;
+    let to = first || (members && members[0] ? members[0].handle : "");           // in a group: the member who gets it (chips below the search)
     const back = h("div", { class: "skz-sheet-back samoji-back" });
     const close = () => { document.removeEventListener("keydown", onKey, true); back.classList.add("closing"); document.body.classList.remove("modal-open"); setTimeout(() => back.remove(), 180); };
     const onKey = (event) => { if (event.key === "Escape") { event.stopPropagation(); close(); } };
@@ -115,6 +116,8 @@
     const search = h("input", { class: "sm-search", type: "search", placeholder: "Samoji suchen", "aria-label": "Samoji suchen", autocomplete: "off", maxlength: 30 });
     const chips = h("div", { class: "sm-tiers" });
     const confirm = h("div", { class: "sm-confirm", hidden: true });
+    const who = h("div", { class: "sm-tiers sm-who", hidden: !(members && members.length) });
+    function drawWho() { fill(who, h("small", { class: "sm-for" }, "Für"), ...(members || []).map((member) => h("button", { class: `sm-chip${member.handle === to ? " on" : ""}`, type: "button", "aria-pressed": String(member.handle === to), onclick: () => { to = member.handle; drawWho(); } }, member.name))); }
 
     const matches = () => ready.items.filter((item) => item[4] >= TIERS[tier][1] && item[4] <= TIERS[tier][2] && (!term || nameOf(item).toLowerCase().includes(term))).sort((a, b) => a[4] - b[4] || a[0] - b[0]);
     function drawBalance() { balance.textContent = `${tokens} ${tokens === 1 ? "Token" : "Tokens"}`; }
@@ -136,7 +139,7 @@
     }
     async function give(item, button) {
       button.disabled = true;
-      const reply = await Api.post("/samojis/send", { id: item[0], to, ...(post ? { post } : {}), ...(chat ? { chat } : {}) });
+      const reply = await Api.post("/samojis/send", { id: item[0], to, ...(post ? { post } : {}), ...(chat ? { chat } : {}), ...(group ? { group } : {}) });
       if (!reply.ok) { toast(Api.message(reply)); button.disabled = false; return; }
       tokens = reply.data.tokens;
       Y.me.tokens = tokens;
@@ -151,24 +154,27 @@
     const panel = h("div", { class: "skz-sheet samoji-sheet", role: "dialog", "aria-modal": "true", "aria-label": "Samojis" },
       h("span", { class: "skz-grip", "aria-hidden": "true" }),
       h("div", { class: "sm-head" }, h("h2", {}, "Samojis"), balance, h("button", { class: "icon-btn round", type: "button", "aria-label": "Schließen", onclick: close }, icon("close"))),
-      search, chips, grid, more, confirm);
+      search, who, chips, grid, more, confirm);
     back.addEventListener("click", (event) => { if (event.target === back) close(); });
     back.append(panel);
     document.body.append(back);
     document.body.classList.add("modal-open");
     document.addEventListener("keydown", onKey, true);
     drawBalance();
+    drawWho();
     drawChips();
     drawGrid();
     return close;
   }
 
   // ------------------------------------------------------------------------------------------------- in chats
-  const fromText = (text) => { const match = typeof text === "string" && text.startsWith(MARKER) ? /^⁣samoji:(\d+)⁣$/.exec(text) : null; return match ? Number(match[1]) : 0; };
+  const fromText = (text) => { const match = typeof text === "string" && text.startsWith(MARKER) ? /^⁣samoji:(\d+)⁣( @\w+)?$/.exec(text) : null; return match ? Number(match[1]) : 0; };
+  const toOf = (text) => { const match = typeof text === "string" ? /⁣ @(\w+)$/.exec(text) : null; return match ? match[1] : ""; };       // (a present in a group names the member who got it)
   /* A bubble for a Samoji in a chat: it is drawn when the list of Samojis is there. */
-  function bubble(id) {
+  function bubble(id, text = "") {
     const box = h("div", { class: "bubble-samoji" });
-    load().then(() => { const item = entry(id); if (item) fill(box, svg(item, 120), h("small", {}, `${nameOf(item)} · ${priceText(item[4])}`)); });
+    const receiver = toOf(text);
+    load().then(() => { const item = entry(id); if (item) fill(box, svg(item, 120), h("small", {}, `${nameOf(item)} · ${priceText(item[4])}${receiver ? ` · für @${receiver}` : ""}`)); });
     return box;
   }
   /* The Tokens of the person (asked once, then remembered). */

@@ -228,18 +228,17 @@ def test_a_like_a_message_and_a_follow_send_a_notification_to_the_other_device(c
     user.last_seen_at = yipi.utcnow() - timedelta(minutes=10)
     db.session.commit()
     api(ben, "post", "/users/mia/follow", {}, status=200)
-    assert len(sent) == 1 and sent[0][0] == subscription(1)["endpoint"] and sent[0][1]["title"] == "Satürn" and "folgt dir" in sent[0][1]["body"] and sent[0][1]["url"] == "/ben"
+    assert len(sent) == 1 and sent[0][0] == subscription(1)["endpoint"] and sent[0][1]["title"] != "Satürn" and sent[0][1]["body"] == "ben\nfolgt dir jetzt" and sent[0][1]["url"] == "/ben"
     api(mia, "post", "/users/ben/follow", {}, status=200)
     user.last_seen_at = yipi.utcnow() - timedelta(minutes=10)
     db.session.commit()
     api(ben, "post", "/messages/mia", {"text": "Hallo"}, status=201)
-    assert len(sent) == 2 and "hat dir geschrieben" in sent[1][1]["body"] and sent[1][1]["url"] == "/messages/ben"
+    assert len(sent) == 2 and sent[1][1]["body"] == "ben\nHallo" and sent[1][1]["title"] == sent[0][1]["title"] and sent[1][1]["url"] == "/messages/ben", "the name of the person who gets it, under it who wrote, under it what was written"
     group = api(mia, "post", "/groups", {"name": "Team", "members": ["ben"]}, status=201)["group"]
     user.last_seen_at = yipi.utcnow() - timedelta(minutes=10)
     db.session.commit()
     api(ben, "post", f"/groups/{group['id']}/messages", {"text": "Moin"}, status=201)
-    assert len(sent) == 3 and "Team" in sent[2][1]["body"] and sent[2][1]["url"] == f"/g/{group['id']}"
-    assert "Hallo" not in str(sent) and "Moin" not in str(sent), "the text of a message never goes into a notification"
+    assert len(sent) == 3 and sent[2][1]["body"] == "ben in „Team“\nMoin" and sent[2][1]["url"] == f"/g/{group['id']}"
 
 
 def test_a_browser_that_is_gone_is_forgotten_and_a_broken_one_does_not_break_a_like(client, monkeypatch):
@@ -305,4 +304,4 @@ def test_what_an_ai_account_does_also_reaches_the_phone_with_one_shared_banner_p
     db.session.add(robot)
     db.session.commit()
     yipi.notify(me.id, robot, "like", 1)
-    assert len(sent) == 1 and "gefällt" in sent[0]["body"] and sent[0]["tag"] == "like-ai"
+    assert len(sent) == 1 and sent[0]["body"].endswith("mag deinen Beitrag") and sent[0]["tag"] == "like-ai"

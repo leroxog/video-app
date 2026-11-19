@@ -381,4 +381,13 @@
   applyTheme();
   render({ initial: true });
   Y.updateBadges();
+  // the daily present: 2 Tokens once a day (asked a moment after the page is open)
+  setTimeout(async () => {
+    if (!Y.me) return;
+    const reply = await Api.post("/tokens/daily");
+    if (!reply.ok) return;
+    Y.me.tokens = reply.data.tokens;
+    Y.samoji?.setTokens(reply.data.tokens);
+    if (reply.data.given) toast(`Tägliches Geschenk: +${reply.data.given} Tokens. Du hast jetzt ${reply.data.tokens}.`);
+  }, 4000);
 })();
