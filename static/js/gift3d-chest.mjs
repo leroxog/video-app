@@ -38,48 +38,83 @@ export function buildChest() {
   const gemMaterial = (hex) => new THREE.MeshPhysicalMaterial({ color: hex, emissive: hex, emissiveIntensity: 0.3, roughness: 0.03, metalness: 0.1, clearcoat: 1 });
   const glowing = (m) => bloom(m);
 
-  // everything is round and bubbly: a chubby body with huge rounded corners, soft pill-shaped bands of gold, big ball feet, round gems, a round lock
-  chest.add(roundedBox(3.0, 1.55, 2.1, 0.7, purple));
-  const inside = at(roundedBox(2.5, 0.2, 1.6, 0.1, new THREE.MeshBasicMaterial({ color: 0xfff0b0 })), 0, 0.68, 0); chest.add(inside);
-  for (const y of [-0.66, 0.66]) chest.add(at(roundedBox(3.12, 0.34, 2.22, 0.17, gold), 0, y, 0));
-  for (const x of [-1.12, 1.12]) chest.add(at(roundedBox(0.5, 1.64, 2.22, 0.24, gold), x, 0, 0));
-  for (const x of [-1.12, 1.12]) for (const y of [-0.3, 0.3]) chest.add(at(sphere(0.12, darkGold), x, y, 1.12));
-  for (const x of [-1.42, 1.42]) for (const z of [-0.86, 0.86]) chest.add(at(sphere(0.37, gold), x, -0.78, z));
-  const runes = [];
-  for (const [x, w] of [[-0.62, 0.5], [0.62, 0.5]]) { const r = at(new THREE.Mesh(new THREE.CapsuleGeometry(0.03, w, 4, 8), rune), x, -0.4, 1.07); r.rotation.z = Math.PI / 2; runes.push(bloom(r)); chest.add(r); }
-  for (const x of [-0.9, -0.5, 0.5, 0.9]) { const r = at(sphere(0.045, rune), x, -0.26, 1.07); runes.push(bloom(r)); chest.add(r); }
+  // built exactly like the reference pictures: a box with softly rounded edges, glossy purple, thin glowing lilac lines, a wide gold band where the lid sits, gold corner caps, three latches,
+  // gold handles on the sides, rivets, and a barrel lid with the same lines; inside it is a purple glow
+  const W = 3.1; const D = 2.2;
+  const inlay = new THREE.MeshStandardMaterial({ color: 0xe9d4ff, emissive: 0xb98cff, emissiveIntensity: 0.25, roughness: 0.3 });
+  const dark = plain(0x120a24);
+  const profile = (w, h, r) => { const s2 = new THREE.Shape(); s2.moveTo(-w / 2, 0); s2.lineTo(w / 2, 0); s2.lineTo(w / 2, h - r); s2.quadraticCurveTo(w / 2, h, w / 2 - r, h); s2.lineTo(-w / 2 + r, h); s2.quadraticCurveTo(-w / 2, h, -w / 2, h - r); s2.lineTo(-w / 2, 0); return s2; };
+  const frame = (w, h, r, k) => { const s2 = profile(w, h, r); const hole = new THREE.Path(); const m = k; hole.moveTo(-w / 2 + m, m); hole.lineTo(-w / 2 + m, h - r); hole.quadraticCurveTo(-w / 2 + m, h - m, -w / 2 + r, h - m); hole.lineTo(w / 2 - r, h - m); hole.quadraticCurveTo(w / 2 - m, h - m, w / 2 - m, h - r); hole.lineTo(w / 2 - m, m); hole.lineTo(-w / 2 + m, m); s2.holes.push(hole); return s2; };
+  const lines = [];
+  const lineMesh = (geometry) => { const m = new THREE.Mesh(geometry, inlay); lines.push(m); return m; };
 
-  // the lid: a big soft dome with fat round ribs of gold and round gems on the front
-  const hinge = new THREE.Group(); at(hinge, 0, 0.78, -1.05);
-  const domeShape = new THREE.Shape(); domeShape.absarc(0, 0, 1, 0, Math.PI, false);
-  const lidGeometry = new THREE.ExtrudeGeometry(domeShape, { depth: 2.6, bevelEnabled: true, bevelThickness: 0.24, bevelSize: 0.2, bevelSegments: 10, curveSegments: 56 });
-  lidGeometry.translate(0, 0, -1.3);
-  const lid = new THREE.Mesh(lidGeometry, purple); lid.rotation.y = Math.PI / 2; lid.scale.set(1, 1.1, 1.0); lid.position.set(0, 0, 1.05); hinge.add(lid);
-  const rib = (x, depth) => { const g = new THREE.ExtrudeGeometry(domeShape, { depth, bevelEnabled: true, bevelThickness: 0.12, bevelSize: 0.1, bevelSegments: 8, curveSegments: 56 }); g.translate(0, 0, -depth / 2); const m = new THREE.Mesh(g, gold); m.rotation.y = Math.PI / 2; m.scale.set(1.17, 1.26, 1.14); m.position.set(x, 0, 1.05); hinge.add(m); };
-  rib(-1.12, 0.3); rib(1.12, 0.3); rib(0, 0.1);
-  for (const [x, hex] of [[-0.72, 0xff2d95], [0.72, 0x39f0ff]]) {
-    const socket = at(torus(0.3, 0.09, gold), x, 0.62, 1.98); socket.rotation.x = 0.95; hinge.add(socket);
-    const g = at(sphere(0.27, gemMaterial(hex), 1, 1.1, 0.8), x, 0.66, 2.04); gems.push(bloom(g)); hinge.add(g);
+  chest.add(at(roundedBox(W, 1.55, D, 0.13, purple), 0, -0.125, 0));
+  const inside = new THREE.Mesh(new THREE.PlaneGeometry(W - 0.5, D - 0.5), new THREE.MeshBasicMaterial({ color: 0x8a4bff })); inside.rotation.x = -Math.PI / 2; at(inside, 0, 0.64, 0); chest.add(inside);
+  // lilac lines down the front and the back, and a framed panel on each side
+  for (const x of [-1.13, -0.5, 0.5, 1.13]) {
+    chest.add(at(lineMesh(new THREE.BoxGeometry(0.06, 0.95, 0.04)), x, -0.38, D / 2 + 0.005));
+    chest.add(at(lineMesh(new THREE.BoxGeometry(0.06, 0.95, 0.04)), x, -0.38, -D / 2 - 0.005));
   }
-  // the medallion on top of the lid: a round gold button with the glowing planet
-  const medal = new THREE.Group(); at(medal, 0, 1.46, 1.05);
-  medal.add(sphere(0.5, gold, 1, 0.34, 1));
-  const planetMat = new THREE.MeshStandardMaterial({ color: 0xa86bff, emissive: 0xa86bff, emissiveIntensity: 0.4, roughness: 0.15 });
-  const planet = bloom(new THREE.Group()); planet.add(sphere(0.27, planetMat)); planet.position.y = 0.2;
-  const planetRing = torus(0.46, 0.05, plain(0xffffff, { emissive: 0xffffff, emissiveIntensity: 0.4 })); planetRing.rotation.x = 1.1; planet.add(planetRing);
-  medal.add(planet); hinge.add(medal);
-  chest.add(hinge);
-
-  // the lock: a round gold plate with a big round keyhole; a round padlock hangs on it while the chest is locked
-  const lock = new THREE.Group(); at(lock, 0, 0.42, 1.1);
-  const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.52, 0.2, 40), new THREE.MeshStandardMaterial({ color: 0xffd25a, metalness: 0.9, roughness: 0.28, envMapIntensity: 1.4 })); plate.rotation.x = Math.PI / 2; lock.add(plate);
-  const rimRing = at(torus(0.5, 0.06, gold), 0, 0, 0.1); lock.add(rimRing);
-  lock.add(at(sphere(0.13, plain(0x120a24), 1, 1, 0.4), 0, 0.1, 0.13), at(new THREE.Mesh(new THREE.CapsuleGeometry(0.06, 0.2, 4, 12), plain(0x120a24)), 0, -0.1, 0.12));
-  const padlock = new THREE.Group(); at(padlock, 0, -0.02, 0.3);
-  padlock.add(roundedBox(0.68, 0.56, 0.34, 0.26, gold), at(torus(0.22, 0.07, darkGold, Math.PI), 0, 0.3, 0), at(sphere(0.07, plain(0x120a24), 1, 1, 0.5), 0, 0.02, 0.17));
+  for (const side of [-1, 1]) {
+    const f = lineMesh(new THREE.ExtrudeGeometry(frame(1.6, 1.05, 0.3, 0.06), { depth: 0.04, bevelEnabled: false })); f.rotation.y = side * Math.PI / 2; at(f, side * (W / 2 - 0.005), -0.82, 0); chest.add(f);
+  }
+  // gold: two bands where the body ends and the lid begins, caps on the four lower corners, blocks on the upper corners
+  chest.add(at(roundedBox(W + 0.08, 0.22, D + 0.08, 0.06, gold), 0, 0.5, 0));
+  for (const x of [-1, 1]) for (const z of [-1, 1]) {
+    chest.add(at(roundedBox(0.52, 0.36, 0.52, 0.1, gold), x * (W / 2 - 0.14), -0.72, z * (D / 2 - 0.14)));
+    chest.add(at(roundedBox(0.4, 0.31, 0.4, 0.08, gold), x * (W / 2 - 0.08), 0.5, z * (D / 2 - 0.08)));
+  }
+  // handles on the two sides
+  for (const side of [-1, 1]) {
+    const hx = side * (W / 2 + 0.06);
+    chest.add(at(roundedBox(0.16, 0.22, 0.82, 0.07, gold), hx, 0.0, 0));
+    chest.add(at(roundedBox(0.2, 0.55, 0.14, 0.06, gold), hx + side * 0.04, -0.2, -0.36), at(roundedBox(0.2, 0.55, 0.14, 0.06, gold), hx + side * 0.04, -0.2, 0.36));
+    chest.add(at(roundedBox(0.2, 0.14, 0.86, 0.06, gold), hx + side * 0.04, -0.46, 0));
+  }
+  // the three latches on the front: two U-shaped hasps and the shield with the lock
+  for (const x of [-0.85, 0.85]) {
+    chest.add(at(roundedBox(0.44, 0.3, 0.1, 0.05, gold), x, 0.5, D / 2 + 0.1));
+    chest.add(at(roundedBox(0.4, 0.46, 0.1, 0.17, gold), x, 0.12, D / 2 + 0.08));
+    chest.add(at(roundedBox(0.2, 0.28, 0.12, 0.08, dark), x, 0.13, D / 2 + 0.1));
+    chest.add(at(sphere(0.05, darkGold), x - 0.14, 0.5, D / 2 + 0.17), at(sphere(0.05, darkGold), x + 0.14, 0.5, D / 2 + 0.17));
+  }
+  const lock = new THREE.Group(); at(lock, 0, 0.22, D / 2 + 0.08);
+  lock.add(roundedBox(0.62, 0.72, 0.1, 0.16, gold), at(roundedBox(0.22, 0.34, 0.12, 0.08, darkGold), 0, 0.02, 0.05), at(new THREE.Mesh(new THREE.CapsuleGeometry(0.035, 0.12, 4, 8), dark), 0, -0.02, 0.11));
+  for (const y of [-0.28, 0.28]) lock.add(at(sphere(0.045, darkGold), 0.2, y, 0.06), at(sphere(0.045, darkGold), -0.2, y, 0.06));
+  const padlock = new THREE.Group(); at(padlock, 0, -0.05, 0.3);
+  padlock.add(roundedBox(0.6, 0.5, 0.3, 0.12, gold), at(torus(0.2, 0.06, darkGold, Math.PI), 0, 0.27, 0), at(sphere(0.06, dark, 1, 1, 0.5), 0, 0.02, 0.15));
   lock.add(padlock);
   chest.add(lock);
+  // rivets: gold ones low on the front and the sides, small purple domes next to the lines
+  for (const [x, y] of [[-0.85, -0.58], [0.85, -0.58], [-1.32, -0.05], [1.32, -0.05], [-0.28, -0.58], [0.28, -0.58]]) chest.add(at(sphere(0.075, darkGold), x, y, D / 2 + 0.03));
+  for (const side of [-1, 1]) for (const [y, z] of [[-0.5, -0.78], [-0.5, 0.78], [0.0, -0.78], [0.0, 0.78]]) chest.add(at(sphere(0.07, darkGold), side * (W / 2 + 0.02), y, z));
+  for (const x of [-1.25, -0.62, 0.62, 1.25]) chest.add(at(sphere(0.065, purple), x, -0.78, D / 2 + 0.02));
+  const runes = [];
 
+  // the lid: a barrel with flat ends, the same lines, a band of gold at the foot, small gold tabs on the front, and framed ends
+  const hinge = new THREE.Group(); at(hinge, 0, 0.66, -D / 2);
+  const lidGeometry = new THREE.ExtrudeGeometry(profile(D - 0.2, 0.82, 0.6), { depth: W - 0.2, bevelEnabled: true, bevelThickness: 0.1, bevelSize: 0.1, bevelSegments: 8, curveSegments: 24 });
+  lidGeometry.translate(0, 0.1, -(W - 0.2) / 2);
+  const lid = new THREE.Mesh(lidGeometry, purple); lid.rotation.y = Math.PI / 2; lid.position.set(0, 0, D / 2); hinge.add(lid);
+  hinge.add(at(roundedBox(W + 0.08, 0.22, D + 0.08, 0.06, gold), 0, 0.13, D / 2));
+  for (const x of [-1, 1]) for (const z of [0.08, D - 0.08]) hinge.add(at(roundedBox(0.4, 0.31, 0.4, 0.08, gold), x * (W / 2 - 0.08), 0.13, z));
+  for (const x of [-1.13, -0.5, 0.5, 1.13]) {
+    const g = new THREE.ExtrudeGeometry(profile(D - 0.2, 0.82, 0.6), { depth: 0.06, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.115, bevelSegments: 3, curveSegments: 24 });
+    g.translate(0, 0.1, -0.03);
+    const m = lineMesh(g); m.rotation.y = Math.PI / 2; m.position.set(x, 0, D / 2); hinge.add(m);
+  }
+  for (const side of [-1, 1]) {
+    const f = lineMesh(new THREE.ExtrudeGeometry(frame(1.5, 0.62, 0.45, 0.06), { depth: 0.04, bevelEnabled: false })); f.rotation.y = side * Math.PI / 2; at(f, side * (W / 2 + 0.095), 0.32, D / 2); hinge.add(f);
+  }
+  for (const x of [-0.85, 0, 0.85]) {
+    hinge.add(at(roundedBox(0.4, 0.34, 0.1, 0.05, gold), x, 0.42, D + 0.02));
+    hinge.add(at(sphere(0.045, darkGold), x - 0.12, 0.42, D + 0.09), at(sphere(0.045, darkGold), x + 0.12, 0.42, D + 0.09));
+  }
+  for (const side of [-1, 1]) for (const [y, z] of [[0.28, 0.45], [0.28, 1.75], [0.62, 1.1]]) hinge.add(at(sphere(0.07, darkGold), side * (W / 2 + 0.16), y, z));
+  for (const x of [-0.85, 0.85]) hinge.add(at(sphere(0.07, darkGold), x, 0.94, D / 2));
+  chest.add(hinge);
+  lines.forEach((m) => bloom(m));
+  
   // light: a glow behind, a soft glow on the floor, a contact shadow, soft rays, the core and the flash of the opening
   const aura = flare(0xb06bff, 3.6, 0); at(aura, 0, 0.4, -1.4); root.add(aura);
   const floorGlow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: floorTexture(), color: 0x9b5cff, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending })); floorGlow.rotation.x = -Math.PI / 2; floorGlow.scale.set(5.6, 4.2, 1); at(floorGlow, 0, -1.0, 0.1); root.add(floorGlow);
@@ -121,7 +156,7 @@ export function buildChest() {
     lastT = t;
     dim = lerp(dim, mood === "locked" ? 0 : 1, 0.08);                          // how lit the chest is (0 dull, 1 shining)
     const ready = mood === "ready";
-    chest.rotation.y = Math.sin(t * 0.8) * 0.1 - 0.32;
+    chest.rotation.y = Math.sin(t * 0.8) * 0.1 + 0.5;
     chest.position.y = ready ? Math.abs(Math.sin(t * 7)) * 0.16 : Math.sin(t * 1.6) * 0.06;
     chest.rotation.z = ready ? Math.sin(t * 30) * 0.03 : 0;
     purple.emissiveIntensity = 0.1 + dim * (0.3 + (ready ? Math.sin(t * 8) * 0.15 : 0));
@@ -130,9 +165,7 @@ export function buildChest() {
     purple.emissive.setHex(mood === "locked" ? 0x1a1050 : 0x4a10c0);
     purple.sheenColor.setHex(mood === "locked" ? 0x7a6cd0 : 0xff9bff);
     padlock.visible = mood === "locked";
-    planetMat.emissiveIntensity = 0.3 + dim * (0.9 + (ready ? Math.sin(t * 9) * 0.6 : Math.sin(t * 2) * 0.2));
-    planetRing.material.emissiveIntensity = 0.3 + dim * 0.8;
-    planet.rotation.y = t * 1.6;
+    inlay.emissiveIntensity = 0.25 + dim * (0.35 + (ready ? Math.sin(t * 9) * 0.25 : Math.sin(t * 2) * 0.08));
     gems.forEach((g, i) => { g.material.emissiveIntensity = 0.3 + dim * (1.2 + Math.sin(t * 5 + i) * 0.5); g.rotation.y = t * 2; });
     gemStars.forEach((sp, i) => { const g = gems[i]; const v = dim * Math.max(0, Math.sin(t * 4 + i * 2)) ** 2; sp.material.opacity = v; sp.scale.setScalar(0.5 + v * 0.9); sp.position.set(g.position.x * 1.0, g.position.y + 0.72 + (ready ? Math.abs(Math.sin(t * 7)) * 0.16 : 0), g.position.z + 0.06); sp.material.rotation = t; });
     runes.forEach((r, i) => { r.material.opacity = 0.15 + dim * (0.55 + Math.sin(t * 4 + i) * 0.3); });

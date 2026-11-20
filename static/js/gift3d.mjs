@@ -6,7 +6,7 @@
    (sparkles, halo, wings, aura). */
 import { THREE, TAU, rnd, pick, material, plain, glow, additive, mesh, at, solid, wingShape, Particles, flare } from "/static/js/gift3d-kit.mjs";
 import { FIGURES } from "/static/js/gift3d-figures.mjs?v=3";
-import { buildChest } from "/static/js/gift3d-chest.mjs?v=18";
+import { buildChest } from "/static/js/gift3d-chest.mjs?v=20";
 import { RoomEnvironment } from "/static/js/vendor/three/RoomEnvironment.js";
 import { EffectComposer } from "/static/js/vendor/three/postprocessing/EffectComposer.js";
 import { RenderPass } from "/static/js/vendor/three/postprocessing/RenderPass.js";

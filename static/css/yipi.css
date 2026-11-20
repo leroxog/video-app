@@ -2981,3 +2981,20 @@ html.typing .main { padding-bottom: 16px; }
 .chest-chip:not(.has-pic) .chest-pic { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .chest-chip.pop .chest-draw { width: 130px; height: 96px; margin-top: 26px; }
 .chest-chip.pop .chest-draw::after { left: 52px; top: 42px; width: 26px; height: 32px; }
+
+/* the chest sheet like TikTok: a deep purple stage with turning rays of light and sparkles behind the big chest */
+.chest-back { background: rgba(8, 2, 22, 0.72); }
+.chest-sheet { position: relative; overflow: hidden; background: radial-gradient(ellipse at 50% 38%, #7b3cf0 0%, #4a1aa8 45%, #1c0a4a 100%); color: #fff; }
+.chest-sheet::before { content: ""; position: absolute; left: 50%; top: 44%; width: 150%; aspect-ratio: 1; margin: -75% 0 0 -75%; background: repeating-conic-gradient(from 0deg, rgba(255, 220, 255, 0.22) 0 8deg, rgba(255, 255, 255, 0) 8deg 24deg); -webkit-mask-image: radial-gradient(circle, #000 0%, transparent 60%); mask-image: radial-gradient(circle, #000 0%, transparent 60%); animation: chest-rays 24s linear infinite; pointer-events: none; }
+.chest-sheet::after { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 18% 22%, #fff 0 1.5px, transparent 2.5px), radial-gradient(circle at 82% 30%, #ffe9a6 0 2px, transparent 3px), radial-gradient(circle at 70% 70%, #fff 0 1.5px, transparent 2.5px), radial-gradient(circle at 28% 62%, #d9b8ff 0 2px, transparent 3px), radial-gradient(circle at 90% 82%, #fff 0 1px, transparent 2px); pointer-events: none; animation: chest-twinkle 2.4s ease-in-out infinite alternate; }
+.chest-sheet > * { position: relative; z-index: 1; }
+.chest-sheet .skz-grip { background: rgba(255, 255, 255, 0.4); }
+.chest-sheet h2, .chest-sheet .sm-head h2 { color: #fff; }
+.chest-sheet .icon-btn { background: rgba(255, 255, 255, 0.16); color: #fff; }
+.chest-count, .chest-note { color: rgba(255, 255, 255, 0.8); }
+.chest-count { font-size: 15px; }
+.chest-result { color: #ffe27a; text-shadow: 0 2px 12px rgba(0, 0, 0, 0.4); }
+.chest-open.locked { background: rgba(255, 255, 255, 0.2); color: rgba(255, 255, 255, 0.6); }
+.chest-open.ready { background: #fe2c55; color: #fff; box-shadow: 0 0 0 4px rgba(254, 44, 85, 0.35), 0 8px 24px rgba(254, 44, 85, 0.55); }
+@keyframes chest-rays { to { transform: rotate(360deg); } }
+@keyframes chest-twinkle { from { opacity: 0.35; } to { opacity: 1; } }
