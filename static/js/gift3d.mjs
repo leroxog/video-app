@@ -6,7 +6,7 @@
    (sparkles, halo, wings, aura). */
 import { THREE, TAU, rnd, pick, material, plain, glow, additive, mesh, at, solid, wingShape, Particles, flare } from "/static/js/gift3d-kit.mjs";
 import { FIGURES } from "/static/js/gift3d-figures.mjs?v=3";
-import { buildChest } from "/static/js/gift3d-chest.mjs?v=15";
+import { buildChest } from "/static/js/gift3d-chest.mjs?v=18";
 import { RoomEnvironment } from "/static/js/vendor/three/RoomEnvironment.js";
 import { EffectComposer } from "/static/js/vendor/three/postprocessing/EffectComposer.js";
 import { RenderPass } from "/static/js/vendor/three/postprocessing/RenderPass.js";
@@ -267,7 +267,7 @@ export function chestThumb() {
     c.group.rotation.y = 0;
     k.scene.add(c.group);
     for (let i = 0; i < 40; i += 1) c.update(1 + i * 0.03, 0.03);
-    k.camera.position.set(0, 1.5, 7.2); k.camera.lookAt(0, 0.1, 0);
+    k.camera.position.set(0, 1.6, 8.0); k.camera.lookAt(0, 0.3, 0);
     particleScale(k.scene, k.camera, k.renderer);
     k.renderer.render(k.scene, k.camera);
     const url = k.canvas.toDataURL("image/png");
@@ -289,8 +289,8 @@ export function chest(host, size = 240) {
   scene.background = new THREE.CanvasTexture(bg);                                 // (a dark stage: bloom needs a background it can glow against)
   lights(scene, renderer);
   const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 60);
-  camera.position.set(0, 1.8, 6.3);
-  camera.lookAt(0, 0.35, 0);
+  camera.position.set(0, 1.9, 7.0);
+  camera.lookAt(0, 0.5, 0);
   const c = buildChest();
   scene.add(c.group);
   particleScale(scene, camera, renderer);
