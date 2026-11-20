@@ -6,12 +6,13 @@
    (sparkles, halo, wings, aura). */
 import { THREE, TAU, rnd, pick, material, plain, glow, additive, mesh, at, solid, wingShape, Particles, flare } from "/static/js/gift3d-kit.mjs";
 import { FIGURES } from "/static/js/gift3d-figures.mjs?v=3";
-import { buildChest } from "/static/js/gift3d-chest.mjs?v=12";
+import { buildChest } from "/static/js/gift3d-chest.mjs?v=15";
 import { RoomEnvironment } from "/static/js/vendor/three/RoomEnvironment.js";
 import { EffectComposer } from "/static/js/vendor/three/postprocessing/EffectComposer.js";
 import { RenderPass } from "/static/js/vendor/three/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "/static/js/vendor/three/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "/static/js/vendor/three/postprocessing/OutputPass.js";
+import { ShaderPass } from "/static/js/vendor/three/postprocessing/ShaderPass.js";
 
 let catalogue = null;                                           // {shapes, palettes, badges}
 export const setCatalogue = (data) => { catalogue = data; };
@@ -278,7 +279,7 @@ export function chestThumb() {
 }
 
 /* The Satürn Chest in a canvas inside `host`. `controller.mood("locked" | "ready")`, `controller.open()` (the show) and `controller.stop()`. */
-export function chest(host, size = 240, { bloom = 0 } = {}) {
+export function chest(host, size = 240) {
   const canvas = document.createElement("canvas");
   host.append(canvas);
   const renderer = newRenderer(canvas, size);
@@ -293,17 +294,38 @@ export function chest(host, size = 240, { bloom = 0 } = {}) {
   const c = buildChest();
   scene.add(c.group);
   particleScale(scene, camera, renderer);
-  let composer = null;                                            // (an optional glow over everything bright: off by default, it veils the shiny gold)
-  if (bloom > 0) { composer = new EffectComposer(renderer); composer.setSize(size, size); composer.addPass(new RenderPass(scene, camera)); composer.addPass(new UnrealBloomPass(new THREE.Vector2(size, size), bloom, 0.3, 1.0)); composer.addPass(new OutputPass()); }
+  // glow: the glowing things (layer 1) are drawn alone on black, blurred, and added to the normal picture
+  const darkMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+  const bloomLayer = new THREE.Layers(); bloomLayer.set(1);
+  const stash = new Map();
+  const darken = (o) => { if ((o.isMesh || o.isPoints || o.isSprite) && !bloomLayer.test(o.layers)) { stash.set(o, o.material); o.material = darkMaterial; } };
+  const restore = (o) => { if (stash.has(o)) { o.material = stash.get(o); stash.delete(o); } };
+  const bloomComposer = new EffectComposer(renderer); bloomComposer.renderToScreen = false; bloomComposer.setSize(size, size);
+  bloomComposer.addPass(new RenderPass(scene, camera));
+  bloomComposer.addPass(new UnrealBloomPass(new THREE.Vector2(size, size), 0.55, 0.4, 0.0));
+  const mixPass = new ShaderPass(new THREE.ShaderMaterial({
+    uniforms: { baseTexture: { value: null }, bloomTexture: { value: bloomComposer.renderTarget2.texture } },
+    vertexShader: "varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+    fragmentShader: "uniform sampler2D baseTexture; uniform sampler2D bloomTexture; varying vec2 vUv; void main() { gl_FragColor = texture2D(baseTexture, vUv) + vec4(1.0) * texture2D(bloomTexture, vUv); }",
+  }), "baseTexture");
+  const composer = new EffectComposer(renderer); composer.setSize(size, size);
+  composer.addPass(new RenderPass(scene, camera)); composer.addPass(mixPass); composer.addPass(new OutputPass());
+  const stage = scene.background;
+  const draw = () => {
+    scene.background = new THREE.Color(0x000000);
+    scene.traverse(darken); bloomComposer.render(); scene.traverse(restore);
+    scene.background = stage;
+    composer.render();
+  };
   let frame = 0;
   const clock = new THREE.Clock();
   let last = 0;
-  const tick = () => { const t = clock.getElapsedTime(); const dt = Math.min(0.05, t - last); last = t; c.update(t, dt); if (composer) composer.render(); else renderer.render(scene, camera); frame = requestAnimationFrame(tick); };
+  const tick = () => { const t = clock.getElapsedTime(); const dt = Math.min(0.05, t - last); last = t; c.update(t, dt); draw(); frame = requestAnimationFrame(tick); };
   tick();
   return {
     canvas,
     mood(name) { if (c.mood() !== name && c.mood() !== "open") c.setMood(name, last); },
     open() { c.open(); },
-    stop() { cancelAnimationFrame(frame); c.dispose(); composer?.dispose?.(); renderer.dispose(); canvas.remove(); },
+    stop() { cancelAnimationFrame(frame); c.dispose(); composer.dispose?.(); bloomComposer.dispose?.(); renderer.dispose(); canvas.remove(); },
   };
 }

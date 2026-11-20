@@ -2975,3 +2975,9 @@ html.typing .main { padding-bottom: 16px; }
 .chest-open.ready { background: var(--snap, #8e44f2); color: #000; box-shadow: 0 0 0 4px rgba(142, 68, 242, 0.3), 0 8px 24px rgba(142, 68, 242, 0.5); }
 .chest-open.pressed { transform: scale(0.95); }
 .chest-note { color: var(--muted); font-size: 12px; font-weight: 700; }
+.chest-draw { display: block; width: 62px; height: 46px; margin: 14px 0 0; border-radius: 12px 12px 8px 8px; background: linear-gradient(#8a45ff 0 55%, #5a1fd0 55%); box-shadow: inset 0 0 0 4px #ffd25a, 0 6px 14px rgba(0, 0, 0, 0.45); position: relative; }
+.chest-draw::after { content: ""; position: absolute; left: 24px; top: 20px; width: 14px; height: 16px; border-radius: 4px; background: #ffd25a; box-shadow: 0 0 0 2px #b8860b; }
+.chest-chip.has-pic .chest-draw { display: none; }
+.chest-chip:not(.has-pic) .chest-pic { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.chest-chip.pop .chest-draw { width: 130px; height: 96px; margin-top: 26px; }
+.chest-chip.pop .chest-draw::after { left: 52px; top: 42px; width: 26px; height: 32px; }

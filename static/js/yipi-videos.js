@@ -103,10 +103,11 @@
       const state = { phase: "closed", busy: false, sheet: null, readyAt: 0, opensAt, closesAt };
       const pic = h("img", { class: "chest-pic", alt: "", draggable: false });
       const chipTime = h("b", { class: "chest-chip-time" }, clockText(opensAt - now));
-      const chip = h("button", { class: "chest-chip pop", type: "button", "aria-label": "Satürn Truhe öffnen" }, pic, chipTime);
+      const chip = h("button", { class: "chest-chip pop", type: "button", "aria-label": "Satürn Truhe öffnen" }, h("span", { class: "chest-draw", "aria-hidden": "true" }), pic, chipTime);       // (a drawn chest stands there at once; the 3D picture takes its place when it is ready)
+      pic.addEventListener("load", () => chip.classList.add("has-pic"));
       chestBox = { chip, state };
       el.append(chip);
-      import("/static/js/gift3d.mjs?v=21").then((module) => module.chestThumb()).then((url) => { pic.src = url; }).catch(() => { chip.classList.add("flat"); });
+      import("/static/js/gift3d.mjs?v=24").then((module) => module.chestThumb()).then((url) => { pic.src = url; }).catch(() => { chip.classList.add("flat"); });
       setTimeout(() => chip.classList.remove("pop"), 1500);       // first in the middle of the screen, then quickly to the side
       const stop = () => { clearInterval(timer); state.sheet?.close(); chip.remove(); chestBox = null; };
       const timer = setInterval(() => {
@@ -145,7 +146,7 @@
       document.addEventListener("keydown", onKey, true);
       count.textContent = state.phase === "ready" ? "Jetzt!" : `Öffnet in ${clockText(state.opensAt - performance.now())}`;
       if (state.phase === "ready") sheet.ready();
-      try { const module = await import("/static/js/gift3d.mjs?v=21"); if (state.sheet === sheet) { controller = module.chest(host, 260); controller.mood(state.phase === "ready" ? "ready" : "locked"); } } catch (error) { host.classList.add("flat"); }
+      try { const module = await import("/static/js/gift3d.mjs?v=24"); if (state.sheet === sheet) { controller = module.chest(host, 260); controller.mood(state.phase === "ready" ? "ready" : "locked"); } } catch (error) { host.classList.add("flat"); }
       button.addEventListener("click", async () => {
         if (state.busy) return;
         if (state.phase !== "ready") { panel.classList.add("nudge"); setTimeout(() => panel.classList.remove("nudge"), 350); return; }       // grey: it brings nothing yet
@@ -178,7 +179,8 @@
       sinceChest += 1;
       if (sinceChest >= nextChest && !chestBox) { sinceChest = 0; nextChest = 8 + Math.floor(Math.random() * 5); askChest(false); }
     }
-    setTimeout(() => askChest(true), 1500);                     // a chest that is already waiting (the page was opened again) comes back
+    askChest(true);                                             // a chest that is already waiting (the page was opened again) comes back at once
+    if (Y.me && !window.__chestWarm) { window.__chestWarm = true; setTimeout(() => import("/static/js/gift3d.mjs?v=24").then((module) => module.chestThumb()).catch(() => {}), 1200); }       // the 3D part is loaded early, so that the chest looks right when it comes
     let watching = null;
     let blocked = false;                                        // the browser does not allow sound before the person touches the page
 

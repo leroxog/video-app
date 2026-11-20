@@ -5,6 +5,8 @@
 import { THREE, TAU, rnd, pick, plain, glow, additive, at, sphere, cyl, cone, torus, roundedBox, Particles, flare } from "/static/js/gift3d-kit.mjs";
 
 const lerp = (a, b, k) => a + (b - a) * k;
+/* Marks an object (and everything in it) as glowing: the renderer blurs it into a soft glow (the second layer is the one of the bloom). */
+const bloom = (object) => { object.traverse((node) => node.layers.enable(1)); return object; };
 const back = (x) => { const c1 = 1.70158; const c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
 
 const texture = (draw) => { const c = document.createElement("canvas"); c.width = c.height = 128; draw(c.getContext("2d")); return new THREE.CanvasTexture(c); };
@@ -34,6 +36,7 @@ export function buildChest() {
   const rune = new THREE.MeshBasicMaterial({ color: 0x39f0ff, transparent: true, opacity: 0.25 });
   const gems = [];
   const gemMaterial = (hex) => new THREE.MeshPhysicalMaterial({ color: hex, emissive: hex, emissiveIntensity: 0.3, roughness: 0.04, metalness: 0.2, clearcoat: 1, flatShading: true });
+  const glowing = (m) => bloom(m);
 
   // the body: chunky, round, a fat belt of gold at the bottom and the rim, wide straps, studs and big feet
   chest.add(roundedBox(3.0, 1.45, 2.0, 0.36, purple));
@@ -43,8 +46,8 @@ export function buildChest() {
   for (const x of [-1.14, 1.14]) for (const y of [-0.3, 0.3]) chest.add(at(sphere(0.1, darkGold), x, y, 1.07));
   for (const x of [-1.5, 1.5]) for (const z of [-0.9, 0.9]) chest.add(at(sphere(0.32, gold), x, -0.72, z));
   const runes = [];
-  for (const [x, w] of [[-0.66, 0.5], [0.66, 0.5]]) { const r = at(new THREE.Mesh(new THREE.BoxGeometry(w, 0.045, 0.02), rune), x, -0.36, 1.03); runes.push(r); chest.add(r); }
-  for (const x of [-0.9, -0.5, 0.5, 0.9]) { const r = at(new THREE.Mesh(new THREE.CircleGeometry(0.045, 8), rune), x, -0.24, 1.03); runes.push(r); chest.add(r); }
+  for (const [x, w] of [[-0.66, 0.5], [0.66, 0.5]]) { const r = at(new THREE.Mesh(new THREE.BoxGeometry(w, 0.045, 0.02), rune), x, -0.36, 1.03); runes.push(bloom(r)); chest.add(r); }
+  for (const x of [-0.9, -0.5, 0.5, 0.9]) { const r = at(new THREE.Mesh(new THREE.CircleGeometry(0.045, 8), rune), x, -0.24, 1.03); runes.push(bloom(r)); chest.add(r); }
 
   // the lid: a big dome with fat ribs of gold and large gems on the front corners
   const hinge = new THREE.Group(); at(hinge, 0, 0.72, -1.0);
@@ -56,14 +59,14 @@ export function buildChest() {
   rib(-1.14, 0.44); rib(1.14, 0.44); rib(0, 0.18);
   for (const [x, hex] of [[-0.7, 0xff2d95], [0.7, 0x39f0ff]]) {
     const socket = at(new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.38, 0.16, 24), gold), x, 0.6, 1.7); socket.rotation.x = 0.85; hinge.add(socket);
-    const g = at(new THREE.Mesh(new THREE.OctahedronGeometry(0.27, 0), gemMaterial(hex)), x, 0.68, 1.76); g.scale.set(1, 1.25, 1); gems.push(g); hinge.add(g);
+    const g = at(new THREE.Mesh(new THREE.OctahedronGeometry(0.27, 0), gemMaterial(hex)), x, 0.68, 1.76); g.scale.set(1, 1.25, 1); gems.push(bloom(g)); hinge.add(g);
   }
   // the medallion in the middle of the lid: a gold ring with the glowing planet
   const medal = new THREE.Group(); at(medal, 0, 1.08, 1.0);
   const medalDisc = new THREE.Mesh(new THREE.CylinderGeometry(0.44, 0.5, 0.14, 40), gold); medal.add(medalDisc);
   const discInner = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.17, 40), new THREE.MeshStandardMaterial({ color: 0x2a1060, roughness: 0.3, metalness: 0.4 })); discInner.position.y = 0.03; medal.add(discInner);
   const planetMat = new THREE.MeshStandardMaterial({ color: 0xa86bff, emissive: 0xa86bff, emissiveIntensity: 0.4, roughness: 0.15 });
-  const planet = new THREE.Group(); planet.add(sphere(0.22, planetMat)); planet.position.y = 0.2;
+  const planet = bloom(new THREE.Group()); planet.add(sphere(0.22, planetMat)); planet.position.y = 0.2;
   const planetRing = torus(0.4, 0.045, plain(0xffffff, { emissive: 0xffffff, emissiveIntensity: 0.4 })); planetRing.rotation.x = 1.1; planet.add(planetRing);
   medal.add(planet); hinge.add(medal);
   chest.add(hinge);
@@ -95,7 +98,7 @@ export function buildChest() {
   const sparkles = new Particles({ max: 260, gravity: -0.05 });
   const fountain = new Particles({ max: 320, gravity: 5.5, grow: 0.9 });
   const confetti = new Particles({ max: 240, gravity: 2.4, additive: false, grow: 1 });
-  root.add(sparkles.object, fountain.object, confetti.object);
+  root.add(sparkles.object, bloom(fountain.object), confetti.object);
   const stars = [];
   const starMap = starTexture();
   for (let i = 0; i < 7; i += 1) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: starMap, color: 0xffffff, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending })); sp.scale.setScalar(0.5); stars.push(sp); root.add(sp); }
@@ -108,7 +111,7 @@ export function buildChest() {
   const makeCoin = () => { const c = new THREE.Group(); c.add(new THREE.Mesh(disc, coinMaterial), new THREE.Mesh(rimGeometry, coinFace)); const star = new THREE.Mesh(new THREE.CircleGeometry(0.12, 5), coinFace); star.rotation.x = -Math.PI / 2; star.position.y = 0.045; c.add(star); return c; };
   const pile = new THREE.Group(); at(pile, 0, 0.66, 0);
   for (let i = 0; i < 6; i += 1) { const c = makeCoin(); c.position.set(-0.7 + i * 0.28, rnd(0, 0.1), rnd(-0.3, 0.3)); c.rotation.set(rnd(-0.6, 0.6), rnd(0, TAU), rnd(-0.6, 0.6)); c.scale.setScalar(1.1); pile.add(c); }
-  pile.visible = false; root.add(pile);
+  pile.visible = false; root.add(bloom(pile));
 
   let mood = "locked";
   let moodAt = 0; let dim = 0;
@@ -167,7 +170,7 @@ export function buildChest() {
       c.position.set(rnd(-0.9, 0.9), 0.95, rnd(-0.4, 0.7));
       const fan = (i / 16 - 0.5) * 2; c.userData = { vx: fan * 3.2 + rnd(-0.4, 0.4), vy: rnd(4.2, 7.4), vz: rnd(0.2, 2.2), spin: rnd(-0.3, 0.3) };
       c.scale.setScalar(rnd(1.0, 1.5));
-      root.add(c); coins.push(c);
+      root.add(bloom(c)); coins.push(c);
     }
   };
   const dispose = () => root.traverse((o) => { o.geometry?.dispose?.(); if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => { m.map?.dispose?.(); m.dispose?.(); }); });

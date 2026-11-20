@@ -33,7 +33,7 @@
   // ------------------------------------------------------------------------------------------------- the 3D pictures
   /* The 3D part (three.js) is loaded when the first Samoji is shown; until then (or without WebGL) a plain coloured disc stands in. */
   const lib = () => {
-    if (!lib.once) lib.once = import("/static/js/gift3d.mjs?v=21").then((module) => { module.setCatalogue(data); return module; });
+    if (!lib.once) lib.once = import("/static/js/gift3d.mjs?v=24").then((module) => { module.setCatalogue(data); return module; });
     return lib.once;
   };
   /* A Samoji as a picture (3D, rendered once and kept); `item` is a row of the catalogue. */
