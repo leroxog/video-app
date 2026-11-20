@@ -6,7 +6,7 @@
    (sparkles, halo, wings, aura). */
 import { THREE, TAU, rnd, pick, material, plain, glow, additive, mesh, at, solid, wingShape, Particles, flare } from "/static/js/gift3d-kit.mjs";
 import { FIGURES } from "/static/js/gift3d-figures.mjs?v=3";
-import { buildChest } from "/static/js/gift3d-chest.mjs?v=20";
+import { buildChest } from "/static/js/gift3d-chest.mjs?v=24";
 import { RoomEnvironment } from "/static/js/vendor/three/RoomEnvironment.js";
 import { EffectComposer } from "/static/js/vendor/three/postprocessing/EffectComposer.js";
 import { RenderPass } from "/static/js/vendor/three/postprocessing/RenderPass.js";
@@ -289,8 +289,8 @@ export function chest(host, size = 240) {
   scene.background = new THREE.CanvasTexture(bg);                                 // (a dark stage: bloom needs a background it can glow against)
   lights(scene, renderer);
   const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 60);
-  camera.position.set(0, 1.9, 7.0);
-  camera.lookAt(0, 0.5, 0);
+  camera.position.set(0, 2.1, 8.0);
+  camera.lookAt(0, 0.7, 0);
   const c = buildChest();
   scene.add(c.group);
   particleScale(scene, camera, renderer);
