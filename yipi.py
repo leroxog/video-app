@@ -4200,8 +4200,7 @@ def register_routes(app):
 
     CHEST_MIN_WAIT, CHEST_MAX_WAIT = 10, 300             # seconds until a chest opens
     CHEST_WINDOW = 8                                     # how long it can be opened after that (the pay falls with every moment: 3 seconds later it is nothing)
-    CHEST_GAP = 180                                      # at least so many seconds between two chests of one person
-    CHEST_PER_DAY = 24
+    # (no limit on how many chests a person can get over time: only one at a time, and the page asks about every tenth video)
 
     def chest_json(row, now):
         return {"id": row.id, "opensIn": max(0.0, (row.opens_at - now).total_seconds()), "closesIn": max(0.0, (row.expires_at - now).total_seconds())}
@@ -4218,7 +4217,7 @@ def register_routes(app):
 
     @route("/api/yipi/chests/maybe", methods=["POST"], endpoint="yipi_chest_maybe")
     def yipi_chest_maybe():
-        """The page asks for a Satürn Chest about every tenth video: a person has at most one at a time, one every three minutes, and 24 a day. Answers {chest: {...}} or {chest: null}."""
+        """The page asks for a Satürn Chest about every tenth video: a person has at most one at a time, and there is no end to how many they can get one after the other. Answers {chest: {...}} or {chest: null}."""
         user, problem = need_user()
         if problem:
             return problem
@@ -4230,11 +4229,6 @@ def register_routes(app):
         if live is not None:
             return jsonify({"ok": True, "chest": chest_json(live, now)})
         if data.get("live") is True:                                         # the page only wants to know whether a chest is waiting (it was opened again): never make a new one
-            return jsonify({"ok": True, "chest": None})
-        last = YipiChest.query.filter_by(user_id=user.id).order_by(YipiChest.id.desc()).first()
-        if last is not None and (now - last.created_at).total_seconds() < CHEST_GAP:
-            return jsonify({"ok": True, "chest": None})
-        if YipiChest.query.filter(YipiChest.user_id == user.id, YipiChest.created_at > now - timedelta(days=1)).count() >= CHEST_PER_DAY:
             return jsonify({"ok": True, "chest": None})
         wait = CHEST_MIN_WAIT * (CHEST_MAX_WAIT / CHEST_MIN_WAIT) ** random.random()          # 10 seconds to 5 minutes, short waits are more likely
         row = YipiChest(user_id=user.id, created_at=now, opens_at=now + timedelta(seconds=wait), expires_at=now + timedelta(seconds=wait + CHEST_WINDOW))

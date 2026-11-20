@@ -148,7 +148,8 @@ def test_the_satuern_chest_opens_after_its_timer_and_pays_more_for_a_quick_tap(c
     quick = mia.post(f"/api/yipi/chests/{first['id']}/open")
     assert quick.status_code == 200 and 8 <= quick.get_json()["reward"] <= 13 and quick.get_json()["tokens"] == 5 + quick.get_json()["reward"], "a tap right after it opened: 8 to 13"
     assert mia.post(f"/api/yipi/chests/{first['id']}/open").status_code == 409, "once"
-    assert mia.post("/api/yipi/chests/maybe", json={}).get_json()["chest"] is None, "the next chest comes later (three minutes)"
+    again2 = mia.post("/api/yipi/chests/maybe", json={}).get_json()["chest"]
+    assert again2 is not None and again2["id"] != first["id"], "no limit: the next chest can come at once (one at a time)"
     # a slow tap: ten seconds after it opened gives one Token
     row2 = yipi.YipiChest(user_id=db.session.get(yipi.YipiUser, row.user_id).id, created_at=yipi.utcnow() - timedelta(minutes=20), opens_at=yipi.utcnow() - timedelta(seconds=12), expires_at=yipi.utcnow() + timedelta(seconds=30))
     db.session.add(row2)
