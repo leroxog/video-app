@@ -443,7 +443,9 @@
       if (!Recognition) { toast("Dein Browser kann nicht zuhören. Nimm Chrome, Edge oder Safari."); return; }
       let state = "listening";                                  // listening | thinking | speaking | over
       let recognition = null;
-      let player = null;
+      const player = new Audio();                                // made at the tap: browsers only let a sound play that was started by a touch, so this one is unlocked now and used for every answer
+      player.src = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=";
+      player.play().catch(() => {});
       const label = h("b", { class: "talk-state" }, "");
       const heard = h("p", { class: "talk-heard" }, "");
       const orb = h("span", { class: "talk-orb" }, h("img", { src: "/static/img/nex-ai.jpg", alt: "", draggable: false }));
@@ -456,7 +458,7 @@
       const finish = () => {
         state = "over";
         try { recognition?.abort(); } catch (error) { /* not running */ }
-        player?.pause();
+        player.pause();
         controller?.abort();
         layer.remove();
         document.body.classList.remove("modal-open");
@@ -485,12 +487,12 @@
           const reply = await Api.post("/nex/speak", { text });
           if (!reply.ok) throw new Error("no voice");
           if (state === "over") return;
-          player = new Audio(`data:audio/mpeg;base64,${reply.data.audio}`);
           player.onended = () => listen();
-          player.onerror = () => listen();
+          player.onerror = () => { toast("Nex AI konnte nicht sprechen."); listen(); };
+          player.src = `data:audio/mpeg;base64,${reply.data.audio}`;
           await player.play();
         } catch (error) {
-          if (state !== "over") listen();
+          if (state !== "over") { toast(error && error.name === "NotAllowedError" ? "Dein Browser blockiert den Ton. Erlaube Ton für diese Seite." : "Nex AI konnte nicht sprechen."); listen(); }
         }
       };
       const reply = async (text) => {
@@ -501,7 +503,7 @@
         if (written) speak(written); else { toast("Nex AI konnte gerade nicht antworten."); listen(); }
       };
       end.addEventListener("click", finish);
-      mute.addEventListener("click", () => { player?.pause(); listen(); });
+      mute.addEventListener("click", () => { player.pause(); listen(); });
       listen();
     });
 
