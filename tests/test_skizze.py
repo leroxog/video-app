@@ -51,10 +51,10 @@ def test_there_are_no_text_posts_to_make_and_the_editor_has_the_tools_of_capcut(
     newpost, editor = read("static", "js", "yipi-newpost.js"), read("static", "js", "yipi-editor.js")
     assert 'chooseCard("post"' not in newpost and 'chooseCard("video", "Ein Video"' in newpost and 'chooseCard("story", "Eine Story"' in newpost
     assert "Y.videoEditor.open({ file: picked.original" in newpost and "edit();" in newpost, "a picked video opens in the editor first"
-    for word in ('"Bearbeiten"', '"Audio"', '"Text"', '"Effekte"', '"Überlagerung"', '"Untertitel"', '"Hochladen"', "new MediaRecorder(", "captureStream(30)", "createMediaElementSource", "Y.music.pick(", "Clipaudio aus"):
+    for word in ('"Teilen"', '"Tempo"', '"Lautstärke"', '"Übergang"', '"Einfrieren"', '"Anpassen"', '"Audio"', '"Text"', '"Sticker"', '"Überlagerung"', '"Effekte"', '"Format"', '"Untertitel"', '"Hochladen"', "new MediaRecorder(", "captureStream(30)", "createMediaElementSource", "Y.music.pick(", "function compose(", "function layout(", "function undo()", "toggleRecording"):
         assert word in editor, word
-    assert 'h("button", { class: "ed-upload", type: "button" }, "Hochladen")' in editor and '"Exportieren")' not in editor, "the button says Hochladen, not Exportieren"
-    assert "if (!changed())" in editor, "a clip that was not changed is handed on as it is"
+    assert '"ed-upload", type: "button" }, snap ? "Fertig" : "Hochladen")' in editor and '"Exportieren")' not in editor, "the button says Hochladen, not Exportieren"
+    assert "if (plain())" in editor, "a clip that was not changed is handed on as it is"
 
 
 def test_a_post_tells_whether_the_viewer_follows_its_author():
@@ -119,7 +119,7 @@ def test_the_clip_of_the_camera_has_the_tools_at_the_side_and_a_purple_senden_an
     assert 'h("span", {}, "Senden an"), icon("send")' in camera and 'class: "cam-tools"' in camera and "Y.videoEditor.open({ file: fileOf(), snap: true, tool" in camera
     for tool in ('"Text"', '"Musik"', '"Schneiden"', '"Effekte"', '"Sticker"'):
         assert tool in camera, tool
-    assert "snap = false" in editor and 'upload.textContent = "Fertig"' in editor
+    assert "snap = false" in editor and 'snap ? "Fertig" : "Hochladen"' in editor
     assert ".cam-review-bar .cam-send { background: var(--snap" in css and "color: #000" in css.split(".cam-review-bar .cam-send {")[1].split("}")[0]
 
 

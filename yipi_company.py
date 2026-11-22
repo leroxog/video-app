@@ -64,6 +64,7 @@ ANNOUNCEMENTS = [
     ("2026-11-22-samojis", "web", "Neu: Die Tokens sind jetzt goldene Münzen, und es gibt 15 neue Samojis als Bilder, von der Rose bis zur Hand mit den Einkaufstüten. Neue Geschenke fallen von oben ins Video, am Rand steht, wie oft welches kam. Die Truhe ist neu."),
     ("2026-11-22-ig", "web", "Neu: Home sieht jetzt aus wie bei Instagram: oben die Storys, darunter die Beiträge groß mit Herz, Kommentar und Speichern. Die Chats sind wie bei WhatsApp, mit Glas-Suche, Filtern (Alle, Ungelesen, Gruppen) und dem runden Neu-Knopf."),
     ("2026-11-22-editor", "web", "Der Schnitt kann mehr: Neues Werkzeug Anpassen mit Helligkeit, Kontrast, Sättigung und Weichzeichner, 8 neue Looks bei Effekten (Kino, Neon, Retro ...) und Spiegeln. Alles wie bei CapCut, direkt vor dem Hochladen."),
+    ("2026-11-22-capcut", "web", "Der Schnitt ist jetzt ein richtiger CapCut: mehrere Clips, Teilen, Kürzen, Tempo, Übergänge, Text mit Animation, Sticker mit Samojis, Überlagerung, Effekte, eigene Stimme, Musik, Format 9:16 und mehr, mit Rückgängig."),
 ]
 
 _state = {"started": False}

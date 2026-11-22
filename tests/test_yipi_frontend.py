@@ -243,7 +243,7 @@ def defined_variables():
 def test_every_style_variable_that_is_used_is_defined():
     used = set(re.findall(r"var\((--[\w-]+)", CSS))
     set_by_script = {variable for source in JS.values() for variable in re.findall(r"setProperty\(\"(--[\w-]+)\"", source)}
-    assert set_by_script == {"--banner", "--fill", "--gw", "--gh", "--grow", "--lift", "--ed-a", "--ed-b", "--ed-h"}
+    assert set_by_script == {"--banner", "--fill", "--gw", "--gh", "--grow", "--lift"}
     in_style_text = {"--dx", "--dy", "--who"}                          # the little pieces of the like burst get their way in a style attribute (yipi-fx.js)
     assert used - defined_variables() - set_by_script - in_style_text == set(), sorted(used - defined_variables() - set_by_script - in_style_text)
 

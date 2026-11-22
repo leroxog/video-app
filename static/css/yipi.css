@@ -2647,73 +2647,6 @@ html.share-locked, html.share-locked body { overflow: hidden; overscroll-behavio
   .reels-scope-btn.on { background: none; color: #fff; box-shadow: inset 0 -2.5px 0 #fff; }
 }
 
-/* ---------------------------------------------------------------------------------------------- the video editor (yipi-editor.js), laid out like CapCut: always dark */
-.nu-card.story .nu-ic { background: #0a0a0a; }
-.pv-edit { position: absolute; left: 10px; top: 10px; z-index: 3; display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px; background: rgba(0, 0, 0, 0.65); color: #fff; font-size: 14px; font-weight: 800; }
-.pv-edit svg { width: 16px; height: 16px; }
-.ed { position: fixed; inset: 0; z-index: 1300; display: flex; flex-direction: column; padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); background: #101010; color: #fff; }
-.ed-top { display: flex; align-items: center; gap: 10px; padding: 10px 14px; }
-.ed-spacer { flex: 1; }
-.ed-x { display: grid; place-items: center; width: 44px; height: 44px; color: #fff; }
-.ed-x svg { width: 26px; height: 26px; }
-.ed-upload { padding: 10px 22px; border-radius: 10px; background: var(--danger); color: #fff; font-size: 16px; font-weight: 800; }
-.ed-upload:disabled { opacity: 0.5; }
-.ed-stage { position: relative; flex: 1 1 auto; min-height: 120px; display: grid; place-items: center; margin: 0 14px; background: #000; overflow: hidden; }
-.ed-stage > * { grid-area: 1 / 1; }
-.ed-video { display: block; max-width: 100%; max-height: 100%; background: #000; }
-.ed-layer { position: relative; pointer-events: none; }
-.ed-item { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; font-weight: 800; line-height: 1.1; text-shadow: 0 0 4px rgba(0, 0, 0, 0.9), 0 1px 3px rgba(0, 0, 0, 0.8); pointer-events: auto; touch-action: none; cursor: grab; user-select: none; }
-.ed-item.on { outline: 1.5px dashed #fff; outline-offset: 4px; }
-.ed-controls { display: flex; align-items: center; justify-content: space-between; padding: 8px 20px; }
-.ed-time { color: #ddd; font-size: 14px; font-variant-numeric: tabular-nums; }
-.ed-play { display: grid; place-items: center; width: 44px; height: 44px; color: #fff; }
-.ed-play svg { width: 28px; height: 28px; }
-.ed-low { display: flex; flex: none; gap: 10px; padding: 0 0 8px 12px; }
-.ed-side { display: flex; flex: none; flex-direction: column; gap: 8px; width: 72px; }
-.ed-quick { display: grid; place-items: center; gap: 4px; padding: 10px 4px; border-radius: 12px; background: #222; color: #fff; font-size: 11px; font-weight: 600; text-align: center; }
-.ed-quick svg { width: 22px; height: 22px; }
-.ed-timeline { position: relative; flex: 1; min-width: 0; padding: 0 22px 0 8px; }
-.ed-ruler { position: relative; height: 20px; color: #999; font-size: 11px; }
-.ed-ruler span { position: absolute; top: 2px; transform: translateX(-50%); }
-.ed-line { position: relative; height: 62px; margin-right: 0; border-radius: 8px; touch-action: none; }
-.ed-strip { position: absolute; inset: 0; display: flex; overflow: hidden; border-radius: 8px; background: #222; }
-.ed-cell { flex: 1; background-color: #2a2a2a; background-position: center; background-size: cover; }
-.ed-shade { position: absolute; inset: 0; border-radius: 8px; pointer-events: none; background: linear-gradient(90deg, rgba(0, 0, 0, 0.7) var(--ed-a, 0%), transparent var(--ed-a, 0%), transparent var(--ed-b, 100%), rgba(0, 0, 0, 0.7) var(--ed-b, 100%)); }
-.ed-handle { position: absolute; top: -3px; bottom: -3px; width: 16px; margin-left: -8px; border-radius: 5px; background: #fff; cursor: ew-resize; touch-action: none; }
-.ed-handle::after { content: ""; position: absolute; top: 40%; bottom: 40%; left: 6px; width: 4px; border-radius: 2px; background: #888; }
-.ed-handle.a { margin-left: -12px; }
-.ed-handle.b { margin-left: -4px; }
-.ed-head { position: absolute; top: -8px; bottom: -8px; width: 3px; margin-left: -1.5px; border-radius: 2px; background: #fff; touch-action: none; }
-.ed-head::before { content: ""; position: absolute; top: 0; bottom: 0; left: -10px; right: -10px; }
-.ed-track { position: relative; height: 34px; margin-top: 8px; border-radius: 8px; background: #1b1b1b; }
-.ed-track.audio { overflow: hidden; }
-.ed-add-audio { display: flex; align-items: center; gap: 8px; height: 100%; padding: 0 12px; color: #aaa; font-size: 14px; font-weight: 700; }
-.ed-add-audio svg { width: 16px; height: 16px; }
-.ed-music-bar { display: block; height: 100%; padding: 9px 10px; overflow: hidden; border-radius: 6px; background: #1f6f56; color: #fff; font-size: 12px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
-.ed-bar-item { position: absolute; top: 3px; bottom: 3px; min-width: 34px; padding: 0 8px; overflow: hidden; border-radius: 6px; background: #e8760a; color: #fff; font-size: 12px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
-.ed-bar-item.on { outline: 2px solid #fff; }
-.ed-panel { display: grid; gap: 10px; max-height: 34dvh; padding: 12px 16px; overflow-y: auto; border-top: 1px solid #2a2a2a; background: #181818; }
-.ed-panel[hidden], .ed-progress[hidden] { display: none; }
-.ed-panel b { font-size: 13px; color: #ddd; }
-.ed-hint { color: #aaa; font-size: 13px; }
-.ed-chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.ed-chip { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px; background: #2a2a2a; color: #fff; font-size: 14px; font-weight: 700; }
-.ed-chip svg { width: 16px; height: 16px; }
-.ed-chip.on { background: #fff; color: #000; }
-.ed-chips.stickers { gap: 6px; }
-.ed-chip.sticker { padding: 2px 10px; font-size: 26px; }
-.ed-field { flex: 1; min-width: 0; padding: 10px 14px; border: 0; border-radius: 12px; background: #2a2a2a; color: #fff; font-size: 16px; }
-.ed-row { display: flex; gap: 8px; }
-.ed-range { width: 100%; accent-color: #fff; }
-.ed-color { width: 30px; height: 30px; border: 2px solid #444; border-radius: 50%; }
-.ed-color.on { border-color: #fff; }
-.ed-tools { display: flex; flex: none; justify-content: space-around; padding: 6px 4px 10px; border-top: 1px solid #222; background: #101010; }
-.ed-tool { display: grid; place-items: center; gap: 4px; padding: 6px 2px; color: #bbb; font-size: 10.5px; font-weight: 600; white-space: nowrap; }
-.ed-tool svg { width: 26px; height: 26px; }
-.ed-tool.on { color: #fff; }
-.ed-progress { position: absolute; inset: 0; z-index: 5; display: grid; place-content: center; justify-items: center; gap: 14px; background: rgba(0, 0, 0, 0.84); text-align: center; }
-.ed-bar { display: block; width: 220px; height: 6px; overflow: hidden; border-radius: 3px; background: #333; }
-.ed-bar i { display: block; width: 0; height: 100%; background: #fff; }
 
 /* ---------------------------------------------------------------------------------------------- simpler and much rounder (2026-11-13)
    Everything that was a rectangle with a thin line is a soft, big round shape now: no frames, no shadows that shout, no strips of "Gesponsert". Later rules win, so this block comes last. */
@@ -2737,12 +2670,6 @@ textarea.field, .dm-input, .dm-compose .cb-field { border-radius: 26px; }
 .skz-sheet { border-radius: 46px 46px 0 0; }
 .skz-chip, .skz-upload-btn { border-radius: 999px; }
 .skz-upload-btn { border-radius: 50%; }
-.ed-stage { border-radius: 30px; }
-.ed-quick { border-radius: 20px; }
-.ed-line, .ed-strip, .ed-shade, .ed-track { border-radius: 16px; }
-.ed-panel { border-radius: 30px 30px 0 0; }
-.ed-field { border-radius: 999px; }
-.ed-upload { border-radius: 999px; }
 .reel-stage { border-radius: 34px; }
 @media (max-width: 819px), (pointer: coarse) {
   .appbar { border-radius: 0 0 34px 34px; }
@@ -2876,7 +2803,6 @@ button, input, textarea, select { font-family: inherit; }
 .cam-tool svg { width: 28px; height: 28px; }
 .cam-review-bar .cam-send { background: var(--snap, #8e44f2); color: #000; min-height: 54px; padding: 0 26px; font-size: 18px; font-weight: 900; }
 .cam-review-bar .cam-send svg { width: 22px; height: 22px; }
-.ed.snap .ed-upload { background: var(--snap, #8e44f2); color: #000; }
 html.turned .turn-note { position: fixed; inset: 0; z-index: 5000; display: grid; place-content: center; justify-items: center; gap: 14px; background: #000; color: #fff; text-align: center; }
 html.turned .turn-phone { display: block; width: 54px; height: 92px; border: 5px solid #fff; border-radius: 14px; }
 html.turned .turn-note b { font-size: 26px; font-weight: 900; }
@@ -3086,3 +3012,82 @@ html.typing .main { padding-bottom: 16px; }
 .chat-fab { position: fixed; right: 18px; bottom: calc(86px + env(safe-area-inset-bottom)); z-index: 20; display: grid; place-items: center; width: 58px; height: 58px; border-radius: 18px; background: var(--ink); color: var(--on-ink); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3); }
 .chat-fab svg { width: 28px; height: 28px; }
 @media (min-width: 820px) and (pointer: fine) { .chat-fab { position: absolute; right: 14px; bottom: 14px; } }
+
+/* the video editor (yipi-editor.js), like CapCut: black, the picture above, the time line with a fixed playhead in the middle, the tools at the bottom */
+.ed { position: fixed; inset: 0; z-index: 1300; display: flex; flex-direction: column; padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); background: #000; color: #fff; user-select: none; -webkit-user-select: none; }
+.ed-top { display: flex; align-items: center; gap: 8px; padding: 8px 12px; }
+.ed-spacer { flex: 1; }
+.ed-x, .ed-round { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: #1c1c1c; color: #fff; }
+.ed-x svg, .ed-round svg { width: 22px; height: 22px; }
+.ed-round:disabled { opacity: 0.3; }
+.ed-round.redo svg { transform: scaleX(-1); }
+.ed-round.small { width: 32px; height: 32px; font-size: 20px; font-weight: 800; line-height: 1; }
+.ed-upload { padding: 10px 22px; border-radius: 999px; background: #fe2c55; color: #fff; font-size: 15px; font-weight: 800; }
+.ed.snap .ed-upload { background: #fff; color: #000; }
+.ed-upload:disabled { opacity: 0.5; }
+.ed-stage { position: relative; flex: 1 1 auto; min-height: 140px; display: grid; place-items: center; margin: 0 12px; border-radius: 22px; overflow: hidden; background: #0c0c0c; }
+.ed-canvas { display: block; width: 100%; height: 100%; object-fit: contain; background: transparent; touch-action: none; }
+.ed-controls { display: flex; align-items: center; gap: 8px; padding: 8px 16px; }
+.ed-time { color: #ddd; font-size: 13px; font-variant-numeric: tabular-nums; }
+.ed-play { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: #fff; color: #000; }
+.ed-play svg { width: 24px; height: 24px; }
+.ed-low { flex: none; padding: 0 0 6px; }
+.ed-timeline { position: relative; height: 196px; }
+.ed-tl { position: absolute; inset: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.ed-tl::-webkit-scrollbar { display: none; }
+.ed-tl-in { position: relative; display: grid; align-content: start; gap: 6px; height: 100%; min-width: 100%; padding-top: 2px; }
+.ed-playhead { position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; margin-left: -1px; border-radius: 1px; background: #fff; box-shadow: 0 0 6px rgba(255, 255, 255, 0.6); pointer-events: none; z-index: 4; }
+.ed-ruler { position: relative; height: 16px; color: #888; font-size: 10.5px; }
+.ed-ruler span { position: absolute; top: 1px; transform: translateX(-50%); }
+.ed-row { position: relative; height: 28px; }
+.ed-row.main { height: 58px; }
+.ed-clip { position: absolute; top: 0; bottom: 0; overflow: hidden; border-radius: 10px; background-color: #2a2a2a; background-repeat: repeat-x; background-size: auto 100%; background-position: left center; color: #fff; text-align: left; }
+.ed-clip.on { box-shadow: 0 0 0 2.5px #fff; z-index: 2; }
+.ed-clip small { position: absolute; left: 6px; bottom: 3px; padding: 1px 6px; border-radius: 999px; background: rgba(0, 0, 0, 0.6); font-size: 10.5px; font-weight: 700; }
+.ed-muted { position: absolute; right: 6px; top: 4px; display: grid; width: 18px; height: 18px; color: #fff; }
+.ed-muted svg { width: 16px; height: 16px; }
+.ed-grip { position: absolute; top: -2px; bottom: -2px; z-index: 3; width: 18px; border-radius: 8px; background: #fff; touch-action: none; cursor: ew-resize; }
+.ed-grip::after { content: ""; position: absolute; top: 30%; bottom: 30%; left: 7px; width: 4px; border-radius: 2px; background: #888; }
+.ed-join { position: absolute; top: 17px; z-index: 3; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 8px; background: #fff; color: #000; }
+.ed-join svg { width: 14px; height: 14px; }
+.ed-join.on { background: #fe2c55; color: #fff; }
+.ed-addclip { position: absolute; top: 4px; display: grid; place-items: center; width: 48px; height: 50px; border-radius: 10px; background: #fff; color: #000; }
+.ed-addclip svg { width: 22px; height: 22px; }
+.ed-bar-item { position: absolute; top: 2px; bottom: 2px; min-width: 16px; padding: 0 8px; overflow: hidden; border-radius: 8px; background: #3a3a3a; color: #fff; font-size: 12px; font-weight: 700; text-align: left; white-space: nowrap; touch-action: none; }
+.ed-bar-item.text { background: #e0b100; color: #000; }
+.ed-bar-item.sticker { background: #d6458f; }
+.ed-bar-item.overlay { background: #3d7bd6; }
+.ed-bar-item.fx { background: #7a47d6; }
+.ed-bar-item.audio { background: #1f8a68; }
+.ed-bar-item.on { box-shadow: 0 0 0 2px #fff; }
+.ed-add-audio { position: absolute; top: 2px; bottom: 2px; display: flex; align-items: center; gap: 8px; padding: 0 14px; border-radius: 8px; background: #1c1c1c; color: #aaa; font-size: 13px; font-weight: 700; white-space: nowrap; }
+.ed-add-audio svg { width: 16px; height: 16px; }
+.ed-panel { display: grid; gap: 10px; max-height: 36dvh; padding: 12px 16px; overflow-y: auto; border-radius: 26px 26px 0 0; border-top: 1px solid #2a2a2a; background: #111; }
+.ed-panel[hidden], .ed-progress[hidden] { display: none; }
+.ed-panel b { font-size: 13px; color: #ddd; }
+.ed-hint { margin: 0; color: #aaa; font-size: 13px; }
+.ed-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.ed-chip { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px; background: #2a2a2a; color: #fff; font-size: 13.5px; font-weight: 700; }
+.ed-chip svg { width: 16px; height: 16px; }
+.ed-chip.on { background: #fff; color: #000; }
+.ed-chip.rec { background: #fe2c55; color: #fff; }
+.ed-chips.stickers { gap: 6px; }
+.ed-chip.sticker { display: grid; place-items: center; min-width: 46px; height: 46px; padding: 2px 8px; font-size: 26px; }
+.ed-chip.sticker img { width: 34px; height: 34px; object-fit: contain; }
+.ed-field { flex: 1; min-width: 0; padding: 10px 16px; border: 0; border-radius: 999px; background: #2a2a2a; color: #fff; font-size: 16px; }
+.ed-row2 { display: flex; gap: 8px; }
+.ed-slider { display: grid; grid-template-columns: 92px 1fr; align-items: center; gap: 10px; color: #ddd; font-size: 13px; font-weight: 700; }
+.ed-range { width: 100%; accent-color: #fff; }
+.ed-color { width: 30px; height: 30px; border: 2px solid #444; border-radius: 50%; }
+.ed-color.on { border-color: #fff; }
+.ed-tools { display: flex; flex: none; gap: 2px; padding: 6px 4px 10px; overflow-x: auto; scrollbar-width: none; border-top: 1px solid #1c1c1c; background: #000; }
+.ed-tools::-webkit-scrollbar { display: none; }
+.ed-tool { display: grid; flex: none; place-items: center; gap: 4px; min-width: 66px; padding: 6px 4px; color: #bbb; font-size: 10.5px; font-weight: 600; white-space: nowrap; }
+.ed-tool svg { width: 25px; height: 25px; }
+.ed-tool.on { color: #fff; }
+.ed-progress { position: absolute; inset: 0; z-index: 5; display: grid; place-content: center; justify-items: center; gap: 14px; background: rgba(0, 0, 0, 0.88); text-align: center; }
+.ed-bar { display: block; width: 220px; height: 6px; overflow: hidden; border-radius: 3px; background: #333; }
+.ed-bar i { display: block; width: 0; height: 100%; background: #fff; }
+.ed-file { display: none; }
+.pv-edit { position: absolute; left: 10px; top: 10px; z-index: 3; display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px; background: rgba(0, 0, 0, 0.65); color: #fff; font-size: 14px; font-weight: 800; }
+.pv-edit svg { width: 16px; height: 16px; }
