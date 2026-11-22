@@ -11,7 +11,16 @@
 
   const MAX_SIDE = 1280;                                         // the longest side of the finished clip
   const FILTERS = [["Original", ""], ["Hell", "brightness(1.15) contrast(1.05)"], ["Kontrast", "contrast(1.35) saturate(1.1)"], ["Schwarz-Weiß", "grayscale(1)"], ["Warm", "sepia(0.45) saturate(1.3)"],
-    ["Kalt", "hue-rotate(-18deg) saturate(1.15)"], ["Verblasst", "contrast(0.85) brightness(1.1) saturate(0.8)"], ["Weich", "blur(1.2px) brightness(1.05)"]];
+    ["Kalt", "hue-rotate(-18deg) saturate(1.15)"], ["Verblasst", "contrast(0.85) brightness(1.1) saturate(0.8)"], ["Weich", "blur(1.2px) brightness(1.05)"],
+    ["Kino", "contrast(1.25) saturate(0.85) sepia(0.2) brightness(0.95)"], ["Lebendig", "saturate(1.7) contrast(1.1)"], ["Retro", "sepia(0.7) contrast(1.1) hue-rotate(-12deg) saturate(1.2)"],
+    ["Drama", "contrast(1.6) brightness(0.9) saturate(0.7)"], ["Traum", "brightness(1.12) saturate(1.25) blur(0.6px) hue-rotate(12deg)"], ["Neon", "saturate(2.2) contrast(1.3) hue-rotate(20deg)"],
+    ["Mono", "grayscale(1) contrast(1.3)"], ["Negativ", "invert(1)"]];
+  /* The filter of the look plus the sliders of "Anpassen" (brightness, contrast, saturation, softness). */
+  const filterOf = (state) => {
+    const a = state.adjust;
+    const extra = a.brightness === 1 && a.contrast === 1 && a.saturate === 1 && a.blur === 0 ? "" : ` brightness(${a.brightness}) contrast(${a.contrast}) saturate(${a.saturate})${a.blur ? ` blur(${a.blur}px)` : ""}`;
+    return `${FILTERS[state.filter][1] || ""}${extra}`.trim() || "none";
+  };
   const STICKERS = [0x1F600, 0x1F602, 0x1F60D, 0x1F525, 0x2764, 0x2B50, 0x1F44D, 0x1F389, 0x1F4AF, 0x1FA90].map((code) => String.fromCodePoint(code));
   const COLORS = ["#ffffff", "#000000", "#fe2c55", "#ffd60a", "#34c759", "#0a84ff"];
   const SPEEDS = [0.5, 0.75, 1, 1.5, 2];
@@ -26,8 +35,8 @@
 
   /* One finished frame: the picture with the filter, then the texts and the stickers that are on at this moment (`at` is the time in the source video). */
   function paint(ctx, source, width, height, state, at) {
-    ctx.filter = FILTERS[state.filter][1] || "none";
-    ctx.drawImage(source, 0, 0, width, height);
+    ctx.filter = filterOf(state);
+    if (state.mirror) { ctx.save(); ctx.translate(width, 0); ctx.scale(-1, 1); ctx.drawImage(source, 0, 0, width, height); ctx.restore(); } else ctx.drawImage(source, 0, 0, width, height);
     ctx.filter = "none";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -52,7 +61,7 @@
   function open({ file, onDone, onClose, snap = false, tool: firstTool = "" } = {}) {
     const url = URL.createObjectURL(file);
     const video = h("video", { class: "ed-video", src: url, playsinline: true, preload: "auto", "aria-label": "Vorschau deines Videos" });
-    const state = { start: 0, end: 0, speed: 1, clipAudio: true, volume: 1, filter: 0, texts: [], stickers: [], music: null, musicVolume: 0.7, captions: true };
+    const state = { start: 0, end: 0, speed: 1, clipAudio: true, volume: 1, filter: 0, texts: [], stickers: [], music: null, musicVolume: 0.7, captions: true, mirror: false, adjust: { brightness: 1, contrast: 1, saturate: 1, blur: 0 } };
     let duration = 0;
     let tool = firstTool;
     let busy = false;
@@ -86,7 +95,8 @@
     const out = () => (state.end - state.start) / state.speed;
     function active(list) { return list.filter((item) => video.currentTime >= item.from && video.currentTime <= item.to); }
     function drawLayer() {
-      video.style.filter = FILTERS[state.filter][1] || "none";
+      video.style.filter = filterOf(state);
+      video.style.transform = state.mirror ? "scaleX(-1)" : "";
       const items = [...active(state.texts).map((item) => ({ item, kind: "text" })), ...active(state.stickers).map((item) => ({ item, kind: "sticker" }))];
       layer.replaceChildren(...items.map(({ item, kind }) => {
         const el = h("span", { class: `ed-item ${kind}${selected === item ? " on" : ""}` }, kind === "text" ? item.text : item.char);
@@ -187,8 +197,15 @@
       panel.hidden = !tool;
       if (!tool) return;
       const rows = [];
-      if (tool === "edit") {
-        rows.push(h("p", { class: "ed-hint" }, "Zieh die Ränder in der Zeitleiste, um das Video zu kürzen."), h("b", {}, "Tempo"), h("div", { class: "ed-chips" }, SPEEDS.map((speed) => chip(`${speed}x`, state.speed === speed, () => { state.speed = speed; video.playbackRate = speed; drawAll(); }))));
+      if (tool === "adjust") {
+        const a = state.adjust;
+        rows.push(h("b", {}, "Helligkeit"), slider(0.5, 1.5, 0.05, a.brightness, (v) => { a.brightness = v; drawLayer(); }, "Helligkeit"),
+          h("b", {}, "Kontrast"), slider(0.5, 1.8, 0.05, a.contrast, (v) => { a.contrast = v; drawLayer(); }, "Kontrast"),
+          h("b", {}, "Sättigung"), slider(0, 2.5, 0.05, a.saturate, (v) => { a.saturate = v; drawLayer(); }, "Sättigung"),
+          h("b", {}, "Weichzeichner"), slider(0, 6, 0.25, a.blur, (v) => { a.blur = v; drawLayer(); }, "Weichzeichner"),
+          h("div", { class: "ed-chips" }, chip("Zurücksetzen", false, () => { state.adjust = { brightness: 1, contrast: 1, saturate: 1, blur: 0 }; drawAll(); })));
+      } else if (tool === "edit") {
+        rows.push(h("p", { class: "ed-hint" }, "Zieh die Ränder in der Zeitleiste, um das Video zu kürzen."), h("div", { class: "ed-chips" }, chip(state.mirror ? "Gespiegelt" : "Spiegeln", state.mirror, () => { state.mirror = !state.mirror; drawAll(); })), h("b", {}, "Tempo"), h("div", { class: "ed-chips" }, SPEEDS.map((speed) => chip(`${speed}x`, state.speed === speed, () => { state.speed = speed; video.playbackRate = speed; drawAll(); }))));
       } else if (tool === "audio") {
         rows.push(h("div", { class: "ed-chips" }, chip(state.clipAudio ? "Originalton an" : "Originalton aus", state.clipAudio, () => { state.clipAudio = !state.clipAudio; video.muted = !state.clipAudio; drawAll(); })),
           h("b", {}, "Lautstärke des Videos"), slider(0, 1, 0.05, state.volume, (v) => { state.volume = v; video.volume = v; }, "Lautstärke des Videos"),
@@ -231,7 +248,7 @@
       controls.push(h("button", { class: "ed-chip", type: "button", onclick: () => remove(list, item) }, icon("trash"), "Entfernen"));
       return controls;
     }
-    const tools = [["edit", "scissors", "Bearbeiten"], ["audio", "music", "Audio"], ["text", "text", "Text"], ["effects", "sparkle", "Effekte"], ["overlay", "image", "Überlagerung"], ["captions", "captions", "Untertitel"]];
+    const tools = [["edit", "scissors", "Bearbeiten"], ["audio", "music", "Audio"], ["text", "text", "Text"], ["effects", "sparkle", "Effekte"], ["adjust", "settings", "Anpassen"], ["overlay", "image", "Überlagerung"], ["captions", "captions", "Untertitel"]];
     const toolbar = h("nav", { class: "ed-tools", "aria-label": "Werkzeuge" });
     function drawTools() {
       toolbar.replaceChildren(...tools.map(([id, symbol, label]) => h("button", { class: `ed-tool${tool === id ? " on" : ""}`, type: "button", "aria-pressed": String(tool === id), onclick: () => { tool = tool === id ? "" : id; drawAll(); } }, icon(symbol), h("span", {}, label))));

@@ -63,6 +63,7 @@ ANNOUNCEMENTS = [
     ("2026-11-20-chest", "web", "Die Samojis sind jetzt echte 3D-Figuren mit eigenen Animationen: Drache, UFO, Sportwagen, Wal, Rose, Löwe und mehr. Beim Verschenken siehst du jetzt oben eine Rechnung mit deinem Guthaben. #neu #samojis"),
     ("2026-11-22-samojis", "web", "Neu: Die Tokens sind jetzt goldene Münzen, und es gibt 15 neue Samojis als Bilder, von der Rose bis zur Hand mit den Einkaufstüten. Neue Geschenke fallen von oben ins Video, am Rand steht, wie oft welches kam. Die Truhe ist neu."),
     ("2026-11-22-ig", "web", "Neu: Home sieht jetzt aus wie bei Instagram: oben die Storys, darunter die Beiträge groß mit Herz, Kommentar und Speichern. Die Chats sind wie bei WhatsApp, mit Glas-Suche, Filtern (Alle, Ungelesen, Gruppen) und dem runden Neu-Knopf."),
+    ("2026-11-22-editor", "web", "Der Schnitt kann mehr: Neues Werkzeug Anpassen mit Helligkeit, Kontrast, Sättigung und Weichzeichner, 8 neue Looks bei Effekten (Kino, Neon, Retro ...) und Spiegeln. Alles wie bei CapCut, direkt vor dem Hochladen."),
 ]
 
 _state = {"started": False}
