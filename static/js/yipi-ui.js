@@ -64,7 +64,7 @@
       wrap.classList.add("letters");
       if (user && user.company) {                                                // an official account: the mark of Satürn on black (Nex-AI in purple)
         wrap.classList.add("official");
-        if (user.handle === "nexai") { wrap.classList.add("nexai"); wrap.append(icon("nexmark")); }
+        if (user.handle === "nexai") { wrap.classList.add("nexai"); wrap.append(h("img", { src: "/static/img/nex-ai.jpg", alt: "", draggable: false })); }
         else { wrap.classList.add("saturn"); wrap.append(Icons.logo()); }                  // (Satürn-Web wears the planet)
       } else {
         wrap.style.background = Core.defaultColors((user && user.handle) || "?").avatar;

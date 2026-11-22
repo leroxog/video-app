@@ -111,13 +111,13 @@
     } }))));
     const moreButton = h("button", { class: "icon-btn round", type: "button", "aria-label": "Mehr", "aria-haspopup": "menu" }, icon("more"));
     const head = h("div", { class: "chat-head" }, back,
-      h("div", { class: "chat-head-main" }, h("span", { class: "avatar md nex-face", "aria-hidden": "true" }, icon("nexmark")),
+      h("div", { class: "chat-head-main" }, h("span", { class: "avatar md nex-face", "aria-hidden": "true" }, h("img", { src: "/static/img/nex-ai.jpg", alt: "", draggable: false })),
         h("div", { class: "chat-head-text" }, h("b", {}, "Nex AI"), modeButton)),
       moreButton);
 
     const postBox = h("div", { class: "nex-post-box", hidden: true });
     const intro = h("div", { class: "thread-intro nex-intro" },
-      h("span", { class: "avatar xl nex-face", "aria-hidden": "true" }, icon("nexmark")),
+      h("span", { class: "avatar xl nex-face", "aria-hidden": "true" }, h("img", { src: "/static/img/nex-ai.jpg", alt: "", draggable: false })),
       h("h2", {}, "Nex AI"),
       h("p", {}, "Frag mich alles: ich erkläre, schreibe und denke mit. Ich bin eine KI und kann Fehler machen."));
     const bubbles = h("div", { class: "bubbles", role: "log", "aria-live": "polite", "aria-label": "Gespräch mit Nex AI" });

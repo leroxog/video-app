@@ -146,7 +146,29 @@
           if (state.phase === "closed") { state.phase = "ready"; state.readyAt = t; chip.classList.add("ready"); chipTime.textContent = "Jetzt!"; state.sheet?.ready(); Y.sound?.play("receive"); }
         } else if (!state.busy) { stop(); toast("Die Satürn Truhe ist weg."); }
       }, 100);
-      chip.addEventListener("click", () => openChestSheet(info, state, stop));
+      /* Press and hold the chest, then move the finger: it can sit wherever you want on the screen. */
+      let hold = null;
+      let dragged = false;
+      chip.addEventListener("contextmenu", (event) => event.preventDefault());
+      chip.addEventListener("pointerdown", (event) => {
+        const box = chip.getBoundingClientRect();
+        hold = { id: event.pointerId, dx: event.clientX - box.left, dy: event.clientY - box.top, on: false, timer: setTimeout(() => { if (hold) { hold.on = true; chip.classList.add("held"); } }, 320) };
+      });
+      chip.addEventListener("pointermove", (event) => {
+        if (!hold || !hold.on) return;
+        dragged = true;
+        chip.classList.remove("pop");
+        const area = el.getBoundingClientRect();
+        const left = Math.max(0, Math.min(area.width - chip.offsetWidth, event.clientX - area.left - hold.dx));
+        const top = Math.max(0, Math.min(area.height - chip.offsetHeight, event.clientY - area.top - hold.dy));
+        chip.style.transition = "none";
+        chip.style.left = `${left}px`;
+        chip.style.top = `${top}px`;
+      });
+      const letGo = () => { if (hold) clearTimeout(hold.timer); hold = null; chip.classList.remove("held"); };
+      chip.addEventListener("pointerup", letGo);
+      chip.addEventListener("pointercancel", letGo);
+      chip.addEventListener("click", () => { if (dragged) { dragged = false; return; } openChestSheet(info, state, stop); });
     }
     /* The sheet with the big chest. */
     async function openChestSheet(info, state, stop) {

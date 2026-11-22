@@ -132,7 +132,7 @@
     /* Satürn, the assistant, is in everybody's list like a contact. */
     function nexRow() {
       return link("/i/nex", { class: `convo convo-nex${active === "nex" ? " active" : ""}` },
-        h("span", { class: "avatar md nex-face", "aria-hidden": "true" }, icon("nexmark")),
+        h("span", { class: "avatar md nex-face", "aria-hidden": "true" }, h("img", { src: "/static/img/nex-ai.jpg", alt: "", draggable: false })),
         h("div", { class: "convo-main" },
           h("div", { class: "convo-top" }, h("b", { class: "convo-name" }, "Nex AI"), h("span", { class: "ai-badge" }, "KI")),
           h("p", { class: "convo-last" }, "Frag mich alles. Ich bin immer für dich da.")));
