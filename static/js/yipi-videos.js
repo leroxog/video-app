@@ -59,17 +59,48 @@
     let dead = false;
     let active = null;
     /* A swipe to the right (mostly sideways, not up or down) opens the profile of the person whose video is on the screen. */
+    /* Like TikTok: the finger pulls the video to the left and the person slides in from the right, it can stay half way while the finger is on the glass; let go past the middle of a short pull and the profile opens, else it springs back. */
     let swipe = null;
-    scroller.addEventListener("touchstart", (event) => { const touch = event.touches[0]; swipe = event.touches.length === 1 && !event.target.closest(".reel-photos") ? { x: touch.clientX, y: touch.clientY } : null; }, { passive: true });
-    scroller.addEventListener("touchend", (event) => {
+    let peek = null;
+    let pull = 0;
+    const slide = (x, smooth) => {
+      const move = [scroller, top, peek];
+      move.forEach((node, index) => { if (node) { node.style.transition = smooth ? "transform 0.22s ease-out" : "none"; node.style.transform = index === 2 ? `translateX(${x + el.clientWidth}px)` : `translateX(${x}px)`; } });
+    };
+    const dropPeek = () => { if (peek) peek.remove(); peek = null; for (const node of [scroller, top]) { node.style.transition = ""; node.style.transform = ""; } };
+    scroller.addEventListener("touchstart", (event) => { const touch = event.touches[0]; swipe = event.touches.length === 1 && !event.target.closest(".reel-photos") ? { x: touch.clientX, y: touch.clientY, side: false } : null; pull = 0; }, { passive: true });
+    scroller.addEventListener("touchmove", (event) => {
+      if (!swipe || !active || !active.item) return;
+      const touch = event.touches[0];
+      const dx = touch.clientX - swipe.x;
+      const dy = touch.clientY - swipe.y;
+      if (!swipe.side) {
+        if (dx < -14 && Math.abs(dx) > Math.abs(dy) * 1.6) {
+          swipe.side = true;
+          const user = active.item.user;
+          peek = h("div", { class: "reels-peek" }, h("div", { class: "reels-peek-banner" }), avatar(user, "lg"), h("b", { class: "reels-peek-name" }, user.name), h("span", { class: "reels-peek-handle" }, `@${user.handle}`));
+          el.append(peek);
+        } else return;
+      }
+      pull = Math.max(-el.clientWidth, Math.min(0, dx));
+      slide(pull, false);
+    }, { passive: true });
+    const finish = (event) => {
       const start = swipe;
       swipe = null;
-      const touch = event.changedTouches[0];
-      if (!start || !touch || !active || !active.item) return;
-      const dx = touch.clientX - start.x;
-      const dy = touch.clientY - start.y;
-      if (dx > 80 && Math.abs(dy) < 45 && dx > Math.abs(dy) * 2.2) Y.navigate(`/${active.item.user.handle}`);
-    }, { passive: true });
+      if (!start || !start.side) return;
+      const open = pull < -el.clientWidth * 0.3 && active && active.item;
+      if (open) {
+        slide(-el.clientWidth, true);
+        const handle = active.item.user.handle;
+        setTimeout(() => { Y.navigate(`/${handle}`); dropPeek(); }, 200);
+      } else {
+        slide(0, true);
+        setTimeout(dropPeek, 230);
+      }
+    };
+    scroller.addEventListener("touchend", finish, { passive: true });
+    scroller.addEventListener("touchcancel", finish, { passive: true });
     /* Shake the phone and the video on the screen gets a like (the sensor of the phone; on iPhones the browser asks once, at the first touch). */
     let lastReading = null;
     let lastShake = 0;

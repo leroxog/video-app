@@ -85,7 +85,7 @@
       swipeStart = { x: event.clientX, y: event.clientY };
     }
     function onUp(event) {
-      if (swipeStart && event.clientX - swipeStart.x > 90 && Math.abs(event.clientY - swipeStart.y) < 60) swiped = true;       // (from the left to the right: the person of the video)
+      if (swipeStart && swipeStart.x - event.clientX > 90 && Math.abs(event.clientY - swipeStart.y) < 60) swiped = true;       // (from the right to the left: the person of the video)
       swipeStart = null;
     }
     addEventListener("pointerdown", onDown, true);

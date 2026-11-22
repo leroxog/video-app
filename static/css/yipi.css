@@ -592,8 +592,8 @@ main:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-vi
 .tile video { width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
 
 /* the Videos tab (like TikTok): one video after the other, each as big as the screen */
-.reels-view { position: relative; margin: 0 calc(var(--pad) * -1); background: #000; color: #fff; }
-.reels { height: 100vh; height: 100dvh; overflow-y: auto; scroll-snap-type: y mandatory; overscroll-behavior: contain; scrollbar-width: none; outline: none; }
+.reels-view { position: relative; overflow: hidden; margin: 0 calc(var(--pad) * -1); background: #000; color: #fff; }
+.reels { touch-action: pan-y; height: 100vh; height: 100dvh; overflow-y: auto; scroll-snap-type: y mandatory; overscroll-behavior: contain; scrollbar-width: none; outline: none; }
 .reels::-webkit-scrollbar { display: none; }
 .reel { position: relative; display: flex; align-items: center; justify-content: center; height: 100vh; height: 100dvh; scroll-snap-align: start; scroll-snap-stop: always; }
 .reel-stage { position: relative; width: 100%; height: 100%; background: #000; overflow: hidden; }
@@ -2777,8 +2777,8 @@ button, input, textarea, select { font-family: inherit; }
 .tour-ring { position: absolute; display: none; width: 92px; height: 92px; border: 3px solid rgba(160, 160, 164, 0.7); border-radius: 50%; transform: translate(-50%, -50%); }
 .tour[data-move="up"] .tour-finger::before, .tour[data-move="right"] .tour-finger::before { content: ""; position: absolute; border-radius: 32px; background: linear-gradient(var(--tour-dir, 180deg), rgba(175, 175, 180, 0.55), rgba(175, 175, 180, 0)); }
 .tour[data-move="up"] .tour-finger::before { left: 8px; right: 8px; top: 56px; height: 120px; }
-.tour[data-move="right"] .tour-finger { --tour-dir: 270deg; }
-.tour[data-move="right"] .tour-finger::before { top: 8px; bottom: 8px; right: 56px; width: 120px; }
+.tour[data-move="right"] .tour-finger { --tour-dir: 90deg; }
+.tour[data-move="right"] .tour-finger::before { top: 8px; bottom: 8px; left: 56px; width: 120px; }
 .tour[data-move="up"] .tour-hand { animation: tour-up 1.7s ease-in-out infinite; }
 .tour[data-move="tap"] .tour-hand { animation: tour-tap 1.1s ease-in-out infinite; }
 .tour[data-move="double"] .tour-hand { animation: tour-tap 0.7s ease-in-out infinite; }
@@ -2786,7 +2786,7 @@ button, input, textarea, select { font-family: inherit; }
 .tour[data-move="tap"] .tour-ring, .tour[data-move="double"] .tour-ring { display: block; animation: tour-ring 1.1s ease-out infinite; }
 @keyframes tour-up { 0% { transform: translate(-50%, 90px); opacity: 0; } 15% { opacity: 1; } 75% { transform: translate(-50%, -170px); opacity: 1; } 100% { transform: translate(-50%, -190px); opacity: 0; } }
 @keyframes tour-tap { 0%, 100% { transform: translate(-50%, -50%) scale(1); } 40% { transform: translate(-50%, -50%) scale(0.82); } }
-@keyframes tour-right { 0% { transform: translate(-170px, -50%); opacity: 0; } 15% { opacity: 1; } 75% { transform: translate(120px, -50%); opacity: 1; } 100% { transform: translate(140px, -50%); opacity: 0; } }
+@keyframes tour-right { 0% { transform: translate(170px, -50%); opacity: 0; } 15% { opacity: 1; } 75% { transform: translate(-120px, -50%); opacity: 1; } 100% { transform: translate(-140px, -50%); opacity: 0; } }
 @keyframes tour-ring { 0% { transform: translate(-50%, -50%) scale(0.4); opacity: 0.9; } 100% { transform: translate(-50%, -50%) scale(1.6); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .tour .tour-hand, .tour .tour-ring { animation: none; } }
 .turn-note { display: none; }
@@ -3095,3 +3095,8 @@ html.typing .main { padding-bottom: 16px; }
 .ed-file { display: none; }
 .pv-edit { position: absolute; left: 10px; top: 10px; z-index: 3; display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px; background: rgba(0, 0, 0, 0.65); color: #fff; font-size: 14px; font-weight: 800; }
 .pv-edit svg { width: 16px; height: 16px; }
+.reels-peek { position: absolute; inset: 0; z-index: 6; display: grid; align-content: center; justify-items: center; gap: 10px; background: #000; color: #fff; text-align: center; transform: translateX(100%); }
+.reels-peek-banner { position: absolute; left: 0; right: 0; top: 0; height: 34%; background: #1c1c1c; }
+.reels-peek .av { position: relative; }
+.reels-peek-name { position: relative; font-size: 20px; font-weight: 800; }
+.reels-peek-handle { position: relative; color: #aaa; font-size: 15px; }
