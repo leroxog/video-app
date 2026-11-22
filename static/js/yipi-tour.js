@@ -1,12 +1,12 @@
-/* Satürn tour (yipi-tour.js): the first time somebody is on Home (a new account or an old one: everybody sees it once) the page gets a little darker and a hand shows what to do, with no words,
-   like on TikTok, Snapchat and Instagram: swipe up to scroll, tap the Videos tab, swipe up for the next video, tap twice to like, swipe to the side to see the person. The dark layer lets every touch
+/* Satürn tour (yipi-tour.js): the first time somebody is on Home (a new account or an old one: everybody sees it once) the page gets a little darker and a grey, see-through finger shows what to do, with no words and with a swipe trail,
+   like on TikTok: swipe up to scroll, tap the Videos tab, swipe up for the next video, tap twice to like, swipe to the side to see the person. The dark layer lets every touch
    through, so the person can really do it; a step is over when the gesture was made. Whoever wants to leave early taps the screen quickly six times after the step has been there for five seconds.
    Only on a phone held upright. It is remembered per account in this browser. */
 (function () {
   "use strict";
 
   const Y = window.Yipi;
-  const { h, icon } = Y;
+  const { h } = Y;
 
   const narrow = () => !window.matchMedia || matchMedia("(max-width: 819px), (pointer: coarse)").matches;
   const key = () => `saturn.tour.${Y.me ? Y.me.handle : ""}`;
@@ -32,7 +32,7 @@
     let lastTap = 0;
     let doubled = false;
     let swiped = false;
-    const hand = h("span", { class: "tour-hand" }, icon("hand"));
+    const hand = h("span", { class: "tour-hand" }, h("i", { class: "tour-finger" }));
     const ring = h("span", { class: "tour-ring" });
     const layer = h("div", { class: "tour", "aria-hidden": "true" }, ring, hand);
     document.body.append(layer);
@@ -85,7 +85,7 @@
       swipeStart = { x: event.clientX, y: event.clientY };
     }
     function onUp(event) {
-      if (swipeStart && Math.abs(event.clientX - swipeStart.x) > 90 && Math.abs(event.clientY - swipeStart.y) < 60) swiped = true;
+      if (swipeStart && event.clientX - swipeStart.x > 90 && Math.abs(event.clientY - swipeStart.y) < 60) swiped = true;       // (from the left to the right: the person of the video)
       swipeStart = null;
     }
     addEventListener("pointerdown", onDown, true);

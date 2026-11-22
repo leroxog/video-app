@@ -65,6 +65,7 @@ ANNOUNCEMENTS = [
     ("2026-11-22-ig", "web", "Neu: Home sieht jetzt aus wie bei Instagram: oben die Storys, darunter die Beiträge groß mit Herz, Kommentar und Speichern. Die Chats sind wie bei WhatsApp, mit Glas-Suche, Filtern (Alle, Ungelesen, Gruppen) und dem runden Neu-Knopf."),
     ("2026-11-22-editor", "web", "Der Schnitt kann mehr: Neues Werkzeug Anpassen mit Helligkeit, Kontrast, Sättigung und Weichzeichner, 8 neue Looks bei Effekten (Kino, Neon, Retro ...) und Spiegeln. Alles wie bei CapCut, direkt vor dem Hochladen."),
     ("2026-11-22-capcut", "web", "Der Schnitt ist jetzt ein richtiger CapCut: mehrere Clips, Teilen, Kürzen, Tempo, Übergänge, Text mit Animation, Sticker mit Samojis, Überlagerung, Effekte, eigene Stimme, Musik, Format 9:16 und mehr, mit Rückgängig."),
+    ("2026-11-22-tour", "web", "Die Einführung zeigt jetzt wie bei TikTok einen grauen, durchsichtigen Finger mit einer Wischspur. Um das Profil zu einem Video zu öffnen, wischst du von links nach rechts."),
 ]
 
 _state = {"started": False}
