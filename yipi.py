@@ -987,6 +987,7 @@ def gif_info(data):
         return None
 
 
+_speak_cache = {}
 NEX_VOICE = "de-DE-FlorianMultilingualNeural"       # the voice of Nex AI when it talks (it speaks other languages, too)
 NEX_MAX_TOKENS = 900                              # the model reasons before it writes: a small number would leave nothing visible
 NEX_PROMPT = (
@@ -4683,6 +4684,8 @@ def register_routes(app):
         text = re.sub(r"https?://\S+|[*_`#>~]+", " ", text).strip()
         if not text:
             return fail("bad_request")
+        if text in _speak_cache:
+            return jsonify({"ok": True, "audio": _speak_cache[text]})
         try:
             import asyncio
             import edge_tts
@@ -4700,7 +4703,10 @@ def register_routes(app):
             return fail("unavailable", 503)
         if not audio:
             return fail("unavailable", 503)
-        return jsonify({"ok": True, "audio": base64.b64encode(audio).decode()})
+        encoded = base64.b64encode(audio).decode()
+        if len(text) <= 20 and len(_speak_cache) < 40:                 # the short calls ("Mhm.") are the same for everybody: made once
+            _speak_cache[text] = encoded
+        return jsonify({"ok": True, "audio": encoded})
 
     @route("/api/yipi/nex/read", methods=["POST"])
     def pulse_nex_read():

@@ -446,6 +446,25 @@
       const player = new Audio();                                // made at the tap: browsers only let a sound play that was started by a touch, so this one is unlocked now and used for every answer
       player.src = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=";
       player.play().catch(() => {});
+      /* Short calls in between ("Ja, verstehe"): while somebody talks on and on, Nex says one now and then, quietly, like a person on the phone. They are made once, when the talk starts. */
+      const nod = new Audio();
+      nod.volume = 0.6;
+      nod.src = player.src;
+      nod.play().catch(() => {});
+      const NODS = ["Ja, verstehe.", "Mhm.", "Okay.", "Aha.", "Genau.", "Ach so."];
+      const nodClips = [];
+      let lastNod = 0;
+      let nodTimer = 0;
+      let nodWords = [];
+      NODS.forEach((text) => Api.post("/nex/speak", { text }).then((reply) => { if (reply.ok) nodClips.push({ text, src: `data:audio/mpeg;base64,${reply.data.audio}` }); }));
+      const nodNow = () => {
+        if (state !== "listening" || !nodClips.length || player.currentTime > 0 && !player.paused) return;
+        const clip = nodClips[Math.floor(Math.random() * nodClips.length)];
+        lastNod = Date.now();
+        nodWords.push(clip.text.replace(/[.,]/g, ""));
+        nod.src = clip.src;
+        nod.play().catch(() => {});
+      };
       const label = h("b", { class: "talk-state" }, "");
       const heard = h("p", { class: "talk-heard" }, "");
       const orb = h("span", { class: "talk-orb" }, h("img", { src: "/static/img/nex-ai.jpg", alt: "", draggable: false }));
@@ -459,6 +478,8 @@
         state = "over";
         try { recognition?.abort(); } catch (error) { /* not running */ }
         player.pause();
+        nod.pause();
+        clearTimeout(nodTimer);
         controller?.abort();
         layer.remove();
         document.body.classList.remove("modal-open");
@@ -472,11 +493,20 @@
         recognition.interimResults = true;
         recognition.continuous = false;
         let said = "";
-        recognition.onresult = (event) => { said = Array.from(event.results).map((entry) => entry[0].transcript).join(" "); heard.textContent = said; };
+        recognition.onresult = (event) => {
+          said = Array.from(event.results).map((entry) => entry[0].transcript).join(" ");
+          heard.textContent = said;
+          clearTimeout(nodTimer);
+          if (said.split(/\s+/).length >= 7 && Date.now() - lastNod > 7000) nodTimer = setTimeout(nodNow, 1300);       // a pause of a moment after a longer piece
+        };
         recognition.onerror = (event) => { if (event.error === "not-allowed" || event.error === "service-not-allowed") { toast("Erlaube das Mikrofon, damit Nex dich hören kann."); finish(); } };
         recognition.onend = () => {
           if (state !== "listening") return;
-          const text = Core.cleanText(said);
+          clearTimeout(nodTimer);
+          let text = said;
+          for (const word of nodWords) text = text.replace(new RegExp("\\s*" + word + "[.,]?\\s*$", "i"), "");       // (the microphone may have heard Nex's own call)
+          nodWords = [];
+          text = Core.cleanText(text);
           if (text) reply(text); else setTimeout(listen, 250);
         };
         try { recognition.start(); } catch (error) { setTimeout(listen, 400); }
