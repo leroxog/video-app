@@ -30,34 +30,30 @@
   const nameOf = (item) => `${data.shapes[item[1]]} ${data.palettes[item[2]][0]}${data.badges[item[3]] ? ` ${data.badges[item[3]]}` : ""}`;
   const priceText = (price) => `${price} ${price === 1 ? "Token" : "Tokens"}`;
 
-  // ------------------------------------------------------------------------------------------------- the 3D pictures
-  /* The 3D part (three.js) is loaded when the first Samoji is shown; until then (or without WebGL) a plain coloured disc stands in. */
-  const lib = () => {
-    if (!lib.once) lib.once = import("/static/js/gift3d.mjs?v=30").then((module) => { module.setCatalogue(data); return module; });
-    return lib.once;
-  };
-  /* A Samoji as a picture (3D, rendered once and kept); `item` is a row of the catalogue. */
+  // ------------------------------------------------------------------------------------------------- the pictures
+  /* Every Samoji is a picture (static/img/samoji/<file>.png, the background is cut away); the Token is the golden coin with the planet. */
+  const fileOf = (item) => `/static/img/samoji/${data.files[item[1]]}.png`;
+  const coin = (extra = "") => h("img", { class: `coin-ic ${extra}`.trim(), src: "/static/img/samoji/coin.png", alt: "", width: 20, height: 20, draggable: false });
   function svg(item, size = 64) {
-    const img = h("img", { class: "samoji-svg", alt: nameOf(item), width: size, height: size, draggable: false });
-    const look = data.palettes[item[2]];
-    img.style.background = `radial-gradient(circle at 35% 30%, ${look[1]}, ${look[2]})`;
-    img.style.borderRadius = "50%";
-    lib().then((module) => module.thumb(item)).then((url) => { img.src = url; img.style.background = "none"; }).catch(() => { /* no WebGL: the disc stays */ });
-    return img;
+    return h("img", { class: "samoji-svg", src: fileOf(item), alt: nameOf(item), width: size, height: size, draggable: false, loading: "lazy" });
   }
-
-  /* The Samoji comes out of the present like smoke: to the left, then up (3D, smooth). `from` is the place of the button; the screen at the right edge when it is not given. */
-  async function burst(item, from) {
-    try {
-      const module = await lib();
-      const start = from || { x: window.innerWidth * 0.9, y: window.innerHeight * 0.58 };
-      await module.fly(item, start);
-    } catch (error) { /* no WebGL: nothing flies */ }
+  const isBig = (item) => item[1] === data.shapes.length - 1;                           // the hand with the bags: bigger, and the dearest
+  /* A Samoji drops from the top of the screen down to the middle (and fades): for a present in a chat. In a video the tally at the edge takes its place (yipi-videos.js). */
+  function burst(item) {
+    const pic = h("img", { class: `samoji-fall${isBig(item) ? " big" : ""}`, src: fileOf(item), alt: "", draggable: false });
+    document.body.append(pic);
+    setTimeout(() => pic.remove(), 1700);
   }
-  /* The presents a video has got (the last ones): they come out one after the other. */
-  async function replay(ids, from) {
+  /* The little tally at the edge of a video: for each Samoji "N×" and the small picture; a new one drops in from the top. */
+  function tally(box, by, dropId = 0) {
+    if (!data) return;
+    fill(box, ...(by || []).map(([id, times]) => { const item = entry(id); return item ? h("div", { class: `gift-chip${isBig(item) ? " big" : ""}${Number(id) === dropId ? " drop" : ""}`, title: nameOf(item) }, h("b", {}, `${times}×`), h("img", { src: fileOf(item), alt: nameOf(item), draggable: false })) : null; }).filter(Boolean));
+  }
+  /* The tally of a video that is shown: the Samojis it has got drop in one after the other. */
+  async function replay(by, box) {
     await load();
-    ids.slice(0, 3).forEach((id, index) => { const item = entry(id); if (item) setTimeout(() => burst(item, from), index * 900); });
+    tally(box, by);
+    [...box.children].forEach((chip, index) => { chip.classList.add("pre"); setTimeout(() => { chip.classList.remove("pre"); chip.classList.add("drop"); }, 150 + index * 220); });
   }
 
   // ------------------------------------------------------------------------------------------------- the sheet
@@ -74,8 +70,7 @@
     let chosen = null;
     let to = first || (members && members[0] ? members[0].handle : "");           // in a group: the member who gets it (chips below the search)
     const back = h("div", { class: "skz-sheet-back samoji-back" });
-    let stopLive = null;
-    const close = () => { stopLive?.(); document.removeEventListener("keydown", onKey, true); back.classList.add("closing"); document.body.classList.remove("modal-open"); setTimeout(() => back.remove(), 180); };
+    const close = () => { document.removeEventListener("keydown", onKey, true); back.classList.add("closing"); document.body.classList.remove("modal-open"); setTimeout(() => back.remove(), 180); };
     const onKey = (event) => { if (event.key === "Escape") { event.stopPropagation(); close(); } };
     const balance = h("span", { class: "sm-balance" });
     const grid = h("div", { class: "sm-grid", role: "list" });
@@ -87,7 +82,7 @@
     function drawWho() { fill(who, h("small", { class: "sm-for" }, "Für"), ...(members || []).map((member) => h("button", { class: `sm-chip${member.handle === to ? " on" : ""}`, type: "button", "aria-pressed": String(member.handle === to), onclick: () => { to = member.handle; drawWho(); } }, member.name))); }
 
     const matches = () => ready.items.filter((item) => item[4] >= TIERS[tier][1] && item[4] <= TIERS[tier][2] && (!term || nameOf(item).toLowerCase().includes(term))).sort((a, b) => a[4] - b[4] || a[0] - b[0]);
-    function drawBalance() { balance.textContent = `${tokens} ${tokens === 1 ? "Token" : "Tokens"}`; }
+    function drawBalance() { fill(balance, coin(), `${tokens} ${tokens === 1 ? "Token" : "Tokens"}`); }
     function drawChips() { fill(chips, ...TIERS.map(([label], index) => h("button", { class: `sm-chip${index === tier ? " on" : ""}`, type: "button", "aria-pressed": String(index === tier), onclick: () => { tier = index; shown = 60; drawChips(); drawGrid(); } }, label))); }
     function drawGrid() {
       const list = matches();
@@ -103,10 +98,7 @@
       const enough = left >= 0;
       const send = h("button", { class: "sm-send", type: "button", disabled: !enough }, enough ? `Senden für ${priceText(item[4])}` : "Zu wenig Tokens");
       send.addEventListener("click", () => give(item, send));
-      stopLive?.();
-      stopLive = null;
-      const holder = h("span", { class: "sm-live" });
-      lib().then((module) => { if (chosen !== item) return; const preview = module.live(item, 104); holder.append(preview.canvas); stopLive = preview.stop; });
+      const holder = h("span", { class: "sm-live" }, h("img", { class: "sm-live-pic", src: fileOf(item), alt: "", draggable: false }));
       const line = (label, value, extra = "") => h("div", { class: `sm-line ${extra}`.trim() }, h("span", {}, label), h("b", {}, value));
       fill(confirm, h("div", { class: "sm-bill-top" }, holder, h("div", { class: "sm-bill-name" }, h("small", {}, "Dein Geschenk"), h("b", {}, nameOf(item)))),
         h("div", { class: "sm-lines" }, line("Preis", `− ${priceText(item[4])}`), line("Du hast", priceText(tokens)), h("hr", {}), line("Danach", priceText(Math.max(0, left)), enough ? "total" : "total bad")),
@@ -121,10 +113,10 @@
       tokens = reply.data.tokens;
       Y.me.tokens = tokens;
       close();
-      burst(item, giftFrom);
+      if (!post) burst(item);
       Y.sound?.play("success");
       toast(`${nameOf(item)} ist angekommen. ${tokens} ${tokens === 1 ? "Token" : "Tokens"} übrig.`);
-      onSent?.(reply.data);
+      onSent?.(reply.data, item);
     }
     search.addEventListener("input", () => { term = search.value.trim().toLowerCase(); shown = 60; drawGrid(); });
     more.addEventListener("click", () => { shown += 60; drawGrid(); });
@@ -157,5 +149,6 @@
   /* The Tokens of the person (asked once, then remembered). */
   async function balanceNow() { await load(); return tokens; }
 
-  Y.samoji = { open, load, svg, burst, replay, fromText, bubble, balance: balanceNow, setTokens: (value) => { tokens = value; } };
+  Y.coin = coin;
+  Y.samoji = { open, load, svg, burst, replay, tally, entry, fromText, bubble, balance: balanceNow, setTokens: (value) => { tokens = value; } };
 })();

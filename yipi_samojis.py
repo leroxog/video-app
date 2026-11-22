@@ -1,31 +1,24 @@
-"""Satürn Samojis (yipi_samojis.py): the 3D presents that can be given for Tokens, like the gifts of the big live apps. All of them are built by Satürn in 3D in the page (static/js/gift3d.mjs, three.js)
-from the numbers kept here: 16 figures (a dragon, a UFO, a sports car, a whale, a rose ...) x 15 looks (colours, gold, silver, neon, glass, a rainbow shimmer) x 5 extras (sparkles, a halo, wings, an aura) = 1200 of
-them, and each one costs a different number of Tokens (2 to 340): a comet or a panda is cheap, a rose, a UFO and a lion are dear, the whale and above all the dragon cost the most, and so are gold, glass and the extras.
+"""Satürn Samojis (yipi_samojis.py): the presents that can be given for Tokens, like the gifts of the big live apps. Since 2026-11-22 they are 15 pictures (a rose, a whale, a panda, a unicorn, a wallet,
+a hand with two shopping bags ...; static/img/samoji/<file>.png, with the background cut away), each with its own price (2 to 100 Tokens); the hand with the bags costs the most.
 Whoever gets a Samoji gets as many Tokens as the giver paid. Everybody starts with 5 Tokens (and gets 2 more every day)."""
 
 START_TOKENS = 5
 
-SHAPES = ["Komet", "Panda", "Roboter", "Gewitter", "Rakete", "Schmetterling", "Rose", "Krone", "Feuerwerk", "Galaxie", "UFO", "Löwe", "Diamantring", "Sportwagen", "Wal", "Drache"]
-SHAPE_PRICE = [2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30, 35, 40, 50, 80]
-# name, the main colour, the second colour, the finish (gloss, gold, silver, neon, glass, holo)
-LOOKS = [("Rosa", "#ff6fa5", "#c2185b", "gloss"), ("Rot", "#ff3b4e", "#a8071a", "gloss"), ("Orange", "#ff9f3a", "#ad4e00", "gloss"), ("Sonnengelb", "#ffd60a", "#b38600", "gloss"),
-         ("Grün", "#43d17a", "#1d7a3f", "gloss"), ("Türkis", "#16c7c7", "#00717a", "gloss"), ("Blau", "#3d8bff", "#0b3fa8", "gloss"), ("Lila", "#9b5cf0", "#4a1d9a", "gloss"),
-         ("Schwarz", "#2b2b30", "#000000", "gloss"), ("Weiß", "#fafafa", "#bdbdc8", "gloss"),
-         ("Gold", "#ffc83d", "#b8860b", "gold"), ("Silber", "#e8e8f0", "#9aa0b0", "silver"), ("Neon", "#ff4fd8", "#7a1fa2", "neon"), ("Glas", "#6fd0ff", "#2a7fb0", "glass"), ("Regenbogen", "#ffffff", "#ff9bd5", "holo")]
-LOOK_FACTOR = [1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 3, 2, 2, 3, 4]
-BADGES = ["", "Funkeln", "Heiligenschein", "Flügel", "Aura"]
-BADGE_PRICE = [0, 1, 3, 8, 20]
-PALETTES = LOOKS                                                # (the old name, the page and the tests still use it)
+SHAPES = ["Herz", "Rose", "Brot", "Bubble Tea", "Nadel", "Kaktus", "Bär", "Flugzeug", "Klo", "Einhorn", "Elefant", "Panda", "Wal", "Geldbörse", "Einkaufstüten"]
+SHAPE_PRICE = [2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 30, 40, 50, 60, 100]            # the hand with the bags costs the most
+FILES = ["herz", "rose", "brot", "bubbletea", "nadel", "kaktus", "baer", "flugzeug", "klo", "einhorn", "elefant", "panda", "wal", "geldboerse", "tueten"]      # static/img/samoji/<file>.png
+# (one look and no extras any more: every Samoji is a picture; the lists stay so that the old page code and the numbers keep their shape)
+LOOKS = [("Original", "#ffffff", "#c9b8ff", "gloss")]
+LOOK_FACTOR = [1]
+BADGES = [""]
+BADGE_PRICE = [0]
+PALETTES = LOOKS
 
 
 def _build():
     items = []
-    number = 0
-    for shape, base in enumerate(SHAPE_PRICE):
-        for look, factor in enumerate(LOOK_FACTOR):
-            for badge, extra in enumerate(BADGE_PRICE):
-                number += 1
-                items.append((number, shape, look, badge, max(1, base * factor) + extra))
+    for number, base in enumerate(SHAPE_PRICE, start=1):
+        items.append((number, number - 1, 0, 0, base))
     return items
 
 
@@ -48,7 +41,7 @@ def name(entry):
 
 def public():
     """What the page needs to build and list every Samoji: the names of the figures, looks and extras, and one short row per Samoji."""
-    return {"shapes": SHAPES, "palettes": [list(look) for look in LOOKS], "badges": BADGES, "items": [list(item) for item in CATALOGUE]}
+    return {"shapes": SHAPES, "files": FILES, "palettes": [list(look) for look in LOOKS], "badges": BADGES, "items": [list(item) for item in CATALOGUE]}
 
 
 MARKER = "⁣samoji:"                                      # a message that carries a Samoji: an invisible sign, "samoji:" and the number (only the server writes these)

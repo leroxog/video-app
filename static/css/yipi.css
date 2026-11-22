@@ -2998,3 +2998,28 @@ html.typing .main { padding-bottom: 16px; }
 .chest-open.ready { background: #fe2c55; color: #fff; box-shadow: 0 0 0 4px rgba(254, 44, 85, 0.35), 0 8px 24px rgba(254, 44, 85, 0.55); }
 @keyframes chest-rays { to { transform: rotate(360deg); } }
 @keyframes chest-twinkle { from { opacity: 0.35; } to { opacity: 1; } }
+
+/* Samojis are pictures now; the Token is the golden coin; the tally of a video at its edge; the chest is the picture of the chest */
+.coin-ic { display: inline-block; width: 20px; height: 20px; vertical-align: -4px; margin-right: 5px; object-fit: contain; }
+.coin-ic.big { width: 34px; height: 34px; vertical-align: -9px; }
+.chip.tokens .coin-ic { width: 16px; height: 16px; margin-right: 4px; }
+.sm-balance { display: inline-flex; align-items: center; }
+.sm-live-pic { width: 96px; height: 96px; object-fit: contain; animation: sm-bob 2.4s ease-in-out infinite; }
+@keyframes sm-bob { 0%, 100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-6px) rotate(3deg); } }
+.samoji-fall { position: fixed; left: calc(50% - 70px); top: 0; z-index: 1300; width: 140px; height: 140px; object-fit: contain; pointer-events: none; animation: sm-fall 1.6s cubic-bezier(0.3, 0, 0.7, 1) forwards; filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.4)); }
+.samoji-fall.big { width: 220px; height: 220px; left: calc(50% - 110px); }
+@keyframes sm-fall { 0% { transform: translateY(-30vh) scale(0.8); opacity: 0; } 15% { opacity: 1; } 70% { transform: translateY(44vh) scale(1.05); opacity: 1; } 100% { transform: translateY(52vh) scale(1); opacity: 0; } }
+.gift-tally { position: absolute; left: 10px; top: 24%; z-index: 6; display: grid; gap: 6px; justify-items: start; pointer-events: none; }
+.gift-tally:empty { display: none; }
+.gift-chip { display: flex; align-items: center; gap: 4px; padding: 3px 9px 3px 5px; border-radius: 999px; background: rgba(0, 0, 0, 0.42); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); color: #fff; font-size: 14px; font-weight: 900; font-variant-numeric: tabular-nums; }
+.gift-chip img { width: 28px; height: 28px; object-fit: contain; }
+.gift-chip.big img { width: 46px; height: 46px; }
+.gift-chip.pre { opacity: 0; }
+.gift-chip.drop { animation: gift-drop 0.7s cubic-bezier(0.3, 0, 0.3, 1.2) both; }
+@keyframes gift-drop { 0% { transform: translateY(-60vh); opacity: 0; } 20% { opacity: 1; } 100% { transform: translateY(0); opacity: 1; } }
+.chest-img { display: block; width: 100%; max-width: 330px; height: auto; margin: 0 auto; filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.45)); transition: filter 0.4s; }
+.chest-stage { width: 100%; height: auto; min-height: 150px; }
+.chest-stage.ready .chest-img { animation: chest-pulse 0.7s ease-in-out infinite alternate; }
+.chest-stage:not(.ready):not(.opened) .chest-img { filter: saturate(0.55) brightness(0.8) drop-shadow(0 10px 20px rgba(0, 0, 0, 0.45)); }
+.chest-stage.opened .chest-img { animation: sm-bob 1.6s ease-in-out infinite; }
+.chest-chip.pop .chest-pic { width: 100%; }

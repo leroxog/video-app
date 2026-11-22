@@ -37,10 +37,13 @@ def person(handle):
     return who
 
 
-def test_there_are_more_than_a_thousand_different_samojis_with_prices_from_one_up():
-    assert len(samojis.CATALOGUE) >= 1000 and len({item[1:4] for item in samojis.CATALOGUE}) == len(samojis.CATALOGUE), "every one is different"
+def test_there_are_fifteen_picture_samojis_with_their_own_prices_and_the_hand_with_the_bags_is_the_dearest():
+    assert len(samojis.CATALOGUE) == 15 and len({item[1:4] for item in samojis.CATALOGUE}) == 15, "every one is different"
     prices = [item[4] for item in samojis.CATALOGUE]
-    assert min(prices) == 2 and max(prices) > 200 and len(set(prices)) > 30, "different prices"
+    assert min(prices) == 2 and max(prices) == 100 and len(set(prices)) == 15, "different prices"
+    assert samojis.SHAPES[-1] == "Einkaufstüten" and samojis.SHAPE_PRICE[-1] == max(prices), "the hand with the bags costs the most"
+    for file in samojis.FILES + ["coin", "chest-open", "chest-closed"]:
+        assert os.path.exists(os.path.join(ROOT, "static", "img", "samoji", file + ".png")), file
     assert samojis.find(1) is not None and samojis.find(0) is None and samojis.find("x") is None and samojis.find(len(samojis.CATALOGUE) + 1) is None
     assert len({samojis.name(item) for item in samojis.CATALOGUE}) == len(samojis.CATALOGUE), "and every one has its own name"
 
@@ -48,7 +51,7 @@ def test_there_are_more_than_a_thousand_different_samojis_with_prices_from_one_u
 def test_everybody_starts_with_five_tokens_and_the_list_comes_with_the_balance(client):
     mia = person("mia")
     listing = mia.get("/api/yipi/samojis").get_json()
-    assert listing["ok"] and listing["tokens"] == 5 and len(listing["items"]) == len(samojis.CATALOGUE) and listing["shapes"] and listing["palettes"] and listing["badges"]
+    assert listing["ok"] and listing["tokens"] == 5 and len(listing["items"]) == len(samojis.CATALOGUE) and listing["shapes"] and listing["palettes"] and listing["files"] == samojis.FILES
     assert mia.get("/api/yipi/users/mia").get_json()["user"]["tokens"] == 5
 
 
@@ -158,19 +161,14 @@ def test_the_satuern_chest_opens_after_its_timer_and_pays_more_for_a_quick_tap(c
     assert slow["reward"] == 0, "twelve seconds after it opened there is nothing left in it"
 
 
-def test_the_page_builds_the_samojis_in_3d_and_has_the_chest():
+def test_the_page_shows_the_samojis_as_pictures_the_tokens_as_a_coin_and_the_chest_as_the_picture():
     read = lambda *parts: open(os.path.join(ROOT, *parts), encoding="utf-8").read()  # noqa: E731
-    core, figures, chest, kit = read("static", "js", "gift3d.mjs"), read("static", "js", "gift3d-figures.mjs"), read("static", "js", "gift3d-chest.mjs"), read("static", "js", "gift3d-kit.mjs")
     page, videos, css = read("static", "js", "yipi-samoji.js"), read("static", "js", "yipi-videos.js"), read("static", "css", "yipi.css")
-    assert "import { THREE" in figures and "export class Particles" in kit and "export function fly(" in core and "export function chest(" in core and "export function thumb(" in core and "CatmullRomCurve3" in core
-    for figure in ("Komet", "Panda", "Roboter", "Gewitter", "Rakete", "Schmetterling", "Rose", "Krone", "Feuerwerk", "Galaxie", "UFO", "Löwe", "Diamantring", "Sportwagen", "Wal", "Drache"):
-        assert f"{figure} " in figures or f"-- {figure}" in figures, figure
-    assert "export const FIGURES = [komet, panda, roboter, gewitter, rakete, schmetterling, rose, krone, feuerwerk, galaxie, ufo, loewe, ring, sportwagen, wal, drache];" in figures
-    assert "export function buildChest" in chest and "setMood" in chest and "innerHTML" not in core + figures + chest + kit + page
-    assert 'import("/static/js/gift3d.mjs' in page and "Y.samoji.replay(reel.item.gifts.last" in videos and "/chests/maybe" in videos
+    assert "/static/img/samoji/" in page and "gift3d" not in page + videos and "innerHTML" not in page + videos and "coin.png" in page
+    assert "Y.samoji.replay(reel.item.gifts.by" in videos and "/chests/maybe" in videos and "chest-closed.png" in videos and "chest-open.png" in videos
     assert 'class: "chest-open locked"' in videos and "Öffnen" in videos and "chest-chip pop" in videos and ".chest-chip.pop" in css and ".chest-open.ready" in css and ".chest-open.locked" in css
     assert "sm-bill-top" in page and "Danach" in page and "Du hast" in page, "the bill is above the Samojis"
-    assert len(samojis.SHAPES) == 16 and len(samojis.LOOKS) == 15 and len(samojis.BADGES) == 5 and "Wal" in samojis.SHAPES and "Rose" in samojis.SHAPES and "Drache" in samojis.SHAPES
+    assert ".gift-tally" in css and ".gift-chip.big" in css and "gift-drop" in css and "×" in page, "the tally at the edge of a video: N× and the small picture, dropping in from the top"
 
 
 def test_a_post_tells_which_presents_it_has_got(client):
@@ -180,4 +178,5 @@ def test_a_post_tells_which_presents_it_has_got(client):
     mia.post("/api/yipi/samojis/send", json={"id": 1, "to": "tom", "post": post["id"]})
     mia.post("/api/yipi/samojis/send", json={"id": 2, "to": "tom", "post": post["id"]})
     gifts = mia.get(f"/api/yipi/posts/{post['id']}").get_json()["post"]["gifts"]
-    assert gifts["count"] == 2 and gifts["last"] == [2, 1], "the last ones, newest first: they are played when the video is opened"
+    assert gifts["count"] == 2 and gifts["last"] == [2, 1], "the last ones, newest first"
+    assert sorted(gifts["by"]) == [[1, 1], [2, 1]], "how many of each Samoji the video has got (the tally at its edge)"

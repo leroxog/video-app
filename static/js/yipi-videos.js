@@ -101,13 +101,11 @@
       const opensAt = now + info.opensIn * 1000;
       const closesAt = now + info.closesIn * 1000;
       const state = { phase: "closed", busy: false, sheet: null, readyAt: 0, opensAt, closesAt };
-      const pic = h("img", { class: "chest-pic", alt: "", draggable: false });
+      const pic = h("img", { class: "chest-pic", alt: "", draggable: false, src: "/static/img/samoji/chest-closed.png" });
       const chipTime = h("b", { class: "chest-chip-time" }, clockText(opensAt - now));
-      const chip = h("button", { class: "chest-chip pop", type: "button", "aria-label": "Satürn Truhe öffnen" }, h("span", { class: "chest-draw", "aria-hidden": "true" }), pic, chipTime);       // (a drawn chest stands there at once; the 3D picture takes its place when it is ready)
-      pic.addEventListener("load", () => chip.classList.add("has-pic"));
+      const chip = h("button", { class: "chest-chip pop", type: "button", "aria-label": "Satürn Truhe öffnen" }, pic, chipTime);
       chestBox = { chip, state };
       el.append(chip);
-      import("/static/js/gift3d.mjs?v=30").then((module) => module.chestThumb()).then((url) => { pic.src = url; }).catch(() => { chip.classList.add("flat"); });
       setTimeout(() => chip.classList.remove("pop"), 1500);       // first in the middle of the screen, then quickly to the side
       const stop = () => { clearInterval(timer); state.sheet?.close(); chip.remove(); chestBox = null; };
       const timer = setInterval(() => {
@@ -146,7 +144,10 @@
       document.addEventListener("keydown", onKey, true);
       count.textContent = state.phase === "ready" ? "Jetzt!" : `Öffnet in ${clockText(state.opensAt - performance.now())}`;
       if (state.phase === "ready") sheet.ready();
-      try { const module = await import("/static/js/gift3d.mjs?v=30"); if (state.sheet === sheet) { controller = module.chest(host, 260); controller.mood(state.phase === "ready" ? "ready" : "locked"); } } catch (error) { host.classList.add("flat"); }
+      const chestPic = h("img", { class: "chest-img", src: "/static/img/samoji/chest-closed.png", alt: "Satürn Truhe", draggable: false });
+      host.append(chestPic);
+      controller = { mood(name) { host.classList.toggle("ready", name === "ready"); }, open() { host.classList.remove("ready"); host.classList.add("opened"); chestPic.src = "/static/img/samoji/chest-open.png"; }, stop() {} };
+      controller.mood(state.phase === "ready" ? "ready" : "locked");
       button.addEventListener("click", async () => {
         if (state.busy) return;
         if (state.phase !== "ready") { panel.classList.add("nudge"); setTimeout(() => panel.classList.remove("nudge"), 350); return; }       // grey: it brings nothing yet
@@ -157,7 +158,7 @@
         controller?.open();
         const reward = reply.data.reward;
         result.hidden = false;
-        result.textContent = reward > 0 ? `+${reward} ${reward === 1 ? "Token" : "Tokens"}` : "Zu langsam: leer";
+        result.replaceChildren(...(reward > 0 ? [Y.coin ? Y.coin("big") : "", `+${reward} ${reward === 1 ? "Token" : "Tokens"}`] : ["Zu langsam: leer"]));
         result.classList.toggle("won", reward > 0);
         button.hidden = true;
         note.textContent = reward > 0 ? `Du hast jetzt ${reply.data.tokens} Tokens.` : "Beim nächsten Mal schneller!";
@@ -180,7 +181,7 @@
       if (sinceChest >= nextChest && !chestBox) { sinceChest = 0; nextChest = 8 + Math.floor(Math.random() * 5); askChest(false); }
     }
     askChest(true);                                             // a chest that is already waiting (the page was opened again) comes back at once
-    if (Y.me && !window.__chestWarm) { window.__chestWarm = true; setTimeout(() => import("/static/js/gift3d.mjs?v=30").then((module) => module.chestThumb()).catch(() => {}), 1200); }       // the 3D part is loaded early, so that the chest looks right when it comes
+    if (Y.me && !window.__chestWarm) { window.__chestWarm = true; new Image().src = "/static/img/samoji/chest-open.png"; }       // the picture of the open chest is loaded early
     let watching = null;
     let blocked = false;                                        // the browser does not allow sound before the person touches the page
 
@@ -279,9 +280,9 @@
       reel.video.currentTime = 0;
       play(reel);
       reel.cc?.start();                                         // subtitles and the spoken translation of this video
-      if (reel.item.gifts && reel.item.gifts.last.length && Y.samoji && !reel.giftsShown) {       // a video that has got presents plays them: they come out of the present button like smoke
+      if (reel.item.gifts && reel.item.gifts.by && reel.item.gifts.by.length && Y.samoji && !reel.giftsShown) {       // a video that has got presents shows its tally at the edge: the Samojis drop in from the top
         reel.giftsShown = true;
-        setTimeout(() => { if (active === reel) Y.samoji.replay(reel.item.gifts.last, reel.giftSpot && reel.giftSpot()); }, 700);
+        setTimeout(() => { if (active === reel) Y.samoji.replay(reel.item.gifts.by, reel.tally); }, 500);
       }
       onReelChange();
       manage();
@@ -330,7 +331,16 @@
       const giftCount = h("span", { class: "reel-count" }, item.gifts ? Core.formatCount(item.gifts.count) : "Samoji");
       const gift = Y.samoji && !(Y.me && Y.me.handle === item.user.handle) && !item.user.ai && !item.user.company ? h("button", { class: "reel-btn", type: "button", "aria-label": "Samoji schenken" }, h("span", { class: "reel-btn-ic" }, icon("gift")), giftCount) : null;
       const giftSpot = () => { const box = gift && gift.getBoundingClientRect(); return box && box.width ? { x: box.left + box.width / 2, y: box.top + box.height / 2 } : undefined; };
-      if (gift) gift.addEventListener("click", () => Y.samoji.open({ to: item.user.handle, post: item.id, giftFrom: giftSpot(), onSent: () => { const now = item.gifts ? item.gifts.count + 1 : 1; item.gifts = { count: now, last: item.gifts ? item.gifts.last : [] }; giftCount.textContent = Core.formatCount(now); } }));
+      const tally = h("div", { class: "gift-tally", "aria-label": "Samojis dieses Videos" });
+      if (gift) gift.addEventListener("click", () => Y.samoji.open({ to: item.user.handle, post: item.id, giftFrom: giftSpot(), onSent: (_reply, sent) => {
+        const now = item.gifts ? item.gifts.count + 1 : 1;
+        const by = item.gifts && item.gifts.by ? item.gifts.by.map((pair) => pair.slice()) : [];
+        const row = by.find((pair) => pair[0] === sent[0]);
+        if (row) row[1] += 1; else by.push([sent[0], 1]);
+        item.gifts = { count: now, last: item.gifts ? item.gifts.last : [], by };
+        giftCount.textContent = Core.formatCount(now);
+        Y.samoji.tally(tally, by, sent[0]);
+      } }));
       const share = h("button", { class: "reel-btn", type: "button", "aria-label": "Teilen", "aria-haspopup": "menu" }, h("span", { class: "reel-btn-ic" }, icon("send")), h("span", { class: "reel-count" }, "Teilen"));
       const cc = !photos && Y.captions ? Y.captions.bind({ video, mediaId: media.id, mine: !!(Y.me && Y.me.handle === item.user.handle), volume: () => (blocked ? 0 : volume / 10) || 0.0001, onChange: () => { const made = reels.find((entry) => entry.video === video); if (made) applySound(made); } }) : null;
       const mine = !!(Y.me && Y.me.handle === item.user.handle);
@@ -470,9 +480,9 @@
         stage.classList.add("photos");
         put(stage, slides, dots, info);
       } else put(stage, video, cc ? cc.element : null, volumeRow, resume, bar, info);
-      const element = h("section", { class: "reel", "data-id": String(item.id), "aria-label": `Video von ${item.user.name}` }, stage, actions);
+      const element = h("section", { class: "reel", "data-id": String(item.id), "aria-label": `Video von ${item.user.name}` }, stage, tally, actions);
       draw();
-      return { element, video, stage, item, url: media.url, draw, position, volumeIcon, volumeButton, range, cc, moreMenu, shakeLike, giftSpot, photos, startPhotos, stopPhotos };
+      return { element, video, stage, item, url: media.url, draw, position, volumeIcon, volumeButton, range, cc, moreMenu, shakeLike, giftSpot, tally, photos, startPhotos, stopPhotos };
     }
 
     function showEmpty() {

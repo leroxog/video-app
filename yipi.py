@@ -1394,7 +1394,7 @@ def feed_items(rows, viewer):
     if original_ids:
         for post_id, count in db.session.query(YipiBookmark.post_id, func.count(YipiBookmark.id)).filter(YipiBookmark.post_id.in_(list(original_ids))).group_by(YipiBookmark.post_id):
             bookmark_counts[post_id] = count
-    gift_counts, gift_last = {}, {}
+    gift_counts, gift_last, gift_by = {}, {}, {}
     if original_ids:                                                # the presents a post has got (how many, and the last ones: a video plays them when it is opened)
         for post_id, count in db.session.query(YipiGift.post_id, func.count(YipiGift.id)).filter(YipiGift.post_id.in_(list(original_ids))).group_by(YipiGift.post_id):
             gift_counts[post_id] = count
@@ -1402,6 +1402,9 @@ def feed_items(rows, viewer):
             for row in YipiGift.query.filter(YipiGift.post_id.in_(list(gift_counts))).order_by(YipiGift.id.desc()).limit(80):
                 if len(gift_last.setdefault(row.post_id, [])) < 3:
                     gift_last[row.post_id].append(row.samoji_id)
+            for post_id, samoji_id, times in db.session.query(YipiGift.post_id, YipiGift.samoji_id, func.count(YipiGift.id)).filter(YipiGift.post_id.in_(list(gift_counts))).group_by(YipiGift.post_id, YipiGift.samoji_id):
+                if samojis.find(samoji_id):
+                    gift_by.setdefault(post_id, []).append([samoji_id, times])               # (how many of each Samoji a video has got: the little tally at the edge of the video)
     liked = bookmarked = reposted = following = set()
     hidden = hidden_user_ids(viewer)
     if viewer:
@@ -1441,7 +1444,7 @@ def feed_items(rows, viewer):
                 "views": post.view_count,
             }
             if gift_counts.get(post.id):
-                item["gifts"] = {"count": gift_counts[post.id], "last": gift_last.get(post.id, [])}
+                item["gifts"] = {"count": gift_counts[post.id], "last": gift_last.get(post.id, []), "by": sorted(gift_by.get(post.id, []), key=lambda pair: -pair[1])[:6]}
             if post.cam_id:
                 item["camId"] = post.cam_id
             if post.fact_status in ("false", "misleading") and post.fact_note:
