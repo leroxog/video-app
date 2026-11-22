@@ -95,6 +95,7 @@
     let term = "";
     let current = tab;
     let general = false;                                              // the folder "Allgemein" is open
+    let filter = "all";                                               // the round filters under the search (like WhatsApp): all, unread, groups
     let dead = false;
     let loaded = false;
 
@@ -104,10 +105,12 @@
       { label: "Neue Gruppe", icon: "users", run: newGroup },
       Y.chatLock && Y.chatLock.enabled() ? { label: "Chats sperren", icon: "lock", run: () => { Y.chatLock.lockNow(); Y.rerender(); } } : null,
     ]));
-    const search = h("input", { class: "search-input", type: "search", placeholder: "Nex AI fragen oder suchen", "aria-label": "Nex AI fragen oder in den Chats suchen", autocomplete: "off", maxlength: 200, enterkeyhint: "search" });
+    const search = h("input", { class: "search-input", type: "search", placeholder: "Suchen oder Nex AI fragen", "aria-label": "Nex AI fragen oder in den Chats suchen", autocomplete: "off", maxlength: 200, enterkeyhint: "search" });
     const tabBox = h("div", { class: "chat-tabs" });
     const body = h("div", { class: "chats-body" });
-    const element = h("div", { class: "chat-pane" }, topbar({ title: "Chats", className: "big", right: plus }), h("label", { class: "search-box chat-search" }, icon("search"), search), tabBox, body);
+    const fab = h("button", { class: "chat-fab", type: "button", "aria-label": "Neuer Chat", "aria-haspopup": "menu" }, icon("plus"));
+    fab.addEventListener("click", () => menu(fab, [{ label: "Neue Nachricht", icon: "mail", run: newMessage }, { label: "Neue Gruppe", icon: "users", run: newGroup }]));
+    const element = h("div", { class: "chat-pane" }, topbar({ title: "Chats", className: "big", right: plus }), h("label", { class: "search-box chat-search" }, icon("search"), search), tabBox, body, fab);
 
     const keyOf = (item) => (item.kind === "group" ? `g${item.group.id}` : `d${item.user.handle.toLowerCase()}`);
 
@@ -142,7 +145,11 @@
     };
 
     function drawTabs() {
-      fill(tabBox, tabs([["main", "Nachrichten"], ["requests", requests ? `Anfragen (${requests})` : "Anfragen"]], current, (id) => { current = id; drawTabs(); draw(); }, "Chats"));
+      const chips = [["all", "Alle"], ["unread", "Ungelesen"], ["groups", "Gruppen"], ["requests", requests ? `Anfragen ${requests}` : "Anfragen"]];
+      fill(tabBox, h("div", { class: "chat-chips", role: "tablist", "aria-label": "Chats" }, chips.map(([id, label]) => {
+        const on = id === "requests" ? current === "requests" : current === "main" && filter === id;
+        return h("button", { class: `chat-chip${on ? " on" : ""}`, type: "button", role: "tab", "aria-selected": String(on), onclick: () => { if (id === "requests") current = "requests"; else { current = "main"; filter = id; } drawTabs(); draw(); } }, label);
+      })));
     }
 
     function draw() {
@@ -161,12 +168,12 @@
         fill(body, ...(parts.length ? parts : [h("div", { class: "chat-list" }, emptyState("Keine Anfragen", term ? "Dazu gibt es nichts." : "Nachrichten von Leuten, denen du nicht folgst, erscheinen hier. Du entscheidest, ob du sie annimmst."))]));
         return;
       }
-      const main = found.filter((item) => item.kind === "group" || item.box === "primary");
+      const main = found.filter((item) => item.kind === "group" || item.box === "primary").filter((item) => filter === "unread" ? item.unread > 0 : filter === "groups" ? item.kind === "group" : true);
       const banner = requests && !term ? h("button", { class: "chat-requests", type: "button", onclick: () => { current = "requests"; drawTabs(); draw(); } },
         h("span", { class: "chat-requests-ic" }, icon("mail")), h("span", { class: "chat-requests-text" }, h("b", {}, "Anfragen"), h("small", {}, `${requests} ${requests === 1 ? "Person möchte" : "Personen möchten"} dir schreiben`)), icon("chevron")) : null;
-      const showNex = !term || "nex ki ai assistent".includes(term);
+      const showNex = filter === "all" && (!term || "nex ki ai assistent".includes(term));
       const rows = [showNex ? nexRow() : null, ...main.map(row)].filter(Boolean);
-      const blank = main.length ? null : term ? (showNex ? null : emptyState("Nichts gefunden", "Probier einen anderen Namen."))
+      const blank = main.length ? null : filter !== "all" ? emptyState(filter === "unread" ? "Nichts Ungelesenes" : "Noch keine Gruppen", filter === "unread" ? "Du bist auf dem neuesten Stand." : "Gründe eine Gruppe mit deinen Freunden.") : term ? (showNex ? null : emptyState("Nichts gefunden", "Probier einen anderen Namen."))
         : emptyState("Noch keine Chats", "Schreib mit deinen Freunden oder gründe eine Gruppe.",
           h("div", { class: "hero-actions" }, h("button", { class: "btn primary", type: "button", onclick: newMessage }, "Nachricht schreiben"), h("button", { class: "btn ghost", type: "button", onclick: newGroup }, "Gruppe gründen")));
       fill(body, banner, rows.length ? h("div", { class: "chat-list" }, rows) : null, blank ? h("div", { class: "chat-blank" }, blank) : null);

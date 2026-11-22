@@ -145,47 +145,122 @@
     return { element: row, reload: load, destroy() { dead = true; } };
   }
 
-  // --------------------------------------------------------------------------------------------------------- Home
+  // --------------------------------------------------------------------------------------------------------- Home (like Instagram)
+  /* One post like in Instagram: a header (round picture, name, three dots), the picture or video the full width, the row of buttons (heart, comment, share ... save at the right), the number of
+     likes, the words and the time. A double tap on the picture likes it; a video plays muted while it is on the screen. */
+  function igCard(item) {
+    const media = first(item);
+    const state = { liked: !!(item.viewer && item.viewer.liked), saved: !!(item.viewer && item.viewer.bookmarked), likes: (item.counts && item.counts.likes) || 0 };
+    const likeBtn = h("button", { class: "ig-act", type: "button", "aria-label": "Gefällt mir" });
+    const saveBtn = h("button", { class: "ig-act ig-save", type: "button", "aria-label": "Speichern" });
+    const likes = h("b", { class: "ig-likes" });
+    function draw() {
+      fill(likeBtn, icon(state.liked ? "heartFill" : "heart"));
+      likeBtn.classList.toggle("on", state.liked);
+      likeBtn.setAttribute("aria-pressed", String(state.liked));
+      fill(saveBtn, icon(state.saved ? "bookmarkFill" : "bookmark"));
+      saveBtn.setAttribute("aria-pressed", String(state.saved));
+      likes.textContent = state.likes ? `${Core.formatCount(state.likes)} Gefällt mir` : "Sei der Erste, dem das gefällt";
+    }
+    async function toggleLike() {
+      if (!Y.requireLogin("Melde dich an, um mitzumachen.")) return;
+      const on = !state.liked;
+      state.liked = on; state.likes = Math.max(0, state.likes + (on ? 1 : -1)); draw();
+      const reply = on ? await Api.post(`/posts/${item.id}/like`) : await Api.del(`/posts/${item.id}/like`);
+      if (!reply.ok) { state.liked = !on; state.likes = Math.max(0, state.likes + (on ? -1 : 1)); draw(); Y.toast?.(Api.message(reply)); return; }
+      if (reply.data.counts) { state.likes = reply.data.counts.likes; draw(); }
+    }
+    async function toggleSave() {
+      if (!Y.requireLogin("Melde dich an, um Lesezeichen zu setzen.")) return;
+      const on = !state.saved;
+      state.saved = on; draw();
+      const reply = on ? await Api.post(`/posts/${item.id}/bookmark`) : await Api.del(`/posts/${item.id}/bookmark`);
+      if (!reply.ok) { state.saved = !on; draw(); Y.toast?.(Api.message(reply)); }
+    }
+    likeBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const wasLiked = state.liked;
+      toggleLike();
+      if (!wasLiked && Y.me) { const box = likeBtn.getBoundingClientRect(); Y.likeBurst?.(box.left + box.width / 2, box.top + box.height / 2, { size: 56 }); Y.sound?.play("like"); }
+    });
+    saveBtn.addEventListener("click", toggleSave);
+    const openIt = () => open(item);
+    const comment = h("button", { class: "ig-act", type: "button", "aria-label": "Kommentare", onclick: () => Y.navigate(Y.postPath(item)) }, icon("reply"));
+    const share = h("button", { class: "ig-act", type: "button", "aria-label": "Teilen" }, icon("send"));
+    share.addEventListener("click", () => Y.menu(share, Y.shareItems(item)));
+    const more = h("button", { class: "ig-more", type: "button", "aria-label": "Mehr" }, icon("more"));
+    more.addEventListener("click", () => Y.menu(more, [{ label: "Beitrag öffnen", icon: "image", run: openIt }, { label: `Profil von ${item.user.name}`, icon: "user", run: () => Y.navigate(`/${item.user.handle}`) }]));
+
+    const stage = h("div", { class: "ig-stage" });
+    let video = null;
+    if (media && media.video) {
+      video = h("video", { src: `${media.url}#t=0.001`, poster: /^\/yipi-media\/[0-9a-f]{32}$/.test(media.url || "") ? `${media.url}/poster` : undefined, muted: true, loop: true, playsinline: true, preload: "metadata", "aria-hidden": "true" });
+      stage.append(video, h("span", { class: "ig-badge", "aria-hidden": "true" }, icon("playCircle")));
+    } else if (media) {
+      stage.append(h("img", { src: media.url, alt: media.alt || "", loading: "lazy", decoding: "async" }));
+      if (item.media.length > 1) stage.append(h("span", { class: "ig-count" }, `1/${item.media.length}`));
+    } else {
+      stage.classList.add("words");
+      stage.style.setProperty("--banner", Core.defaultColors(item.user.handle).banner);
+      stage.append(h("span", { class: "skz-words" }, Y.snippet(String(item.text || "").replace(/\s+/g, " "), 160)));
+    }
+    stage.addEventListener("click", openIt);
+    Y.onDoubleTap?.(stage, (x, y) => { if (!state.liked) toggleLike(); Y.likeBurst?.(x, y); if (Y.me) Y.sound?.play("like"); }, { ignore: "button, a" });
+    if (video && "IntersectionObserver" in window) {
+      new IntersectionObserver((entries) => { for (const entry of entries) { if (entry.isIntersecting && entry.intersectionRatio > 0.6) video.play().catch(() => {}); else video.pause(); } }, { threshold: [0, 0.6] }).observe(video);
+    }
+
+    const text = String(item.text || "").trim();
+    const replies = (item.counts && item.counts.replies) || 0;
+    const card = h("article", { class: "ig-card", "data-id": String(item.id), "aria-label": `Beitrag von ${item.user.name}` },
+      h("div", { class: "ig-head" },
+        link(`/${item.user.handle}`, { class: "ig-who", "aria-label": `Profil von ${item.user.name}` }, avatar(item.user, "sm"), h("span", { class: "ig-name" }, h("b", {}, item.user.name), h("small", {}, `@${item.user.handle}`))),
+        more),
+      stage,
+      h("div", { class: "ig-bar" }, h("div", { class: "ig-left" }, likeBtn, comment, share), saveBtn),
+      h("div", { class: "ig-text" },
+        likes,
+        media && text ? h("p", { class: "ig-caption" }, h("b", {}, item.user.name), " ", Y.snippet(text, 220)) : null,
+        replies ? h("button", { class: "ig-replies", type: "button", onclick: () => Y.navigate(Y.postPath(item)) }, replies === 1 ? "1 Kommentar ansehen" : `Alle ${Core.formatCount(replies)} Kommentare ansehen`) : null,
+        h("small", { class: "ig-time" }, Core.relativeTime(item.createdAt))));
+    draw();
+    return card;
+  }
+
   const oldHome = Y.views.home;
   Y.views.home = function home(route, ctx) {
     if (!Y.me || !narrow()) return oldHome(route, ctx);
-    let dead = false;
     const people = peopleRow();
+    people.element.classList.add("ig-stories");
     Y.refreshStories = () => people.reload();
-    const forBox = h("div", { class: "skz-for", role: "list" });
-    const forHead = h("button", { class: "skz-h2", type: "button", onclick: () => Y.navigate("/videos") }, h("span", {}, "Abos"), icon("chevron"));
-    const forSection = h("section", { class: "skz-sec", hidden: true }, forHead, forBox);
-    const seed = 1 + Math.floor(Math.random() * 999999);                      // "Entdecke" is a shuffle (a new one every time Home is opened), not the newest first
-    const grid = pager({
-      load: listLoader((offset) => qs("/timeline", { feed: "media", order: "random", seed, offset: offset || 0, limit: 10 })),
-      render: (item) => card(item, "big"),
-      empty: Y.emptyState("Noch nichts zu entdecken", "Beiträge mit Fotos und Videos erscheinen hier."),
-    });
-    grid.element.classList.add("skz-grid");
-    const el = h("div", { class: "view home-view skz-home" },
-      h("section", { class: "skz-sec" }, h("h2", {}, "Freunde"), people.element),
-      forSection,
-      h("section", { class: "skz-sec" }, h("h2", {}, "Entdecke"), grid.element));
-
-    async function loadFor() {
-      let reply = await Api.get(qs("/timeline", { feed: "following" }));       // "Abos": what the people you follow made; when you follow nobody yet, what is for you
-      let label = "Abos";
-      if (!reply.ok || !reply.data.items.length) { reply = await Api.get(qs("/timeline", { feed: "foryou" })); label = "Für dich"; }
-      if (dead || !reply.ok || !reply.data.items.length) return;
-      forHead.firstChild.textContent = label;
-      forSection.hidden = false;
-      fill(forBox, ...reply.data.items.slice(0, 14).map((item) => { const made = card(item, "tall"); made.setAttribute("role", "listitem"); return made; }));
+    let scope = "foryou";
+    const tabBox = h("div", { class: "ig-tabs", role: "tablist" });
+    const feedBox = h("div", { class: "ig-feed" });
+    let feed = null;
+    function drawFeed() {
+      feed?.destroy();
+      feed = pager({
+        load: listLoader((offset) => qs("/timeline", { feed: scope, offset: offset || 0, limit: 8 })),
+        render: (item) => igCard(item),
+        empty: Y.emptyState(scope === "following" ? "Noch nichts von deinen Abos" : "Noch nichts los", scope === "following" ? "Folge Leuten, dann siehst du hier ihre Beiträge." : "Beiträge erscheinen hier."),
+      });
+      fill(feedBox, feed.element);
     }
-    loadFor();
+    function drawTabs() {
+      fill(tabBox, ...[["foryou", "Für dich"], ["following", "Abos"]].map(([id, label]) => h("button", { class: `ig-tab${id === scope ? " on" : ""}`, type: "button", role: "tab", "aria-selected": String(id === scope), onclick: () => { if (id === scope) return; scope = id; drawTabs(); drawFeed(); } }, label)));
+    }
+    drawTabs();
+    drawFeed();
+    const el = h("div", { class: "view home-view skz-home ig-home" }, people.element, tabBox, feedBox);
     const change = () => { if (el.isConnected) Y.rerender?.(); };           // the phone was turned to the side: the feed comes back
     const query = window.matchMedia ? matchMedia("(max-width: 819px), (pointer: coarse)") : null;
     query?.addEventListener?.("change", change);
 
     return {
       element: el, title: "Satürn", keep: true,
-      refresh() { people.reload(); loadFor(); grid.reload(); },
-      onPosted() { loadFor(); grid.reload(); },
-      destroy() { dead = true; people.destroy(); grid.destroy(); query?.removeEventListener?.("change", change); if (Y.refreshStories) Y.refreshStories = null; },
+      refresh() { people.reload(); feed?.reload(); },
+      onPosted() { feed?.reload(); },
+      destroy() { people.destroy(); feed?.destroy(); query?.removeEventListener?.("change", change); if (Y.refreshStories) Y.refreshStories = null; },
     };
   };
 

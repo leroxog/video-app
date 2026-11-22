@@ -62,6 +62,7 @@ ANNOUNCEMENTS = [
     ("2026-11-19-samojis", "web", "Neu: Tokens und Samojis! Jeder startet mit 5 Tokens. Verschenke eines von über 1000 Samojis im Chat oder bei Videos: Wer es bekommt, bekommt genauso viele Tokens. Dazu: Fotos mit mehreren Bildern laufen jetzt auch bei Videos. #neu #samojis"),
     ("2026-11-20-chest", "web", "Die Samojis sind jetzt echte 3D-Figuren mit eigenen Animationen: Drache, UFO, Sportwagen, Wal, Rose, Löwe und mehr. Beim Verschenken siehst du jetzt oben eine Rechnung mit deinem Guthaben. #neu #samojis"),
     ("2026-11-22-samojis", "web", "Neu: Die Tokens sind jetzt goldene Münzen, und es gibt 15 neue Samojis als Bilder, von der Rose bis zur Hand mit den Einkaufstüten. Neue Geschenke fallen von oben ins Video, am Rand steht, wie oft welches kam. Die Truhe ist neu."),
+    ("2026-11-22-ig", "web", "Neu: Home sieht jetzt aus wie bei Instagram: oben die Storys, darunter die Beiträge groß mit Herz, Kommentar und Speichern. Die Chats sind wie bei WhatsApp, mit Glas-Suche, Filtern (Alle, Ungelesen, Gruppen) und dem runden Neu-Knopf."),
 ]
 
 _state = {"started": False}

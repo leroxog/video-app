@@ -24,7 +24,7 @@
     const find = Y.searchEntry({ class: "appbar-btn appbar-find", "aria-label": "Suchen" }, { class: "appbar-find-row search-row" }, icon("search"));
     const pill = Y.searchEntry({ class: "appbar-pill", "aria-label": "Suchen" }, { class: "appbar-pill-row search-row" }, icon("search"), h("span", {}, "Suchen"));       // (the round search line of the sketch: Home and Entdecken)
     // the header of Home like Snapchat's "Storys": your picture, a round magnifier (it unfolds into a line), the title, a round "add a friend" and a round "more"
-    const title = h("span", { class: "appbar-title" }, "Storys");
+    const title = h("span", { class: "appbar-title" }, "Satürn");
     const round = (name, label, symbol, onclick) => h("button", { class: `appbar-round ${name}`, type: "button", "aria-label": label, ...(name === "appbar-more-round" ? { "aria-haspopup": "menu" } : {}), onclick }, icon(symbol));
     const looking = round("appbar-look", "Suchen", "search", () => {
       if (element.classList.contains("searching")) return;

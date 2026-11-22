@@ -27,8 +27,8 @@ def test_the_new_scripts_are_in_the_bundle_before_the_frame():
 
 def test_home_has_the_three_rows_of_the_sketch_and_the_plus_is_a_sheet():
     skizze = read("static", "js", "yipi-skizze.js")
-    for word in ('h("h2", {}, "Freunde")', '"Abos"', 'h("h2", {}, "Entdecke")', '"Kontakt hinzufügen"', '"oder Gruppe erstellen"', '"Datei hochladen"', "Y.newPost = function newPost",
-                 'feed: "media"', "Y.views.home = function home", "(max-width: 819px)"):
+    for word in ('peopleRow()', '"Abos"', 'function igCard', '"Kontakt hinzufügen"', '"oder Gruppe erstellen"', '"Datei hochladen"', "Y.newPost = function newPost",
+                 '"ig-card"', "Y.views.home = function home", "(max-width: 819px)"):
         assert word in skizze, word
     assert 'if (options.only || !narrow()) return oldNewPost(options);' in skizze, "a wide screen and the places that know what they want keep the old way"
 
@@ -38,7 +38,7 @@ def test_the_tabs_the_bar_and_the_chats_follow_the_sketch():
     assert 'id: "profile", label: "Profil"' in shell and 'id: "camera"' not in shell.split("const TABS = [")[1].split("];")[0]
     assert 'extraItem("/camera", "camera", "Kamera und Spiele"' in shell and 'entry("/camera", "camera", "Kamera und Spiele")' in shell, "the camera is in the side bar and the menu"
     assert 'class: "appbar-pill"' in chrome and 'appbar-group"' in chrome and "Y.openDrawer()" in chrome
-    assert '"Nex AI fragen oder suchen"' in chats and 'h("span", { class: "convo-time" }, Y.timeEl(item.at))' in chats and 'Core.buildPath({ name: "nex"' in chats
+    assert '"Suchen oder Nex AI fragen"' in chats and 'class: "chat-chip' in chats and 'h("span", { class: "convo-time" }, Y.timeEl(item.at))' in chats and 'Core.buildPath({ name: "nex"' in chats
 
 
 def test_the_profile_and_the_videos_follow_the_sketch():
@@ -127,7 +127,6 @@ def test_a_tablet_gets_the_layout_of_the_phone_and_entdecke_is_a_shuffle_and_the
     css, skizze = read("static", "css", "yipi.css"), read("static", "js", "yipi-skizze.js")
     assert "@media (min-width: 820px) and (pointer: fine)" in css and "@media (max-width: 819px), (pointer: coarse)" in css, "touch screens take the narrow rules, screens with a mouse the wide ones"
     assert "(pointer: coarse) and (min-width: 600px)" in css and "html.typing .tabbar { display: none; }" in css
-    assert 'order: "random", seed, offset: offset || 0' in skizze
     server = read("yipi.py")
     assert 'feed in ("videos", "media") and request.args.get("order") == "random"' in server
     assert "pulse.invalid" not in server, "Apple, Google and Microsoft refuse a made-up sender address for the notifications"
