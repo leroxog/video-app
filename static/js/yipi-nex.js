@@ -50,7 +50,7 @@
     lastShown = bag.slice(0, count);
     return lastShown.slice();
   }
-  const EXPLAIN = "Erkläre diesen Beitrag kurz und verständlich: Worum geht es, und was könnte gemeint sein?";
+  const EXPLAIN = "Erkläre diesen Beitrag kurz und verständlich: Was ist darauf zu sehen, worum geht es, und was könnte gemeint sein?";
 
   /* One answer of the server as a stream of text: onText(textSoFar) after every piece. Resolves {text, error?, status?, aborted?}. */
   async function stream(payload, onText, signal) {
@@ -110,10 +110,11 @@
       toast(`Nex AI: ${label}`);
     } }))));
     const moreButton = h("button", { class: "icon-btn round", type: "button", "aria-label": "Mehr", "aria-haspopup": "menu" }, icon("more"));
+    const talkButton = h("button", { class: "icon-btn round nex-talk", type: "button", "aria-label": "Mit Nex AI sprechen" }, icon("mic"));
     const head = h("div", { class: "chat-head" }, back,
       h("div", { class: "chat-head-main" }, h("span", { class: "avatar md nex-face", "aria-hidden": "true" }, h("img", { src: "/static/img/nex-ai.jpg", alt: "", draggable: false })),
         h("div", { class: "chat-head-text" }, h("b", {}, "Nex AI"), modeButton)),
-      moreButton);
+      talkButton, moreButton);
 
     const postBox = h("div", { class: "nex-post-box", hidden: true });
     const intro = h("div", { class: "thread-intro nex-intro" },
@@ -273,7 +274,7 @@
       drawStaged();
       save();
       draw();
-      await answer(extra);
+      return await answer(extra);
     }
 
     async function answer(extra = {}) {
@@ -294,7 +295,7 @@
       }, controller.signal);
       controller = null;
       setBusy(false);
-      if (chat.id !== mine) return;                      // another conversation was opened meanwhile
+      if (chat.id !== mine) return "";                      // another conversation was opened meanwhile
       const written = Core.cleanText(result.text || "");
       if (written) {
         chat.messages.push({ role: "assistant", content: written, at: Date.now() });
@@ -307,6 +308,7 @@
         fill(text, h("p", { class: "nex-p nex-problem" }, problem(result)));
       }
       if (result.error && written) toast(problem(result));
+      return written;
     }
 
     function regenerate(index) {
@@ -434,6 +436,74 @@
     input.addEventListener("keydown", (event) => { if (event.key === "Enter" && !event.shiftKey && matchMedia("(pointer: fine)").matches) { event.preventDefault(); ask(input.value); } });
     sendButton.addEventListener("click", () => ask(input.value));
     stopButton.addEventListener("click", () => controller?.abort());
+
+    /* ---- talking with Nex AI: the microphone listens (the speech recognition of the browser), the question goes to Nex AI, and the answer is spoken by a natural voice from the server; then it listens again */
+    talkButton.addEventListener("click", () => {
+      const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!Recognition) { toast("Dein Browser kann nicht zuhören. Nimm Chrome, Edge oder Safari."); return; }
+      let state = "listening";                                  // listening | thinking | speaking | over
+      let recognition = null;
+      let player = null;
+      const label = h("b", { class: "talk-state" }, "");
+      const heard = h("p", { class: "talk-heard" }, "");
+      const orb = h("span", { class: "talk-orb" }, h("img", { src: "/static/img/nex-ai.jpg", alt: "", draggable: false }));
+      const end = h("button", { class: "talk-end", type: "button", "aria-label": "Gespräch beenden" }, icon("callEnd"));
+      const mute = h("button", { class: "talk-skip", type: "button" }, "Zuhören");
+      const layer = h("div", { class: "talk", role: "dialog", "aria-modal": "true", "aria-label": "Gespräch mit Nex AI" }, orb, label, heard, h("div", { class: "talk-row" }, mute, end));
+      document.body.append(layer);
+      document.body.classList.add("modal-open");
+      const set = (next, text) => { state = next; layer.dataset.state = next; label.textContent = text; mute.hidden = next !== "speaking"; };
+      const finish = () => {
+        state = "over";
+        try { recognition?.abort(); } catch (error) { /* not running */ }
+        player?.pause();
+        controller?.abort();
+        layer.remove();
+        document.body.classList.remove("modal-open");
+      };
+      const listen = () => {
+        if (state === "over") return;
+        set("listening", "Ich höre zu …");
+        heard.textContent = "";
+        recognition = new Recognition();
+        recognition.lang = navigator.language && navigator.language.startsWith("de") ? "de-DE" : (navigator.language || "de-DE");
+        recognition.interimResults = true;
+        recognition.continuous = false;
+        let said = "";
+        recognition.onresult = (event) => { said = Array.from(event.results).map((entry) => entry[0].transcript).join(" "); heard.textContent = said; };
+        recognition.onerror = (event) => { if (event.error === "not-allowed" || event.error === "service-not-allowed") { toast("Erlaube das Mikrofon, damit Nex dich hören kann."); finish(); } };
+        recognition.onend = () => {
+          if (state !== "listening") return;
+          const text = Core.cleanText(said);
+          if (text) reply(text); else setTimeout(listen, 250);
+        };
+        try { recognition.start(); } catch (error) { setTimeout(listen, 400); }
+      };
+      const speak = async (text) => {
+        set("speaking", "Nex spricht");
+        try {
+          const reply = await Api.post("/nex/speak", { text });
+          if (!reply.ok) throw new Error("no voice");
+          if (state === "over") return;
+          player = new Audio(`data:audio/mpeg;base64,${reply.data.audio}`);
+          player.onended = () => listen();
+          player.onerror = () => listen();
+          await player.play();
+        } catch (error) {
+          if (state !== "over") listen();
+        }
+      };
+      const reply = async (text) => {
+        set("thinking", "Nex denkt nach …");
+        heard.textContent = text;
+        const written = await ask(text, { voice: true });
+        if (state === "over") return;
+        if (written) speak(written); else { toast("Nex AI konnte gerade nicht antworten."); listen(); }
+      };
+      end.addEventListener("click", finish);
+      mute.addEventListener("click", () => { player?.pause(); listen(); });
+      listen();
+    });
 
     // ---- a post to explain, or a question from the address (?q=)
     function startFromRoute() {

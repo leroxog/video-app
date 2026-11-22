@@ -7,6 +7,7 @@
   const MESSAGES = {
     network: "Keine Verbindung. Prüfe dein Internet und versuche es noch einmal.",
     not_logged_in: "Bitte melde dich an.",
+    unavailable: "Das geht gerade nicht. Versuche es gleich noch einmal.",
     too_many: "Zu viele Versuche. Bitte warte einen Moment.",
     forbidden: "Das ist nicht erlaubt.",
     not_found: "Das gibt es nicht (mehr).",

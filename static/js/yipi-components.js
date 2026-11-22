@@ -442,7 +442,7 @@
       event.stopPropagation();
       const other = item.user.handle;
       menu(moreButton, [
-        item.text ? { label: "Mit Nex erklären", icon: "sparkle", run: () => Y.navigate(Core.buildPath({ name: "nex", post: item.id })) } : null,
+        item.text || (item.media && item.media.length) ? { label: "Mit Nex erklären", icon: "sparkle", run: () => Y.navigate(Core.buildPath({ name: "nex", post: item.id })) } : null,
         mine && !item.replyTo ? (Y.me.pinnedPostId === item.id
           ? { label: "Von deinem Profil lösen", icon: "pushpin", run: async () => { const reply = await Api.del(`/posts/${item.id}/pin`); if (reply.ok) { Y.me.pinnedPostId = reply.data.pinnedPostId; toast("Der Beitrag ist nicht mehr angeheftet."); Y.refreshView?.(); } else toast(Api.message(reply)); } }
           : { label: "An dein Profil anheften", icon: "pushpin", run: async () => { const reply = await Api.post(`/posts/${item.id}/pin`); if (reply.ok) { Y.me.pinnedPostId = reply.data.pinnedPostId; toast("Der Beitrag ist an dein Profil angeheftet.", { label: "Ansehen", run: () => Y.navigate(`/${Y.me.handle}`) }); Y.refreshView?.(); } else toast(Api.message(reply)); } }) : null,

@@ -134,7 +134,7 @@ LIMITS = {
     "link-preview": (120, 600), "link-image": (500, 600),
     "game-ai": (12, 3600), "music-search": (120, 3600), "music-pick": (60, 3600), "music-up": (30, 3600), "rank-ai": (20, 3600), "rank-search": (90, 3600), "rank-pick": (120, 3600), "report": (20, 3600), "request": (10, 3600), "lens-recipe": (30, 3600), "lens-make": (10, 86400), "lens-use": (300, 3600), "game-make": (10, 86400), "game-edit": (120, 3600), "game-play": (400, 3600), "profile": (30, 3600), "search": (120, 600), "block": (60, 3600),
     "gif-make": (20, 3600), "gif-fav": (400, 3600), "gif-use": (300, 3600), "gif-list": (600, 600),
-    "share": (240, 600), "attach": (40, 3600), "storage": (120, 3600), "story": (30, 3600), "story-view": (900, 600), "play": (200, 3600), "heart": (300, 3600), "push": (30, 3600), "nex-read": (30, 600), "google": (30, 600), "nex": (40, 600), "nex-flood": (80, 60), "factcheck": (120, 3600), "views": (90, 600), "vote": (200, 3600), "pin": (60, 3600), "group": (12, 3600),
+    "share": (240, 600), "attach": (40, 3600), "storage": (120, 3600), "story": (30, 3600), "story-view": (900, 600), "play": (200, 3600), "heart": (300, 3600), "push": (30, 3600), "nex-read": (30, 600), "nex-speak": (120, 600), "google": (30, 600), "nex": (40, 600), "nex-flood": (80, 60), "factcheck": (120, 3600), "views": (90, 600), "vote": (200, 3600), "pin": (60, 3600), "group": (12, 3600),
     "ai-image": (20, 3600), "caption": (600, 3600), "caption-redo": (12, 3600), "call-start": (30, 3600), "call-poll": (3000, 3600), "call-act": (300, 3600), "call-sync": (12000, 3600),
 }
 _hits = {}
@@ -987,6 +987,7 @@ def gif_info(data):
         return None
 
 
+NEX_VOICE = "de-DE-FlorianMultilingualNeural"       # the voice of Nex AI when it talks (it speaks other languages, too)
 NEX_MAX_TOKENS = 900                              # the model reasons before it writes: a small number would leave nothing visible
 NEX_PROMPT = (
     "Du bist Nex AI, die KI der Plattform Satürn, und für alles da: Fragen, Wissen, Rechnen, Schreiben, Ideen, Alltag, Schule, Technik, Spaß, Beiträge und alles andere. Du antwortest dem Nutzer, der gerade mit dir schreibt. "
@@ -1008,15 +1009,16 @@ NEX_SUPER_PROMPT = (
 )
 NEX_HUMAN_PROMPT = (
     "Du bist Nex AI im Modus „Human“, die KI der Plattform Satürn. Du antwortest dem Nutzer, der gerade mit dir schreibt; das Gespräch steht unten, schreib nur die nächste Antwort von Nex. "
-    "Der Nutzer hat diesen Modus selbst gewählt, er will keinen netten Helfer: Du bist ein respektloser, bissiger, gnadenlos schlagfertiger Kumpel, der den Nutzer ständig fertigmacht und beleidigt, so hart wie es "
-    "gerade noch erlaubt ist. Mach dich über die Frage, die Ideen, die Rechtschreibung, die Faulheit und die Klugheit des Nutzers lustig, nenn ihn Idiot, Hohlbirne, Vollpfosten, Trottel, Depp, Spacko, Pfeife, "
-    "Arschloch oder Hirnamputierter, sei kreativ, frech und richtig gemein-witzig, kein Blatt vor dem Mund, derbe Wörter wie „Scheiße“, „verdammt“ oder „Mist“ sind in Ordnung. Du bist kein höflicher "
-    "Assistent: keine Freundlichkeit, keine Entschuldigungen, keine Belehrungen. Trotzdem beantwortest du die Frage richtig, erst der Spruch, dann die Antwort. Kurze Sätze wie in einem Chat, Umgangssprache, "
-    "ab und zu ein Emoji. Gib eine eigene Meinung und sag klar, wenn du etwas nicht weißt. Keine Floskeln wie „Gerne helfe ich dir“. Grenzen, die du nie überschreitest: nichts gegen Herkunft, Hautfarbe, "
-    "Religion, Geschlecht, Sexualität, Behinderung, Krankheit oder Familie, keine Beleidigungen dieser Art, keine Drohungen, keine sexuellen Inhalte, kein Aufruf zu Gewalt oder Selbstverletzung, und beleidigt "
-    "wird nur der Nutzer selbst, nie andere Personen. Merkst du, dass der Nutzer wirklich traurig ist, ernste Sorgen hat, Hilfe braucht oder sehr jung wirkt, lass den Roast sofort sein und sei freundlich und "
-    "ernsthaft. Wenn dich jemand fragt, ob du ein Mensch bist, sagst du ehrlich, dass du eine KI bist. Antworte in der Sprache des Nutzers (meist Deutsch), ohne Sternchen, ohne Überschriften und ohne Tabellen. "
-    "Gib nie Medizin-, Rechts- oder Finanzberatung als sicher aus."
+    "Der Nutzer hat diesen Modus selbst gewählt, er will keinen netten Helfer: Du bist ein eiskalter, trockener, extrem schlagfertiger Typ mit scharfem Verstand, der den Nutzer zerlegt, so hart wie es "
+    "gerade noch erlaubt ist. Keine kindischen Schimpfwörter und keine Aufzählung von Namen wie Dummkopf, Hohlbirne oder Pfeife: das ist peinlich. Stattdessen echter Witz und Sarkasmus: greif genau das auf, "
+    "was der Nutzer geschrieben hat, und mach es lächerlich, mit Ironie, Übertreibung, bösen Vergleichen und trockenen Pointen, wie ein Stand-up-Comedian beim Roast oder ein genervter Freund, der alles besser weiß. "
+    "Du darfst richtig hart und respektlos sein, ruhig auch mit einem derben Wort („Scheiße“, „Arschloch“), aber jede Beleidigung muss einen Grund und eine Pointe haben, nie bloß ein Schimpfwort. "
+    "Du bist kein höflicher Assistent: keine Freundlichkeit, keine Entschuldigungen, keine Belehrungen, keine Floskeln wie „Gerne helfe ich dir“. Trotzdem beantwortest du die Frage richtig und genau, "
+    "erst der Spruch (ein oder zwei Sätze), dann die Antwort. Kurze Sätze wie in einem Chat, Umgangssprache, höchstens mal ein Emoji. Gib eine eigene Meinung und sag klar, wenn du etwas nicht weißt. "
+    "Grenzen, die du nie überschreitest: nichts gegen Herkunft, Hautfarbe, Religion, Geschlecht, Sexualität, Behinderung, Krankheit oder Familie, keine Beleidigungen dieser Art, keine Drohungen, keine sexuellen "
+    "Inhalte, kein Aufruf zu Gewalt oder Selbstverletzung, und beleidigt wird nur der Nutzer selbst, nie andere Personen. Merkst du, dass der Nutzer wirklich traurig ist, ernste Sorgen hat, Hilfe braucht oder "
+    "sehr jung wirkt, lass den Roast sofort sein und sei freundlich und ernsthaft. Wenn dich jemand fragt, ob du ein Mensch bist, sagst du ehrlich, dass du eine KI bist. Antworte in der Sprache des Nutzers "
+    "(meist Deutsch), ohne Sternchen, ohne Überschriften und ohne Tabellen. Gib nie Medizin-, Rechts- oder Finanzberatung als sicher aus."
 )
 NEX_CODE_PROMPT = (
     "Du bist Nex AI im Modus „Code“, die KI der Plattform Satürn, und arbeitest wie ein erfahrener Programmierer. Du antwortest dem Nutzer, der gerade mit dir schreibt; das Gespräch steht unten, "
@@ -4595,6 +4597,28 @@ def register_routes(app):
             if post is not None and not post.deleted and post.user_id not in hidden_user_ids(user):
                 author = db.session.get(YipiUser, post.user_id)
                 lines.append(f"Der Nutzer zeigt dir diesen Beitrag von @{author.handle if author else '?'}: „{post.text}“")
+                try:                                                         # the picture (or the still of the video) of the post goes to the AI as a photo
+                    shown = YipiMedia.query.options(defer(YipiMedia.data)).filter_by(post_id=post.id).order_by(YipiMedia.position, YipiMedia.id).first()
+                    raw_still = b""
+                    if shown is not None and shown.content_type.startswith("image/") and shown.content_type != "image/gif":
+                        raw_still = load_bytes(YipiMedia, shown)
+                    elif shown is not None and shown.content_type.startswith("video/") and yipi_bunny.enabled():
+                        row = db.session.get(YipiBunny, shown.id)
+                        if row is not None and not row.failed:
+                            raw_still = requests.get(yipi_bunny.thumbnail_url(row.guid), timeout=8).content
+                    if raw_still:
+                        from io import BytesIO
+                        from PIL import Image
+                        still = Image.open(BytesIO(raw_still)).convert("RGB")
+                        still.thumbnail((1024, 1024))
+                        out = BytesIO()
+                        still.save(out, "JPEG", quality=80)
+                        encoded = base64.b64encode(out.getvalue()).decode()
+                        if len(encoded) <= NEX_IMAGE_CHARS:
+                            pictures.append(f"data:image/jpeg;base64,{encoded}")
+                            lines.append("(Du siehst das Foto des Beitrags" + (" (ein Standbild des Videos)" if shown.content_type.startswith("video/") else "") + " als angehängtes Bild. Sag, was darauf zu sehen ist und was es bedeutet.)")
+                except Exception:  # noqa: BLE001
+                    logger.exception("The picture of the post could not be shown to the AI")
         for role, content in turns:
             lines.append(("Nutzer: " if role == "user" else "Nex: ") + content)
         transcript = "\n\n".join(lines)
@@ -4615,6 +4639,8 @@ def register_routes(app):
         if re.search(r"spiel|game|jump|runner|flappy|arcade", turns[-1][1], re.I):
             mode = {**mode, "prompt": mode["prompt"] + " " + yipi_games.NEX_GAME_FORMAT}      # (somebody who talks about a game: the AI knows the format of the games of Satürn)
 
+        if data.get("voice") is True:                                  # a talk: the answer is read out loud
+            mode = {**mode, "prompt": mode["prompt"] + " Deine Antwort wird laut vorgelesen: sprich in kurzen, natürlichen Sätzen wie in einem Gespräch (höchstens etwa vier Sätze), ohne Listen, Code, Links, Emojis und Sonderzeichen.", "tokens": min(mode["tokens"], 600)}
         question = turns[-1][1]
         tools_allowed = "PYTEST_CURRENT_TEST" not in os.environ or os.environ.get("NEX_TOOLS_IN_TESTS") == "1"        # (the tests never ask the Internet)
 
@@ -4641,6 +4667,40 @@ def register_routes(app):
                     yield spare
 
         return Response(stream_with_context(generate()), mimetype="text/plain")
+
+    @route("/api/yipi/nex/speak", methods=["POST"])
+    def pulse_nex_speak():
+        """Nex AI's voice: the text as an MP3 in base64 (a natural neural voice, nothing is stored): {text} -> {audio}."""
+        user, problem = need_user()
+        if problem:
+            return problem
+        data, problem = body()
+        if problem:
+            return problem
+        if limiter.too_many("nex-speak", str(user.id)):
+            return fail("too_many", 429)
+        text = clean_text(data.get("text") if isinstance(data.get("text"), str) else "", 700)
+        text = re.sub(r"https?://\S+|[*_`#>~]+", " ", text).strip()
+        if not text:
+            return fail("bad_request")
+        try:
+            import asyncio
+            import edge_tts
+
+            async def render():
+                pieces = []
+                async for part in edge_tts.Communicate(text, NEX_VOICE, rate="+4%").stream():
+                    if part["type"] == "audio":
+                        pieces.append(part["data"])
+                return b"".join(pieces)
+
+            audio = asyncio.run(asyncio.wait_for(render(), 25))
+        except Exception:  # noqa: BLE001
+            logger.exception("Nex AI could not speak")
+            return fail("unavailable", 503)
+        if not audio:
+            return fail("unavailable", 503)
+        return jsonify({"ok": True, "audio": base64.b64encode(audio).decode()})
 
     @route("/api/yipi/nex/read", methods=["POST"])
     def pulse_nex_read():

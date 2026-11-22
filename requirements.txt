@@ -16,3 +16,5 @@ python-dotenv==1.0.1
 pypdf==6.21.2
 # Notifications on the phone or the computer even when the page is closed (Web Push with VAPID keys).
 pywebpush==2.4.0
+# Nex AI can talk: a natural voice (Microsoft's neural voices, no key needed).
+edge-tts==7.3.1

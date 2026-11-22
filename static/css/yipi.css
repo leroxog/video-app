@@ -3118,3 +3118,21 @@ html.typing .main { padding-bottom: 16px; }
 .chest-open.ready { background: #fe2c55; color: #fff; box-shadow: none; }
 .nex-face img, .avatar.nexai img { display: block; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
 .avatar.official.nexai { background: #000; }
+/* talking with Nex AI: a black layer with the round symbol that breathes while it listens and speaks */
+.talk { position: fixed; inset: 0; z-index: 1600; display: grid; place-content: center; justify-items: center; gap: 18px; padding: 24px; background: #000; color: #fff; text-align: center; }
+.talk-orb { display: block; width: 168px; height: 168px; border-radius: 50%; overflow: hidden; box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.35); }
+.talk-orb img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.talk[data-state="listening"] .talk-orb { animation: talk-pulse 1.6s ease-in-out infinite; }
+.talk[data-state="speaking"] .talk-orb { animation: talk-speak 0.8s ease-in-out infinite alternate; }
+.talk[data-state="thinking"] .talk-orb { animation: talk-think 1.2s ease-in-out infinite alternate; }
+.talk-state { font-size: 20px; font-weight: 800; }
+.talk-heard { min-height: 3.2em; max-width: 520px; margin: 0; color: #bbb; font-size: 16px; line-height: 1.4; }
+.talk-row { display: flex; align-items: center; gap: 14px; }
+.talk-end { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; background: #fe2c55; color: #fff; }
+.talk-end svg { width: 28px; height: 28px; }
+.talk-skip { padding: 14px 22px; border-radius: 999px; background: #222; color: #fff; font-size: 15px; font-weight: 800; }
+.talk-skip[hidden] { display: none; }
+@keyframes talk-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.35); } 50% { box-shadow: 0 0 0 26px rgba(255, 255, 255, 0); } }
+@keyframes talk-speak { from { transform: scale(1); } to { transform: scale(1.1); } }
+@keyframes talk-think { from { opacity: 1; } to { opacity: 0.55; } }
+.nex-talk { flex: none; }

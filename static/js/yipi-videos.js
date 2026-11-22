@@ -458,6 +458,7 @@
       const moreMenu = (anchor) => menu(anchor, [
         Y.downloadVideo ? { label: "Video herunterladen", icon: "download", run: () => Y.downloadVideo(item) } : null,
         { label: "Link kopieren", icon: "link", run: () => Y.copyLink(Y.postPath(item)) },
+        { label: "Mit Nex erklären", icon: "sparkle", run: () => Y.navigate(Core.buildPath({ name: "nex", post: item.id })) },
         { label: "Beitrag öffnen", icon: "reply", run: () => Y.navigate(Y.postPath(item)) },
         cc ? { label: "Untertitel und Sprache", icon: "captions", run: () => Y.captions.sheet(cc) } : null,
         !mine ? { label: "Beitrag melden", icon: "flag", danger: true, run: () => Y.reportDialog({ postId: item.id }) } : null,
